@@ -51,8 +51,8 @@ describe('OverviewPane view', () => {
         expect(cards('waiting').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff'), expect.stringContaining('Approve the plan')]);
         expect(within(lane('resolved')).getByText('Old tracing')).toBeInTheDocument();
         expect(screen.queryByRole('group', { name: 'overview.group.idle' })).not.toBeInTheDocument();
-        // Lanes follow the statuses, what needs the user first.
-        expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['overview.view.label', 'overview.group.waiting', 'overview.group.failed', 'overview.group.ready', 'overview.group.working', 'overview.group.resolved']);
+        // Lanes follow the statuses: what runs first, then what needs the user, then what waits for review.
+        expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['overview.view.label', 'overview.group.working', 'overview.group.waiting', 'overview.group.ready', 'overview.group.failed', 'overview.group.resolved']);
     });
 
     it('never scrolls sideways: the pane clips x and the board is one width-bound grid', () => {
@@ -108,7 +108,7 @@ describe('OverviewPane view', () => {
         // It leaves its status for the pinned section, which sits above every group.
         const pinnedLane = () => screen.getByRole('group', { name: 'overview.pinned' });
         expect(within(pinnedLane()).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null).map((b) => b.textContent)).toEqual([expect.stringContaining('Approve the plan')]);
-        expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['overview.view.label', 'overview.pinned', 'overview.group.waiting', 'overview.group.failed', 'overview.group.ready', 'overview.group.working', 'overview.group.resolved']);
+        expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['overview.view.label', 'overview.pinned', 'overview.group.working', 'overview.group.waiting', 'overview.group.ready', 'overview.group.failed', 'overview.group.resolved']);
         // A second pin, from another status, joins above it: newest pin first.
         fireEvent.click(within(lane('failed')).getByRole('button', { name: 'overview.pin' }));
         expect(JSON.parse(localStorage.getItem('tingly-project.overview.pinned.p') ?? '[]')).toEqual(['f1', 'w2']);

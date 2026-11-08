@@ -39,7 +39,7 @@ export function ThreadCard({ thread, selectedId, onOpen, stacked, pinned, onTogg
 }
 
 /**
- * Threads as the top band's board: one column per status, what needs the user first, each
+ * Threads as the top band's board: one column per status, what runs first, each
  * thread an outlined card (the Overview's band and its kanban view draw the
  * same card). Columns with no threads are left out. It is the band's fixed-height
  * layout: the columns sit side by side and each scrolls inside; the Overview

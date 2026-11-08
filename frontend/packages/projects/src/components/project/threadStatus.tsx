@@ -6,9 +6,9 @@ import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Star, Stream } fr
 import type { Thread } from '../../client';
 import { radius } from '@tingly/ui/theme/radius';
 
-/** Overview groups, in the order the Overview shows them: what needs the
- * user first. */
-export const STATUS_ORDER = ['waiting', 'failed', 'ready', 'working', 'idle', 'resolved'] as const;
+/** Overview groups, in the order the Overview shows them: what runs first,
+ * then what needs the user, then what waits for review. */
+export const STATUS_ORDER = ['working', 'waiting', 'ready', 'failed', 'idle', 'resolved'] as const;
 export type ThreadStatus = (typeof STATUS_ORDER)[number];
 
 /** How a state reads: amber when it needs the user, red when it failed,

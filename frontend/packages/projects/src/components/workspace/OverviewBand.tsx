@@ -42,8 +42,8 @@ interface Props {
 }
 
 /**
- * The Overview as a band under the header: one column per status, what needs
- * the user first. Closed, it is one line of counts. Finished work stays out
+ * The Overview as a band under the header: one column per status, what runs
+ * first. Closed, it is one line of counts. Finished work stays out
  * of the way: the Overview window lists it.
  */
 export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLibrary, onStatus }: Props) {
