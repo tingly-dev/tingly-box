@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Library } from './Library';
+import { LibraryPreview } from './LibraryPreview';
 import { Markdown } from '../Markdown';
 import { previewKind, sniffImage, PREVIEW_LIMIT } from './LibraryPreview';
 
@@ -201,6 +202,16 @@ it('reports a failed load in the dialog', async () => {
     render(<Library projectId="p1" refreshKey={0} />);
     await open('broken.png');
     expect(await screen.findByText('file not found')).toBeInTheDocument();
+});
+
+it('reads a file from where srcOf points, so chat attachments share this preview', async () => {
+    m.fetch.mockImplementation((url: string) => String(url).includes('/threads/t1/attachments/file')
+        ? Promise.resolve(new Response('# From the thread'))
+        : Promise.resolve(new Response('{}')));
+    render(<LibraryPreview srcOf={(p) => `/api/v1/threads/t1/attachments/file?path=${encodeURIComponent(p)}`} file={{ path: 'doc.md', name: 'doc.md', size: 16 }} onClose={() => {}} onDownload={() => {}} />);
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByRole('heading', { name: 'From the thread' })).toBeInTheDocument();
+    expect(m.fetch.mock.calls.map((c) => String(c[0]))).toEqual(['/api/v1/threads/t1/attachments/file?path=doc.md']);
 });
 
 it('keeps other types download-only', async () => {

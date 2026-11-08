@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, IconButton, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -53,20 +53,42 @@ const NO_SIBLINGS: PreviewFile[] = [];
 
 type Body = { state: 'loading' } | { state: 'error'; message: string } | { state: 'image'; url: string } | { state: 'text'; text: string; markdown: boolean } | { state: 'large' };
 
+/** Fetches a file through the host's authentication and saves it under `filename`; a refusal (the server's own message) reaches `onError`. */
+export async function saveFile(url: string, filename: string, onError?: (message: string) => void) {
+    try {
+        const res = await apiFetch(url);
+        if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
+        const blobUrl = URL.createObjectURL(await res.blob());
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+    } catch (e) {
+        onError?.((e as Error).message);
+    }
+}
+
 /**
- * A modal preview of one library file: an image, a Markdown file rendered
+ * The shared preview of one file: an image, a Markdown file rendered
  * like a conversation reply (safe mode: no HTML, no remote images, only
- * http/https/mailto links), or another text file as plain text. With
- * `siblings` (the folder's images, in tree order) an image preview steps
+ * http/https/mailto links), or another text file as plain text. The
+ * library and chat attachments both open it, so a kind previewable here
+ * previews the same way everywhere. With `siblings` (the images among the
+ * file's neighbours, in order) an image preview steps
  * through them with Left/Right/Up/Down or the header buttons, stopping at
- * the first and last. The bytes come through `apiFetch` from the library file endpoint (so
+ * the first and last. The bytes come through `apiFetch` from `srcOf`
+ * (by default the library file endpoint, so
  * the host's authentication and the endpoint's path checks apply). An image
  * is shown through `<img>` from a blob typed by its extension, after its
  * first bytes are checked to be that format, so a file that only has an image
  * name is never handed to the browser; text is set as a React text node.
  */
-export function LibraryPreview({ projectId, file, siblings = NO_SIBLINGS, onClose, onDownload, onNavigate }: {
-    projectId: string;
+export function LibraryPreview({ projectId, srcOf, file, siblings = NO_SIBLINGS, onClose, onDownload, onNavigate }: {
+    /** The library the default `srcOf` reads from; omitted when `srcOf` brings its own source. */
+    projectId?: string;
+    /** Where a file's bytes come from; by default the project's library, so a chat attachment passes its thread's endpoint. */
+    srcOf?: (path: string) => string;
     file: PreviewFile | null;
     siblings?: PreviewFile[];
     onClose: () => void;
@@ -100,6 +122,9 @@ export function LibraryPreview({ projectId, file, siblings = NO_SIBLINGS, onClos
         if (shown && paper.current && (!paper.current.contains(active) || active?.disabled)) paper.current.focus();
     }, [shown, index]);
 
+    // Where the bytes come from: the library file endpoint unless the caller brings its own.
+    const src = useCallback((path: string) => (srcOf ?? ((p: string) => `/api/v1/projects/${projectId ?? ''}/library/file?path=${encodeURIComponent(p)}`))(path), [projectId, srcOf]);
+
     useEffect(() => {
         if (!shown || !kind) return;
         if (tooLarge) { setBody({ state: 'large' }); return; }
@@ -107,7 +132,7 @@ export function LibraryPreview({ projectId, file, siblings = NO_SIBLINGS, onClos
         let live = true;
         let url = '';
         (async () => {
-            const res = await apiFetch(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(shown.path)}`);
+            const res = await apiFetch(src(shown.path));
             if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
             if (kind === 'text') {
                 const text = await res.text();
@@ -127,7 +152,7 @@ export function LibraryPreview({ projectId, file, siblings = NO_SIBLINGS, onClos
             live = false;
             if (url) URL.revokeObjectURL(url);
         };
-    }, [projectId, shown, kind, tooLarge]);
+    }, [src, shown, kind, tooLarge]);
 
     return (
         <Dialog open={!!file} onClose={onClose} maxWidth="lg" fullWidth aria-labelledby="library-preview-title" onKeyDown={onKeyDown}
