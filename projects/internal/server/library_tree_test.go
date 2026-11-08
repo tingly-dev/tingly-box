@@ -289,7 +289,7 @@ func TestLibraryArchiveOverTheLimitsIs413WithTheReason(t *testing.T) {
 		Error string `json:"error"`
 	}
 	require.Equal(t, http.StatusRequestEntityTooLarge, c.do("GET", "/projects/"+p.ID+"/library/archive?path=many", nil, &e))
-	assert.Contains(t, e.Error, "100 files")
+	assert.Contains(t, e.Error, "200 files")
 	require.Equal(t, http.StatusRequestEntityTooLarge, c.do("GET", "/projects/"+p.ID+"/library/archive?path=fat", nil, &e))
-	assert.Contains(t, e.Error, "10 MB")
+	assert.Contains(t, e.Error, "40 MB")
 }

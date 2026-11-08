@@ -106,7 +106,7 @@ it('downloads a folder as a zip named after it', async () => {
 it("shows the server's message as a toast when the folder is over the limit, and downloads nothing", async () => {
     const click = vi.fn();
     const anchor = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click);
-    const msg = 'this folder has more than 100 files (a zip download is limited to 100 files and 10 MB)';
+    const msg = 'this folder has more than 200 files (a zip download is limited to 200 files and 40 MB)';
     m.fetch.mockImplementation((url: string) => {
         const u = new URL(url, 'http://x');
         if (u.pathname.endsWith('/library/archive')) return Promise.resolve(new Response(JSON.stringify({ error: msg }), { status: 413 }));

@@ -259,7 +259,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithQuery("path", "string", "Library-relative directory; empty is the library root"),
 		swagger.WithResponseModel(LibraryTreeResponse{}))
 	api.GET("/projects/:id/library/archive", h.archiveLibrary, tag,
-		swagger.WithDescription("Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out."),
+		swagger.WithDescription("Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out."),
 		swagger.WithQuery("path", "string", "Library-relative folder; empty is the library root"))
 	api.POST("/projects/:id/library", h.uploadLibrary, tag,
 		swagger.WithDescription("Upload files (multipart field \"files\") to the library"),

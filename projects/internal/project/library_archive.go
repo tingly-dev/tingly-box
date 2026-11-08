@@ -16,8 +16,8 @@ import (
 // What one folder download may hold. Both are checked before anything is
 // streamed; they are meant to be revisited.
 const (
-	MaxArchiveFiles = 100
-	MaxArchiveBytes = 10 << 20
+	MaxArchiveFiles = 200
+	MaxArchiveBytes = 40 << 20
 )
 
 // ArchiveLimitError says a folder is too big to download as one zip. Kind is
