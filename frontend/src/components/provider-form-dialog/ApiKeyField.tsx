@@ -8,7 +8,6 @@ interface ApiKeyFieldProps {
     mode: 'add' | 'edit';
     required?: boolean;
     token: string;
-    hasExistingToken?: boolean;
     onTokenChange: (value: string) => void;
     noApiKey: boolean;
     onNoApiKeyChange: (checked: boolean) => void;
@@ -25,7 +24,6 @@ interface ApiKeyFieldProps {
 const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     mode,
     token,
-    hasExistingToken = false,
     required = false,
     onTokenChange,
     noApiKey,
@@ -38,8 +36,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
 
     const isDisabled = noApiKey && !optionalEditable;
     const label = t('providerDialog.apiKey.label');
-    const showStoredKey = mode === 'edit' && hasExistingToken && !isDisabled;
-    const placeholder = showStoredKey ? '****' : mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit');
+    const placeholder = mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit');
 
     return (
         <Box>
@@ -55,7 +52,6 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                 helperText={t(mode === 'add' ? 'providerDialog.editUx.keyOptionalHint' : 'providerDialog.editUx.keyEditHint')}
                 disabled={isDisabled}
                 slotProps={{
-                    inputLabel: showStoredKey ? {shrink: true} : undefined,
                     input: {
                         sx: {
                             '& input': {

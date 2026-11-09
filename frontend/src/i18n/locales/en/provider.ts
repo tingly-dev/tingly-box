@@ -68,7 +68,7 @@ export default {
     "editUx": {
       "proxySettings": "Proxy",
       "keyOptionalHint": "Optional for self-hosted services without authentication. Leave blank if no key is required.",
-      "keyEditHint": "Leave blank to keep the current key. Select “No API key required” for a service without authentication.",
+      "keyEditHint": "The current key is shown masked — click the eye to reveal it, type to replace. Select “No API key required” for a service without authentication.",
       "oauthStyleLocked": "API style is managed by OAuth and cannot be changed here.",
       "authentication": "Authentication",
       "googleCompatible": "Google Compatible",
@@ -135,8 +135,8 @@ export default {
     "apiKey": {
       "label": "API Key",
       "placeholderAdd": "Your API key",
-      "placeholderEdit": "Leave empty to keep current key",
-      "helperEdit": "Leave empty to keep current key"
+      "placeholderEdit": "Type to replace the saved key",
+      "helperEdit": "Type to replace the saved key"
     },
     "enabled": "Enabled",
     "export": {
