@@ -541,7 +541,6 @@ const ProviderFormDialog = ({
                     mode={mode}
                     required={mode === 'add' && !allowEmptyKey && !noApiKey}
                     token={data.token}
-                    hasExistingToken={!!existingToken}
                     onTokenChange={(value) => { onChange('token', value); setVerificationResult(null); }}
                     noApiKey={noApiKey}
                     optionalEditable={optionalEditableToken}

@@ -101,7 +101,10 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                         apiStyle: provider.api_style || 'openai',
                         apiBaseOpenAI: provider.api_base_openai || '',
                         apiBaseAnthropic: provider.api_base_anthropic || '',
-                        token: '',
+                        // Seed the field with the stored key (password-masked,
+                        // eye toggles it). Saving unchanged resends the same
+                        // value — a harmless no-op for the backend.
+                        token: provider.token || '',
                         enabled: provider.enabled,
                         noKeyRequired: provider.no_key_required || false,
                         proxyUrl: provider.proxy_url || '',

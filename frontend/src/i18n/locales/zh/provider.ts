@@ -68,7 +68,7 @@ export default {
     "editUx": {
       "proxySettings": "代理",
       "keyOptionalHint": "自部署服务无需认证时，API 密钥可留空。",
-      "keyEditHint": "留空保留当前密钥；服务无需认证时，请勾选「无需 API 密钥」。",
+      "keyEditHint": "当前密钥已掩码显示——点击眼睛图标可查看，输入即替换。服务无需认证时，请勾选「无需 API 密钥」。",
       "oauthStyleLocked": "API 风格由 OAuth 授权决定，此处不可修改。",
       "authentication": "认证",
       "googleCompatible": "Google 兼容",
@@ -135,8 +135,8 @@ export default {
     "apiKey": {
       "label": "API 密钥",
       "placeholderAdd": "您的 API 密钥",
-      "placeholderEdit": "留空以保留当前密钥",
-      "helperEdit": "留空以保留当前密钥"
+      "placeholderEdit": "输入以替换已保存的密钥",
+      "helperEdit": "输入以替换已保存的密钥"
     },
     "enabled": "已启用",
     "export": {
