@@ -54,7 +54,7 @@ module (`task projects:boundary`); Tingly Box reaches it only through its
 
 `remote/` is the IM-to-agent library (bot lifecycle, pairing, access control, chat commands, agent
 notifications). It is its own Go module (`remote/CLAUDE.md`) that imports only `imbot` and `agentboot`; Tingly Box and
-Projects import it, never the reverse (`task remote:boundary`). What a chat is handed to is the port in `remote/agent`.
+Projects import it, never the reverse (`task remote:boundary`). What a chat is handed to is the port in `remote/agent`; in Tingly Box every IM chat runs as a Projects workspace thread (project or folder with a workdir).
 
 # Build
 
