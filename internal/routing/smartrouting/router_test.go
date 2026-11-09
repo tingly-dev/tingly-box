@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func TestSmartRouting_Integration_OpenAI(t *testing.T) {
@@ -721,30 +722,21 @@ func TestLatestUser_ToolResultDoesNotFalseMatch(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "please search for keyword"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "I will search now"}},
-				},
-			},
-			{
-				// tool_result user message — no text, only tool result block
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfToolResult: &anthropic.BetaToolResultBlockParam{
-						ToolUseID: "toolu_01",
-						Content: []anthropic.BetaToolResultBlockParamContentUnion{
-							{OfText: &anthropic.BetaTextBlockParam{Text: "search results here"}},
-						},
-					}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "please search for keyword"}},
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "I will search now"}},
+			}),
+			// tool_result user message — no text, only tool result block
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfToolResult: &anthropic.BetaToolResultBlockParam{
+					ToolUseID: "toolu_01",
+					Content: []anthropic.BetaToolResultBlockParamContentUnion{
+						{OfText: &anthropic.BetaTextBlockParam{Text: "search results here"}},
+					},
+				}},
+			}),
 		},
 	}
 
@@ -775,24 +767,15 @@ func TestLatestUser_TextAfterToolResult(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "first message without keyword"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "response"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "now use keyword here"}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "first message without keyword"}},
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "response"}},
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "now use keyword here"}},
+			}),
 		},
 	}
 
@@ -811,27 +794,18 @@ func TestLatestContentType_NotBleededFromPreviousImage(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-						Data:      "/9j/4AAQ...",
-						MediaType: anthropic.BetaBase64ImageSourceMediaTypeImageJPEG,
-					}),
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "I see an image"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "now a text-only follow-up"}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+					Data:      "/9j/4AAQ...",
+					MediaType: anthropic.BetaBase64ImageSourceMediaTypeImageJPEG,
+				}),
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "I see an image"}},
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "now a text-only follow-up"}},
+			}),
 		},
 	}
 

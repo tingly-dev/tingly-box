@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"google.golang.org/genai"
 )
 
@@ -251,19 +251,19 @@ func TestConvertGoogleToAnthropicRequestComplex(t *testing.T) {
 		assert.Len(t, params.Messages, 3)
 
 		// First message should be user with search query
-		assert.Equal(t, anthropic.MessageParamRoleUser, params.Messages[0].Role)
-		assert.Len(t, params.Messages[0].Content, 1)
-		assert.NotNil(t, params.Messages[0].Content[0].OfText)
+		assert.Equal(t, "user", msgparam.Role(params.Messages[0]))
+		assert.Len(t, msgparam.Content(params.Messages[0]), 1)
+		assert.NotNil(t, msgparam.Content(params.Messages[0])[0].OfText)
 
 		// Second message should be assistant with tool_use
-		assert.Equal(t, anthropic.MessageParamRoleAssistant, params.Messages[1].Role)
-		assert.Len(t, params.Messages[1].Content, 1)
-		assert.NotNil(t, params.Messages[1].Content[0].OfToolUse)
+		assert.Equal(t, "assistant", msgparam.Role(params.Messages[1]))
+		assert.Len(t, msgparam.Content(params.Messages[1]), 1)
+		assert.NotNil(t, msgparam.Content(params.Messages[1])[0].OfToolUse)
 
 		// Third message should be user with tool_result
-		assert.Equal(t, anthropic.MessageParamRoleUser, params.Messages[2].Role)
-		assert.Len(t, params.Messages[2].Content, 1)
-		assert.NotNil(t, params.Messages[2].Content[0].OfToolResult)
+		assert.Equal(t, "user", msgparam.Role(params.Messages[2]))
+		assert.Len(t, msgparam.Content(params.Messages[2]), 1)
+		assert.NotNil(t, msgparam.Content(params.Messages[2])[0].OfToolResult)
 	})
 
 	t.Run("complex system instruction with multiple parts", func(t *testing.T) {
@@ -305,9 +305,9 @@ func TestConvertGoogleToAnthropicRequestComplex(t *testing.T) {
 		params := ConvertGoogleToAnthropicRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
 
 		assert.Len(t, params.Messages, 1)
-		assert.Len(t, params.Messages[0].Content, 2) // text + tool_use
-		assert.NotNil(t, params.Messages[0].Content[0].OfText)
-		assert.NotNil(t, params.Messages[0].Content[1].OfToolUse)
+		assert.Len(t, msgparam.Content(params.Messages[0]), 2) // text + tool_use
+		assert.NotNil(t, msgparam.Content(params.Messages[0])[0].OfText)
+		assert.NotNil(t, msgparam.Content(params.Messages[0])[1].OfToolUse)
 	})
 
 	t.Run("tool result with complex JSON response", func(t *testing.T) {
@@ -334,13 +334,13 @@ func TestConvertGoogleToAnthropicRequestComplex(t *testing.T) {
 		params := ConvertGoogleToAnthropicRequest("gemini-pro", contents, &genai.GenerateContentConfig{})
 
 		assert.Len(t, params.Messages, 1)
-		assert.Equal(t, anthropic.MessageParamRoleUser, params.Messages[0].Role)
-		assert.Len(t, params.Messages[0].Content, 1)
-		assert.NotNil(t, params.Messages[0].Content[0].OfToolResult)
-		assert.Equal(t, "toolu_789", params.Messages[0].Content[0].OfToolResult.ToolUseID)
+		assert.Equal(t, "user", msgparam.Role(params.Messages[0]))
+		assert.Len(t, msgparam.Content(params.Messages[0]), 1)
+		assert.NotNil(t, msgparam.Content(params.Messages[0])[0].OfToolResult)
+		assert.Equal(t, "toolu_789", msgparam.Content(params.Messages[0])[0].OfToolResult.ToolUseID)
 
 		// Verify the content is properly JSON-encoded
-		resultContent := params.Messages[0].Content[0].OfToolResult.Content
+		resultContent := msgparam.Content(params.Messages[0])[0].OfToolResult.Content
 		require.Len(t, resultContent, 1)
 		var resultData map[string]interface{}
 		err := json.Unmarshal([]byte(resultContent[0].OfText.Text), &resultData)

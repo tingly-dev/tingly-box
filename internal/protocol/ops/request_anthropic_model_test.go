@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -168,7 +169,7 @@ func TestApplyAnthropicModelTransform_Beta_EffortWithoutThinkingPreserved(t *tes
 		MaxTokens:    int64(4096),
 		OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffortMedium},
 		Messages: []anthropic.BetaMessageParam{
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}),
 		},
 	}
 
@@ -314,7 +315,7 @@ func TestApplyAnthropicModelTransform_Beta_Opus47_BudgetConvertsToAdaptive(t *te
 		MaxTokens: int64(64000),
 		Thinking:  anthropic.BetaThinkingConfigParamOfEnabled(4096),
 		Messages: []anthropic.BetaMessageParam{
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{{OfText: &anthropic.BetaTextBlockParam{Text: "Hello"}}}),
 		},
 	}
 
@@ -490,20 +491,14 @@ func TestApplyAnthropicModelTransform_NilRequest(t *testing.T) {
 func TestFilterThinkingBlocksInMessages(t *testing.T) {
 	// Test case: Filter thinking blocks from messages
 	messages := []anthropic.MessageParam{
-		{
-			Role: "user",
-			Content: []anthropic.ContentBlockParamUnion{
-				anthropic.NewTextBlock("Hello"),
-			},
-		},
-		{
-			Role: "assistant",
-			Content: []anthropic.ContentBlockParamUnion{
-				anthropic.NewTextBlock("Thinking..."),
-				// Note: Creating a thinking block requires proper construction
-				// This test demonstrates the structure; actual implementation may vary
-			},
-		},
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			anthropic.NewTextBlock("Hello"),
+		}),
+		msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+			anthropic.NewTextBlock("Thinking..."),
+			// Note: Creating a thinking block requires proper construction
+			// This test demonstrates the structure; actual implementation may vary
+		}),
 	}
 
 	// The filter should remove messages with only thinking blocks
@@ -680,10 +675,10 @@ func TestComputeCCVersion(t *testing.T) {
 func TestExtractFirstUserMessageText(t *testing.T) {
 	req := &anthropic.MessageNewParams{
 		Messages: []anthropic.MessageParam{
-			{Role: "system", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "system msg"}}}},
-			{Role: "user", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "hello world"}}}},
-			{Role: "assistant", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "hi"}}}},
-			{Role: "user", Content: []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "second user msg"}}}},
+			msgparam.New("system", []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "system msg"}}}),
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "hello world"}}}),
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "hi"}}}),
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{{OfText: &anthropic.TextBlockParam{Text: "second user msg"}}}),
 		},
 	}
 

@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestConvertAnthropicInputSchemaToOpenAIParameters tests the helper function
@@ -242,16 +243,13 @@ func TestConvertAnthropicBetaToOpenAI_ImageBase64(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaTextBlock("describe this image"),
-					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-						Data:      "iVBORw0KGgo=",
-						MediaType: anthropic.BetaBase64ImageSourceMediaTypeImagePNG,
-					}),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaTextBlock("describe this image"),
+				anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+					Data:      "iVBORw0KGgo=",
+					MediaType: anthropic.BetaBase64ImageSourceMediaTypeImagePNG,
+				}),
+			}),
 		},
 	}
 
@@ -277,14 +275,11 @@ func TestConvertAnthropicBetaToOpenAI_ImageURL(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaImageBlock(anthropic.BetaURLImageSourceParam{
-						URL: "https://example.com/cat.png",
-					}),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaImageBlock(anthropic.BetaURLImageSourceParam{
+					URL: "https://example.com/cat.png",
+				}),
+			}),
 		},
 	}
 
@@ -315,12 +310,9 @@ func TestConvertAnthropicBetaToOpenAI_TextContentShapeIsStable(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaTextBlock("hello"),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaTextBlock("hello"),
+			}),
 		},
 	}
 
@@ -341,7 +333,11 @@ func TestConvertAnthropicBetaToOpenAI_TextContentShapeIsStable(t *testing.T) {
 		plain, "text content is always a content-part list")
 
 	// The same message with a breakpoint on it differs by that field alone.
-	req.Messages[0].Content[0].OfText.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
+	req.Messages[0] = msgparam.WithBetaContent(req.Messages[0], func() []anthropic.BetaContentBlockParamUnion {
+		blocks := msgparam.BetaContent(req.Messages[0])
+		blocks[0].OfText.CacheControl = anthropic.NewBetaCacheControlEphemeralParam()
+		return blocks
+	}())
 	cached, ok := content(req).([]any)
 	require.True(t, ok)
 	require.Len(t, cached, 1)
@@ -360,13 +356,10 @@ func TestConvertAnthropicToOpenAI_ImageBase64(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewTextBlock("look"),
-					anthropic.NewImageBlockBase64("image/jpeg", "/9j/4AAQ"),
-				},
-			},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				anthropic.NewTextBlock("look"),
+				anthropic.NewImageBlockBase64("image/jpeg", "/9j/4AAQ"),
+			}),
 		},
 	}
 

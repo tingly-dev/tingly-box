@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestE2E_ProtocolConversions tests end-to-end protocol conversions
@@ -39,7 +40,7 @@ func TestE2E_ProtocolConversions(t *testing.T) {
 				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 				MaxTokens: int64(1024),
 				Messages: []anthropic.BetaMessageParam{
-					{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("Hello")}},
+					msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("Hello")}),
 				},
 			},
 		},
@@ -216,7 +217,7 @@ func TestE2E_FullChain(t *testing.T) {
 			Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 			MaxTokens: int64(1024),
 			Messages: []anthropic.BetaMessageParam{
-				{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("Hello")}},
+				msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("Hello")}),
 			},
 		}
 

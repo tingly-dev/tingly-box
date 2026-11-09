@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestDeepSeekReasoningContent verifies that all assistant messages include x_thinking field
@@ -17,46 +18,34 @@ func TestDeepSeekReasoningContent(t *testing.T) {
 	}{
 		{
 			name: "Simple text message without thinking",
-			anthropicMsg: anthropic.MessageParam{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewTextBlock("Hello!"),
-				},
-			},
+			anthropicMsg: msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				anthropic.NewTextBlock("Hello!"),
+			}),
 			expectHasField: true, // x_thinking field should be present (empty string)
 		},
 		{
 			name: "Message with thinking",
-			anthropicMsg: anthropic.MessageParam{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewThinkingBlock("thinking-123", "Let me think about this"),
-					anthropic.NewTextBlock("Hello!"),
-				},
-			},
+			anthropicMsg: msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				anthropic.NewThinkingBlock("thinking-123", "Let me think about this"),
+				anthropic.NewTextBlock("Hello!"),
+			}),
 			expectHasField: true,
 		},
 		{
 			name: "Message with tool_calls",
-			anthropicMsg: anthropic.MessageParam{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewTextBlock("I'll call a tool"),
-					anthropic.NewToolUseBlock("tool_123", map[string]any{"arg": "value"}, "my_function"),
-				},
-			},
+			anthropicMsg: msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				anthropic.NewTextBlock("I'll call a tool"),
+				anthropic.NewToolUseBlock("tool_123", map[string]any{"arg": "value"}, "my_function"),
+			}),
 			expectHasField: true,
 		},
 		{
 			name: "Message with tool_calls and thinking",
-			anthropicMsg: anthropic.MessageParam{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewThinkingBlock("thinking-456", "Planning the tool call"),
-					anthropic.NewTextBlock("I'll call a tool"),
-					anthropic.NewToolUseBlock("tool_789", map[string]any{"arg": "value"}, "my_function"),
-				},
-			},
+			anthropicMsg: msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				anthropic.NewThinkingBlock("thinking-456", "Planning the tool call"),
+				anthropic.NewTextBlock("I'll call a tool"),
+				anthropic.NewToolUseBlock("tool_789", map[string]any{"arg": "value"}, "my_function"),
+			}),
 			expectHasField: true,
 		},
 	}
@@ -101,18 +90,12 @@ func TestDeepSeekRequestConversion(t *testing.T) {
 				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 				MaxTokens: 1024,
 				Messages: []anthropic.MessageParam{
-					{
-						Role: anthropic.MessageParamRoleUser,
-						Content: []anthropic.ContentBlockParamUnion{
-							anthropic.NewTextBlock("Hello"),
-						},
-					},
-					{
-						Role: anthropic.MessageParamRoleAssistant,
-						Content: []anthropic.ContentBlockParamUnion{
-							anthropic.NewTextBlock("Hi there!"),
-						},
-					},
+					msgparam.New("user", []anthropic.ContentBlockParamUnion{
+						anthropic.NewTextBlock("Hello"),
+					}),
+					msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+						anthropic.NewTextBlock("Hi there!"),
+					}),
 				},
 			},
 			expectAllHave: true,
@@ -123,31 +106,19 @@ func TestDeepSeekRequestConversion(t *testing.T) {
 				Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 				MaxTokens: 1024,
 				Messages: []anthropic.MessageParam{
-					{
-						Role: anthropic.MessageParamRoleUser,
-						Content: []anthropic.ContentBlockParamUnion{
-							anthropic.NewTextBlock("Hello"),
-						},
-					},
-					{
-						Role: anthropic.MessageParamRoleAssistant,
-						Content: []anthropic.ContentBlockParamUnion{
-							anthropic.NewThinkingBlock("thinking-1", "User said hello"),
-							anthropic.NewTextBlock("Hi there!"),
-						},
-					},
-					{
-						Role: anthropic.MessageParamRoleUser,
-						Content: []anthropic.ContentBlockParamUnion{
-							anthropic.NewTextBlock("How are you?"),
-						},
-					},
-					{
-						Role: anthropic.MessageParamRoleAssistant,
-						Content: []anthropic.ContentBlockParamUnion{
-							anthropic.NewTextBlock("I'm doing well!"),
-						},
-					},
+					msgparam.New("user", []anthropic.ContentBlockParamUnion{
+						anthropic.NewTextBlock("Hello"),
+					}),
+					msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+						anthropic.NewThinkingBlock("thinking-1", "User said hello"),
+						anthropic.NewTextBlock("Hi there!"),
+					}),
+					msgparam.New("user", []anthropic.ContentBlockParamUnion{
+						anthropic.NewTextBlock("How are you?"),
+					}),
+					msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+						anthropic.NewTextBlock("I'm doing well!"),
+					}),
 				},
 			},
 			expectAllHave: true,

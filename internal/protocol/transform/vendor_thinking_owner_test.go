@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go/v2"
-	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -19,10 +18,9 @@ const thirdPartyAnthropicURL = "https://api.z.ai/api/anthropic"
 // in the shape the vendor stage sees for target.
 func toolTurnWithoutThinking(target protocol.APIType) any {
 	v1 := &anthropic.MessageNewParams{
-		Model:       anthropic.Model("glm-5"),
-		MaxTokens:   32000,
-		Temperature: param.NewOpt(0.6),
-		Thinking:    anthropic.ThinkingConfigParamOfEnabled(16000),
+		Model:     anthropic.Model("glm-5"),
+		MaxTokens: 32000,
+		Thinking:  anthropic.ThinkingConfigParamOfEnabled(16000),
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("list files")),
 			anthropic.NewAssistantMessage(
@@ -32,6 +30,7 @@ func toolTurnWithoutThinking(target protocol.APIType) any {
 			anthropic.NewUserMessage(anthropic.NewToolResultBlock("t1", "a.txt", false)),
 		},
 	}
+	v1.SetExtraFields(map[string]any{"temperature": 0.6})
 	if target == protocol.TypeAnthropicBeta {
 		return request.ConvertAnthropicV1ToBetaRequest(v1)
 	}
@@ -42,11 +41,17 @@ func toolTurnWithoutThinking(target protocol.APIType) any {
 // Anthropic request shape.
 func thinkingOf(t *testing.T, req any) (enabled bool, temperature float64) {
 	t.Helper()
+	getTemp := func(extras map[string]any) float64 {
+		t.Helper()
+		v, ok := extras["temperature"].(float64)
+		require.True(t, ok, "temperature must survive the conversion as an extra field, extras=%v", extras)
+		return v
+	}
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
-		return r.Thinking.OfEnabled != nil, r.Temperature.Value
+		return r.Thinking.OfEnabled != nil, getTemp(r.ExtraFields())
 	case *anthropic.BetaMessageNewParams:
-		return r.Thinking.OfEnabled != nil, r.Temperature.Value
+		return r.Thinking.OfEnabled != nil, getTemp(r.ExtraFields())
 	}
 	t.Fatalf("unexpected request type %T", req)
 	return false, 0

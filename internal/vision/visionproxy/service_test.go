@@ -9,6 +9,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -22,16 +23,13 @@ func betaReqWithImage() *anthropic.BetaMessageNewParams {
 	return &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("downstream-text-model"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "what is this?"}},
-					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-						Data:      applyTestPNG,
-						MediaType: anthropic.BetaBase64ImageSourceMediaType("image/png"),
-					}),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "what is this?"}},
+				anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+					Data:      applyTestPNG,
+					MediaType: anthropic.BetaBase64ImageSourceMediaType("image/png"),
+				}),
+			}),
 		},
 	}
 }
@@ -75,7 +73,7 @@ func (echoingVisionClient) Describe(_ context.Context, svc *loadbalance.Service,
 }
 
 func firstImagePresent(req *anthropic.BetaMessageNewParams) bool {
-	for _, b := range req.Messages[0].Content {
+	for _, b := range msgparam.BetaContent(req.Messages[0]) {
 		if b.OfImage != nil {
 			return true
 		}
@@ -85,7 +83,7 @@ func firstImagePresent(req *anthropic.BetaMessageNewParams) bool {
 
 func joinedText(req *anthropic.BetaMessageNewParams) string {
 	var sb strings.Builder
-	for _, b := range req.Messages[0].Content {
+	for _, b := range msgparam.BetaContent(req.Messages[0]) {
 		if b.OfText != nil {
 			sb.WriteString(b.OfText.Text)
 		}

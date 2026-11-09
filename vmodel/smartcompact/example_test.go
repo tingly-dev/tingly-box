@@ -6,43 +6,29 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func TestExample_PrintAllStrategies(t *testing.T) {
 	input := []anthropic.BetaMessageParam{
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("read main.go and fix the bug"),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("I'll read the file first."),
-				anthropic.NewBetaToolUseBlock("tool-1", map[string]any{"path": "main.go"}, "read_file"),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaToolResultBlock("tool-1", "func main() { panic(\"bug\") }", false),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("Found the bug. Writing the fix."),
-				anthropic.NewBetaToolUseBlock("tool-2", map[string]any{"path": "main.go", "content": "func main() {}"}, "write_file"),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaToolResultBlock("tool-2", "ok", false),
-				anthropic.NewBetaTextBlock("<command>compact</command>"),
-			},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("read main.go and fix the bug"),
+		}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("I'll read the file first."),
+			anthropic.NewBetaToolUseBlock("tool-1", map[string]any{"path": "main.go"}, "read_file"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaToolResultBlock("tool-1", "func main() { panic(\"bug\") }", false),
+		}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("Found the bug. Writing the fix."),
+			anthropic.NewBetaToolUseBlock("tool-2", map[string]any{"path": "main.go", "content": "func main() {}"}, "write_file"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaToolResultBlock("tool-2", "ok", false),
+			anthropic.NewBetaTextBlock("<command>compact</command>"),
+		}),
 	}
 
 	printStrategy := func(name string, result []anthropic.BetaMessageParam) {
@@ -51,8 +37,8 @@ func TestExample_PrintAllStrategies(t *testing.T) {
 		fmt.Printf("  Output messages: %d\n", len(result))
 		fmt.Printf("═══════════════════════════════════════\n")
 		for i, msg := range result {
-			fmt.Printf("[%d] role=%s  blocks=%d\n", i, msg.Role, len(msg.Content))
-			for j, block := range msg.Content {
+			fmt.Printf("[%d] role=%s  blocks=%d\n", i, msgparam.BetaRole(msg), len(msgparam.BetaContent(msg)))
+			for j, block := range msgparam.BetaContent(msg) {
 				switch {
 				case block.OfText != nil:
 					fmt.Printf("    [%d] text: %s\n", j, truncate(block.OfText.Text, 120))

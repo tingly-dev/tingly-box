@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // This file is the tool-channel companion of image_conversions_test.go
@@ -60,7 +61,7 @@ func TestConvertOpenAIToAnthropic_ToolMessageImage(t *testing.T) {
 
 	var toolResult *anthropic.BetaToolResultBlockParam
 	for _, msg := range out.Messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfToolResult != nil {
 				toolResult = block.OfToolResult
 			}
@@ -143,31 +144,25 @@ func anthropicV1ToolResultImageRequest() *anthropic.MessageNewParams {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewToolUseBlock("toolu_1", map[string]any{}, "screenshot"),
-				},
-			},
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfToolResult: &anthropic.ToolResultBlockParam{
-						ToolUseID: "toolu_1",
-						Content: []anthropic.ToolResultBlockParamContentUnion{
-							{OfText: &anthropic.TextBlockParam{Text: "took screenshot"}},
-							{OfImage: &anthropic.ImageBlockParam{
-								Source: anthropic.ImageBlockParamSourceUnion{
-									OfBase64: &anthropic.Base64ImageSourceParam{
-										MediaType: "image/png",
-										Data:      "iVBORw0KGgo=",
-									},
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				anthropic.NewToolUseBlock("toolu_1", map[string]any{}, "screenshot"),
+			}),
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{OfToolResult: &anthropic.ToolResultBlockParam{
+					ToolUseID: "toolu_1",
+					Content: []anthropic.ToolResultBlockParamContentUnion{
+						{OfText: &anthropic.TextBlockParam{Text: "took screenshot"}},
+						{OfImage: &anthropic.ImageBlockParam{
+							Source: anthropic.ImageBlockParamSourceUnion{
+								OfBase64: &anthropic.Base64ImageSourceParam{
+									MediaType: "image/png",
+									Data:      "iVBORw0KGgo=",
 								},
-							}},
-						},
-					}},
-				},
-			},
+							},
+						}},
+					},
+				}},
+			}),
 		},
 	}
 }
@@ -178,31 +173,25 @@ func anthropicBetaToolResultImageRequest() *anthropic.BetaMessageNewParams {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaToolUseBlock("toolu_1", map[string]any{}, "screenshot"),
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfToolResult: &anthropic.BetaToolResultBlockParam{
-						ToolUseID: "toolu_1",
-						Content: []anthropic.BetaToolResultBlockParamContentUnion{
-							{OfText: &anthropic.BetaTextBlockParam{Text: "took screenshot"}},
-							{OfImage: &anthropic.BetaImageBlockParam{
-								Source: anthropic.BetaImageBlockParamSourceUnion{
-									OfBase64: &anthropic.BetaBase64ImageSourceParam{
-										MediaType: "image/png",
-										Data:      "iVBORw0KGgo=",
-									},
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaToolUseBlock("toolu_1", map[string]any{}, "screenshot"),
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfToolResult: &anthropic.BetaToolResultBlockParam{
+					ToolUseID: "toolu_1",
+					Content: []anthropic.BetaToolResultBlockParamContentUnion{
+						{OfText: &anthropic.BetaTextBlockParam{Text: "took screenshot"}},
+						{OfImage: &anthropic.BetaImageBlockParam{
+							Source: anthropic.BetaImageBlockParamSourceUnion{
+								OfBase64: &anthropic.BetaBase64ImageSourceParam{
+									MediaType: "image/png",
+									Data:      "iVBORw0KGgo=",
 								},
-							}},
-						},
-					}},
-				},
-			},
+							},
+						}},
+					},
+				}},
+			}),
 		},
 	}
 }
@@ -297,19 +286,16 @@ func TestConvertAnthropicV1ToOpenAI_ImageAlongsideToolResult(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfToolResult: &anthropic.ToolResultBlockParam{
-						ToolUseID: "toolu_1",
-						Content: []anthropic.ToolResultBlockParamContentUnion{
-							{OfText: &anthropic.TextBlockParam{Text: "done"}},
-						},
-					}},
-					anthropic.NewTextBlock("compare with this:"),
-					anthropic.NewImageBlockBase64("image/png", "iVBORw0KGgo="),
-				},
-			},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{OfToolResult: &anthropic.ToolResultBlockParam{
+					ToolUseID: "toolu_1",
+					Content: []anthropic.ToolResultBlockParamContentUnion{
+						{OfText: &anthropic.TextBlockParam{Text: "done"}},
+					},
+				}},
+				anthropic.NewTextBlock("compare with this:"),
+				anthropic.NewImageBlockBase64("image/png", "iVBORw0KGgo="),
+			}),
 		},
 	}
 

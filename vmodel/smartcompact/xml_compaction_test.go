@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -17,34 +18,22 @@ func TestClaudeCodeCompactionStrategy_CompressBeta_ProducesAssistantWithCompacti
 	strategy := NewXMLCompactionStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("read file")},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("reading"),
-				anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "main.go"}, "1"),
-			},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "content", false)},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("read file")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("reading"),
+			anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "main.go"}, "1"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "content", false)}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
 
 	require.Len(t, result, 1)
-	assert.Equal(t, "assistant", string(result[0].Role))
+	assert.Equal(t, "assistant", msgparam.BetaRole(result[0]))
 
-	require.NotEmpty(t, result[0].Content)
-	block := result[0].Content[0]
+	require.NotEmpty(t, msgparam.BetaContent(result[0]))
+	block := msgparam.BetaContent(result[0])[0]
 	assert.NotNil(t, block.OfCompaction, "expected compaction block")
 	assert.Nil(t, block.OfText, "should not be a text block")
 }
@@ -55,31 +44,19 @@ func TestClaudeCodeCompactionStrategy_CompressBeta_CompactionBlockHasContent(t *
 	strategy := NewXMLCompactionStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("fix the bug in handler.go")},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("looking at it"),
-				anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "handler.go"}, "1"),
-			},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "buggy code", false)},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("fix the bug in handler.go")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("looking at it"),
+			anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "handler.go"}, "1"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "buggy code", false)}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
 	require.Len(t, result, 1)
 
-	block := result[0].Content[0]
+	block := msgparam.BetaContent(result[0])[0]
 	require.NotNil(t, block.OfCompaction)
 	assert.True(t, block.OfCompaction.Content.Valid())
 
@@ -106,10 +83,10 @@ func TestClaudeCodeCompactionStrategy_CompressV1_FallsBackToAssistantTextMessage
 	result := strategy.CompressV1(input)
 
 	require.Len(t, result, 1)
-	assert.Equal(t, "assistant", string(result[0].Role))
-	require.NotEmpty(t, result[0].Content)
+	assert.Equal(t, "assistant", msgparam.Role(result[0]))
+	require.NotEmpty(t, msgparam.Content(result[0]))
 	// v1 fallback: text block with XML summary
-	assert.NotNil(t, result[0].Content[0].OfText)
+	assert.NotNil(t, msgparam.Content(result[0])[0].OfText)
 }
 
 // TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet verifies
@@ -119,9 +96,9 @@ func TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet(t *testing.T)
 
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hello")}},
-			{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi")}},
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("<command>compact</command>")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hello")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi")}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("<command>compact</command>")}),
 		},
 		Tools: []anthropic.BetaToolUnionParam{
 			{OfTool: &anthropic.BetaToolParam{Name: "read_file", InputSchema: anthropic.BetaToolInputSchemaParam{Type: "object"}}},
@@ -132,8 +109,8 @@ func TestXMLCompactionTransformer_Beta_CompressesWhenConditionsMet(t *testing.T)
 	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	require.Len(t, req.Messages, 1)
-	assert.Equal(t, "assistant", string(req.Messages[0].Role))
-	assert.NotNil(t, req.Messages[0].Content[0].OfCompaction)
+	assert.Equal(t, "assistant", msgparam.BetaRole(req.Messages[0]))
+	assert.NotNil(t, msgparam.BetaContent(req.Messages[0])[0].OfCompaction)
 }
 
 // TestXMLCompactionTransformer_Beta_PassthroughWhenNoTools verifies
@@ -143,7 +120,7 @@ func TestXMLCompactionTransformer_Beta_PassthroughWhenNoTools(t *testing.T) {
 
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("<command>compact</command>")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("<command>compact</command>")}),
 		},
 	}
 

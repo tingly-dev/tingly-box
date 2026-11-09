@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -30,11 +31,11 @@ func TestClaudeCodeDocumentStrategy_CompressV1_ProducesUserMessageWithDocumentBl
 
 	// Must produce exactly one user message
 	require.Len(t, result, 1)
-	assert.Equal(t, "user", string(result[0].Role))
+	assert.Equal(t, "user", msgparam.Role(result[0]))
 
 	// Must contain a document block (not a text block)
-	require.NotEmpty(t, result[0].Content)
-	docBlock := result[0].Content[0]
+	require.NotEmpty(t, msgparam.Content(result[0]))
+	docBlock := msgparam.Content(result[0])[0]
 	assert.NotNil(t, docBlock.OfDocument, "expected document block, got something else")
 	assert.Nil(t, docBlock.OfText, "should not be a text block")
 }
@@ -57,7 +58,7 @@ func TestClaudeCodeDocumentStrategy_CompressV1_DocumentContainsConversationXML(t
 	result := strategy.CompressV1(input)
 	require.Len(t, result, 1)
 
-	doc := result[0].Content[0].OfDocument
+	doc := msgparam.Content(result[0])[0].OfDocument
 	require.NotNil(t, doc)
 
 	// Source must be plain text
@@ -96,7 +97,7 @@ func TestClaudeCodeDocumentStrategy_CompressV1_DocumentHasTitleAndContext(t *tes
 	result := strategy.CompressV1(input)
 	require.Len(t, result, 1)
 
-	doc := result[0].Content[0].OfDocument
+	doc := msgparam.Content(result[0])[0].OfDocument
 	require.NotNil(t, doc)
 
 	// Title must be set
@@ -114,42 +115,30 @@ func TestClaudeCodeDocumentStrategy_CompressBeta_ProducesUserMessageWithDocument
 	strategy := NewConversationDocumentStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("read file"),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("reading"),
-				anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "main.go"}, "1"),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaToolResultBlock("1", "content", false),
-			},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("compact"),
-			},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("read file"),
+		}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("reading"),
+			anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "main.go"}, "1"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaToolResultBlock("1", "content", false),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("compact"),
+		}),
 	}
 
 	result := strategy.CompressBeta(input)
 
 	// Must produce exactly one user message
 	require.Len(t, result, 1)
-	assert.Equal(t, "user", string(result[0].Role))
+	assert.Equal(t, "user", msgparam.BetaRole(result[0]))
 
 	// Must contain a document block
-	require.NotEmpty(t, result[0].Content)
-	docBlock := result[0].Content[0]
+	require.NotEmpty(t, msgparam.BetaContent(result[0]))
+	docBlock := msgparam.BetaContent(result[0])[0]
 	assert.NotNil(t, docBlock.OfDocument, "expected document block")
 	assert.Nil(t, docBlock.OfText, "should not be a text block")
 }
@@ -160,31 +149,19 @@ func TestClaudeCodeDocumentStrategy_CompressBeta_DocumentContainsConversationXML
 	strategy := NewConversationDocumentStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("fix the bug")},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("looking at it"),
-				anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "bug.go"}, "1"),
-			},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "buggy code", false)},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("fix the bug")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("looking at it"),
+			anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "bug.go"}, "1"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "buggy code", false)}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
 	require.Len(t, result, 1)
 
-	doc := result[0].Content[0].OfDocument
+	doc := msgparam.BetaContent(result[0])[0].OfDocument
 	require.NotNil(t, doc)
 	require.NotNil(t, doc.Source.OfText)
 
@@ -274,7 +251,7 @@ func TestConversationDocumentTransformer_V1_CompressesWhenConditionsMet(t *testi
 
 	// Must be compressed to a single user message with document block
 	require.Len(t, req.Messages, 1)
-	assert.Equal(t, "user", string(req.Messages[0].Role))
-	require.NotEmpty(t, req.Messages[0].Content)
-	assert.NotNil(t, req.Messages[0].Content[0].OfDocument)
+	assert.Equal(t, "user", msgparam.Role(req.Messages[0]))
+	require.NotEmpty(t, msgparam.Content(req.Messages[0]))
+	assert.NotNil(t, msgparam.Content(req.Messages[0])[0].OfDocument)
 }

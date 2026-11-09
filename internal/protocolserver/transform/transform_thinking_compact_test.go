@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -117,13 +118,13 @@ func TestThinkingCompactV1_RemovesThinkingFromPastRounds(t *testing.T) {
 	require.Len(t, req.Messages, 4)
 
 	// First round assistant message - thinking removed (index 1)
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "Old response", req.Messages[1].Content[0].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[1]), 1)
+	assert.Equal(t, "Old response", msgparam.Content(req.Messages[1])[0].OfText.Text)
 
 	// Second round assistant message - thinking preserved (index 3, last message)
-	assert.Len(t, req.Messages[3].Content, 2)
-	assert.Equal(t, "Current thinking", req.Messages[3].Content[0].OfThinking.Thinking)
-	assert.Equal(t, "Current response", req.Messages[3].Content[1].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[3]), 2)
+	assert.Equal(t, "Current thinking", msgparam.Content(req.Messages[3])[0].OfThinking.Thinking)
+	assert.Equal(t, "Current response", msgparam.Content(req.Messages[3])[1].OfText.Text)
 }
 
 func TestThinkingCompactV1_EmptyMessages(t *testing.T) {
@@ -175,12 +176,12 @@ func TestThinkingCompactV1_WithToolUse(t *testing.T) {
 	require.Len(t, req.Messages, 5)
 
 	// First round assistant message - thinking removed (index 1)
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "search", req.Messages[1].Content[0].OfToolUse.Name)
+	assert.Len(t, msgparam.Content(req.Messages[1]), 1)
+	assert.Equal(t, "search", msgparam.Content(req.Messages[1])[0].OfToolUse.Name)
 
 	// Last assistant message - thinking preserved
-	assert.Len(t, req.Messages[4].Content, 2)
-	assert.Equal(t, "Current thinking", req.Messages[4].Content[0].OfThinking.Thinking)
+	assert.Len(t, msgparam.Content(req.Messages[4]), 2)
+	assert.Equal(t, "Current thinking", msgparam.Content(req.Messages[4])[0].OfThinking.Thinking)
 }
 
 func TestThinkingCompactBeta_RemovesThinkingFromPastRounds(t *testing.T) {
@@ -189,29 +190,17 @@ func TestThinkingCompactBeta_RemovesThinkingFromPastRounds(t *testing.T) {
 		MaxTokens: 1024,
 		Messages: []anthropic.BetaMessageParam{
 			// First round - should have thinking removed
-			{
-				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("First question")},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaThinkingBlock("sig1", "Old thinking"),
-					anthropic.NewBetaTextBlock("Old response"),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("First question")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaThinkingBlock("sig1", "Old thinking"),
+				anthropic.NewBetaTextBlock("Old response"),
+			}),
 			// Second round - current, should keep thinking
-			{
-				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("New question")},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaThinkingBlock("sig2", "Current thinking"),
-					anthropic.NewBetaTextBlock("Current response"),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("New question")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaThinkingBlock("sig2", "Current thinking"),
+				anthropic.NewBetaTextBlock("Current response"),
+			}),
 		},
 	}
 
@@ -219,13 +208,13 @@ func TestThinkingCompactBeta_RemovesThinkingFromPastRounds(t *testing.T) {
 	require.Len(t, req.Messages, 4)
 
 	// First round assistant message - thinking removed (index 1)
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "Old response", req.Messages[1].Content[0].OfText.Text)
+	assert.Len(t, msgparam.BetaContent(req.Messages[1]), 1)
+	assert.Equal(t, "Old response", msgparam.BetaContent(req.Messages[1])[0].OfText.Text)
 
 	// Second round assistant message - thinking preserved (index 3, last message)
-	assert.Len(t, req.Messages[3].Content, 2)
-	assert.Equal(t, "Current thinking", req.Messages[3].Content[0].OfThinking.Thinking)
-	assert.Equal(t, "Current response", req.Messages[3].Content[1].OfText.Text)
+	assert.Len(t, msgparam.BetaContent(req.Messages[3]), 2)
+	assert.Equal(t, "Current thinking", msgparam.BetaContent(req.Messages[3])[0].OfThinking.Thinking)
+	assert.Equal(t, "Current response", msgparam.BetaContent(req.Messages[3])[1].OfText.Text)
 }
 
 func TestThinkingCompactBeta_WithToolUse(t *testing.T) {
@@ -234,33 +223,18 @@ func TestThinkingCompactBeta_WithToolUse(t *testing.T) {
 		MaxTokens: 1024,
 		Messages: []anthropic.BetaMessageParam{
 			// First round - should have thinking removed
-			{
-				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("First question")},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaThinkingBlock("sig1", "Old thinking"),
-					anthropic.NewBetaToolUseBlock("tool-1", map[string]any{"query": "test"}, "search"),
-				},
-			},
-			{
-				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-1", "result", false)},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("First question")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaThinkingBlock("sig1", "Old thinking"),
+				anthropic.NewBetaToolUseBlock("tool-1", map[string]any{"query": "test"}, "search"),
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-1", "result", false)}),
 			// Current round - keep thinking
-			{
-				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("New question")},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaThinkingBlock("sig2", "Current thinking"),
-					anthropic.NewBetaTextBlock("Current response"),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("New question")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaThinkingBlock("sig2", "Current thinking"),
+				anthropic.NewBetaTextBlock("Current response"),
+			}),
 		},
 	}
 
@@ -268,12 +242,12 @@ func TestThinkingCompactBeta_WithToolUse(t *testing.T) {
 	require.Len(t, req.Messages, 5)
 
 	// First round assistant message - thinking removed (index 1)
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "search", req.Messages[1].Content[0].OfToolUse.Name)
+	assert.Len(t, msgparam.BetaContent(req.Messages[1]), 1)
+	assert.Equal(t, "search", msgparam.BetaContent(req.Messages[1])[0].OfToolUse.Name)
 
 	// Last assistant message - thinking preserved
-	assert.Len(t, req.Messages[4].Content, 2)
-	assert.Equal(t, "Current thinking", req.Messages[4].Content[0].OfThinking.Thinking)
+	assert.Len(t, msgparam.BetaContent(req.Messages[4]), 2)
+	assert.Equal(t, "Current thinking", msgparam.BetaContent(req.Messages[4])[0].OfThinking.Thinking)
 }
 
 func TestThinkingCompactV1_SingleRound(t *testing.T) {
@@ -293,8 +267,8 @@ func TestThinkingCompactV1_SingleRound(t *testing.T) {
 	require.Len(t, req.Messages, 2)
 
 	// Only round is current, so thinking should be preserved
-	assert.Len(t, req.Messages[1].Content, 2)
-	assert.Equal(t, "Thinking", req.Messages[1].Content[0].OfThinking.Thinking)
+	assert.Len(t, msgparam.Content(req.Messages[1]), 2)
+	assert.Equal(t, "Thinking", msgparam.Content(req.Messages[1])[0].OfThinking.Thinking)
 }
 
 // TestThinkingCompactV1_ComplexToolUseFlow tests the complete flow with tool results
@@ -330,18 +304,18 @@ func TestThinkingCompactV1_ComplexToolUseFlow(t *testing.T) {
 
 	// Round 1 assistant messages should have thinking removed
 	// Index 1: first assistant
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "search", req.Messages[1].Content[0].OfToolUse.Name)
+	assert.Len(t, msgparam.Content(req.Messages[1]), 1)
+	assert.Equal(t, "search", msgparam.Content(req.Messages[1])[0].OfToolUse.Name)
 
 	// Index 3: second assistant
-	assert.Len(t, req.Messages[3].Content, 1)
-	assert.Equal(t, "Round 1 complete", req.Messages[3].Content[0].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[3]), 1)
+	assert.Equal(t, "Round 1 complete", msgparam.Content(req.Messages[3])[0].OfText.Text)
 
 	// Round 2 assistant (current) should keep thinking
 	// Index 5: current assistant
-	assert.Len(t, req.Messages[5].Content, 2)
-	assert.Equal(t, "Current thinking", req.Messages[5].Content[0].OfThinking.Thinking)
-	assert.Equal(t, "Current response", req.Messages[5].Content[1].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[5]), 2)
+	assert.Equal(t, "Current thinking", msgparam.Content(req.Messages[5])[0].OfThinking.Thinking)
+	assert.Equal(t, "Current response", msgparam.Content(req.Messages[5])[1].OfText.Text)
 }
 
 // TestThinkingCompactV1_KeepLastNRounds verifies that k=2 preserves the last 2 rounds' thinking
@@ -375,18 +349,18 @@ func TestThinkingCompactV1_KeepLastNRounds(t *testing.T) {
 	require.Len(t, req.Messages, 6)
 
 	// Round 1 assistant (index 1) - thinking removed
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "Old response", req.Messages[1].Content[0].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[1]), 1)
+	assert.Equal(t, "Old response", msgparam.Content(req.Messages[1])[0].OfText.Text)
 
 	// Round 2 assistant (index 3) - thinking preserved
-	assert.Len(t, req.Messages[3].Content, 2)
-	assert.Equal(t, "Recent thinking", req.Messages[3].Content[0].OfThinking.Thinking)
-	assert.Equal(t, "Recent response", req.Messages[3].Content[1].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[3]), 2)
+	assert.Equal(t, "Recent thinking", msgparam.Content(req.Messages[3])[0].OfThinking.Thinking)
+	assert.Equal(t, "Recent response", msgparam.Content(req.Messages[3])[1].OfText.Text)
 
 	// Round 3 assistant (index 5, current) - thinking preserved
-	assert.Len(t, req.Messages[5].Content, 2)
-	assert.Equal(t, "Current thinking", req.Messages[5].Content[0].OfThinking.Thinking)
-	assert.Equal(t, "Current response", req.Messages[5].Content[1].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[5]), 2)
+	assert.Equal(t, "Current thinking", msgparam.Content(req.Messages[5])[0].OfThinking.Thinking)
+	assert.Equal(t, "Current response", msgparam.Content(req.Messages[5])[1].OfText.Text)
 }
 
 // TestThinkingCompact_NonAnthropicPassthrough verifies unsupported request

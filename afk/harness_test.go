@@ -13,6 +13,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 )
 
 // recordingLog captures what a Harness checkpoints, and when.
@@ -40,18 +42,18 @@ func (l *recordingLog) count() int {
 	return len(l.appended)
 }
 
-func (l *recordingLog) roles() []anthropic.BetaMessageParamRole {
+func (l *recordingLog) roles() []string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	out := make([]anthropic.BetaMessageParamRole, 0, len(l.appended))
+	out := make([]string, 0, len(l.appended))
 	for _, m := range l.appended {
-		out = append(out, m.Role)
+		out = append(out, msgparam.BetaRole(m))
 	}
 	return out
 }
 
-func lastRole(msgs []anthropic.BetaMessageParam) anthropic.BetaMessageParamRole {
-	return msgs[len(msgs)-1].Role
+func lastRole(msgs []anthropic.BetaMessageParam) string {
+	return msgparam.BetaRole(msgs[len(msgs)-1])
 }
 
 // TestHarness_CheckpointsEachStep is the durability property: a multi-step run
@@ -140,9 +142,9 @@ func TestHarness_InterruptedRunLeavesReplayableTranscript(t *testing.T) {
 
 	// The run ended on tool results, which are a user turn; the harness closes
 	// it out so the transcript alternates.
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, lastRole(res.Messages),
+	assert.Equal(t, "assistant", lastRole(res.Messages),
 		"an interrupted transcript must not end on a user turn")
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, lastRole(log.appended),
+	assert.Equal(t, "assistant", lastRole(log.appended),
 		"and what was persisted must satisfy the same invariant")
 	assert.Equal(t, len(res.Messages), log.count())
 }
@@ -163,11 +165,8 @@ func TestHarness_FirstStepFailureStillLeavesReplayableTranscript(t *testing.T) {
 	require.Error(t, err)
 
 	require.NotEmpty(t, res.Messages)
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, lastRole(res.Messages))
-	assert.Equal(t, []anthropic.BetaMessageParamRole{
-		anthropic.BetaMessageParamRoleUser,
-		anthropic.BetaMessageParamRoleAssistant,
-	}, log.roles(), "the prompt is kept, closed out so the next turn can be appended")
+	assert.Equal(t, "assistant", lastRole(res.Messages))
+	assert.Equal(t, []string{"user", "assistant"}, log.roles(), "the prompt is kept, closed out so the next turn can be appended")
 }
 
 // A run that ends normally already ends on an assistant turn; no note is added.
@@ -186,7 +185,7 @@ func TestHarness_CompletedRunGetsNoInterruptionNote(t *testing.T) {
 	assert.False(t, res.Interrupted)
 	assert.Equal(t, "all done", res.FinalText)
 	require.Len(t, res.Messages, 2)
-	assert.Equal(t, "all done", res.Messages[1].Content[0].OfText.Text,
+	assert.Equal(t, "all done", msgparam.BetaContent(res.Messages[1])[0].OfText.Text,
 		"a completed run should not be annotated")
 }
 
@@ -215,7 +214,7 @@ func TestHarness_CancelledRunIsCheckpointedAndClosed(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	assert.True(t, res.Interrupted)
 
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, lastRole(res.Messages))
+	assert.Equal(t, "assistant", lastRole(res.Messages))
 	assert.Equal(t, len(res.Messages), log.count(), "cancelled work is still durable")
 	assert.Equal(t, int32(1), atomic.LoadInt32(&reqCount), "the next step never started")
 }
@@ -387,15 +386,16 @@ func TestHarness_SteeringMergesIntoToolResultTurn(t *testing.T) {
 	// user, assistant(tool_use), user(tool_result + steering), assistant
 	require.Len(t, res.Messages, 4)
 	merged := res.Messages[2]
-	assert.Equal(t, anthropic.BetaMessageParamRoleUser, merged.Role)
-	require.Len(t, merged.Content, 2, "steering joins the tool_result message")
-	assert.NotNil(t, merged.Content[0].OfToolResult)
-	require.NotNil(t, merged.Content[1].OfText)
-	assert.Equal(t, "and check the humidity", merged.Content[1].OfText.Text)
+	assert.Equal(t, "user", msgparam.BetaRole(merged))
+	mergedContent := msgparam.BetaContent(merged)
+	require.Len(t, mergedContent, 2, "steering joins the tool_result message")
+	assert.NotNil(t, mergedContent[0].OfToolResult)
+	require.NotNil(t, mergedContent[1].OfText)
+	assert.Equal(t, "and check the humidity", mergedContent[1].OfText.Text)
 
 	// Roles alternate: no two user messages in a row anywhere.
 	for i := 1; i < len(res.Messages); i++ {
-		assert.NotEqual(t, res.Messages[i-1].Role, res.Messages[i].Role,
+		assert.NotEqual(t, msgparam.BetaRole(res.Messages[i-1]), msgparam.BetaRole(res.Messages[i]),
 			"roles must alternate at index %d", i)
 	}
 }
@@ -440,8 +440,8 @@ func TestHarness_SteeringAfterTextStepContinuesTheRun(t *testing.T) {
 
 	// user, assistant, user(steering), assistant
 	require.Len(t, res.Messages, 4)
-	assert.Equal(t, anthropic.BetaMessageParamRoleUser, res.Messages[2].Role)
-	assert.Equal(t, "one more thing", res.Messages[2].Content[0].OfText.Text)
+	assert.Equal(t, "user", msgparam.BetaRole(res.Messages[2]))
+	assert.Equal(t, "one more thing", msgparam.BetaContent(res.Messages[2])[0].OfText.Text)
 }
 
 // Steering is durable: what the model was shown is what lands in the log.
@@ -473,7 +473,7 @@ func TestHarness_SteeringIsCheckpointed(t *testing.T) {
 		"the log must match what the model was shown, steering included")
 	var found bool
 	for _, m := range log.appended {
-		for _, b := range m.Content {
+		for _, b := range msgparam.BetaContent(m) {
 			if b.OfText != nil && b.OfText.Text == "remember this" {
 				found = true
 			}

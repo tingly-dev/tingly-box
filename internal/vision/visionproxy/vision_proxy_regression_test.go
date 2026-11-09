@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // Regression for the case the original processBeta/processV1 missed:
@@ -34,16 +35,15 @@ func TestVisionProxy_AnthropicBeta_ToolResultImage_Described(t *testing.T) {
 	}
 	req := &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("downstream-text-model"),
-		Messages: []anthropic.BetaMessageParam{{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
+		Messages: []anthropic.BetaMessageParam{
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: "here's the screenshot"}},
 				{OfToolResult: &anthropic.BetaToolResultBlockParam{
 					ToolUseID: "tool-1",
 					Content:   []anthropic.BetaToolResultBlockParamContentUnion{imgInTR},
 				}},
-			},
-		}},
+			}),
+		},
 	}
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
@@ -70,15 +70,12 @@ func TestVisionProxy_AnthropicV1_ToolResultImage_Described(t *testing.T) {
 	}
 	req := &anthropic.MessageNewParams{
 		Model: anthropic.Model("downstream-text-model"),
-		Messages: []anthropic.MessageParam{{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfToolResult: &anthropic.ToolResultBlockParam{
-					ToolUseID: "tool-1",
-					Content:   []anthropic.ToolResultBlockParamContentUnion{imgInTR},
-				}},
-			},
-		}},
+		Messages: []anthropic.MessageParam{msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			{OfToolResult: &anthropic.ToolResultBlockParam{
+				ToolUseID: "tool-1",
+				Content:   []anthropic.ToolResultBlockParamContentUnion{imgInTR},
+			}},
+		})},
 	}
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
@@ -109,22 +106,16 @@ func TestVisionProxy_AnthropicBeta_HistoricalToolResultImage_StrippedNoCall(t *t
 		Model: anthropic.Model("downstream-text-model"),
 		Messages: []anthropic.BetaMessageParam{
 			// historical turn carrying a tool_result image
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfToolResult: &anthropic.BetaToolResultBlockParam{
-						ToolUseID: "tool-old",
-						Content:   []anthropic.BetaToolResultBlockParamContentUnion{historicalImg},
-					}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfToolResult: &anthropic.BetaToolResultBlockParam{
+					ToolUseID: "tool-old",
+					Content:   []anthropic.BetaToolResultBlockParamContentUnion{historicalImg},
+				}},
+			}),
 			// latest turn — text only, no vision call expected
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "follow-up question"}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "follow-up question"}},
+			}),
 		},
 	}
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}

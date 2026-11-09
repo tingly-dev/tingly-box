@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestParseImageURLToAnthropicSource covers the data-URL parser used by every
@@ -61,14 +62,14 @@ func TestConvertOpenAIToAnthropic_ImageURL(t *testing.T) {
 
 	out := ConvertOpenAIToAnthropicRequest(req, 1024)
 	require.Len(t, out.Messages, 1)
-	require.Len(t, out.Messages[0].Content, 2, "expected text + image blocks")
+	require.Len(t, msgparam.BetaContent(out.Messages[0]), 2, "expected text + image blocks")
 
-	assert.NotNil(t, out.Messages[0].Content[0].OfText)
-	assert.Equal(t, "look", out.Messages[0].Content[0].OfText.Text)
+	assert.NotNil(t, msgparam.BetaContent(out.Messages[0])[0].OfText)
+	assert.Equal(t, "look", msgparam.BetaContent(out.Messages[0])[0].OfText.Text)
 
-	require.NotNil(t, out.Messages[0].Content[1].OfImage)
-	require.NotNil(t, out.Messages[0].Content[1].OfImage.Source.OfURL)
-	assert.Equal(t, "https://example.com/cat.png", out.Messages[0].Content[1].OfImage.Source.OfURL.URL)
+	require.NotNil(t, msgparam.BetaContent(out.Messages[0])[1].OfImage)
+	require.NotNil(t, msgparam.BetaContent(out.Messages[0])[1].OfImage.Source.OfURL)
+	assert.Equal(t, "https://example.com/cat.png", msgparam.BetaContent(out.Messages[0])[1].OfImage.Source.OfURL.URL)
 }
 
 // TestConvertOpenAIToAnthropic_ImageDataURL verifies that an OpenAI data: URL
@@ -90,10 +91,10 @@ func TestConvertOpenAIToAnthropic_ImageDataURL(t *testing.T) {
 
 	out := ConvertOpenAIToAnthropicRequest(req, 1024)
 	require.Len(t, out.Messages, 1)
-	require.Len(t, out.Messages[0].Content, 1)
+	require.Len(t, msgparam.BetaContent(out.Messages[0]), 1)
 
-	require.NotNil(t, out.Messages[0].Content[0].OfImage)
-	src := out.Messages[0].Content[0].OfImage.Source
+	require.NotNil(t, msgparam.BetaContent(out.Messages[0])[0].OfImage)
+	src := msgparam.BetaContent(out.Messages[0])[0].OfImage.Source
 	require.NotNil(t, src.OfBase64)
 	assert.Equal(t, "image/jpeg", string(src.OfBase64.MediaType))
 	assert.Equal(t, "/9j/4AAQ", src.OfBase64.Data)
@@ -106,13 +107,10 @@ func TestConvertAnthropicV1ToResponses_Image(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewTextBlock("describe"),
-					anthropic.NewImageBlockBase64("image/png", "iVBORw0KGgo="),
-				},
-			},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				anthropic.NewTextBlock("describe"),
+				anthropic.NewImageBlockBase64("image/png", "iVBORw0KGgo="),
+			}),
 		},
 	}
 
@@ -139,14 +137,11 @@ func TestConvertAnthropicBetaToResponses_Image(t *testing.T) {
 		Model:     "test-model",
 		MaxTokens: 100,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					anthropic.NewBetaImageBlock(anthropic.BetaURLImageSourceParam{
-						URL: "https://example.com/cat.png",
-					}),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaImageBlock(anthropic.BetaURLImageSourceParam{
+					URL: "https://example.com/cat.png",
+				}),
+			}),
 		},
 	}
 
@@ -193,11 +188,11 @@ func TestConvertResponsesToAnthropic_Image(t *testing.T) {
 	t.Run("beta", func(t *testing.T) {
 		out := ConvertOpenAIResponsesToAnthropicBetaRequest(makeReq(), 1024)
 		require.Len(t, out.Messages, 1)
-		require.Len(t, out.Messages[0].Content, 2)
+		require.Len(t, msgparam.BetaContent(out.Messages[0]), 2)
 
-		require.NotNil(t, out.Messages[0].Content[1].OfImage)
-		require.NotNil(t, out.Messages[0].Content[1].OfImage.Source.OfBase64)
-		assert.Equal(t, "image/png", string(out.Messages[0].Content[1].OfImage.Source.OfBase64.MediaType))
+		require.NotNil(t, msgparam.BetaContent(out.Messages[0])[1].OfImage)
+		require.NotNil(t, msgparam.BetaContent(out.Messages[0])[1].OfImage.Source.OfBase64)
+		assert.Equal(t, "image/png", string(msgparam.BetaContent(out.Messages[0])[1].OfImage.Source.OfBase64.MediaType))
 	})
 }
 

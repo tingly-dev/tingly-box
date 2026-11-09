@@ -12,6 +12,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 )
 
 // capturedRequest is what the server saw: the decoded body plus the headers we
@@ -222,7 +224,7 @@ func TestHarness_CompactionBlockSurvivesHistoryAndPersistence(t *testing.T) {
 
 func hasCompactionBlock(msgs []anthropic.BetaMessageParam) bool {
 	for _, m := range msgs {
-		for _, b := range m.Content {
+		for _, b := range msgparam.BetaContent(m) {
 			if b.OfCompaction != nil {
 				return true
 			}

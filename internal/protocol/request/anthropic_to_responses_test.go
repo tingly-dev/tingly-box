@@ -155,10 +155,10 @@ func TestConvertAnthropicV1ToResponsesRequest_FullConversion(t *testing.T) {
 // TestConvertAnthropicBetaToResponsesRequest_WithTemperature tests conversion with temperature
 func TestConvertAnthropicBetaToResponsesRequest_WithTemperature(t *testing.T) {
 	anthropicReq := &anthropic.BetaMessageNewParams{
-		Model:       anthropic.Model("claude-3-5-sonnet-latest"),
-		Messages:    []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("Test"))},
-		Temperature: anthropic.Opt(0.7),
+		Model:    anthropic.Model("claude-3-5-sonnet-latest"),
+		Messages: []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("Test"))},
 	}
+	anthropicReq.SetExtraFields(map[string]any{"temperature": 0.7})
 
 	result := ConvertAnthropicBetaToResponsesRequest(anthropicReq)
 
@@ -173,10 +173,10 @@ func TestConvertAnthropicBetaToResponsesRequest_WithTemperature(t *testing.T) {
 // TestConvertAnthropicV1ToResponsesRequest_WithTemperature tests v1 conversion with temperature
 func TestConvertAnthropicV1ToResponsesRequest_WithTemperature(t *testing.T) {
 	anthropicReq := &anthropic.MessageNewParams{
-		Model:       anthropic.Model("claude-3-5-sonnet-20241022"),
-		Messages:    []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("Test"))},
-		Temperature: anthropic.Opt(0.8),
+		Model:    anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("Test"))},
 	}
+	anthropicReq.SetExtraFields(map[string]any{"temperature": 0.8})
 
 	result := ConvertAnthropicV1ToResponsesRequest(anthropicReq)
 

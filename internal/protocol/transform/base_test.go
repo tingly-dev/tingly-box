@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -41,7 +42,7 @@ func newAnthropicBetaRequest(model string, maxTokens int64) *anthropic.BetaMessa
 		Model:     anthropic.Model(model),
 		MaxTokens: maxTokens,
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}),
 		},
 	}
 }

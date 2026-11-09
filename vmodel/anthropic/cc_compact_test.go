@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 )
@@ -15,11 +16,11 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 	vm := newCompactVM()
 
 	originalMessages := []sdk.BetaMessageParam{
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First user message")}},
-		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First assistant response")}},
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Second user message")}},
-		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Second assistant response")}},
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("<command>compact</command>")}},
+		msgparam.NewBeta("user", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First user message")}),
+		msgparam.NewBeta("assistant", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First assistant response")}),
+		msgparam.NewBeta("user", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Second user message")}),
+		msgparam.NewBeta("assistant", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Second assistant response")}),
+		msgparam.NewBeta("user", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("<command>compact</command>")}),
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{
@@ -47,7 +48,7 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 
 	hasCompressedContent := false
 	for _, msg := range req.Messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfText != nil && len(block.OfText.Text) > 0 {
 				content := block.OfText.Text
 				if len(content) > 100 && (strings.Contains(content, "<conversation>") || strings.Contains(content, "<user>")) {
@@ -81,8 +82,8 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 	vm := newCompactVM()
 
 	originalMessages := []sdk.BetaMessageParam{
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Regular user message")}},
-		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Regular assistant response")}},
+		msgparam.NewBeta("user", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Regular user message")}),
+		msgparam.NewBeta("assistant", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Regular assistant response")}),
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{
@@ -105,7 +106,7 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 	}
 
 	for _, msg := range req.Messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfText != nil {
 				content := block.OfText.Text
 				if strings.Contains(content, "<conversation>") || strings.Contains(content, "<compressed>") {
@@ -124,9 +125,9 @@ func TestClaudeCodeCompact_NoCompressionWithoutTools(t *testing.T) {
 	})
 
 	originalMessages := []sdk.BetaMessageParam{
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Message 1")}},
-		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Response 1")}},
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("<command>compact</command>")}},
+		msgparam.NewBeta("user", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Message 1")}),
+		msgparam.NewBeta("assistant", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Response 1")}),
+		msgparam.NewBeta("user", []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("<command>compact</command>")}),
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{

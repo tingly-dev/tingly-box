@@ -12,6 +12,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -108,14 +109,11 @@ func TestWire_BetaStreaming_RenamesEverySiteAndRestoresTheStream(t *testing.T) {
 		ToolChoice: anthropic.BetaToolChoiceParamOfTool("read_file"),
 		Messages: []anthropic.BetaMessageParam{
 			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("go")),
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{{
-					OfToolUse: &anthropic.BetaToolUseBlockParam{
-						ID: "toolu_0", Name: "read_file", Input: map[string]any{},
-					},
-				}},
-			},
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{{
+				OfToolUse: &anthropic.BetaToolUseBlockParam{
+					ID: "toolu_0", Name: "read_file", Input: map[string]any{},
+				},
+			}}),
 		},
 	}
 	req.Metadata.UserID = param.NewOpt(wireMetadataUserID)
@@ -167,14 +165,11 @@ func TestWire_V1Streaming_RenamesEverySiteAndRestoresTheStream(t *testing.T) {
 		ToolChoice: anthropic.ToolChoiceParamOfTool("read_file"),
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("go")),
-			{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{{
-					OfToolUse: &anthropic.ToolUseBlockParam{
-						ID: "toolu_0", Name: "read_file", Input: map[string]any{},
-					},
-				}},
-			},
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{{
+				OfToolUse: &anthropic.ToolUseBlockParam{
+					ID: "toolu_0", Name: "read_file", Input: map[string]any{},
+				},
+			}}),
 		},
 	}
 	req.Metadata.UserID = param.NewOpt(wireMetadataUserID)
