@@ -34,7 +34,7 @@ Instructions, Goal.
 - Errors use one shape, `{"error": "..."}`, via `module/apierr`.
 - Metadata edits (rename, star, move) must not bump a conversation's
   `updated_at`; use the `*Meta` / `Set*` store helpers.
-- The coordinator and threads are Claude Code sessions (agentboot); the coordinator acts only through the Projects MCP tools. Nothing in `project` calls a model directly. `internal/llm` is a plain model client used only by the standalone app's Chats and connection test.
+- The coordinator and threads are Claude Code sessions (agentboot); the coordinator acts only through the Projects MCP tools. Nothing in `projects` calls a model directly. `internal/llm` is a plain model client used only by the standalone app's Chats and connection test.
 - Tests script the coordinator's session with `internal/coordtest` (calls the real MCP tools) on top of `agentboot/engine/enginetest`.
 - `projects` is the embedding facade (`New` / `Register` / `Start` / `Host`); this module never imports Tingly Box's root module (`task projects:boundary`, also run in CI). It may import the `remote` module, but only its ports and vocabulary (`remote/agent`, `remote/interaction`): `*App` implements `agent.Chat`, and the IM bridge itself lives in the host.
 - Projects routes live under `/api/v1/projects` (projects, their thread lists) and `/api/v1/threads` (everything addressed by a thread id). Settings, Chats and health sit outside it and are standalone-only (`build` in `server_modules.go`).

@@ -1,6 +1,6 @@
 # Remote 的聊天控制并入 Projects
 
-> 状态：**实施中**（第 2 期能力、第 3 期 a 切换已提 PR）。承接 [projects-im.md](./projects-im.md)（M1–M5 已落地：绑定了的 chat 走 Projects）
+> 状态：**已实施**（第 2 期命令与第 3 期切换已合入：#2190–#2193 删除旧执行路径，#2428 让 `/dir` 等命令在所有 IM chat 生效；`@tb`/`@cc` 已下线，未绑定 chat 的前缀只做剥离并提示直接发消息）。承接 [projects-im.md](./projects-im.md)（M1–M5 已落地：绑定了的 chat 走 Projects）
 > 和 [projects-desk-absorption.md](./projects-desk-absorption.md)（Desk 并入 Projects 的先例，本文沿用它的做法）。
 
 ## 目标
