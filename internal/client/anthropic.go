@@ -94,6 +94,10 @@ func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, tra
 		// Provider credentials come only from the provider record; the gateway's
 		// own ANTHROPIC_* environment must never be sent upstream.
 		anthropicOption.WithoutEnvironmentDefaults(),
+		// The v2 SDK defaults to the 2026-10-21 API version, which drops
+		// temperature/top_p/top_k; the ecosystem this gateway serves is on the
+		// classic version, so pin it. The V2 client group opts back in.
+		anthropicOption.WithHeader("anthropic-version", anthropicVersion),
 		anthropicOption.WithBaseURL(anthropicBaseURL(baseURL)),
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
