@@ -118,6 +118,15 @@ type ResponsesUsageWire struct {
 type ResponsesInputTokensDetailsWire struct {
 	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
 	CachedTokens     int64 `json:"cached_tokens"`
+	// Retention-tier split of the writes (gpt-5.6+). Omitempty like
+	// CacheWriteTokens: absent means the channel never reported a split, and
+	// older clients must not be handed a field they don't know.
+	CacheWriteTokensDetails *ResponsesCacheWriteTokensDetailsWire `json:"cache_write_tokens_details,omitempty"`
+}
+
+type ResponsesCacheWriteTokensDetailsWire struct {
+	Ttl30mTokens int64 `json:"ttl_30m_tokens"`
+	Ttl12hTokens int64 `json:"ttl_12h_tokens"`
 }
 
 type ResponsesOutputTokensDetailsWire struct {

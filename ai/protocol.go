@@ -82,6 +82,16 @@ type TokenUsage struct {
 	// prompt_tokens and only cached_tokens is subtracted).
 	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
 
+	// CacheWriteTTL30m / CacheWriteTTL12h split CacheWriteTokens by the cache
+	// retention tier the write was made at (OpenAI Responses API
+	// cache_write_tokens_details, gpt-5.6+): 30-minute default retention vs
+	// the premium 12-hour tier. They are disjoint SUBSETS of CacheWriteTokens
+	// (30m + 12h = CacheWriteTokens when reported). Sourced only from the
+	// Responses path; Chat Completions and Anthropic never report a split, in
+	// which case both stay zero and the write tier is unknown.
+	CacheWriteTTL30m int `json:"cache_write_ttl_30m_tokens,omitempty"`
+	CacheWriteTTL12h int `json:"cache_write_ttl_12h_tokens,omitempty"`
+
 	// ReasoningTokens is the number of tokens used for internal reasoning
 	// (e.g. o1/o3 reasoning models). These are a subset of OutputTokens.
 	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
