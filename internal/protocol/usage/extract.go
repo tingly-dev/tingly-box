@@ -50,13 +50,18 @@ func FromOpenAIResponses(u responses.ResponseUsage) *protocol.TokenUsage {
 	cacheRead := int(u.InputTokensDetails.CachedTokens)
 	cacheWrite := int(u.InputTokensDetails.CacheWriteTokens)
 	reasoning := int(u.OutputTokensDetails.ReasoningTokens)
-	return protocol.NewTokenUsageFull(
+	out := protocol.NewTokenUsageFull(
 		int(u.InputTokens)-cacheRead,
 		int(u.OutputTokens),
 		cacheRead,
 		cacheWrite,
 		reasoning,
 	)
+	// Retention-tier breakdown of the writes (30m default vs 12h premium).
+	// Present only on gpt-5.6+ Responses usage; zero/absent on other channels.
+	out.CacheWriteTTL30m = int(u.InputTokensDetails.CacheWriteTokensDetails.Ttl30mTokens)
+	out.CacheWriteTTL12h = int(u.InputTokensDetails.CacheWriteTokensDetails.Ttl12hTokens)
+	return out
 }
 
 // FromAnthropicMessage extracts normalized TokenUsage from an Anthropic v1

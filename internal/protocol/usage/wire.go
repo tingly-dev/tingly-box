@@ -81,7 +81,7 @@ func ToResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 		return nil
 	}
 	inputTokens := int64(u.PromptTotalTokens())
-	return &wire.ResponsesUsageWire{
+	built := &wire.ResponsesUsageWire{
 		InputTokens:  inputTokens,
 		OutputTokens: int64(u.OutputTokens),
 		TotalTokens:  inputTokens + int64(u.OutputTokens),
@@ -93,4 +93,14 @@ func ToResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 			ReasoningTokens: int64(u.ReasoningTokens),
 		},
 	}
+	// Emit the retention-tier split only when the channel reported one — an
+	// absent details block means "tier unknown", matching the omitempty on
+	// the wire struct.
+	if u.CacheWriteTTL30m > 0 || u.CacheWriteTTL12h > 0 {
+		built.InputTokensDetails.CacheWriteTokensDetails = &wire.ResponsesCacheWriteTokensDetailsWire{
+			Ttl30mTokens: int64(u.CacheWriteTTL30m),
+			Ttl12hTokens: int64(u.CacheWriteTTL12h),
+		}
+	}
+	return built
 }

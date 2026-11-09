@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
 	protocol "github.com/tingly-dev/tingly-box/ai"
@@ -115,8 +116,40 @@ func TestFromOpenAIResponses(t *testing.T) {
 			assert.Equal(t, tc.wantOutput, got.OutputTokens)
 			assert.Equal(t, tc.wantCache, got.CacheReadTokens)
 			assert.Equal(t, tc.wantReasoning, got.ReasoningTokens)
+			assert.Zero(t, got.CacheWriteTTL30m)
+			assert.Zero(t, got.CacheWriteTTL12h)
 		})
 	}
+}
+
+// FromOpenAIResponses: cache_write_tokens_details retention split (gpt-5.6+).
+func TestFromOpenAIResponsesCacheWriteTTL(t *testing.T) {
+	u := responses.ResponseUsage{
+		InputTokens:  1000,
+		OutputTokens: 50,
+	}
+	u.InputTokensDetails.CachedTokens = 300
+	u.InputTokensDetails.CacheWriteTokens = 100
+	u.InputTokensDetails.CacheWriteTokensDetails.Ttl30mTokens = 60
+	u.InputTokensDetails.CacheWriteTokensDetails.Ttl12hTokens = 40
+
+	got := usage.FromOpenAIResponses(u)
+	assert.Equal(t, 700, got.InputTokens) // total minus cache-read hits
+	assert.Equal(t, 100, got.CacheWriteTokens)
+	assert.Equal(t, 60, got.CacheWriteTTL30m)
+	assert.Equal(t, 40, got.CacheWriteTTL12h)
+
+	// Egress: the split survives the wire round-trip; without it, the
+	// details block stays absent (tier unknown ≠ explicit zero).
+	wireOut := usage.ToResponsesUsageWire(got)
+	require.NotNil(t, wireOut.InputTokensDetails.CacheWriteTokensDetails)
+	assert.Equal(t, int64(60), wireOut.InputTokensDetails.CacheWriteTokensDetails.Ttl30mTokens)
+	assert.Equal(t, int64(40), wireOut.InputTokensDetails.CacheWriteTokensDetails.Ttl12hTokens)
+
+	noSplit := *got
+	noSplit.CacheWriteTTL30m, noSplit.CacheWriteTTL12h = 0, 0
+	wireOut = usage.ToResponsesUsageWire(&noSplit)
+	assert.Nil(t, wireOut.InputTokensDetails.CacheWriteTokensDetails)
 }
 
 // ---------------------------------------------------------------------------
