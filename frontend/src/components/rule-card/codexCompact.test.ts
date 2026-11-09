@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CODEX_COMPACT, compactZones, lowZoneStart, planCodexCompact } from './codexCompact';
+import { CODEX_COMPACT, compactZones, formatTokens, lowZoneStart, parseTokens, planCodexCompact, resolveCodexWindow } from './codexCompact';
 
 const { window, window1M } = CODEX_COMPACT;
 
@@ -58,5 +58,32 @@ describe('compactZones', () => {
         const zones = compactZones(window1M, 100);
         expect(zones.cappedFrom).toBeNull();
         expect(zones.low?.from).toBeCloseTo(96.4);
+    });
+});
+
+describe('context window helpers', () => {
+    it('resolves manual > 1M flag > 200K', () => {
+        expect(resolveCodexWindow(256_000, true)).toBe(256_000);
+        expect(resolveCodexWindow(0, true)).toBe(1_000_000);
+        expect(resolveCodexWindow(0, false)).toBe(200_000);
+        expect(resolveCodexWindow(100, false)).toBe(200_000);
+    });
+
+    it('formats windows the way people say them', () => {
+        expect(formatTokens(200_000)).toBe('200K');
+        expect(formatTokens(1_000_000)).toBe('1M');
+        expect(formatTokens(1_500_000)).toBe('1.5M');
+        expect(formatTokens(131_072)).toBe('131K');
+    });
+
+    it('parses typed windows', () => {
+        expect(parseTokens('256k')).toBe(256_000);
+        expect(parseTokens('1M')).toBe(1_000_000);
+        expect(parseTokens('1.5m')).toBe(1_500_000);
+        expect(parseTokens('131072')).toBe(131_072);
+        expect(parseTokens('200,000')).toBe(200_000);
+        expect(parseTokens('abc')).toBeNull();
+        expect(parseTokens('1k')).toBeNull();
+        expect(parseTokens('20m')).toBeNull();
     });
 });

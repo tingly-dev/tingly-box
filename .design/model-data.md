@@ -68,6 +68,16 @@
 `TestEmbeddedTokenLimitsAreDecimal` 会拦住新写入的 2 的幂;规则也写在 providers.json
 `_naming_rules.token_limit_units`。
 
+## 上下文窗口的口径
+
+`context` 是厂商**公布的上下文窗口**,对外列表里叫 `context_window`。厂商对"窗口"有两种口径:
+Anthropic 的窗口由输入输出共用,它的 Models API 把窗口直接报成 `max_input_tokens`;OpenAI 的窗口
+把输出也算进去(gpt-5:400K = 272K 输入 + 128K 输出)。为了让 `max_input_tokens` 只有一个含义
+("一次请求最多能带的输入"),窗口包含输出的 provider 设 `context_includes_output: true`
+(目前 `openai-com`、`azure-openai`),查询时把 `max_input` 推算为 `context − max_output`;
+单条 model 也可以直接写 `max_input`。`codex` 模板的 `context` 本身就是 Codex 的输入预算,不设这个标记。
+读取统一走 `ModelInfo.InputLimit()`,详见 `.design/codex-config.md` 的 "Three numbers, one meaning each"。
+
 ## 消费方
 
 - `internal/protocol/ops/request_anthropic_model.go`:按模型能力对 thinking 三方言

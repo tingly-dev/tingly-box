@@ -55,6 +55,9 @@ async function modelAPI(path: string, options: RequestInit = {}): Promise<any> {
 
 export const listOpenAIModels = (): Promise<any> => modelAPI('/openai/v1/models');
 export const listAnthropicModels = (): Promise<any> => modelAPI('/anthropic/v1/models');
+// One scenario's model list (/tingly/{scenario}/v1/models): exactly what that
+// scenario's clients see, including each model's context_length.
+export const listScenarioModels = (scenario: string): Promise<any> => modelAPI(`/tingly/${scenario}/v1/models`);
 
 /**
  * Build an OpenAI SDK client targeting a tingly scenario passthrough endpoint.
