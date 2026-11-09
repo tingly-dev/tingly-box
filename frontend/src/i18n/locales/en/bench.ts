@@ -161,6 +161,8 @@ export default {
     "promptEditorDone": "Done",
     "size": "Size",
     "quality": "Quality",
+    "effort": "Effort",
+    "effortDefault": "default (not sent)",
     "count": "N",
     "generate": "Generate",
     "generateAnother": "Generate another · {{count}} running",

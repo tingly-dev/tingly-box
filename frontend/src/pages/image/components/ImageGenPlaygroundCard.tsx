@@ -62,6 +62,7 @@ import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
 const TextPlus = tablerMui(IconTextPlus);
 const Writing = tablerMui(IconWriting);
 import type {
+    Effort,
     GenerationRun,
     ImportedImage,
     Quality,
@@ -162,6 +163,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [size, setSize] = useState(profile?.size ?? '1024x1024');
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
+    // 'default' = don't send reasoning_effort — the behavior predating the
+    // control. Anything else rides the request as the images API's
+    // reasoning_effort parameter.
+    const [effort, setEffort] = useState<Effort>(profile?.effort ?? 'default');
     const [count, setCount] = useState(profile?.count ?? 1);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -394,10 +399,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            effort,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, getPrompt, model, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, effort, getPrompt, model, quality, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -419,6 +425,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
+            setEffort(run.effort ?? 'default');
             setCount(run.count ?? 1);
             setReferenceImages(sources.slice(0, MAX_EDIT_REFERENCE_IMAGES));
             controlsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -563,9 +570,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model: selectedModel,
             size,
             quality,
+            effort,
             count,
         });
-    }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
+    }, [activePromptId, count, effort, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
 
     // Stable identities (they read through `latest`), so the memoised tab row
     // is not re-rendered by every keystroke in the prompt field.
@@ -636,6 +644,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            effort,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
@@ -655,6 +664,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                effort: run.effort,
                 count: run.count ?? 1,
             });
             copyRunToProfile(run, created.id);
@@ -947,7 +957,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 display: 'grid',
                                 gridTemplateColumns: {
                                     xs: 'repeat(2, minmax(0, 1fr))',
-                                    sm: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                    sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 88px',
                                 },
                                 gap: 1.5,
                             }}
@@ -984,6 +994,24 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <MenuItem value="medium">medium</MenuItem>
                                     <MenuItem value="high">high</MenuItem>
                                     <MenuItem value="standard">standard</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <FormControl size="small">
+                                <InputLabel id="image-effort-label">
+                                    {t('playground.effort', { defaultValue: 'Effort' })}
+                                </InputLabel>
+                                <Select
+                                    labelId="image-effort-label"
+                                    label={t('playground.effort', { defaultValue: 'Effort' })}
+                                    value={effort}
+                                    onChange={(event) => setEffort(event.target.value as Effort)}
+                                >
+                                    <MenuItem value="default">
+                                        {t('playground.effortDefault', { defaultValue: 'default (not sent)' })}
+                                    </MenuItem>
+                                    <MenuItem value="low">low</MenuItem>
+                                    <MenuItem value="medium">medium</MenuItem>
+                                    <MenuItem value="high">high</MenuItem>
                                 </Select>
                             </FormControl>
                             <TextField

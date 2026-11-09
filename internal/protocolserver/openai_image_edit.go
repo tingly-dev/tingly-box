@@ -247,6 +247,7 @@ func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
 		}
 		req.OutputCompression = param.NewOpt(oc)
 	}
+	applyImageReasoningEffort(req, formValue("reasoning_effort"))
 
 	return req, nil
 }
@@ -276,6 +277,7 @@ type imageEditJSONRequest struct {
 	OutputFormat      string              `json:"output_format,omitempty"`
 	OutputCompression *int64              `json:"output_compression,omitempty"`
 	InputFidelity     string              `json:"input_fidelity,omitempty"`
+	ReasoningEffort   string              `json:"reasoning_effort,omitempty"`
 	User              string              `json:"user,omitempty"`
 }
 
@@ -329,6 +331,7 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 	if jsonReq.User != "" {
 		req.User = param.NewOpt(jsonReq.User)
 	}
+	applyImageReasoningEffort(req, jsonReq.ReasoningEffort)
 
 	for idx, s := range jsonReq.Image {
 		data, contentType, err := decodeInlineImage(s)
