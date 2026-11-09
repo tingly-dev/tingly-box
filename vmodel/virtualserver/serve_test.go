@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
-	anthropicopt "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicsdk "github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicopt "github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/openai/openai-go/v3"
 	openaiopt "github.com/openai/openai-go/v3/option"
 	"github.com/stretchr/testify/assert"

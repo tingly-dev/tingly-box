@@ -3,7 +3,7 @@ package transform
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"

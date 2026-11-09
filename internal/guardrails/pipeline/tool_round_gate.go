@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
 
 	guardrails "github.com/tingly-dev/tingly-box/internal/guardrails"

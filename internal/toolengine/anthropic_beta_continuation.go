@@ -1,6 +1,6 @@
 package toolengine
 
-import "github.com/anthropics/anthropic-sdk-go"
+import "github.com/anthropics/anthropic-sdk-go/v2"
 
 // mergeAnthropicBetaContinuation splices a stored mixed round (the assistant
 // turn and its server-tool results) into the follow-up request: the client's

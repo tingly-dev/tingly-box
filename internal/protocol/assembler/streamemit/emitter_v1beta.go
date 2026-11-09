@@ -3,7 +3,7 @@ package streamemit
 import (
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // FeedV1Beta routes a v1beta Anthropic stream event through the emitter

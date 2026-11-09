@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 )
 

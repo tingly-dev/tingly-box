@@ -3,7 +3,7 @@ package protocolserver
 import (
 	"context"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/gin-gonic/gin"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"

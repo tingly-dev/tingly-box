@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
 	"github.com/tingly-dev/tingly-box/internal/typ"

@@ -3,7 +3,7 @@ package ops
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // systemMessage builds a message with the non-standard "system" role carrying a

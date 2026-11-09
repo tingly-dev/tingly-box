@@ -1,8 +1,8 @@
 package thinking
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 )
 
 // ReconcileV1WithRequest makes the request's thinking legal on the Anthropic

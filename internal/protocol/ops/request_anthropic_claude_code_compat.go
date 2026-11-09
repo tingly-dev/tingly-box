@@ -1,6 +1,6 @@
 package ops
 
-import "github.com/anthropics/anthropic-sdk-go"
+import "github.com/anthropics/anthropic-sdk-go/v2"
 
 // ApplyClaudeCodeCompatRoleRewrite normalizes any "system" role inside the
 // Anthropic messages array so the request becomes valid for third-party

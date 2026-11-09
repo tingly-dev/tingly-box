@@ -3,7 +3,7 @@ package routing
 import (
 	"net/http"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"

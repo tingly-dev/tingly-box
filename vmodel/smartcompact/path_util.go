@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // PathUtil extracts and manipulates file paths from tool parameters.

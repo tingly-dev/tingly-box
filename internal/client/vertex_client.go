@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync"
 
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
-	anthropicVertex "github.com/anthropics/anthropic-sdk-go/vertex"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
+	anthropicVertex "github.com/anthropics/anthropic-sdk-go/v2/vertex"
 
 	gauth "cloud.google.com/go/auth"
 	gcreds "cloud.google.com/go/auth/credentials"

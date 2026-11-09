@@ -3,7 +3,7 @@ package smartcompact
 import (
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // lastUserMessageContainsCompact checks if the last user message contains "compact" (case-insensitive).

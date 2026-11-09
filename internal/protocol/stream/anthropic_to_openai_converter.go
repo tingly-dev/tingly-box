@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"

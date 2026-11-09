@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicstream "github.com/anthropics/anthropic-sdk-go/v2/packages/ssestream"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"

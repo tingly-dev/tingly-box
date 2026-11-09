@@ -1,6 +1,6 @@
 package assembler
 
-import "github.com/anthropics/anthropic-sdk-go"
+import "github.com/anthropics/anthropic-sdk-go/v2"
 
 // AnthropicSDKAssembler wraps the SDK's Message.Accumulate method
 // providing a unified interface for stream accumulation.

@@ -40,8 +40,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/stretchr/testify/require"
 )
 

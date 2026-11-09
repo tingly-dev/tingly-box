@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 

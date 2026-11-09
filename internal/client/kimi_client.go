@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"

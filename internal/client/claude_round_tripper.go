@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // knownAnthropicBetas is the universe of valid anthropic-beta flag values

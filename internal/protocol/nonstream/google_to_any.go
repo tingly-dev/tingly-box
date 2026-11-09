@@ -7,7 +7,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"google.golang.org/genai"
 )
 

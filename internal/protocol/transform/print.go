@@ -3,7 +3,7 @@ package transform
 import (
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 func PrintBetaMessage(req *anthropic.BetaMessageNewParams) {

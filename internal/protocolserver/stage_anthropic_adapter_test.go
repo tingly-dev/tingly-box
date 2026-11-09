@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 

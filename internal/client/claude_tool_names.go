@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 )
 
 // mcpNamespaceSeparator separates the segments of an MCP tool name.

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
-	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
+	anthropicstream "github.com/anthropics/anthropic-sdk-go/v2/packages/ssestream"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/constant"

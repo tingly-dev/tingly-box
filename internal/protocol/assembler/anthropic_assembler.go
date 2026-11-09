@@ -3,8 +3,8 @@ package assembler
 import (
 	"encoding/json"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/shared/constant"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/shared/constant"
 
 	"github.com/tingly-dev/tingly-box/ai"
 )
