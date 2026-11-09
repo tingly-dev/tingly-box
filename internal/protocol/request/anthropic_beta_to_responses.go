@@ -5,6 +5,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // ConvertAnthropicBetaToResponsesRequest converts Anthropic beta request to OpenAI Responses API format
@@ -33,10 +35,10 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	}
 
 	for _, msg := range anthropicReq.Messages {
-		if string(msg.Role) == "user" {
+		if msgparam.BetaRole(msg) == "user" {
 			items := convertBetaUserMessageToResponsesInput(msg)
 			inputItems = append(inputItems, items...)
-		} else if string(msg.Role) == "assistant" {
+		} else if msgparam.BetaRole(msg) == "assistant" {
 			items := convertBetaAssistantMessageToResponsesInput(msg)
 			inputItems = append(inputItems, items...)
 		}
@@ -53,13 +55,13 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 	}
 
 	// Convert temperature
-	if anthropicReq.Temperature.Valid() {
-		params.Temperature = ParamOpt(anthropicReq.Temperature.Value)
+	if temp := SamplingTemperature(anthropicReq); temp.Valid() {
+		params.Temperature = ParamOpt(temp.Value)
 	}
 
 	// Convert top_p
-	if anthropicReq.TopP.Valid() {
-		params.TopP = ParamOpt(anthropicReq.TopP.Value)
+	if topP := SamplingTopP(anthropicReq); topP.Valid() {
+		params.TopP = ParamOpt(topP.Value)
 	}
 
 	// Convert tools from Anthropic format to Responses API format
@@ -120,7 +122,7 @@ func convertBetaAssistantMessageToResponsesInput(msg anthropic.BetaMessageParam)
 
 func anthropicBetaMessagesHaveRepresentableCacheControl(messages []anthropic.BetaMessageParam) bool {
 	for _, message := range messages {
-		for _, block := range message.Content {
+		for _, block := range msgparam.BetaContent(message) {
 			cacheControl := block.GetCacheControl()
 			if cacheControl == nil || param.IsOmitted(*cacheControl) {
 				continue
@@ -135,7 +137,7 @@ func anthropicBetaMessagesHaveRepresentableCacheControl(messages []anthropic.Bet
 
 func anthropicBetaMessagesHaveToolUseCacheControl(messages []anthropic.BetaMessageParam) bool {
 	for _, message := range messages {
-		for _, block := range message.Content {
+		for _, block := range msgparam.BetaContent(message) {
 			if block.OfToolUse != nil && !param.IsOmitted(block.OfToolUse.CacheControl) {
 				return true
 			}

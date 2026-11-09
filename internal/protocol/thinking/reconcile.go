@@ -3,6 +3,7 @@ package thinking
 import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // ReconcileV1WithRequest makes the request's thinking legal on the Anthropic
@@ -27,7 +28,8 @@ func ReconcileV1WithRequest(req *anthropic.MessageNewParams) {
 		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 		return
 	}
-	req.Temperature, req.TopK, req.TopP = thinkingSampling(req.Temperature, req.TopK, req.TopP)
+	sampling := reconcileSampling(req.ExtraFields())
+	req.SetExtraFields(sampling)
 }
 
 // ReconcileBetaWithRequest is ReconcileV1WithRequest for Beta
@@ -44,25 +46,41 @@ func ReconcileBetaWithRequest(req *anthropic.BetaMessageNewParams) {
 		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 		return
 	}
-	req.Temperature, req.TopK, req.TopP = thinkingSampling(req.Temperature, req.TopK, req.TopP)
+	sampling := reconcileSampling(req.ExtraFields())
+	req.SetExtraFields(sampling)
 }
 
 // minThinkingTopP is the smallest top_p Anthropic accepts with thinking on.
 const minThinkingTopP = 0.95
 
-// thinkingSampling returns the sampling parameters thinking allows: no
-// temperature other than 1, no top_k, and top_p within [0.95, 1].
-func thinkingSampling(temperature param.Opt[float64], topK param.Opt[int64], topP param.Opt[float64]) (param.Opt[float64], param.Opt[int64], param.Opt[float64]) {
-	if temperature.Valid() && temperature.Value != 1 {
-		temperature = param.Opt[float64]{}
+// reconcileSampling applies thinkingSampling to the request's sampling
+// extras. v2 SDK params no longer have temperature/top_p/top_k fields; with
+// the pinned 2023-06-01 API version the server still accepts them, so they
+// travel as extra fields. Dropping a value sets param.Omit so a decoded
+// inbound value is not re-sent.
+func reconcileSampling(extras map[string]any) map[string]any {
+	if len(extras) == 0 {
+		return nil
 	}
-	if topK.Valid() {
-		topK = param.Opt[int64]{}
+	out := make(map[string]any, 3)
+	if v, ok := extras["temperature"]; ok {
+		if f, ok := v.(float64); !ok || f == 1 {
+			out["temperature"] = v
+		} else {
+			out["temperature"] = param.Omit
+		}
 	}
-	if topP.Valid() && topP.Value < minThinkingTopP {
-		topP = param.NewOpt(minThinkingTopP)
+	if _, ok := extras["top_k"]; ok {
+		out["top_k"] = param.Omit
 	}
-	return temperature, topK, topP
+	if v, ok := extras["top_p"]; ok {
+		if f, ok := v.(float64); ok && f < minThinkingTopP {
+			out["top_p"] = minThinkingTopP
+		} else {
+			out["top_p"] = v
+		}
+	}
+	return out
 }
 
 // DisableV1ForUnsignedToolTurn turns budget thinking off when the
@@ -91,10 +109,10 @@ func DisableBetaForUnsignedToolTurn(req *anthropic.BetaMessageNewParams) {
 // tool without starting with a thinking block.
 func toolTurnWithoutThinking(messages []anthropic.MessageParam) bool {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role != anthropic.MessageParamRoleAssistant {
+		if msgparam.Role(messages[i]) != "assistant" {
 			continue
 		}
-		content := messages[i].Content
+		content := msgparam.Content(messages[i])
 		hasToolUse := false
 		for _, block := range content {
 			if block.OfToolUse != nil {
@@ -109,10 +127,10 @@ func toolTurnWithoutThinking(messages []anthropic.MessageParam) bool {
 // betaToolTurnWithoutThinking is toolTurnWithoutThinking for Beta messages.
 func betaToolTurnWithoutThinking(messages []anthropic.BetaMessageParam) bool {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role != anthropic.BetaMessageParamRoleAssistant {
+		if msgparam.BetaRole(messages[i]) != "assistant" {
 			continue
 		}
-		content := messages[i].Content
+		content := msgparam.BetaContent(messages[i])
 		hasToolUse := false
 		for _, block := range content {
 			if block.OfToolUse != nil {

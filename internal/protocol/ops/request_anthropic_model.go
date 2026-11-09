@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -188,7 +189,7 @@ func filterThinkingBlocksInMessages(messages []anthropic.MessageParam) []anthrop
 	for _, msg := range messages {
 		// Check if message has thinking blocks
 		hasThinking := false
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			if block.OfThinking != nil {
 				hasThinking = true
 				break
@@ -202,8 +203,8 @@ func filterThinkingBlocksInMessages(messages []anthropic.MessageParam) []anthrop
 		}
 
 		// Filter out thinking blocks from content
-		filteredBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
-		for _, block := range msg.Content {
+		filteredBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(msgparam.Content(msg)))
+		for _, block := range msgparam.Content(msg) {
 			// Skip thinking blocks
 			if block.OfThinking != nil {
 				continue
@@ -213,10 +214,7 @@ func filterThinkingBlocksInMessages(messages []anthropic.MessageParam) []anthrop
 
 		// Only keep message if it still has content
 		if len(filteredBlocks) > 0 {
-			filtered = append(filtered, anthropic.MessageParam{
-				Role:    msg.Role,
-				Content: filteredBlocks,
-			})
+			filtered = append(filtered, msgparam.New(msgparam.Role(msg), filteredBlocks))
 		}
 	}
 
@@ -234,7 +232,7 @@ func filterBetaThinkingBlocksInMessages(messages []anthropic.BetaMessageParam) [
 	for _, msg := range messages {
 		// Check if message has thinking blocks
 		hasThinking := false
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfThinking != nil {
 				hasThinking = true
 				break
@@ -248,8 +246,8 @@ func filterBetaThinkingBlocksInMessages(messages []anthropic.BetaMessageParam) [
 		}
 
 		// Filter out thinking blocks from content
-		filteredBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(msg.Content))
-		for _, block := range msg.Content {
+		filteredBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(msgparam.BetaContent(msg)))
+		for _, block := range msgparam.BetaContent(msg) {
 			// Skip thinking blocks
 			if block.OfThinking != nil {
 				continue
@@ -259,10 +257,7 @@ func filterBetaThinkingBlocksInMessages(messages []anthropic.BetaMessageParam) [
 
 		// Only keep message if it still has content
 		if len(filteredBlocks) > 0 {
-			filtered = append(filtered, anthropic.BetaMessageParam{
-				Role:    msg.Role,
-				Content: filteredBlocks,
-			})
+			filtered = append(filtered, msgparam.NewBeta(msgparam.BetaRole(msg), filteredBlocks))
 		}
 	}
 
@@ -416,8 +411,8 @@ func computeCCVersion(messageText string) string {
 // Returns empty string if not found.
 func extractFirstUserMessageText(messages []anthropic.MessageParam) string {
 	for _, msg := range messages {
-		if msg.Role == "user" {
-			for _, block := range msg.Content {
+		if msgparam.Role(msg) == "user" {
+			for _, block := range msgparam.Content(msg) {
 				if block.OfText != nil {
 					return block.OfText.Text
 				}
@@ -430,8 +425,8 @@ func extractFirstUserMessageText(messages []anthropic.MessageParam) string {
 // extractFirstBetaUserMessageText extracts the text content of the first user message (beta API).
 func extractFirstBetaUserMessageText(messages []anthropic.BetaMessageParam) string {
 	for _, msg := range messages {
-		if msg.Role == "user" {
-			for _, block := range msg.Content {
+		if msgparam.BetaRole(msg) == "user" {
+			for _, block := range msgparam.BetaContent(msg) {
 				if block.OfText != nil {
 					return block.OfText.Text
 				}
@@ -450,18 +445,19 @@ func ApplyAnthropicV1DeepSeekThinkingPatch(req *anthropic.MessageNewParams) {
 		return
 	}
 	for i := range req.Messages {
-		if string(req.Messages[i].Role) != "assistant" {
+		if msgparam.Role(req.Messages[i]) != "assistant" {
 			continue
 		}
+		blocks := msgparam.Content(req.Messages[i])
 		found := false
-		for _, b := range req.Messages[i].Content {
+		for _, b := range blocks {
 			if b.OfThinking != nil {
 				found = true
 				break
 			}
 		}
 		if !found {
-			req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewThinkingBlock("", ""))
+			req.Messages[i] = msgparam.WithContent(req.Messages[i], append(blocks, anthropic.NewThinkingBlock("", "")))
 		}
 	}
 }
@@ -473,18 +469,19 @@ func ApplyAnthropicBetaDeepSeekThinkingPatch(req *anthropic.BetaMessageNewParams
 		return
 	}
 	for i := range req.Messages {
-		if string(req.Messages[i].Role) != "assistant" {
+		if msgparam.BetaRole(req.Messages[i]) != "assistant" {
 			continue
 		}
+		blocks := msgparam.BetaContent(req.Messages[i])
 		found := false
-		for _, b := range req.Messages[i].Content {
+		for _, b := range blocks {
 			if b.OfThinking != nil {
 				found = true
 				break
 			}
 		}
 		if !found {
-			req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewBetaThinkingBlock("", ""))
+			req.Messages[i] = msgparam.WithBetaContent(req.Messages[i], append(blocks, anthropic.NewBetaThinkingBlock("", "")))
 		}
 	}
 }

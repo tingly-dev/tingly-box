@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
@@ -71,15 +72,8 @@ func ConvertOpenAIResponsesToAnthropicBetaRequest(
 		anthropicParams.MaxTokens = defaultMaxTokens
 	}
 
-	// Convert temperature
-	if !param.IsOmitted(params.Temperature) {
-		anthropicParams.Temperature = AnthropicParamOpt(params.Temperature.Value)
-	}
-
-	// Convert top_p
-	if !param.IsOmitted(params.TopP) {
-		anthropicParams.TopP = AnthropicParamOpt(params.TopP.Value)
-	}
+	// Convert temperature and top_p — the v2 SDK carries them via extras
+	SetSamplingExtras(anthropicParams, params.Temperature, params.TopP)
 
 	applyOpenAIEffortAsThinking(anthropicParams, params.Reasoning.Effort, limitSet)
 
@@ -156,8 +150,8 @@ func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseI
 			case "assistant":
 				converted := convertResponsesAssistantMessageToAnthropicBeta(msg)
 				// Codex emits a blank message item for tool-only turns; drop it.
-				converted.Content = dropEmptyTextBlocks(converted.Content)
-				if len(converted.Content) > 0 {
+				converted = msgparam.WithBetaContent(converted, dropEmptyTextBlocks(msgparam.BetaContent(converted)))
+				if len(msgparam.BetaContent(converted)) > 0 {
 					messages = append(messages, converted)
 				}
 			}
@@ -165,8 +159,8 @@ func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseI
 			// The assistant-message counterpart to item.OfMessage — see
 			// ResponseInputItemParamOfOutputMessage in anthropic_v1_to_responses.go.
 			converted := convertResponsesOutputMessageToAnthropicBeta(item.OfOutputMessage)
-			converted.Content = dropEmptyTextBlocks(converted.Content)
-			if len(converted.Content) > 0 {
+			converted = msgparam.WithBetaContent(converted, dropEmptyTextBlocks(msgparam.BetaContent(converted)))
+			if len(msgparam.BetaContent(converted)) > 0 {
 				messages = append(messages, converted)
 			}
 		case !param.IsOmitted(item.OfFunctionCall):
@@ -182,8 +176,9 @@ func convertResponsesInputToAnthropicBetaMessages(inputItems responses.ResponseI
 // appendBetaMessage merges consecutive same-role messages into one, so parallel
 // tool calls and their results each collapse into a single assistant/user message.
 func appendBetaMessage(messages *[]anthropic.BetaMessageParam, msg anthropic.BetaMessageParam) {
-	if n := len(*messages); n > 0 && (*messages)[n-1].Role == msg.Role {
-		(*messages)[n-1].Content = append((*messages)[n-1].Content, msg.Content...)
+	if n := len(*messages); n > 0 && msgparam.BetaRole((*messages)[n-1]) == msgparam.BetaRole(msg) {
+		last := &(*messages)[n-1]
+		*last = msgparam.WithBetaContent(*last, append(msgparam.BetaContent(*last), msgparam.BetaContent(msg)...))
 		return
 	}
 	*messages = append(*messages, msg)
@@ -248,10 +243,7 @@ func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageP
 func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMessageParam) anthropic.BetaMessageParam {
 	// Check for simple string content
 	if !param.IsOmitted(msg.Content.OfString) {
-		return anthropic.BetaMessageParam{
-			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(msg.Content.OfString.Value)},
-		}
+		return msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(msg.Content.OfString.Value)})
 	}
 
 	// Handle array content
@@ -270,18 +262,12 @@ func convertResponsesAssistantMessageToAnthropicBeta(msg *responses.EasyInputMes
 			}
 		}
 		if len(blocks) > 0 {
-			return anthropic.BetaMessageParam{
-				Role:    anthropic.BetaMessageParamRoleAssistant,
-				Content: blocks,
-			}
+			return msgparam.NewBeta("assistant", blocks)
 		}
 	}
 
 	// Default empty assistant message
-	return anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("")},
-	}
+	return msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("")})
 }
 
 // convertResponsesOutputMessageToAnthropicBeta converts a Responses API
@@ -305,10 +291,7 @@ func convertResponsesOutputMessageToAnthropicBeta(msg *responses.ResponseOutputM
 	if len(blocks) == 0 {
 		blocks = []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("")}
 	}
-	return anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: blocks,
-	}
+	return msgparam.NewBeta("assistant", blocks)
 }
 
 // convertResponsesFunctionCallToAnthropicBeta converts Responses API function_call to Anthropic Beta tool_use block
@@ -319,10 +302,7 @@ func convertResponsesFunctionCallToAnthropicBeta(call *responses.ResponseFunctio
 	}
 
 	// Create assistant message with tool_use block
-	return anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(call.CallID, input, toolnamespace.FlatName(call.Namespace.Value, call.Name))},
-	}
+	return msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(call.CallID, input, toolnamespace.FlatName(call.Namespace.Value, call.Name))})
 }
 
 // convertResponsesFunctionCallOutputToAnthropicBeta converts Responses API function_call_output to Anthropic Beta tool_result block

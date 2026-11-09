@@ -1,6 +1,10 @@
 package toolengine
 
-import "github.com/anthropics/anthropic-sdk-go/v2"
+import (
+	"github.com/anthropics/anthropic-sdk-go/v2"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
+)
 
 // mergeAnthropicBetaContinuation splices a stored mixed round (the assistant
 // turn and its server-tool results) into the follow-up request: the client's
@@ -17,16 +21,16 @@ func mergeAnthropicBetaContinuation(segment []anthropic.BetaMessageParam, messag
 	assistantIdx := -1
 	toolResultIdx := -1
 	for idx, msg := range messages {
-		if assistantIdx == -1 && msg.Role == anthropic.BetaMessageParamRoleAssistant {
-			for _, block := range msg.Content {
+		if assistantIdx == -1 && msgparam.BetaRole(msg) == "assistant" {
+			for _, block := range msgparam.BetaContent(msg) {
 				if block.OfToolUse != nil {
 					assistantIdx = idx
 					break
 				}
 			}
 		}
-		if toolResultIdx == -1 && msg.Role == anthropic.BetaMessageParamRoleUser {
-			for _, block := range msg.Content {
+		if toolResultIdx == -1 && msgparam.BetaRole(msg) == "user" {
+			for _, block := range msgparam.BetaContent(msg) {
 				if block.OfToolResult != nil {
 					toolResultIdx = idx
 					break
@@ -43,7 +47,7 @@ func mergeAnthropicBetaContinuation(segment []anthropic.BetaMessageParam, messag
 
 	merged := append([]anthropic.BetaMessageParam{}, segment...)
 	lastIdx := len(merged) - 1
-	merged[lastIdx].Content = append(append([]anthropic.BetaContentBlockParamUnion{}, merged[lastIdx].Content...), messages[toolResultIdx].Content...)
+	merged[lastIdx] = msgparam.WithBetaContent(merged[lastIdx], append(append([]anthropic.BetaContentBlockParamUnion{}, msgparam.BetaContent(merged[lastIdx])...), msgparam.BetaContent(messages[toolResultIdx])...))
 	if assistantIdx == -1 || toolResultIdx < assistantIdx {
 		result := append([]anthropic.BetaMessageParam{}, merged...)
 		result = append(result, messages[:toolResultIdx]...)

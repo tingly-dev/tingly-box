@@ -15,6 +15,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -448,8 +449,8 @@ func remapRequestToolNames(req *anthropic.MessageNewParams) map[string]string {
 	// at the client's spelling would contradict the renamed tools[] and put
 	// the snake_case names back on the wire this rename exists to remove.
 	for i := range req.Messages {
-		for j := range req.Messages[i].Content {
-			use := req.Messages[i].Content[j].OfToolUse
+		for j := range msgparam.Content(req.Messages[i]) {
+			use := msgparam.Content(req.Messages[i])[j].OfToolUse
 			if use == nil {
 				continue
 			}
@@ -494,8 +495,8 @@ func remapBetaRequestToolNames(req *anthropic.BetaMessageNewParams) map[string]s
 		}
 	}
 	for i := range req.Messages {
-		for j := range req.Messages[i].Content {
-			use := req.Messages[i].Content[j].OfToolUse
+		for j := range msgparam.BetaContent(req.Messages[i]) {
+			use := msgparam.BetaContent(req.Messages[i])[j].OfToolUse
 			if use == nil {
 				continue
 			}

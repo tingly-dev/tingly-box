@@ -5,12 +5,13 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // IsThinkingEnabled checks if thinking mode is enabled in the Anthropic request
 func IsThinkingEnabled(anthropicReq *anthropic.MessageNewParams) bool {
 	for _, msg := range anthropicReq.Messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			if block.OfThinking != nil {
 				return true
 			}
@@ -23,7 +24,7 @@ func IsThinkingEnabled(anthropicReq *anthropic.MessageNewParams) bool {
 // IsThinkingEnabledBeta checks if thinking mode is enabled in the Anthropic beta request
 func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
 	for _, msg := range anthropicReq.Messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfThinking != nil {
 				return true
 			}

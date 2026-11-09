@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -168,13 +169,10 @@ func (a *poolVisionClient) describeViaAnthropic(ctx context.Context, provider *t
 		Model:     anthropic.Model(model),
 		MaxTokens: budget,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					imageBlock,
-					{OfText: &anthropic.BetaTextBlockParam{Text: a.prompt}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				imageBlock,
+				{OfText: &anthropic.BetaTextBlockParam{Text: a.prompt}},
+			}),
 		},
 	})
 	defer stream.Close()

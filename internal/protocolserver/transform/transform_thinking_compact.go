@@ -3,6 +3,7 @@ package transform
 import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
@@ -117,13 +118,10 @@ func (t *ThinkingCompactTransform) compactV1Rounds(rounds []protocol.V1Round) ([
 
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
-			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				newContent, count := removeV1ThinkingBlocks(msg.Content, removedCount)
+			if !shouldPreserve && guardPassed && msgparam.Role(msg) == "assistant" {
+				newContent, count := removeV1ThinkingBlocks(msgparam.Content(msg), removedCount)
 				removedCount = count
-				msg = anthropic.MessageParam{
-					Role:    msg.Role,
-					Content: newContent,
-				}
+				msg = msgparam.New(msgparam.Role(msg), newContent)
 			}
 			result = append(result, msg)
 		}
@@ -152,13 +150,10 @@ func (t *ThinkingCompactTransform) compactBetaRounds(rounds []protocol.BetaRound
 
 		for _, msg := range rnd.Messages {
 			// Only remove thinking from assistant messages in non-preserved rounds that passed guard
-			if !shouldPreserve && guardPassed && string(msg.Role) == "assistant" {
-				newContent, count := removeBetaThinkingBlocks(msg.Content, removedCount)
+			if !shouldPreserve && guardPassed && msgparam.BetaRole(msg) == "assistant" {
+				newContent, count := removeBetaThinkingBlocks(msgparam.BetaContent(msg), removedCount)
 				removedCount = count
-				msg = anthropic.BetaMessageParam{
-					Role:    msg.Role,
-					Content: newContent,
-				}
+				msg = msgparam.NewBeta(msgparam.BetaRole(msg), newContent)
 			}
 			result = append(result, msg)
 		}

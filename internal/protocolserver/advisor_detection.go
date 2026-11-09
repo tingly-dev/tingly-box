@@ -7,6 +7,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func HasNativeAdvisorBeta(req *protocol.AnthropicBetaMessagesRequest) bool {
@@ -15,7 +16,7 @@ func HasNativeAdvisorBeta(req *protocol.AnthropicBetaMessagesRequest) bool {
 
 func betaHistoryHasAdvisorBlocks(messages []anthropic.BetaMessageParam) bool {
 	for _, msg := range messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			var raw map[string]any
 			bytes, err := json.Marshal(block)
 			if err != nil {

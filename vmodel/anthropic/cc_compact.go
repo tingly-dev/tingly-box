@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"strings"
 
 	sdk "github.com/anthropics/anthropic-sdk-go/v2"
@@ -69,8 +70,8 @@ func (t *ClaudeCodeCompactTransform) shouldApplyV1Beta(req *sdk.BetaMessageNewPa
 
 func lastUserMessageContainsCompact(messages []sdk.MessageParam) bool {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if string(messages[i].Role) == "user" {
-			return extractAndCheckText(messages[i].Content)
+		if msgparam.Role(messages[i]) == "user" {
+			return extractAndCheckText(msgparam.Content(messages[i]))
 		}
 	}
 	return false
@@ -78,8 +79,8 @@ func lastUserMessageContainsCompact(messages []sdk.MessageParam) bool {
 
 func lastUserMessageContainsCompactBeta(messages []sdk.BetaMessageParam) bool {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if string(messages[i].Role) == "user" {
-			return extractAndCheckTextBeta(messages[i].Content)
+		if msgparam.BetaRole(messages[i]) == "user" {
+			return extractAndCheckTextBeta(msgparam.BetaContent(messages[i]))
 		}
 	}
 	return false

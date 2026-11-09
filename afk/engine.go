@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 	"github.com/sirupsen/logrus"
 )
 
@@ -332,11 +333,12 @@ func withConversationCacheBreakpoint(messages []anthropic.BetaMessageParam) []an
 		return messages
 	}
 	last := messages[len(messages)-1]
-	if len(last.Content) == 0 {
+	content := msgparam.BetaContent(last)
+	if len(content) == 0 {
 		return messages
 	}
 
-	blocks := append([]anthropic.BetaContentBlockParamUnion(nil), last.Content...)
+	blocks := append([]anthropic.BetaContentBlockParamUnion(nil), content...)
 	tail := blocks[len(blocks)-1]
 	switch {
 	case tail.OfText != nil:
@@ -354,9 +356,7 @@ func withConversationCacheBreakpoint(messages []anthropic.BetaMessageParam) []an
 	}
 
 	out := append([]anthropic.BetaMessageParam(nil), messages...)
-	lastCopy := last
-	lastCopy.Content = blocks
-	out[len(out)-1] = lastCopy
+	out[len(out)-1] = msgparam.NewBeta(msgparam.BetaRole(last), blocks)
 	return out
 }
 
@@ -473,7 +473,9 @@ func (e *Engine) streamTurn(
 		}}
 	}
 	if e.temperature != nil {
-		params.Temperature = anthropic.Float(*e.temperature)
+		// v2 SDK dropped Temperature from the params; the gateway pins the
+		// 2023-06-01 API version, where it still travels as an extra field.
+		params.SetExtraFields(map[string]any{"temperature": *e.temperature})
 	}
 	if think, ok := e.thinking.thinkingParam(); ok {
 		params.Thinking = think

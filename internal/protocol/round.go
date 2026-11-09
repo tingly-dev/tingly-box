@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // File provides message round grouping for Anthropic requests.
@@ -115,11 +116,11 @@ func (g *Grouper) GroupBeta(messages []anthropic.BetaMessageParam) []BetaRound {
 
 // IsPureUserMessage checks if a v1 message is a pure user instruction (not a tool result).
 func (g *Grouper) IsPureUserMessage(msg anthropic.MessageParam) bool {
-	if string(msg.Role) != "user" {
+	if msgparam.Role(msg) != "user" {
 		return false
 	}
 	// Check if content contains only non-tool-result blocks
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfToolResult != nil {
 			return false // This is a tool result, not a pure user message
 		}
@@ -129,11 +130,11 @@ func (g *Grouper) IsPureUserMessage(msg anthropic.MessageParam) bool {
 
 // IsPureBetaUserMessage checks if a beta message is a pure user instruction.
 func (g *Grouper) IsPureBetaUserMessage(msg anthropic.BetaMessageParam) bool {
-	if string(msg.Role) != "user" {
+	if string(msgparam.BetaRole(msg)) != "user" {
 		return false
 	}
 	// Check if content contains only non-tool-result blocks
-	for _, block := range msg.Content {
+	for _, block := range msgparam.BetaContent(msg) {
 		if block.OfToolResult != nil {
 			return false
 		}
@@ -148,7 +149,7 @@ func (g *Grouper) analyzeV1Round(messages []anthropic.MessageParam) *RoundStats 
 	}
 
 	for _, msg := range messages {
-		switch string(msg.Role) {
+		switch msgparam.Role(msg) {
 		case "user":
 			if g.IsPureUserMessage(msg) {
 				stats.UserMessageCount++
@@ -158,7 +159,7 @@ func (g *Grouper) analyzeV1Round(messages []anthropic.MessageParam) *RoundStats 
 		case "assistant":
 			stats.AssistantCount++
 			// Check for thinking blocks
-			for _, block := range msg.Content {
+			for _, block := range msgparam.Content(msg) {
 				if block.OfThinking != nil || block.OfRedactedThinking != nil {
 					stats.HasThinking = true
 					break
@@ -177,7 +178,7 @@ func (g *Grouper) analyzeBetaRound(messages []anthropic.BetaMessageParam) *Round
 	}
 
 	for _, msg := range messages {
-		switch string(msg.Role) {
+		switch string(msgparam.BetaRole(msg)) {
 		case "user":
 			if g.IsPureBetaUserMessage(msg) {
 				stats.UserMessageCount++
@@ -187,7 +188,7 @@ func (g *Grouper) analyzeBetaRound(messages []anthropic.BetaMessageParam) *Round
 		case "assistant":
 			stats.AssistantCount++
 			// Check for thinking blocks
-			for _, block := range msg.Content {
+			for _, block := range msgparam.BetaContent(msg) {
 				if block.OfThinking != nil || block.OfRedactedThinking != nil {
 					stats.HasThinking = true
 					break

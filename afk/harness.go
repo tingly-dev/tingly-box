@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 	"github.com/sirupsen/logrus"
 )
 
@@ -117,15 +118,13 @@ func injectSteering(stepMsgs []anthropic.BetaMessageParam, steering []string) []
 	}
 
 	out := append([]anthropic.BetaMessageParam(nil), stepMsgs...)
-	if n := len(out); n > 0 && out[n-1].Role == anthropic.BetaMessageParamRoleUser {
-		last := out[n-1]
+	if n := len(out); n > 0 && msgparam.BetaRole(out[n-1]) == "user" {
 		// Copy the content slice: it is shared with the caller's view of the
 		// conversation, and appending in place could write through to it.
-		merged := make([]anthropic.BetaContentBlockParamUnion, 0, len(last.Content)+len(blocks))
-		merged = append(merged, last.Content...)
+		merged := make([]anthropic.BetaContentBlockParamUnion, 0, len(msgparam.BetaContent(out[n-1]))+len(blocks))
+		merged = append(merged, msgparam.BetaContent(out[n-1])...)
 		merged = append(merged, blocks...)
-		last.Content = merged
-		out[n-1] = last
+		out[n-1] = msgparam.NewBeta("user", merged)
 		return out
 	}
 	return append(out, anthropic.NewBetaUserMessage(blocks...))
@@ -262,11 +261,9 @@ func (h *Harness) Run(
 // close finishes an interrupted run: it restores the alternating-role invariant
 // if the transcript ends on a user turn, then flushes whatever is still pending.
 func (h *Harness) close(messages []anthropic.BetaMessageParam, pending []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
-	if n := len(messages); n > 0 && messages[n-1].Role == anthropic.BetaMessageParamRoleUser {
-		note := anthropic.BetaMessageParam{
-			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(interruptedNote)},
-		}
+	if n := len(messages); n > 0 && msgparam.BetaRole(messages[n-1]) == "user" {
+		note := msgparam.NewBeta("assistant",
+			[]anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(interruptedNote)})
 		messages = append(messages, note)
 		pending = append(pending, note)
 	}

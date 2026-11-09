@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -44,7 +45,7 @@ func (t *PurgeErrorsTransform) Apply(ctx *transform.TransformContext) error {
 	turnOf := make([]int, len(req.Messages))
 	currentTurn := 0
 	for i, msg := range req.Messages {
-		if string(msg.Role) == "user" && i > 0 {
+		if msgparam.BetaRole(msg) == "user" && i > 0 {
 			currentTurn++
 		}
 		turnOf[i] = currentTurn
@@ -54,7 +55,7 @@ func (t *PurgeErrorsTransform) Apply(ctx *transform.TransformContext) error {
 	// Collect errored tool_call_ids and the turn they appeared in.
 	erroredCallTurn := map[string]int{} // tool_call_id → turn
 	for i, msg := range req.Messages {
-		for _, blk := range msg.Content {
+		for _, blk := range msgparam.BetaContent(msg) {
 			if blk.OfToolResult == nil {
 				continue
 			}
@@ -65,8 +66,8 @@ func (t *PurgeErrorsTransform) Apply(ctx *transform.TransformContext) error {
 	}
 
 	// For each errored call that is old enough, replace the tool_use input.
-	for i, msg := range req.Messages {
-		for j, blk := range msg.Content {
+	for _, msg := range req.Messages {
+		for _, blk := range msgparam.BetaContent(msg) {
 			if blk.OfToolUse == nil {
 				continue
 			}
@@ -78,7 +79,7 @@ func (t *PurgeErrorsTransform) Apply(ctx *transform.TransformContext) error {
 			if age < t.gracePeriodTurns {
 				continue // still within grace period
 			}
-			req.Messages[i].Content[j].OfToolUse.Input = json.RawMessage(purgeInputPlaceholder)
+			blk.OfToolUse.Input = json.RawMessage(purgeInputPlaceholder)
 		}
 	}
 

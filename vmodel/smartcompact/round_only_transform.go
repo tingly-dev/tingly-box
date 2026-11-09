@@ -3,6 +3,7 @@ package smartcompact
 import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -57,7 +58,7 @@ func (t *RoundOnlyTransform) CompressV1(messages []anthropic.MessageParam) []ant
 
 		for _, msg := range round.Messages {
 			compressed := t.filterMessage(msg)
-			if len(compressed.Content) > 0 {
+			if len(msgparam.Content(compressed)) > 0 {
 				result = append(result, compressed)
 			}
 		}
@@ -85,7 +86,7 @@ func (t *RoundOnlyTransform) CompressBeta(messages []anthropic.BetaMessageParam)
 
 		for _, msg := range round.Messages {
 			compressed := t.filterBetaMessage(msg)
-			if len(compressed.Content) > 0 {
+			if len(msgparam.BetaContent(compressed)) > 0 {
 				result = append(result, compressed)
 			}
 		}
@@ -119,7 +120,7 @@ func (t *RoundOnlyTransform) applyV1(req *anthropic.MessageNewParams) error {
 func (t *RoundOnlyTransform) filterMessage(msg anthropic.MessageParam) anthropic.MessageParam {
 	var filtered []anthropic.ContentBlockParamUnion
 
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		// Only keep text blocks
 		if block.OfText != nil {
 			filtered = append(filtered, block)
@@ -127,8 +128,7 @@ func (t *RoundOnlyTransform) filterMessage(msg anthropic.MessageParam) anthropic
 		// All other block types (thinking, tool_use, tool_result) are removed
 	}
 
-	msg.Content = filtered
-	return msg
+	return msgparam.WithContent(msg, filtered)
 }
 
 // applyBeta applies round-only compression to beta requests.
@@ -143,12 +143,11 @@ func (t *RoundOnlyTransform) applyBeta(req *anthropic.BetaMessageNewParams) erro
 func (t *RoundOnlyTransform) filterBetaMessage(msg anthropic.BetaMessageParam) anthropic.BetaMessageParam {
 	var filtered []anthropic.BetaContentBlockParamUnion
 
-	for _, block := range msg.Content {
+	for _, block := range msgparam.BetaContent(msg) {
 		if block.OfText != nil {
 			filtered = append(filtered, block)
 		}
 	}
 
-	msg.Content = filtered
-	return msg
+	return msgparam.WithBetaContent(msg, filtered)
 }

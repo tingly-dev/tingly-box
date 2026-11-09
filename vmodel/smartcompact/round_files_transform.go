@@ -3,6 +3,7 @@ package smartcompact
 import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -116,9 +117,9 @@ func (t *RoundFilesTransform) compressRoundWithVirtualTools(round protocol.V1Rou
 
 	// First pass: collect files
 	for _, msg := range round.Messages {
-		role := string(msg.Role)
+		role := msgparam.Role(msg)
 		if role == "assistant" {
-			for _, block := range msg.Content {
+			for _, block := range msgparam.Content(msg) {
 				if block.OfToolUse != nil {
 					if inputMap, ok := block.OfToolUse.Input.(map[string]any); ok {
 						files := t.pathUtil.ExtractFromMap(inputMap)
@@ -134,18 +135,18 @@ func (t *RoundFilesTransform) compressRoundWithVirtualTools(round protocol.V1Rou
 
 	// Second pass: build compressed messages
 	for _, msg := range round.Messages {
-		role := string(msg.Role)
+		role := msgparam.Role(msg)
 
 		if role == "user" && t.isPureUserMessage(msg) {
 			// Pure user message: keep only text
 			compressed := t.keepOnlyText(msg)
-			if len(compressed.Content) > 0 {
+			if len(msgparam.Content(compressed)) > 0 {
 				result = append(result, compressed)
 			}
 		} else if role == "assistant" {
 			// Assistant message: keep only text
 			compressed := t.keepOnlyText(msg)
-			hasText := len(compressed.Content) > 0
+			hasText := len(msgparam.Content(compressed)) > 0
 			if hasText {
 				result = append(result, compressed)
 			}
@@ -169,10 +170,10 @@ func (t *RoundFilesTransform) compressRoundWithVirtualTools(round protocol.V1Rou
 
 // isPureUserMessage checks if message is a pure user message (not tool_result).
 func (t *RoundFilesTransform) isPureUserMessage(msg anthropic.MessageParam) bool {
-	if string(msg.Role) != "user" {
+	if msgparam.Role(msg) != "user" {
 		return false
 	}
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfToolResult != nil {
 			return false
 		}
@@ -183,13 +184,12 @@ func (t *RoundFilesTransform) isPureUserMessage(msg anthropic.MessageParam) bool
 // keepOnlyText keeps only text blocks from a message.
 func (t *RoundFilesTransform) keepOnlyText(msg anthropic.MessageParam) anthropic.MessageParam {
 	var filtered []anthropic.ContentBlockParamUnion
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfText != nil {
 			filtered = append(filtered, block)
 		}
 	}
-	msg.Content = filtered
-	return msg
+	return msgparam.WithContent(msg, filtered)
 }
 
 // applyBeta applies round-files compression to beta requests.
@@ -208,9 +208,9 @@ func (t *RoundFilesTransform) compressBetaRoundWithVirtualTools(round protocol.B
 
 	// First pass: collect files
 	for _, msg := range round.Messages {
-		role := string(msg.Role)
+		role := msgparam.BetaRole(msg)
 		if role == "assistant" {
-			for _, block := range msg.Content {
+			for _, block := range msgparam.BetaContent(msg) {
 				if block.OfToolUse != nil {
 					if inputMap, ok := block.OfToolUse.Input.(map[string]any); ok {
 						files := t.pathUtil.ExtractFromMap(inputMap)
@@ -226,16 +226,16 @@ func (t *RoundFilesTransform) compressBetaRoundWithVirtualTools(round protocol.B
 
 	// Second pass: build compressed messages
 	for _, msg := range round.Messages {
-		role := string(msg.Role)
+		role := msgparam.BetaRole(msg)
 
 		if role == "user" && t.isPureBetaUserMessage(msg) {
 			compressed := t.keepOnlyBetaText(msg)
-			if len(compressed.Content) > 0 {
+			if len(msgparam.BetaContent(compressed)) > 0 {
 				result = append(result, compressed)
 			}
 		} else if role == "assistant" {
 			compressed := t.keepOnlyBetaText(msg)
-			hasText := len(compressed.Content) > 0
+			hasText := len(msgparam.BetaContent(compressed)) > 0
 			if hasText {
 				result = append(result, compressed)
 			}
@@ -255,10 +255,10 @@ func (t *RoundFilesTransform) compressBetaRoundWithVirtualTools(round protocol.B
 }
 
 func (t *RoundFilesTransform) isPureBetaUserMessage(msg anthropic.BetaMessageParam) bool {
-	if string(msg.Role) != "user" {
+	if msgparam.BetaRole(msg) != "user" {
 		return false
 	}
-	for _, block := range msg.Content {
+	for _, block := range msgparam.BetaContent(msg) {
 		if block.OfToolResult != nil {
 			return false
 		}
@@ -268,11 +268,10 @@ func (t *RoundFilesTransform) isPureBetaUserMessage(msg anthropic.BetaMessagePar
 
 func (t *RoundFilesTransform) keepOnlyBetaText(msg anthropic.BetaMessageParam) anthropic.BetaMessageParam {
 	var filtered []anthropic.BetaContentBlockParamUnion
-	for _, block := range msg.Content {
+	for _, block := range msgparam.BetaContent(msg) {
 		if block.OfText != nil {
 			filtered = append(filtered, block)
 		}
 	}
-	msg.Content = filtered
-	return msg
+	return msgparam.WithBetaContent(msg, filtered)
 }

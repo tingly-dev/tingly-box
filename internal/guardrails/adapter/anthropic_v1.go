@@ -6,6 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -23,8 +24,8 @@ func AdaptMessagesFromAnthropicV1(system []anthropic.TextBlockParam, messages []
 
 	for _, msg := range messages {
 		out = append(out, guardrailscore.Message{
-			Role:    string(msg.Role),
-			Content: request.ConvertContentBlocksToString(msg.Content),
+			Role:    msgparam.Role(msg),
+			Content: request.ConvertContentBlocksToString(msgparam.Content(msg)),
 		})
 	}
 

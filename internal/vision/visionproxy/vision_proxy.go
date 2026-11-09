@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -240,11 +241,11 @@ func spliceOrCollect(refs []imageRef, isLast bool, ref imageRef) []imageRef {
 func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 	var refs []imageRef
 	lastIdx := latestImageAnchor(len(req.Messages), func(i int) bool {
-		return req.Messages[i].Role == anthropic.BetaMessageParamRoleUser
+		return msgparam.BetaRole(req.Messages[i]) == "user"
 	})
 	for mi := range req.Messages {
 		isLast := mi == lastIdx
-		blocks := req.Messages[mi].Content
+		blocks := msgparam.BetaContent(req.Messages[mi])
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractBetaImageSource(img)
@@ -287,11 +288,11 @@ func collectBeta(req *anthropic.BetaMessageNewParams) []imageRef {
 func collectV1(req *anthropic.MessageNewParams) []imageRef {
 	var refs []imageRef
 	lastIdx := latestImageAnchor(len(req.Messages), func(i int) bool {
-		return req.Messages[i].Role == anthropic.MessageParamRoleUser
+		return msgparam.Role(req.Messages[i]) == "user"
 	})
 	for mi := range req.Messages {
 		isLast := mi == lastIdx
-		blocks := req.Messages[mi].Content
+		blocks := msgparam.Content(req.Messages[mi])
 		for bi := range blocks {
 			if img := blocks[bi].OfImage; img != nil {
 				mediaType, b64, remoteURL := extractV1ImageSource(img)

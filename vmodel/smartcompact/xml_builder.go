@@ -2,6 +2,7 @@ package smartcompact
 
 import (
 	"fmt"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
@@ -31,8 +32,8 @@ func messagesV1ToXML(messages []anthropic.MessageParam, pathUtil *PathUtil, xmlB
 
 	// First pass: collect files from tool_use blocks
 	for _, msg := range messages {
-		if string(msg.Role) == "assistant" {
-			for _, block := range msg.Content {
+		if string(msgparam.Role(msg)) == "assistant" {
+			for _, block := range msgparam.Content(msg) {
 				if block.OfToolUse != nil {
 					if inputMap, ok := block.OfToolUse.Input.(map[string]any); ok {
 						files := pathUtil.ExtractFromMap(inputMap)
@@ -48,7 +49,7 @@ func messagesV1ToXML(messages []anthropic.MessageParam, pathUtil *PathUtil, xmlB
 
 	// Build XML
 	for _, msg := range messages {
-		role := string(msg.Role)
+		role := msgparam.Role(msg)
 
 		if role == "user" {
 			text := extractV1Text(&msg)
@@ -79,8 +80,8 @@ func messagesBetaToXML(messages []anthropic.BetaMessageParam, pathUtil *PathUtil
 
 	// First pass: collect files from tool_use blocks
 	for _, msg := range messages {
-		if string(msg.Role) == "assistant" {
-			for _, block := range msg.Content {
+		if string(msgparam.BetaRole(msg)) == "assistant" {
+			for _, block := range msgparam.BetaContent(msg) {
 				if block.OfToolUse != nil {
 					if inputMap, ok := block.OfToolUse.Input.(map[string]any); ok {
 						files := pathUtil.ExtractFromMap(inputMap)
@@ -96,7 +97,7 @@ func messagesBetaToXML(messages []anthropic.BetaMessageParam, pathUtil *PathUtil
 
 	// Build XML
 	for _, msg := range messages {
-		role := string(msg.Role)
+		role := msgparam.BetaRole(msg)
 
 		if role == "user" {
 			text := extractBetaText(&msg)
@@ -124,7 +125,7 @@ func messagesBetaToXML(messages []anthropic.BetaMessageParam, pathUtil *PathUtil
 // extractV1Text extracts text content from a v1 message (user text and tool result text).
 func extractV1Text(msg *anthropic.MessageParam) string {
 	var text strings.Builder
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(*msg) {
 		if block.OfText != nil {
 			text.WriteString(block.OfText.Text)
 			text.WriteString("\n")
@@ -143,7 +144,7 @@ func extractV1Text(msg *anthropic.MessageParam) string {
 // extractBetaText extracts text content from a beta message (user text and tool result text).
 func extractBetaText(msg *anthropic.BetaMessageParam) string {
 	var text strings.Builder
-	for _, block := range msg.Content {
+	for _, block := range msgparam.BetaContent(*msg) {
 		if block.OfText != nil {
 			text.WriteString(block.OfText.Text)
 			text.WriteString("\n")
