@@ -37,6 +37,20 @@ func TestWorkBuddyFitChatSpellings(t *testing.T) {
 	assert.Nil(t, names)
 }
 
+func TestWorkBuddyClaudeSystemCompatibility(t *testing.T) {
+	body := `{"messages":[{"role":"developer","content":[{"type":"text","text":"x-anthropic-billing-header: example\nYou are Claude Code, Anthropic’s official CLI for Claude. Keep the rules."}]},{"role":"user","content":"You are Claude Code, Anthropic's official CLI for Claude"}]}`
+	v, _ := fitChat(t, body)
+	msgs := v["messages"].([]any)
+	sys := msgs[0].(map[string]any)
+	assert.Equal(t, "system", sys["role"])
+	block := sys["content"].([]any)[0].(map[string]any)
+	assert.Equal(t, "You are Claude Code, Anthropic's CLI for Claude. Keep the rules.", block["text"])
+	assert.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude", msgs[1].(map[string]any)["content"])
+	out, _ := workbuddyFitChat([]byte(body))
+	again, _ := workbuddyFitChat(out)
+	assert.JSONEq(t, string(out), string(again))
+}
+
 func TestWorkBuddyFitToolNames(t *testing.T) {
 	v, names := fitChat(t, `{"messages":[
 		{"role":"assistant","tool_calls":[{"id":"1","type":"function","function":{"name":"fs.read","arguments":"{}"}}]},
