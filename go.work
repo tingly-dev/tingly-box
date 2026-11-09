@@ -11,3 +11,6 @@ use (
 	./remote
 	./swagger
 )
+
+replace github.com/anthropics/anthropic-sdk-go/v2 => ./libs/anthropic-sdk-go
+
