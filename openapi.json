@@ -12820,6 +12820,10 @@
             "type": "string",
             "description": "Field CLAUDE_CODE_AUTO_COMPACT_WINDOW"
           },
+          "CLAUDE_CODE_AUTO_MODE_SERVER": {
+            "type": "string",
+            "description": "Field CLAUDE_CODE_AUTO_MODE_SERVER"
+          },
           "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": {
             "type": "string",
             "description": "Field CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"

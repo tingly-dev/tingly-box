@@ -320,6 +320,8 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 	}
 
 	baseEnv = upgradeLegacyCCEnv(baseEnv)
+	// A main settings file written before this default existed lacks it.
+	withAutoModeServerDefault(baseEnv)
 
 	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, true)
 	maps.Copy(baseEnv, generated)

@@ -57,6 +57,8 @@ export interface ClaudeCodePrefs {
     DISABLE_AUTOUPDATER?: string;
     USE_BUILTIN_RIPGREP?: string;
 
+    CLAUDE_CODE_AUTO_MODE_SERVER?: string;
+
     HTTP_PROXY?: string;
     HTTPS_PROXY?: string;
     NO_PROXY?: string;
@@ -77,6 +79,7 @@ export interface FieldStruct {
     kind: Kind;
     unit?: string;
     advanced?: boolean; // Mark advanced fields that should be collapsed by default
+    offValue?: string; // What a bool writes when switched off; default '' = not written
 }
 
 // Shared layout primitives for the main Auto Config form and profile
@@ -134,6 +137,10 @@ export const CLAUDE_CODE_FIELD_STRUCT: FieldStruct[] = [
     { envName: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', group: 'switches', kind: 'bool', advanced: true },
     { envName: 'DISABLE_AUTOUPDATER', group: 'switches', kind: 'bool', advanced: true },
     { envName: 'USE_BUILTIN_RIPGREP', group: 'switches', kind: 'bool', advanced: true },
+    // Auto mode server review: a top-level row (AutoModeServerSection), not in
+    // Advanced. Off writes an explicit '0' — unset would let Claude Code ask
+    // the server, which the gateway can't answer.
+    { envName: 'CLAUDE_CODE_AUTO_MODE_SERVER', group: 'behavior', kind: 'bool', offValue: '0' },
     // Network proxy (advanced - rarely needed)
     { envName: 'HTTP_PROXY', group: 'network', kind: 'text', advanced: true },
     { envName: 'HTTPS_PROXY', group: 'network', kind: 'text', advanced: true },
@@ -297,6 +304,11 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
         label: '使用内置 ripgrep',
         purpose: 'Claude Code 自带的 ripgrep 优先于系统 PATH',
         tooltip: '官方默认开启。仅在需要用系统自定义 ripgrep 时关闭。',
+    },
+    CLAUDE_CODE_AUTO_MODE_SERVER: {
+        label: '服务端审查',
+        purpose: 'auto 模式下由 Anthropic 服务端审查工具调用',
+        tooltip: 'tb 默认关闭（0）：Claude Code 自己发送分类器请求，经 tb 网关路由，由上游供应商按 token 计费。开启（1）需要 Anthropic 原生上游，且网关把审查请求与结果原样透传，否则会回退并出现“会话不符合条件”提示。',
     },
     HTTP_PROXY: {
         label: 'HTTP 代理',
@@ -462,6 +474,11 @@ const FIELDS_TEXT_EN: FieldTextMap = {
         purpose: "Prefer Claude Code's bundled ripgrep over system PATH",
         tooltip: "On by default. Disable only if you need to use a custom system ripgrep.",
     },
+    CLAUDE_CODE_AUTO_MODE_SERVER: {
+        label: 'Server-side review',
+        purpose: "Let Anthropic's server review tool calls in auto mode",
+        tooltip: "Off (0) by default: Claude Code sends its own classifier requests, which tb routes like any other request and your upstream provider bills as tokens. On (1) needs an Anthropic-native upstream with the gateway passing the review request and results through unchanged; otherwise Claude Code falls back and shows a \"session isn't eligible\" notice.",
+    },
     HTTP_PROXY: {
         label: 'HTTP proxy',
         purpose: 'Proxy used for outbound HTTP requests from Claude Code',
@@ -625,6 +642,11 @@ const FIELDS_TEXT_RU: FieldTextMap = {
         label: 'Встроенный ripgrep',
         purpose: 'Предпочитать ripgrep из поставки Claude Code, а не из системного PATH',
         tooltip: 'Включено по умолчанию. Отключайте, только если нужен собственный системный ripgrep.',
+    },
+    CLAUDE_CODE_AUTO_MODE_SERVER: {
+        label: 'Проверка на сервере',
+        purpose: 'Проверять вызовы инструментов в режиме auto на сервере Anthropic',
+        tooltip: 'По умолчанию выключено (0): Claude Code сам отправляет запросы классификатора, tb маршрутизирует их как обычные, а вышестоящий провайдер тарифицирует токены. Включение (1) требует нативного апстрима Anthropic и прозрачной передачи шлюзом запроса проверки и результатов; иначе Claude Code откатывается и показывает уведомление «сессия не подходит».',
     },
     HTTP_PROXY: {
         label: 'HTTP-прокси',
@@ -916,6 +938,7 @@ export const derivePrefsFromRules = ({ rules, slots = [] }: DerivePrefsInput): C
         DISABLE_TELEMETRY: '1',
         DISABLE_ERROR_REPORTING: '1',
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        CLAUDE_CODE_AUTO_MODE_SERVER: '0',
     };
 };
 
@@ -1011,7 +1034,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                     <Switch
                         size="small"
                         checked={value === '1'}
-                        onChange={(_, c) => setValue(c ? '1' : '')}
+                        onChange={(_, c) => setValue(c ? '1' : (field.offValue ?? ''))}
                     />
                 )}
                 {(field.kind === 'int' || field.kind === 'text' || field.kind === 'model') && (
@@ -1309,6 +1332,55 @@ const CoAuthoredBySection: React.FC<{
     );
 };
 
+const AUTO_MODE_SERVER_TEXT: Record<AppLanguage, ToggleSettingText> = {
+    zh: {
+        title: 'Auto 模式审查',
+        hint: '写入 env CLAUDE_CODE_AUTO_MODE_SERVER；tb 默认关闭。',
+        label: '服务端审查',
+        tooltip: CLAUDE_CODE_FIELDS_TEXT.zh.CLAUDE_CODE_AUTO_MODE_SERVER.tooltip,
+    },
+    en: {
+        title: 'Auto mode review',
+        hint: 'Writes the env CLAUDE_CODE_AUTO_MODE_SERVER; tb keeps it off by default.',
+        label: 'Server-side review',
+        tooltip: CLAUDE_CODE_FIELDS_TEXT.en.CLAUDE_CODE_AUTO_MODE_SERVER.tooltip,
+    },
+    ru: {
+        title: 'Проверка в режиме auto',
+        hint: 'Записывает env CLAUDE_CODE_AUTO_MODE_SERVER; в tb по умолчанию выключено.',
+        label: 'Проверка на сервере',
+        tooltip: CLAUDE_CODE_FIELDS_TEXT.ru.CLAUDE_CODE_AUTO_MODE_SERVER.tooltip,
+    },
+};
+
+// A top-level row for the one env that changes what auto mode costs. It
+// writes an explicit '1' / '0' (never an empty value) so a user's "off" is
+// kept instead of falling back to Claude Code's own default.
+const AutoModeServerSection: React.FC<{
+    lang: AppLanguage;
+    prefs: ClaudeCodePrefs;
+    setPrefs: (p: ClaudeCodePrefs) => void;
+}> = ({ lang, prefs, setPrefs }) => {
+    const text = AUTO_MODE_SERVER_TEXT[lang];
+
+    return (
+        <SettingsRowSection
+            title={text.title}
+            hint={text.hint}
+            label={text.label}
+            tooltip={text.tooltip}
+            settingsKey="CLAUDE_CODE_AUTO_MODE_SERVER"
+            control={
+                <Switch
+                    size="small"
+                    checked={prefs.CLAUDE_CODE_AUTO_MODE_SERVER === '1'}
+                    onChange={(_, c) => setPrefs({ ...prefs, CLAUDE_CODE_AUTO_MODE_SERVER: c ? '1' : '0' })}
+                />
+            }
+        />
+    );
+};
+
 interface QuickConfigPanelWithBehaviorProps extends QuickConfigPanelProps {
     showThinkingSummaries: boolean;
     setShowThinkingSummaries: (show: boolean) => void;
@@ -1330,11 +1402,12 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelWithBehaviorProps> = ({
     // Model slots are derived from routing rules, so only the settings a user
     // typed in by hand count as "customised".
     const customizedCount = CLAUDE_CODE_FIELD_STRUCT.filter(f =>
-        f.kind !== 'model' && String((prefs as Record<string, unknown>)[f.envName] ?? '') !== '').length;
+        f.kind !== 'model' && f.group !== 'behavior' && String((prefs as Record<string, unknown>)[f.envName] ?? '') !== '').length;
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
+            <AutoModeServerSection lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <ShowThinkingSummariesSection lang={lang} checked={showThinkingSummaries} onChange={setShowThinkingSummaries} />
             <CoAuthoredBySection lang={lang} checked={coAuthoredBy} onChange={setCoAuthoredBy} />
             <AdvancedSection customizedCount={customizedCount}>
