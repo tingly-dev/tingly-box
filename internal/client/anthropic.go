@@ -103,9 +103,12 @@ func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, tra
 	}
 	// Multi-field credential providers (Bedrock / Vertex) carry no bearer token;
 	// their cloud adapter option (appended last) installs its own auth. Setting
-	// an empty WithAPIKey would only plant a stray x-api-key header.
+	// an empty key header would only plant a stray x-api-key header.
 	if !provider.IsMultiFieldCredential() {
-		options = append(options, anthropicOption.WithAPIKey(provider.GetAccessToken()))
+		// v2's WithAPIKey sends Authorization: Bearer; the classic ecosystem
+		// this client serves (2023-06-01) expects x-api-key. The V2 client
+		// group uses the new bearer default.
+		options = append(options, anthropicOption.WithHeader("x-api-key", provider.GetAccessToken()))
 	}
 
 	// context-1m is NOT injected here: it's a request-body/header concern
@@ -213,21 +216,28 @@ func (c *AnthropicClient) MessagesCountTokens(ctx context.Context, req *anthropi
 	return c.client.Messages.CountTokens(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
+// betaQuery keeps the classic beta egress wire shape. The v1 SDK carried
+// ?beta=true on beta endpoints (the v2 SDK does not); Anthropic's official
+// API ignores it, but some compatible providers route on it.
+func betaQuery() anthropicOption.RequestOption {
+	return anthropicOption.WithQuery("beta", "true")
+}
+
 func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
-	return c.client.Beta.Messages.CountTokens(ctx, *req)
+	return c.client.Beta.Messages.CountTokens(ctx, *req, betaQuery())
 }
 
 // BetaMessagesNew creates a new beta message request
 func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
-	return c.client.Beta.Messages.New(ctx, *req)
+	return c.client.Beta.Messages.New(ctx, *req, betaQuery())
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request
 func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
-	return c.client.Beta.Messages.NewStreaming(ctx, *req)
+	return c.client.Beta.Messages.NewStreaming(ctx, *req, betaQuery())
 }
 
 // GetProvider returns the provider for this client
