@@ -3,6 +3,8 @@ package request
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
@@ -70,28 +72,52 @@ func ConvertAnthropicBetaToV1Request(req *anthropic.BetaMessageNewParams) (*anth
 	if err := json.Unmarshal(data, &v1); err != nil {
 		return nil, fmt.Errorf("unmarshal Anthropic Beta request as v1: %w", err)
 	}
-	v1Data, err := json.Marshal(&v1)
-	if err != nil {
-		return nil, fmt.Errorf("marshal Anthropic v1 request: %w", err)
-	}
-	if dropped := droppedTopLevelFields(data, v1Data); len(dropped) > 0 {
-		return nil, fmt.Errorf("downgrade Anthropic Beta request: Beta-only fields %v have no V1 form", dropped)
+	if betaOnly := betaOnlyTopLevelFields(data); len(betaOnly) > 0 {
+		return nil, fmt.Errorf("downgrade Anthropic Beta request: Beta-only fields %v have no V1 form", betaOnly)
 	}
 	return &v1, nil
 }
 
-func droppedTopLevelFields(from, to []byte) []string {
-	kept := map[string]bool{}
-	gjson.ParseBytes(to).ForEach(func(key, _ gjson.Result) bool {
-		kept[key.String()] = true
-		return true
-	})
-	var dropped []string
+// betaOnlyTopLevelFields reports which top-level keys of the Beta request are
+// Beta-only, i.e. declared on the Beta params but not on the V1 params. The
+// SDK preserves unknown keys as param extras on decode (so they survive a
+// decode/re-encode round trip), so "compare before/after JSON" cannot detect
+// drops anymore; declared json tags are the source of truth for what each
+// shape carries natively. Keys the SDK models on neither struct (e.g. the
+// classic sampling fields, carried as extras) pass through untouched.
+func betaOnlyTopLevelFields(from []byte) []string {
+	v1 := declaredJSONFields(reflect.TypeOf(anthropic.MessageNewParams{}))
+	beta := declaredJSONFields(reflect.TypeOf(anthropic.BetaMessageNewParams{}))
+	var betaOnly []string
 	gjson.ParseBytes(from).ForEach(func(key, _ gjson.Result) bool {
-		if !kept[key.String()] {
-			dropped = append(dropped, key.String())
+		name := key.String()
+		if beta[name] && !v1[name] {
+			betaOnly = append(betaOnly, name)
 		}
 		return true
 	})
-	return dropped
+	return betaOnly
+}
+
+// declaredJSONFields returns the set of wire keys declared by structType's
+// json tags, including fields promoted from embedded structs.
+func declaredJSONFields(structType reflect.Type) map[string]bool {
+	known := map[string]bool{}
+	if structType.Kind() != reflect.Struct {
+		return known
+	}
+	for i := 0; i < structType.NumField(); i++ {
+		field := structType.Field(i)
+		if field.Anonymous && field.Type.Kind() == reflect.Struct {
+			for k := range declaredJSONFields(field.Type) {
+				known[k] = true
+			}
+			continue
+		}
+		tag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if tag != "" && tag != "-" {
+			known[tag] = true
+		}
+	}
+	return known
 }
