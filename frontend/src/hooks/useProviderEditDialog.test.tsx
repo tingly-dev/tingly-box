@@ -32,6 +32,7 @@ describe('provider edit', () => {
         expect(screen.getByRole('switch', {name: 'Enabled'})).toBeChecked();
         expect(screen.getByLabelText('Name')).toHaveValue('My provider');
         expect(screen.getByLabelText('API Key')).toHaveValue('');
+        expect(screen.getByLabelText('API Key')).toHaveAttribute('placeholder', '****');
         fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
         await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({token: undefined})));
     });
@@ -76,6 +77,7 @@ describe('provider edit', () => {
         vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, no_key_required: true, token: ''}});
         await open();
         expect(screen.getByRole('checkbox', {name: 'No API key required'})).toBeChecked();
+        expect(screen.getByLabelText('API Key')).not.toHaveAttribute('placeholder', '****');
         fireEvent.click(screen.getByRole('button', {name: 'Test Connection'}));
         expect(screen.getByText('An API key is needed for this test. You can save without testing.')).toBeInTheDocument();
     });
