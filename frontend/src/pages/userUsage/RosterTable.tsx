@@ -21,7 +21,7 @@ import { ArrowForward } from '@/components/icons';
 import SearchField from '@/components/SearchField';
 import { UsageMetricValueCells } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, RosterAxisState } from '@/components/dashboard';
-import { formatDateTime, getModelKey, getProviderKey } from './userUsageModel';
+import { formatDateTime, getModelKey, getProviderKey, accountKey } from './userUsageModel';
 import type { UserUsageRow, ViewMode, PrimaryColumn } from './userUsageModel';
 import { fontSizes } from '@/theme/fonts';
 
@@ -179,63 +179,70 @@ export default function RosterTable({
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {viewMode === 'account' && (activeAxis.pagedRows as UserUsageRow[]).map((row) => renderRow(
-                            row.token_id,
-                            row.user_id === activeAxis.selectedKey,
-                            row,
-                            (
-                                <TableCell>
-                                    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                                        <Avatar sx={{
-                                            width: 34,
-                                            height: 34,
-                                            fontSize: 14,
-                                            bgcolor: row.user_id === activeAxis.selectedKey ? 'primary.main' : alpha(theme.palette.primary.main, 0.1),
-                                            color: row.user_id === activeAxis.selectedKey ? 'primary.contrastText' : 'primary.main',
-                                        }}>
-                                            {row.display_name.slice(0, 1).toUpperCase()}
-                                        </Avatar>
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                                                <Typography
-                                                    variant="body1"
-                                                    noWrap
-                                                    sx={{ color: 'text.primary', fontWeight: 600 }}
-                                                >
-                                                    {row.display_name}
+                        {viewMode === 'account' && (activeAxis.pagedRows as UserUsageRow[]).map((row) => {
+                            // The axis (and the Top list beside it) keys accounts by
+                            // user_id — selecting with token_id here would put the
+                            // click outside the axis' key space and the selection
+                            // would snap straight back to the first row.
+                            const key = accountKey(row);
+                            return renderRow(
+                                key,
+                                key === activeAxis.selectedKey,
+                                row,
+                                (
+                                    <TableCell>
+                                        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                                            <Avatar sx={{
+                                                width: 34,
+                                                height: 34,
+                                                fontSize: 14,
+                                                bgcolor: row.user_id === activeAxis.selectedKey ? 'primary.main' : alpha(theme.palette.primary.main, 0.1),
+                                                color: row.user_id === activeAxis.selectedKey ? 'primary.contrastText' : 'primary.main',
+                                            }}>
+                                                {row.display_name.slice(0, 1).toUpperCase()}
+                                            </Avatar>
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                                    <Typography
+                                                        variant="body1"
+                                                        noWrap
+                                                        sx={{ color: 'text.primary', fontWeight: 600 }}
+                                                    >
+                                                        {row.display_name}
+                                                    </Typography>
+                                                    {row.account_type === 'primary' && (
+                                                        <Chip
+                                                            size="small"
+                                                            color="primary"
+                                                            variant="outlined"
+                                                            label={t('dashboard.userUsage.primary', { defaultValue: 'Primary' })}
+                                                            sx={{ height: 22 }}
+                                                        />
+                                                    )}
+                                                    {!row.enabled && (
+                                                        <Chip
+                                                            size="small"
+                                                            label={t('dashboard.userUsage.disabled', { defaultValue: 'Disabled' })}
+                                                            sx={{ height: 22 }}
+                                                        />
+                                                    )}
+                                                </Stack>
+                                                <Typography variant="body2">
+                                                    {row.account_type === 'primary'
+                                                        ? t('dashboard.userUsage.globalToken', { defaultValue: 'Global model token' })
+                                                        : row.last_used_at
+                                                        ? t('dashboard.userUsage.lastUsed', {
+                                                            value: formatDateTime(row.last_used_at),
+                                                            defaultValue: `Last used ${formatDateTime(row.last_used_at)}`,
+                                                        })
+                                                        : t('dashboard.userUsage.neverUsed', { defaultValue: 'Never used' })}
                                                 </Typography>
-                                                {row.account_type === 'primary' && (
-                                                    <Chip
-                                                        size="small"
-                                                        color="primary"
-                                                        variant="outlined"
-                                                        label={t('dashboard.userUsage.primary', { defaultValue: 'Primary' })}
-                                                        sx={{ height: 22 }}
-                                                    />
-                                                )}
-                                                {!row.enabled && (
-                                                    <Chip
-                                                        size="small"
-                                                        label={t('dashboard.userUsage.disabled', { defaultValue: 'Disabled' })}
-                                                        sx={{ height: 22 }}
-                                                    />
-                                                )}
-                                            </Stack>
-                                            <Typography variant="body2">
-                                                {row.account_type === 'primary'
-                                                    ? t('dashboard.userUsage.globalToken', { defaultValue: 'Global model token' })
-                                                    : row.last_used_at
-                                                    ? t('dashboard.userUsage.lastUsed', {
-                                                        value: formatDateTime(row.last_used_at),
-                                                        defaultValue: `Last used ${formatDateTime(row.last_used_at)}`,
-                                                    })
-                                                    : t('dashboard.userUsage.neverUsed', { defaultValue: 'Never used' })}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
-                                </TableCell>
-                            ),
-                        ))}
+                                            </Box>
+                                        </Stack>
+                                    </TableCell>
+                                ),
+                            );
+                        })}
                         {viewMode === 'model' && (activeAxis.pagedRows as AggregatedStat[]).map((row) => {
                             const key = getModelKey(row);
                             return renderRow(
