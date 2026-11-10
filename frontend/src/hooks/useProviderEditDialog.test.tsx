@@ -63,7 +63,7 @@ describe('provider edit', () => {
         await open();
         fireEvent.click(screen.getByRole('button', {name: 'Test Connection'}));
         expect(await screen.findAllByText(/Authentication failed/)).not.toHaveLength(0);
-        expect(api.probeProviderLightweight).toHaveBeenCalledWith('My provider', 'openai', provider.api_base, 'stored-secret', 'api_key');
+        expect(api.probeProviderLightweight).toHaveBeenCalledWith('My provider', 'openai', provider.api_base, 'stored-secret', 'api_key', expect.any(AbortSignal));
     });
     it('explicitly selects no authentication without resending the stored key', async () => {
         await open();
