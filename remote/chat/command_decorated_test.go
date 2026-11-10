@@ -85,6 +85,57 @@ func TestHelpShortcutChatPaths(t *testing.T) {
 	assert.Equal(t, "@tingly_bot /h", router.inbound()[0].Text)
 }
 
+func TestPickerShortcutsMatchCanonicalCommands(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+	chat := alice.OpenDM(harness.Setting.UUID)
+	router.bind(chat.ChatID)
+	for _, pair := range [][2]string{{"/d", "/dir"}, {"/proj", "/project"}, {"/d 2", "/dir 2"}, {"/proj 2", "/project 2"}, {"/d /path/that/does/not/exist", "/dir /path/that/does/not/exist"}} {
+		chat.Drain()
+		chat.SendText(pair[1])
+		want := chat.WaitText(3 * time.Second).Text
+		chat.Drain()
+		chat.SendText(pair[0])
+		assert.Equal(t, want, chat.WaitText(3*time.Second).Text, pair[0])
+	}
+}
+
+func TestSessionShortcutsRouteCanonicalNameAndArguments(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+	direct := alice.OpenDM(harness.Setting.UUID)
+	group := env.NewGroup("eng", alice, env.NewUser("bob")).Chat(harness.Setting.UUID)
+	harness.WhitelistGroup(group.ChatID, alice.ID)
+	router.bind(direct.ChatID)
+	router.bind(group.ChatID)
+
+	for _, pair := range [][2]string{{"sess", "session"}, {"n", "new"}, {"sto", "stop"}, {"cl", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+		for _, tc := range []struct {
+			chat *testenv.Chat
+			text string
+		}{
+			{direct, "/" + pair[0] + "  one  two"},
+			{group, "@tingly_bot /" + pair[0] + "  one  two"},
+		} {
+			before := len(router.commands())
+			tc.chat.Drain()
+			tc.chat.SendText(tc.text)
+			tc.chat.WaitText(3 * time.Second)
+			require.Len(t, router.commands(), before+1, tc.text)
+			assert.Equal(t, pair[1]+":one  two", router.commands()[before], tc.text)
+		}
+	}
+	for _, text := range []string{"/p", "/s", "/unknown"} {
+		direct.Drain()
+		direct.SendText(text)
+		direct.WaitText(3*time.Second).AssertContains(t, "Unknown command "+text)
+	}
+}
+
 func Test_DirectChatReadsPlainCommandsOnly(t *testing.T) {
 	env, harness, alice := bootHelperNotStarted(t)
 	router := &fakeRouter{bound: map[string]bool{}}

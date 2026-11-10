@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/bot"
+	shortcuts "github.com/tingly-dev/tingly-box/remote/commands"
 )
 
 // RegisterBuiltinCommands registers the chat commands
@@ -31,6 +32,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		commands = append(commands, newSessionCommand(botHandler, c))
 	}
 	for _, cmd := range commands {
+		cmd.Aliases = shortcuts.Aliases(cmd.Name)
 		if err := registry.Register(cmd); err != nil {
 			return fmt.Errorf("failed to register command %s: %w", cmd.ID, err)
 		}
@@ -124,7 +126,6 @@ func newSessionCommand(adapter BotHandlerAdapter, c agent.CommandSpec) imbot.Com
 
 func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-help", "help", "Show what this chat can do").
-		WithAliases("start", "h").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			return sendCommandText(adapter, ctx, helpText(ctx.SenderID, ctx.ChatID, adapter.HasPrivilegedAccess(ctx), !ctx.IsDirectMessage))
 		}).
@@ -278,7 +279,6 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-pair-bind", "pair",
 		"Pair this chat with the bot using the operator's pairing code").
-		WithAliases("bind").
 		Hidden().
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if !ctx.IsDirectMessage {

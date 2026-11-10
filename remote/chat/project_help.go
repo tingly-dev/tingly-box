@@ -1,6 +1,10 @@
 package chat
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/tingly-dev/tingly-box/remote/commands"
+)
 
 // helpText is /help: the commands this chat can run
 // (.design/remote-into-projects.md, "命令精简"), and the ids the notify API
@@ -13,6 +17,9 @@ func helpText(senderID, chatID string, privileged, group bool) string {
 	lines := []string{"Send a message to talk to Claude Code.", "/h: Shortcut for /help"}
 	for _, c := range commandSpecs() {
 		if usage, ok := c.usageFor(privileged, group); ok {
+			if aliases := commands.Aliases(c.Name); len(aliases) > 0 {
+				usage += " (/" + strings.Join(aliases, ", /") + ")"
+			}
 			lines = append(lines, usage+": "+c.Help)
 		}
 	}

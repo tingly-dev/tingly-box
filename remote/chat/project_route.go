@@ -9,6 +9,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/agent"
 	bot2 "github.com/tingly-dev/tingly-box/remote/bot"
+	"github.com/tingly-dev/tingly-box/remote/commands"
 )
 
 // ProjectRouter is how a chat talks to Claude Code: through Projects, where
@@ -242,10 +243,14 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 // for anything else.
 func projectCommand(text string, group bool) (name, arg string, ok bool) {
 	cmd, ok := imbot.ParseSlashCommand(text, group)
-	if !ok || !isSessionCommand(cmd.Name) {
+	if !ok {
 		return "", "", false
 	}
-	return cmd.Name, cmd.Args, true
+	name = commands.Canonical(cmd.Name)
+	if !isSessionCommand(name) {
+		return "", "", false
+	}
+	return name, cmd.Args, true
 }
 
 // runProjectCommand runs a session command in Projects and tells the chat
