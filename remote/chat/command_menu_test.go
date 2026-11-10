@@ -14,7 +14,7 @@ import (
 func TestShortcutHelpAndRegistration(t *testing.T) {
 	registry := imbot.NewCommandRegistry()
 	require.NoError(t, RegisterBuiltinCommands(registry, nil))
-	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"proj", "project"}, {"sess", "session"}, {"n", "new"}, {"sto", "stop"}, {"cl", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"p", "project"}, {"sess", "session"}, {"n", "new"}, {"sp", "stop"}, {"cr", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		cmd, ok := registry.Get(pair[0])
 		require.True(t, ok, pair[0])
 		assert.Equal(t, pair[1], cmd.Name)
@@ -22,10 +22,10 @@ func TestShortcutHelpAndRegistration(t *testing.T) {
 	}
 	group := helpText("u", "c", false, true)
 	assert.NotContains(t, group, "/d ")
-	assert.NotContains(t, group, "/proj")
+	assert.NotContains(t, group, "/project [N] (/p)")
 	direct := helpText("u", "c", false, false)
 	assert.Contains(t, direct, "/d")
-	assert.Contains(t, direct, "/proj")
+	assert.Contains(t, direct, "/project [N] (/p)")
 }
 
 func TestHelpText(t *testing.T) {
@@ -36,8 +36,8 @@ Chat ID: c1`
 	session := strings.Join([]string{
 		"/session [N] (/sess): List the sessions here, or switch to #N",
 		"/new [message] (/n): Start a new session",
-		"/stop [#N] (/sto): Stop the running session",
-		"/clear (/cl): Stop, and start a new session with the next message",
+		"/stop [#N] (/sp): Stop the running session",
+		"/clear (/cr): Stop, and start a new session with the next message",
 		"/status (/stat): Where this chat is and how its session runs",
 		"/verbose on|off (/v): Also see each step, not only the reply",
 		"/yolo: Use every tool without asking, or back",
@@ -53,16 +53,16 @@ Chat ID: c1`
 		{"privileged direct", true, false, strings.Join([]string{intro,
 			"/cd <path>: Work in another folder",
 			"/dir [N|path] (/d): List registered folders, or switch to one",
-			"/project [N] (/proj): List projects, or switch to a project's coordinator",
+			"/project [N] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"privileged group", true, true, strings.Join([]string{intro,
 			"/cd <path>: Work in another folder",
 			"/dir [N|path] (/d): List registered folders, or switch to one",
-			"/project [N] (/proj): List projects, or switch to a project's coordinator",
+			"/project [N] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"direct picker only", false, false, strings.Join([]string{intro,
 			"/dir [N] (/d): List registered folders, or switch to one",
-			"/project [N] (/proj): List projects, or switch to a project's coordinator",
+			"/project [N] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"group without permission", false, true, strings.Join([]string{intro, session, tail}, "\n")},
 	}

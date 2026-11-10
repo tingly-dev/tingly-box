@@ -200,7 +200,7 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 ## 命令精简（已定，YZ 2026-10-22）
 
-新模式下聊天只做三件事：选在哪干（目录、项目、会话）、控制当前会话、看状态。2026-11-01 更新：`/dir` 列 Projects 注册的未归档文件夹，`/project` 单独列项目并绑定协调者。`/help` 按聊天权限列出命令；退役名称不保留，但现行命令有下列明确短写：
+新模式下聊天只做三件事：选在哪干（目录、项目、会话）、控制当前会话、看状态。2026-11-01 更新：`/dir` 列 Projects 注册的未归档文件夹，`/project` 单独列项目并绑定协调者。`/help` 按聊天权限列出命令；历史命令除下述明确重新使用的短写外不保留：
 
 2026-11-01 补充：主动绑定的对象是 Project、Folder 或指定的 Folder Session。绑定归属保存在 `target_project_id`，指定 Folder Session 时另有 `target_thread_id`；`thread_id` 是当前交互焦点。Project 初始焦点是协调者，Folder 可先无焦点、首条消息创建 Session。`/session N` 只切换焦点、不改变归属；`@N` 只将一条消息发给目标线程。旧绑定升级时按已有线程或待启动文件夹推断归属，历史数据没有记录是否由用户主动选中某个 Folder Session，无法恢复该意图。
 
@@ -219,13 +219,13 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 命令的读法与权限（2026-11-04，YZ，详见 `bot-capability-access-control.md` §6.2）：**@ 只存在于群聊**——群里同一条命令各平台装饰不同（Telegram `/dir@bot`、Slack/Discord `<@U1> /dir`、飞书 `@_user_1 /dir`、企微/WhatsApp `@bot /dir`、钉钉前导空格、全角 `／dir`），单聊只认朴素的 `/xxx`；解析只在 `imbot.ParseSlashCommand(text, group)`，闸门和处理器必须传同一个 group。Telegram 群里发给别的 bot 的 `/cmd@otherbot` 由 Telegram 适配器丢弃。直聊里选择已注册的文件夹和项目只需 start，自由路径（`/cd <路径>`、`/dir <路径>`、目录浏览器）和发文件需要 `remote_control.privileged`（界面“任意文件夹和文件”），群聊里全部需要；拒绝时回一句指向该开关，`/help` 只列聊天能跑的命令。
 
-**命令短写（当前实现）**：`/h` → `/help`，`/d` → `/dir`，`/proj` → `/project`，`/sess` → `/session`，`/n` → `/new`，`/sto` → `/stop`，`/cl` → `/clear`，`/stat` → `/status`，`/v` → `/verbose`。`/start` 和 `/bind` 仍分别是 `/help` 和 `/pair` 的既有别名；`/cd`、`/yolo` 不另加短写。帮助在允许的主命令旁展示短写，平台菜单仍只列主命令；退役的 `/p`、`/s` 不复用。
+**命令短写（当前实现）**：`/h` → `/help`，`/d` → `/dir`，`/p` → `/project`，`/sess` → `/session`，`/n` → `/new`，`/sp` → `/stop`，`/cr` → `/clear`，`/stat` → `/status`，`/v` → `/verbose`。`/start` 和 `/bind` 仍分别是 `/help` 和 `/pair` 的既有别名；`/cd`、`/yolo` 不另加短写。帮助在允许的主命令旁展示短写，平台菜单仍只列主命令。
 
-`remote/commands` 是短写映射的共同来源：注册表使用别名，授权按规范名及原参数分类，Projects 会话分发也先转换名称而保留参数。群聊装饰、私聊解析、待审批及权限闸门与主命令一致；尤其 `/d <path>` 仍需要特权，群聊 `/d`、`/proj` 也需要特权。
+`remote/commands` 是短写映射的共同来源：注册表使用别名，授权按规范名及原参数分类，Projects 会话分发也先转换名称而保留参数。群聊装饰、私聊解析、待审批及权限闸门与主命令一致；尤其 `/d <path>` 仍需要特权，群聊 `/d`、`/p` 也需要特权。
 
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
-`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
-`/quiet` `/noverbose`，以及裸词 `stop`（现在是普通消息）。`/h` 后来恢复为上面的帮助短写。
+`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
+`/quiet` `/noverbose`，以及裸词 `stop`（现在是普通消息）。`/h` 后来恢复为上面的帮助短写。历史上 `/p` 是旧目录列表的别名，现在重新用于项目列表，含义已改变；历史 `/s` 是旧 `/interrupt` 的停止别名，此后已退役，目前仍是未知命令，停止请用 `/sp` 或 `/stop`。
 
 ## 历史决定（YZ，2026-10-21；命令名称以“命令精简”的当前实现为准）
 

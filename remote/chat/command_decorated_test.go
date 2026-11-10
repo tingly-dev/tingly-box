@@ -92,7 +92,7 @@ func TestPickerShortcutsMatchCanonicalCommands(t *testing.T) {
 	require.NoError(t, env.Manager().Start(env.Context()))
 	chat := alice.OpenDM(harness.Setting.UUID)
 	router.bind(chat.ChatID)
-	for _, pair := range [][2]string{{"/d", "/dir"}, {"/proj", "/project"}, {"/d 2", "/dir 2"}, {"/proj 2", "/project 2"}, {"/d /path/that/does/not/exist", "/dir /path/that/does/not/exist"}} {
+	for _, pair := range [][2]string{{"/d", "/dir"}, {"/p", "/project"}, {"/d 2", "/dir 2"}, {"/p 2", "/project 2"}, {"/d /path/that/does/not/exist", "/dir /path/that/does/not/exist"}} {
 		chat.Drain()
 		chat.SendText(pair[1])
 		want := chat.WaitText(3 * time.Second).Text
@@ -100,6 +100,41 @@ func TestPickerShortcutsMatchCanonicalCommands(t *testing.T) {
 		chat.SendText(pair[0])
 		assert.Equal(t, want, chat.WaitText(3*time.Second).Text, pair[0])
 	}
+}
+
+func TestProjectShortcutDecorations(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+	direct := alice.OpenDM(harness.Setting.UUID)
+	group := env.NewGroup("eng", alice, env.NewUser("bob")).Chat(harness.Setting.UUID)
+	harness.WhitelistGroup(group.ChatID, alice.ID)
+	router.bind(direct.ChatID)
+	router.bind(group.ChatID)
+
+	for _, tc := range []struct {
+		chat      *testenv.Chat
+		canonical string
+		shortcut  string
+	}{
+		{direct, "/project 2", "／P 2"},
+		{group, "/project 2", "/p@tingly_bot 2"},
+		{group, "/project 2", "<@U123> /p 2"},
+	} {
+		tc.chat.Drain()
+		tc.chat.SendText(tc.canonical)
+		want := tc.chat.WaitText(3 * time.Second).Text
+		tc.chat.Drain()
+		tc.chat.SendText(tc.shortcut)
+		assert.Equal(t, want, tc.chat.WaitText(3*time.Second).Text, tc.shortcut)
+	}
+	direct.Drain()
+	direct.SendText("/p@tingly_bot 2")
+	direct.WaitText(3*time.Second).AssertContains(t, "Unknown command /p@tingly_bot")
+	direct.SendText("@tingly_bot /p 2")
+	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "@tingly_bot /p 2", router.inbound()[0].Text)
 }
 
 func TestSessionShortcutsRouteCanonicalNameAndArguments(t *testing.T) {
@@ -113,7 +148,7 @@ func TestSessionShortcutsRouteCanonicalNameAndArguments(t *testing.T) {
 	router.bind(direct.ChatID)
 	router.bind(group.ChatID)
 
-	for _, pair := range [][2]string{{"sess", "session"}, {"n", "new"}, {"sto", "stop"}, {"cl", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"sess", "session"}, {"n", "new"}, {"sp", "stop"}, {"cr", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		for _, tc := range []struct {
 			chat *testenv.Chat
 			text string
@@ -129,7 +164,7 @@ func TestSessionShortcutsRouteCanonicalNameAndArguments(t *testing.T) {
 			assert.Equal(t, pair[1]+":one  two", router.commands()[before], tc.text)
 		}
 	}
-	for _, text := range []string{"/p", "/s", "/unknown"} {
+	for _, text := range []string{"/s", "/proj", "/sto", "/cl", "/unknown"} {
 		direct.Drain()
 		direct.SendText(text)
 		direct.WaitText(3*time.Second).AssertContains(t, "Unknown command "+text)

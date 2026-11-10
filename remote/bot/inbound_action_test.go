@@ -19,7 +19,10 @@ func TestDecoratedShortcutAuthorization(t *testing.T) {
 		{"/d /work", false, access.ActionRemoteControlPrivileged},
 		{"/d 2", false, access.ActionRemoteControlStart},
 		{"/d@bot 2", true, access.ActionRemoteControlPrivileged},
-		{"@bot /proj 2", true, access.ActionRemoteControlPrivileged},
+		{"@bot /p 2", true, access.ActionRemoteControlPrivileged},
+		{"/p@bot 2", true, access.ActionRemoteControlPrivileged},
+		{"/p 2", false, access.ActionRemoteControlStart},
+		{"/p@bot 2", false, access.ActionRemoteControlStart},
 		{"<@U123> /d /work", true, access.ActionRemoteControlPrivileged},
 		{"/d@bot /work", false, access.ActionRemoteControlStart},
 		{"@bot /d /work", false, access.ActionRemoteControlStart},
@@ -34,7 +37,7 @@ func TestDecoratedShortcutAuthorization(t *testing.T) {
 }
 
 func TestShortcutAuthorizationParity(t *testing.T) {
-	for _, pair := range [][2]string{{"d", "dir"}, {"proj", "project"}, {"sess", "session"}, {"n", "new"}, {"sto", "stop"}, {"cl", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"d", "dir"}, {"p", "project"}, {"sess", "session"}, {"n", "new"}, {"sp", "stop"}, {"cr", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		for _, group := range []bool{false, true} {
 			for _, arg := range []string{"", " 2", " 0", " /some path"} {
 				for _, pending := range []access.ActionName{"", access.ActionRemoteControlApprove} {
