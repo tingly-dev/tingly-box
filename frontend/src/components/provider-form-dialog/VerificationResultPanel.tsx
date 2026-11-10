@@ -40,7 +40,8 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     <Close fontSize="small"/>
                 </IconButton>
             </Box>
-            <Typography variant="body2" color={result.success ? 'success.main' : 'error.main'} sx={{mb: 1, fontWeight: 600}}>{result.message}</Typography>
+            {/* Cancelled runs are not failures — render them neutral instead of red. */}
+            <Typography variant="body2" color={result.success ? 'success.main' : result.cancelled ? 'text.secondary' : 'error.main'} sx={{mb: 1, fontWeight: 600}}>{result.message}</Typography>
             <Stack spacing={0.75}>
                 {details.map((detail, index) => {
                     const isSuccess = detail.includes('✓');

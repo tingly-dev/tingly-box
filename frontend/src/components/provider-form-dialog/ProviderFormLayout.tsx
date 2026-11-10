@@ -25,18 +25,23 @@ interface LayoutProps {
     onBack?: () => void;
 }
 
-/** Shared shell keeps every provider editor's sizing, scrolling and actions aligned. */
+/** Shared shell keeps every provider editor's sizing, scrolling and actions aligned.
+ *
+ * Close locks (backdrop, header X, footer Cancel) follow `saving` only — a
+ * read-only connection test must never trap the user in the dialog; it is
+ * cancelled by the dialog when it closes. Form controls stay locked while
+ * `busy` (test running or saving). */
 export default function ProviderFormLayout({open, title, description, busy, saving, onClose, onSubmit, formRef,
     children, exportAction, secondaryAction, submitText, showCancel = true, onBack}: LayoutProps) {
     const {t} = useTranslation();
     const titleId = useId();
-    return <Dialog open={open} onClose={() => {if (!busy) onClose();}} aria-labelledby={titleId} maxWidth="sm" fullWidth
+    return <Dialog open={open} onClose={() => {if (!saving) onClose();}} aria-labelledby={titleId} maxWidth="sm" fullWidth
         slotProps={{paper: {sx: {
             maxHeight: '90dvh', m: {xs: 1.5, sm: 3}, width: {xs: 'calc(100% - 24px)', sm: 'calc(100% - 48px)'},
             display: 'flex', flexDirection: 'column',
         }}}}>
         <DialogHeader title={title || t('providerDialog.editTitle')} titleId={titleId} closeLabel={t('common.close')}
-            onClose={onClose} closeDisabled={busy}/>
+            onClose={onClose} closeDisabled={saving}/>
         <form ref={formRef} onSubmit={onSubmit} noValidate style={{display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden'}}>
             <DialogContent sx={{px: {xs: 2, sm: 3}, pt: 1, pb: 2.5, overflowY: 'auto', flex: 1}}>
                 <Stack component="fieldset" disabled={busy} spacing={2.5} sx={{border: 0, m: 0, p: 0, minWidth: 0}}>
@@ -49,7 +54,7 @@ export default function ProviderFormLayout({open, title, description, busy, savi
                 {onBack && <Button size="small" disabled={busy} startIcon={<ArrowBack fontSize="small"/>} onClick={onBack}>{t('common.back')}</Button>}
                 <Box sx={{ml: 'auto', display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': {whiteSpace: 'nowrap'}}}>
                     {secondaryAction}
-                    {showCancel && <Button type="button" color="inherit" size="small" disabled={busy} onClick={onClose}>{t('common.cancel')}</Button>}
+                    {showCancel && <Button type="button" color="inherit" size="small" disabled={saving} onClick={onClose}>{t('common.cancel')}</Button>}
                     <Button type="submit" variant="contained" size="small" disabled={busy}>
                         {saving ? t('providerDialog.editUx.saving') : submitText || t('common.saveChanges')}
                     </Button>

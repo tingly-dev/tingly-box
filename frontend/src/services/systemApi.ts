@@ -98,8 +98,10 @@ export const systemApi = {
         })),
 
     // Lightweight probe for optional key validation using OPTIONS and models endpoint
-    // This is used by the "Test Connection" button - results are informational only
-    probeProviderLightweight: async (name: string, api_style: string, api_base: string, token: string, auth_type?: string): Promise<any> =>
+    // This is used by the "Test Connection" button - results are informational only.
+    // The optional signal cancels an in-flight probe (dialog Stop button / watchdog);
+    // the backend honours the dropped connection by cancelling its upstream probes.
+    probeProviderLightweight: async (name: string, api_style: string, api_base: string, token: string, auth_type?: string, signal?: AbortSignal): Promise<any> =>
         controlApi((client, headers) => client.POST('/api/v2/probe/lightweight', {
             headers,
             body: {
@@ -108,7 +110,8 @@ export const systemApi = {
                 api_base: api_base,
                 token: token,
                 auth_type: auth_type,
-            }
+            },
+            signal,
         })),
 
     getVersion: async (): Promise<string> => {
