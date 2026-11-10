@@ -37,9 +37,9 @@ func TestDecoratedShortcutAuthorization(t *testing.T) {
 }
 
 func TestShortcutAuthorizationParity(t *testing.T) {
-	for _, pair := range [][2]string{{"d", "dir"}, {"p", "project"}, {"s", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"p", "project"}, {"s", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		for _, group := range []bool{false, true} {
-			for _, arg := range []string{"", " 2", " 0", " /some path"} {
+			for _, arg := range []string{"", " extra", " 2", " 0", " /some path"} {
 				for _, pending := range []access.ActionName{"", access.ActionRemoteControlApprove} {
 					msg := imbot.Message{ChatType: imbot.ChatTypeDirect}
 					if group {
@@ -53,23 +53,6 @@ func TestShortcutAuthorizationParity(t *testing.T) {
 					require.Equal(t, wantAction, gotAction, "%s group=%v arg=%q pending=%s", pair[0], group, arg, pending)
 				}
 			}
-		}
-	}
-}
-
-func TestHelpShortcutAuthorizationParity(t *testing.T) {
-	for _, group := range []bool{false, true} {
-		for _, pending := range []access.ActionName{"", access.ActionRemoteControlApprove} {
-			msg := imbot.Message{ChatType: imbot.ChatTypeDirect}
-			if group {
-				msg.ChatType = imbot.ChatTypeGroup
-			}
-			msg.Content = imbot.NewTextContent("/help extra")
-			wantCapability, wantAction := bot.InboundAction(msg, access.CapabilityRemoteControl, pending)
-			msg.Content = imbot.NewTextContent("/h extra")
-			gotCapability, gotAction := bot.InboundAction(msg, access.CapabilityRemoteControl, pending)
-			require.Equal(t, wantCapability, gotCapability)
-			require.Equal(t, wantAction, gotAction)
 		}
 	}
 }

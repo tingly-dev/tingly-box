@@ -18,7 +18,17 @@ func TestShortcutHelpAndRegistration(t *testing.T) {
 		cmd, ok := registry.Get(pair[0])
 		require.True(t, ok, pair[0])
 		assert.Equal(t, pair[1], cmd.Name)
-		assert.Contains(t, helpText("u", "c", true, false), "/"+pair[0])
+		help := helpText("u", "c", true, false)
+		if pair[1] == "help" {
+			assert.Contains(t, help, "/h: Shortcut for /help")
+		} else {
+			assert.Contains(t, help, "(/"+pair[0]+"):", pair[0])
+		}
+	}
+	for _, pair := range [][2]string{{"start", "help"}, {"bind", "pair"}} {
+		cmd, ok := registry.Get(pair[0])
+		require.True(t, ok, pair[0])
+		assert.Equal(t, pair[1], cmd.Name)
 	}
 	group := helpText("u", "c", false, true)
 	assert.NotContains(t, group, "/d ")
@@ -113,7 +123,10 @@ func TestMenuAndHelpListTheSameCommands(t *testing.T) {
 		assert.Equal(t, spec.Order, cmd.Priority, spec.Name)
 		usage, ok := spec.usageFor(true, false)
 		require.True(t, ok)
-		assert.Contains(t, help, usage, spec.Name)
-		assert.Contains(t, help, ": "+spec.Help, spec.Name)
+		line := usage
+		if len(cmd.Aliases) > 0 {
+			line += " (/" + strings.Join(cmd.Aliases, ", /") + ")"
+		}
+		assert.Contains(t, help, line+": "+spec.Help, spec.Name)
 	}
 }
