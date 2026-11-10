@@ -1,6 +1,8 @@
 // Usage dashboard and history
 export default {
   "dashboard": {
+    webToolSpend: '网页工具费用',
+    webToolRequests: '{{count}} 次计费 Search/Fetch 请求 · 不含 token 费用',
     "userUsage": {
       "title": "团队用量",
       "subtitle": "查看每个在册用户如何使用共享的 AI 访问能力。",

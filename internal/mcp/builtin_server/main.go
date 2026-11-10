@@ -15,6 +15,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/webtools/deepseek"
 )
 
 // Endpoints are variables so tests can point them at a local httptest server.
@@ -37,13 +39,16 @@ func ToolDefinitions() ([]mcp.Tool, error) {
 	// Register web search tool
 	webSearchTool := mcp.Tool{
 		Name:        mcptools.BuiltinWebSearchToolName,
-		Description: "Search web pages with Serper and return top organic results.",
+		Description: "Search web pages and return relevant results and summaries.",
 	}
 
 	// Set input schema via JSON conversion
 	if err := setToolInputSchema(&webSearchTool, map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
+			"count":        map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 50, "description": "Number of results (DeepSeek, default 10)."},
+			"need_content": map[string]interface{}{"type": "boolean", "description": "Include full page content instead of summaries (DeepSeek)."},
+			"ori_question": map[string]interface{}{"type": "string", "description": "Optional original question sent explicitly to DeepSeek."},
 			"query": map[string]interface{}{
 				"type":        "string",
 				"description": "Search query.",
@@ -67,7 +72,7 @@ func ToolDefinitions() ([]mcp.Tool, error) {
 	// Register web fetch tool
 	webFetchTool := mcp.Tool{
 		Name:        mcptools.BuiltinWebFetchToolName,
-		Description: "Fetch and convert a URL to markdown-like text via Jina Reader.",
+		Description: "Fetch a URL and return its content as Markdown.",
 	}
 
 	if err := setToolInputSchema(&webFetchTool, map[string]interface{}{
@@ -82,7 +87,7 @@ func ToolDefinitions() ([]mcp.Tool, error) {
 				"description": "Extraction instruction for content focus.",
 			},
 		},
-		"required": []string{"url", "prompt"},
+		"required": []string{"url"},
 	}); err != nil {
 		return nil, fmt.Errorf("failed to set web fetch schema: %w", err)
 	}
@@ -194,16 +199,6 @@ func handleWebFetch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 		}, nil
 	}
 
-	prompt, ok := args["prompt"].(string)
-	if !ok || strings.TrimSpace(prompt) == "" {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{
-				mcp.TextContent{Type: "text", Text: "Error: prompt is required"},
-			},
-			IsError: true,
-		}, nil
-	}
-
 	// Call web fetch implementation
 	result, err := webFetchImpl(ctx, args)
 	if err != nil {
@@ -224,6 +219,11 @@ func handleWebFetch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 
 // webSearchImpl implements the actual web search logic
 func webSearchImpl(ctx context.Context, args map[string]interface{}) (string, error) {
+	if service, selected, err := standaloneDeepSeek(mcptools.BuiltinWebSearchToolName); err != nil {
+		return "", err
+	} else if selected {
+		return service.Tool(ctx, "search", args)
+	}
 	// Extract query
 	query, ok := args["query"].(string)
 	if !ok || strings.TrimSpace(query) == "" {
@@ -391,6 +391,11 @@ func truncateForError(body []byte) string {
 
 // webFetchImpl implements the actual web fetch logic
 func webFetchImpl(ctx context.Context, args map[string]interface{}) (string, error) {
+	if service, selected, err := standaloneDeepSeek(mcptools.BuiltinWebFetchToolName); err != nil {
+		return "", err
+	} else if selected {
+		return service.Tool(ctx, "fetch", args)
+	}
 	// Extract URL
 	targetURL, ok := args["url"].(string)
 	if !ok || strings.TrimSpace(targetURL) == "" {
@@ -451,4 +456,23 @@ func webFetchImpl(ctx context.Context, args map[string]interface{}) (string, err
 	output.WriteString(content)
 
 	return output.String(), nil
+}
+
+// Standalone stdio can also use an explicitly supplied DeepSeek key. The hosted
+// runtime resolves provider credentials in-process instead (with accounting).
+func standaloneDeepSeek(tool string) (*deepseek.Service, bool, error) {
+	env := map[string]string{}
+	for _, key := range []string{"SERPER_API_KEY", "WEB_SEARCH_BACKEND", "WEB_FETCH_BACKEND"} {
+		env[key] = os.Getenv(key)
+	}
+	key := os.Getenv("DEEPSEEK_API_KEY")
+	backend, err := mcptools.WebBackend(env, tool, key != "")
+	service := &deepseek.Service{Resolve: func() *typ.Provider {
+		base := os.Getenv("DEEPSEEK_BASE_URL")
+		if base == "" {
+			base = "https://api.deepseek.com/v1"
+		}
+		return &typ.Provider{APIBase: base, Token: key}
+	}}
+	return service, backend == "deepseek", err
 }

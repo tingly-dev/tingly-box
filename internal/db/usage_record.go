@@ -14,7 +14,11 @@ import (
 
 // UsageRecord is the GORM model for persisting individual usage records
 type UsageRecord struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
+	ID uint `gorm:"primaryKey;autoIncrement;column:id"`
+	// EventType distinguishes token usage (legacy/default) from request billing.
+	EventType    string    `gorm:"column:event_type;not null;default:tokens"`
+	UnitPrice    float64   `gorm:"column:unit_price;not null;default:0"`
+	Currency     string    `gorm:"column:currency;not null;default:''"`
 	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
 	ProviderName string    `gorm:"column:provider_name;not null"`
 	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
@@ -36,8 +40,10 @@ type UsageRecord struct {
 	// an ALTER on three tables for no behavioral gain, so the legacy name is
 	// pinned in the tag and the mismatch stops at this line. Raw SQL selects
 	// alias it (`SUM(cache_input_tokens) as cache_read_tokens`) so Scan binds.
-	CacheReadTokens  int `gorm:"column:cache_input_tokens;default:0"`
-	CacheWriteTokens int `gorm:"column:cache_write_tokens;default:0"`
+	CacheReadTokens  int     `gorm:"column:cache_input_tokens;default:0"`
+	CacheWriteTokens int     `gorm:"column:cache_write_tokens;default:0"`
+	BillableRequests int64   `gorm:"column:billable_requests;not null;default:0"`
+	RequestCostCNY   float64 `gorm:"column:request_cost_cny;not null;default:0"`
 	// ReasoningTokens counts thinking/reasoning tokens (OpenAI reasoning
 	// models, Anthropic extended thinking). A SUBSET of OutputTokens, not
 	// an addition to it.
@@ -82,8 +88,10 @@ type UsageDailyRecord struct {
 	InputTokens  int64  `gorm:"column:input_tokens;not null"`
 	OutputTokens int64  `gorm:"column:output_tokens;not null"`
 	// Cache tokens: reads, then writes (a subset of InputTokens)
-	CacheReadTokens  int64 `gorm:"column:cache_input_tokens;default:0"`
-	CacheWriteTokens int64 `gorm:"column:cache_write_tokens;default:0"`
+	CacheReadTokens  int64   `gorm:"column:cache_input_tokens;default:0"`
+	CacheWriteTokens int64   `gorm:"column:cache_write_tokens;default:0"`
+	BillableRequests int64   `gorm:"column:billable_requests;not null;default:0"`
+	RequestCostCNY   float64 `gorm:"column:request_cost_cny;not null;default:0"`
 	// ReasoningTokens: a subset of OutputTokens (see UsageRecord doc)
 	ReasoningTokens int64 `gorm:"column:reasoning_tokens;default:0"`
 	// System tokens
@@ -199,6 +207,9 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 // database -- split out so RecordRequestOutcome can create it in the same
 // transaction as a StatsStore write.
 func prepareUsageRecord(record *UsageRecord) {
+	if record.EventType == "" {
+		record.EventType = "tokens"
+	}
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now()
 	}
@@ -251,6 +262,8 @@ type AggregatedStat struct {
 	OutputTokens     int64   `json:"total_output_tokens"`
 	CacheReadTokens  int64   `json:"cache_read_tokens"`
 	CacheWriteTokens int64   `json:"cache_write_tokens"`
+	BillableRequests int64   `json:"billable_requests"`
+	RequestCostCNY   float64 `json:"request_cost_cny"`
 	ReasoningTokens  int64   `json:"reasoning_tokens"`
 	SystemTokens     int64   `json:"system_tokens"`
 	AvgInputTokens   float64 `json:"avg_input_tokens"`
@@ -391,6 +404,8 @@ type aggBucket struct {
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
+	BillableRequests int64
+	RequestCostCNY   float64
 	ReasoningTokens  int64
 	SystemTokens     int64
 	ErrorCount       int64
@@ -412,6 +427,8 @@ func (b aggBucket) toAggregatedStat() AggregatedStat {
 		OutputTokens:     b.OutputTokens,
 		CacheReadTokens:  b.CacheReadTokens,
 		CacheWriteTokens: b.CacheWriteTokens,
+		BillableRequests: b.BillableRequests,
+		RequestCostCNY:   b.RequestCostCNY,
 		ReasoningTokens:  b.ReasoningTokens,
 		SystemTokens:     b.SystemTokens,
 		AvgInputTokens:   avgFloat(float64(b.InputTokens), b.RequestCount),
@@ -477,6 +494,8 @@ func (us *UsageStore) rawAggBuckets(query UsageStatsQuery, applyLimit bool) ([]a
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+		COALESCE(SUM(billable_requests), 0) as billable_requests,
+		COALESCE(SUM(request_cost_cny), 0) as request_cost_cny,
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
@@ -504,6 +523,8 @@ type TimeSeriesData struct {
 	OutputTokens     int64   `json:"output_tokens"`
 	CacheReadTokens  int64   `json:"cache_read_tokens"`
 	CacheWriteTokens int64   `json:"cache_write_tokens"`
+	BillableRequests int64   `json:"billable_requests"`
+	RequestCostCNY   float64 `json:"request_cost_cny"`
 	ReasoningTokens  int64   `json:"reasoning_tokens"`
 	SystemTokens     int64   `json:"system_tokens"`
 	ErrorCount       int64   `json:"error_count"`
@@ -555,6 +576,8 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 		OutputTokens     int64
 		CacheReadTokens  int64
 		CacheWriteTokens int64
+		BillableRequests int64
+		RequestCostCNY   float64
 		ReasoningTokens  int64
 		SystemTokens     int64
 		ErrorCount       int64
@@ -571,6 +594,8 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+		COALESCE(SUM(billable_requests), 0) as billable_requests,
+		COALESCE(SUM(request_cost_cny), 0) as request_cost_cny,
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
@@ -596,6 +621,8 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 			OutputTokens:     r.OutputTokens,
 			CacheReadTokens:  r.CacheReadTokens,
 			CacheWriteTokens: r.CacheWriteTokens,
+			BillableRequests: r.BillableRequests,
+			RequestCostCNY:   r.RequestCostCNY,
 			ReasoningTokens:  r.ReasoningTokens,
 			SystemTokens:     r.SystemTokens,
 			ErrorCount:       r.ErrorCount,

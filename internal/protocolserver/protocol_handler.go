@@ -31,6 +31,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/vision/visionproxy"
+	"github.com/tingly-dev/tingly-box/internal/webtools/deepseek"
 )
 
 // ProtocolHandlerDeps declares exactly what the AI Model API handlers need from the host
@@ -41,6 +42,9 @@ import (
 // the fields/methods it actually touches on *Server today.
 type ProtocolHandlerDeps struct {
 	Config *config.Config
+
+	// DeepSeekWebtools shares provider resolution and per-request accounting with MCP.
+	DeepSeekWebtools *deepseek.Service
 
 	// TokenTracker records usage to the OTel meter pipeline (may be nil if
 	// OTel setup failed at startup — callers must nil-check).

@@ -25,10 +25,10 @@ export default function MCPToolCard({
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
     const advisor = isAdvisorTool(tool, source);
     const serverTool = isServerToolSource(source);
-    const missingSearchKey = tool.name === 'mcp_web_search' && needsSearchKey(source);
+    const missingSearchKey = tool.name === 'mcp_web_search' && needsSearchKey(source, tool);
     const restricted = isToolRestricted(tool, source);
     const note = missingSearchKey
-        ? label('missing_searchKey', 'Search needs a Serper API key; Fetch does not.')
+        ? label('missing_searchKey', 'Search needs a configured DeepSeek provider or a Serper API key.')
         : restricted
           ? source?.enabled === false
               ? label('connectionOff', 'This connection is off. Enable it to discover and use its tools.')
@@ -46,7 +46,7 @@ export default function MCPToolCard({
             ariaLabel={inWorkspace ? tool.name : `${source?.name || tool.source_id} / ${tool.name}`}
             onToggle={(on) => onChange({ enabled: on })}
             onTest={onTest}
-            testDisabled={busy || (!enabled && !serverTool) || !tool.enabled || restricted || advisor || missingSearchKey}
+            testDisabled={busy || (!enabled && !serverTool) || !tool.enabled || restricted || advisor || missingSearchKey || tool.ready === false}
         />
     );
 }

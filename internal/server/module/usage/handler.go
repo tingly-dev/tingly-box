@@ -81,6 +81,8 @@ func (h *Handler) GetStats(c *gin.Context) {
 			StreamedRate:     s.StreamedRate,
 			CacheReadTokens:  s.CacheReadTokens,
 			CacheWriteTokens: s.CacheWriteTokens,
+			BillableRequests: s.BillableRequests,
+			RequestCostCNY:   s.RequestCostCNY,
 			ReasoningTokens:  s.ReasoningTokens,
 		}
 	}
@@ -144,6 +146,8 @@ func (h *Handler) GetTimeSeries(c *gin.Context) {
 			OutputTokens:     d.OutputTokens,
 			CacheReadTokens:  d.CacheReadTokens,
 			CacheWriteTokens: d.CacheWriteTokens,
+			BillableRequests: d.BillableRequests,
+			RequestCostCNY:   d.RequestCostCNY,
 			ReasoningTokens:  d.ReasoningTokens,
 			ErrorCount:       d.ErrorCount,
 			AvgLatencyMs:     d.AvgLatencyMs,
@@ -213,7 +217,8 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			tokensPerSecond = db.TokensPerSecond(r.OutputTokens, r.LatencyMs, r.TTFTMs)
 		}
 		data[i] = UsageRecordResponse{
-			ID:               r.ID,
+			ID:        r.ID,
+			EventType: r.EventType, UnitPrice: r.UnitPrice, Currency: r.Currency,
 			ProviderUUID:     r.ProviderUUID,
 			ProviderName:     r.ProviderName,
 			Model:            r.Model,
@@ -227,6 +232,8 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			TotalTokens:      r.TotalTokens,
 			CacheReadTokens:  r.CacheReadTokens,
 			CacheWriteTokens: r.CacheWriteTokens,
+			BillableRequests: r.BillableRequests,
+			RequestCostCNY:   r.RequestCostCNY,
 			ReasoningTokens:  r.ReasoningTokens,
 			Status:           r.Status,
 			ErrorCode:        r.ErrorCode,

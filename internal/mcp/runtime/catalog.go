@@ -14,6 +14,9 @@ import (
 )
 
 type CatalogTool struct {
+	// Backend/readiness are safe display metadata, independent of opt-in policy.
+	Backend        string                 `json:"backend,omitempty"`
+	Ready          *bool                  `json:"ready,omitempty"`
 	SourceID       string                 `json:"source_id"`
 	Name           string                 `json:"name"`
 	NormalizedName string                 `json:"normalized_name"`
@@ -59,7 +62,7 @@ func (r *Runtime) DiscoverSource(ctx context.Context, id string) (SourceStatus, 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.RequestTimeout)*time.Second)
 	defer cancel()
 	var definitions []ToolDefinition
-	if source.ID == mcptools.ServerWebtoolsSourceID {
+	if source.ID == mcptools.ServerWebtoolsSourceID || source.ID == mcptools.BuiltinWebtoolsSourceID && r.deepSeekWebtools.Available() {
 		tools, err := builtinserver.ToolDefinitions()
 		if err != nil {
 			return status, err
@@ -112,7 +115,16 @@ func (r *Runtime) DiscoverSource(ctx context.Context, id string) (SourceStatus, 
 		if SourceImplementation(*source) == typ.ToolImplementationVirtual {
 			normalized = NormalizeToolName("builtin", def.Name)
 		}
-		status.Tools = append(status.Tools, CatalogTool{SourceID: id, Name: def.Name, NormalizedName: normalized, Description: def.Description,
+
+		var backend string
+		var ready *bool
+		if isWebtoolSource(id) {
+			if _, known := mcptools.WebtoolReadinessCheckers[def.Name]; known {
+				backend, _ = r.webBackend(*source, def.Name)
+				ready = typ.BoolPtr(r.isSourceToolConfigured(*source, def.Name))
+			}
+		}
+		status.Tools = append(status.Tools, CatalogTool{Backend: backend, Ready: ready, SourceID: id, Name: def.Name, NormalizedName: normalized, Description: def.Description,
 			InputSchema: def.InputSchema, OutputSchema: def.OutputSchema, Annotations: def.Annotations, Enabled: enabled, Usage: usage, Implementation: SourceImplementation(*source)})
 	}
 	sort.Slice(status.Tools, func(i, j int) bool { return status.Tools[i].Name < status.Tools[j].Name })

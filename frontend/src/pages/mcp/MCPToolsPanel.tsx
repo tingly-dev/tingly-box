@@ -61,7 +61,7 @@ export default function MCPToolsPanel({
                 const advisor = source.transport === 'advisor' || !!source.advisor;
                 const serverTool = isServerToolSource(source);
                 const webtools = isServerWebtoolsSource(source);
-                const summary = connectionSummary(source);
+                const summary = connectionSummary(source, tools);
                 const failed = route?.state === 'error' || route?.state === 'unconfigured';
                 const builtin = isBuiltinSource(source) && !webtools && !advisor;
                 // Neutral unless the connection needs the user (amber) or failed (red).
@@ -175,7 +175,7 @@ export default function MCPToolsPanel({
                             )}
                             {webtools && (
                                 <Typography variant="caption" color="text.secondary">
-                                    {workspace('webtoolsContext', 'Configure Search with a Serper API key and enable Search / Fetch separately. Ready tools replace native web tools on supported model routes. The MCP version has independent settings.')}
+                                    {workspace('webtoolsContext', 'Search / Fetch automatically reuse an available DeepSeek credential, or use Serper / Jina Reader. Enable tools separately. Ready tools replace native web tools; the MCP version has independent settings.')}
                                 </Typography>
                             )}
                             {advisor && (
