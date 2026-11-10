@@ -16,6 +16,7 @@ func (e ResponsesCreatedEvent) EventType() string                    { return e.
 func (e ResponsesInProgressEvent) EventType() string                 { return e.Type }
 func (e ResponsesCompletedEvent) EventType() string                  { return e.Type }
 func (e ResponsesIncompleteEvent) EventType() string                 { return e.Type }
+func (e ResponsesFailedEvent) EventType() string                     { return e.Type }
 func (e ResponsesOutputItemAddedEvent) EventType() string            { return e.Type }
 func (e ResponsesOutputItemDoneEvent) EventType() string             { return e.Type }
 func (e ResponsesContentPartAddedEvent) EventType() string           { return e.Type }
@@ -39,6 +40,43 @@ type ResponsesStreamErrorEvent struct {
 // NewResponsesStreamErrorEvent builds a mid-stream "error" event.
 func NewResponsesStreamErrorEvent(seq int64, code, message string) ResponsesStreamErrorEvent {
 	return ResponsesStreamErrorEvent{Type: "error", SequenceNumber: seq, Code: code, Message: message}
+}
+
+// ResponsesFailedEvent is the response.failed lifecycle event. The proxy
+// emits it after a mid-stream content-policy block (#2417): Codex reads the
+// block code from response.failed or an HTTP 400 body, never from an "error"
+// event, and retries a stream that ends without a terminal event.
+type ResponsesFailedEvent struct {
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
+	Response       ResponsesWireResponse `json:"response"`
+}
+
+// ResponsesFailedErrorWire is the error object of a failed response.
+// Misalignment is the upstream's details object for
+// misalignment_policy_violation, relayed as-is when present.
+type ResponsesFailedErrorWire struct {
+	Code         string          `json:"code"`
+	Message      string          `json:"message"`
+	Misalignment json.RawMessage `json:"misalignment,omitempty"`
+}
+
+// NewResponsesFailedEvent builds a response.failed event. The response id
+// is left empty: the passthrough does not track it, and Codex reads only
+// response.error.
+func NewResponsesFailedEvent(seq, createdAt int64, model string, failure ResponsesFailedErrorWire) ResponsesFailedEvent {
+	return ResponsesFailedEvent{
+		Type:           "response.failed",
+		SequenceNumber: seq,
+		Response: ResponsesWireResponse{
+			Object:    "response",
+			CreatedAt: createdAt,
+			Status:    "failed",
+			Output:    []ResponsesOutputItemWire{},
+			Model:     model,
+			Error:     failure,
+		},
+	}
 }
 
 type ResponsesCreatedEvent struct {
@@ -81,7 +119,7 @@ type ResponsesWireResponse struct {
 	Model             string                          `json:"model,omitempty"`
 	CompletedAt       int64                           `json:"completed_at,omitempty"`
 	IncompleteDetails *ResponsesIncompleteDetailsWire `json:"incomplete_details"`
-	Error             interface{}                     `json:"error"` // always null: failures surface as error events or HTTP errors
+	Error             interface{}                     `json:"error"` // null except in response.failed (NewResponsesFailedEvent)
 }
 
 // ToMap converts the typed response contract to the legacy map surface used by
