@@ -14,7 +14,7 @@ import (
 func TestShortcutHelpAndRegistration(t *testing.T) {
 	registry := imbot.NewCommandRegistry()
 	require.NoError(t, RegisterBuiltinCommands(registry, nil))
-	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"p", "project"}, {"sess", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"p", "project"}, {"s", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		cmd, ok := registry.Get(pair[0])
 		require.True(t, ok, pair[0])
 		assert.Equal(t, pair[1], cmd.Name)
@@ -34,7 +34,7 @@ func TestHelpText(t *testing.T) {
 Your ID: u1
 Chat ID: c1`
 	session := strings.Join([]string{
-		"/session [N] (/sess): List the sessions here, or switch to #N",
+		"/session [N] (/s): List the sessions here, or switch to #N",
 		"/new [message] (/n): Start a new session",
 		"/stop [#N]: Stop the running session",
 		"/clear (/cls): Stop, and start a new session with the next message",

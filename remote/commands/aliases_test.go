@@ -26,7 +26,8 @@ func TestAliasesDoNotCollide(t *testing.T) {
 	require.Equal(t, "project", Canonical("p"))
 	require.Equal(t, "clear", Canonical("cls"))
 	require.Empty(t, Aliases("stop"))
-	for _, name := range []string{"s", "sp", "cr", "unknown"} {
+	require.Equal(t, "session", Canonical("s"))
+	for _, name := range []string{"sess", "sp", "cr", "unknown"} {
 		require.Equal(t, name, Canonical(name))
 	}
 }

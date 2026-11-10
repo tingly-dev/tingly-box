@@ -13,7 +13,7 @@ var aliases = [...]Alias{
 	{"bind", "pair"},
 	{"d", "dir"},
 	{"p", "project"},
-	{"sess", "session"},
+	{"s", "session"},
 	{"n", "new"},
 	{"cls", "clear"},
 	{"stat", "status"},

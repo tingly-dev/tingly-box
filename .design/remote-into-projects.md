@@ -219,13 +219,13 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 命令的读法与权限（2026-11-04，YZ，详见 `bot-capability-access-control.md` §6.2）：**@ 只存在于群聊**——群里同一条命令各平台装饰不同（Telegram `/dir@bot`、Slack/Discord `<@U1> /dir`、飞书 `@_user_1 /dir`、企微/WhatsApp `@bot /dir`、钉钉前导空格、全角 `／dir`），单聊只认朴素的 `/xxx`；解析只在 `imbot.ParseSlashCommand(text, group)`，闸门和处理器必须传同一个 group。Telegram 群里发给别的 bot 的 `/cmd@otherbot` 由 Telegram 适配器丢弃。直聊里选择已注册的文件夹和项目只需 start，自由路径（`/cd <路径>`、`/dir <路径>`、目录浏览器）和发文件需要 `remote_control.privileged`（界面“任意文件夹和文件”），群聊里全部需要；拒绝时回一句指向该开关，`/help` 只列聊天能跑的命令。
 
-**命令短写（当前实现）**：`/h` → `/help`，`/d` → `/dir`，`/p` → `/project`，`/sess` → `/session`，`/n` → `/new`，`/cls` → `/clear`，`/stat` → `/status`，`/v` → `/verbose`。`/start` 和 `/bind` 仍分别是 `/help` 和 `/pair` 的既有别名；`/cd`、`/stop`、`/yolo` 不另加短写。帮助在允许的主命令旁展示短写，平台菜单仍只列主命令。
+**命令短写（当前实现）**：`/h` → `/help`，`/d` → `/dir`，`/p` → `/project`，`/s` → `/session`，`/n` → `/new`，`/cls` → `/clear`，`/stat` → `/status`，`/v` → `/verbose`。`/start` 和 `/bind` 仍分别是 `/help` 和 `/pair` 的既有别名；`/cd`、`/stop`、`/yolo` 不另加短写。帮助在允许的主命令旁展示短写，平台菜单仍只列主命令。
 
 `remote/commands` 是短写映射的共同来源：注册表使用别名，授权按规范名及原参数分类，Projects 会话分发也先转换名称而保留参数。群聊装饰、私聊解析、待审批及权限闸门与主命令一致；尤其 `/d <path>` 仍需要特权，群聊 `/d`、`/p` 也需要特权。
 
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
-`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
-`/quiet` `/noverbose`，以及裸词 `stop`（现在是普通消息）。`/h` 后来恢复为上面的帮助短写。历史上 `/p` 是旧目录列表的别名，现在重新用于项目列表，含义已改变；历史 `/s` 是旧 `/interrupt` 的停止别名，此后已退役，目前仍是未知命令，停止请用 `/stop`。
+`/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/threads`、`/focus`、`/back`、`/interrupt` `/i`、
+`/quiet` `/noverbose`，以及裸词 `stop`（现在是普通消息）。`/h` 后来恢复为上面的帮助短写。历史上 `/p` 是旧目录列表的别名，现在重新用于项目列表，含义已改变；历史 `/s` 是旧 `/interrupt` 的停止别名，退役后现重新用于 `/session`，不再停止任务；停止请用 `/stop`。
 
 ## 历史决定（YZ，2026-10-21；命令名称以“命令精简”的当前实现为准）
 
