@@ -6,7 +6,66 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+// CoordinatorSettingsDelivery records only a digest of settings confirmed in a session.
+// An empty digest means a prior delivery may have reached the transcript.
+type CoordinatorSettingsDelivery struct {
+	ThreadID  string `gorm:"primaryKey;size:36"`
+	SessionID string `gorm:"size:64;not null"`
+	Digest    string `gorm:"size:64;not null"`
+}
+
+// BeginCoordinatorSettings reads the last confirmation and invalidates it before
+// dispatch. A crash or skipped uncertain input must not leave a stale marker.
+func (s *Store) BeginCoordinatorSettings(threadID, sessionID string) (string, error) {
+	var digest string
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var thread Thread
+		if err := tx.Select("id", "session_id").First(&thread, "id = ? AND session_id = ?", threadID, sessionID).Error; err != nil {
+			return notFound(err)
+		}
+		var delivery CoordinatorSettingsDelivery
+		err := tx.First(&delivery, "thread_id = ?", threadID).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil && delivery.SessionID == sessionID {
+			digest = delivery.Digest
+		}
+		return tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&CoordinatorSettingsDelivery{ThreadID: threadID, SessionID: sessionID}).Error
+	})
+	return digest, err
+}
+
+// InvalidateCoordinatorSettings ensures compaction or uncertain delivery is
+// followed by a fresh settings snapshot, including across service restarts.
+func (s *Store) InvalidateCoordinatorSettings(threadID string) error {
+	return s.db.Where("thread_id = ?", threadID).Delete(&CoordinatorSettingsDelivery{}).Error
+}
+
+// FinishCoordinatorTurn commits the successful input and its settings snapshot
+// together. Neither a changed session nor a failed input advances the marker.
+func (s *Store) FinishCoordinatorTurn(inputID, threadID, sessionID, digest string, turns int) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&Thread{}).Where("id = ? AND session_id = ?", threadID, sessionID).UpdateColumn("turns", turns)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return errors.New("coordinator session changed")
+		}
+		res = tx.Model(&CoordinatorSettingsDelivery{}).Where("thread_id = ? AND session_id = ?", threadID, sessionID).UpdateColumn("digest", digest)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return errors.New("coordinator settings delivery missing")
+		}
+		return (&Store{db: tx}).FinishCoordinatorInput(inputID, true)
+	})
+}
 
 // CoordinatorInput tracks the delivery of a conversation event to the
 // coordinator session. Running is intentionally not retried after a crash: the
@@ -141,12 +200,15 @@ func (s *Store) ResolveCoordinatorInput(projectID, id string, retry bool) error 
 	if retry {
 		state = CoordinatorPending
 	}
-	res := s.db.Model(&CoordinatorInput{}).Where("project_id = ? AND id = ? AND state = ?", projectID, id, CoordinatorUncertain).Update("state", state)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected != 1 {
-		return errors.New("coordinator input is not uncertain in this project")
-	}
-	return nil
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&CoordinatorInput{}).Where("project_id = ? AND id = ? AND state = ?", projectID, id, CoordinatorUncertain).Update("state", state)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return errors.New("coordinator input is not uncertain in this project")
+		}
+		// Older versions could have sent settings in an uncertain notice.
+		return tx.Where("thread_id IN (SELECT main_thread_id FROM projects WHERE id = ?)", projectID).Delete(&CoordinatorSettingsDelivery{}).Error
+	})
 }
