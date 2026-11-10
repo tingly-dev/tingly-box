@@ -619,6 +619,12 @@ func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
 			anthropicBaseURL:       "https://cloudgpu.app",
 			supportsModelsEndpoint: true,
 		},
+		{
+			id:                     "uberllm-dev",
+			openAIBaseURL:          "https://api.uberllm.dev/v1",
+			anthropicBaseURL:       "https://api.uberllm.dev",
+			supportsModelsEndpoint: true,
+		},
 	}
 
 	for _, tt := range tests {
