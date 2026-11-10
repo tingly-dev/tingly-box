@@ -165,3 +165,45 @@ func TestWebSearchDoesNotRetryClientError(t *testing.T) {
 		t.Fatalf("expected 1 call (no retry on 4xx), got %d", got)
 	}
 }
+
+func TestStandaloneDeepSeekWebtools(t *testing.T) {
+	t.Setenv("SERPER_API_KEY", "")
+	t.Setenv("DEEPSEEK_API_KEY", "deepseek-key")
+	t.Setenv("WEB_SEARCH_BACKEND", "auto")
+	t.Setenv("WEB_FETCH_BACKEND", "auto")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer deepseek-key" {
+			t.Errorf("unexpected upstream auth")
+		}
+		if r.URL.Path == "/v1/tools/search" {
+			w.Write([]byte(`{"results":[{"title":"Go","url":"https://go.dev","summary":"DeepSeek summary"}]}`))
+			return
+		}
+		if r.URL.Path != "/v1/tools/fetch" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Write([]byte(`{"title":"Go","content":"Markdown page"}`))
+	}))
+	defer upstream.Close()
+	t.Setenv("DEEPSEEK_BASE_URL", upstream.URL+"/v1")
+	result, err := webSearchImpl(context.Background(), searchArgs("golang"))
+	if err != nil || !strings.Contains(result, "DeepSeek summary") {
+		t.Fatalf("search: %q, %v", result, err)
+	}
+	result, err = webFetchImpl(context.Background(), map[string]interface{}{"url": "https://go.dev"})
+	if err != nil || !strings.Contains(result, "Markdown page") {
+		t.Fatalf("fetch without prompt: %q, %v", result, err)
+	}
+	definitions, err := ToolDefinitions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(definitions[1].InputSchema.Required) != 1 || definitions[1].InputSchema.Required[0] != "url" {
+		t.Fatalf("fetch schema should only require url")
+	}
+	for _, field := range []string{"count", "need_content", "ori_question"} {
+		if _, ok := definitions[0].InputSchema.Properties[field]; !ok {
+			t.Errorf("search schema missing %s", field)
+		}
+	}
+}

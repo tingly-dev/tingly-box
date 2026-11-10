@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -56,6 +57,13 @@ func SetTrackingContext(c *gin.Context, rule *typ.Rule, provider *typ.Provider, 
 			scenario = ExtractScenarioFromPath(c.Request.URL.Path)
 		}
 		c.Set(ContextKeyScenario, scenario)
+	}
+	if c.Request != nil {
+		identity := coretool.UsageIdentity{UserID: GetUserIDFromContext(c), TeamID: c.GetString(constant.CtxKeyTeamID), Scenario: c.GetString(ContextKeyScenario)}
+		if rule != nil {
+			identity.RuleUUID = rule.UUID
+		}
+		c.Request = c.Request.WithContext(coretool.WithUsageIdentity(c.Request.Context(), identity))
 	}
 }
 

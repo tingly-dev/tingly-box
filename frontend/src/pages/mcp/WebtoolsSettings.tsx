@@ -29,10 +29,10 @@ export default function WebtoolsSettings({ source, onSave }: {
     return (
         <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-                {label('webtoolsSetupHint', 'Search uses Serper and needs its API key. Fetch uses Jina Reader without a search key. Save the settings, then enable each tool separately. These settings do not change the MCP version.')}
+                {label('webtoolsSetupHint', 'Search and Fetch reuse your configured DeepSeek API key when no Serper key is set. Otherwise they use Serper and Jina Reader. Enable each tool separately; the MCP version has independent settings.')}
             </Typography>
             <Alert severity="info">
-                {label('webtoolsPrivacyHint', 'Search queries are sent to Serper; fetched URLs are sent to Jina Reader. Enable only the tools you want the gateway to run.')}
+                {label('webtoolsPrivacyHint', 'Queries and URLs are sent to the selected backend (DeepSeek, Serper or Jina Reader). DeepSeek is billed per successful request. Only explicitly provided original questions are sent to search.')}
             </Alert>
             {error && <Alert severity="error">{error}</Alert>}
             <TextField
@@ -41,7 +41,7 @@ export default function WebtoolsSettings({ source, onSave }: {
                 autoComplete="off"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                helperText={label('serperAPIKeyHint', 'SERPER_API_KEY — required only for Search. Leave blank to remove the saved key.')}
+                helperText={label('serperAPIKeyHint', 'Optional SERPER_API_KEY — leave blank to use a configured DeepSeek provider. Without either key, Fetch still works through Jina Reader.')}
                 disabled={saving}
                 fullWidth
             />

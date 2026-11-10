@@ -12144,6 +12144,11 @@
             "description": "Field avg_output_tokens",
             "example": 164.2
           },
+          "billable_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field billable_requests"
+          },
           "cache_read_tokens": {
             "type": "integer",
             "format": "int64",
@@ -12193,6 +12198,11 @@
             "format": "int64",
             "description": "Field reasoning_tokens",
             "example": 12000
+          },
+          "request_cost_cny": {
+            "type": "number",
+            "format": "double",
+            "description": "Field request_cost_cny"
           },
           "request_count": {
             "type": "integer",
@@ -12256,6 +12266,8 @@
           "streamed_rate",
           "cache_read_tokens",
           "cache_write_tokens",
+          "billable_requests",
+          "request_cost_cny",
           "reasoning_tokens"
         ]
       },
@@ -13114,6 +13126,10 @@
           "annotations": {
             "description": "Field annotations"
           },
+          "backend": {
+            "type": "string",
+            "description": "Field backend"
+          },
           "description": {
             "type": "string",
             "description": "Field description"
@@ -13139,6 +13155,10 @@
           },
           "output_schema": {
             "description": "Field output_schema"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Field ready"
           },
           "source_id": {
             "type": "string",
@@ -23094,6 +23114,11 @@
             "description": "Field avg_latency_ms",
             "example": 1100
           },
+          "billable_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field billable_requests"
+          },
           "cache_read_tokens": {
             "type": "integer",
             "format": "int64",
@@ -23130,6 +23155,11 @@
             "description": "Field reasoning_tokens",
             "example": 800
           },
+          "request_cost_cny": {
+            "type": "number",
+            "format": "double",
+            "description": "Field request_cost_cny"
+          },
           "request_count": {
             "type": "integer",
             "format": "int64",
@@ -23156,6 +23186,8 @@
           "output_tokens",
           "cache_read_tokens",
           "cache_write_tokens",
+          "billable_requests",
+          "request_cost_cny",
           "reasoning_tokens",
           "error_count",
           "avg_latency_ms"
@@ -24176,6 +24208,11 @@
       "UsageRecordResponse": {
         "type": "object",
         "properties": {
+          "billable_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field billable_requests"
+          },
           "cache_read_tokens": {
             "type": "integer",
             "format": "int64",
@@ -24188,9 +24225,17 @@
             "description": "Field cache_write_tokens",
             "example": 300
           },
+          "currency": {
+            "type": "string",
+            "description": "Field currency"
+          },
           "error_code": {
             "type": "string",
             "description": "Field error_code"
+          },
+          "event_type": {
+            "type": "string",
+            "description": "Field event_type"
           },
           "id": {
             "type": "integer",
@@ -24236,6 +24281,11 @@
             "format": "int64",
             "description": "Field reasoning_tokens",
             "example": 50
+          },
+          "request_cost_cny": {
+            "type": "number",
+            "format": "double",
+            "description": "Field request_cost_cny"
           },
           "request_model": {
             "type": "string",
@@ -24285,6 +24335,11 @@
             "description": "Field ttft_ms",
             "example": 180
           },
+          "unit_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Field unit_price"
+          },
           "user_id": {
             "type": "string",
             "description": "Field user_id",
@@ -24292,6 +24347,9 @@
           }
         },
         "required": [
+          "event_type",
+          "unit_price",
+          "currency",
           "id",
           "provider_uuid",
           "provider_name",
@@ -24303,6 +24361,8 @@
           "total_tokens",
           "cache_read_tokens",
           "cache_write_tokens",
+          "billable_requests",
+          "request_cost_cny",
           "reasoning_tokens",
           "status",
           "latency_ms",

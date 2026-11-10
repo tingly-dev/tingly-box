@@ -40,6 +40,8 @@ func mergeBucket(dst map[string]*aggBucket, key string, b aggBucket) {
 	cur.OutputTokens += b.OutputTokens
 	cur.CacheReadTokens += b.CacheReadTokens
 	cur.CacheWriteTokens += b.CacheWriteTokens
+	cur.BillableRequests += b.BillableRequests
+	cur.RequestCostCNY += b.RequestCostCNY
 	cur.ReasoningTokens += b.ReasoningTokens
 	cur.SystemTokens += b.SystemTokens
 	cur.ErrorCount += b.ErrorCount
@@ -171,6 +173,8 @@ func (us *UsageStore) tierStatBuckets(q UsageStatsQuery, tier *rollupTier, from,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+		COALESCE(SUM(billable_requests), 0) as billable_requests,
+		COALESCE(SUM(request_cost_cny), 0) as request_cost_cny,
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(error_count), 0) as error_count,
@@ -309,6 +313,8 @@ func seriesFromBuckets(merged map[string]*aggBucket) []TimeSeriesData {
 			OutputTokens:     b.OutputTokens,
 			CacheReadTokens:  b.CacheReadTokens,
 			CacheWriteTokens: b.CacheWriteTokens,
+			BillableRequests: b.BillableRequests,
+			RequestCostCNY:   b.RequestCostCNY,
 			ReasoningTokens:  b.ReasoningTokens,
 			SystemTokens:     b.SystemTokens,
 			ErrorCount:       b.ErrorCount,
@@ -391,6 +397,8 @@ func (us *UsageStore) tierSeriesBuckets(tier *rollupTier, interval string, from,
 		COALESCE(SUM(output_tokens), 0) as output_tokens,
 		COALESCE(SUM(cache_input_tokens), 0) as cache_read_tokens,
 		COALESCE(SUM(cache_write_tokens), 0) as cache_write_tokens,
+		COALESCE(SUM(billable_requests), 0) as billable_requests,
+		COALESCE(SUM(request_cost_cny), 0) as request_cost_cny,
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(error_count), 0) as error_count,

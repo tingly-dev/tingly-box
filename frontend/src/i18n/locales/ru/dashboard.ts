@@ -1,6 +1,8 @@
 // Usage dashboard and history
 export default {
   "dashboard": {
+    webToolSpend: 'Расходы на веб-инструменты',
+    webToolRequests: '{{count}} платных запросов Search/Fetch · без стоимости токенов',
     "userUsage": {
       "title": "Использование командой",
       "subtitle": "Посмотрите, как каждый зарегистрированный пользователь расходует общий доступ к ИИ.",

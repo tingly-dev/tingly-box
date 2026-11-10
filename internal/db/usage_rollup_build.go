@@ -15,7 +15,7 @@ import (
 const (
 	// rollupSumColumns are the additive columns every rollup table carries.
 	rollupSumColumns = `request_count, total_tokens, input_tokens, output_tokens,
-		cache_input_tokens, cache_write_tokens, reasoning_tokens, system_tokens,
+		cache_input_tokens, cache_write_tokens, billable_requests, request_cost_cny, reasoning_tokens, system_tokens,
 		error_count, streamed_count, latency_sum_ms`
 
 	// rawSumSelect computes rollupSumColumns from usage_records rows.
@@ -25,6 +25,8 @@ const (
 		COALESCE(SUM(output_tokens), 0),
 		COALESCE(SUM(cache_input_tokens), 0),
 		COALESCE(SUM(cache_write_tokens), 0),
+		COALESCE(SUM(billable_requests), 0),
+		COALESCE(SUM(request_cost_cny), 0),
 		COALESCE(SUM(reasoning_tokens), 0),
 		COALESCE(SUM(system_tokens), 0),
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0),
@@ -38,6 +40,8 @@ const (
 		COALESCE(SUM(output_tokens), 0),
 		COALESCE(SUM(cache_input_tokens), 0),
 		COALESCE(SUM(cache_write_tokens), 0),
+		COALESCE(SUM(billable_requests), 0),
+		COALESCE(SUM(request_cost_cny), 0),
 		COALESCE(SUM(reasoning_tokens), 0),
 		COALESCE(SUM(system_tokens), 0),
 		COALESCE(SUM(error_count), 0),

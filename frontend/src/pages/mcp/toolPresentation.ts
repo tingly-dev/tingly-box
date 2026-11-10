@@ -14,8 +14,8 @@ export const isBuiltinSource = (source?: MCPSourceConfig) =>
 
 export const isServerWebtoolsSource = (source?: MCPSourceConfig) => source?.id === BUILTIN_SERVER_WEBTOOLS_ID;
 
-export const needsSearchKey = (source?: MCPSourceConfig) =>
-    isServerWebtoolsSource(source) && !source?.env?.SERPER_API_KEY?.trim();
+export const needsSearchKey = (source?: MCPSourceConfig, tool?: MCPCatalogTool) =>
+    isServerWebtoolsSource(source) && (tool?.ready !== undefined ? !tool.ready : !source?.env?.SERPER_API_KEY?.trim());
 
 // Server Tools have their own configuration and do not belong to MCP profiles.
 export const isServerToolSource = (source?: MCPSourceConfig) =>
@@ -68,12 +68,15 @@ const emptyValues = (map?: Record<string, string>) => Object.values(map || {}).f
 
 // What the connection card shows about a source's configuration, so the user
 // sees what is set and what is still missing without opening the drawer.
-export const connectionSummary = (source: MCPSourceConfig): ConnectionSummary => {
+export const connectionSummary = (source: MCPSourceConfig, tools: MCPCatalogTool[] = []): ConnectionSummary => {
     const missing: ConnectionSummary['missing'] = [];
     let target = '';
     if (isServerWebtoolsSource(source)) {
-        target = 'Serper / Jina Reader';
-        if (needsSearchKey(source)) missing.push('searchKey');
+        const search = tools.find((tool) => tool.name === 'mcp_web_search');
+        const fetch = tools.find((tool) => tool.name === 'mcp_web_fetch');
+        const names: Record<string, string> = { deepseek: 'DeepSeek', serper: 'Serper', jina: 'Jina Reader' };
+        target = [...new Set([names[search?.backend || 'serper'], names[fetch?.backend || 'jina']])].join(' / ');
+        if (needsSearchKey(source, search)) missing.push('searchKey');
     } else if (source.transport === 'advisor' || source.advisor) {
         target = source.advisor?.model || '';
         if (!target) missing.push('advisorModel');
