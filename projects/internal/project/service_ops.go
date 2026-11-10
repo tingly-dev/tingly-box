@@ -59,14 +59,8 @@ func (s *Service) Save(p *db.Project) error {
 			Payload: jsonString(map[string]bool{"settings_changed": true}),
 		}
 	}
-	var saveErr error
-	if s.Coordinator.live() && notice != nil && !p.Paused && p.ArchivedAt == nil {
-		saveErr = s.Store.SaveProjectWithCoordinatorInput(p, notice)
-	} else {
-		saveErr = s.Store.SaveProjectWithEvent(p, notice)
-	}
-	if saveErr != nil {
-		return saveErr
+	if err := s.Store.SaveProjectWithEvent(p, notice); err != nil {
+		return err
 	}
 	s.Hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: p})
 	if s.Threads != nil {
@@ -74,9 +68,6 @@ func (s *Service) Save(p *db.Project) error {
 	}
 	if notice != nil {
 		s.Coordinator.publishEvent(p.ID, notice)
-		if !p.Paused && p.ArchivedAt == nil {
-			s.Coordinator.wake(p.ID)
-		}
 	}
 	return nil
 }

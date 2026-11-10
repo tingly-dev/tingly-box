@@ -2,7 +2,7 @@
 
 ## 背景与目标
 
-一个 Project 的主线程是用户与 Coordinator 的对话。Coordinator 接收用户消息、工作线程汇报和项目设置变更，负责回答、拆分工作、跟进线程以及汇总结果；工作线程各自运行 Claude Code，会话和工作目录互相独立。
+一个 Project 的主线程是用户与 Coordinator 的对话。Coordinator 接收用户消息和工作线程汇报，负责回答、拆分工作、跟进线程以及汇总结果；项目设置保存后不单独触发 Coordinator 回合，而在下一条输入时生效。工作线程各自运行 Claude Code，会话和工作目录互相独立。
 
 原实现对每次触发都读取最近 40 条主线程事件，把展示事件拼成模型消息，再由 Projects 自己循环调用模型和工具。工具调用与结果只存在于当前回合；下一回合只能看到事件重建出来的摘要。模型上下文因此不等于真实执行历史，滚动窗口及变化的系统提示也不利于复用上游 prompt cache。
 
@@ -16,7 +16,8 @@
 flowchart LR
     User[用户 / IM] --> Input[主线程事件 + 持久输入]
     Worker[工作线程汇报] --> Input
-    Settings[项目设置变更] --> Input
+    Settings[项目设置变更] --> State[保存设置及可见事件]
+    State -. 下一条输入读取 .-> Queue
     Input --> Queue[按 Project 串行领取]
     Queue --> Engine[agentboot session engine]
     Engine --> Claude[Claude Code session / transcript]
@@ -51,13 +52,13 @@ Coordinator 通过 `read_shared_file` 和 `list_shared_files` 读取本 Project 
 
 ## 一个回合的生命周期
 
-1. 用户消息或线程汇报写入主线程事件，并在同一数据库事务中创建 `pending` 输入；活跃项目的设置变更同事务保存设置、system 事件和输入。暂停或归档期间的汇报和设置变更仍记录事件，但不会作为输入投递。
+1. 用户消息或线程汇报写入主线程事件，并在同一数据库事务中创建 `pending` 输入；项目设置变更同事务保存设置和可见 system 事件，但不创建输入、不唤醒 Coordinator。暂停或归档期间的汇报仍记录事件，但不会作为输入投递。
 2. 内存队列唤醒该 Project；每次领取该项目最早的未完成输入，将它标为 `running`。Project 暂停或归档时不领取新输入。
 3. 首次运行时，主线程持久化新的 session ID 和 cwd。系统向新会话提供当前 Project 上下文，以及最近历史事件中发生在当前输入之前的部分，明确标记为历史；这只是一次性迁移，不是无损还原旧工具调用。新输入按用户、系统或线程来源保留信任信封。
-4. 后续回合将当前输入追加到同一 session。设置变更回合还带当前项目上下文；工作线程状态可以通过 `list_threads`、`get_thread` 等工具按需读取。agentboot 有常驻进程时复用，进程被回收或重启后以保存的 session ID 恢复。Claude Code 的 init 事件记录 session 已启动，以便后续使用 resume。
+4. 后续回合将当前输入追加到同一 session；每条真实输入随附当前项目设置（含空值），覆盖历史里的旧配置，多次修改自然合并。模型和启动选项也取领取时的项目快照。工作线程状态可以通过 `list_threads`、`get_thread` 等工具按需读取。agentboot 有常驻进程时复用，进程被回收或重启后以保存的 session ID 恢复。Claude Code 的 init 事件记录 session 已启动，以便后续使用 resume。
 5. Coordinator 的 MCP 配置文件指向仅监听 loopback 的随机 capability URL，按主线程作用域注册工具。启用 `ENABLE_TOOL_SEARCH=false`，让首个模型请求直接看到 Projects 工具；一次回合开始时记录项目配置快照和触发来源，结束后关闭该回合的工具权限。
 6. MCP 调用序列化执行，并在执行前检查活动回合、项目暂停/归档状态及配置快照；配置变化时返回错误，要求模型根据新设置重新评估。用户确认仍通过 `message_thread` 的 `cite` 由系统原样引用，线程汇报和共享文件内容不能冒充用户授权。
-7. 用户触发回合的文本投影到主线程事件，并向前端发布更新；报告和设置触发的文本在回合结束后决定是否发布。`no_update` 在用户消息回合被拒绝；其他回合调用后标记静默并拒绝后续工具调用，最终不发布该回合文本。它是 MCP 结果，不能假定会立即停止 Claude Code 进程。
+7. 用户触发回合的文本投影到主线程事件，并向前端发布更新；报告触发的文本在回合结束后决定是否发布。`no_update` 在用户消息回合被拒绝；其他回合调用后标记静默并拒绝后续工具调用，最终不发布该回合文本。它是 MCP 结果，不能假定会立即停止 Claude Code 进程。
 8. 成功结束将输入标为 `done`；失败、中断或启动后结果无法确定时标为 `uncertain`，并显示错误。Project 的下一条输入不能越过尚未解决的较早输入。
 
 工具定义与原 Coordinator 共用，包括 `start_thread`、`message_thread`、`get_thread`、`list_threads`、`read_conversation`、决策、记忆、指令更新和静默工具；MCP 层不接受模型传入的 Project ID。工作线程的 capability 不获得 Coordinator 工具。实现入口分别在 [coordinator_session.go](../internal/project/coordinator_session.go)、[coordinator.go](../internal/project/coordinator.go)、[coordinator_mcp.go](../internal/project/coordinator_mcp.go) 和 [session_tools_mcp.go](../internal/project/session_tools_mcp.go)。
@@ -74,7 +75,7 @@ stateDiagram-v2
     uncertain --> done: 用户选择跳过
 ```
 
-输入表记录 Project ID、主线程事件 ID、状态和时间；同一事件只有一条输入。设置更新、用户输入及活跃线程报告各自按事务写入事件和输入，避免事件已经出现但投递记录没有保存。启动时将遗留 `running` 标为 `uncertain`，并唤醒有待处理或不确定输入的项目。
+输入表记录 Project ID、主线程事件 ID、状态和时间；同一事件只有一条输入。用户输入及活跃线程报告各自按事务写入事件和输入，避免事件已经出现但投递记录没有保存。启动时将遗留 `running` 标为 `uncertain`，并唤醒有待处理或不确定输入的项目。旧版本留下的 `settings_changed` pending 输入在领取时只标记完成，不运行模型；对应可见事件保留。已运行或 uncertain 的旧输入不自动清除，仍须用户决定恢复；选择重试后也只跳过该设置通知。
 
 Claude transcript、SQLite 和工具副作用不共享事务。例如进程可能在启动线程之后、保存成功状态之前退出，所以系统不能知道该输入是否完整执行。`uncertain` 阻止自动重放和后续输入越过；页面提示用户检查已有线程和操作，再明确选择**重试消息**或**跳过消息**。重试可能重复已发生的操作，跳过可能留下未完成的请求；确认对话框说明相应后果。接口是 `POST /api/v1/projects/{id}/coordinator/recover`，提交 `input_id` 和 `action`（`retry` 或 `skip`）；Project 详情的 `coordinator_recovery` 提供待处理 ID。
 
@@ -88,7 +89,7 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 已有 Project 首次进入新实现时保留主线程、显示历史和工作线程，创建独立的 Coordinator session 并一次性导入有限近期上下文；更早的内容存在时，导入文本会提示用 `read_conversation` 查询。早于导入窗口的对话仍保存在主线程；旧实现丢弃的工具调用和工具结果无法恢复。旧的自驱模型循环（`Coordinator.turn` / `LLMSource`）已删除，session 是唯一路径，不再支持回滚。
 
-线程汇报和设置变更回合末尾附一个 system 信封（`kind="check-in"` / `kind="settings-changed"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。
+线程汇报回合末尾附一个 system 信封（`kind="check-in"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。设置变更不会产生独立回合。
 
 ## 验证与已知边界
 
@@ -101,4 +102,4 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 上述探针不能验证生产网关或供应商的缓存命中率。共享读取目前不支持 PDF 等二进制文档，也没有大文件分页；应交由工作线程处理。全面的崩溃点注入、不同上游的缓存 token 指标和自动去重仍是后续工作。
 
-留作以后：项目上下文（含记忆索引）只在首回合和设置变更回合注入，线程写入的新记忆要到下一次设置变更才会告诉 Coordinator（它可以随时用 `list_shared_files` 主动读）。将来补的话，只在索引变化时把增减的索引行追加在当回合输入末尾；不改系统提示词，也不改写历史，以免破坏前缀缓存。
+项目设置在每条真实输入时刷新；记忆索引仍只在首回合注入，线程写入的新记忆可用 `list_shared_files` 主动读取。每回合附设置会增加输入 token；模型与上游决定缓存效果。配置比较和工具副作用不与设置保存处于同一事务，既有检查后修改及 A→B→A 竞态未解决；已执行的副作用和文字也不能回滚。模型可尝试热切换；profile、环境或其他启动签名改变时，下一回合可能重启 CLI 进程并 resume 同一 session ID，并非重建对话。

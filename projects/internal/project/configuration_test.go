@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -12,58 +13,126 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
-func TestConfigurationSaveNotifiesCoordinatorWithoutMetadataWakeups(t *testing.T) {
+func TestConfigurationSaveDefersCoordinatorUntilNextMessage(t *testing.T) {
 	var seen prompts
-	var mu sync.Mutex
-	var inputs []string
-	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error { return nil }, func(c *coordtest.Turn) error {
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
 		seen.add(c)
-		mu.Lock()
-		inputs = append(inputs, c.Input())
-		mu.Unlock()
-		c.Reply(noUpdate)
+		c.Reply("ok")
 		return nil
 	})
-	coord := svc.Coordinator
+	_, err := svc.Coordinator.Post(f.project.ID, "first", nil, Source{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(seen.all()) == 1 && !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
 
+	f.project.Instructions = "First edit."
+	require.NoError(t, svc.Save(f.project))
+	f.project.Instructions = "Final edit."
+	f.project.Repos = nil
+	require.NoError(t, svc.Save(f.project))
+	pending, err := f.store.PendingCoordinatorInputs(f.project.ID)
+	require.NoError(t, err)
+	assert.Zero(t, pending, "settings must not be queued as coordinator inputs")
+	assert.False(t, svc.Coordinator.Busy(f.project.ID), "settings must not wake the coordinator")
+	assert.Len(t, seen.all(), 1)
+
+	_, err = svc.Coordinator.Post(f.project.ID, "next", nil, Source{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(seen.all()) >= 2 && !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
+	turns := seen.all()
+	require.Len(t, turns, 2)
+	launches := f.agent.Launches()
+	require.Len(t, launches, 2)
+	assert.Equal(t, launches[0].SessionID, launches[1].SessionID)
+	assert.True(t, launches[1].Resume)
+	assert.Contains(t, turns[1], "Final edit.")
+	assert.Contains(t, turns[1], "no repositories")
+	assert.NotContains(t, turns[1], "First edit.")
+}
+
+func TestInactiveAndMetadataChangesDoNotScheduleCoordinator(t *testing.T) {
+	var seen prompts
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		seen.add(c)
+		return nil
+	})
 	f.project.Starred = true
 	require.NoError(t, svc.Save(f.project))
 	require.NoError(t, svc.Save(f.project))
-	assert.Empty(t, seen.all())
 	assert.Empty(t, convo(t, f.store, f.project.ID))
-
-	f.project.Instructions = "Use the new workflow."
-	f.project.Repos = nil
+	require.NoError(t, svc.SetPaused(f.project, true))
+	f.project.Instructions = "Updated while paused"
 	require.NoError(t, svc.Save(f.project))
-	require.Eventually(t, func() bool { return !coord.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
-	turns := seen.all()
-	require.Len(t, turns, 1)
-	assert.Contains(t, turns[0], "Use the new workflow.")
-	assert.Contains(t, turns[0], "no repositories")
-	mu.Lock()
-	assert.Contains(t, inputs[0], "instructions, repositories")
-	mu.Unlock()
-	assert.Contains(t, turns[0], "Continue previously requested work")
-	assert.Contains(t, turns[0], `kind="settings-changed"`)
-	events := convo(t, f.store, f.project.ID)
-	require.Len(t, events, 1, "NO_UPDATE stays silent")
-	assert.Equal(t, db.EvSystem, events[0].Kind)
-	assert.Equal(t, db.SourceSystem, events[0].Source)
-
-	require.NoError(t, svc.Save(f.project))
-	assert.Len(t, seen.all(), 1, "a no-op edit must not wake the coordinator")
-	assert.Len(t, convo(t, f.store, f.project.ID), 1)
-
-	f.project.Paused = true
-	f.project.Goal = "A new goal"
-	require.NoError(t, svc.Save(f.project))
-	assert.False(t, coord.Busy(f.project.ID))
-	assert.Len(t, seen.all(), 1, "paused projects record settings without running")
-	assert.Len(t, convo(t, f.store, f.project.ID), 2)
+	require.NoError(t, svc.SetPaused(f.project, false))
+	require.Eventually(t, func() bool { return !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
+	assert.Empty(t, seen.all())
+	pending, err := f.store.PendingCoordinatorInputs(f.project.ID)
+	require.NoError(t, err)
+	assert.Zero(t, pending)
+	require.Len(t, convo(t, f.store, f.project.ID), 1)
 }
 
-// A settings change while a turn runs: the turn's tools are refused, and the
-// settings-changed turn runs on the new model with the new context.
+func TestReportUsesLatestClearedSettings(t *testing.T) {
+	var seen prompts
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		seen.add(c)
+		c.Reply("ok")
+		return nil
+	})
+	_, err := svc.Coordinator.Post(f.project.ID, "first", nil, Source{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(seen.all()) == 1 && !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
+	f.project.Goal, f.project.Instructions, f.project.Repos = "", "", nil
+	require.NoError(t, svc.Save(f.project))
+	svc.Coordinator.onReport(Report{Thread: db.Thread{ID: "worker", ProjectID: f.project.ID, Title: "Work"}, Kind: ReportFinished, Text: "done"})
+	require.Eventually(t, func() bool { return len(seen.all()) == 2 && !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
+	assert.Contains(t, seen.all()[1], `Goal: ""`)
+	assert.Contains(t, seen.all()[1], `Instructions: ""`)
+	assert.Contains(t, seen.all()[1], "no repositories")
+	assert.Contains(t, seen.all()[1], `kind="check-in"`)
+}
+
+func TestLegacySettingsInputsAreNotDelivered(t *testing.T) {
+	var seen prompts
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		seen.add(c)
+		c.Reply("ok")
+		return nil
+	})
+	notice := &db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvSystem, Source: db.SourceSystem, Content: "old settings notice", Payload: `{"settings_changed":true}`}
+	require.NoError(t, f.store.AddCoordinatorInput(f.project.ID, notice))
+	_, err := svc.Coordinator.Post(f.project.ID, "real message", nil, Source{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(seen.all()) == 1 && !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
+	assert.NotContains(t, seen.all()[0], "old settings notice")
+	assert.Contains(t, seen.all()[0], "real message")
+	pending, err := f.store.PendingCoordinatorInputs(f.project.ID)
+	require.NoError(t, err)
+	assert.Zero(t, pending)
+}
+
+func TestUncertainLegacySettingsInputNeedsRecovery(t *testing.T) {
+	var seen prompts
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		seen.add(c)
+		c.Reply("ok")
+		return nil
+	})
+	notice := &db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvSystem, Source: db.SourceSystem, Payload: `{"settings_changed":true}`}
+	require.NoError(t, f.store.AddCoordinatorInput(f.project.ID, notice))
+	input, err := f.store.ClaimCoordinatorInput(f.project.ID)
+	require.NoError(t, err)
+	require.NoError(t, f.store.RecoverCoordinatorInputs())
+	require.Error(t, svc.Coordinator.drainSessionInputs(context.Background(), f.project.ID))
+	uncertain, err := f.store.UncertainCoordinatorInput(f.project.ID)
+	require.NoError(t, err)
+	require.Equal(t, input.ID, uncertain)
+	assert.Empty(t, seen.all())
+	require.NoError(t, f.store.ResolveCoordinatorInput(f.project.ID, input.ID, true))
+	require.NoError(t, svc.Coordinator.drainSessionInputs(context.Background(), f.project.ID))
+	assert.Empty(t, seen.all(), "retrying a legacy notice must not run a turn")
+}
+
+// A settings change during a turn refuses stale tools, but starts no new turn.
 func TestConfigurationChangeDuringResponseRejectsStaleToolsAndUsesNewModel(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
@@ -86,9 +155,8 @@ func TestConfigurationChangeDuringResponseRejectsStaleToolsAndUsesNewModel(t *te
 			c.Reply("Settings changed; re-planning.")
 			return nil
 		}
-		if c.SettingsChanged() {
-			c.Call("start_thread", map[string]string{"title": "Updated plan", "task": "continue in the replacement repository"})
-		}
+		c.Call("start_thread", map[string]string{"title": "Updated plan", "task": "continue in the replacement repository"})
+		c.Reply("Started.")
 		return nil
 	})
 	repo = f.repo
@@ -109,6 +177,13 @@ func TestConfigurationChangeDuringResponseRejectsStaleToolsAndUsesNewModel(t *te
 	f.project.Repos = []db.Repo{{Path: newRepo(t), BaseBranch: "main"}}
 	require.NoError(t, svc.Save(f.project))
 	once.Do(func() { close(release) })
+	require.Eventually(t, func() bool { return !coord.Busy(f.project.ID) }, 5*time.Second, time.Millisecond)
+	mu.Lock()
+	count := len(models)
+	mu.Unlock()
+	require.Equal(t, 1, count, "a settings change must not start a new turn")
+	_, err = coord.Post(f.project.ID, "Continue with the new settings", nil, Source{})
+	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
