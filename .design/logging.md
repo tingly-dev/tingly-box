@@ -321,6 +321,7 @@ OpenAI 原生 chat/responses 的错误 chunk 根本没有外层 `"type":"error"`
 | `SendStreamingError` / `SendForwardingError` | `internal/protocol/stream/anthropic_helper.go:84,97` | `ClassifyUpstreamFailure` | 流式请求建立/转发失败（尚未开始吐 SSE 帧） |
 | 三处 "Failed to forward request" | `openai_embeddings.go` / `openai_image.go` / `openai_image_edit.go` | `ClassifyUpstreamFailure` | embeddings / 图片生成 / 图片编辑的直接转发失败 |
 | `failEmptyAssembly` | `internal/protocol/stream/openai_responses_to_anthropic_converter.go` | `ClassifyUpstreamFailure` | 上游流没有产出任何内容块 |
+| `failContentPolicyBlock` | `internal/protocolserver/error_response.go` | 固定 400（`AsContentPolicyBlock` 命中时） | OpenAI Responses 透传（流式首事件 / 非流式）上游以内容策略拦截（#2417），见第 8 节 |
 | ~9 处 mid-stream SSE error 帧 | `google_to_any.go` / `openai_to_anthropic{,_beta}.go` / `anthropic_passthrough.go` / `openai_chat_to_responses.go` / `openai_passthrough.go`（2 处，OpenAI 原生 error chunk 形状，不套 `BuildErrorEvent`） | 无状态码（流已开始） | SSE 已经开始吐帧之后，upstream 流中途失败 |
 
 其中 Anthropic 形状(`{"type":"error","error":{...}}`)的站点统一通过
@@ -373,3 +374,12 @@ error 帧加字段前,先确认它是 Anthropic 形状还是 OpenAI 形状,两�
   路径才需要这层处理。
 - **没有把 `BuildErrorEvent` 挪进 `protocol` 包**——见第 5 节,这是 wire-format
   归属问题,不是效率或分类问题。
+- **内容策略拦截(#2417)没有接进 `ClassifyUpstreamFailure`**——上游以 200 + 流内
+  `error` 事件拦截请求(`cyber_policy` / `bio_policy` /
+  `misalignment_policy_violation`)时,只有 OpenAI Responses 透传的两个 handler
+  (`nonstreamOpenAIResponses`、`streamOpenAIResponses` 的 prime 失败分支)和
+  `HandleOpenAIResponsesStream` 的流中分支先调 `protocol.AsContentPolicyBlock`。
+  接进分类器会同时改变 Anthropic / Chat 客户端经 Responses 上游的行为,这一步
+  有意留到单独的改动;那之前这些路径对拦截仍回 5xx、仍会 failover。
+  客户端消息仍按第 3 节的白名单只给 type / code / 截断后的 message;原始事件经
+  `UpstreamLogDetail` 的 `StreamError` 分支只进服务端日志。

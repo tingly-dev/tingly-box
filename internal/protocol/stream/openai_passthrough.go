@@ -466,6 +466,18 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			SendStreamingError(c, err)
 			return usage, err
 		}
+		// A content-policy block (#2417) keeps its code instead of
+		// stream_failed, and ends with response.failed: Codex stops only on
+		// that, and retries a stream that has no terminal event.
+		if block, ok := protocol.AsContentPolicyBlock(err); ok {
+			errorEvent := wire.NewResponsesStreamErrorEvent(nextSeq, block.Code, block.Message)
+			OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
+			failed := wire.NewResponsesFailedEvent(nextSeq+1, time.Now().Unix(), responseModel, wire.ResponsesFailedErrorWire{
+				Code: block.Code, Message: block.Message, Misalignment: block.Misalignment,
+			})
+			OpenAIResponsesEvent(c, failed.EventType(), failed)
+			return usage, &protocol.ContentPolicyBlockError{Code: block.Code, Err: err}
+		}
 		errorEvent := wire.NewResponsesStreamErrorEvent(nextSeq, "stream_failed", protocol.UpstreamMessage(err))
 		OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
 		return usage, err

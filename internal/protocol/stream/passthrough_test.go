@@ -2,8 +2,10 @@ package stream
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -707,4 +709,79 @@ func TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly(t *testing.T) {
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
 	assert.False(t, ok, "role-only delta must not mark TTFT")
+}
+
+// runResponsesPassthrough drives HandleOpenAIResponsesStream over raw event
+// payloads and returns the client body split into (event name, data) pairs.
+func runResponsesPassthrough(t *testing.T, events ...string) (names, datas []string, err error) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](newFakeResponsesDecoder(events), nil)
+	_, err = HandleOpenAIResponsesStream(newTestHandleContext(c), stream, "gpt-4o")
+	for _, block := range strings.Split(w.Body.String(), "\n\n") {
+		var name, data string
+		for _, line := range strings.Split(block, "\n") {
+			if v, ok := strings.CutPrefix(line, "event: "); ok {
+				name = v
+			}
+			if v, ok := strings.CutPrefix(line, "data: "); ok {
+				data = v
+			}
+		}
+		if name != "" || data != "" {
+			names, datas = append(names, name), append(datas, data)
+		}
+	}
+	return names, datas, err
+}
+
+const (
+	passthroughCreated = `{"type":"response.created","sequence_number":0,"response":{"id":"resp_1"}}`
+	passthroughDelta   = `{"type":"response.output_text.delta","sequence_number":1,"item_id":"item_1","output_index":0,"delta":"partial"}`
+)
+
+func passthroughUpstreamError(code, extra string) string {
+	return `{"type":"error","sequence_number":2,"error":{"type":"invalid_request","code":"` + code + `","message":"flagged"` + extra + `}}`
+}
+
+// A content-policy block after output started (#2417): the error event keeps
+// the upstream code in the flat Responses shape, and response.failed follows
+// so Codex stops instead of retrying the stream as dropped.
+func TestHandleOpenAIResponsesStream_ContentPolicyBlockMidStream(t *testing.T) {
+	names, datas, err := runResponsesPassthrough(t, passthroughCreated, passthroughDelta, passthroughUpstreamError("cyber_policy", ""))
+	require.Error(t, err)
+	var blockErr *protocol.ContentPolicyBlockError
+	require.ErrorAs(t, err, &blockErr, "usage tracking gets the code-only error")
+	assert.Equal(t, "cyber_policy", blockErr.Code)
+
+	require.Equal(t, []string{"response.created", "response.output_text.delta", "error", "response.failed"}, names)
+	assert.Equal(t, "cyber_policy", gjson.Get(datas[2], "code").String())
+	assert.Equal(t, "flagged", gjson.Get(datas[2], "message").String())
+	assert.Equal(t, int64(2), gjson.Get(datas[2], "sequence_number").Int(), "continues after the last forwarded event")
+	assert.Equal(t, int64(3), gjson.Get(datas[3], "sequence_number").Int())
+	assert.Equal(t, "failed", gjson.Get(datas[3], "response.status").String())
+	assert.Equal(t, "cyber_policy", gjson.Get(datas[3], "response.error.code").String())
+	assert.Equal(t, "gpt-4o", gjson.Get(datas[3], "response.model").String())
+	assert.False(t, gjson.Get(datas[3], "response.error.misalignment").Exists())
+}
+
+func TestHandleOpenAIResponsesStream_ContentPolicyBlockKeepsMisalignment(t *testing.T) {
+	names, datas, err := runResponsesPassthrough(t, passthroughCreated,
+		passthroughUpstreamError("misalignment_policy_violation", `,"misalignment":{"category":"x"}`))
+	require.Error(t, err)
+	require.Equal(t, "response.failed", names[len(names)-1])
+	assert.JSONEq(t, `{"category":"x"}`, gjson.Get(datas[len(datas)-1], "response.error.misalignment").Raw)
+}
+
+// Any other in-stream error keeps the existing stream_failed event.
+func TestHandleOpenAIResponsesStream_TransientStreamErrorUnchanged(t *testing.T) {
+	names, datas, err := runResponsesPassthrough(t, passthroughCreated, passthroughDelta, passthroughUpstreamError("server_error", ""))
+	require.Error(t, err)
+	var blockErr *protocol.ContentPolicyBlockError
+	assert.False(t, errors.As(err, &blockErr))
+	require.Equal(t, []string{"response.created", "response.output_text.delta", "error"}, names)
+	assert.Equal(t, "stream_failed", gjson.Get(datas[2], "code").String())
 }

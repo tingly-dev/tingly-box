@@ -153,6 +153,10 @@ func (ph *ProtocolHandler) nonstreamOpenAIResponses(c *gin.Context, reqCtx *tran
 		defer cancel()
 	}
 	if err != nil {
+		if block, ok := protocol.AsContentPolicyBlock(err); ok {
+			ph.failContentPolicyBlock(c, err, block)
+			return
+		}
 		ph.failRequest(c, err, "Failed to forward request")
 		return
 	}
@@ -187,6 +191,10 @@ func (ph *ProtocolHandler) streamOpenAIResponses(c *gin.Context, reqCtx *transfo
 
 	primedStream, primeErr := stream.PrimeResponsesStream(respStream)
 	if primeErr != nil {
+		if block, ok := protocol.AsContentPolicyBlock(primeErr); ok {
+			ph.failContentPolicyBlock(c, primeErr, block)
+			return
+		}
 		ph.handlePreStreamFailure(c, primeErr, recorder)
 		return
 	}

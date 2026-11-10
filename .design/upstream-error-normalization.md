@@ -55,4 +55,5 @@ all of them (right status, body kept in the message). Sources of
 
 `detail` / `message` / plain-text bodies keep only status + status text on the
 OpenAI SDK (no decode error). Mid-stream SSE `error` events and the Google
-(genai) client are untouched.
+(genai) client are untouched, except content-policy blocks on the OpenAI
+Responses passthrough (#2417, `.design/logging.md` §8).

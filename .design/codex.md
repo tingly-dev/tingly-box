@@ -111,6 +111,29 @@ an upstream HTTP 502. TB may then return a JSON failure before downstream SSE
 starts, or an SSE error after streaming has started. The client-visible JSON
 and the upstream HTTP status are different observations.
 
+### Content-policy blocks
+
+The Codex backend blocks a request on content-policy grounds with HTTP 200 and
+then an in-stream `error` event whose `error.code` is `cyber_policy`,
+`bio_policy` or `misalignment_policy_violation` (#2417). Codex itself stops on
+these codes only when it reads them from an HTTP 400 body or from
+`response.failed`. It ignores them inside an `error` event, and a stream that
+then ends without a terminal event is retried as dropped (read at openai/codex
+de6e72addd67: `codex-api/src/error.rs` `parse_terminal_provider_error`,
+`codex-api/src/api_bridge.rs`, `codex-api/src/endpoint/responses.rs`).
+
+On the Responses passthrough TB therefore answers:
+
+- before downstream SSE starts (non-streaming, or the block is the first
+  event): HTTP 400 with `x-should-retry: false` and
+  `{"error":{"type","code","message"}}` (plus `misalignment` when the
+  upstream sent it). A multi-service rule does not fail over.
+- after streaming started: the flat `error` event with the upstream code
+  instead of `stream_failed`, then `response.failed` carrying the same code.
+
+Anthropic and Chat Completions clients on a Codex rule are not covered yet
+(`.design/logging.md` §8).
+
 Upstream sources (paths relative to `codex-rs/`):
 [capability selection](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/model-provider/src/capabilities.rs#L30),
 [local request builder](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/compact.rs#L288),

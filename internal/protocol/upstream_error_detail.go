@@ -9,6 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/ssestream"
 )
 
 // maxClientDetailLen caps the vendor message relayed to a client so a
@@ -105,6 +106,12 @@ func UpstreamLogDetail(err error) string {
 	var anthropicErr *anthropic.Error
 	if errors.As(err, &anthropicErr) {
 		return fmt.Sprintf("anthropic status=%d request_id=%q body=%s", anthropicErr.StatusCode, anthropicErr.RequestID, truncateLogDetail(anthropicErr.RawJSON()))
+	}
+	// An in-stream error event: the SDK's message keeps only the "error"
+	// object; the event carries the whole payload (type, sequence_number).
+	var streamErr *ssestream.StreamError
+	if errors.As(err, &streamErr) {
+		return fmt.Sprintf("stream event=%q data=%s", streamErr.Event.Type, truncateLogDetail(strings.TrimSpace(string(streamErr.Event.Data))))
 	}
 	return ""
 }
