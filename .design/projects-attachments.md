@@ -46,6 +46,9 @@ of the folder (see [workspace.md](../projects/.design/workspace.md)). It is
 outside the folder the person works in on purpose: files put inside would show
 up in their repository's `git status` and could be committed. Uploads made
 before the first thread exists go straight there; there is no draft area.
+In the new-session composer, the folder cannot be changed while files are
+uploading or attached; remove them first to choose another folder. This keeps
+the draft's upload owner and the new session's project consistent.
 A thread's Claude Code settings (the host profile's, if any, merged with the
 library and memory directories) list them as allowed directories, so no
 approval prompt. Threads started before uploads were shared per folder keep

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/agent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 )
 
 // sentText is one message the fake sink was asked to deliver.
@@ -499,6 +502,55 @@ func TestFilesAChatSendsReachTheThreadAsAttachments(t *testing.T) {
 	body, err := os.ReadFile(abs)
 	require.NoError(t, err)
 	assert.Equal(t, "not really a photo", string(body), "a copy the thread owns, so the host may remove its own")
+}
+
+func TestChannelFilesPersistForCoordinatorAndFolder(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	folder := t.TempDir()
+	_, err := svc.BindChannel("telegram", "project-files", "", "", f.project.ID)
+	require.NoError(t, err)
+	require.NoError(t, svc.ChannelToFolder("telegram", "folder-files", "", folder, "", true))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("actual file bytes"))
+	}))
+	defer server.Close()
+	for _, chatID := range []string{"project-files", "folder-files"} {
+		t.Run(chatID, func(t *testing.T) {
+			tmp := t.TempDir()
+			download, err := chat.NewFileStore().DownloadFile(context.Background(), tmp, server.URL, "text/plain", "../../report.txt")
+			require.NoError(t, err)
+			handled, err := svc.PostFromChannel("telegram", chatID, "read this", []ChannelFile{{Name: download.Filename, Path: download.Path}})
+			require.NoError(t, err)
+			require.True(t, handled)
+			require.NoError(t, os.Remove(download.Path))
+			sink.next(t)
+			binding, err := f.store.GetChannelBinding("telegram", chatID)
+			require.NoError(t, err)
+			thread, err := f.store.GetThread(binding.ThreadID)
+			require.NoError(t, err)
+			waitQuiet(t, f, svc, thread.ID)
+			events, err := f.store.ListThreadEvents(thread.ID)
+			require.NoError(t, err)
+			var atts []Attachment
+			for _, e := range events {
+				if e.Kind == db.EvUser && e.Content == "read this" {
+					atts = ParseAttachments(e.Payload)
+				}
+			}
+			require.Len(t, atts, 1)
+			assert.Equal(t, "report.txt", atts[0].Name)
+			assert.True(t, strings.HasPrefix(atts[0].Path, "uploads/"))
+			abs, err := f.threads.layout.LibraryPath(thread.ProjectID, atts[0].Path)
+			require.NoError(t, err)
+			body, err := os.ReadFile(abs)
+			require.NoError(t, err)
+			assert.Equal(t, "actual file bytes", string(body))
+			assert.Contains(t, AttachmentNote(f.threads.layout.LibraryDir(thread.ProjectID), atts), abs)
+			_, err = f.threads.layout.ResolveAttachments("unrelated-project", []string{atts[0].Path})
+			assert.Error(t, err)
+		})
+	}
 }
 
 func TestAChatThatNeverTalkedStartsInItsFolder(t *testing.T) {

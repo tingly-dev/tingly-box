@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, components } from '../../client';
@@ -35,15 +35,22 @@ export function NewSessionView({ initialFolder, folders, permissionModes, onCrea
     const [mode, setMode] = useState('');
     const [effort, setEffort] = useState<components['schemas']['EffortRequest']['effort']>('');
     const [text, setText] = useState('');
-    const folder = picked ?? initialFolder ?? folders[0] ?? '';
+    const [hasAttachments, setHasAttachments] = useState(false);
+    const [attachmentFolder, setAttachmentFolder] = useState<string | null>(null);
+    const folder = attachmentFolder ?? picked ?? initialFolder ?? folders[0] ?? '';
+    const attachmentsChanged = useCallback((has: boolean) => {
+        setHasAttachments(has);
+        if (!has) setAttachmentFolder(null);
+    }, []);
 
     return (
         <Box sx={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', px: 2 }}>
             <Box sx={{ width: '100%', maxWidth: 720, mx: 'auto', my: 'auto', py: { xs: 2, md: 5 }, flexShrink: 0 }}>
                 <Typography variant="h5" sx={{ textAlign: 'center', mb: 3, fontWeight: 500 }}>{t('session.heading')}</Typography>
                 <Box sx={{ mb: 0.75, px: 0.5, minWidth: 0, borderRadius: radius.card, bgcolor: 'action.hover', display: 'flex', alignItems: 'center' }}>
-                    <FolderPicker value={folder} onChange={setPicked} folders={folders} onAddFolder={onAddFolder} disabled={creating} />
+                    <FolderPicker value={folder} onChange={setPicked} folders={folders} onAddFolder={onAddFolder} disabled={creating || hasAttachments} />
                 </Box>
+                {hasAttachments && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>{t('session.folderLockedByAttachments')}</Typography>}
                 <Composer
                     autoFocus
                     keepUntilSent
@@ -55,7 +62,11 @@ export function NewSessionView({ initialFolder, folders, permissionModes, onCrea
                     text={text}
                     onTextChange={setText}
                     onAccepted={(sent) => setText((prev) => (prev === sent ? '' : prev))}
-                    attach={(files) => onAttach(folder.trim(), files)}
+                    onAttachmentsChange={attachmentsChanged}
+                    attach={(files) => {
+                        setAttachmentFolder(folder);
+                        return onAttach(folder.trim(), files);
+                    }}
                     // Files are stored under the folder's project, so there must be a folder first.
                     attachBlocked={folder.trim() === '' ? t('session.attachNeedsFolder') : undefined}
                     onSend={async (prompt, attachments) => {

@@ -76,7 +76,7 @@ export const zh: Dict<typeof en> = {
         pathExample: '/目录路径',
     },
     session: {
-        attachNeedsFolder: '先选择工作目录，再添加附件',
+        attachNeedsFolder: '先选择工作目录，再添加附件', folderLockedByAttachments: '移除附件后即可更改工作目录。',
         sessions: '会话', new: '新建会话', none: '还没有会话', folder: '工作目录', chooseFolder: '选择工作目录',
         folderPlaceholder: '/目录路径', heading: '需要 Claude 处理什么任务？', promptPlaceholder: '描述一个任务…',
         placeholder: '给这个会话发消息…', queuePlaceholder: '给这个会话发消息——它会在下一步读到…',

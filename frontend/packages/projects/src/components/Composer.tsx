@@ -47,6 +47,8 @@ export interface ComposerProps {
     attach?: (files: File[]) => Promise<Attachment[]>;
     /** Why attaching is unavailable right now; shows the button disabled with this hint, and ignores paste and drop of files. */
     attachBlocked?: string;
+    /** Reports whether the draft contains pending or uploaded files. */
+    onAttachmentsChange?: (hasAttachments: boolean) => void;
     /** A turn runs: Stop shows when onStop is set, and Send waits unless sendWhileStreaming. */
     streaming?: boolean;
     onStop?: () => void | Promise<void>;
@@ -112,7 +114,7 @@ export interface ComposerProps {
  * Enter (confirming a candidate) never sends, and a send never runs twice.
  */
 export function Composer({
-    onSend, attach, attachBlocked, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
+    onSend, attach, attachBlocked, onAttachmentsChange, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
     context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
@@ -129,6 +131,7 @@ export function Composer({
     const [dragging, setDragging] = useState(false);
     const [contextOpen, setContextOpen] = useState(false);
     const [files, setFiles] = useState<Pending[]>([]);
+    useLayoutEffect(() => { onAttachmentsChange?.(files.length > 0); }, [files.length, onAttachmentsChange]);
     const [attachError, setAttachError] = useState('');
     const fileInput = useRef<HTMLInputElement>(null);
     const nextKey = useRef(0);
