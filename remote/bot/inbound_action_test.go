@@ -10,6 +10,23 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
+func TestHelpShortcutAuthorizationParity(t *testing.T) {
+	for _, group := range []bool{false, true} {
+		for _, pending := range []access.ActionName{"", access.ActionRemoteControlApprove} {
+			msg := imbot.Message{ChatType: imbot.ChatTypeDirect}
+			if group {
+				msg.ChatType = imbot.ChatTypeGroup
+			}
+			msg.Content = imbot.NewTextContent("/help extra")
+			wantCapability, wantAction := bot.InboundAction(msg, access.CapabilityRemoteControl, pending)
+			msg.Content = imbot.NewTextContent("/h extra")
+			gotCapability, gotAction := bot.InboundAction(msg, access.CapabilityRemoteControl, pending)
+			require.Equal(t, wantCapability, gotCapability)
+			require.Equal(t, wantAction, gotAction)
+		}
+	}
+}
+
 // Choosing among registered folders and projects needs start; a free path and
 // the directory browser need privileged; in a group every one of them does.
 // Only a group strips mentions and "/cmd@bot", so a mention before a command in

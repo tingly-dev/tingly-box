@@ -10,7 +10,7 @@ import "strings"
 // needs it, none of the three is. The lines come from commandSpecs, the same
 // list the platform menu is built from.
 func helpText(senderID, chatID string, privileged, group bool) string {
-	lines := []string{"Send a message to talk to Claude Code."}
+	lines := []string{"Send a message to talk to Claude Code.", "/h: Shortcut for /help"}
 	for _, c := range commandSpecs() {
 		if usage, ok := c.usageFor(privileged, group); ok {
 			lines = append(lines, usage+": "+c.Help)

@@ -25,7 +25,7 @@ Chat ID: c1`
 		"/verbose on|off: Also see each step, not only the reply",
 		"/yolo: Use every tool without asking, or back",
 	}, "\n")
-	intro := "Send a message to talk to Claude Code."
+	intro := "Send a message to talk to Claude Code.\n/h: Shortcut for /help"
 
 	tests := []struct {
 		name       string

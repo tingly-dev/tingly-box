@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
 )
 
 // The parser's tables live in imbot/core and the full folder/permission flows
@@ -44,6 +45,44 @@ func Test_GroupReadsDecoratedCommands(t *testing.T) {
 	chat.Drain()
 	chat.SendText("/nosuch@tingly_bot 1")
 	chat.WaitText(3*time.Second).AssertContains(t, "Unknown command /nosuch.")
+}
+
+func TestHelpShortcutChatPaths(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+	direct := alice.OpenDM(harness.Setting.UUID)
+	group := env.NewGroup("eng", alice, env.NewUser("bob")).Chat(harness.Setting.UUID)
+	harness.WhitelistGroup(group.ChatID, alice.ID)
+	router.bind(direct.ChatID)
+	router.bind(group.ChatID)
+
+	for _, tc := range []struct {
+		name  string
+		chat  *testenv.Chat
+		forms []string
+	}{
+		{"direct", direct, []string{"/h", " /H extra arguments ", "／h", "/start", "/"}},
+		{"group", group, []string{"/h", "/h@tingly_bot args", "@tingly_bot /h", "<@U123>/h", "@_user_1 /h", "／h"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.chat.Drain()
+			tc.chat.SendText("/help")
+			want := tc.chat.WaitText(3 * time.Second).Text
+			for _, text := range tc.forms {
+				tc.chat.Drain()
+				tc.chat.SendText(text)
+				assert.Equal(t, want, tc.chat.WaitText(3*time.Second).Text, text)
+			}
+		})
+	}
+	direct.Drain()
+	direct.SendText("/h@tingly_bot")
+	direct.WaitText(3*time.Second).AssertContains(t, "Unknown command /h@tingly_bot")
+	direct.SendText("@tingly_bot /h")
+	require.Eventually(t, func() bool { return len(router.inbound()) == 1 }, 3*time.Second, 10*time.Millisecond)
+	assert.Equal(t, "@tingly_bot /h", router.inbound()[0].Text)
 }
 
 func Test_DirectChatReadsPlainCommandsOnly(t *testing.T) {

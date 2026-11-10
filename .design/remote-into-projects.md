@@ -219,9 +219,11 @@ Remote 页面保留，只去掉 SmartGuide 模型和“常驻会话”这类作�
 
 命令的读法与权限（2026-11-04，YZ，详见 `bot-capability-access-control.md` §6.2）：**@ 只存在于群聊**——群里同一条命令各平台装饰不同（Telegram `/dir@bot`、Slack/Discord `<@U1> /dir`、飞书 `@_user_1 /dir`、企微/WhatsApp `@bot /dir`、钉钉前导空格、全角 `／dir`），单聊只认朴素的 `/xxx`；解析只在 `imbot.ParseSlashCommand(text, group)`，闸门和处理器必须传同一个 group。Telegram 群里发给别的 bot 的 `/cmd@otherbot` 由 Telegram 适配器丢弃。直聊里选择已注册的文件夹和项目只需 start，自由路径（`/cd <路径>`、`/dir <路径>`、目录浏览器）和发文件需要 `remote_control.privileged`（界面“任意文件夹和文件”），群聊里全部需要；拒绝时回一句指向该开关，`/help` 只列聊天能跑的命令。
 
+**帮助短写**：`/h` 与 `/help` 使用同一处理器，`/start` 仍是已有别名；帮助中展示 `/h`，平台菜单仍只列主命令。群聊装饰和私聊解析规则不变，两者经过相同的访问及待审批闸门。这是现行命令的短写，不恢复上面已退役的命令名。特权命令的权限在分发前按命令名判断，不能仅添加注册表别名而不同时处理授权。
+
 `@N <话>` 保留（不是命令）。`/bind`、`/join`（接入层）照旧，不进帮助。删掉：`/bash`（Claude Code 自己能跑命令）、`/mock`、
 `/resume`（并入 `/session`；在 Projects 外开的 CLI 会话不列）、`/p`、`/threads`、`/focus`、`/back`、`/interrupt` `/s` `/i`、
-`/quiet` `/noverbose`、`/h`，以及裸词 `stop`（现在是普通消息）。
+`/quiet` `/noverbose`，以及裸词 `stop`（现在是普通消息）。`/h` 后来恢复为上面的帮助短写。
 
 ## 已定（YZ，2026-10-21）
 

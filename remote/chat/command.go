@@ -124,7 +124,7 @@ func newSessionCommand(adapter BotHandlerAdapter, c agent.CommandSpec) imbot.Com
 
 func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-help", "help", "Show what this chat can do").
-		WithAliases("start").
+		WithAliases("start", "h").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			return sendCommandText(adapter, ctx, helpText(ctx.SenderID, ctx.ChatID, adapter.HasPrivilegedAccess(ctx), !ctx.IsDirectMessage))
 		}).

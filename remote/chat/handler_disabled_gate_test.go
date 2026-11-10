@@ -61,6 +61,7 @@ func TestDisabledChatDroppedSilently(t *testing.T) {
 
 	chat.SendText("hello?")
 	chat.SendText("/help")
+	chat.SendText("/h")
 	chat.SendText("/pair 123456") // must not be able to talk its way back in
 	chat.ExpectIdle(700 * time.Millisecond)
 
