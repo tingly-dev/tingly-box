@@ -52,3 +52,75 @@ Takeaways:
   protocol difference behind it.
 - Same class of failure in other gateways: LiteLLM #32992, cc-switch
   #7074 / #7400, opencodex #4870, gptme #3846.
+
+## First-party Search and Fetch (#2484)
+
+The built-in `mcp_web_search` and `mcp_web_fetch` tools can use DeepSeek's
+`POST /v1/tools/search` and `POST /v1/tools/fetch` APIs. Enable the desired
+MCP/Server Tools as before; backend selection does not enable a disabled tool
+or change `native_websearch_strip` semantics.
+
+### Credentials and default selection
+
+Hosted calls resolve an **enabled API-key provider** whose OpenAI base (or
+fallback API base) has the exact host `api.deepseek.com`. The key is read on
+each call, never copied into source Env or persisted as a second secret. The
+provider's proxy is respected. If multiple credentials qualify, the lowest
+provider UUID wins deterministically. Anthropic-only DeepSeek bases are
+normalized to the same host's `/v1/tools/...` endpoints.
+
+- With a source's `SERPER_API_KEY` configured, Search/Fetch continue using
+  Serper/Jina.
+- Without that key, an available DeepSeek credential makes both tools use
+  DeepSeek. Without either credential, Fetch still uses Jina; Search is not
+  ready.
+- Advanced overrides use the source's existing environment map:
+  `WEB_SEARCH_BACKEND=auto|deepseek|serper` and
+  `WEB_FETCH_BACKEND=auto|deepseek|jina`. Explicit DeepSeek selection without a
+  usable provider is unconfigured; it does not silently fall back.
+- Standalone `mcp-builtin` also accepts `DEEPSEEK_API_KEY` and optional
+  `DEEPSEEK_BASE_URL`. Hosted provider-backed calls run in-process so that
+  credentials stay out of the stdio subprocess and usage is recorded by the
+  gateway. Standalone stdio is not a gateway billing/observability surface.
+
+Search accepts `query`, `count` (1–50; upstream default 10), `need_content`,
+`ori_question`, and the existing domain allow/block lists. By default results
+render `summary`, falling back to `snippet`, rather than full content. Full
+content is opt-in with `need_content=true`. Scores, authority and dates are
+annotated without filtering low-scoring results. `ori_question` is forwarded
+**only if explicitly provided**; conversation messages are never automatically
+sent to search. Fetch accepts `url`; the legacy `prompt` is optional and is
+not sent to DeepSeek.
+
+### Gateway API
+
+Model-authenticated clients can call `/v1/tools/search` and `/v1/tools/fetch`
+directly, or append `/tools/search` and `/tools/fetch` to their existing
+`/tingly/:scenario[/v1]` base. Bodies and upstream error envelopes are passed
+through without chat/protocol conversion. Only the resolved provider's Bearer
+key is sent upstream. Team-scoped sharing keys cannot use these direct APIs
+to bypass their assigned model/provider routing.
+
+HTTP 408, 429 and 5xx responses are retried at most twice with cancellable
+500 ms / 1 s backoff. Other 4xx responses are not retried. MCP callers receive
+a clear top-up message on 402; direct callers retain the upstream 402 error
+envelope. No cross-vendor fallback or client-side QPS limiter is applied.
+
+### Request billing
+
+DeepSeek currently charges **CNY 0.005 per successful request producing
+results**, independently of `count`. Empty searches, empty fetched content,
+failures and timeouts contribute zero billable requests. One usage event is
+recorded per logical invocation, not per retry:
+
+- `event_type=requests`, model `deepseek-tools/search` or `deepseek-tools/fetch`;
+- `billable_requests`, price snapshot `unit_price=0.005`, `currency=CNY`;
+- `request_cost_cny` is separate from all token counters (which remain zero).
+
+The measures survive raw queries and daily pre-aggregation, and are exposed
+in stats, time series and request records. The Dashboard displays CNY request
+spend separately from token usage. Existing token records migrate with
+`event_type=tokens` and zero request cost. Provider, latency, error status,
+and available caller/scenario/rule identity are retained for observability.
+
+API reference: <https://api-docs.deepseek.com/zh-cn/guides/search/>.

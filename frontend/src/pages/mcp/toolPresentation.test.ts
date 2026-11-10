@@ -58,3 +58,19 @@ describe('built-in sources', () => {
         expect(toolPolicyPatch({ id: 'remote' }, tool, { enabled: true })).not.toHaveProperty('enabled');
     });
 });
+
+describe('resolved web tool backends', () => {
+    it('does not claim a Serper key is missing when DeepSeek is ready', () => {
+        const source = { id: 'server-webtools' };
+        const tools = [
+            { name: 'mcp_web_search', backend: 'deepseek', ready: true },
+            { name: 'mcp_web_fetch', backend: 'deepseek', ready: true },
+        ] as never;
+        expect(connectionSummary(source, tools)).toMatchObject({ target: 'DeepSeek', missing: [] });
+    });
+    it('uses runtime readiness rather than a saved but unresolved Serper reference', () => {
+        const source = { id: 'server-webtools', env: { SERPER_API_KEY: '${MISSING}' } };
+        const tools = [{ name: 'mcp_web_search', backend: 'serper', ready: false }] as never;
+        expect(connectionSummary(source, tools).missing).toContain('searchKey');
+    });
+});

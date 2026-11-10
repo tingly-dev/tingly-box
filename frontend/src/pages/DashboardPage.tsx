@@ -122,6 +122,10 @@ export default function DashboardPage() {
         cacheHitRate,
     } = summary;
 
+    // Request-billed web tools are priced in CNY, separately from token usage.
+    const billableWebRequests = stats.reduce((sum, s) => sum + (s.billable_requests || 0), 0);
+    const webRequestCostCNY = stats.reduce((sum, s) => sum + (s.request_cost_cny || 0), 0);
+
     // Calculate streamed rate
     const totalStreamed = stats.reduce((sum, s) => sum + (s.streamed_count || 0), 0);
     const streamedRate = totalRequests > 0 ? (totalStreamed / totalRequests) * 100 : 0;
@@ -174,6 +178,13 @@ export default function DashboardPage() {
                 {t('dashboard.overview.title', { defaultValue: 'Usage Dashboard' })}
             </Box>
             {toolbar}
+            {billableWebRequests > 0 && (
+                <StatCard
+                    title={t('dashboard.webToolSpend')}
+                    value={`CNY ${webRequestCostCNY.toFixed(3)}`}
+                    subtitle={t('dashboard.webToolRequests', { count: billableWebRequests })}
+                />
+            )}
             {/* Main Content */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {/* Stat Cards Row - 5 cards */}

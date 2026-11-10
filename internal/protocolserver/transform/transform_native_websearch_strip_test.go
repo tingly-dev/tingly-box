@@ -9,6 +9,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/webtools/deepseek"
 )
 
 func TestNativeWebToolsAreStrippedOnlyAfterServerReplacementInjection(t *testing.T) {
@@ -84,4 +85,19 @@ func TestIsNativeWebToolName_Fetch(t *testing.T) {
 			t.Errorf("isNativeWebToolName(%q, stripFetch=true): got %v, want %v", tc.name, got, tc.expect)
 		}
 	}
+}
+
+func TestDeepSeekReplacementKeepsNativeStrippingSemantics(t *testing.T) {
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "server-webtools", Command: "unused", Enabled: typ.BoolPtr(true), Tools: []string{"mcp_web_search", "mcp_web_fetch"}}}}
+	rt := runtime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	defer rt.Close()
+	rt.SetDeepSeekWebtools(&deepseek.Service{Resolve: func() *typ.Provider { return &typ.Provider{Token: "configured"} }})
+	req := &openai.ChatCompletionNewParams{Tools: []openai.ChatCompletionToolUnionParam{
+		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "web_search"}),
+		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "web_fetch"}),
+	}}
+	ctx := protocoltransform.NewTransformContext(req)
+	require.NoError(t, NewMCPToolInjectionTransform(rt).WithConnectedTools(func() bool { return false }).Apply(ctx))
+	require.NoError(t, NewNativeWebSearchStripTransform(rt).Apply(ctx))
+	require.Equal(t, []string{"tingly_box_mcp__server-webtools__mcp_web_fetch", "tingly_box_mcp__server-webtools__mcp_web_search"}, extractOpenAIToolNames(req.Tools))
 }

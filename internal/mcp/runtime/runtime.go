@@ -18,12 +18,14 @@ import (
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/webtools/deepseek"
 )
 
 type configProvider func() *typ.MCPRuntimeConfig
 
 // Runtime handles MCP tool source discovery and tool execution.
 type Runtime struct {
+	deepSeekWebtools  *deepseek.Service
 	getConfig         configProvider
 	sc                *sessionCache
 	toolSourceFactory *ToolSourceFactory
@@ -386,7 +388,7 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	}
 
 	if sourceID == mcptools.ServerWebtoolsSourceID && !r.IsBuiltinServerToolAvailable(sourceID, toolName) {
-		return coretool.ToolResult{}, fmt.Errorf("Server Tool %s is disabled or not configured; Search requires SERPER_API_KEY", normalizedName)
+		return coretool.ToolResult{}, fmt.Errorf("Server Tool %s is disabled or not configured; Search requires SERPER_API_KEY or an enabled DeepSeek provider", normalizedName)
 	}
 
 	if cfg := r.GetConfig(); cfg != nil {
@@ -415,6 +417,10 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 		if tool, ok := r.virtualRegistry.Get(toolName); ok {
 			return r.callVirtualTool(ctx, tool, arguments)
 		}
+	}
+
+	if result, handled, err := r.callDeepSeekWebtool(ctx, sourceID, toolName, arguments); handled {
+		return result, err
 	}
 
 	// 2. Forward to remote tool source (user mode)
@@ -812,7 +818,7 @@ func (r *Runtime) isBuiltinServerToolAvailable(source typ.MCPSourceConfig, toolN
 //     Custom MCP servers (stdio/http/sse) use their transport-specific check
 //     (command non-empty / endpoint non-empty / env refs resolved).
 //  2. Tool-level: for builtin sources, a per-tool ToolReadinessChecker may impose
-//     additional requirements (e.g. mcp_web_search requires SERPER_API_KEY).
+//     additional requirements (e.g. Search needs Serper or a DeepSeek provider).
 func (r *Runtime) IsClientToolAvailable(sourceID string, toolName string) bool {
 	if r == nil {
 		return false
@@ -852,6 +858,15 @@ func (r *Runtime) isSourceToolConfigured(source typ.MCPSourceConfig, toolName st
 	ts, err := r.toolSourceFactory.CreateToolSource(source)
 	if err != nil || !ts.IsConfigured() {
 		return false
+	}
+	if isWebtoolSource(source.ID) {
+		backend, err := r.webBackend(source, toolName)
+		if err != nil {
+			return false
+		}
+		if backend == "deepseek" {
+			return true
+		}
 	}
 	checker, known := mcptools.WebtoolReadinessCheckers[toolName]
 	return !known || checker.IsReady(source.Env)

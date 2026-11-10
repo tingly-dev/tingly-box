@@ -1,6 +1,8 @@
 // Usage dashboard and history
 export default {
   "dashboard": {
+    webToolSpend: 'Web tool spend',
+    webToolRequests: '{{count}} billable Search/Fetch requests · excludes token usage',
     "userUsage": {
       "title": "Team usage",
       "subtitle": "See how every registered user is consuming shared AI access.",

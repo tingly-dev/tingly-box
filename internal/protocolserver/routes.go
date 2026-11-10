@@ -52,6 +52,10 @@ func (ph *ProtocolHandler) modelAuthChain(modelAuth gin.HandlerFunc, extra ...gi
 // The host server owns the gin engine and the auth middleware; this package
 // owns the route shape and the handlers behind it.
 func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.HandlerFunc) {
+	// Raw DeepSeek-compatible entrypoints also work outside a model scenario.
+	for _, op := range []string{"search", "fetch"} {
+		engine.POST("/v1/tools/"+op, ph.modelAuthChain(modelAuth, deepSeekWebHandler(ph.deps.DeepSeekWebtools, op))...)
+	}
 	// scenario routes with middleware to inject scenario into context.
 	// legacyScenarioAliasMiddleware runs first so a deprecated scenario id
 	// (e.g. "agent" -> "custom") is rewritten before profileAliasMiddleware
@@ -87,6 +91,9 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 // SetupMixinEndpoints registers the protocol-mixed endpoint set (OpenAI +
 // Anthropic surfaces on one group), each gated by modelAuth.
 func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth gin.HandlerFunc) {
+	for _, op := range []string{"search", "fetch"} {
+		group.POST("/tools/"+op, ph.modelAuthChain(modelAuth, deepSeekWebHandler(ph.deps.DeepSeekWebtools, op))...)
+	}
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleOpenAIChatCompletions)...)
 
