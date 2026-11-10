@@ -37,7 +37,7 @@ func TestDecoratedShortcutAuthorization(t *testing.T) {
 }
 
 func TestShortcutAuthorizationParity(t *testing.T) {
-	for _, pair := range [][2]string{{"d", "dir"}, {"p", "project"}, {"sess", "session"}, {"n", "new"}, {"sp", "stop"}, {"cr", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"d", "dir"}, {"p", "project"}, {"sess", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		for _, group := range []bool{false, true} {
 			for _, arg := range []string{"", " 2", " 0", " /some path"} {
 				for _, pending := range []access.ActionName{"", access.ActionRemoteControlApprove} {

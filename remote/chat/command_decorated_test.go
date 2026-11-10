@@ -148,7 +148,7 @@ func TestSessionShortcutsRouteCanonicalNameAndArguments(t *testing.T) {
 	router.bind(direct.ChatID)
 	router.bind(group.ChatID)
 
-	for _, pair := range [][2]string{{"sess", "session"}, {"n", "new"}, {"sp", "stop"}, {"cr", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+	for _, pair := range [][2]string{{"sess", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
 		for _, tc := range []struct {
 			chat *testenv.Chat
 			text string
@@ -164,7 +164,7 @@ func TestSessionShortcutsRouteCanonicalNameAndArguments(t *testing.T) {
 			assert.Equal(t, pair[1]+":one  two", router.commands()[before], tc.text)
 		}
 	}
-	for _, text := range []string{"/s", "/proj", "/sto", "/cl", "/unknown"} {
+	for _, text := range []string{"/s", "/proj", "/sto", "/cl", "/sp", "/cr", "/unknown"} {
 		direct.Drain()
 		direct.SendText(text)
 		direct.WaitText(3*time.Second).AssertContains(t, "Unknown command "+text)

@@ -15,8 +15,7 @@ var aliases = [...]Alias{
 	{"p", "project"},
 	{"sess", "session"},
 	{"n", "new"},
-	{"sp", "stop"},
-	{"cr", "clear"},
+	{"cls", "clear"},
 	{"stat", "status"},
 	{"v", "verbose"},
 }
