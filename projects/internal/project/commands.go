@@ -24,9 +24,6 @@ func (e *ErrCommandUnsupported) Error() string {
 // ErrNothingToCompact is /compact on a thread that has not run yet.
 var ErrNothingToCompact = errors.New("nothing to compact yet: this conversation has not started")
 
-// ErrCompactUnavailable is /compact where Projects does not run it (yet).
-var ErrCompactUnavailable = errors.New("/compact isn't available here yet")
-
 // commandKind says what a message beginning with "/" is.
 type commandKind int
 
@@ -75,6 +72,16 @@ func parseCommand(text string) command {
 		return command{kind: cmdUnsupported, name: name}
 	}
 	return command{}
+}
+
+// personCommand reads a message as a slash command. Only a person's text
+// counts (see byPerson), and a message with files is never one.
+func personCommand(text string, src Source, attachments int) (command, bool) {
+	if !byPerson(src) || attachments > 0 {
+		return command{}, false
+	}
+	cmd := parseCommand(text)
+	return cmd, cmd.kind != notCommand
 }
 
 // byPerson reports whether a message was typed by a person on the web or in

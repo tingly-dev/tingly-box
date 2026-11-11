@@ -19,7 +19,6 @@ import (
 // commandPayload is the payload of an EvCommand event.
 type commandPayload struct {
 	Name         string `json:"name"`
-	Args         string `json:"args,omitempty"`
 	State        string `json:"state"` // running, ok, failed
 	Trigger      string `json:"trigger,omitempty"`
 	TokensBefore int64  `json:"tokens_before,omitempty"`
@@ -82,12 +81,8 @@ func (m *Threads) compactReturned(t *db.Thread, a *activeThread, slot *limiter, 
 // compaction turn makes no model call, so no usage entry would update them.
 // The live process knows exactly; failing that, the compaction's own figure.
 func (m *Threads) refreshContext(threadID string, res agentboot.CompactResult) {
-	used, window := int64(0), int64(0)
-	if u, err := m.engine.ContextUsage(context.Background(), m.sessionOf(threadID)); err == nil {
-		used, window = u.Used, u.Max
-	} else if res.Reported.Tokens {
-		used = res.TokensAfter
-	} else {
+	used, window, ok := contextAfterCompact(m.engine, m.sessionOf(threadID), res)
+	if !ok {
 		return
 	}
 	_, _ = m.update(threadID, func(t *db.Thread) {
@@ -96,6 +91,19 @@ func (m *Threads) refreshContext(threadID string, res agentboot.CompactResult) {
 			t.ContextWindow = int(window)
 		}
 	})
+}
+
+// contextAfterCompact is how full a session's context is once a compaction
+// ended: what the live process says, else the compaction's own figure. ok is
+// false when neither is known; window is 0 when only the figure is.
+func contextAfterCompact(e *engine.Engine, sessionID string, res agentboot.CompactResult) (used, window int64, ok bool) {
+	if u, err := e.ContextUsage(context.Background(), sessionID); err == nil {
+		return u.Used, u.Max, true
+	}
+	if res.Reported.Tokens {
+		return res.TokensAfter, 0, true
+	}
+	return 0, 0, false
 }
 
 // openingPayload is the card of a compaction that has just started.

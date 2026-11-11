@@ -186,3 +186,60 @@ describe('Composer attachments', () => {
         expect(attach).not.toHaveBeenCalled();
     });
 });
+
+describe('Composer slash menu', () => {
+    const setup = (props: Partial<Parameters<typeof Composer>[0]> = {}) => {
+        const send = vi.fn().mockResolvedValue(true);
+        render(<Composer placeholder="Reply" slashCommands onSend={send} {...props} />);
+        return { send, input: screen.getByPlaceholderText('Reply') };
+    };
+
+    it('offers /compact when the message starts with a slash, and inserts it on Enter instead of sending', () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/' } });
+        expect(screen.getByRole('option', { name: /compact/ })).toBeInTheDocument();
+        fireEvent.keyDown(input, { key: 'Enter' });
+        expect(input).toHaveValue('/compact ');
+        expect(send).not.toHaveBeenCalled();
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    });
+
+    it('narrows as the name is typed, completes with Tab and with a click', () => {
+        const { input } = setup();
+        fireEvent.change(input, { target: { value: '/co' } });
+        fireEvent.keyDown(input, { key: 'Tab' });
+        expect(input).toHaveValue('/compact ');
+
+        fireEvent.change(input, { target: { value: '/x' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '/' } });
+        fireEvent.mouseDown(screen.getByRole('option', { name: /compact/ }));
+        expect(input).toHaveValue('/compact ');
+    });
+
+    it('sends a complete command on Enter, and closes with Escape', async () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/compact' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('/compact', []);
+
+        fireEvent.change(input, { target: { value: '/com' } });
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '/comp' } });
+        expect(screen.getByRole('option')).toBeInTheDocument();
+    });
+
+    it('stays out of the way of ordinary text and when not enabled', () => {
+        const { input } = setup();
+        fireEvent.change(input, { target: { value: 'compare /etc/hosts' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '/etc/hosts is broken' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        cleanup();
+        const off = setup({ slashCommands: false });
+        fireEvent.change(off.input, { target: { value: '/' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    });
+});

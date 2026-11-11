@@ -140,7 +140,6 @@ export type TranscriptBlock =
 // tokens_reported is set: otherwise the agent did not say.
 export interface CommandPayload {
     name: string;
-    args?: string;
     state: 'running' | 'ok' | 'failed';
     trigger?: 'manual' | 'auto';
     tokens_before?: number;
