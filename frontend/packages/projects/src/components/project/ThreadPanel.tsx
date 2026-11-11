@@ -602,6 +602,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onReview={() => setDiffOpen(true)}
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
+                subagents={subagents}
+                onOpenAgent={openAgent}
+                onShowAgent={(agent) => void openInChat({ call: agent.call }, agent.event_id)}
                 top={railTop}
                 extra={railExtra}
                 configuredModel={configuredModel}

@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Thread } from '../../client';
+import type { Subagent, Thread } from '../../client';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { readLocal } from '../../utils/storage';
 import { ThreadInfoRail } from './ThreadInfoRail';
@@ -79,5 +79,34 @@ describe('ThreadInfoRail', () => {
         render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} extra={<section aria-label="host card" />} />);
         const usage = screen.getByRole('region', { name: 'rail.usage' });
         expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("lists the thread's subagents in their own card, a row opening the run on its own", async () => {
+        const onOpenAgent = vi.fn();
+        const onShowAgent = vi.fn();
+        const agents: Subagent[] = [
+            { call: 'c-early', background: true, created_at: '2026-11-11T01:00:00Z', description: 'First scout', event_id: 'e1', status: 'completed', steps: 3, subagent_type: 'Explore' },
+            { call: 'c-late', background: true, created_at: '2026-11-11T02:00:00Z', description: '', event_id: 'e2', status: 'running', steps: 1 },
+        ];
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false}
+            subagents={{ list: () => Promise.resolve(agents) }} onOpenAgent={onOpenAgent} onShowAgent={onShowAgent} />);
+        const card = await waitFor(() => screen.getByRole('region', { name: 'subagents.title' }));
+        expect(within(card).getByText('First scout')).toBeInTheDocument();
+        // Newest first; an unnamed run falls back to the card's title.
+        expect(within(card).getAllByText('subagents.title').length).toBeGreaterThan(1);
+        expect(within(card).getByText('Explore')).toBeInTheDocument();
+        fireEvent.click(within(card).getByText('First scout'));
+        expect(onOpenAgent).toHaveBeenCalledWith(agents[0]);
+        // The rows are newest first, so the first scout's Show button is the second one.
+        fireEvent.click(within(card).getAllByRole('button', { name: 'subagents.show' })[1]);
+        expect(onShowAgent).toHaveBeenCalledWith(agents[0]);
+    });
+
+    it('carries no subagent card for a thread that never ran one', async () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false}
+            subagents={{ list: () => Promise.resolve([]) }} onOpenAgent={() => undefined} onShowAgent={() => undefined} />);
+        expect(screen.getByText('subagents.loading')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('subagents.loading')).not.toBeInTheDocument());
+        expect(screen.queryByRole('region', { name: 'subagents.title' })).not.toBeInTheDocument();
     });
 });

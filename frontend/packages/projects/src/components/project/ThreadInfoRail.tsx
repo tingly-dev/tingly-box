@@ -1,14 +1,16 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Box, Button, CircularProgress, Collapse, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
-import { api, unwrap, type Thread } from '../../client';
+import { api, unwrap, type Subagent, type Thread } from '../../client';
 import { Cancel, CheckCircle, ChevronRight, DiffIcon, ExpandMore, PlayerStop, Robot, Terminal } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
+import { timeAgo } from '../../utils/format';
 import { Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
+import { agentIcon, agentState } from './ThreadActivityPopover';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -57,6 +59,52 @@ function TaskLine({ threadId, task, onChanged, onReveal }: { threadId: string; t
     );
 }
 
+/** The thread's subagents (its Agent calls, oldest first), read once the card
+ * shows: every run of the thread, not just this turn's. A row opens the run
+ * on its own, where its steps read out. */
+function SubagentsCard({ subagents, onOpenAgent, onShowAgent }: { subagents: { list: () => Promise<Subagent[]> }; onOpenAgent: (agent: Subagent) => void; onShowAgent: (agent: Subagent) => void }) {
+    const { t, i18n } = useTranslation('projects');
+    const [agents, setAgents] = useState<Subagent[] | null>(null);
+    useEffect(() => {
+        let live = true;
+        subagents.list().then((list) => { if (live) setAgents(list); }).catch(() => { if (live) setAgents([]); });
+        return () => { live = false; };
+    }, [subagents]);
+    if (agents != null && agents.length === 0) return null;
+    return (
+        <RailCard id="agents" title={t('subagents.title')} aside={agents != null && agents.length > 0 ? String(agents.length) : undefined}>
+            {agents === null
+                ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', fontSize: fontSizes.sm }}><CircularProgress size={14} />{t('subagents.loading')}</Box>
+                : (
+                    <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>
+                        {[...agents].reverse().map((agent) => (
+                            <Stack key={agent.call} direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0, py: 0.5, borderTop: 1, borderColor: 'divider' }}>
+                                <Robot sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                <Typography noWrap title={agent.description} onClick={() => onOpenAgent(agent)}
+                                    sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.primary', cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+                                    {agent.description || t('subagents.title')}
+                                </Typography>
+                                {agent.subagent_type && (
+                                    <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'text.secondary', flexShrink: 0 }}>{agent.subagent_type}</Typography>
+                                )}
+                                <Typography component="span" title={[t(agentState(agent)), t('subagents.steps', { count: agent.steps }), timeAgo(agent.created_at, i18n.language)].join(' · ')}
+                                    sx={{ fontSize: fontSizes.sm, color: 'text.secondary', flexShrink: 0 }}>
+                                    {t(agentState(agent))}
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, minWidth: 20, justifyContent: 'center' }}>{agentIcon(agent)}</Box>
+                                <Tooltip title={t('subagents.show')}>
+                                    <IconButton size="small" onClick={() => onShowAgent(agent)} aria-label={t('subagents.show')} sx={{ p: 0.25 }}>
+                                        <ChevronRight sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
+                        ))}
+                    </Box>
+                )}
+        </RailCard>
+    );
+}
+
 interface Props {
     thread: Thread;
     /** A working folder's session: no worktree branch to review; its background tasks always have a card (a project thread gets one while it has some). */
@@ -75,6 +123,12 @@ interface Props {
     top?: ReactNode;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
+    /** Lists the thread's subagents (its Agent calls) for the rail's own card. */
+    subagents?: { list: () => Promise<Subagent[]> };
+    /** Opens a subagent on its own, in place of the conversation. */
+    onOpenAgent?: (agent: Subagent) => void;
+    /** Shows a subagent where it was called, in the conversation. */
+    onShowAgent?: (agent: Subagent) => void;
 }
 
 /**
@@ -83,7 +137,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra, subagents, onOpenAgent, onShowAgent }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -138,6 +192,9 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                         </>
                     )}
                 </RailCard>
+            )}
+            {subagents && onOpenAgent && onShowAgent && (
+                <SubagentsCard subagents={subagents} onOpenAgent={onOpenAgent} onShowAgent={onShowAgent} />
             )}
         </InfoRailFrame>
     );

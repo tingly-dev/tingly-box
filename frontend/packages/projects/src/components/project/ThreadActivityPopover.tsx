@@ -22,10 +22,11 @@ interface Props {
 }
 
 /** A subagent's state as the status area reads it: the list does not know whether the turn is still live. */
-const agentState = (agent: Subagent) =>
+export const agentState = (agent: Subagent) =>
     ({ running: 'tasks.statusRunning', completed: 'tasks.statusDone', stopped: 'tasks.statusStopped', failed: 'tasks.statusFailed' } as const)[agent.status as 'running' | 'completed' | 'stopped' | 'failed'] ?? agent.status;
 
-const agentIcon = (agent: Subagent) => {
+/** The state's mark, in a 16px slot. */
+export const agentIcon = (agent: Subagent) => {
     const sx = { fontSize: 16 };
     if (agent.status === 'running') return <CircularProgress size={14} />;
     if (agent.status === 'completed') return <CheckCircle sx={{ ...sx, color: 'text.secondary' }} />;

@@ -79,7 +79,7 @@ export function StatusGroups({ groups, rows, onOpen, onGroupClick, empty }: { gr
                         >
                             {/* A collapsed group's heading is its toggle; only open groups open their list from here. */}
                             <StatusHeading label={g.label} status={g.key} count={list.length}
-                                onClick={onGroupClick && !g.collapsed && ((e) => { e.stopPropagation(); onGroupClick(g.key, g.label, e.currentTarget); })} />
+                                onClick={onGroupClick && !g.collapsed ? ((e) => { e.stopPropagation(); onGroupClick(g.key, g.label, e.currentTarget); }) : undefined} />
                             {g.collapsed && <ExpandMore sx={{ fontSize: 16, color: 'text.secondary', transform: open ? 'rotate(180deg)' : 'none' }} />}
                         </Box>
                         <Collapse in={open}>
