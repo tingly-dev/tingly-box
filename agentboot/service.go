@@ -161,6 +161,21 @@ func (s *AgentService) resolveAgent(agentType AgentType) (Agent, error) {
 	return agent, nil
 }
 
+// CompactPrompt is the user message that makes the agent of agentType (the
+// default when empty) compact its conversation; ErrCompactUnsupported if that
+// agent cannot.
+func (s *AgentService) CompactPrompt(agentType AgentType, instructions string) (string, error) {
+	agent, err := s.resolveAgent(agentType)
+	if err != nil {
+		return "", err
+	}
+	c, ok := agent.(Compactor)
+	if !ok {
+		return "", ErrCompactUnsupported
+	}
+	return c.CompactPrompt(instructions), nil
+}
+
 // Execute runs a prompt against the specified agent type and project path and
 // returns a raw [ExecutionHandle] for callers that want event-level control.
 // Pass an empty agentType to use the default agent.
