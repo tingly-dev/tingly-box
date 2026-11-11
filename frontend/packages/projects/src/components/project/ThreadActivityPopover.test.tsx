@@ -9,7 +9,7 @@ vi.mock('./threadActivity', () => ({ loadThreadActivity: vi.fn() }));
 
 afterEach(cleanup);
 
-const thread = (o: Partial<Thread> = {}): Thread => ({ id: 't1', title: 'Fix login', status: 'working', running_tasks: 1 } as Thread);
+const thread = (o: Partial<Thread> = {}): Thread => ({ id: 't1', title: 'Fix login', status: 'working', running_tasks: 1, ...o } as Thread);
 
 const activity = vi.mocked(loadThreadActivity);
 

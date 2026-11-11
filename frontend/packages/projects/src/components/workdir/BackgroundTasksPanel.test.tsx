@@ -7,7 +7,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: 
 
 afterEach(cleanup);
 
-const task = (o: Partial<BackgroundTaskRow>): BackgroundTaskRow => ({
+const task = (o: Partial<BackgroundTaskRow> = {}): BackgroundTaskRow => ({
     taskId: 'a', callId: '', status: 'running', background: true, taskType: 'local_agent', description: 'scout', ended: false,
     input: { prompt: 'look around' }, ...o,
 } as BackgroundTaskRow);

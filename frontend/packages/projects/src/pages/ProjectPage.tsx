@@ -6,6 +6,7 @@ import { api, isFolder, type BackgroundTask, type components, unwrap, type Proje
 import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane, type OverviewTab } from '../components/project/OverviewPane';
 import { ThreadActivityPopover } from '../components/project/ThreadActivityPopover';
+import { StatusThreadsPopover } from '../components/project/StatusThreadsPopover';
 import { ModelPicker } from '../components/ModelPicker';
 import { EffortPicker } from '../components/EffortPicker';
 import { loadPermissionModes, PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
@@ -246,6 +247,12 @@ export default function ProjectPage() {
     const [activity, setActivity] = useState<{ targets: Thread[]; anchor: HTMLElement } | null>(null);
     const openTasksList = (targets: Thread[], anchor: HTMLElement) => setActivity({ targets, anchor });
     const closeActivity = () => setActivity(null);
+    // A status count, opened into its list: which threads (sessions in a folder) stand in that state.
+    const [statusList, setStatusList] = useState<{ label: string; threads: Thread[]; anchor: HTMLElement } | null>(null);
+    const openStatusList = (label: string, list: Thread[], anchor: HTMLElement) => setStatusList({ label, threads: list, anchor });
+    const closeStatusList = () => setStatusList(null);
+    const openStatusThreads = (status: string, anchor: HTMLElement) =>
+        openStatusList(t(`overview.group.${status}`), threads.filter((th) => th.status === status), anchor);
     const clearDrill = () => setParams((p) => {
         p.delete('focus');
         p.delete('task');
@@ -366,8 +373,8 @@ export default function ProjectPage() {
         />
     ) : null;
     const overviewEl = (initialTab?: OverviewTab) => (
-        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
-            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} onTasks={openTasksList} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />} />
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} onStatus={openStatusThreads} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
+            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} onTasks={openTasksList} onStatus={openStatusList} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the
@@ -425,7 +432,7 @@ export default function ProjectPage() {
                 sideAlwaysOpen={overviewAt !== 'side'}
                 paneToggle={paneToggle}
                 top={overviewAt === 'top' ? (
-                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onTasks={openTasksList} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onTasks={openTasksList} onStatusList={openStatusThreads} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
                 ) : undefined}
                 main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
@@ -600,6 +607,15 @@ export default function ProjectPage() {
                 <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
             </Dialog>
             {im?.dialog}
+
+            {/* What a status count stands for: the threads in that state, each row opening the thread (its tasks pill keeps drilling into what it runs). */}
+            <Popover open={!!statusList} anchorEl={statusList?.anchor ?? null} onClose={closeStatusList}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
+                {statusList && (
+                    <StatusThreadsPopover label={statusList.label} threads={statusList.threads} onOpen={openThread}
+                        onTasks={openTasksList} onClose={closeStatusList} />
+                )}
+            </Popover>
 
             {/* What a status-area count stands for: a thread's (or every working thread's) running tasks and subagents, each row opening its detail. */}
             <Popover open={!!activity} anchorEl={activity?.anchor ?? null} onClose={closeActivity}

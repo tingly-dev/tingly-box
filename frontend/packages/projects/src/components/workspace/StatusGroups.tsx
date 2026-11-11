@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Box, Collapse, Typography } from '@mui/material';
 import { ExpandMore } from '../icons';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 import { ListRow } from '../ListRow';
 import { ThreadStateMark } from '../project/threadStatus';
 
@@ -30,10 +31,15 @@ export interface StatusRow {
 }
 
 /** A quiet group heading: the state's mark, the name, a count. The key of a
- * group is the status it lists. */
-export function StatusHeading({ label, status, count }: { label: string; status: string; count: number }) {
+ * group is the status it lists. Given `onClick`, the heading opens what the
+ * count counts (the status area's click-through: a state → its rows). */
+export function StatusHeading({ label, status, count, onClick }: { label: string; status: string; count: number; onClick?: (e: { stopPropagation(): void; currentTarget: HTMLElement }) => void }) {
     return (
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+        <Box onClick={onClick}
+            role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+            aria-label={onClick ? `${label} ${count}` : undefined}
+            onKeyDown={onClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(e); } } : undefined}
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, ...(onClick && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: radius.row, px: 0.5 }) }}>
             <ThreadStateMark status={status} />
             <Box component="span" sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: status === 'waiting' ? 'text.primary' : 'text.secondary' }}>{label}</Box>
             <Box component="span" sx={{ fontSize: fontSizes.sm, color: 'text.disabled' }}>{count}</Box>
@@ -47,9 +53,11 @@ function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) 
 
 /**
  * Work grouped by status, most urgent first: a project's threads, a working
- * directory's sessions. Groups with no rows are left out.
+ * directory's sessions. Groups with no rows are left out. Given
+ * `onGroupClick`, a group heading opens its group's list (the status
+ * area's click-through: a state → its rows).
  */
-export function StatusGroups({ groups, rows, onOpen, empty }: { groups: StatusGroup[]; rows: StatusRow[]; onOpen: (id: string) => void; empty?: ReactNode }) {
+export function StatusGroups({ groups, rows, onOpen, onGroupClick, empty }: { groups: StatusGroup[]; rows: StatusRow[]; onOpen: (id: string) => void; /** Opens a status group's list from its heading. */ onGroupClick?: (key: string, label: string, anchor: HTMLElement) => void; empty?: ReactNode }) {
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     if (rows.length === 0) {
         return <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{empty}</Typography>;
@@ -69,7 +77,9 @@ export function StatusGroups({ groups, rows, onOpen, empty }: { groups: StatusGr
                             onClick={g.collapsed ? () => setExpanded((e) => ({ ...e, [g.key]: !open })) : undefined}
                             sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, cursor: g.collapsed ? 'pointer' : undefined }}
                         >
-                            <StatusHeading label={g.label} status={g.key} count={list.length} />
+                            {/* A collapsed group's heading is its toggle; only open groups open their list from here. */}
+                            <StatusHeading label={g.label} status={g.key} count={list.length}
+                                onClick={onGroupClick && !g.collapsed && ((e) => { e.stopPropagation(); onGroupClick(g.key, g.label, e.currentTarget); })} />
                             {g.collapsed && <ExpandMore sx={{ fontSize: 16, color: 'text.secondary', transform: open ? 'rotate(180deg)' : 'none' }} />}
                         </Box>
                         <Collapse in={open}>

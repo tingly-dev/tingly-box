@@ -14,6 +14,8 @@ interface Props {
     onOpen: (id: string) => void;
     /** Opens the thread's running tasks from its card's count pill. */
     onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
+    /** Opens a column's thread list from its status heading. */
+    onStatus?: (status: string, anchor: HTMLElement) => void;
     /** Cards a column shows before it scrolls; unset, a column fills the height it is given. */
     listMaxHeight?: number;
     rowRef?: Ref<HTMLDivElement>;
@@ -47,7 +49,7 @@ export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinne
  * layout: the columns sit side by side and each scrolls inside; the Overview
  * pane uses `StatusBoard`, which scrolls one way only.
  */
-export function StatusColumns({ threads, selectedId, onOpen, onTasks, listMaxHeight, rowRef, rowSx }: Props) {
+export function StatusColumns({ threads, selectedId, onOpen, onTasks, onStatus, listMaxHeight, rowRef, rowSx }: Props) {
     const { t } = useTranslation('projects');
     const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => th.status === s) })).filter((g) => g.list.length > 0);
     const columns = groups.filter((g) => g.key !== 'resolved');
@@ -58,7 +60,8 @@ export function StatusColumns({ threads, selectedId, onOpen, onTasks, listMaxHei
         <Box ref={rowRef} sx={{ display: 'flex', gap: 1.5, px: 2, pb: 1.5, overflowX: 'auto', ...rowSx }}>
             {columns.map((g) => (
                 <Box key={g.key} role="group" aria-label={t(`overview.group.${g.key}`)} sx={{ flex: '1 1 0', minWidth: 220, maxWidth: 360, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <Box sx={{ mb: 0.75 }}><StatusHeading label={t(`overview.group.${g.key}`)} status={g.key} count={g.list.length} /></Box>
+                    <Box sx={{ mb: 0.75 }}><StatusHeading label={t(`overview.group.${g.key}`)} status={g.key} count={g.list.length}
+                        onClick={onStatus && ((e) => { e.stopPropagation(); onStatus(g.key, e.currentTarget); })} /></Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, overflowY: 'auto', minHeight: 0, ...(listMaxHeight == null ? { flex: 1 } : { maxHeight: listMaxHeight }) }}>
                         {g.list.map((th) => (
                             <ThreadCard key={th.id} thread={th} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} />
@@ -68,7 +71,8 @@ export function StatusColumns({ threads, selectedId, onOpen, onTasks, listMaxHei
             ))}
             {finished > 0 && (
                 <Box sx={{ flex: '0 0 auto', minWidth: 120 }}>
-                    <StatusHeading label={t('overview.group.resolved')} status="resolved" count={finished} />
+                    <StatusHeading label={t('overview.group.resolved')} status="resolved" count={finished}
+                        onClick={onStatus && ((e) => { e.stopPropagation(); onStatus('resolved', e.currentTarget); })} />
                 </Box>
             )}
         </Box>

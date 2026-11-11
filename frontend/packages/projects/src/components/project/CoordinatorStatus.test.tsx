@@ -53,6 +53,18 @@ describe('CoordinatorStatus', () => {
         expect(onTasks.mock.calls[0][1]).toBeInstanceOf(HTMLElement);
     });
 
+    it('opens a state\'s threads from its count, the waiting count holding failed too', () => {
+        const onStatus = vi.fn();
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} onStatus={onStatus}
+            threads={[worker('working'), worker('waiting'), worker('failed'), worker('ready')]} />);
+        fireEvent.click(screen.getByText('thread.status.waiting'));
+        const [label, list] = onStatus.mock.calls[0];
+        expect(label).toBe('thread.status.waiting');
+        expect(list.map((th: Thread) => th.status).sort()).toEqual(['failed', 'waiting']);
+        fireEvent.click(screen.getByText('thread.status.working'));
+        expect(onStatus.mock.calls[1][1].map((th: Thread) => th.status)).toEqual(['working']);
+    });
+
     it('stays quiet about background tasks when none run', () => {
         render(<CoordinatorStatus {...props} coordinator={coordinator()} threads={[worker('working')]} />);
         expect(screen.queryByText('rail.backgroundTasks')).not.toBeInTheDocument();

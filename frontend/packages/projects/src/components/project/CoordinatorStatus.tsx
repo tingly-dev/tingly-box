@@ -14,6 +14,8 @@ interface Props {
     threads: Thread[];
     /** Opens the running-tasks list of the threads that have tasks, from the fact that counts them. */
     onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
+    /** Opens a state's thread list from the fact that counts it (the waiting count holds failed too). */
+    onStatus?: (label: string, threads: Thread[], anchor: HTMLElement) => void;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
 }
@@ -23,7 +25,7 @@ interface Props {
  * Usage cards a thread's rail has, plus what only the coordinator has (its
  * queue, its threads by state, its model).
  */
-export function CoordinatorStatus({ project, coordinator, queued, threads, onTasks, extra }: Props) {
+export function CoordinatorStatus({ project, coordinator, queued, threads, onTasks, onStatus, extra }: Props) {
     const { t } = useTranslation('projects');
     const count = (...statuses: string[]) => threads.filter((x) => statuses.includes(x.status)).length;
     const running = threads.reduce((n, x) => n + (x.running_tasks ?? 0), 0);
@@ -40,10 +42,10 @@ export function CoordinatorStatus({ project, coordinator, queued, threads, onTas
                     ? <Box sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('rail.noThreads')}</Box>
                     : (
                         <>
-                            <Fact label={t('thread.status.working')}>{count('working')}</Fact>
-                            <Fact label={t('thread.status.waiting')}>{count('waiting', 'failed')}</Fact>
-                            <Fact label={t('thread.status.ready')}>{count('ready')}</Fact>
-                            <Fact label={t('thread.status.resolved')}>{count('resolved')}</Fact>
+                            <Fact label={t('thread.status.working')} onClick={onStatus && ((e) => { e.stopPropagation(); onStatus(t('thread.status.working'), threads.filter((x) => x.status === 'working'), e.currentTarget); })}>{count('working')}</Fact>
+                            <Fact label={t('thread.status.waiting')} onClick={onStatus && ((e) => { e.stopPropagation(); onStatus(t('thread.status.waiting'), threads.filter((x) => x.status === 'waiting' || x.status === 'failed'), e.currentTarget); })}>{count('waiting', 'failed')}</Fact>
+                            <Fact label={t('thread.status.ready')} onClick={onStatus && ((e) => { e.stopPropagation(); onStatus(t('thread.status.ready'), threads.filter((x) => x.status === 'ready'), e.currentTarget); })}>{count('ready')}</Fact>
+                            <Fact label={t('thread.status.resolved')} onClick={onStatus && ((e) => { e.stopPropagation(); onStatus(t('thread.status.resolved'), threads.filter((x) => x.status === 'resolved'), e.currentTarget); })}>{count('resolved')}</Fact>
                             {running > 0 && (
                                 <Fact label={t('rail.backgroundTasks')} title={t('rail.tasksInThreads', { tasks: running, count: busy.length })}
                                     onClick={onTasks && ((e) => { e.stopPropagation(); onTasks(busy, e.currentTarget); })}>
