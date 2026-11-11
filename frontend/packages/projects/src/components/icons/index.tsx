@@ -25,6 +25,8 @@ import {
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
     IconLayoutSidebarRight,
+    IconLayoutSidebarRightCollapse,
+    IconLayoutSidebarRightExpand,
     IconLoader2,
     IconMessage,
     IconMessageCircleQuestion,
@@ -68,6 +70,8 @@ export const Branch = tablerMui(IconGitBranch);
 export const Merge = tablerMui(IconGitMerge);
 export const GitCommit = tablerMui(IconGitCommit);
 export const OverviewPane = tablerMui(IconLayoutSidebarRight);
+export const RailHide = tablerMui(IconLayoutSidebarRightCollapse);
+export const RailShow = tablerMui(IconLayoutSidebarRightExpand);
 export const Question = tablerMui(IconMessageCircleQuestion);
 export const DiffIcon = tablerMui(IconFileDiff);
 export const Spinner = tablerMui(IconLoader2);

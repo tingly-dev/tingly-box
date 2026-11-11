@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Thread } from '../../client';
 import { CoordinatorStatus } from './CoordinatorStatus';
@@ -40,6 +40,29 @@ describe('CoordinatorStatus', () => {
         render(<CoordinatorStatus {...props} coordinator={coordinator()} threads={[{ ...worker('working'), id: 'w1', running_tasks: 2 } as Thread, { ...worker('working'), id: 'w2', running_tasks: 1 } as Thread, worker('ready')]} />);
         const threads = screen.getByRole('region', { name: 'rail.threads' });
         expect(within(threads).getByText('rail.backgroundTasks').nextSibling).toHaveTextContent('rail.tasksInThreads');
+    });
+
+    it('opens what the tasks fact counts from the fact itself', () => {
+        const onTasks = vi.fn();
+        const w1 = { ...worker('working'), id: 'w1', running_tasks: 2 } as Thread;
+        const w2 = { ...worker('working'), id: 'w2', running_tasks: 1 } as Thread;
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} onTasks={onTasks} threads={[w1, w2, worker('ready')]} />);
+        fireEvent.click(screen.getByText('rail.tasksInThreads'));
+        expect(onTasks).toHaveBeenCalledTimes(1);
+        expect(onTasks.mock.calls[0][0].map((th: Thread) => th.id)).toEqual(['w1', 'w2']);
+        expect(onTasks.mock.calls[0][1]).toBeInstanceOf(HTMLElement);
+    });
+
+    it('opens a state\'s threads from its count, the waiting count holding failed too', () => {
+        const onStatus = vi.fn();
+        render(<CoordinatorStatus {...props} coordinator={coordinator()} onStatus={onStatus}
+            threads={[worker('working'), worker('waiting'), worker('failed'), worker('ready')]} />);
+        fireEvent.click(screen.getByText('thread.status.waiting'));
+        const [label, list] = onStatus.mock.calls[0];
+        expect(label).toBe('thread.status.waiting');
+        expect(list.map((th: Thread) => th.status).sort()).toEqual(['failed', 'waiting']);
+        fireEvent.click(screen.getByText('thread.status.working'));
+        expect(onStatus.mock.calls[1][1].map((th: Thread) => th.status)).toEqual(['working']);
     });
 
     it('stays quiet about background tasks when none run', () => {

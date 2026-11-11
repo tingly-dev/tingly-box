@@ -1,6 +1,9 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Thread } from '../../client';
+import type { Subagent, Thread } from '../../client';
+
+const { writeToClipboard } = vi.hoisted(() => ({ writeToClipboard: vi.fn(() => Promise.resolve()) }));
+vi.mock('@tingly/ui', async (importOriginal) => ({ ...(await importOriginal()), writeToClipboard }));
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { readLocal } from '../../utils/storage';
 import { ThreadInfoRail } from './ThreadInfoRail';
@@ -32,6 +35,43 @@ describe('ThreadInfoRail', () => {
         expect(onReview).toHaveBeenCalled();
         // A project thread with no background tasks has no card for them.
         expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
+    });
+
+    it('keeps a long folder on one line: the tail shows, the hover and the copy carry the whole', async () => {
+        const cwd = '/Users/me/.tingly-box/projects/p-latency/threads/t-cache';
+        render(<ThreadInfoRail {...props} thread={thread({ cwd })} folder={false} tasks={[]} canReview={false} />);
+        const shown = screen.getByTitle(cwd);
+        // The path abbreviates to its tail from a `/`, never wrapping the card tall.
+        expect(shown.textContent?.startsWith('…')).toBe(true);
+        expect(shown.textContent).not.toContain('.tingly-box');
+        expect(screen.queryByText('/work/app')).not.toBeInTheDocument();
+        // A click copies the whole value, and a check says so.
+        fireEvent.click(shown);
+        await waitFor(() => expect(writeToClipboard).toHaveBeenCalledWith(cwd));
+        await waitFor(() => expect(shown.querySelector('svg')).not.toBeNull());
+    });
+
+    it('lets a short value show as it always did, with a click that copies it whole', () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        const shown = screen.getByTitle('/work/app');
+        expect(shown.textContent).toBe('/work/app');
+        fireEvent.click(shown);
+        expect(writeToClipboard).toHaveBeenCalledWith('/work/app');
+    });
+
+    it('keeps the permissions row on one line too, with a click that copies it', () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} permission="Project default · Accept edits" />);
+        const shown = screen.getByTitle('Project default · Accept edits');
+        expect(shown.textContent).toBe('Project default · Accept edits');
+        fireEvent.click(shown);
+        expect(writeToClipboard).toHaveBeenCalledWith('Project default · Accept edits');
+    });
+
+    it('copies a session id whole while still showing it short', () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        fireEvent.click(screen.getByTitle('abcd1234-0000'));
+        expect(writeToClipboard).toHaveBeenCalledWith('abcd1234-0000');
+        expect(screen.getByTitle('abcd1234-0000').textContent).toBe('abcd1234');
     });
 
     it('shows the background tasks of a project thread too, not only a folder session', () => {
@@ -79,5 +119,34 @@ describe('ThreadInfoRail', () => {
         render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} extra={<section aria-label="host card" />} />);
         const usage = screen.getByRole('region', { name: 'rail.usage' });
         expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("lists the thread's subagents in their own card, a row opening the run on its own", async () => {
+        const onOpenAgent = vi.fn();
+        const onShowAgent = vi.fn();
+        const agents: Subagent[] = [
+            { call: 'c-early', background: true, created_at: '2026-11-11T01:00:00Z', description: 'First scout', event_id: 'e1', status: 'completed', steps: 3, subagent_type: 'Explore' },
+            { call: 'c-late', background: true, created_at: '2026-11-11T02:00:00Z', description: '', event_id: 'e2', status: 'running', steps: 1 },
+        ];
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false}
+            subagents={{ list: () => Promise.resolve(agents) }} onOpenAgent={onOpenAgent} onShowAgent={onShowAgent} />);
+        const card = await waitFor(() => screen.getByRole('region', { name: 'subagents.title' }));
+        expect(within(card).getByText('First scout')).toBeInTheDocument();
+        // Newest first; an unnamed run falls back to the card's title.
+        expect(within(card).getAllByText('subagents.title').length).toBeGreaterThan(1);
+        expect(within(card).getByText('Explore')).toBeInTheDocument();
+        fireEvent.click(within(card).getByText('First scout'));
+        expect(onOpenAgent).toHaveBeenCalledWith(agents[0]);
+        // The rows are newest first, so the first scout's Show button is the second one.
+        fireEvent.click(within(card).getAllByRole('button', { name: 'subagents.show' })[1]);
+        expect(onShowAgent).toHaveBeenCalledWith(agents[0]);
+    });
+
+    it('carries no subagent card for a thread that never ran one', async () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false}
+            subagents={{ list: () => Promise.resolve([]) }} onOpenAgent={() => undefined} onShowAgent={() => undefined} />);
+        expect(screen.getByText('subagents.loading')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('subagents.loading')).not.toBeInTheDocument());
+        expect(screen.queryByRole('region', { name: 'subagents.title' })).not.toBeInTheDocument();
     });
 });

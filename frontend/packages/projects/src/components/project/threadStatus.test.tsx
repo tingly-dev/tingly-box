@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
 import { stateTone, ThreadBadges, ThreadState, ThreadSubtitle } from './threadStatus';
@@ -88,5 +88,24 @@ describe('ThreadBadges', () => {
         expect(screen.getByTitle('thread.mergedInto')).toBeTruthy();
         rerender(<ThreadBadges thread={thread({ branch: 'tb/fix' })} />);
         expect(screen.queryByText('thread.commits:0')).toBeNull();
+    });
+
+    it('opens what the tasks count counts from the pill, without opening the thread', () => {
+        const onTasks = vi.fn();
+        const onOpenThread = vi.fn();
+        render(<div onClick={onOpenThread}><ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} onTasks={onTasks} /></div>);
+        const pill = screen.getByRole('button', { name: 'thread.tasksSubtitle:3' });
+        fireEvent.click(pill);
+        expect(onTasks).toHaveBeenCalledTimes(1);
+        expect((onTasks.mock.calls[0][0] as Thread[])[0].id).toBe('t');
+        expect(onTasks.mock.calls[0][1]).toBeInstanceOf(HTMLElement);
+        // The click stops at the pill: the row's own open does not fire.
+        expect(onOpenThread).not.toHaveBeenCalled();
+    });
+
+    it('stays a plain count without a handler, even while tasks run', () => {
+        render(<ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} />);
+        expect(screen.queryByRole('button', { name: 'thread.tasksSubtitle:3' })).toBeNull();
+        expect(screen.getByTitle('thread.tasksSubtitle:3')).toBeTruthy();
     });
 });

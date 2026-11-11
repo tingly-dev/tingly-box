@@ -13,7 +13,7 @@ import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, DiffIcon, MoreVert, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
+import { ArrowBack, DiffIcon, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -94,6 +94,12 @@ interface Props {
     /** Cards the host adds to the info rail (SessionSlots.railCards). */
     railExtra?: React.ReactNode;
     railMinPanel?: number;
+    /** A subagent a drill-in asked to open on its own (the status area's list). */
+    initialFocus?: string;
+    /** A background task a drill-in asked to open: its panel, with the row expanded. */
+    initialTask?: string;
+    /** Tells the page the drill-in was taken, so it can clean the URL. */
+    onDrillConsumed?: () => void;
 }
 
 type View = 'chat' | 'trajectory';
@@ -104,7 +110,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -238,6 +244,22 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const focusSteps = focused ? host?.steps(focused) : undefined;
     const focusType = focusBlock?.task?.subagentType || (focusBlock?.call.input as { subagent_type?: string } | undefined)?.subagent_type;
 
+    // A drill-in from the status area: the URL asked for one subagent (opened
+    // on its own, like the panel's own list opens one) or one background task
+    // (its panel, with the row expanded). The page cleans the URL once taken.
+    const columnRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!initialFocus) return;
+        setView('chat');
+        setFocus({ threadId, call: initialFocus });
+        onDrillConsumed?.();
+    }, [initialFocus, threadId, onDrillConsumed]);
+    useEffect(() => {
+        if (!initialTask) return;
+        setTasksAnchor(columnRef.current);
+        onDrillConsumed?.();
+    }, [initialTask, threadId, onDrillConsumed]);
+
     // The waiting question's own deadline, for the strip's folded line.
     const pendingAutoAt = useMemo(() => {
         const b = blocks.find((x) => x.type === 'request' && !!pendingRequestId && x.message.request_id === pendingRequestId);
@@ -348,7 +370,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
+        <Box ref={columnRef} sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
             <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -358,9 +380,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         : <ThreadTitle title={thread.title} onSave={saveTitle} />}
                     {canReview && (
                         <Tooltip title={t('thread.review')}>
-                            {/* Icon-only, but still the contained call to action the text button was. */}
-                            <IconButton size="small" aria-label={t('thread.review')} onClick={() => setDiffOpen(true)}
-                                sx={{ flexShrink: 0, bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}>
+                            <IconButton size="small" aria-label={t('thread.review')} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0 }}>
                                 <DiffIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
@@ -374,6 +394,15 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </Button>
                         </Tooltip>
                     )}
+                    {/* The info rail's own switch, out where it can be found; the rail is on wherever it fits. */}
+                    {wide && railTop == null && (
+                        <Tooltip title={railOn ? t('rail.hide') : t('rail.show')}>
+                            <IconButton size="small" onClick={toggleRail} aria-expanded={railOn}
+                                aria-label={railOn ? t('rail.hide') : t('rail.show')} sx={{ flexShrink: 0 }}>
+                                {railOn ? <RailHide fontSize="small" /> : <RailShow fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     {actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
@@ -382,7 +411,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
                         {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
-                        {wide && railTop == null && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
                         {session && !thread.archived_at && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
@@ -550,7 +578,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             {hasTasks && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
+                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} initialOpenId={initialTask} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
                 </Popover>
             )}
             {subagents && (
@@ -580,6 +608,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onReview={() => setDiffOpen(true)}
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
+                subagents={subagents}
+                onOpenAgent={openAgent}
+                onShowAgent={(agent) => void openInChat({ call: agent.call }, agent.event_id)}
                 top={railTop}
                 extra={railExtra}
                 configuredModel={configuredModel}

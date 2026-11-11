@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import type { Thread } from '../../client';
-import { ChevronRight, ExpandMore } from '../icons';
+import { Check, ChevronRight, ExpandMore } from '../icons';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
 import { cacheHitPct, contextFill, formatTurnDuration } from '../../utils/usage';
@@ -73,9 +74,39 @@ export function RailCard({ id, title, aside, defaultOpen = true, children }: { i
     );
 }
 
-export function Fact({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
+/** A Fact's value that stays on one line: a long path keeps its tail
+ * (`…/projects/p-latency/threads/t-cache`), anything long enough to clip
+ * tells its whole self on hover, and a click copies it — a check marks the
+ * copy for a moment. Short values show, hover and copy just the same. */
+export function CopyValue({ value, copy, head }: { value: string; /** What a click copies (defaults to the value itself), as for a session id shown short. */ copy?: string; /** A path keeps its tail, not its head. */ head?: boolean }) {
+    const { t } = useTranslation('projects');
+    const { copied, copy: write } = useCopyFeedback();
+    const full = copy ?? value;
+    const keep = 40;
+    // A long path drops its middle directories but keeps the tail whole; a clean cut lands on a `/` where one is near.
+    const tail = value.slice(-(keep - 1));
+    const cut = tail.indexOf('/');
+    const shown = head && value.length > keep ? `…${cut > 0 ? tail.slice(cut) : tail}` : value;
     return (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm }}>
+        <Box component="span" role="button" tabIndex={0} aria-label={t('common.copy')}
+            title={full}
+            onClick={(e) => { e.stopPropagation(); void write(full); }}
+            onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void write(full); } }}
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, minWidth: 0, maxWidth: '100%', cursor: 'copy', borderRadius: radius.row, '&:hover': { bgcolor: 'action.hover' } }}>
+            <Box component="span" sx={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shown}</Box>
+            {copied && <Check sx={{ fontSize: 14, flexShrink: 0, color: 'primary.main' }} />}
+        </Box>
+    );
+}
+
+/** A label and a value on one line. With `onClick` the whole line opens what
+ * the value counts (the status area's running-tasks fact). */
+export function Fact({ label, title, onClick, children }: { label: string; title?: string; /** Opens what the value stands for; without it the line is plain text. */ onClick?: (e: { stopPropagation(): void; currentTarget: HTMLElement }) => void; children: ReactNode }) {
+    return (
+        <Box onClick={onClick}
+            role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(e); } } : undefined}
+            sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm, ...(onClick && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: radius.row }) }}>
             <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0 }}>{label}</Box>
             <Box component="span" title={title} sx={{ ...mono, color: 'text.primary', minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{children}</Box>
         </Box>

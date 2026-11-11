@@ -29,6 +29,26 @@ describe('OverviewBand buttons', () => {
         expect(onLibrary).toHaveBeenCalledTimes(1);
         expect(onStatus).toHaveBeenCalledTimes(1);
     });
+
+    it('opens a status\'s thread list from the closed counts and the column headings', () => {
+        const onStatusList = vi.fn();
+        const { rerender } = render(<OverviewBand threads={threads} open={false} onToggle={() => {}} onOpen={() => {}} onLibrary={() => {}} onStatus={() => {}} onStatusList={onStatusList} />);
+        const waiting = screen.getByRole('button', { name: 'overview.group.waiting 1' });
+        fireEvent.click(waiting);
+        expect(onStatusList).toHaveBeenCalledWith('waiting', expect.any(HTMLElement));
+        // Open: the same list from the column's heading, without opening a card.
+        const onOpen = vi.fn();
+        rerender(<OverviewBand threads={threads} open onToggle={() => {}} onOpen={onOpen} onLibrary={() => {}} onStatus={() => {}} onStatusList={onStatusList} />);
+        fireEvent.click(screen.getByRole('button', { name: 'overview.group.working 1' }));
+        expect(onStatusList).toHaveBeenCalledWith('working', expect.any(HTMLElement));
+        expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('keeps the headings plain counts without a handler', () => {
+        render(<OverviewBand threads={threads} open={false} onToggle={() => {}} onOpen={() => {}} onLibrary={() => {}} onStatus={() => {}} />);
+        expect(screen.queryByRole('button', { name: 'overview.group.waiting 1' })).not.toBeInTheDocument();
+        expect(screen.getByText('overview.group.waiting')).toBeInTheDocument();
+    });
 });
 
 describe('OverviewBand resizing', () => {
