@@ -13,7 +13,7 @@ import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, DiffIcon, MoreVert, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
+import { ArrowBack, DiffIcon, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
@@ -380,9 +380,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         : <ThreadTitle title={thread.title} onSave={saveTitle} />}
                     {canReview && (
                         <Tooltip title={t('thread.review')}>
-                            {/* Icon-only, but still the contained call to action the text button was. */}
-                            <IconButton size="small" aria-label={t('thread.review')} onClick={() => setDiffOpen(true)}
-                                sx={{ flexShrink: 0, bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}>
+                            <IconButton size="small" aria-label={t('thread.review')} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0 }}>
                                 <DiffIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
@@ -396,6 +394,15 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </Button>
                         </Tooltip>
                     )}
+                    {/* The info rail's own switch, out where it can be found; the rail is on wherever it fits. */}
+                    {wide && railTop == null && (
+                        <Tooltip title={railOn ? t('rail.hide') : t('rail.show')}>
+                            <IconButton size="small" onClick={toggleRail} aria-expanded={railOn}
+                                aria-label={railOn ? t('rail.hide') : t('rail.show')} sx={{ flexShrink: 0 }}>
+                                {railOn ? <RailHide fontSize="small" /> : <RailShow fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     {actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
@@ -404,7 +411,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
                         {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
-                        {wide && railTop == null && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
                         {session && !thread.archived_at && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
