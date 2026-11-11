@@ -18,7 +18,7 @@ func TestCoordinatorMCPValidatesAndScopesTools(t *testing.T) {
 	other := mkProject(t, store, &db.Project{Name: "Other"})
 	coord := &Coordinator{store: store, layout: Layout{Root: t.TempDir()}, hub: NewHub()}
 	turn := &coordinatorToolTurn{}
-	turn.begin(p, true)
+	turn.begin(p, true, nil)
 	server, err := coord.coordinatorMCPForTurn(turn)
 	require.NoError(t, err)
 	st, ct := mcp.NewInMemoryTransports()
@@ -37,6 +37,10 @@ func TestCoordinatorMCPValidatesAndScopesTools(t *testing.T) {
 		require.NoError(t, err)
 		return result
 	}
+	turn.begin(p, true, &db.ThreadEvent{Payload: AttachmentsPayload([]Attachment{{Name: "a", Path: "uploads/000000000000-a"}})})
+	require.True(t, call("start_thread", map[string]any{"title": "Read", "task": "read"}).IsError, "selection must be explicit")
+	require.True(t, call("propose_threads", map[string]any{"threads": []any{map[string]any{"title": "Read", "task": "read"}}}).IsError, "each proposal needs a selection")
+	turn.begin(p, true, nil)
 	require.True(t, call("start_thread", map[string]any{"task": "missing title"}).IsError)
 	require.True(t, call("no_update", map[string]any{}).IsError)
 	require.True(t, call("get_thread", map[string]any{"thread_id": other.MainThreadID}).IsError)

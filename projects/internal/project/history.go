@@ -94,13 +94,23 @@ type readArgs struct {
 // 8-character id of the event to read back from (default: the oldest event
 // of the window), Contains keeps only events with that text, ID reads one
 // event whole.
+func historyBody(e db.ThreadEvent) string {
+	text := e.Content
+	if e.Kind == db.EvUser && e.Source != db.SourceThread && e.Source != db.SourceSystem {
+		for i, a := range ParseAttachments(e.Payload) {
+			text += fmt.Sprintf("\n[attachment_ref message_id=%s index=%d name=%q]", short(e.ID), i, a.Name)
+		}
+	}
+	return text
+}
+
 func (c *Coordinator) readConversation(p *db.Project, a readArgs) (string, error) {
 	if id := strings.TrimSpace(a.ID); id != "" {
 		e, err := c.store.FindThreadEvent(p.MainThreadID, id)
 		if err != nil {
 			return "", fmt.Errorf("no message %q in this conversation", id)
 		}
-		text, _, _ := fit([]readEntry{{short(e.ID), historyWho(*e) + " " + stamp(e.CreatedAt), e.Content}}, true, nil)
+		text, _, _ := fit([]readEntry{{short(e.ID), historyWho(*e) + " " + stamp(e.CreatedAt), historyBody(*e)}}, true, nil)
 		return envelope(trustRelay, text, "source", "history", "kind", "read_conversation"), nil
 	}
 	limit := a.Limit
@@ -138,13 +148,14 @@ func (c *Coordinator) readConversation(p *db.Project, a readArgs) (string, error
 	}
 	var kept []readEntry
 	for _, e := range events {
-		if e.Kind == db.EvUsage || e.Kind == db.EvTask || strings.TrimSpace(e.Content) == "" {
+		body := historyBody(e)
+		if e.Kind == db.EvUsage || e.Kind == db.EvTask || strings.TrimSpace(body) == "" {
 			continue
 		}
-		if contains != "" && !strings.Contains(strings.ToLower(e.Content), contains) {
+		if contains != "" && !strings.Contains(strings.ToLower(body), contains) {
 			continue
 		}
-		kept = append(kept, readEntry{short(e.ID), historyWho(e) + " " + stamp(e.CreatedAt), e.Content})
+		kept = append(kept, readEntry{short(e.ID), historyWho(e) + " " + stamp(e.CreatedAt), body})
 	}
 	// With a search the page is the scan window; the answer is still the
 	// nearest limit matches.

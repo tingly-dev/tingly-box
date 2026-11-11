@@ -100,12 +100,20 @@ each adapter uses it for the upload (DingTalk multipart name and `sampleFile`
 ## What the model gets
 
 The message text is followed by a note listing each file's absolute path, type
-and size. A thread reads them like any file (its directories already include
-the library, and Claude Code reads images by path). The coordinator gets the
-same note, so it can hand a path to a thread in a brief. This keeps images
-working for any model that reaches the files through Claude Code, and keeps
-the coordinator's token cost to a few lines per file instead of the content.
-Inline image blocks for the coordinator's own vision are open.
+and size, after the file has been saved and resolved in its owner's library.
+IM's download directory is temporary: Projects copies the file into the target
+library before returning, and only that persistent path is sent to an agent.
+Web and folder/workdir messages follow the same rule; a folder's library is
+outside its working directory as described above. If the file is no longer
+available, the note says it was removed, rather than giving a stale path.
+
+A coordinator delegating a task selects the relevant user-message attachment
+references (`message_id` and zero-based index). The server validates their
+project ownership and supplies the paths to the new or existing thread, so the
+coordinator need not copy paths into its prose. Each proposed thread retains its
+own selection until started, when the files are checked again. Attachment
+references are not user approvals; citations remain separate. Old folder-thread
+uploads resolve in that thread's legacy library when absent from the shared one.
 
 ## API
 

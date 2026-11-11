@@ -2,6 +2,9 @@ package project
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -102,6 +105,83 @@ func countKind(msgs []db.ThreadEvent, kind string) int {
 	return n
 }
 
+func TestCoordinatorDelegatesUploadedFileWithoutCopyingPath(t *testing.T) {
+	worker := make(chan string, 1)
+	calls := make(chan string, 1)
+	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
+		worker <- turn.Prompt
+		return nil
+	}, func(c *coordtest.Turn) error {
+		if c.CheckIn() {
+			c.Reply(noUpdate)
+			return nil
+		}
+		match := regexp.MustCompile(`msg="([^"]+)"`).FindStringSubmatch(c.InputEnvelope())
+		if len(match) != 2 {
+			calls <- "missing event ID"
+			return nil
+		}
+		out, failed := c.Call("start_thread", map[string]any{"title": "Read file", "task": "Read the attachment", "attachment_refs": []map[string]any{{"message_id": match[1], "index": 0}}})
+		if failed {
+			calls <- out
+		} else {
+			calls <- ""
+		}
+		return nil
+	})
+	a, err := f.threads.layout.SaveAttachment(f.project.ID, "data.txt", strings.NewReader("actual bytes"), 0)
+	require.NoError(t, err)
+	path, err := f.threads.layout.LibraryPath(f.project.ID, a.Path)
+	require.NoError(t, err)
+	_, err = svc.Coordinator.Post(f.project.ID, "Please read it", []Attachment{a}, Source{})
+	require.NoError(t, err)
+	select {
+	case err := <-calls:
+		require.Empty(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("coordinator did not delegate")
+	}
+	select {
+	case prompt := <-worker:
+		require.Contains(t, prompt, path)
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Equal(t, "actual bytes", string(body))
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not start")
+	}
+}
+
+func TestCoordinatorMessagesThreadWithSelectedAttachment(t *testing.T) {
+	prompts := make(chan string, 2)
+	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error { prompts <- turn.Prompt; return nil }, nil)
+	thread, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Worker", Task: "start", Repo: "none"})
+	require.NoError(t, err)
+	select {
+	case <-prompts:
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not start")
+	}
+	waitStatus(t, f.store, thread.ID, db.ThreadIdle)
+	a, err := f.threads.layout.SaveAttachment(f.project.ID, "followup.txt", strings.NewReader("data"), 0)
+	require.NoError(t, err)
+	event := &db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvUser, Payload: AttachmentsPayload([]Attachment{a})}
+	require.NoError(t, f.store.AddThreadEvent(event))
+	args, err := json.Marshal(map[string]any{"thread_id": thread.ID, "message": "please read", "attachment_refs": []AttachmentRef{{MessageID: event.ID, Index: 0}}})
+	require.NoError(t, err)
+	_, failed, _ := svc.Coordinator.runTool(context.Background(), f.project, "message_thread", args)
+	require.False(t, failed)
+	path, err := f.threads.layout.LibraryPath(f.project.ID, a.Path)
+	require.NoError(t, err)
+	select {
+	case prompt := <-prompts:
+		require.Contains(t, prompt, path)
+		require.Contains(t, prompt, coordinatorNote)
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not receive follow-up")
+	}
+}
+
 func TestCoordinatorRoutesWorkToThreadsAndRelaysReports(t *testing.T) {
 	var seen prompts
 	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
@@ -179,6 +259,51 @@ func threadsOf(t *testing.T, f *testFixture) []db.Thread {
 	threads, err := f.store.ListThreads(f.project.ID)
 	require.NoError(t, err)
 	return threads
+}
+
+func TestProposedThreadKeepsAttachmentSelection(t *testing.T) {
+	worker := make(chan string, 1)
+	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
+		worker <- turn.Prompt
+		return nil
+	}, func(c *coordtest.Turn) error {
+		if c.CheckIn() {
+			c.Reply(noUpdate)
+			return nil
+		}
+		match := regexp.MustCompile(`msg="([^"]+)"`).FindStringSubmatch(c.InputEnvelope())
+		if len(match) == 2 {
+			c.Call("propose_threads", map[string]any{"threads": []any{map[string]any{"title": "Read file", "task": "read", "attachment_refs": []any{map[string]any{"message_id": match[1], "index": 0}}}}})
+		}
+		c.Reply("Proposed")
+		return nil
+	})
+	a, err := f.threads.layout.SaveAttachment(f.project.ID, "a.txt", strings.NewReader("bytes"), 0)
+	require.NoError(t, err)
+	_, err = svc.Coordinator.Post(f.project.ID, "plan", []Attachment{a}, Source{})
+	require.NoError(t, err)
+	events := waitMessages(t, f.store, f.project.ID, func(events []db.ThreadEvent) bool { return countKind(events, db.EvSuggestions) == 1 })
+	var proposal db.ThreadEvent
+	for _, e := range events {
+		if e.Kind == db.EvSuggestions {
+			proposal = e
+		}
+	}
+	path, err := f.threads.layout.LibraryPath(f.project.ID, a.Path)
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(path))
+	_, err = svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, proposal.ID, nil)
+	require.Error(t, err, "deleted uploads do not start a task")
+	require.Empty(t, threadsOf(t, f))
+	require.NoError(t, os.WriteFile(path, []byte("bytes"), 0600))
+	_, err = svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, proposal.ID, nil)
+	require.NoError(t, err)
+	select {
+	case prompt := <-worker:
+		require.Contains(t, prompt, path)
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not start")
+	}
 }
 
 func TestProposeThenStartSuggestions(t *testing.T) {

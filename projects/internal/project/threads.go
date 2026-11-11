@@ -207,6 +207,21 @@ func queuedPrompt(q queued, libraryDir string) string {
 	return withAttachments(literalPrompt(text), libraryDir, q.atts)
 }
 
+func (m *Threads) threadPrompt(q queued, p *db.Project, t *db.Thread) string {
+	text := q.text
+	if q.relayed {
+		text = coordinatorNote + text
+	}
+	note := m.layout.threadAttachmentNote(p, t, q.atts)
+	if note == "" {
+		return text
+	}
+	if strings.TrimSpace(text) == "" {
+		return note
+	}
+	return text + "\n\n" + note
+}
+
 // fromThread is the source of a message another thread sent.
 func fromThread(id string) Source { return Source{Kind: db.SourceThread, Ref: id} }
 
@@ -471,8 +486,9 @@ type StartSpec struct {
 	Task  string
 	// Repo is the path of one of the project's repos; empty picks the first,
 	// "none" works without a repository.
-	Repo   string
-	Origin string
+	Repo        string
+	Origin      string
+	Attachments []Attachment
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -565,7 +581,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if spec.Origin == "user" {
 		src = Source{}
 	}
-	m.enqueue(t.ID, queued{text: t.Task, src: src})
+	m.enqueue(t.ID, queued{text: t.Task, src: src, atts: spec.Attachments})
 	return t, nil
 }
 
@@ -841,7 +857,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		return
 	}
 	a.slot = slot
-	prompt := queuedPrompt(*a.current, m.layout.LibraryDir(UploadOwner(p, t)))
+	prompt := m.threadPrompt(*a.current, p, t)
 	m.mu.Unlock()
 	// Waiting for the slot can take a while: launch with what the owner
 	// picked since (profile, model, permission mode).

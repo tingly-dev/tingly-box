@@ -16,18 +16,20 @@ import (
 // The caller supplies the settings and trigger for the active turn; they must
 // not be reused for another turn. The project ID is never accepted from Claude.
 type coordinatorToolTurn struct {
-	mu            sync.Mutex
-	snapshot      *db.Project
-	userTriggered bool
-	quiet         atomic.Bool
+	mu             sync.Mutex
+	snapshot       *db.Project
+	userTriggered  bool
+	hasAttachments bool
+	quiet          atomic.Bool
 }
 
-func (t *coordinatorToolTurn) begin(p *db.Project, userTriggered bool) {
+func (t *coordinatorToolTurn) begin(p *db.Project, userTriggered bool, event *db.ThreadEvent) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	copy := *p
 	copy.Repos = append([]db.Repo(nil), p.Repos...)
 	t.snapshot, t.userTriggered = &copy, userTriggered
+	t.hasAttachments = userTriggered && event != nil && len(ParseAttachments(event.Payload)) > 0
 	t.quiet.Store(false)
 }
 
@@ -95,6 +97,28 @@ func (c *Coordinator) coordinatorMCPForTurn(turn *coordinatorToolTurn) (*mcp.Ser
 			}
 			if name == toolNoUpdate && userTriggered {
 				return fail("A message from the user needs a reply. Answer it, or start or message a thread.")
+			}
+			if turn.hasAttachments {
+				objects := []map[string]any{}
+				if obj, ok := input.(map[string]any); ok {
+					switch name {
+					case "start_thread", "message_thread":
+						objects = append(objects, obj)
+					case "propose_threads":
+						if list, ok := obj["threads"].([]any); ok {
+							for _, item := range list {
+								if task, ok := item.(map[string]any); ok {
+									objects = append(objects, task)
+								}
+							}
+						}
+					}
+				}
+				for _, obj := range objects {
+					if _, ok := obj["attachment_refs"].([]any); !ok {
+						return fail("Select relevant attachment_refs for each task, or pass [] when none apply.")
+					}
+				}
 			}
 			out, isErr, started := c.runTool(ctx, current, name, args)
 			if name == toolNoUpdate && !isErr {
