@@ -1,5 +1,5 @@
 import {Box} from '@mui/material';
-import {Claude, Codex, Gemini, Google, Kimi, Qwen, WorkBuddy, XAI, ZCode} from '../BrandIcons';
+import {Claude, Codex, Gemini, Google, Kimi, Qwen, Qoder, WorkBuddy, XAI, ZCode} from '../BrandIcons';
 
 export interface OAuthProvider {
     id: string;
@@ -128,12 +128,12 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
     {
         id: 'qoder', name: 'Qoder', displayName: 'Qoder International',
         description: 'Connect a Qoder international account.',
-        icon: <Box sx={{fontWeight: 700, fontSize: 26}}>Q</Box>, color: '#6657e8', enabled: true,
+        icon: <Qoder size={32}/>, color: '#2ADB5C', enabled: true,
     },
     {
         id: 'qoder_cn', name: 'Qoder CN', displayName: 'Qoder CN',
         description: 'Connect a Qoder China account.',
-        icon: <Box sx={{fontWeight: 700, fontSize: 26}}>Q</Box>, color: '#6657e8', enabled: true,
+        icon: <Qoder size={32}/>, color: '#2ADB5C', enabled: true,
     },
     // WorkBuddy (Tencent). Same login-link flow as ZCode: the site owns the
     // sign-in, the backend polls for the tokens. One card per account region;
