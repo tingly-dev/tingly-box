@@ -14,8 +14,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-error",
-  "stream": false
+  "model": "virtual-model-error"
 }
 --- client response (status 429)
 {"error":{"message":"Failed to forward request: POST \"REDACTED\": 429 Too Many Requests {\"error\":{\"message\":\"simulated rate limit\",\"type\":\"rate_limit_error\"},\"type\":\"error\"}","type":"api_error"}}
@@ -58,8 +57,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-error-500",
-  "stream": false
+  "model": "virtual-model-error-500"
 }
 --- client response (status 500)
 {"error":{"message":"Failed to forward request: POST \"REDACTED\": 500 Internal Server Error {\"error\":{\"message\":\"simulated upstream error\",\"type\":\"api_error\"},\"type\":\"error\"}","type":"api_error"}}
@@ -102,8 +100,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-error-auth-401",
-  "stream": false
+  "model": "virtual-model-error-auth-401"
 }
 --- client response (status 401)
 {"error":{"message":"Failed to forward request: POST \"REDACTED\": 401 Unauthorized {\"error\":{\"message\":\"authentication failed\",\"type\":\"authentication_error\"},\"type\":\"error\"}","type":"api_error"}}
@@ -146,8 +143,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-error-midstream-close",
-  "stream": false
+  "model": "virtual-model-error-midstream-close"
 }
 --- client response (status 200)
 {"content":[{"text":"hello world this stream will be truncated","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-error-midstream-close","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
@@ -200,8 +196,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-incomplete",
-  "stream": false
+  "model": "virtual-model-incomplete"
 }
 --- client response (status 200)
 {"content":[{"text":"This response was truncated due to output limit.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-incomplete","role":"assistant","stop_reason":"max_tokens","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":50}}
@@ -260,8 +255,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-multi_turn",
-  "stream": false
+  "model": "virtual-model-multi_turn"
 }
 --- client response (status 200)
 {"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-multi_turn","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
@@ -320,8 +314,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-streaming_text",
-  "stream": false
+  "model": "virtual-model-streaming_text"
 }
 --- client response (status 200)
 {"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-streaming_text","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
@@ -380,8 +373,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-streaming_tool_use",
-  "stream": false
+  "model": "virtual-model-streaming_tool_use"
 }
 --- client response (status 200)
 {"content":[{"id":"<ID1>","input":{"location":"Paris","unit":"celsius"},"name":"get_weather","type":"tool_use"}],"id":"<ID2>","model":"pv-anthropic_v1-to-anthropic_beta-streaming_tool_use","role":"assistant","stop_reason":"tool_use","type":"message","usage":{"input_tokens":15,"output_tokens":20}}
@@ -440,8 +432,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-text",
-  "stream": false
+  "model": "virtual-model-text"
 }
 --- client response (status 200)
 {"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-text","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
@@ -500,8 +491,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-thinking",
-  "stream": false
+  "model": "virtual-model-thinking"
 }
 --- client response (status 200)
 {"content":[{"signature":"thinking_sig_validate","thinking":"Let me reason about this step by step...","type":"thinking"},{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-thinking","role":"assistant","stop_reason":"end_turn","type":"message","usage":{"input_tokens":10,"output_tokens":30}}
@@ -569,8 +559,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-tool_result",
-  "stream": false
+  "model": "virtual-model-tool_result"
 }
 --- client response (status 200)
 {"content":[{"text":"The capital of France is Paris.","type":"text"}],"id":"<ID1>","model":"pv-anthropic_v1-to-anthropic_beta-tool_result","role":"assistant","stop_reason":"end_turn","stop_sequence":null,"type":"message","usage":{"input_tokens":10,"output_tokens":8}}
@@ -629,8 +618,7 @@ POST /v1/messages
       "role": "user"
     }
   ],
-  "model": "virtual-model-tool_use",
-  "stream": false
+  "model": "virtual-model-tool_use"
 }
 --- client response (status 200)
 {"content":[{"id":"<ID1>","input":{"location":"Paris","unit":"celsius"},"name":"get_weather","type":"tool_use"}],"id":"<ID2>","model":"pv-anthropic_v1-to-anthropic_beta-tool_use","role":"assistant","stop_reason":"tool_use","type":"message","usage":{"input_tokens":15,"output_tokens":20}}

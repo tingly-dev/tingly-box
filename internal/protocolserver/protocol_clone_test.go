@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -113,5 +115,42 @@ func TestCloneResponsesParams_RoundTrip(t *testing.T) {
 	clone.Model = "changed"
 	if string(orig.Model) == "changed" {
 		t.Fatal("clone aliases the original params")
+	}
+}
+
+func TestCloneAnthropicRequestsPreserveInternalExtras(t *testing.T) {
+	const body = `{"model":"m","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"hi"}]}`
+	for _, beta := range []bool{false, true} {
+		t.Run(map[bool]string{false: "v1", true: "beta"}[beta], func(t *testing.T) {
+			var orig interface {
+				SetExtraFields(map[string]any)
+				ExtraFields() map[string]any
+			}
+			if beta {
+				orig = &protocol.AnthropicBetaMessagesRequest{}
+			} else {
+				orig = &protocol.AnthropicMessagesRequest{}
+			}
+			require.NoError(t, json.Unmarshal([]byte(body), orig))
+			orig.SetExtraFields(map[string]any{"internal_extension": map[string]any{"value": "original"}})
+			template, err := json.Marshal(orig)
+			require.NoError(t, err)
+			var extras map[string]any
+			if beta {
+				clone, err := CloneAnthropicBetaRequest(template)
+				require.NoError(t, err)
+				require.True(t, clone.Stream)
+				extras = clone.ExtraFields()
+			} else {
+				clone, err := CloneAnthropicV1Request(template)
+				require.NoError(t, err)
+				require.True(t, clone.Stream)
+				extras = clone.ExtraFields()
+			}
+			require.Equal(t, orig.ExtraFields(), extras)
+			require.NotContains(t, extras, "stream")
+			extras["internal_extension"].(map[string]any)["value"] = "changed"
+			require.Equal(t, "original", orig.ExtraFields()["internal_extension"].(map[string]any)["value"])
+		})
 	}
 }

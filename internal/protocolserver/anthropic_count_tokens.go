@@ -2,7 +2,6 @@ package protocolserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -43,7 +42,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 
 	// always use beta for token count
 	var params anthropic.BetaMessageCountTokensParams
-	if err := json.Unmarshal(bodyBytes, &params); err != nil {
+	if err := protocol.UnmarshalAnthropicCountTokensRequest(bodyBytes, &params); err != nil {
 		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("Message error: %s", err.Error()),
