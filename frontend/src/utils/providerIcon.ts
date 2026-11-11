@@ -17,6 +17,7 @@ const OAUTH_ISSUER_ICON: Record<string, string> = {
     antigravity: 'google',
     zcode_cn: 'zcode',
     workbuddy_cn: 'workbuddy',
+    qoder_cn: 'qoder',
 };
 
 /**

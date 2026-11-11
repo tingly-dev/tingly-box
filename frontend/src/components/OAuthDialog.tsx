@@ -22,6 +22,7 @@ import {getOAuthRedirectPath} from "@/utils/protocol";
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
 import OAuthAuthorizationDialog, {type OAuthAuthorizationData} from './oauth/OAuthAuthorizationDialog';
 import WorkBuddyConnectionNote from './oauth/WorkBuddyConnectionNote';
+import QoderConnectionNote from './oauth/QoderConnectionNote';
 import { fontMono, fontSizes } from '@/theme/fonts';
 
 interface OAuthDialogProps {
@@ -354,6 +355,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                 )}
 
                                 <WorkBuddyConnectionNote providerId={provider?.id}/>
+                                <QoderConnectionNote providerId={provider?.id}/>
 
                                 {/* Some providers (Claude Code, Codex) redirect the browser to a fixed
                                     loopback port for the callback. On a remote deployment that port lives
