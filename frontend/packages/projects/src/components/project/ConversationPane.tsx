@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, ButtonBase, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
@@ -12,6 +12,9 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { showManagerMessage } from './messageDetail';
+import { toolRuns } from './conversationActivity';
+import { ActivityRun } from '../../transcript';
+import { conciseBlock } from '../../transcript/messageDetail';
 import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandLess, ExpandMore, PlayArrow, Settings } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
@@ -285,15 +288,20 @@ interface Props {
     onOpenTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
     onChooseDecision: (messageId: string, index: number) => Promise<void>;
+    /** Interrupts the running coordinator turn, like a thread's stop. */
+    onStop?: () => Promise<void>;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
     const [awayFromBottom, setAwayFromBottom] = useState(false);
     const [seed, setSeed] = useState('');
     const [detail, setDetail] = useMessageDetail('conversation');
+    // What the coordinator did between its replies (its Projects tool calls),
+    // folded like a thread's transcript and drawn with the shared rows.
+    const { runs: workRuns, covered: workCovered } = useMemo(() => toolRuns(messages), [messages]);
     const [settingsOpen, setSettingsOpen] = useState(() => readLocal('conversation.threadDefaultsOpen') === '1');
     const toggleSettings = () => {
         writeLocal('conversation.threadDefaultsOpen', settingsOpen ? '0' : '1');
@@ -339,6 +347,16 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     )}
                     {messages.map((m) => {
                         if (m.kind !== 'user' && !showManagerMessage(m, detail)) return null;
+                        // A run of tool calls renders once, at the event that opened it; concise keeps only what still means something.
+                        if (workCovered.has(m.id)) {
+                            const run = workRuns.find((r) => r.firstId === m.id);
+                            if (!run) return null;
+                            const block = { type: 'activity' as const, steps: run.steps };
+                            // Concise hides the calls, exactly as a thread's transcript does.
+                            const shown = detail === 'concise' ? conciseBlock(block) : block;
+                            if (!shown || shown.type !== 'activity') return null;
+                            return <ActivityRun key={m.id} steps={shown.steps} live={busy && run === workRuns[workRuns.length - 1]} expandAll={false} />;
+                        }
                         switch (m.kind) {
                             case 'user': {
                                 const attachments = parse<{ attachments?: Attachment[] }>(m.payload)?.attachments ?? [];
@@ -439,6 +457,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     disabled={disabled}
                     seed={seed}
                     streaming={busy}
+                    onStop={onStop}
                     leftSlot={modelControl}
                     model={model}
                     onModelChange={onModelChange}

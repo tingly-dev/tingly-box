@@ -212,6 +212,20 @@ export default function ProjectPage() {
         } finally { setRecovering(false); }
     };
 
+    // Stopping the coordinator's turn ends it without recovery: the reply it
+    // got to stays, and the refreshed detail says whether it is busy still.
+    const stopCoordinator = async () => {
+        try {
+            const d = await unwrap(api.POST('/api/v1/projects/{id}/coordinator/stop', { params: { path: { id } } }));
+            setBusy(d.coordinator_busy);
+            setQueued(d.coordinator_queued ?? 0);
+            setRecovery(d.coordinator_recovery ?? '');
+            await conversation.catchUp().catch(() => undefined);
+        } catch (e) {
+            notify((e as Error).message, 'error');
+        }
+    };
+
     useProjectEvents(id, onEvent, () => {
         void load();
         conversation.catchUp().catch(() => undefined);
@@ -553,6 +567,7 @@ export default function ProjectPage() {
                                 notify((e as Error).message, 'error');
                             }
                         }}
+                        onStop={stopCoordinator}
                     />
                     )}
                     </Box>

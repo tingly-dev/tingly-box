@@ -227,6 +227,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Resolve an interrupted coordinator input; retry may repeat side effects"),
 		swagger.WithRequestModel(RecoverCoordinatorRequest{}),
 		swagger.WithResponseModel(ProjectDetailResponse{}))
+	api.POST("/projects/:id/coordinator/stop", h.stopCoordinator, tag,
+		swagger.WithDescription("Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery"),
+		swagger.WithResponseModel(ProjectDetailResponse{}))
 	api.PATCH("/projects/:id", h.update, tag,
 		swagger.WithDescription("Update project settings; pause, resume, archive, unarchive, star. A folder has no repos or thread model: setting either on a folder is a 400."),
 		swagger.WithRequestModel(UpdateProjectRequest{}),
@@ -409,6 +412,20 @@ func (h *Handler) recoverCoordinator(c *gin.Context) {
 	}
 	if err := h.svc.Coordinator.RecoverInput(p.ID, req.InputID, req.Action == "retry"); err != nil {
 		apierr.Message(c, http.StatusConflict, err.Error())
+		return
+	}
+	h.get(c)
+}
+
+// stopCoordinator interrupts the running coordinator turn the way the stop
+// button means it: nothing is left uncertain, the conversation carries on.
+func (h *Handler) stopCoordinator(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.Coordinator.StopTurn(p.ID); err != nil {
+		apierr.BadRequest(c, err.Error())
 		return
 	}
 	h.get(c)

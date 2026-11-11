@@ -292,8 +292,9 @@ const RunRows = ({steps, live, expandAll, pendingRequestId}: {steps: ActivitySte
 // has a few calls it folds into one line saying what it did, so a long turn
 // reads as its replies, not as a wall of tool rows. The run still going (or
 // holding a call that waits for an approval) stays open, and settles shut when
-// the turn moves on. Opened, it is the per-call rows.
-const ActivityRun = ({steps, live, hold = false, expandAll, pendingRequestId}: {steps: ActivityStep[]; live: boolean; hold?: boolean; expandAll: boolean; pendingRequestId?: string}) => {
+// the turn moves on. Opened, it is the per-call rows. Exported for hosts that
+// render their own conversation around it (the project coordinator's).
+export const ActivityRun = ({steps, live, hold = false, expandAll, pendingRequestId}: {steps: ActivityStep[]; live: boolean; hold?: boolean; expandAll: boolean; pendingRequestId?: string}) => {
     const {t} = useTranslation();
     const sum = useMemo(() => summarizeRun(steps), [steps]);
     const calls = sum.read + sum.searched + sum.commands + sum.edited + sum.other;

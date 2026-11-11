@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,10 +26,18 @@ type coordinatorSessions struct {
 	engine *engine.Engine
 	mu     sync.Mutex
 	runs   map[string]*coordinatorSessionRun
+	// stopReq holds the sessions whose stop was asked before their turn had
+	// registered a run; the next turn takes it as already stopped.
+	stopReq map[string]bool
 	// resend holds the projects whose conversation was compacted: their next
 	// turn gets the project context again, in case the summary dropped it.
 	resend map[string]bool
 }
+
+// errStopTurn says the user stopped the turn on purpose: unlike a failure or
+// a pause it is not uncertain — the input counts as handled and the queue
+// moves on.
+var errStopTurn = errors.New("coordinator turn stopped at the user's request")
 
 type coordinatorSessionRun struct {
 	text          []string
@@ -38,6 +48,9 @@ type coordinatorSessionRun struct {
 	live          *db.ThreadEvent
 	initErr       error
 	tally         turnTally
+	// stopped records a stop the user asked for while this run was up: the
+	// turn treats its own end as deliberate instead of uncertain.
+	stopped atomic.Bool
 	// compact marks a run that compacts the conversation; card is its
 	// compaction card while one is open.
 	compact   bool
@@ -91,9 +104,50 @@ func (s coordinatorSessionStore) Append(id string, entry engine.Entry) {
 		}
 		return
 	}
-	if entry.Role != "assistant" || entry.Parent != "" || entry.Content == "" {
+	if entry.Role == "assistant" && entry.Parent == "" && entry.Content != "" {
+		// The run's reply: streamed live while it arrives, joined at the end.
+		s.appendAssistant(id, entry)
 		return
 	}
+	// What the turn did between its replies — its Projects tool calls and
+	// their results, task events, engine errors and lifecycle notes — is
+	// recorded on the main thread like any thread's transcript, so the page
+	// shows the whole turn instead of the text alone. Thinking stays out, as
+	// it does on every thread.
+	s.sessions.mu.Lock()
+	run := s.sessions.runs[id]
+	s.sessions.mu.Unlock()
+	if run == nil {
+		return
+	}
+	var ev *db.ThreadEvent
+	switch entry.Kind {
+	case engine.KindToolUse:
+		ev = &db.ThreadEvent{Kind: db.EvToolUse, Content: entry.Content, Payload: string(entry.Payload), RequestID: entry.RequestID}
+	case engine.KindToolResult:
+		ev = &db.ThreadEvent{Kind: db.EvToolResult, Content: entry.Content, Payload: string(entry.Payload), RequestID: entry.RequestID}
+	case engine.KindTask:
+		ev = &db.ThreadEvent{Kind: db.EvTask, Payload: string(entry.Payload), RequestID: entry.RequestID}
+	case engine.KindError:
+		ev = &db.ThreadEvent{Kind: db.EvError, Content: entry.Content}
+	case engine.KindSystem:
+		for _, q := range quietNotes {
+			if strings.HasPrefix(entry.Content, q) {
+				return
+			}
+		}
+		ev = &db.ThreadEvent{Kind: db.EvSystem, Content: entry.Content}
+	default:
+		return
+	}
+	ev.Parent = entry.Parent
+	s.sessions.c.addEvent(run.projectID, ev)
+}
+
+// appendAssistant folds a top-level assistant text into the run's reply: the
+// live event is published as it arrives, and the joined text is what the turn
+// leaves behind.
+func (s coordinatorSessionStore) appendAssistant(id string, entry engine.Entry) {
 	s.sessions.mu.Lock()
 	defer s.sessions.mu.Unlock()
 	if run := s.sessions.runs[id]; run != nil {
@@ -109,7 +163,7 @@ func (s coordinatorSessionStore) Append(id string, entry engine.Entry) {
 }
 
 func newCoordinatorSessions(c *Coordinator, host Host, tools *sessionToolsMCP, agents Agents) *coordinatorSessions {
-	s := &coordinatorSessions{c: c, host: host, tools: tools, runs: make(map[string]*coordinatorSessionRun), resend: map[string]bool{}}
+	s := &coordinatorSessions{c: c, host: host, tools: tools, runs: make(map[string]*coordinatorSessionRun), stopReq: map[string]bool{}, resend: map[string]bool{}}
 	s.engine = engine.New(engine.Config{Agent: agents.Service, Pool: agents.Pool, Store: coordinatorSessionStore{s}, Prompter: func(string) agentboot.Prompter { return coordinatorPrompter{} }, OnTurnEnd: func(id string, end engine.TurnEnd) {
 		s.mu.Lock()
 		run := s.runs[id]
@@ -173,6 +227,44 @@ func (s *coordinatorSessions) launchOptions(ctx context.Context, p *db.Project, 
 	return opts, nil
 }
 
+// requestStop ends the session's turn, or marks the input the queue is about
+// to claim as stopped on arrival. Only StopTurn calls it with inputs waiting,
+// so the note is always taken by a turn, never left for a later one.
+func (s *coordinatorSessions) requestStop(sid string) {
+	s.mu.Lock()
+	run := s.runs[sid]
+	s.mu.Unlock()
+	if run != nil {
+		run.stopped.Store(true)
+	} else if !s.engine.Busy(sid) {
+		s.mu.Lock()
+		s.stopReq[sid] = true
+		s.mu.Unlock()
+	}
+	s.engine.Stop(sid)
+}
+
+// stopRunning interrupts a turn already in flight; nothing queued is touched.
+// A stop arriving too late (the turn just ended) is a no-op.
+func (s *coordinatorSessions) stopRunning(sid string) {
+	s.mu.Lock()
+	run := s.runs[sid]
+	s.mu.Unlock()
+	if run != nil {
+		run.stopped.Store(true)
+	}
+	s.engine.Stop(sid)
+}
+
+// takeStop consumes a stop left for a session before its turn registered.
+func (s *coordinatorSessions) takeStop(sid string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stopped := s.stopReq[sid]
+	delete(s.stopReq, sid)
+	return stopped
+}
+
 func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db.ThreadEvent, inputID string) error {
 	main, err := s.c.store.GetThread(p.MainThreadID)
 	if err != nil {
@@ -194,6 +286,12 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 			return err
 		}
 	}
+	// A stop left while this input was claimed but not started is meant for
+	// it; past this point the run's own flag carries the request.
+	if s.takeStop(main.SessionID) {
+		return errStopTurn
+	}
+	defer s.takeStop(main.SessionID)
 	if cmd, ok := coordinatorCommand(event); ok {
 		// Compaction can discard prior settings even if interrupted; invalidate
 		// before invoking it so the next real input refreshes them.
@@ -283,6 +381,11 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	if !s.engine.Start(main.SessionID, main.Cwd, prompt.String(), main.Turns > 0, func(context.Context) agentboot.ExecutionOptions { return opts }) {
 		return fmt.Errorf("coordinator session is busy")
 	}
+	if run.stopped.Load() {
+		// The stop landed before the engine saw the turn: interrupt what it
+		// just started, and let the end below settle the run.
+		s.engine.Stop(main.SessionID)
+	}
 	var end engine.TurnEnd
 	select {
 	case end = <-run.end:
@@ -294,6 +397,12 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	}
 	// A turn that failed or was stopped still spent tokens.
 	s.recordUsage(main, run)
+	if run.stopped.Load() {
+		// The user stopped the turn: keep what it said so far and let the
+		// conversation move on; nothing is uncertain about that.
+		s.keepPartial(run)
+		return errStopTurn
+	}
 	if end.Err != nil {
 		return end.Err
 	}
@@ -365,6 +474,25 @@ func (s *coordinatorSessions) checkIn(mainThreadID string, event *db.ThreadEvent
 		budget = append(budget, "minutes_since_user", roundMinutes(away))
 	}
 	return envelope(trustSystem, "(Coordinator check-in: the thread update above just arrived. Post a brief update for the user only if it matters, otherwise call "+toolNoUpdate+".)", append([]string{"source", "system", "kind", "check-in"}, budget...)...), nil
+}
+
+// keepPartial saves what a stopped turn already said to the user: the live
+// reply event holds the first block and the streamed rest, and the row needs
+// the full text to survive a reload. Chats hear nothing: the turn did not
+// finish saying it.
+func (s *coordinatorSessions) keepPartial(run *coordinatorSessionRun) {
+	s.mu.Lock()
+	text := strings.TrimSpace(strings.Join(run.text, "\n\n"))
+	live := run.live
+	s.mu.Unlock()
+	if live == nil || live.Content == text {
+		return
+	}
+	live.Content = text
+	if err := s.c.store.UpdateThreadEvent(live); err != nil {
+		return
+	}
+	s.c.publishEvent(run.projectID, live)
 }
 
 // recordUsage adds the turn's tokens to the main thread: the coordinator's

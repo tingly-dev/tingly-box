@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -132,4 +133,127 @@ func TestCoordinatorSessionSaysWhenHistoryIsCut(t *testing.T) {
 	assert.Contains(t, first, "read_conversation")
 	assert.Contains(t, first, fmt.Sprintf("m%03d", historyLimit+4))
 	assert.NotContains(t, first, "m000", "the oldest messages are left to read_conversation")
+}
+
+// Stopping a running turn keeps what it already said, asks for no recovery,
+// and the queue serves the message sent behind it.
+func TestCoordinatorStopKeepsTheReplyAndContinues(t *testing.T) {
+	var turns atomic.Int32
+	release := make(chan struct{})
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		if turns.Add(1) == 1 {
+			c.Use("call-1", "mcp__tingly-projects__list_threads", map[string]any{"limit": 5})
+			c.Say("Working on it…", 1, 1)
+			select {
+			case <-release:
+				c.Say("Finished.", 1, 1)
+				return nil
+			case <-c.Ctx.Done():
+				return c.Ctx.Err()
+			}
+		}
+		c.Say("Queued done.", 1, 1)
+		return nil
+	})
+	p := f.project
+	_, err := svc.Coordinator.Post(p.ID, "Do the thing.", nil, Source{})
+	require.NoError(t, err)
+	var live *db.ThreadEvent
+	for _, m := range waitMessages(t, f.store, p.ID, func(msgs []db.ThreadEvent) bool {
+		return countKind(msgs, db.EvAssistant) == 1
+	}) {
+		if m.Kind == db.EvAssistant {
+			live = &m
+		}
+	}
+	require.NotNil(t, live)
+	require.Equal(t, "Working on it…", live.Content)
+
+	// A message behind the running turn must not be dropped by the stop.
+	_, err = svc.Coordinator.Post(p.ID, "And this too.", nil, Source{})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.Coordinator.StopTurn(p.ID))
+	close(release)
+	require.Eventually(t, func() bool { return !svc.Coordinator.Busy(p.ID) }, 5*time.Second, 10*time.Millisecond)
+
+	msgs, err := f.store.ListThreadEvents(p.MainThreadID)
+	require.NoError(t, err)
+	// The interrupted turn's tool call and partial reply stay.
+	assert.Contains(t, kinds(msgs), db.EvToolUse)
+	var partial *db.ThreadEvent
+	var follow *db.ThreadEvent
+	for i := range msgs {
+		switch {
+		case msgs[i].Kind == db.EvAssistant && live != nil && msgs[i].ID == live.ID:
+			partial = &msgs[i]
+		case msgs[i].Kind == db.EvAssistant && (live == nil || msgs[i].ID != live.ID):
+			follow = &msgs[i]
+		}
+	}
+	require.NotNil(t, partial, "the stopped turn's live reply is still there")
+	assert.Equal(t, "Working on it…", partial.Content, "what the turn said before the stop is kept")
+	require.NotNil(t, follow, "the message behind the stopped turn was answered")
+	assert.Equal(t, "Queued done.", follow.Content)
+	// Nothing is uncertain: no recovery is offered, no error line added.
+	recovery, err := f.store.UncertainCoordinatorInput(p.ID)
+	require.NoError(t, err)
+	assert.Empty(t, recovery)
+	assert.Equal(t, 0, countKind(msgs, db.EvError))
+}
+
+// Stopping while nothing runs is a no-op: the next message is still answered.
+func TestCoordinatorStopWhenIdleLeavesTheNextMessageAlone(t *testing.T) {
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		c.Reply("Answered.")
+		return nil
+	})
+	p := f.project
+	_, err := svc.Coordinator.Post(p.ID, "First.", nil, Source{})
+	require.NoError(t, err)
+	waitMessages(t, f.store, p.ID, func(msgs []db.ThreadEvent) bool {
+		return !svc.Coordinator.Busy(p.ID) && countKind(msgs, db.EvAssistant) == 1
+	})
+
+	require.NoError(t, svc.Coordinator.StopTurn(p.ID))
+	_, err = svc.Coordinator.Post(p.ID, "Second.", nil, Source{})
+	require.NoError(t, err)
+	msgs := waitMessages(t, f.store, p.ID, func(msgs []db.ThreadEvent) bool {
+		return !svc.Coordinator.Busy(p.ID) && countKind(msgs, db.EvAssistant) == 2
+	})
+	assert.Equal(t, "Answered.", msgs[len(msgs)-1].Content)
+	assert.Equal(t, 0, countKind(msgs, db.EvError))
+}
+
+// The turn's tool calls are recorded on the conversation like any thread's
+// transcript, not just the final text.
+func TestCoordinatorSessionRecordsToolCalls(t *testing.T) {
+	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error {
+		c.Use("call-1", "mcp__tingly-projects__start_thread", map[string]any{"title": "Ship it", "task": "ship it"})
+		c.Say("Started a thread.", 1, 1)
+		return nil
+	})
+	p := f.project
+	_, err := svc.Coordinator.Post(p.ID, "Start work.", nil, Source{})
+	require.NoError(t, err)
+	msgs := waitMessages(t, f.store, p.ID, func(msgs []db.ThreadEvent) bool {
+		return countKind(msgs, db.EvToolUse) == 1 && countKind(msgs, db.EvAssistant) == 1 && !svc.Coordinator.Busy(p.ID)
+	})
+	var call *db.ThreadEvent
+	for i := range msgs {
+		if msgs[i].Kind == db.EvToolUse {
+			call = &msgs[i]
+		}
+	}
+	require.NotNil(t, call)
+	assert.Equal(t, "mcp__tingly-projects__start_thread", call.Content)
+	assert.JSONEq(t, `{"title": "Ship it", "task": "ship it"}`, call.Payload)
+}
+
+func kinds(msgs []db.ThreadEvent) []string {
+	out := make([]string, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, m.Kind)
+	}
+	return out
 }
