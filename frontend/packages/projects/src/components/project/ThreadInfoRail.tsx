@@ -9,7 +9,7 @@ import { useNotify } from '../../hooks/useNotify';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { timeAgo } from '../../utils/format';
-import { Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
+import { CopyValue, Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 import { agentIcon, agentState } from './ThreadActivityPopover';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
@@ -153,13 +153,13 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             )}
             <StatusCard thread={thread} />
             <RailCard id="env" title={t('rail.environment')}>
-                <Fact label={t('rail.folder')}>{thread.cwd}</Fact>
-                {branch && <Fact label={t('rail.branch')}>{branch}</Fact>}
-                {configuredModel && <Fact label={t('threadSettings.configuredModel')}>{configuredModel}</Fact>}
-                {folder && thread.model && <Fact label={t('threadSettings.configuredModel')}>{[thread.profile, thread.model].filter(Boolean).join(' · ')}</Fact>}
-                {thread.reported_model && <Fact label={t('threadSettings.lastModel')}>{thread.reported_model}</Fact>}
-                {permission && <Fact label={t('rail.permissions')}>{permission}</Fact>}
-                {thread.session_id && <Fact label={t('rail.session')} title={thread.session_id}>{shortSession(thread.session_id)}</Fact>}
+                <Fact label={t('rail.folder')}><CopyValue value={thread.cwd} head /></Fact>
+                {branch && <Fact label={t('rail.branch')}><CopyValue value={branch} /></Fact>}
+                {configuredModel && <Fact label={t('threadSettings.configuredModel')}><CopyValue value={configuredModel} /></Fact>}
+                {folder && thread.model && <Fact label={t('threadSettings.configuredModel')}><CopyValue value={[thread.profile, thread.model].filter(Boolean).join(' · ')} /></Fact>}
+                {thread.reported_model && <Fact label={t('threadSettings.lastModel')}><CopyValue value={thread.reported_model} /></Fact>}
+                {permission && <Fact label={t('rail.permissions')}><CopyValue value={permission} /></Fact>}
+                {thread.session_id && <Fact label={t('rail.session')}><CopyValue value={shortSession(thread.session_id)} copy={thread.session_id} /></Fact>}
             </RailCard>
             <UsageCard thread={thread} />
             {extra}
