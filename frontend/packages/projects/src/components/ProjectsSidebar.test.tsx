@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsHostProvider, type ProjectsHost } from '../host/ProjectsHost';
 import { ProjectsSidebar, type ProjectsSidebarSection } from './ProjectsSidebar';
+import { Pause } from './icons';
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
@@ -119,6 +120,29 @@ describe('ProjectsSidebar', () => {
         show(h, '/p');
         await screen.findByRole('region', { name: 'nav.projects' });
         expect(screen.queryByRole('link', { name: /im\.title/ })).not.toBeInTheDocument();
+    });
+    it('dims a paused project, swaps its row icon for a pause mark and hides its dots', async () => {
+        // A paused project still reports waiting threads (an interrupted turn
+        // lands there), but nothing can run or be answered until it resumes.
+        show(host([summary('a', 'Alpha', 2), { ...summary('g', 'Gamma', 3), paused: true }]), '/p');
+        const projects = await screen.findByRole('region', { name: 'nav.projects' });
+        const alpha = within(projects).getByRole('link', { name: /Alpha/ });
+        const gamma = within(projects).getByRole('link', { name: /Gamma/ });
+        // The paused row reads quieter; the active row does not.
+        expect(gamma).toHaveStyle({ opacity: '0.45' });
+        expect(alpha).not.toHaveStyle({ opacity: '0.45' });
+        // Paused wins over the dots: Gamma waits too, yet shows nothing,
+        // while the active Alpha keeps its waiting dot.
+        expect(gamma.querySelector('.MuiBadge-badge')).toHaveClass('MuiBadge-invisible');
+        expect(alpha.querySelector('.MuiBadge-badge')).not.toHaveClass('MuiBadge-invisible');
+        // The row icon itself becomes the pause mark — uncolored, like every row icon.
+        const pauseSvg = render(<Pause />).container.querySelector('svg')!;
+        expect(gamma.querySelector('.MuiBadge-root > svg')!.innerHTML).toBe(pauseSvg.innerHTML);
+        expect(gamma.querySelector('svg.MuiSvgIcon-colorWarning')).toBeNull();
+        expect(alpha.querySelector('.MuiBadge-root > svg')!.innerHTML).not.toBe(pauseSvg.innerHTML);
+        // Hovering the mark explains the pause.
+        fireEvent.mouseOver(gamma.querySelector('.MuiBadge-root')!);
+        expect(await screen.findByText('sidebar.pausedTip')).toBeInTheDocument();
     });
     it('keeps the Workdirs section a plain tree: no view switch, no kanban', async () => {
         const h = host([folder('f-app', '/home/me/app', 1, 0)]);

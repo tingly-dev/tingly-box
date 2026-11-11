@@ -5,7 +5,7 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectList } from '../hooks/useProjectList';
-import { Add, ChatBubble, Folder, Stack, Star } from './icons';
+import { Add, ChatBubble, Folder, Pause, Stack, Star } from './icons';
 import { useProjectsHost } from '../host/ProjectsHost';
 import { NavTree } from './NavTree';
 
@@ -25,12 +25,20 @@ export interface ProjectsSidebarRow {
     attention?: boolean;
     /** Work runs here and nothing waits: a quieter dot. */
     running?: boolean;
+    /** Paused: the row dims until hovered and shows a pause mark instead of the dots. */
+    paused?: boolean;
     /** Trailing content: a count, a status mark. */
     end?: ReactNode;
 }
 
 /** Running is neutral: only what needs the user is coloured (amber). */
 const RUNNING_DOT = { '& .MuiBadge-badge': { backgroundColor: 'text.secondary' } } as const;
+
+/** Paused reads quieter: the whole row dims, hovering wakes it back up. */
+const PAUSED_ROW_SX = {
+    opacity: 0.45,
+    '&:hover': { opacity: 1 },
+} as const;
 
 /** A titled group of rows. Hosts pass their own (e.g. Tingly Box's working folders). */
 export interface ProjectsSidebarSection {
@@ -80,6 +88,7 @@ function useImBotCount(enabled: boolean): number | null {
 }
 
 function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection; onNavigate?: () => void }) {
+    const { t } = useTranslation('projects');
     const title = (
         <Typography noWrap sx={{ flex: 1, fontSize: fontSizes.sm, fontWeight: 600, color: 'text.secondary' }}>
             {section.title}
@@ -106,7 +115,13 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                 {section.rows.length === 0 && !section.content && section.empty && (
                     <Typography variant="body2" color="text.secondary" sx={{ px: 3, py: 1 }}>{section.empty}</Typography>
                 )}
-                {section.rows.map((row) => (
+                {section.rows.map((row) => {
+                    // Paused wins over the dots: its threads cannot be working, and
+                    // what waits there cannot be answered until the project resumes.
+                    const paused = !!row.paused;
+                    const attention = !paused && row.attention;
+                    const running = !paused && row.running;
+                    return (
                     <Box key={row.key}>
                     <ListItemButton
                         component={NavLink}
@@ -120,18 +135,35 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                             '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
                             ...(row.selected && navRowSelectedSx),
                             '& .row-end, & .row-end *': row.selected ? { color: 'inherit' } : {},
+                            ...(paused && PAUSED_ROW_SX),
                         }}
                     >
                         <ListItemIcon sx={{ minWidth: 32, color: 'inherit', '& svg': { fontSize: 20 } }}>
-                            <Badge color="warning" variant="dot" invisible={!row.attention && !row.running} sx={row.attention ? undefined : RUNNING_DOT}>
-                                {row.icon ?? <Folder />}
-                            </Badge>
+                            {(() => {
+                                const icon = (
+                                    <Badge color="warning" variant="dot" invisible={!attention && !running} sx={attention ? undefined : RUNNING_DOT}>
+                                        {row.icon ?? <Folder />}
+                                    </Badge>
+                                );
+                                // The tip describes the pause mark; the row keeps its own name.
+                                return paused ? (
+                                    <Tooltip title={t('sidebar.pausedTip')} describeChild>
+                                        <Box component="span" sx={{ display: 'inline-flex' }}>{icon}</Box>
+                                    </Tooltip>
+                                ) : icon;
+                            })()}
                         </ListItemIcon>
-                        <ListItemText primary={row.label} secondary={row.subtitle} slotProps={navRowTextSlotProps(!!row.selected)} sx={{ minWidth: 0, my: 0 }} />
+                        <ListItemText
+                            primary={row.label}
+                            secondary={row.subtitle}
+                            slotProps={navRowTextSlotProps(!!row.selected)}
+                            sx={{ minWidth: 0, my: 0 }}
+                        />
                         {row.end != null && <Box className="row-end" sx={{ ml: 1, flexShrink: 0, display: 'flex', alignItems: 'center' }}>{row.end}</Box>}
                     </ListItemButton>
                     </Box>
-                ))}
+                    );
+                })}
             </List>
         </Box>
     );
@@ -182,9 +214,11 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             key: p.id,
             label: p.name,
             title: p.name,
-            icon: p.starred ? <Star /> : <Stack />,
+            // A paused project's icon is the pause mark itself — uncolored, like every row icon.
+            icon: p.paused ? <Pause /> : p.starred ? <Star /> : <Stack />,
             to: paths.project(p.id),
             selected: location.pathname === paths.project(p.id),
+            paused: p.paused,
             ...state(p),
         })),
         empty: projects ? t('sidebar.noProjects') : undefined,
