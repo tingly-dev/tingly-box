@@ -109,30 +109,9 @@ Go SDK when it detects an SSE payload's `error` object. It can be reproduced
 with an upstream HTTP **200** and that in-stream payload; it does not establish
 an upstream HTTP 502. TB may then return a JSON failure before downstream SSE
 starts, or an SSE error after streaming has started. The client-visible JSON
-and the upstream HTTP status are different observations.
-
-### Content-policy blocks
-
-The Codex backend blocks a request on content-policy grounds with HTTP 200 and
-then an in-stream `error` event whose `error.code` is `cyber_policy`,
-`bio_policy` or `misalignment_policy_violation` (#2417). Codex itself stops on
-these codes only when it reads them from an HTTP 400 body or from
-`response.failed`. It ignores them inside an `error` event, and a stream that
-then ends without a terminal event is retried as dropped (read at openai/codex
-de6e72addd67: `codex-api/src/error.rs` `parse_terminal_provider_error`,
-`codex-api/src/api_bridge.rs`, `codex-api/src/endpoint/responses.rs`).
-
-On the Responses passthrough TB therefore answers:
-
-- before downstream SSE starts (non-streaming, or the block is the first
-  event): HTTP 400 with `x-should-retry: false` and
-  `{"error":{"type","code","message"}}` (plus `misalignment` when the
-  upstream sent it). A multi-service rule does not fail over.
-- after streaming started: the flat `error` event with the upstream code
-  instead of `stream_failed`, then `response.failed` carrying the same code.
-
-Anthropic and Chat Completions clients on a Codex rule are not covered yet
-(`.design/logging.md` §8).
+and the upstream HTTP status are different observations. A content-policy block
+from a Codex OAuth upstream is the exception: the Codex client reports it as a
+400 (§6), so this prefix does not appear for it.
 
 Upstream sources (paths relative to `codex-rs/`):
 [capability selection](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/model-provider/src/capabilities.rs#L30),
@@ -235,3 +214,72 @@ client shape through a provider wired with a Codex OAuth identity, so these
 rules — breakpoints stripped, system lifted into `instructions`, `session-id`
 present and agreeing with `prompt_cache_key` — are asserted against the request
 that actually leaves the Codex RoundTripper, not against a hand-built body.
+
+## 6. Content-policy blocks
+
+The Codex backend blocks a request on content-policy grounds with HTTP 200 and
+then an in-stream `error` event whose `error.code` names the policy:
+`cyber_policy` and `bio_policy` in TB's logs for #2417.
+`misalignment_policy_violation`, which Codex CLI handles the same way, is
+treated alike; it has not been seen in-stream. Events such as
+`response.created`, and sometimes output, arrive before the block. In the
+deployment logs examined for #2417, every block on a streaming Responses
+passthrough arrived after the stream had started.
+
+Codex CLI stops on these codes only when it reads them from an HTTP 400 body or
+from `response.failed`. It ignores them inside an `error` event, and retries a
+stream that then ends without a terminal event as dropped (read at openai/codex
+de6e72addd67: `codex-api/src/sse/responses.rs` `process_responses_event`,
+`codex-api/src/error.rs` `parse_terminal_provider_error`,
+`codex-api/src/api_bridge.rs`, `protocol/src/error.rs` `retry_delay`).
+
+The block is recognized in the Codex client; protocol code only transports it:
+
+- `codexRoundTripper` sets `Content-Type: text/event-stream; tingly-codex=1` on
+  the SSE response, which selects `codexEventDecoder`
+  (`internal/client/codex_stream_errors.go`, registered with
+  `ssestream.RegisterDecoder`). The decoder passes events through and ends the
+  stream at a block with a 400 `*openai.Error` carrying the upstream code and
+  message, the error openai-go builds for an HTTP 400 with the same body.
+  openai-go creates the decoder inside `Responses.NewStreaming` from the
+  response Content-Type (`libs/openai-go/responses/response.go`), so a
+  registered decoder is the hook that needs no copy of `NewStreaming`, and one
+  header covers every Codex stream (streaming, the non-streaming assembly,
+  image generation, and an image edit with a mask; an edit without a mask uses
+  the plain-JSON `images/edits` endpoint, which is not a stream). A decoder was
+  chosen over rewriting the response body (the `sseToolNameRewriter` pattern)
+  because the SDK has already parsed the SSE framing and no bytes are
+  rewritten. If the Content-Type stopped matching the registration, the SDK
+  would fall back to its plain decoder without an error;
+  `TestCodexStreamDecoderSelected` pins the wiring.
+- Before anything reached the client, the existing status mapping
+  (`ClassifyUpstreamFailure`, also through the Stage assembly's
+  `EmptyResponseError`) gives every client protocol a 400. 400 is outside
+  `retryableUpstreamStatuses`, so a multi-account rule does not fail over and
+  records no breaker failure. A tier on another vendor is not tried either:
+  answering a blocked request with a different model would be a routing choice
+  for the rule to state, not an implicit fallback.
+- After a Responses passthrough stream started, `HandleOpenAIResponsesStream`
+  writes the flat `error` event with the error's code and the upstream message,
+  then `response.failed` with the same code and the upstream response's id. The
+  rule applies to any `*openai.Error` that has a code; mid-stream, only an
+  upstream client in `internal/client` produces one, because openai-go builds
+  `*openai.Error` only for an HTTP status >= 400.
+- An upstream `response.failed` with one of these codes is left alone: it
+  already ends the stream, and the passthrough forwards it as sent.
+
+The 400 is synthesized; the upstream answered 200. The client message names the
+code (`Upstream error: 400 Bad Request (type=invalid_request,
+code=cyber_policy): ...`), but the error body has no separate `code` field, so
+for a block that arrives before streaming starts Codex CLI shows that text
+instead of its own policy message. `response.failed` carries only code and
+message, so Codex CLI gets no misalignment details.
+
+Not covered, registered as known gaps CPB1 and CPB2 in
+`internal/protocoltest/content_policy_block_test.go`:
+
+- an Anthropic stream that already started ends with the converter's generic
+  stream error; the code reaches neither the client nor the usage record or
+  server log (Chat Completions streams carry it in the error chunk's message);
+- Responses upstreams other than Codex OAuth, such as the third-party relay
+  seen in #2417: they use the generic OpenAI client.

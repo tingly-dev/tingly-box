@@ -59,6 +59,20 @@ func statusLine(code int) string {
 	return fmt.Sprintf("%d", code)
 }
 
+// UpstreamErrorCode returns the code of an upstream *openai.Error in err and
+// the message to relay with it: the vendor's message, capped like the client
+// messages built here, or the full client message when the vendor sent none.
+func UpstreamErrorCode(err error) (code, message string, ok bool) {
+	var e *openai.Error
+	if !errors.As(err, &e) || e.Code == "" {
+		return "", "", false
+	}
+	if msg := truncateClientDetail(e.Message); msg != "" {
+		return e.Code, msg, true
+	}
+	return e.Code, safeOpenAIMessage(e), true
+}
+
 func truncateClientDetail(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) <= maxClientDetailLen {

@@ -51,7 +51,10 @@ per-request, decoded-event hook:
   `requestconfig.ExecuteNewRequest` path as non-streaming calls; middleware runs there.
 - The SDK never sets `Accept-Encoding`, so Go's transport does transparent gzip
   decoding before middleware sees the body — plaintext.
-- `ssestream` has no decoder registry in use; its only hook is the raw `io.Reader`.
+- `anthropic-sdk-go`'s `ssestream` has a decoder registry (`RegisterDecoder`, looked up by the exact
+  Content-Type value), but nothing registers in it, so the only hook in use is the raw
+  `io.Reader`. (The Codex client registers in openai-go's `ssestream` under a Content-Type
+  parameter its round tripper sets; `.design/codex.md` §6.)
 - Middlewares re-run per retry attempt; the Claude OAuth client sets `MaxRetries(0)`.
 
 So `Guard`/`GuardBeta` attach `restoreToolNamesMiddleware(reverseMap)` via
