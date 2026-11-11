@@ -52,8 +52,10 @@ func Content(m anthropic.MessageParam) []anthropic.ContentBlockParamUnion {
 		return m.OfAssistant.Content
 	case m.OfSystem != nil:
 		blocks := make([]anthropic.ContentBlockParamUnion, 0, len(m.OfSystem.Content))
-		for _, text := range m.OfSystem.Content {
-			blocks = append(blocks, anthropic.ContentBlockParamUnion{OfText: &text})
+		for i := range m.OfSystem.Content {
+			// Keep mutations (for example credential masking) attached to the
+			// original message, just as for user and assistant text blocks.
+			blocks = append(blocks, anthropic.ContentBlockParamUnion{OfText: &m.OfSystem.Content[i]})
 		}
 		return blocks
 	default:
