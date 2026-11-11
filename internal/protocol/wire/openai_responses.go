@@ -43,9 +43,10 @@ func NewResponsesStreamErrorEvent(seq int64, code, message string) ResponsesStre
 }
 
 // ResponsesFailedEvent is the response.failed lifecycle event. The proxy
-// emits it after a mid-stream content-policy block (#2417): Codex reads the
-// block code from response.failed or an HTTP 400 body, never from an "error"
-// event, and retries a stream that ends without a terminal event.
+// emits it when an upstream error with a code ends a stream that has already
+// started (#2417): Codex reads a content-policy code only from response.failed
+// or an HTTP 400 body, not from an "error" event, and retries a stream that
+// ends without a terminal event.
 type ResponsesFailedEvent struct {
 	Type           string                `json:"type"`
 	SequenceNumber int64                 `json:"sequence_number"`
@@ -53,22 +54,20 @@ type ResponsesFailedEvent struct {
 }
 
 // ResponsesFailedErrorWire is the error object of a failed response.
-// Misalignment is the upstream's details object for
-// misalignment_policy_violation, relayed as-is when present.
 type ResponsesFailedErrorWire struct {
-	Code         string          `json:"code"`
-	Message      string          `json:"message"`
-	Misalignment json.RawMessage `json:"misalignment,omitempty"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
-// NewResponsesFailedEvent builds a response.failed event. The response id
-// is left empty: the passthrough does not track it, and Codex reads only
-// response.error.
-func NewResponsesFailedEvent(seq, createdAt int64, model string, failure ResponsesFailedErrorWire) ResponsesFailedEvent {
+// NewResponsesFailedEvent builds a response.failed event for the response
+// with the given id (the one its response.created carried, "" if none was
+// seen).
+func NewResponsesFailedEvent(seq int64, id string, createdAt int64, model string, failure ResponsesFailedErrorWire) ResponsesFailedEvent {
 	return ResponsesFailedEvent{
 		Type:           "response.failed",
 		SequenceNumber: seq,
 		Response: ResponsesWireResponse{
+			ID:        id,
 			Object:    "response",
 			CreatedAt: createdAt,
 			Status:    "failed",

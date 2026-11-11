@@ -53,30 +53,14 @@ func TestResponsesOutputItemAddedEvent_MessageCarriesContent(t *testing.T) {
 	assert.Contains(t, string(b), `"content":[]`)
 }
 
-// Codex reads a content-policy block from response.failed's response.error
-// (#2417); misalignment details are relayed only when the upstream sent them.
+// Codex reads the code of a failed response from response.error (#2417).
 func TestNewResponsesFailedEvent(t *testing.T) {
-	ev := NewResponsesFailedEvent(10, 1700000000, "gpt-5", ResponsesFailedErrorWire{Code: "cyber_policy", Message: "flagged"})
+	ev := NewResponsesFailedEvent(10, "resp_1", 1700000000, "gpt-5", ResponsesFailedErrorWire{Code: "some_code", Message: "flagged"})
 	assert.Equal(t, "response.failed", ev.EventType())
 	b, err := json.Marshal(ev)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"type":"response.failed","sequence_number":10,"response":{
-		"id":"","object":"response","created_at":1700000000,"status":"failed","output":[],
+		"id":"resp_1","object":"response","created_at":1700000000,"status":"failed","output":[],
 		"model":"gpt-5","incomplete_details":null,
-		"error":{"code":"cyber_policy","message":"flagged"}}}`, string(b))
-
-	withDetails := NewResponsesFailedEvent(1, 0, "", ResponsesFailedErrorWire{
-		Code: "misalignment_policy_violation", Message: "m", Misalignment: json.RawMessage(`{"category":"x"}`),
-	})
-	b, err = json.Marshal(withDetails)
-	require.NoError(t, err)
-	var decoded struct {
-		Response struct {
-			Error struct {
-				Misalignment json.RawMessage `json:"misalignment"`
-			} `json:"error"`
-		} `json:"response"`
-	}
-	require.NoError(t, json.Unmarshal(b, &decoded))
-	assert.JSONEq(t, `{"category":"x"}`, string(decoded.Response.Error.Misalignment))
+		"error":{"code":"some_code","message":"flagged"}}}`, string(b))
 }

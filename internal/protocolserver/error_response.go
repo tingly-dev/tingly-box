@@ -1,8 +1,6 @@
 package protocolserver
 
 import (
-	"cmp"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -59,43 +57,6 @@ func (ph *ProtocolHandler) failForward(c *gin.Context, err error) {
 	recorder := recording.FromGin(c)
 	ph.trackUsageFromContext(c, 0, 0, err)
 	stream.SendForwardingError(c, err)
-	if recorder != nil {
-		recorder.RecordError(err)
-	}
-}
-
-// contentPolicyBlockResponse is the client body for a content-policy block:
-// the allowlisted fields plus the upstream's misalignment details, which
-// Codex reads from an HTTP 400 body for misalignment_policy_violation.
-type contentPolicyBlockResponse struct {
-	Error contentPolicyBlockDetail `json:"error"`
-}
-
-type contentPolicyBlockDetail struct {
-	protocol.ErrorDetail
-	Misalignment json.RawMessage `json:"misalignment,omitempty"`
-}
-
-// failContentPolicyBlock answers a Responses request whose upstream blocked
-// the content on policy grounds before anything reached the client (#2417).
-// 400 is not retried by SDKs or Codex, and is outside
-// retryableUpstreamStatuses, so a multi-service rule does not re-send the
-// same content to another account. x-should-retry: false is the Stainless
-// SDKs' explicit no-retry signal (shouldRetry in openai-go and
-// anthropic-sdk-go). Codex maps error.code to its policy handling.
-func (ph *ProtocolHandler) failContentPolicyBlock(c *gin.Context, err error, block protocol.ContentPolicyBlock) {
-	recorder := recording.FromGin(c)
-	ph.trackUsageFromContext(c, 0, 0, &protocol.ContentPolicyBlockError{Code: block.Code, Err: err})
-	c.Error(protocol.LoggableUpstreamError(err)).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.Header("x-should-retry", "false")
-	c.JSON(http.StatusBadRequest, contentPolicyBlockResponse{Error: contentPolicyBlockDetail{
-		ErrorDetail: protocol.ErrorDetail{
-			Message: block.Message,
-			Type:    cmp.Or(block.Type, "invalid_request_error"),
-			Code:    block.Code,
-		},
-		Misalignment: block.Misalignment,
-	}})
 	if recorder != nil {
 		recorder.RecordError(err)
 	}
