@@ -392,6 +392,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked
+         * @description Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked
+         */
+        post: operations["apiV1ProjectsIdForkPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/library": {
         parameters: {
             query?: never;
@@ -1434,6 +1454,10 @@ export interface components {
             events: components["schemas"]["ThreadEvent"][];
             /** @description Field more */
             more: boolean;
+        };
+        ForkProjectRequest: {
+            /** @description Field name */
+            name?: string;
         };
         HandoffResponse: {
             /** @description Field command */
@@ -2882,6 +2906,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Event"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdForkPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
                 };
             };
         };

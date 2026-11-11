@@ -6,7 +6,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type Usage } from '../../client';
 import { TextEditDialog } from '../TextEditDialog';
-import { Add, Close, Delete, Description } from '../icons';
+import { Add, Close, Delete, Description, Duplicate } from '../icons';
+import { ForkProjectDialog } from './ForkProjectDialog';
 import { useModels } from '../../hooks/useModels';
 import { useNotify } from '../../hooks/useNotify';
 import { useProjectsHost } from '../../host/ProjectsHost';
@@ -42,7 +43,7 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
     );
 }
 
-function General({ project, patch }: { project: Project; patch: (p: Patch) => Promise<void> }) {
+function General({ project, patch, onFork }: { project: Project; patch: (p: Patch) => Promise<void>; onFork: () => void }) {
     const { t } = useTranslation('projects');
     const { session } = useProjectsHost();
     const [name, setName] = useState(project.name);
@@ -96,6 +97,18 @@ function General({ project, patch }: { project: Project; patch: (p: Patch) => Pr
                 </Box>
                 <Button variant="outlined" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>
             </Box>
+            {project.type !== 'folder' && (
+                <>
+                    <Divider />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('projectSettings.fork')}</Typography>
+                            <Typography variant="body2" color="text.secondary">{t('projectSettings.forkHelp')}</Typography>
+                        </Box>
+                        <Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>
+                    </Box>
+                </>
+            )}
         </Stack>
     );
 }
@@ -274,6 +287,7 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { onProjectsChanged } = useProjectsHost();
+    const [forking, setForking] = useState(false);
     const patch = async (body: Patch) => {
         try {
             const p = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id: project.id } }, body }));
@@ -297,11 +311,14 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
                 <Tab value="usage" label={t('projectSettings.tabUsage')} />
             </Tabs>
             <DialogContent sx={{ pt: 2.5 }}>
-                {tab === 'general' && <General project={project} patch={patch} />}
+                {tab === 'general' && <General project={project} patch={patch} onFork={() => setForking(true)} />}
                 {tab === 'memory' && <Memory project={project} patch={patch} refreshKey={memoryKey} />}
                 {tab === 'environment' && <Environment project={project} patch={patch} />}
                 {tab === 'usage' && <UsageTab projectId={project.id} />}
             </DialogContent>
+            {project.type !== 'folder' && (
+                <ForkProjectDialog project={project} open={forking} onClose={() => setForking(false)} onForked={onClose} />
+            )}
         </Dialog>
     );
 }
