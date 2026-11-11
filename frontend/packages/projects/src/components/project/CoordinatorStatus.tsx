@@ -12,6 +12,8 @@ interface Props {
     /** Inputs waiting behind the running turn. */
     queued: number;
     threads: Thread[];
+    /** Opens the running-tasks list of the threads that have tasks, from the fact that counts them. */
+    onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
 }
@@ -21,11 +23,11 @@ interface Props {
  * Usage cards a thread's rail has, plus what only the coordinator has (its
  * queue, its threads by state, its model).
  */
-export function CoordinatorStatus({ project, coordinator, queued, threads, extra }: Props) {
+export function CoordinatorStatus({ project, coordinator, queued, threads, onTasks, extra }: Props) {
     const { t } = useTranslation('projects');
     const count = (...statuses: string[]) => threads.filter((x) => statuses.includes(x.status)).length;
     const running = threads.reduce((n, x) => n + (x.running_tasks ?? 0), 0);
-    const withTasks = threads.filter((x) => x.running_tasks > 0).length;
+    const busy = threads.filter((x) => x.running_tasks > 0);
     return (
         <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, bgcolor: 'background.default', minHeight: '100%' }}>
             {coordinator && (
@@ -42,7 +44,12 @@ export function CoordinatorStatus({ project, coordinator, queued, threads, extra
                             <Fact label={t('thread.status.waiting')}>{count('waiting', 'failed')}</Fact>
                             <Fact label={t('thread.status.ready')}>{count('ready')}</Fact>
                             <Fact label={t('thread.status.resolved')}>{count('resolved')}</Fact>
-                            {running > 0 && <Fact label={t('rail.backgroundTasks')}>{t('rail.tasksInThreads', { tasks: running, count: withTasks })}</Fact>}
+                            {running > 0 && (
+                                <Fact label={t('rail.backgroundTasks')} title={t('rail.tasksInThreads', { tasks: running, count: busy.length })}
+                                    onClick={onTasks && ((e) => { e.stopPropagation(); onTasks(busy, e.currentTarget); })}>
+                                    {t('rail.tasksInThreads', { tasks: running, count: busy.length })}
+                                </Fact>
+                            )}
                         </>
                     )}
             </RailCard>

@@ -37,6 +37,8 @@ interface Props {
     open: boolean;
     onToggle: () => void;
     onOpen: (id: string) => void;
+    /** Opens a thread's running tasks from its card's count pill. */
+    onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     onLibrary: () => void;
     onStatus: () => void;
 }
@@ -46,7 +48,7 @@ interface Props {
  * first. Closed, it is one line of counts. Finished work stays out
  * of the way: the Overview window lists it.
  */
-export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLibrary, onStatus }: Props) {
+export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTasks, onLibrary, onStatus }: Props) {
     const { t } = useTranslation('projects');
     const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => th.status === s) })).filter((g) => g.list.length > 0);
     const shown = groups.filter((g) => g.key !== 'resolved');
@@ -84,7 +86,7 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onLi
                 </Tooltip>
             </Box>
             {open && shown.length > 0 && (
-                <StatusColumns threads={threads} selectedId={selectedId} onOpen={onOpen}
+                <StatusColumns threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks}
                     rowRef={columns} rowSx={height != null ? { height } : undefined} listMaxHeight={height == null ? 152 : undefined} />
             )}
             {open && shown.length > 0 && <BandResizer height={height ?? fit} onHeight={setStored} onCommit={commit} />}

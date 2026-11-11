@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Popover, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, isFolder, type BackgroundTask, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
 import { ConversationPane } from '../components/project/ConversationPane';
 import { OverviewPane, type OverviewTab } from '../components/project/OverviewPane';
+import { ThreadActivityPopover } from '../components/project/ThreadActivityPopover';
 import { ModelPicker } from '../components/ModelPicker';
 import { EffortPicker } from '../components/EffortPicker';
 import { loadPermissionModes, PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
@@ -229,14 +230,27 @@ export default function ProjectPage() {
     const threadMap = useMemo(() => new Map(threads.map((th) => [th.id, th])), [threads]);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
 
-    const openThread = (tid: string) => {
+    const openThread = (tid: string, drill?: { focus?: string; task?: string }) => {
+        // A drill-in names the one subagent (focus) or background task (task) to open with the thread.
         setParams((p) => {
             p.set('thread', tid);
+            if (drill?.focus) p.set('focus', drill.focus); else p.delete('focus');
+            if (drill?.task) p.set('task', drill.task); else p.delete('task');
             return p;
         });
         if (threadAt === 'side') pane.reveal();
         else if (pane.narrow) pane.setDrawerOpen(false);
     };
+    // The status area's counts, opened into their lists (the band's pill, the
+    // coordinator's fact): what they count, one click from each entry.
+    const [activity, setActivity] = useState<{ targets: Thread[]; anchor: HTMLElement } | null>(null);
+    const openTasksList = (targets: Thread[], anchor: HTMLElement) => setActivity({ targets, anchor });
+    const closeActivity = () => setActivity(null);
+    const clearDrill = () => setParams((p) => {
+        p.delete('focus');
+        p.delete('task');
+        return p;
+    }, { replace: true });
     const openFromOverview = (tid: string) => {
         setOverviewFloatId(tid);
         openThread(tid);
@@ -334,6 +348,9 @@ export default function ProjectPage() {
             )}
             onBack={closeThread}
             hideTitle={threadAt === 'float'}
+            initialFocus={params.get('focus') ?? undefined}
+            initialTask={params.get('task') ?? undefined}
+            onDrillConsumed={clearDrill}
             actions={canPlace && overviewAt !== 'top' && (
                 <Tooltip title={t(threadAt === 'float' ? 'window.dock' : 'window.float')}>
                     <IconButton
@@ -349,8 +366,8 @@ export default function ProjectPage() {
         />
     ) : null;
     const overviewEl = (initialTab?: OverviewTab) => (
-        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
-            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />} />
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
+            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} onTasks={openTasksList} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the
@@ -408,7 +425,7 @@ export default function ProjectPage() {
                 sideAlwaysOpen={overviewAt !== 'side'}
                 paneToggle={paneToggle}
                 top={overviewAt === 'top' ? (
-                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onTasks={openTasksList} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
                 ) : undefined}
                 main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
@@ -484,6 +501,7 @@ export default function ProjectPage() {
                             </>
                         )}
                         onOpenThread={openThread}
+                        onOpenTasks={openTasksList}
                         onSend={async (text, attachments) => {
                             if (projectSaving.current) return false;
                             try {
@@ -582,6 +600,17 @@ export default function ProjectPage() {
                 <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
             </Dialog>
             {im?.dialog}
+
+            {/* What a status-area count stands for: a thread's (or every working thread's) running tasks and subagents, each row opening its detail. */}
+            <Popover open={!!activity} anchorEl={activity?.anchor ?? null} onClose={closeActivity}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
+                {activity && (
+                    <ThreadActivityPopover targets={activity.targets} onClose={closeActivity}
+                        onOpenAgent={(tid, call) => openThread(tid, { focus: call })}
+                        onOpenTask={(tid, taskId) => openThread(tid, { task: taskId })}
+                        onOpenThread={(tid) => openThread(tid)} />
+                )}
+            </Popover>
 
             {project && settingsTab && (
                 <ProjectSettingsDialog

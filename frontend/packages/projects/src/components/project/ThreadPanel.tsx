@@ -94,6 +94,12 @@ interface Props {
     /** Cards the host adds to the info rail (SessionSlots.railCards). */
     railExtra?: React.ReactNode;
     railMinPanel?: number;
+    /** A subagent a drill-in asked to open on its own (the status area's list). */
+    initialFocus?: string;
+    /** A background task a drill-in asked to open: its panel, with the row expanded. */
+    initialTask?: string;
+    /** Tells the page the drill-in was taken, so it can clean the URL. */
+    onDrillConsumed?: () => void;
 }
 
 type View = 'chat' | 'trajectory';
@@ -104,7 +110,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -238,6 +244,22 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const focusSteps = focused ? host?.steps(focused) : undefined;
     const focusType = focusBlock?.task?.subagentType || (focusBlock?.call.input as { subagent_type?: string } | undefined)?.subagent_type;
 
+    // A drill-in from the status area: the URL asked for one subagent (opened
+    // on its own, like the panel's own list opens one) or one background task
+    // (its panel, with the row expanded). The page cleans the URL once taken.
+    const columnRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!initialFocus) return;
+        setView('chat');
+        setFocus({ threadId, call: initialFocus });
+        onDrillConsumed?.();
+    }, [initialFocus, threadId, onDrillConsumed]);
+    useEffect(() => {
+        if (!initialTask) return;
+        setTasksAnchor(columnRef.current);
+        onDrillConsumed?.();
+    }, [initialTask, threadId, onDrillConsumed]);
+
     // The waiting question's own deadline, for the strip's folded line.
     const pendingAutoAt = useMemo(() => {
         const b = blocks.find((x) => x.type === 'request' && !!pendingRequestId && x.message.request_id === pendingRequestId);
@@ -348,7 +370,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
+        <Box ref={columnRef} sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
             <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -550,7 +572,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             {hasTasks && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
+                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} initialOpenId={initialTask} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
                 </Popover>
             )}
             {subagents && (

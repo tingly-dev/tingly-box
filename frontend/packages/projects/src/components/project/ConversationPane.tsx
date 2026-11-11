@@ -35,7 +35,7 @@ function parse<T>(payload?: string): T | null {
  * rather than the conversation adding a note. A thread with changes to
  * review offers "Review" right here.
  */
-export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: string) => void }) {
+export function ThreadCard({ thread, onOpen, onTasks }: { thread: Thread; onOpen: (id: string) => void; /** Opens the thread's running tasks from its count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
     const [reviewing, setReviewing] = useState(false);
     const canReview = thread.status === 'ready' && !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at;
@@ -61,7 +61,7 @@ export function ThreadCard({ thread, onOpen }: { thread: Thread; onOpen: (id: st
                 <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
                     <ThreadSubtitle thread={thread} />
                 </Typography>
-                <ThreadBadges thread={thread} />
+                <ThreadBadges thread={thread} onTasks={onTasks} />
                 {canReview && (
                     <Button size="small" variant="outlined" startIcon={<DiffIcon />} sx={{ flexShrink: 0, py: 0.125 }}
                         onClick={(e) => {
@@ -144,11 +144,13 @@ interface Suggestion {
     thread_id?: string;
 }
 
-function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
+function SuggestionsCard({ message, threads, onStart, onOpen, onTasks, disabled }: {
     message: ThreadEvent;
     threads: Map<string, Thread>;
     onStart: (messageId: string, indexes: number[]) => Promise<void>;
     onOpen: (id: string) => void;
+    /** Opens a suggested thread's running tasks from its count pill. */
+    onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     disabled: boolean;
 }) {
     const { t } = useTranslation('projects');
@@ -169,7 +171,7 @@ function SuggestionsCard({ message, threads, onStart, onOpen, disabled }: {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5 }}>
                 {suggestions.map((s, i) => {
                     const th = s.thread_id ? threads.get(s.thread_id) : undefined;
-                    if (th) return <ThreadCard key={i} thread={th} onOpen={onOpen} />;
+                    if (th) return <ThreadCard key={i} thread={th} onOpen={onOpen} onTasks={onTasks} />;
                     return (
                         <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.25, borderRadius: radius.row, bgcolor: 'action.hover' }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -279,11 +281,13 @@ interface Props {
     /** Pickers above the message box (what the project's threads start with). */
     composerContext?: React.ReactNode;
     onOpenThread: (id: string) => void;
+    /** Opens a thread's running tasks from its card's count pill. */
+    onOpenTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
     onChooseDecision: (messageId: string, index: number) => Promise<void>;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onStartSuggestions, onChooseDecision }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -366,13 +370,13 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                                     <Box key={m.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                                         {ids.map((id) => {
                                             const th = threads.get(id);
-                                            return th ? <ThreadCard key={id} thread={th} onOpen={onOpenThread} /> : null;
+                                            return th ? <ThreadCard key={id} thread={th} onOpen={onOpenThread} onTasks={onOpenTasks} /> : null;
                                         })}
                                     </Box>
                                 );
                             }
                             case 'suggestions':
-                                return <SuggestionsCard key={m.id} message={m} threads={threads} onStart={onStartSuggestions} onOpen={onOpenThread} disabled={disabled} />;
+                                return <SuggestionsCard key={m.id} message={m} threads={threads} onStart={onStartSuggestions} onOpen={onOpenThread} onTasks={onOpenTasks} disabled={disabled} />;
                             case 'decision':
                                 return <DecisionCard key={m.id} message={m} onChoose={onChooseDecision} disabled={disabled} />;
                             // A thread's line above is its live state; each report is also its

@@ -73,9 +73,14 @@ export function RailCard({ id, title, aside, defaultOpen = true, children }: { i
     );
 }
 
-export function Fact({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
+/** A label and a value on one line. With `onClick` the whole line opens what
+ * the value counts (the status area's running-tasks fact). */
+export function Fact({ label, title, onClick, children }: { label: string; title?: string; /** Opens what the value stands for; without it the line is plain text. */ onClick?: (e: { stopPropagation(): void; currentTarget: HTMLElement }) => void; children: ReactNode }) {
     return (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm }}>
+        <Box onClick={onClick}
+            role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(e); } } : undefined}
+            sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm, ...(onClick && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: radius.row }) }}>
             <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0 }}>{label}</Box>
             <Box component="span" title={title} sx={{ ...mono, color: 'text.primary', minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{children}</Box>
         </Box>

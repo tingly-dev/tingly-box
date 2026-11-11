@@ -11,6 +11,8 @@ interface Props {
     threads: Thread[];
     selectedId?: string;
     onOpen: (id: string) => void;
+    /** Opens the thread's running tasks from its card's count pill. */
+    onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     orientation: BoardOrientation;
     /** The pinned thread ids, with `onTogglePin`; without both, cards cannot be pinned. They draw above every status. */
     pinnedIds?: string[];
@@ -34,13 +36,13 @@ const RAIL_AT = 640;
  * right and wrapping onto further lines; in a wide pane the heading moves to
  * the left of its cards.
  */
-export function StatusBoard({ threads, selectedId, onOpen, orientation, pinnedIds, onTogglePin }: Props) {
+export function StatusBoard({ threads, selectedId, onOpen, onTasks, orientation, pinnedIds, onTogglePin }: Props) {
     const { t } = useTranslation('projects');
     const horizontal = orientation === 'horizontal';
     const pinned = pinnedIds != null && onTogglePin != null ? new Set(pinnedIds) : undefined;
     const toggle = onTogglePin;
     const cards = (list: Thread[]) => list.map((th) => (
-        <ThreadCard key={th.id} thread={th} selectedId={selectedId} onOpen={onOpen} stacked
+        <ThreadCard key={th.id} thread={th} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} stacked
             pinned={pinned?.has(th.id)} onTogglePin={pinned != null && toggle != null ? () => toggle(th.id) : undefined} />
     ));
     // Pinned threads leave their statuses for one section above them all, in the stored order (newest pin first).

@@ -17,6 +17,8 @@ type TaskOutput = components['schemas']['TaskOutputResponse'];
 interface Props {
     sessionId: string;
     tasks: BackgroundTaskRow[];
+    /** A task a drill-in asked for: the row starts expanded (alone still opens by itself). */
+    initialOpenId?: string | null;
     /** Called after a task was stopped, to pick up its final state. */
     onChanged: () => void;
     /** Scrolls the conversation to the call that started a task. */
@@ -32,10 +34,10 @@ const OUTPUT_REFRESH_MS = 2000;
  * that started it. Each row opens into what the task is: the command and its
  * live output, or the subagent's brief, what it is doing and what it last said.
  */
-export function BackgroundTasksPanel({ sessionId, tasks, onChanged, onReveal }: Props) {
+export function BackgroundTasksPanel({ sessionId, tasks, initialOpenId, onChanged, onReveal }: Props) {
     const { t } = useTranslation('projects');
     // A lone task opens by itself: the panel was opened to look at it.
-    const [openId, setOpenId] = useState<string | null>(tasks.length === 1 ? tasks[0].taskId : null);
+    const [openId, setOpenId] = useState<string | null>(initialOpenId ?? (tasks.length === 1 ? tasks[0].taskId : null));
     // Finished work stays listed, newest first: its output and report are
     // what people come back to read.
     const running = tasks.filter((task) => task.status === 'running' && !task.ended);

@@ -121,11 +121,24 @@ const pill = {
 
 /** A thread's work at a glance, as small pills: its commits, or that it was
  * merged. Nothing for a thread without a branch; the details sit in the
- * tooltip, so the pill stays one icon and one word wherever it shows. */
-export function ThreadBadges({ thread, tasks: showTasks = true }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean }) {
+ * tooltip, so the pill stays one icon and one word wherever it shows. The
+ * running-tasks pill is a count of what is running elsewhere: given
+ * `onTasks` it opens what the count counts, instead of only explaining
+ * itself. */
+export function ThreadBadges({ thread, tasks: showTasks = true, onTasks }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean; /** Opens the thread's task list from the pill; without it the pill stays a plain count. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
+    const open = (e: { stopPropagation(): void; currentTarget: HTMLElement }) => {
+        e.stopPropagation();
+        onTasks?.([thread], e.currentTarget);
+    };
+    const canOpen = !!onTasks && thread.running_tasks > 0;
     const tasks = showTasks && thread.running_tasks > 0 && (
-        <Box component="span" title={t('thread.tasksSubtitle', { count: thread.running_tasks })} sx={pill}>
+        <Box component="span" title={t('thread.tasksSubtitle', { count: thread.running_tasks })}
+            role={canOpen ? 'button' : undefined} tabIndex={canOpen ? 0 : undefined}
+            aria-label={canOpen ? t('thread.tasksSubtitle', { count: thread.running_tasks }) : undefined}
+            onClick={canOpen ? open : undefined}
+            onKeyDown={canOpen ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(e); } } : undefined}
+            sx={canOpen ? { ...pill, cursor: 'pointer', '&:hover': { borderColor: 'text.disabled', color: 'text.primary' } } : pill}>
             <Stream />{t('thread.tasksBadge', { count: thread.running_tasks })}
         </Box>
     );
