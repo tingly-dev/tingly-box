@@ -8,6 +8,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/remote/access"
+	"github.com/tingly-dev/tingly-box/remote/commands"
 )
 
 type AccessStore interface {
@@ -68,7 +69,7 @@ func pickerAction(group bool) access.ActionName {
 // commandAction is the action a folder or project command needs, or "" for any
 // other command.
 func commandAction(cmd imbot.SlashCommand, group bool) access.ActionName {
-	switch cmd.Name {
+	switch commands.Canonical(cmd.Name) {
 	case "cd":
 		return access.ActionRemoteControlPrivileged
 	case "dir":

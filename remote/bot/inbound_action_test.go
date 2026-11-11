@@ -10,6 +10,53 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
+func TestDecoratedShortcutAuthorization(t *testing.T) {
+	for _, tt := range []struct {
+		text  string
+		group bool
+		want  access.ActionName
+	}{
+		{"/d /work", false, access.ActionRemoteControlPrivileged},
+		{"/d 2", false, access.ActionRemoteControlStart},
+		{"/d@bot 2", true, access.ActionRemoteControlPrivileged},
+		{"@bot /p 2", true, access.ActionRemoteControlPrivileged},
+		{"/p@bot 2", true, access.ActionRemoteControlPrivileged},
+		{"/p 2", false, access.ActionRemoteControlStart},
+		{"/p@bot 2", false, access.ActionRemoteControlStart},
+		{"<@U123> /d /work", true, access.ActionRemoteControlPrivileged},
+		{"/d@bot /work", false, access.ActionRemoteControlStart},
+		{"@bot /d /work", false, access.ActionRemoteControlStart},
+	} {
+		msg := imbot.Message{ChatType: imbot.ChatTypeDirect, Content: imbot.NewTextContent(tt.text)}
+		if tt.group {
+			msg.ChatType = imbot.ChatTypeGroup
+		}
+		_, got := bot.InboundAction(msg, "", "")
+		require.Equal(t, tt.want, got, tt.text)
+	}
+}
+
+func TestShortcutAuthorizationParity(t *testing.T) {
+	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"p", "project"}, {"s", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+		for _, group := range []bool{false, true} {
+			for _, arg := range []string{"", " extra", " 2", " 0", " /some path"} {
+				for _, pending := range []access.ActionName{"", access.ActionRemoteControlApprove} {
+					msg := imbot.Message{ChatType: imbot.ChatTypeDirect}
+					if group {
+						msg.ChatType = imbot.ChatTypeGroup
+					}
+					msg.Content = imbot.NewTextContent("/" + pair[1] + arg)
+					wantCapability, wantAction := bot.InboundAction(msg, access.CapabilityRemoteControl, pending)
+					msg.Content = imbot.NewTextContent("/" + pair[0] + arg)
+					gotCapability, gotAction := bot.InboundAction(msg, access.CapabilityRemoteControl, pending)
+					require.Equal(t, wantCapability, gotCapability, "%s group=%v arg=%q pending=%s", pair[0], group, arg, pending)
+					require.Equal(t, wantAction, gotAction, "%s group=%v arg=%q pending=%s", pair[0], group, arg, pending)
+				}
+			}
+		}
+	}
+}
+
 // Choosing among registered folders and projects needs start; a free path and
 // the directory browser need privileged; in a group every one of them does.
 // Only a group strips mentions and "/cmd@bot", so a mention before a command in

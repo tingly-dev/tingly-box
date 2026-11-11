@@ -11,21 +11,48 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
+func TestShortcutHelpAndRegistration(t *testing.T) {
+	registry := imbot.NewCommandRegistry()
+	require.NoError(t, RegisterBuiltinCommands(registry, nil))
+	for _, pair := range [][2]string{{"h", "help"}, {"d", "dir"}, {"p", "project"}, {"s", "session"}, {"n", "new"}, {"cls", "clear"}, {"stat", "status"}, {"v", "verbose"}} {
+		cmd, ok := registry.Get(pair[0])
+		require.True(t, ok, pair[0])
+		assert.Equal(t, pair[1], cmd.Name)
+		help := helpText("u", "c", true, false)
+		if pair[1] == "help" {
+			assert.Contains(t, help, "/h: Shortcut for /help")
+		} else {
+			assert.Contains(t, help, "(/"+pair[0]+"):", pair[0])
+		}
+	}
+	for _, pair := range [][2]string{{"start", "help"}, {"bind", "pair"}} {
+		cmd, ok := registry.Get(pair[0])
+		require.True(t, ok, pair[0])
+		assert.Equal(t, pair[1], cmd.Name)
+	}
+	group := helpText("u", "c", false, true)
+	assert.NotContains(t, group, "/d ")
+	assert.NotContains(t, group, "/project [N] (/p)")
+	direct := helpText("u", "c", false, false)
+	assert.Contains(t, direct, "/d")
+	assert.Contains(t, direct, "/project [N] (/p)")
+}
+
 func TestHelpText(t *testing.T) {
 	const tail = `@N <message>: say one thing to session #N
 
 Your ID: u1
 Chat ID: c1`
 	session := strings.Join([]string{
-		"/session [N]: List the sessions here, or switch to #N",
-		"/new [message]: Start a new session",
+		"/session [N] (/s): List the sessions here, or switch to #N",
+		"/new [message] (/n): Start a new session",
 		"/stop [#N]: Stop the running session",
-		"/clear: Stop, and start a new session with the next message",
-		"/status: Where this chat is and how its session runs",
-		"/verbose on|off: Also see each step, not only the reply",
+		"/clear (/cls): Stop, and start a new session with the next message",
+		"/status (/stat): Where this chat is and how its session runs",
+		"/verbose on|off (/v): Also see each step, not only the reply",
 		"/yolo: Use every tool without asking, or back",
 	}, "\n")
-	intro := "Send a message to talk to Claude Code."
+	intro := "Send a message to talk to Claude Code.\n/h: Shortcut for /help"
 
 	tests := []struct {
 		name       string
@@ -35,17 +62,17 @@ Chat ID: c1`
 	}{
 		{"privileged direct", true, false, strings.Join([]string{intro,
 			"/cd <path>: Work in another folder",
-			"/dir [N|path]: List registered folders, or switch to one",
-			"/project [N]: List projects, or switch to a project's coordinator",
+			"/dir [N|path] (/d): List registered folders, or switch to one",
+			"/project [N] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"privileged group", true, true, strings.Join([]string{intro,
 			"/cd <path>: Work in another folder",
-			"/dir [N|path]: List registered folders, or switch to one",
-			"/project [N]: List projects, or switch to a project's coordinator",
+			"/dir [N|path] (/d): List registered folders, or switch to one",
+			"/project [N] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"direct picker only", false, false, strings.Join([]string{intro,
-			"/dir [N]: List registered folders, or switch to one",
-			"/project [N]: List projects, or switch to a project's coordinator",
+			"/dir [N] (/d): List registered folders, or switch to one",
+			"/project [N] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"group without permission", false, true, strings.Join([]string{intro, session, tail}, "\n")},
 	}
@@ -94,6 +121,12 @@ func TestMenuAndHelpListTheSameCommands(t *testing.T) {
 		require.True(t, ok, "%s is registered", spec.Name)
 		assert.Equal(t, spec.Help, cmd.Description, spec.Name)
 		assert.Equal(t, spec.Order, cmd.Priority, spec.Name)
-		assert.Contains(t, help, spec.Usage+": "+spec.Help, spec.Name)
+		usage, ok := spec.usageFor(true, false)
+		require.True(t, ok)
+		line := usage
+		if len(cmd.Aliases) > 0 {
+			line += " (/" + strings.Join(cmd.Aliases, ", /") + ")"
+		}
+		assert.Contains(t, help, line+": "+spec.Help, spec.Name)
 	}
 }
