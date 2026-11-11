@@ -1,11 +1,9 @@
 package dingtalk
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -32,6 +30,7 @@ type Bot struct {
 	mu         sync.RWMutex
 	webhookMap map[string]string       // conversationID -> webhook URL
 	convMap    map[string]conversation // conversationID -> OpenAPI addressing
+	msgs       *msgRefs                // msgId -> conversation, for reactions
 
 	// REST bases; overridable so tests can point at a local server.
 	oapiBase string
@@ -64,6 +63,7 @@ func NewDingTalkBot(config *core.Config) (*Bot, error) {
 		BaseBot:    core.NewBaseBot(config),
 		webhookMap: make(map[string]string),
 		convMap:    make(map[string]conversation),
+		msgs:       newMsgRefs(),
 		oapiBase:   defaultOAPIBase,
 		apiBase:    defaultAPIBase,
 	}
@@ -156,6 +156,7 @@ func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDat
 	}
 	b.convMap[data.ConversationId] = conversation{direct: data.ConversationType == "1", staffID: data.SenderStaffId}
 	b.mu.Unlock()
+	b.msgs.put(data.MsgId, msgRef{conversationID: data.ConversationId, robotCode: data.RobotCode})
 
 	// Use adapter to convert platform message to core message
 	coreMessage, err := b.adapter.AdaptChatBotMessage(ctx, data)
@@ -208,39 +209,6 @@ func (b *Bot) SendMedia(ctx context.Context, target string, media []core.MediaAt
 	return b.SendMessage(ctx, target, &core.SendMessageOptions{
 		Media: media,
 	})
-}
-
-// React adds an emoji reaction to a message via DingTalk REST API.
-// messageID must be the DingTalk msgId (from incoming message data.MsgId).
-func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
-	token, err := b.getAccessToken(ctx)
-	if err != nil {
-		return fmt.Errorf("dingtalk react: get token: %w", err)
-	}
-
-	url := "https://api.dingtalk.com/v1.0/im/messages/" + messageID + "/reactions"
-	body, _ := json.Marshal(map[string]interface{}{
-		"reactionType": map[string]string{"emojiCode": emoji},
-	})
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("dingtalk react: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-acs-dingtalk-access-token", token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("dingtalk react: http: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("dingtalk react: status %d: %s", resp.StatusCode, string(data))
-	}
-	return nil
 }
 
 // getAccessToken returns a cached or fresh DingTalk access token.
