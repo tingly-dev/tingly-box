@@ -7,6 +7,9 @@ export default {
     "useProxy": "Use proxy & continue",
     "skip": "Continue without proxy"
   },
+  "qoderConnection": {
+    "scope": "This third-party connection uses Qoder client interfaces. Models, credits and permitted clients are determined by Qoder. A successful sign-in does not guarantee access from every client; use the connection within your account permissions and Qoder’s terms."
+  },
   "workbuddyConnection": {
     "cardSummary": "Everyday work · Routing & tools",
     "proxyHint": "Optional: configure a network proxy for this connection.",

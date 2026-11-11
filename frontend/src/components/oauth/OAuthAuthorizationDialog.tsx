@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import {useEffect, useState} from 'react';
 import WorkBuddyConnectionNote from './WorkBuddyConnectionNote';
+import QoderConnectionNote from './QoderConnectionNote';
 import api from "@/services/api.ts";
 import { fontMono } from '@/theme/fonts';
 
@@ -264,6 +265,7 @@ const OAuthAuthorizationDialog = ({
                 <DialogContent>
                     <Stack spacing={3}>
                         <WorkBuddyConnectionNote providerId={authData?.providerId}/>
+                        <QoderConnectionNote providerId={authData?.providerId}/>
                         {/* Error message */}
                         {errorMessage && (
                             <Alert severity="error" aria-live="polite">
