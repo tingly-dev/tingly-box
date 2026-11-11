@@ -59,7 +59,7 @@ describe('conversation presentation', () => {
 
     it('offers a way back to the latest messages after scrolling up', () => {
         show(props([event('assistant', 'A reply')]));
-        const scroller = screen.getByText('A reply').closest('[class*="MuiStack"]')!.parentElement!;
+        const scroller = screen.getByTestId('conversation-scroll');
         Object.defineProperties(scroller, {
             scrollHeight: { configurable: true, value: 1000 },
             clientHeight: { configurable: true, value: 300 },
@@ -90,17 +90,18 @@ describe('conversation presentation', () => {
         expect(writeText).toHaveBeenCalledWith('const value = 1;');
     });
 
-    it('preserves attachment-only messages, IM provenance, busy and error actions', () => {
+    it('preserves attachment-only messages, IM provenance and the live-turn line', () => {
         show({ ...props([
             event('user', '', { source: 'im', source_platform: 'telegram', source_chat_id: 'chat', payload: JSON.stringify({ attachments: [{ name: 'log.txt', path: 'uploads/log.txt', type: 'text/plain', size: 32 }] }) }),
             event('error', 'Connection failed'),
         ]), busy: true });
         expect(screen.getByText('log.txt')).toBeInTheDocument();
         expect(screen.getByTestId('entity-label')).toHaveTextContent('Telegram·chat');
-        expect(screen.getByRole('status')).toHaveTextContent('chat.thinking');
+        // The live turn reads through the shared transcript's working line.
+        expect(screen.getByRole('status')).toHaveTextContent('projects.transcript.verb_working');
         expect(within(screen.getByRole('status')).getByRole('progressbar')).toBeInTheDocument();
-        expect(screen.getByRole('alert')).toHaveTextContent('Connection failed');
-        expect(screen.getByRole('link', { name: 'connection.open' })).toHaveAttribute('href', '/settings');
+        // An error reads like a thread's: the same error block, no own actions row.
+        expect(screen.getByText('Connection failed')).toBeInTheDocument();
         expect(composer).toHaveBeenLastCalledWith(expect.objectContaining({ draftKey: 'coordinator', streaming: true, placeholder: 'conversation.queuePlaceholder' }));
     });
 

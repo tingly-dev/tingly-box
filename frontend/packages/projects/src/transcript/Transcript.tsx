@@ -50,6 +50,9 @@ interface TranscriptProps {
     newSince?: string;
     hideChecklist?: boolean;
     messageSource?: (message: TranscriptEntry) => ReactNode;
+    // Renders the host's own entries the transcript doesn't model (its
+    // conversation cards); without one they show as quiet text.
+    renderCustom?: (message: TranscriptEntry) => ReactNode;
 }
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
@@ -292,9 +295,8 @@ const RunRows = ({steps, live, expandAll, pendingRequestId}: {steps: ActivitySte
 // has a few calls it folds into one line saying what it did, so a long turn
 // reads as its replies, not as a wall of tool rows. The run still going (or
 // holding a call that waits for an approval) stays open, and settles shut when
-// the turn moves on. Opened, it is the per-call rows. Exported for hosts that
-// render their own conversation around it (the project coordinator's).
-export const ActivityRun = ({steps, live, hold = false, expandAll, pendingRequestId}: {steps: ActivityStep[]; live: boolean; hold?: boolean; expandAll: boolean; pendingRequestId?: string}) => {
+// the turn moves on. Opened, it is the per-call rows.
+const ActivityRun = ({steps, live, hold = false, expandAll, pendingRequestId}: {steps: ActivityStep[]; live: boolean; hold?: boolean; expandAll: boolean; pendingRequestId?: string}) => {
     const {t} = useTranslation();
     const sum = useMemo(() => summarizeRun(steps), [steps]);
     const calls = sum.read + sum.searched + sum.commands + sum.edited + sum.other;
@@ -529,7 +531,7 @@ const holdsPending = (block: TranscriptBlock | undefined, pendingRequestId?: str
 // BlockList renders a run of blocks: the conversation, or a subagent's own
 // work inside its card.
 const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1}: BlockListProps) => {
-    const {detail} = useTranscriptHost();
+    const {detail, renderCustom: renderHostCustom} = useTranscriptHost();
     const items = shownBlocks(blocks, pendingRequestId, detail);
     // A merged run of calls keeps its first index, so the divider goes
     // before the first item at or past newFrom.
@@ -574,12 +576,29 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                     );
                 case 'command':
                     return <Box key={i} {...anchor}><CommandCard message={b.message}/></Box>;
-                case 'system':
+                case 'system': {
+                    // A host's lifecycle notes are often its own words; give
+                    // its renderer the first look, then show the text quietly.
+                    const custom = renderHostCustom?.(b.message);
+                    if (custom) return <Box key={i} {...anchor}>{custom}</Box>;
                     return (
                         <Typography key={i} {...anchor} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
                             {b.message.content}
                         </Typography>
                     );
+                }
+                case 'custom': {
+                    if (renderHostCustom) {
+                        const custom = renderHostCustom(b.message);
+                        if (custom != null) return <Box key={i} {...anchor}>{custom}</Box>;
+                        return null;
+                    }
+                    return (
+                        <Typography key={i} {...anchor} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
+                            {b.message.content}
+                        </Typography>
+                    );
+                }
             }
     };
     return (
@@ -939,7 +958,7 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince, hideChecklist = false, messageSource}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince, hideChecklist = false, messageSource, renderCustom}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
     // gets a line saying what it does and for how long.
     const showWorking = working && !pendingRequestId;
@@ -947,7 +966,7 @@ const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', exp
     const currentGroup = groups.at(-1);
 
     return (
-        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} messageSource={messageSource}>
+        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} messageSource={messageSource} renderCustom={renderCustom}>
             <Stack spacing={messageSpacing}>
                 {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
                 <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>

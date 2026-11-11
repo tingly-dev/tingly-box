@@ -134,9 +134,13 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
                 entries.push({ kind: 'command', content: e.content, payload: parse(e.payload), timestamp });
                 break;
             default:
-                entries.push({ kind: 'system', content: e.content, timestamp });
+                // Unknown kinds pass through with their own kind, so a host's
+                // conversation cards stay whole for its renderer to draw.
+                entries.push({ kind: e.kind, content: e.content, payload: parse(e.payload), timestamp });
         }
         if (e.parent) for (let i = first; i < entries.length; i++) entries[i].parent = e.parent;
+        // The host event's id, so the host's own cards can act on their entry.
+        for (let i = first; i < entries.length; i++) entries[i].id ??= e.id;
     }
     // With no turn running there is nothing left to wait for.
     if (!running) markRead();

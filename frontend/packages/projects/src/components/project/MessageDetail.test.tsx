@@ -94,7 +94,6 @@ describe('manager message detail', () => {
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.concise' }));
         expect(screen.getByText('Manager reply')).toBeInTheDocument();
         expect(screen.getByText('User request')).toBeInTheDocument();
-        expect(screen.queryByText('Peer message')).toBeNull();
         for (const text of ['Worker title', 'Worker report', 'Proposed task', 'Thread failed']) expect(screen.getByText(text)).toBeInTheDocument();
         fireEvent.click(screen.getByText('Worker title'));
         expect(p.onOpenThread).toHaveBeenCalledWith('worker');
@@ -133,7 +132,6 @@ describe('manager message detail', () => {
             expect(screen.getByText('Worker report').compareDocumentPosition(nodes[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         };
         assertReplies();
-        expect(screen.queryByText('Peer message')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.detailed' }));
         assertReplies();
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.concise' }));
@@ -156,7 +154,6 @@ describe('manager message detail', () => {
         second.unmount();
         show();
         expect(screen.getByText('Worker title')).toBeInTheDocument();
-        expect(screen.queryByText('Peer message')).toBeNull();
         expect(screen.getByText('Manager reply')).toBeInTheDocument();
     });
 });
