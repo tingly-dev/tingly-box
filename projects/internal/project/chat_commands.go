@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,6 +34,9 @@ const (
 	// ChatYolo switches the chat's session between running every tool
 	// without asking and its usual permission mode.
 	ChatYolo = agent.CommandYolo
+	// ChatCompact compacts the conversation of the chat's session; the result
+	// comes back as the session's next reply.
+	ChatCompact = agent.CommandCompact
 )
 
 // yoloMode is the permission mode /yolo turns on.
@@ -87,6 +91,13 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			}
 			t = target
 		}
+	}
+	if name == ChatCompact {
+		if b.NewThread {
+			return true, "Nothing to compact: your next message starts a new session.", nil
+		}
+		reply, err := s.compact(b, t, arg)
+		return true, reply, err
 	}
 	tag := threadTag(t.Seq, t.Title)
 	if t.Agent == db.AgentLLM {
@@ -176,6 +187,8 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 			return true, "", err
 		}
 		return true, fmt.Sprintf("Started [%s] in %s.", threadTag(t.Seq, t.Title), where), nil
+	case ChatCompact:
+		return true, "Nothing to compact yet. " + next, nil
 	case ChatStop, ChatClear:
 		if b.ThreadID != "" && arg == "" && s.Threads.Running(b.ThreadID) {
 			s.Threads.Stop(b.ThreadID)
@@ -264,4 +277,17 @@ func (s *Service) verbose(b *db.ChannelBinding, arg string) (string, error) {
 		return "Verbose is on: this chat sees each step a session takes, not only its reply. /verbose off to stop.", nil
 	}
 	return "Verbose is off: this chat sees each reply. /verbose on to also see each step.", nil
+}
+
+// compact is /compact in a chat: the same request the web sends as
+// "/compact", for the chat's session or the project conversation.
+func (s *Service) compact(b *db.ChannelBinding, t *db.Thread, instructions string) (string, error) {
+	src := Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID}
+	if _, err := s.Send(context.Background(), t.ID, compactText(instructions), nil, src); err != nil {
+		return "", err
+	}
+	if t.Agent == db.AgentLLM {
+		return "Compacting the project conversation…", nil
+	}
+	return fmt.Sprintf("Compacting [%s]… I will tell you when it is done.", threadTag(t.Seq, t.Title)), nil
 }

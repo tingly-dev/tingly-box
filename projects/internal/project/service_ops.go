@@ -158,6 +158,9 @@ func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attach
 	if err != nil {
 		return nil, err
 	}
+	if cmd := parseCommand(text); cmd.kind != notCommand && byPerson(src) && len(atts) == 0 {
+		return s.runCommand(ctx, t, cmd, src)
+	}
 	if t.Agent == db.AgentLLM {
 		if _, err := s.Coordinator.Post(t.ProjectID, text, atts, src); err != nil {
 			return nil, err
@@ -175,8 +178,23 @@ func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []At
 	if err != nil {
 		return nil, err
 	}
-	if t.Agent == db.AgentLLM {
+	if t.Agent == db.AgentLLM || (parseCommand(text).kind != notCommand && byPerson(src) && len(atts) == 0) {
 		return s.Send(ctx, threadID, text, atts, src)
 	}
 	return s.Threads.SendWith(ctx, threadID, text, atts, src, mode)
+}
+
+// runCommand runs a slash command a person typed to thread t. Unsupported
+// ones are refused with a reason; none is ever sent on to the agent as text.
+func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src Source) (*db.Thread, error) {
+	switch cmd.kind {
+	case cmdUnsupported:
+		return nil, &ErrCommandUnsupported{Name: cmd.name}
+	case cmdCompact:
+		if t.Agent == db.AgentLLM {
+			return nil, ErrCompactUnavailable
+		}
+		return s.Threads.Compact(ctx, t.ID, cmd.args, src)
+	}
+	return nil, fmt.Errorf("unknown command /%s", cmd.name)
 }

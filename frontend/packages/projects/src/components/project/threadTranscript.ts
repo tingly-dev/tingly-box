@@ -130,6 +130,9 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
             case 'error':
                 entries.push({ kind: 'error', content: e.content, timestamp });
                 break;
+            case 'command':
+                entries.push({ kind: 'command', content: e.content, payload: parse(e.payload), timestamp });
+                break;
             default:
                 entries.push({ kind: 'system', content: e.content, timestamp });
         }
