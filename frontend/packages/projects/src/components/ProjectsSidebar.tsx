@@ -139,21 +139,22 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                         }}
                     >
                         <ListItemIcon sx={{ minWidth: 32, color: 'inherit', '& svg': { fontSize: 20 } }}>
-                            <Badge color="warning" variant="dot" invisible={!attention && !running} sx={attention ? undefined : RUNNING_DOT}>
-                                {row.icon ?? <Folder />}
-                            </Badge>
+                            {(() => {
+                                const icon = (
+                                    <Badge color="warning" variant="dot" invisible={!attention && !running} sx={attention ? undefined : RUNNING_DOT}>
+                                        {row.icon ?? <Folder />}
+                                    </Badge>
+                                );
+                                // The tip describes the pause mark; the row keeps its own name.
+                                return paused ? (
+                                    <Tooltip title={t('sidebar.pausedTip')} describeChild>
+                                        <Box component="span" sx={{ display: 'inline-flex' }}>{icon}</Box>
+                                    </Tooltip>
+                                ) : icon;
+                            })()}
                         </ListItemIcon>
                         <ListItemText
-                            primary={paused ? (
-                                // describeChild keeps the project name the row's
-                                // accessible label; the tip only describes it.
-                                <Tooltip title={t('sidebar.pausedTip')} describeChild>
-                                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                                        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.label}</Box>
-                                        <Pause sx={{ fontSize: 14, flexShrink: 0 }} color="warning" />
-                                    </Box>
-                                </Tooltip>
-                            ) : row.label}
+                            primary={row.label}
                             secondary={row.subtitle}
                             slotProps={navRowTextSlotProps(!!row.selected)}
                             sx={{ minWidth: 0, my: 0 }}
@@ -213,7 +214,8 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             key: p.id,
             label: p.name,
             title: p.name,
-            icon: p.starred ? <Star /> : <Stack />,
+            // A paused project's icon is the pause mark itself — uncolored, like every row icon.
+            icon: p.paused ? <Pause /> : p.starred ? <Star /> : <Stack />,
             to: paths.project(p.id),
             selected: location.pathname === paths.project(p.id),
             paused: p.paused,
