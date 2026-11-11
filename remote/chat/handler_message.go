@@ -70,7 +70,7 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	group := msg.IsGroupMessage()
 	if !h.projectsOn() {
 		if isPairCommand(text, group) || isJoinCommand(text, group) {
-			h.handleSlashCommand(hCtx, text)
+			h.dispatchAccessCommand(hCtx, text)
 			return
 		}
 		h.SendText(hCtx, chatControlOff)
@@ -104,6 +104,11 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	// are the registry's; nothing else is a command. The old agent words
 	// ("@cc fix it", "/tb hi") are not commands: they go on as messages.
 	if isCommand && stripAgentPrefix(cmd.Text()) == cmd.Text() {
+		if isPairCommand(text, group) || isJoinCommand(text, group) {
+			h.dispatchAccessCommand(hCtx, text)
+			return
+		}
+		h.reactReceived(hCtx)
 		if name, arg, ok := projectCommand(text, group); ok {
 			h.runProjectCommand(hCtx, name, arg)
 			return
@@ -116,6 +121,20 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 
 	h.reactReceived(hCtx)
 	h.routeToProject(hCtx, text)
+}
+
+// dispatchAccessCommand waits until pairing succeeds before acknowledging an
+// unpaired DM. Already-authorized chats receive the usual immediate reaction.
+func (h *BotHandler) dispatchAccessCommand(hCtx HandlerContext, text string) {
+	unpaired := hCtx.IsDirect() && h.botSetting.IsRequirePairing() &&
+		!h.chatStore.IsChatPaired(hCtx.ChatID, hCtx.BotUUID)
+	if !unpaired {
+		h.reactReceived(hCtx)
+	}
+	h.handleSlashCommand(hCtx, text)
+	if unpaired && h.chatStore.IsChatPaired(hCtx.ChatID, hCtx.BotUUID) {
+		h.reactReceived(hCtx)
+	}
 }
 
 // handleInboundGate runs the message-shape-specific compatibility gate before

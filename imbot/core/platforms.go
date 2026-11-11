@@ -125,8 +125,8 @@ var platformDescriptors = []PlatformDescriptor{
 		Category:    "im",
 		Auth:        tokenAuth,
 		Capabilities: &PlatformCapabilities{
-			ChatTypes:      []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
-			MediaTypes:     []string{"image", "video", "audio", "document", "gif"},
+			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
+			MediaTypes: []string{"image", "video", "audio", "document", "gif"},
 			// "components" deliberately absent: the platform's SendMessage
 			// never renders core.ActionSet into Discord message components,
 			// and there is no inbound InteractionCreate handling either, so
@@ -151,8 +151,8 @@ var platformDescriptors = []PlatformDescriptor{
 		Category:    "im",
 		Auth:        tokenAuth,
 		Capabilities: &PlatformCapabilities{
-			ChatTypes:      []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
-			MediaTypes:     []string{"image", "video", "audio", "document"},
+			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
+			MediaTypes: []string{"image", "video", "audio", "document"},
 			// "blockKit" deliberately absent: SendMessage never renders
 			// core.ActionSet into Slack Block Kit buttons, and there is no
 			// inbound interactive-message callback handling either — see
@@ -251,7 +251,7 @@ var platformDescriptors = []PlatformDescriptor{
 			RateLimit:      50,
 			ThinkingRender: ThinkingRenderDimmed,
 		},
-		Reactions: emojiReactions,
+		Reactions: dingtalkReactions,
 	},
 	{
 		// Weixin has no explicit capabilities entry and intentionally falls
@@ -315,6 +315,19 @@ var emojiReactions = map[ReactionToken]string{
 	ReactionLike:     "👍",
 	ReactionLove:     "❤️",
 	ReactionLaugh:    "😂",
+}
+
+// dingtalkReactions maps tokens to DingTalk default emotion names (Chinese or
+// English), not emoji characters. Only names in the default list are valid:
+// https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/e2c0cdf97e016ee76687d9c26986c23a26a84738/skills/mono/references/products/chat-emoji-list.md
+// The adapter resolves them in imbot/platform/dingtalk/emotions.go.
+var dingtalkReactions = map[ReactionToken]string{
+	ReactionReceived: "RogerThat",
+	ReactionDone:     "OK",
+	ReactionError:    "Wrong",
+	ReactionLike:     "Like",
+	ReactionLove:     "Love",
+	ReactionLaugh:    "Cry",
 }
 
 // larkReactions is the Feishu/Lark reaction-key set (named keys, not emoji).
