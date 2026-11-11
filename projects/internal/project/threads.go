@@ -212,6 +212,7 @@ func (m *Threads) threadPrompt(q queued, p *db.Project, t *db.Thread) string {
 	if q.relayed {
 		text = coordinatorNote + text
 	}
+	text = literalPrompt(text)
 	note := m.layout.threadAttachmentNote(p, t, q.atts)
 	if note == "" {
 		return text
