@@ -7,6 +7,7 @@ vi.mock('@tingly/ui', async (importOriginal) => ({ ...(await importOriginal()), 
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { readLocal } from '../../utils/storage';
 import { ThreadInfoRail } from './ThreadInfoRail';
+import { keepTail } from './infoRail';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { count?: number; pct?: number }) => (o?.count != null ? `${key}:${o.count}` : o?.pct != null ? `${key}:${o.pct}` : key), i18n: { language: 'en' } }) }));
 
@@ -37,23 +38,26 @@ describe('ThreadInfoRail', () => {
         expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
     });
 
-    it('keeps a long folder on one line: the tail shows, the hover and the copy carry the whole', async () => {
+    it('keeps a long folder on one line: the ellipsis leads, the tail stays whole, the hover and the copy carry the whole', async () => {
         const cwd = '/Users/me/.tingly-box/projects/p-latency/threads/t-cache';
         render(<ThreadInfoRail {...props} thread={thread({ cwd })} folder={false} tasks={[]} canReview={false} />);
-        const shown = screen.getByTitle(cwd);
-        // The path abbreviates to its tail from a `/`, never wrapping the card tall.
+        // The path abbreviates to its trailing directories from a `/`, never wrapping the card tall.
+        const shown = screen.getByText('…/threads/t-cache');
         expect(shown.textContent?.startsWith('…')).toBe(true);
         expect(shown.textContent).not.toContain('.tingly-box');
         expect(screen.queryByText('/work/app')).not.toBeInTheDocument();
+        // Hovering tells the whole value through the tooltip.
+        fireEvent.mouseOver(shown);
+        expect(await screen.findByText(cwd)).toBeInTheDocument();
         // A click copies the whole value, and a check says so.
         fireEvent.click(shown);
         await waitFor(() => expect(writeToClipboard).toHaveBeenCalledWith(cwd));
-        await waitFor(() => expect(shown.querySelector('svg')).not.toBeNull());
+        await waitFor(() => expect(shown.closest('[role="button"]')?.querySelector('svg')).not.toBeNull());
     });
 
     it('lets a short value show as it always did, with a click that copies it whole', () => {
         render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
-        const shown = screen.getByTitle('/work/app');
+        const shown = screen.getByText('/work/app');
         expect(shown.textContent).toBe('/work/app');
         fireEvent.click(shown);
         expect(writeToClipboard).toHaveBeenCalledWith('/work/app');
@@ -61,7 +65,7 @@ describe('ThreadInfoRail', () => {
 
     it('keeps the permissions row on one line too, with a click that copies it', () => {
         render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} permission="Project default · Accept edits" />);
-        const shown = screen.getByTitle('Project default · Accept edits');
+        const shown = screen.getByText('Project default · Accept edits');
         expect(shown.textContent).toBe('Project default · Accept edits');
         fireEvent.click(shown);
         expect(writeToClipboard).toHaveBeenCalledWith('Project default · Accept edits');
@@ -69,9 +73,9 @@ describe('ThreadInfoRail', () => {
 
     it('copies a session id whole while still showing it short', () => {
         render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
-        fireEvent.click(screen.getByTitle('abcd1234-0000'));
+        fireEvent.click(screen.getByText('abcd1234'));
         expect(writeToClipboard).toHaveBeenCalledWith('abcd1234-0000');
-        expect(screen.getByTitle('abcd1234-0000').textContent).toBe('abcd1234');
+        expect(screen.getByText('abcd1234').textContent).toBe('abcd1234');
     });
 
     it('shows the background tasks of a project thread too, not only a folder session', () => {
@@ -148,5 +152,40 @@ describe('ThreadInfoRail', () => {
         expect(screen.getByText('subagents.loading')).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByText('subagents.loading')).not.toBeInTheDocument());
         expect(screen.queryByRole('region', { name: 'subagents.title' })).not.toBeInTheDocument();
+    });
+});
+
+describe('keepTail', () => {
+    const path = '/home/x/tingly-box/.claude/worktrees/stop-28c4c8';
+
+    it('keeps the last two path directories when they fit the budget', () => {
+        expect(keepTail(path, 24)).toBe('…/worktrees/stop-28c4c8');
+    });
+
+    it('drops earlier directories before ever cutting the tail', () => {
+        expect(keepTail(path, 14)).toBe('…/stop-28c4c8');
+    });
+
+    it('clips a too-long last segment at its head, never at its end', () => {
+        const shown = keepTail(path, 9);
+        expect(shown.startsWith('…')).toBe(true);
+        expect(shown.endsWith('28c4c8')).toBe(true);
+        expect(shown).toHaveLength(9);
+    });
+
+    it('lets a value that fits through untouched', () => {
+        expect(keepTail('/work/app', 40)).toBe('/work/app');
+    });
+
+    it('cuts a prefixed value after a nearby separator so the tail reads whole', () => {
+        expect(keepTail('Project default · Accept edits', 18)).toBe('…· Accept edits');
+        expect(keepTail('main → tp/stop-28c4c8', 18)).toBe('…→ tp/stop-28c4c8');
+    });
+
+    it('falls back to a plain head ellipsis for one long word', () => {
+        const shown = keepTail('claude-sonnet-4-5-20250929', 12);
+        expect(shown.startsWith('…')).toBe(true);
+        expect(shown.endsWith('20250929')).toBe(true);
+        expect(shown).toHaveLength(12);
     });
 });
