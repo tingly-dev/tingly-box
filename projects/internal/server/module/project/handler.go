@@ -335,16 +335,18 @@ func (h *Handler) create(c *gin.Context) {
 }
 
 func (h *Handler) fork(c *gin.Context) {
-	p, ok := h.project(c)
-	if !ok {
-		return
-	}
 	var req ForkProjectRequest
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	fork, err := h.svc.Fork(p.ID, req.Name)
+	fork, err := h.svc.Fork(c.Param("id"), req.Name)
 	if err != nil {
+		// An unknown project is 404; everything else (a folder, a failed
+		// copy) is the caller's mistake in words.
+		if errors.Is(err, db.ErrNotFound) {
+			apierr.Store(c, err, "project")
+			return
+		}
 		apierr.BadRequest(c, err.Error())
 		return
 	}

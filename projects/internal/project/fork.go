@@ -51,12 +51,11 @@ func (s *Service) Fork(sourceID, name string) (*db.Project, error) {
 		DisableWorktree:      src.DisableWorktree,
 		MaxRunningThreads:    src.MaxRunningThreads,
 	}
-	// A row from before a default existed forks like a new project starts.
+	// A row from before the default existed forks like a new project starts;
+	// max_running_threads needs no such fill (migrate backfills rows to >= 1
+	// at every open, and Create stamps new ones).
 	if fork.ThreadPermissionMode == "" {
 		fork.ThreadPermissionMode = DefaultPermissionMode
-	}
-	if fork.MaxRunningThreads <= 0 {
-		fork.MaxRunningThreads = db.DefaultMaxRunningThreads
 	}
 	if err := s.Store.CreateProjectWithMain(fork, &db.Thread{Origin: "user"}, s.Layout.Root); err != nil {
 		return nil, err
@@ -125,10 +124,8 @@ func copyTree(srcRoot, dstRoot string) error {
 			return nil
 		}
 		dst := filepath.Join(dstRoot, rel)
-		if dir := filepath.Dir(rel); dir != "." {
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-				return err
-			}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
 		}
 		return copyFile(p, dst)
 	})

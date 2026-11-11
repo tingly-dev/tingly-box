@@ -18,18 +18,16 @@ interface Props {
 /** What the copy carries and what it leaves behind, one quiet row each. */
 function CopyList() {
     const { t } = useTranslation('projects');
-    const rows = [
-        { icon: <Check sx={{ fontSize: 16 }} />, text: t('projectSettings.forkCopies') },
-        { icon: <Close sx={{ fontSize: 16 }} />, text: t('projectSettings.forkNotCopied') },
-    ];
     return (
         <Box sx={{ display: 'grid', gap: 0.75 }}>
-            {rows.map((r, i) => (
-                <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                    <Box sx={{ mt: '2px', display: 'flex', color: i === 0 ? 'primary.main' : 'text.disabled' }}>{r.icon}</Box>
-                    <Typography variant="body2" color={i === 0 ? 'text.primary' : 'text.secondary'}>{r.text}</Typography>
-                </Box>
-            ))}
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Check sx={{ fontSize: 16, mt: '2px', color: 'primary.main' }} />
+                <Typography variant="body2" color="text.primary">{t('projectSettings.forkCopies')}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Close sx={{ fontSize: 16, mt: '2px', color: 'text.disabled' }} />
+                <Typography variant="body2" color="text.secondary">{t('projectSettings.forkNotCopied')}</Typography>
+            </Box>
         </Box>
     );
 }
@@ -47,9 +45,12 @@ export function ForkProjectDialog({ project, open, onClose, onForked }: Props) {
     const [name, setName] = useState('');
     const [busy, setBusy] = useState(false);
 
+    // Seed once per open (like NewProjectDialog seeds empty): a project event
+    // arriving mid-edit must not wipe what is being typed.
     useEffect(() => {
         if (open) setName(`${project.name} (fork)`);
-    }, [open, project.name]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- project.name is read at open only
+    }, [open]);
 
     const submit = async () => {
         if (!name.trim() || busy) return;

@@ -141,8 +141,9 @@ func TestForkNamesExplicit(t *testing.T) {
 	require.Equal(t, "Custom name", fork.Name)
 }
 
-// TestForkFillsRowDefaults forks a row from before the defaults existed: the
-// fork starts where a new project would.
+// TestForkFillsRowDefaults forks a row from before the permission-mode default
+// existed: the fork starts where a new project would. max_running_threads
+// needs no fill here — migrate backfills every row to >= 1 at open.
 func TestForkFillsRowDefaults(t *testing.T) {
 	svc, store, layout := forkFixture(t)
 	p := mkProject(t, store, &db.Project{Name: "Origin"})
@@ -150,7 +151,6 @@ func TestForkFillsRowDefaults(t *testing.T) {
 	fork, err := svc.Fork(p.ID, "")
 	require.NoError(t, err)
 	require.Equal(t, DefaultPermissionMode, fork.ThreadPermissionMode)
-	require.Equal(t, db.DefaultMaxRunningThreads, fork.MaxRunningThreads)
 }
 
 // TestForkRejectsFolder refuses a working folder: its assets are the folder's

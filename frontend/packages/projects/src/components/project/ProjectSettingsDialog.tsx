@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
     Alert, Autocomplete, Box, Button, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack,
     Switch, FormControlLabel, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Typography,
@@ -43,6 +43,19 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
     );
 }
 
+/** One settings action: what it does on the left, its button on the right. */
+function ActionRow({ title, help, action }: { title: string; help: string; action: ReactNode }) {
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ flex: 1 }}>
+                <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
+                <Typography variant="body2" color="text.secondary">{help}</Typography>
+            </Box>
+            {action}
+        </Box>
+    );
+}
+
 function General({ project, patch, onFork }: { project: Project; patch: (p: Patch) => Promise<void>; onFork: () => void }) {
     const { t } = useTranslation('projects');
     const { session } = useProjectsHost();
@@ -83,30 +96,24 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                 <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, disable_worktree: disableWorktree, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('projectSettings.pauseHelp')}</Typography>
-                </Box>
-                <Button variant="outlined" onClick={() => void patch({ paused: !project.paused })}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Button>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('projectSettings.archiveHelp')}</Typography>
-                </Box>
-                <Button variant="outlined" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>
-            </Box>
+            <ActionRow
+                title={project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}
+                help={t('projectSettings.pauseHelp')}
+                action={<Button variant="outlined" onClick={() => void patch({ paused: !project.paused })}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Button>}
+            />
+            <ActionRow
+                title={project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}
+                help={t('projectSettings.archiveHelp')}
+                action={<Button variant="outlined" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>}
+            />
             {project.type !== 'folder' && (
                 <>
                     <Divider />
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Box sx={{ flex: 1 }}>
-                            <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('projectSettings.fork')}</Typography>
-                            <Typography variant="body2" color="text.secondary">{t('projectSettings.forkHelp')}</Typography>
-                        </Box>
-                        <Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>
-                    </Box>
+                    <ActionRow
+                        title={t('projectSettings.fork')}
+                        help={t('projectSettings.forkHelp')}
+                        action={<Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>}
+                    />
                 </>
             )}
         </Stack>
@@ -316,9 +323,8 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
                 {tab === 'environment' && <Environment project={project} patch={patch} />}
                 {tab === 'usage' && <UsageTab projectId={project.id} />}
             </DialogContent>
-            {project.type !== 'folder' && (
-                <ForkProjectDialog project={project} open={forking} onClose={() => setForking(false)} onForked={onClose} />
-            )}
+            {/* Forking can only be armed from General's guarded row above. */}
+            <ForkProjectDialog project={project} open={forking} onClose={() => setForking(false)} onForked={onClose} />
         </Dialog>
     );
 }
