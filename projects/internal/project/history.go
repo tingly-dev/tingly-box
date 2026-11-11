@@ -94,14 +94,11 @@ type readArgs struct {
 // 8-character id of the event to read back from (default: the oldest event
 // of the window), Contains keeps only events with that text, ID reads one
 // event whole.
-func historyBody(e db.ThreadEvent) string {
-	text := e.Content
+func historyBody(e db.ThreadEvent, libraryDir string) string {
 	if e.Kind == db.EvUser && e.Source != db.SourceThread && e.Source != db.SourceSystem {
-		for i, a := range ParseAttachments(e.Payload) {
-			text += fmt.Sprintf("\n[attachment_ref message_id=%s index=%d name=%q]", short(e.ID), i, a.Name)
-		}
+		return withAttachments(e.Content, libraryDir, ParseAttachments(e.Payload))
 	}
-	return text
+	return e.Content
 }
 
 func (c *Coordinator) readConversation(p *db.Project, a readArgs) (string, error) {
@@ -110,7 +107,7 @@ func (c *Coordinator) readConversation(p *db.Project, a readArgs) (string, error
 		if err != nil {
 			return "", fmt.Errorf("no message %q in this conversation", id)
 		}
-		text, _, _ := fit([]readEntry{{short(e.ID), historyWho(*e) + " " + stamp(e.CreatedAt), historyBody(*e)}}, true, nil)
+		text, _, _ := fit([]readEntry{{short(e.ID), historyWho(*e) + " " + stamp(e.CreatedAt), historyBody(*e, c.layout.LibraryDir(p.ID))}}, true, nil)
 		return envelope(trustRelay, text, "source", "history", "kind", "read_conversation"), nil
 	}
 	limit := a.Limit
@@ -148,7 +145,7 @@ func (c *Coordinator) readConversation(p *db.Project, a readArgs) (string, error
 	}
 	var kept []readEntry
 	for _, e := range events {
-		body := historyBody(e)
+		body := historyBody(e, c.layout.LibraryDir(p.ID))
 		if e.Kind == db.EvUsage || e.Kind == db.EvTask || strings.TrimSpace(body) == "" {
 			continue
 		}

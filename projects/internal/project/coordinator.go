@@ -328,12 +328,7 @@ func renderHistory(history []db.ThreadEvent, libraryDir string) []historyMessage
 		case db.EvSystem:
 			add("user", envelope(trustSystem, m.Content, "source", "system", "kind", "update", "at", stamp(m.CreatedAt)))
 		case db.EvUser:
-			atts := ParseAttachments(m.Payload)
-			text := withAttachments(m.Content, libraryDir, atts)
-			if len(atts) > 0 {
-				text += fmt.Sprintf("\n[Attachment references for delegation: message_id=%s; indices 0–%d in the order above]", short(m.ID), len(atts)-1)
-			}
-			add("user", envelope(trustPrincipal, text, "source", userSource(m), "msg", short(m.ID), "at", stamp(m.CreatedAt)))
+			add("user", envelope(trustPrincipal, withAttachments(m.Content, libraryDir, ParseAttachments(m.Payload)), "source", userSource(m), "msg", short(m.ID), "at", stamp(m.CreatedAt)))
 		case db.EvAssistant:
 			add("assistant", m.Content)
 		case db.EvThreadStarted:
@@ -404,7 +399,7 @@ func coordinatorSystemPrompt(l Layout, p *db.Project, threads []db.Thread, now t
 
 How to route each message:
 - Quick questions: answer here yourself, briefly.
-- New work: start a thread with start_thread. One thread per independent task; a message with several unrelated tasks becomes several threads. A thread cannot see this conversation, so its task must be self-contained: the goal, relevant context and decisions, acceptance criteria, and how to verify.
+- New work: start a thread with start_thread. One thread per independent task; a message with several unrelated tasks becomes several threads. A thread cannot see this conversation, so its task must be self-contained: the goal, relevant context and decisions, acceptance criteria, how to verify, and paths to any relevant attached files.
 - Follow-ups in an area a thread already owns: send them to that thread with message_thread, and tell the user which thread got it. Prefer this over starting a new thread for the same area.
 - If the user asks to see a plan first or to confirm before starting, use propose_threads instead of start_thread.
 - A report with outcome="stalled" means a thread's turn is still running but has shown no activity for a while. It is not a failure: look at it with get_thread, and tell the user only if it looks stuck or they are waiting on it. Do not stop or restart it.
@@ -471,12 +466,10 @@ type coordinatorTool struct {
 
 func coordinatorTools() []coordinatorTool {
 	str := func(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
-	refs := map[string]any{"type": "array", "description": "Attachments relevant to this task, identified by user message ID and zero-based index; use [] when none apply. Paths are supplied by the system.", "items": map[string]any{"type": "object", "properties": map[string]any{"message_id": str("ID of a user message in this conversation"), "index": map[string]any{"type": "integer", "minimum": 0}}, "required": []string{"message_id", "index"}}}
 	threadSpec := map[string]any{
-		"attachment_refs": refs,
-		"title":           str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
-		"task":            str("Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify."),
-		"repo":            str("Optional. Path of the project repository to work in; \"none\" for no repository."),
+		"title": str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
+		"task":  str("Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify."),
+		"repo":  str("Optional. Path of the project repository to work in; \"none\" for no repository."),
 	}
 	return []coordinatorTool{
 		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
@@ -496,7 +489,7 @@ func coordinatorTools() []coordinatorTool {
 			},
 			Required: []string{"question", "options", "recommended"}},
 		{Name: "message_thread", Description: "Send a message to an existing thread (follow-up work, an answer to its question). It runs after the thread's current turn.",
-			Properties: map[string]any{"thread_id": str("Thread id (the 8-character prefix is enough)."), "message": str("What to tell the thread."), "attachment_refs": refs,
+			Properties: map[string]any{"thread_id": str("Thread id (the 8-character prefix is enough)."), "message": str("What to tell the thread."),
 				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
 			Required: []string{"thread_id", "message"}},
 		{Name: "get_thread", Description: "Read a thread's status, branch, last report and recent transcript. Entries are cut and the result capped like read_conversation; page back with before, read entries whole with full.",
@@ -535,11 +528,10 @@ type suggestionsPayload struct {
 
 // Suggestion is a proposed thread; ThreadID is set once started.
 type Suggestion struct {
-	Title          string          `json:"title"`
-	Task           string          `json:"task"`
-	Repo           string          `json:"repo,omitempty"`
-	ThreadID       string          `json:"thread_id,omitempty"`
-	AttachmentRefs []AttachmentRef `json:"attachment_refs,omitempty"`
+	Title    string `json:"title"`
+	Task     string `json:"task"`
+	Repo     string `json:"repo,omitempty"`
+	ThreadID string `json:"thread_id,omitempty"`
 }
 
 func (c *Coordinator) findThread(projectID, ref string) (*db.Thread, error) {
@@ -568,7 +560,6 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, i
 		Summary, File     string
 		Instructions      string
 		Cite              []string
-		AttachmentRefs    []AttachmentRef `json:"attachment_refs"`
 		Before, Contains  string
 		ID, Status        string
 		Limit             int
@@ -584,11 +575,7 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, i
 		if strings.TrimSpace(in.Task) == "" {
 			return "task is required", true, nil
 		}
-		atts, err := c.resolveAttachmentRefs(p, in.AttachmentRefs)
-		if err != nil {
-			return fail(err)
-		}
-		t, err := c.threads.Start(ctx, p, StartSpec{Title: in.Title, Task: in.Task, Repo: in.Repo, Origin: "coordinator", Attachments: atts})
+		t, err := c.threads.Start(ctx, p, StartSpec{Title: in.Title, Task: in.Task, Repo: in.Repo, Origin: "coordinator"})
 		if err != nil {
 			return fail(err)
 		}
@@ -596,11 +583,6 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, i
 	case "propose_threads":
 		if len(in.Threads) == 0 {
 			return "threads is empty", true, nil
-		}
-		for _, suggestion := range in.Threads {
-			if _, err := c.resolveAttachmentRefs(p, suggestion.AttachmentRefs); err != nil {
-				return fail(err)
-			}
 		}
 		c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvSuggestions,
 			Payload: jsonString(suggestionsPayload{Suggestions: in.Threads})})
@@ -627,11 +609,7 @@ func (c *Coordinator) runTool(ctx context.Context, p *db.Project, name string, i
 			}
 			msg += quote
 		}
-		atts, err := c.resolveAttachmentRefs(p, in.AttachmentRefs)
-		if err != nil {
-			return fail(err)
-		}
-		if _, err := c.threads.Send(ctx, t.ID, msg, fromThread(p.MainThreadID), atts); err != nil {
+		if _, err := c.threads.Send(ctx, t.ID, msg, fromThread(p.MainThreadID), nil); err != nil {
 			return fail(err)
 		}
 		if busy {
@@ -765,31 +743,16 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 	for _, i := range indexes {
 		want[i] = true
 	}
-	resolved := make(map[int][]Attachment)
-	for i, suggestion := range pl.Suggestions {
-		if suggestion.ThreadID != "" || (len(want) > 0 && !want[i]) {
-			continue
-		}
-		atts, err := c.resolveAttachmentRefs(p, suggestion.AttachmentRefs)
-		if err != nil {
-			return nil, err
-		}
-		resolved[i] = atts
-	}
 	for i := range pl.Suggestions {
 		s := &pl.Suggestions[i]
 		if s.ThreadID != "" || (len(want) > 0 && !want[i]) {
 			continue
 		}
-		t, err := c.threads.Start(ctx, p, StartSpec{Title: s.Title, Task: s.Task, Repo: s.Repo, Origin: "suggestion", Attachments: resolved[i]})
+		t, err := c.threads.Start(ctx, p, StartSpec{Title: s.Title, Task: s.Task, Repo: s.Repo, Origin: "suggestion"})
 		if err != nil {
 			return nil, err
 		}
 		s.ThreadID = t.ID
-		m.Payload = jsonString(pl)
-		if err := c.store.UpdateThreadEvent(m); err != nil {
-			return nil, err
-		}
 	}
 	m.Payload = jsonString(pl)
 	if err := c.store.UpdateThreadEvent(m); err != nil {

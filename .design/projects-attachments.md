@@ -107,13 +107,12 @@ Web and folder/workdir messages follow the same rule; a folder's library is
 outside its working directory as described above. If the file is no longer
 available, the note says it was removed, rather than giving a stale path.
 
-A coordinator delegating a task selects the relevant user-message attachment
-references (`message_id` and zero-based index). The server validates their
-project ownership and supplies the paths to the new or existing thread, so the
-coordinator need not copy paths into its prose. Each proposed thread retains its
-own selection until started, when the files are checked again. Attachment
-references are not user approvals; citations remain separate. Old folder-thread
-uploads resolve in that thread's legacy library when absent from the shared one.
+The coordinator receives the same paths and includes relevant ones in a
+thread's task or follow-up text. This relies on the model to pass them on;
+it does not automatically forward every attachment to every thread. Files
+may be removed before a thread reads them. Attachment contents are not user
+approvals; citations remain separate. Old folder-thread uploads resolve in
+that thread's legacy library when absent from the shared one.
 
 ## API
 

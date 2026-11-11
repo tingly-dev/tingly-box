@@ -486,9 +486,8 @@ type StartSpec struct {
 	Task  string
 	// Repo is the path of one of the project's repos; empty picks the first,
 	// "none" works without a repository.
-	Repo        string
-	Origin      string
-	Attachments []Attachment
+	Repo   string
+	Origin string
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -581,7 +580,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if spec.Origin == "user" {
 		src = Source{}
 	}
-	m.enqueue(t.ID, queued{text: t.Task, src: src, atts: spec.Attachments})
+	m.enqueue(t.ID, queued{text: t.Task, src: src})
 	return t, nil
 }
 
