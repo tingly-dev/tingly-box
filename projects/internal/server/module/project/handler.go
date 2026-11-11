@@ -66,6 +66,11 @@ type CreateProjectRequest struct {
 	Repos []string `json:"repos,omitempty"`
 }
 
+// ForkProjectRequest names the fork; empty is "<source name> (fork)".
+type ForkProjectRequest struct {
+	Name string `json:"name,omitempty"`
+}
+
 // UpdateProjectRequest changes the fields that are set.
 type UpdateProjectRequest struct {
 	Name                 *string   `json:"name,omitempty"`
@@ -229,6 +234,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.DELETE("/projects/:id", h.delete, tag,
 		swagger.WithDescription("Archive a project or folder (the same as PATCH archived=true): its threads stop and stay readable, its IM chats are unbound, nothing is deleted"),
 		swagger.WithResponseModel(OKResponse{}))
+	api.POST("/projects/:id/fork", h.fork, tag,
+		swagger.WithDescription("Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked"),
+		swagger.WithRequestModel(ForkProjectRequest{}),
+		swagger.WithResponseModel(db.Project{}))
 
 	api.GET("/projects/events", h.allEvents, tag,
 		swagger.WithDescription("Server-sent events for every project, for the sidebar and lists: project, thread and coordinator frames only. Transcript entries (thread_event) and streamed coordinator text are not sent here; subscribe to /projects/{id}/events for those"),
@@ -323,6 +332,25 @@ func (h *Handler) create(c *gin.Context) {
 		status = http.StatusOK
 	}
 	c.JSON(status, p)
+}
+
+func (h *Handler) fork(c *gin.Context) {
+	var req ForkProjectRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	fork, err := h.svc.Fork(c.Param("id"), req.Name)
+	if err != nil {
+		// An unknown project is 404; everything else (a folder, a failed
+		// copy) is the caller's mistake in words.
+		if errors.Is(err, db.ErrNotFound) {
+			apierr.Store(c, err, "project")
+			return
+		}
+		apierr.BadRequest(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusCreated, fork)
 }
 
 func (h *Handler) models(c *gin.Context) {

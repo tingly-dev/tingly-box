@@ -73,6 +73,28 @@ func (s *Store) GetProject(id string) (*Project, error) {
 	return &p, nil
 }
 
+// DeleteProjectCascade removes a project and everything scoped to it: its
+// threads, their events, its coordinator inputs and its IM bindings. No user
+// action deletes a project (archiving is the only removal the app offers);
+// Fork calls this to roll back a copy that failed midway.
+func (s *Store) DeleteProjectCascade(projectID string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("target_project_id = ?", projectID).Delete(&ChannelBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", projectID).Delete(&CoordinatorInput{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM thread_events WHERE thread_id IN (SELECT id FROM threads WHERE project_id = ?)", projectID).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", projectID).Delete(&Thread{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", projectID).Delete(&Project{}).Error
+	})
+}
+
 // SaveProject writes all fields of p.
 func (s *Store) SaveProject(p *Project) error {
 	return s.db.Save(p).Error

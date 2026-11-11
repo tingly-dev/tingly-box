@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 import { ProjectsHostProvider } from '../../host/ProjectsHost';
 
@@ -14,7 +15,8 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 function open(p: Record<string, unknown> = project) {
     m.get.mockResolvedValue({ data: { max_running_threads_limit: 100 }, response: new Response() });
     m.patch.mockResolvedValue({ data: { ...p }, response: new Response() });
-    render(<ProjectsHostProvider host={host}><ProjectSettingsDialog project={p as never} open tab="general" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></ProjectsHostProvider>);
+    // The fork dialog (nested under General) navigates, so the tree needs a router.
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="general" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
     return screen.getByRole('textbox', { name: 'projectSettings.maxRunning' }) as HTMLInputElement;
 }
 const save = () => screen.getByRole('button', { name: 'common.save' });

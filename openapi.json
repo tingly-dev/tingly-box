@@ -5640,6 +5640,50 @@
         }
       }
     },
+    "/api/v1/projects/{id}/fork": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked",
+        "description": "Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked",
+        "operationId": "apiV1ProjectsIdForkPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/library": {
       "get": {
         "tags": [
@@ -5709,8 +5753,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
-        "description": "Download a library folder as a zip (at most 100 files and 10 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
         "operationId": "apiV1ProjectsIdLibraryArchiveGet",
         "parameters": [
           {
@@ -14768,6 +14812,15 @@
           "category"
         ]
       },
+      "ForkProjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        }
+      },
       "GenerateTokenRequest": {
         "type": "object",
         "properties": {
@@ -22031,6 +22084,16 @@
             "type": "integer",
             "format": "int64",
             "description": "Field cache_write_tokens"
+          },
+          "cache_write_ttl_12h_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_ttl_12h_tokens"
+          },
+          "cache_write_ttl_30m_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_ttl_30m_tokens"
           },
           "input_tokens": {
             "type": "integer",
