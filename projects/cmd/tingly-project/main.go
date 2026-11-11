@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -84,6 +85,11 @@ func rootCmd() *cobra.Command {
 }
 
 func runServe(cfg config.Config) error {
+	dataDir, err := filepath.Abs(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	cfg.DataDir = dataDir
 	store, err := db.Open(cfg.DBPath(), db.WithProjectsDir(cfg.ProjectsDir()))
 	if err != nil {
 		return err

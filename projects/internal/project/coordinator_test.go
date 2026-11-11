@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -100,6 +101,58 @@ func countKind(msgs []db.ThreadEvent, kind string) int {
 		}
 	}
 	return n
+}
+
+func TestCoordinatorPassesAttachmentPathAsTaskText(t *testing.T) {
+	seen := make(chan string, 1)
+	worker := make(chan string, 1)
+	results := make(chan string, 1)
+	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
+		worker <- turn.Prompt
+		return nil
+	}, func(c *coordtest.Turn) error {
+		if c.CheckIn() {
+			c.Reply(noUpdate)
+			return nil
+		}
+		input := c.Input()
+		seen <- input
+		// A scripted coordinator forwards the path it was given as ordinary text.
+		out, failed := c.Call("start_thread", map[string]string{"title": "Read upload", "task": input, "repo": "none"})
+		if failed {
+			results <- out
+		} else {
+			results <- ""
+		}
+		return nil
+	})
+	a, err := f.threads.layout.SaveAttachment(f.project.ID, "data.txt", strings.NewReader("actual bytes"), 0)
+	require.NoError(t, err)
+	path, err := f.threads.layout.LibraryPath(f.project.ID, a.Path)
+	require.NoError(t, err)
+	_, err = svc.Coordinator.Post(f.project.ID, "Please read", []Attachment{a}, Source{})
+	require.NoError(t, err)
+	select {
+	case input := <-seen:
+		require.Contains(t, input, path)
+	case <-time.After(5 * time.Second):
+		t.Fatal("coordinator did not receive upload")
+	}
+	select {
+	case result := <-results:
+		require.Empty(t, result)
+	case <-time.After(5 * time.Second):
+		t.Fatal("coordinator did not delegate")
+	}
+	select {
+	case prompt := <-worker:
+		require.Contains(t, prompt, path)
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Equal(t, "actual bytes", string(body))
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not start")
+	}
 }
 
 func TestCoordinatorRoutesWorkToThreadsAndRelaysReports(t *testing.T) {

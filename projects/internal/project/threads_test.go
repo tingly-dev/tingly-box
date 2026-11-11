@@ -99,6 +99,36 @@ func waitStatus(t *testing.T, store *db.Store, id, status string) *db.Thread {
 	return nil
 }
 
+func TestThreadReadsSharedProjectUpload(t *testing.T) {
+	var uploadPath string
+	result := make(chan error, 1)
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		if !strings.Contains(turn.Opts.AppendSystemPrompt, filepath.Dir(filepath.Dir(uploadPath))) {
+			result <- errors.New("thread was not told the shared library path")
+			return nil
+		}
+		body, err := os.ReadFile(uploadPath)
+		if err == nil && string(body) != "shared upload contents" {
+			err = errors.New("unexpected shared upload contents")
+		}
+		result <- err
+		return nil
+	})
+	a, err := f.threads.layout.SaveAttachment(f.project.ID, "shared.txt", strings.NewReader("shared upload contents"), 0)
+	require.NoError(t, err)
+	uploadPath, err = f.threads.layout.LibraryPath(f.project.ID, a.Path)
+	require.NoError(t, err)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Read upload", Task: "Read the shared upload", Origin: "coordinator"})
+	require.NoError(t, err)
+	assert.NotEqual(t, f.repo, th.Cwd, "thread runs in a worktree")
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("thread did not read the upload")
+	}
+}
+
 func TestThreadCommitsBecomeReadyAndMerge(t *testing.T) {
 	var f *testFixture
 	f = newFixture(t, func(turn *enginetest.Turn) error {

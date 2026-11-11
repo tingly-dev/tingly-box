@@ -399,7 +399,7 @@ func coordinatorSystemPrompt(l Layout, p *db.Project, threads []db.Thread, now t
 
 How to route each message:
 - Quick questions: answer here yourself, briefly.
-- New work: start a thread with start_thread. One thread per independent task; a message with several unrelated tasks becomes several threads. A thread cannot see this conversation, so its task must be self-contained: the goal, relevant context and decisions, acceptance criteria, and how to verify.
+- New work: start a thread with start_thread. One thread per independent task; a message with several unrelated tasks becomes several threads. A thread cannot see this conversation, so its task must be self-contained: the goal, relevant context and decisions, acceptance criteria, how to verify, and paths to any relevant attached files.
 - Follow-ups in an area a thread already owns: send them to that thread with message_thread, and tell the user which thread got it. Prefer this over starting a new thread for the same area.
 - If the user asks to see a plan first or to confirm before starting, use propose_threads instead of start_thread.
 - A report with outcome="stalled" means a thread's turn is still running but has shown no activity for a while. It is not a failure: look at it with get_thread, and tell the user only if it looks stuck or they are waiting on it. Do not stop or restart it.

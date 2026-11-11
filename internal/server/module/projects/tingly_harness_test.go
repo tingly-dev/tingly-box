@@ -51,6 +51,7 @@ type tinglyProjectsHarness struct {
 	stores            *hostdb.StoreManager
 	otherID, chosenID string
 	workdir           string
+	dataDir           string
 	enabled           *atomic.Bool
 	registry          *channel.Registry
 	call              func(string, string, any, any)
@@ -123,7 +124,8 @@ for line in sys.stdin:
 	t.Cleanup(func() { _ = cfg.CloseStores() })
 	tbHost := NewHost(cfg)
 	tbHost.SetChatBridge(bridge)
-	app, err := projectsapp.New(projectsapp.Options{Host: tbHost, DataDir: t.TempDir()})
+	dataDir := t.TempDir()
+	app, err := projectsapp.New(projectsapp.Options{Host: tbHost, DataDir: dataDir})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = app.Close() })
 	pairing := false
@@ -173,7 +175,7 @@ for line in sys.stdin:
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), out))
 		}
 	}
-	return &tinglyProjectsHarness{env: env, bridge: bridge, stores: stores, otherID: otherID, chosenID: chosenID, workdir: workdir, enabled: enabled, registry: reg, call: call}
+	return &tinglyProjectsHarness{env: env, bridge: bridge, stores: stores, otherID: otherID, chosenID: chosenID, workdir: workdir, dataDir: dataDir, enabled: enabled, registry: reg, call: call}
 }
 
 func TestTinglySessionIMRoundTrip(t *testing.T) {
@@ -589,7 +591,7 @@ func TestTinglyChatFilesKeepTheirNames(t *testing.T) {
 	h.setPrivileged(t, chat, true)
 
 	chat.SendMedia([]core.MediaAttachment{{Type: "document", URL: srv.URL + "/dl/AgACAgIAAxkDAAIB", MimeType: "application/pdf", Filename: "季度报告 final.pdf"}})
-	chat.WaitText(10 * time.Second)
+	firstReply := chat.WaitText(10 * time.Second).Text
 	chat.SendMedia([]core.MediaAttachment{{Type: "image", URL: srv.URL + "/dl/pic", MimeType: "image/png"}})
 	chat.WaitText(10 * time.Second)
 
@@ -614,6 +616,18 @@ func TestTinglyChatFilesKeepTheirNames(t *testing.T) {
 	require.Equal(t, "季度报告 final.pdf", names[0])
 	require.Regexp(t, `^image-\d{8}-\d{6}\.png$`, names[1])
 	require.Regexp(t, `^uploads/[0-9a-f]{12}-季度报告 final\.pdf$`, paths[0])
+	var detail struct {
+		Thread struct {
+			ProjectID string `json:"project_id"`
+		} `json:"thread"`
+	}
+	h.call("GET", "/threads/"+threadID, nil, &detail)
+	stored := filepath.Join(h.dataDir, "projects", detail.Thread.ProjectID, "library", filepath.FromSlash(paths[0]))
+	require.Contains(t, firstReply, stored, "the actual process received the persistent path")
+	body, err := os.ReadFile(stored)
+	require.NoError(t, err)
+	require.Equal(t, "%PDF-1.4 report", string(body))
+	require.NotContains(t, firstReply, "tb-chat-files-")
 	for _, p := range paths {
 		require.NotContains(t, p, "AgACAgIAAxkDAAIB")
 	}

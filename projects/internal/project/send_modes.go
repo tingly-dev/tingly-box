@@ -76,7 +76,7 @@ func (m *Threads) inject(threadID string, q queued) bool {
 	if err != nil {
 		return false
 	}
-	prompt := queuedPrompt(q, m.layout.LibraryDir(UploadOwner(p, t)))
+	prompt := m.threadPrompt(q, p, t)
 	if err := m.engine.Inject(m.sessionOf(threadID), prompt); err != nil {
 		if !errors.Is(err, engine.ErrNotInjectable) {
 			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "could not add the message to the running turn: " + err.Error()})

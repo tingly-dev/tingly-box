@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,6 +87,38 @@ func TestFolderThreadsShareUploadsOverHTTP(t *testing.T) {
 	assert.NotEqual(t, 200, code)
 	_, err = os.Stat(filepath.Join(root, f.ID, "library", "uploads"))
 	assert.NoError(t, err, "uploads live in the folder project's library")
+}
+
+func TestWorkdirUploadPathsReachAgentOverHTTP(t *testing.T) {
+	prompts := make(chan string, 4)
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { prompts <- turn.Prompt; turn.Say("ok", 1, 1); return nil }}
+	root := t.TempDir()
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, root)
+	var folder db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &folder))
+	code, atts := c.upload("/projects/"+folder.ID+"/attachments", "first.txt", "first bytes")
+	require.Equal(t, 201, code)
+	var thread db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+folder.ID+"/threads", map[string]any{"content": "first", "attachments": []string{atts[0].Path}}, &thread))
+	check := func(a project.Attachment, wantText, wantBody string) {
+		t.Helper()
+		path := filepath.Join(root, folder.ID, "library", filepath.FromSlash(a.Path))
+		select {
+		case prompt := <-prompts:
+			require.Contains(t, prompt, wantText)
+			require.Contains(t, prompt, path)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, wantBody, string(data))
+		case <-time.After(5 * time.Second):
+			t.Fatal("agent did not receive message")
+		}
+	}
+	check(atts[0], "first", "first bytes")
+	code, atts = c.upload("/threads/"+thread.ID+"/attachments", "next.txt", "next bytes")
+	require.Equal(t, 201, code)
+	require.Equal(t, 200, c.do("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "next", "attachments": []string{atts[0].Path}, "mode": "queue"}, nil))
+	check(atts[0], "next", "next bytes")
 }
 
 // An attachment is read through the same checks as the Library: one swapped for a link is refused.

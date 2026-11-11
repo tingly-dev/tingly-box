@@ -73,7 +73,7 @@ export const en = {
     },
     session: {
         sessions: 'Sessions', new: 'New session', none: 'No sessions yet', folder: 'Working folder', chooseFolder: 'Choose a working folder',
-        folderPlaceholder: '/path/to/folder', attachNeedsFolder: 'Choose a working folder to attach files', heading: 'What should Claude work on?', promptPlaceholder: 'Describe a task…',
+        folderPlaceholder: '/path/to/folder', attachNeedsFolder: 'Choose a working folder to attach files', folderLockedByAttachments: 'Remove attachments to change the working folder.', heading: 'What should Claude work on?', promptPlaceholder: 'Describe a task…',
         placeholder: 'Message this session…', queuePlaceholder: 'Message this session — it reads it at its next step…',
         resolvedPlaceholder: 'Reopen the session to send it more work', resolve: 'Mark session resolved', reopen: 'Reopen session', archive: 'Archive session', restore: 'Restore session', archivedPlaceholder: 'Restore the session to send it more work',
         refreshFailed: 'Could not refresh the sessions. What is shown is the last loaded; reconnecting automatically.',

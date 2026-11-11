@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -99,7 +100,11 @@ func New(opts Options) (*App, error) {
 	}
 	dbPath, root := ":memory:", os.TempDir()
 	if opts.DataDir != "" {
-		cfg := config.Config{DataDir: opts.DataDir}
+		dataDir, err := filepath.Abs(opts.DataDir)
+		if err != nil {
+			return nil, err
+		}
+		cfg := config.Config{DataDir: dataDir}
 		dbPath, root = cfg.DBPath(), cfg.ProjectsDir()
 	}
 	store, err := db.Open(dbPath, db.WithProjectsDir(root))
