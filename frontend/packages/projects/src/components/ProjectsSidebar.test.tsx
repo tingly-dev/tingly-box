@@ -120,6 +120,26 @@ describe('ProjectsSidebar', () => {
         await screen.findByRole('region', { name: 'nav.projects' });
         expect(screen.queryByRole('link', { name: /im\.title/ })).not.toBeInTheDocument();
     });
+    it('dims a paused project, explains it on hover and hides its dots', async () => {
+        // A paused project still reports waiting threads (an interrupted turn
+        // lands there), but nothing can run or be answered until it resumes.
+        show(host([summary('a', 'Alpha', 2), { ...summary('g', 'Gamma', 3), paused: true }]), '/p');
+        const projects = await screen.findByRole('region', { name: 'nav.projects' });
+        const alpha = within(projects).getByRole('link', { name: /Alpha/ });
+        const gamma = within(projects).getByRole('link', { name: /Gamma/ });
+        // The paused row reads quieter; the active row does not.
+        expect(gamma).toHaveStyle({ opacity: '0.45' });
+        expect(alpha).not.toHaveStyle({ opacity: '0.45' });
+        // Paused wins over the dots: Gamma waits too, yet shows nothing,
+        // while the active Alpha keeps its waiting dot.
+        expect(gamma.querySelector('.MuiBadge-badge')).toHaveClass('MuiBadge-invisible');
+        expect(alpha.querySelector('.MuiBadge-badge')).not.toHaveClass('MuiBadge-invisible');
+        // The pause mark next to the name carries the hover tip.
+        expect(gamma.querySelector('svg.MuiSvgIcon-colorWarning')).not.toBeNull();
+        expect(alpha.querySelector('svg.MuiSvgIcon-colorWarning')).toBeNull();
+        fireEvent.mouseOver(within(gamma).getByText('Gamma'));
+        expect(await screen.findByText('sidebar.pausedTip')).toBeInTheDocument();
+    });
     it('keeps the Workdirs section a plain tree: no view switch, no kanban', async () => {
         const h = host([folder('f-app', '/home/me/app', 1, 0)]);
         list.mockImplementation((path: string) => Promise.resolve({
