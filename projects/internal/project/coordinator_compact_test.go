@@ -72,6 +72,9 @@ func newCoordinatorCompactFixture(t *testing.T) *coordinatorCompactFixture {
 				Reported: agentboot.CompactReported{Tokens: true}})
 			return nil
 		}
+		if strings.Contains(turn.Prompt, "trigger auto compact") {
+			turn.Compacted(agentboot.CompactResult{Trigger: agentboot.CompactAuto})
+		}
 		turn.Say("done", 30, 4)
 		return nil
 	}}
@@ -158,8 +161,21 @@ func TestCoordinatorCompactsItsOwnSession(t *testing.T) {
 	prompts = f.sent()
 	require.Len(t, prompts, 3)
 	assert.Contains(t, prompts[2], "Current project context")
+	assert.Contains(t, prompts[2], `kind="project-context"`, "settings must also be restored after compaction")
 	f.say(t, "and then?", 3)
+	assert.NotContains(t, f.sent()[3], `kind="project-context"`)
 	assert.NotContains(t, f.sent()[3], "Current project context", "only the first turn after a compaction")
+}
+
+func TestCoordinatorAutoCompactionRefreshesSettings(t *testing.T) {
+	f := newCoordinatorCompactFixture(t)
+	f.say(t, "hello", 1)
+	f.say(t, "trigger auto compact", 2)
+	assert.NotContains(t, f.sent()[1], `kind="project-context"`)
+	f.say(t, "after auto compact", 3)
+	assert.Contains(t, f.sent()[2], `kind="project-context"`)
+	f.say(t, "unchanged", 4)
+	assert.NotContains(t, f.sent()[3], `kind="project-context"`)
 }
 
 func TestCoordinatorCompactRefusedDoesNotBlockTheQueue(t *testing.T) {

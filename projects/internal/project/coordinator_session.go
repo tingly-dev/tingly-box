@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -39,8 +40,9 @@ type coordinatorSessionRun struct {
 	tally         turnTally
 	// compact marks a run that compacts the conversation; card is its
 	// compaction card while one is open.
-	compact bool
-	card    *db.ThreadEvent
+	compact   bool
+	card      *db.ThreadEvent
+	compacted bool
 }
 
 type coordinatorSessionStore struct{ sessions *coordinatorSessions }
@@ -171,7 +173,7 @@ func (s *coordinatorSessions) launchOptions(ctx context.Context, p *db.Project, 
 	return opts, nil
 }
 
-func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db.ThreadEvent) error {
+func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db.ThreadEvent, inputID string) error {
 	main, err := s.c.store.GetThread(p.MainThreadID)
 	if err != nil {
 		return err
@@ -187,12 +189,23 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	}
 	if main.SessionID == "" {
 		main.SessionID = uuid.NewString()
+		main.Turns = 0
 		if err := s.c.store.SaveThread(main); err != nil {
 			return err
 		}
 	}
 	if cmd, ok := coordinatorCommand(event); ok {
-		return s.compact(ctx, p, main, cmd.args)
+		// Compaction can discard prior settings even if interrupted; invalidate
+		// before invoking it so the next real input refreshes them.
+		if main.Turns > 0 {
+			if err := s.c.store.InvalidateCoordinatorSettings(main.ID); err != nil {
+				return err
+			}
+		}
+		if err := s.compact(ctx, p, main, cmd.args); err != nil {
+			return err
+		}
+		return s.c.store.FinishCoordinatorInput(inputID, true)
 	}
 	config, err := s.tools.config(main.ID)
 	if err != nil {
@@ -206,6 +219,12 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	toolTurn.begin(p, user)
 	defer toolTurn.end()
 
+	settingsText := coordinatorCurrentSettings(p)
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte("v1\x00"+settingsText)))
+	confirmed, err := s.c.store.BeginCoordinatorSettings(main.ID, main.SessionID)
+	if err != nil {
+		return fmt.Errorf("prepare coordinator settings: %w", err)
+	}
 	var prompt strings.Builder
 	if main.Turns == 0 {
 		history, err := s.c.store.ListRecentThreadEvents(main.ID, historyLimit+1)
@@ -230,7 +249,8 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 			fmt.Fprintf(&prompt, "%s: %s\n", m.Role, m.Content)
 		}
 	}
-	if main.Turns == 0 || event.Kind == db.EvSystem || s.takeResend(p.ID) {
+	resend := s.takeResend(p.ID)
+	if main.Turns == 0 || event.Kind == db.EvSystem || resend {
 		threads, err := s.c.store.ListThreads(p.ID)
 		if err != nil {
 			return err
@@ -238,7 +258,9 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 		s.c.threads.Annotate(threads)
 		fmt.Fprintf(&prompt, "\nCurrent project context:\n%s\n", coordinatorSystemPrompt(s.c.layout, p, threads, event.CreatedAt))
 	}
-	fmt.Fprintf(&prompt, "\n%s\n", coordinatorCurrentSettings(p))
+	if main.Turns == 0 || confirmed != digest || resend {
+		fmt.Fprintf(&prompt, "\n%s\n", settingsText)
+	}
 	for _, m := range renderHistory([]db.ThreadEvent{*event}, s.c.layout.LibraryDir(p.ID)) {
 		fmt.Fprintf(&prompt, "\n%s\n", m.Content)
 	}
@@ -277,16 +299,13 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	}
 	s.mu.Lock()
 	initErr := run.initErr
+	compacted := run.compacted
 	s.mu.Unlock()
 	if initErr != nil {
 		return fmt.Errorf("save coordinator session: %w", initErr)
 	}
 	if end.Stopped || end.NotSent {
 		return fmt.Errorf("coordinator session stopped before completion")
-	}
-	main.Turns++
-	if err := s.c.store.SaveThread(main); err != nil {
-		return err
 	}
 	if !toolTurn.quiet.Load() {
 		s.mu.Lock()
@@ -304,7 +323,11 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 			s.c.final(s.c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvAssistant, Content: text}))
 		}
 	}
-	return nil
+	if compacted {
+		// The compacted transcript may no longer contain the settings we sent.
+		digest = ""
+	}
+	return s.c.store.FinishCoordinatorTurn(inputID, main.ID, main.SessionID, digest, main.Turns+1)
 }
 
 // coordinatorCurrentSettings accompanies an actual input, never a separate turn.

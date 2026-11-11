@@ -106,6 +106,9 @@ func (s *coordinatorSessions) noteCompact(sessionID string, e engine.Entry) {
 	}
 	s.mu.Lock()
 	run := s.runs[sessionID]
+	if run != nil && ce.Phase == agentboot.CompactDone {
+		run.compacted = true
+	}
 	s.mu.Unlock()
 	if run == nil {
 		return
