@@ -145,14 +145,37 @@ func Test_PairingResetCleanup(t *testing.T) {
 // Test_ReactionReceived verifies the bot reacts to inbound messages with
 // the "received" emoji (👨‍💻 on tingly).
 func Test_ReactionReceived(t *testing.T) {
-	_, harness, alice := bootHelper(t, false)
-	chat := alice.OpenDM(harness.Setting.UUID)
-
-	msgID := chat.SendText("hello")
-	react := chat.WaitReaction(msgID, 3*time.Second)
-	if react.Emoji != "👨‍💻" {
-		t.Fatalf("expected 'received' reaction emoji, got %q", react.Emoji)
+	for _, text := range []string{"hello", "/help", "/h", "/status", "/notacommand"} {
+		t.Run(text, func(t *testing.T) {
+			_, harness, alice := bootHelper(t, false)
+			chat := alice.OpenDM(harness.Setting.UUID)
+			msgID := chat.SendText(text)
+			react := chat.WaitReaction(msgID, 3*time.Second)
+			require.Equal(t, "👨‍💻", react.Emoji)
+			chat.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
+		})
 	}
+}
+
+func Test_ReactionRespectsPairingAndWhitelist(t *testing.T) {
+	env, harness, alice := bootHelper(t, true)
+	dm := alice.OpenDM(harness.Setting.UUID)
+	dm.SendText("/help")
+	dm.WaitText(3*time.Second).AssertContains(t, "/pair <code>")
+	dm.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
+	dm.SendText("/pair invalid")
+	dm.WaitText(3 * time.Second)
+	dm.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
+	code, _ := harness.MintPairingCode()
+	id := dm.SendText("/pair " + code)
+	dm.WaitText(3*time.Second).AssertContains(t, "Paired")
+	require.Equal(t, "👨‍💻", dm.WaitReaction(id, 3*time.Second).Emoji)
+	dm.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
+
+	group := env.NewGroup("eng", alice).Chat(harness.Setting.UUID)
+	group.SendText("/help")
+	group.WaitText(3*time.Second).AssertContains(t, "not enabled")
+	group.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
 }
 
 // Test_DirPick exercises the inline-keyboard folder-switch flow: /dir lists

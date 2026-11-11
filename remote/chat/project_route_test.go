@@ -392,9 +392,16 @@ func Test_ProjectsOffTurnsChatOff(t *testing.T) {
 	chat.SendText("@cc fix it")
 	chat.WaitText(3*time.Second).AssertContains(t, "Turn on Projects")
 	chat.Drain()
-	chat.SendText("/pair 123456")
-	ev := chat.WaitText(3 * time.Second)
-	assert.NotContains(t, ev.Text, "Turn on Projects", "pairing is not chat control")
+	chat.SendText("/help")
+	chat.WaitText(3*time.Second).AssertContains(t, "Turn on Projects")
+	chat.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
+	for _, command := range []string{"/pair 123456", "/join"} {
+		id := chat.SendText(command)
+		ev := chat.WaitText(3 * time.Second)
+		assert.NotContains(t, ev.Text, "Turn on Projects", "access commands are not chat control")
+		assert.Equal(t, "👨‍💻", chat.WaitReaction(id, 3*time.Second).Emoji)
+		chat.ExpectNoEvent(150*time.Millisecond, tingly.EventReact)
+	}
 	assert.Empty(t, router.inbound())
 	assert.Empty(t, router.movedTo())
 }
