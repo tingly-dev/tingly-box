@@ -1,4 +1,4 @@
-package transform
+package upstream
 
 import (
 	"encoding/json"
@@ -18,7 +18,7 @@ func TestRemoveAnthropicThinkingBudget(t *testing.T) {
 			before, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.Contains(t, string(before), `"budget_tokens":4096`)
-			require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(&TransformContext{Request: req}))
+			omitThinkingBudget(req)
 			after, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.NotContains(t, string(after), `"budget_tokens"`)
@@ -32,7 +32,7 @@ func TestRemoveThinkingBudgetLeavesOpenAIRequest(t *testing.T) {
 	req.SetExtraFields(map[string]any{"thinking_budget": 4096})
 	before, err := json.Marshal(req)
 	require.NoError(t, err)
-	require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(&TransformContext{Request: req}))
+	omitThinkingBudget(req)
 	after, err := json.Marshal(req)
 	require.NoError(t, err)
 	require.JSONEq(t, string(before), string(after))
@@ -48,7 +48,7 @@ func TestRemoveAnthropicThinkingBudgetLeavesOtherModes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			before, err := json.Marshal(req)
 			require.NoError(t, err)
-			require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(&TransformContext{Request: req}))
+			omitThinkingBudget(req)
 			after, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.JSONEq(t, string(before), string(after))

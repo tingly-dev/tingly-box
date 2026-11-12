@@ -39,9 +39,10 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 	}
 
 	terminal, err := upstream.NewAnthropic(upstream.Config{
-		Clients:  ph.deps.ClientPool,
-		Provider: provider,
-		Model:    requestModel,
+		Clients:                ph.deps.ClientPool,
+		Provider:               provider,
+		Model:                  requestModel,
+		RecordAnthropicRequest: anthropicWireRecorder(c),
 	}, upstream.AnthropicWireBeta)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)

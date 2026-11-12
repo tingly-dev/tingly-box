@@ -37,6 +37,8 @@ type Config struct {
 	// StreamOnly marks a provider that only streams (Codex): a complete call
 	// is sent as a stream and answered with the stream's final response.
 	StreamOnly bool
+	// RecordAnthropicRequest captures the final Anthropic wire-shaped request.
+	RecordAnthropicRequest func(any) error
 }
 
 func (c Config) validate() error {
