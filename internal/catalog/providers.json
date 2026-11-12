@@ -18,7 +18,7 @@
     "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
   "version": "2.7.0",
-  "last_updated": "2026-11-02T00:00:00Z",
+  "last_updated": "2026-11-12T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -40,6 +40,8 @@
       "api_style": "anthropic",
       "icon": "aws",
       "models": [
+        { "id": "global.anthropic.claude-haiku-5-5", "sources": ["https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html"] },
+        {"id": "global.anthropic.claude-fable-5-2", "sources": ["https://platform.claude.com/docs/en/models/overview"]},
         { "id": "anthropic.claude-opus-5-5" },
         { "id": "anthropic.claude-sonnet-5-5" },
         { "id": "anthropic.claude-fable-5-1" },
@@ -79,6 +81,7 @@
       "api_style": "anthropic",
       "icon": "vertexai",
       "models": [
+        {"id": "claude-fable-5-2", "context": 1000000, "max_output": 128000, "sources": ["https://platform.claude.com/docs/en/models/overview"]},
         { "id": "claude-opus-5-5" },
         { "id": "claude-sonnet-5-5" },
         { "id": "claude-fable-5-1" },
@@ -117,6 +120,8 @@
       "api_style": "google",
       "icon": "vertexai",
       "models": [
+        {"id": "gemini-4-carbon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
+        {"id": "gemini-4-argon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
         { "id": "gemini-3-flash" },
         { "id": "gemini-3.5-flash" },
         { "id": "gemini-2.5-pro" },
@@ -144,6 +149,8 @@
       "api_style": "openai",
       "icon": "azure",
       "models": [
+        {"id": "gpt-6.1-sol", "context": 1050000, "max_output": 128000, "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]},
+        {"id": "gpt-6.1-terra", "context": 1050000, "max_output": 128000, "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]},
         {
           "id": "gpt-6-astra",
           "context": 1050000,
@@ -288,6 +295,7 @@
       "base_url_openai": "https://api.openai.com/v1",
       "base_url_anthropic": null,
       "models": [
+        {"id": "gpt-6.1-terra", "context": 1050000, "max_output": 128000, "sources": ["https://developers.openai.com/api/docs/models/gpt-6.1-terra"]},
         {
           "id": "gpt-6-astra",
           "context": 1050000,
@@ -499,6 +507,7 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
+        {"id": "claude-fable-5-2", "context": 1000000, "max_output": 128000, "sources": ["https://platform.claude.com/docs/en/models/overview"]},
         {
           "id": "claude-haiku-5-5",
           "context": 1000000,
@@ -1012,6 +1021,8 @@
       "base_url_openai": "https://generativelanguage.googleapis.com/v1beta/openai",
       "base_url_anthropic": null,
       "models": [
+        {"id": "gemini-4-carbon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
+        {"id": "gemini-4-argon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
         {
           "id": "gemini-3.8-flash",
           "context": 1024000,
@@ -1427,6 +1438,9 @@
       "base_url_openai": "https://api.mistral.ai/v1",
       "base_url_anthropic": null,
       "models": [
+        {"id": "deepseek-v4-1-flash-1017", "context": 1000000, "max_output": 128000, "sources": ["https://docs.mistral.ai/models/deepseek-v4-flash-1017"]},
+        {"id": "zai-glm-5-3-flash", "context": 1000000, "max_output": 128000, "sources": ["https://docs.mistral.ai/models/zai-glm-5-3-flash"]},
+        {"id": "mistral-large-4", "context": 1000000, "sources": ["https://docs.mistral.ai/models/mistral-large-4-0"]},
         {
           "id": "mistral-large-2512",
           "context": 256000,
@@ -1521,6 +1535,8 @@
       "base_url_openai": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://dashscope.aliyuncs.com/apps/anthropic",
       "models": [
+        {"id": "antdigital/Ling-3.1-flash", "context": 1000000, "sources": ["https://help.aliyun.com/zh/model-studio/newly-released-models"]},
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://help.aliyun.com/zh/model-studio/kimi-k3-1-pro"]},
         {
           "id": "qwen-max",
           "context": 32000,
@@ -1637,6 +1653,7 @@
       "base_url_openai": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
       "models": [
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://help.aliyun.com/zh/model-studio/kimi-k3-1-pro"]},
         {
           "id": "qwen-max",
           "context": 128000,
@@ -1933,29 +1950,86 @@
       "base_url_openai": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
       "models": [
-        { "id": "auto", "note": "platform routing model: picks an underlying model per request" },
-        { "id": "qwen3.8-max", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.8-flash", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.7-max", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.7-plus", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.6-flash", "context": 1000000, "max_output": 64000 },
-        { "id": "deepseek-v4.1-flash", "context": 1000000, "max_output": 384000 },
-        { "id": "deepseek-v4-pro", "context": 1000000, "max_output": 384000 },
-        { "id": "deepseek-v4-pro-0813", "context": 1000000, "max_output": 384000 },
-        { "id": "deepseek-v4-flash-0731" },
-        { "id": "glm-5.3" },
-        { "id": "glm-5.2" }
+        {
+          "id": "auto",
+          "note": "platform routing model: picks an underlying model per request"
+        },
+        {
+          "id": "qwen4-max-preview",
+          "context": 1000000,
+              "note": "Preview ends 2026-11-25 24:00 UTC+8; official maximum 393216 tokens shared by thinking and answer",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
+          ]
+        },
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "decision-model-preview",
+          "note": "Limited-time preview"
+        }
       ],
       "supports_models_endpoint": false,
       "icon": "qwen",
-      "last_updated": "2026-09-30",
+      "last_updated": "2026-11-12",
       "sources": [
         "https://help.aliyun.com/zh/model-studio/token-plan-overview",
         "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview",
         "https://help.aliyun.com/zh/model-studio/token-plan-team-overview",
         "https://help.aliyun.com/en/model-studio/token-plan-team-quickstart",
         "https://help.aliyun.com/en/model-studio/base-url",
-        "https://help.aliyun.com/zh/model-studio/text-generation-model"
+        "https://help.aliyun.com/zh/model-studio/text-generation-model",
+        "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
       ]
     },
     "dashscope-intl-token": {
@@ -1976,27 +2050,80 @@
       "base_url_openai": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic",
       "models": [
-        { "id": "auto", "note": "platform routing model: picks an underlying model per request" },
-        { "id": "qwen3.8-max", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.8-flash", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.7-max", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.7-plus", "context": 1000000, "max_output": 128000 },
-        { "id": "qwen3.6-flash", "context": 1000000, "max_output": 64000 },
-        { "id": "deepseek-v4.1-flash", "context": 1000000, "max_output": 384000 },
-        { "id": "deepseek-v4-pro", "context": 1000000, "max_output": 384000 },
-        { "id": "deepseek-v4-pro-0813", "context": 1000000, "max_output": 384000 },
-        { "id": "deepseek-v4-flash-0731" },
-        { "id": "glm-5.3" },
-        { "id": "glm-5.2" }
+        {
+          "id": "auto",
+          "note": "platform routing model: picks an underlying model per request"
+        },
+        {
+          "id": "qwen4-max-preview",
+          "context": 1000000,
+              "note": "Preview ends 2026-11-25 24:00 UTC+8; official maximum 393216 tokens shared by thinking and answer",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
+          ]
+        },
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.2"
+        }
       ],
       "supports_models_endpoint": false,
       "icon": "qwen",
-      "last_updated": "2026-09-30",
+      "last_updated": "2026-11-12",
       "sources": [
         "https://www.alibabacloud.com/help/en/model-studio/token-plan-overview",
         "https://www.alibabacloud.com/help/en/model-studio/token-plan-personal-overview",
         "https://www.alibabacloud.com/help/en/model-studio/base-url",
-        "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
+        "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+        "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
       ]
     },
     "qianwenaiapi": {
@@ -2665,6 +2792,7 @@
       "base_url_openai": "https://api.minimaxi.com/v1",
       "base_url_anthropic": "https://api.minimaxi.com/anthropic",
       "models": [
+        {"id": "MiniMax-M3.1-Flash", "context": 1000000, "sources": ["https://platform.minimax.cn/docs/guides/models-intro"]},
         {
           "id": "MiniMax-M2",
           "context": 200000,
@@ -2781,6 +2909,7 @@
       "base_url_openai": "https://api.minimax.io/v1",
       "base_url_anthropic": "https://api.minimax.io/anthropic",
       "models": [
+        {"id": "MiniMax-M3.1-Flash", "context": 1000000, "sources": ["https://platform.minimax.io/docs/guides/models-intro"]},
         {
           "id": "MiniMax-M2",
           "context": 200000,
@@ -3204,6 +3333,8 @@
       "base_url_openai": "https://api.moonshot.ai/v1",
       "base_url_anthropic": "https://api.moonshot.ai/anthropic",
       "models": [
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://platform.kimi.ai/docs/models"]},
+        {"id": "kimi-k3.1-pro-highspeed", "context": 1000000, "sources": ["https://platform.kimi.ai/docs/models"]},
         {
           "id": "moonshot-v1-8k",
           "context": 8000,
@@ -3295,6 +3426,8 @@
       "base_url_openai": "https://api.moonshot.cn/v1",
       "base_url_anthropic": "https://api.moonshot.cn/anthropic",
       "models": [
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://platform.kimi.com/docs/models"]},
+        {"id": "kimi-k3.1-pro-highspeed", "context": 1000000, "sources": ["https://platform.kimi.com/docs/models"]},
         {
           "id": "moonshot-v1-8k",
           "context": 8000,
@@ -3385,6 +3518,8 @@
       "base_url_openai": "https://api.kimi.com/coding/v1",
       "base_url_anthropic": "https://api.kimi.com/coding/",
       "models": [
+        {"id": "k3.1-pro", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
+        {"id": "k3.1-pro-highspeed", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
         {
           "id": "kimi-for-coding",
           "context": 1024000,
@@ -3440,6 +3575,8 @@
       "base_url_openai": "https://api.kimi.ai/coding/v1",
       "base_url_anthropic": "https://api.kimi.ai/coding/",
       "models": [
+        {"id": "k3.1-pro", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
+        {"id": "k3.1-pro-highspeed", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
         {
           "id": "kimi-for-coding",
           "context": 1024000,
@@ -3476,6 +3613,79 @@
         "https://www.kimi.com/code/docs/en/kimi-code/models"
       ]
     },
+    "volces-com-agent": {
+      "id": "volces-com-agent",
+      "name": "Volcengine Ark Agent Plan (CN)",
+      "alias": "Volcengine Agent Plan | 火山方舟 Agent Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "ark.cn-beijing.volces.com",
+      "vendor_family": "bytedance",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "description": "Agent Plan personal subscription uses a dedicated key; text models are for interactive AI tools and availability varies by subscription tier.",
+      "type": "official",
+      "api_doc": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "model_doc": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "pricing_doc": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "base_url_openai": "https://ark.cn-beijing.volces.com/api/plan/v3",
+      "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/plan",
+      "models": [
+        {
+          "id": "ark-code-latest"
+        },
+        {
+          "id": "doubao-seed-2.0-mini"
+        },
+        {
+          "id": "doubao-seed-2.1-lite"
+        },
+        {
+          "id": "doubao-seed-2.1-pro"
+        },
+        {
+          "id": "doubao-seed-evolving"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "deepseek-v4.1-flash-economy"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-flash"
+        },
+        {
+          "id": "kimi-k3"
+        },
+        {
+          "id": "kimi-k3.1-pro"
+        },
+        {
+          "id": "kimi-k2.8-preview"
+        },
+        {
+          "id": "glm-latest"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "doubao",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh"
+      ],
+      "openai_endpoint_mode": "both"
+    },
     "volces-com": {
       "id": "volces-com",
       "name": "Volcengine Ark (CN)",
@@ -3495,6 +3705,10 @@
       "base_url_openai": "https://ark.cn-beijing.volces.com/api/v3",
       "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/v3",
       "models": [
+        {"id": "kimi-k3-1-pro-261024", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
+        {"id": "deepseek-v4-1-flash-261017", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
+        {"id": "deepseek-v4-1-flash-economy-261017", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
+        {"id": "glm-5-2-260617", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
         {
           "id": "doubao-seed-evolving",
           "context": 1024000,
@@ -3599,6 +3813,8 @@
       "base_url_openai": "https://ark.cn-beijing.volces.com/api/coding/v3",
       "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/coding",
       "models": [
+        {"id": "kimi-k3.1-pro", "sources": ["https://docs.volcengine.com/docs/ark/coding-plan-personal-model-release?lang=zh"]},
+        {"id": "deepseek-v4.1-flash-economy", "sources": ["https://docs.volcengine.com/docs/ark/coding-plan-personal-model-release?lang=zh"]},
         { "id": "ark-code-latest" },
         {
           "id": "doubao-seed-evolving",
@@ -3814,6 +4030,132 @@
         "https://www.volcengine.com/docs/82379/1350667"
       ]
     },
+    "baidubce-com-token-personal": {
+      "id": "baidubce-com-token-personal",
+      "name": "Baidu Qianfan Token Plan (Personal)",
+      "alias": "Baidu Token Plan Personal | 百度千帆 Token Plan 个人版",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "qianfan.baidubce.com",
+      "vendor_family": "baidu",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "description": "Baidu Qianfan Token Plan Personal requires a dedicated plan key; interactive coding and agent tools only. Model availability depends on the subscription.",
+      "type": "official",
+      "api_doc": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "model_doc": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "pricing_doc": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "base_url_openai": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+      "base_url_anthropic": "https://qianfan.baidubce.com/anthropic/tokenplan/personal",
+      "models": [
+        {
+          "id": "qianfan-code-latest"
+        },
+        {
+          "id": "ernie-5.5-flash-preview"
+        },
+        {
+          "id": "ernie-light-dt-1.0"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-pro-0813"
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "glm-5.1"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "baidu",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6"
+      ]
+    },
+    "baidubce-com-token-team": {
+      "id": "baidubce-com-token-team",
+      "name": "Baidu Qianfan Token Plan (Team)",
+      "alias": "Baidu Token Plan Team | 百度千帆 Token Plan 企业版",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "qianfan.baidubce.com",
+      "vendor_family": "baidu",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "description": "Baidu Qianfan Token Plan Team requires a dedicated plan key; interactive coding and agent tools only. Model availability depends on the subscription.",
+      "type": "official",
+      "api_doc": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "model_doc": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "pricing_doc": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "base_url_openai": "https://qianfan.baidubce.com/v2/tokenplan/team",
+      "base_url_anthropic": "https://qianfan.baidubce.com/anthropic/tokenplan/team",
+      "models": [
+        {
+          "id": "ernie-5.5-flash-preview"
+        },
+        {
+          "id": "ernie-light-dt-1.0"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-pro-0813"
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "glm-5.1"
+        },
+        {
+          "id": "deepseek-v3.2"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "baidu",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2"
+      ]
+    },
     "baidubce-com": {
       "id": "baidubce-com",
       "name": "Baidu Qianfan (CN)",
@@ -3896,6 +4238,171 @@
       "last_updated": "2026-09-29",
       "sources": [
         "https://cloud.baidu.com/doc/qianfan/s/imlg0beiu"
+      ]
+    },
+    "tencent-com-token": {
+      "id": "tencent-com-token",
+      "name": "Tencent TokenHub Token Plan",
+      "alias": "Tencent Token Plan | 腾讯云 Token Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "tokenhub.tencentmaas.com",
+      "vendor_family": "tencent",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.tencent.com/document/product/1823",
+      "description": "Tencent TokenHub personal General and Hy Token Plans share endpoints and API key. Hy plan supports hy4, hy4-preview and hy3 aliases only; the remaining listed models require General plan. Interactive AI tools only.",
+      "type": "official",
+      "api_doc": "https://cloud.tencent.com/document/product/1823/130060",
+      "model_doc": "https://cloud.tencent.com/document/product/1823/130060",
+      "pricing_doc": "https://cloud.tencent.com/document/product/1823/130060",
+      "base_url_openai": "https://tokenhub.tencentmaas.com/plan/v3",
+      "base_url_anthropic": "https://tokenhub.tencentmaas.com/plan/anthropic",
+      "models": [
+        {
+          "id": "tc-code-latest",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "hy4"
+        },
+        {
+          "id": "hy4-preview"
+        },
+        {
+          "id": "minimax-m3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "minimax-m-3-0",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5.3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5-3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5.3-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "kimi-k3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5.2",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5-2",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "minimax-m2.7",
+          "note": "General Token Plan only; scheduled for retirement 2026-11-17"
+        },
+        {
+          "id": "minimax-m-2-7",
+          "note": "General Token Plan only; scheduled for retirement 2026-11-17"
+        },
+        {
+          "id": "deepseek-v4-flash-202605",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-0731",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek-v4-pro-202606",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-pro-0813",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-pro",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "hy3",
+          "note": "Hy Token Plan only; hy3-preview routes to hy3"
+        },
+        {
+          "id": "hy3-preview",
+          "note": "Hy Token Plan only; hy3-preview routes to hy3"
+        },
+        {
+          "id": "hy3-202608",
+          "note": "Hy Token Plan only; hy3-preview routes to hy3"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "tencent",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.tencent.com/document/product/1823/130060"
+      ],
+      "openai_endpoint_mode": "both"
+    },
+    "tencent-com-coding": {
+      "id": "tencent-com-coding",
+      "name": "Tencent TokenHub Coding Plan",
+      "alias": "Tencent Coding Plan | 腾讯云 Coding Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.lkeap.cloud.tencent.com",
+      "vendor_family": "tencent",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.tencent.com/document/product/1823",
+      "description": "Tencent TokenHub Coding Plan uses a dedicated subscription key and endpoints; interactive coding tools only.",
+      "type": "official",
+      "api_doc": "https://cloud.tencent.com/document/product/1823/130092",
+      "model_doc": "https://cloud.tencent.com/document/product/1823/130092",
+      "pricing_doc": "https://cloud.tencent.com/document/product/1823/130092",
+      "base_url_openai": "https://api.lkeap.cloud.tencent.com/coding/v3",
+      "base_url_anthropic": "https://api.lkeap.cloud.tencent.com/coding/anthropic",
+      "models": [
+        {
+          "id": "tc-code-latest",
+          "note": "Auto routing"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "tencent",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.tencent.com/document/product/1823/130092"
       ]
     },
     "tencent-com": {
@@ -4697,6 +5204,16 @@
       "base_url_openai": "https://api.together.xyz/v1",
       "base_url_anthropic": "https://api.together.xyz/",
       "models": [
+        {"id": "deepseek-ai/DeepSeek-V4.1-Flash-1017", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "meta-models/Muse-Glimmer-30B", "context": 128000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "meta-models/Muse-Spark-Open-816B-A42B", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "MiniMaxAI/MiniMax-M3.1-Flash", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "moonshotai/Kimi-K3.1-Pro", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL", "context": 256000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "Qwen/Qwen3.7-Max", "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "Qwen/Qwen3.7-Plus", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "Qwen/Qwen3.8-Flash", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "zai-org/GLM-5.3-Flash", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
           "context": 128000
@@ -4986,7 +5503,7 @@
           "sources": ["https://docs.cohere.com/docs/models"]
         },
         {
-          "id": "north-mini-code-1-0",
+          "id": "north-mini-code-1.0",
           "context": 256000,
           "max_output": 64000,
           "note": "30B/3B-active MoE agentic coding model (Apache 2.0)",
@@ -4996,7 +5513,7 @@
           ]
         },
         {
-          "id": "north-small-translate-1-0",
+          "id": "north-small-translate-1.0",
           "context": 16000,
           "max_output": 16000,
           "note": "218B/25B-active MoE translation model, free tier, non-commercial open weights",
