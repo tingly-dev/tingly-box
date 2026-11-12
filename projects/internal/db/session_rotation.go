@@ -35,11 +35,11 @@ func (s *Store) RotateThreadSession(threadID, expectedID, newID string, event *T
 		if err := tx.Where("thread_id = ?", threadID).Delete(&CoordinatorSettingsDelivery{}).Error; err != nil {
 			return err
 		}
-		payload, err := json.Marshal(map[string]string{"name": "new", "state": "ok", "previous_session_id": expectedID, "session_id": newID})
+		payload, err := json.Marshal(map[string]string{"name": "clear", "state": "ok", "previous_session_id": expectedID, "session_id": newID})
 		if err != nil {
 			return err
 		}
-		event.ThreadID, event.Kind, event.Content, event.Payload = threadID, EvCommand, "new", string(payload)
+		event.ThreadID, event.Kind, event.Content, event.Payload = threadID, EvCommand, "clear", string(payload)
 		return (&Store{db: tx}).AddThreadEvent(event)
 	})
 }
@@ -48,7 +48,8 @@ func (s *Store) RotateThreadSession(threadID, expectedID, newID string, event *T
 // the first session created while migrating an existing conversation.
 func (s *Store) HasCoordinatorSessionBoundary(threadID, sessionID string) (bool, error) {
 	var count int64
-	err := s.db.Model(&ThreadEvent{}).Where("thread_id = ? AND kind = ? AND content = ? AND json_extract(payload, '$.session_id') = ?", threadID, EvCommand, "new", sessionID).Count(&count).Error
+	// Retain recognition of boundaries written by the earlier /new version.
+	err := s.db.Model(&ThreadEvent{}).Where("thread_id = ? AND kind = ? AND content IN ? AND json_extract(payload, '$.session_id') = ?", threadID, EvCommand, []string{"clear", "new"}, sessionID).Count(&count).Error
 	return count != 0, err
 }
 

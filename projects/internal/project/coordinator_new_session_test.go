@@ -18,7 +18,7 @@ func TestCoordinatorNewSessionFreshAfterReload(t *testing.T) {
 	require.Eventually(t, func() bool { return len(seen.all()) == 1 && !svc.Coordinator.Busy(f.project.ID) }, 5*time.Second, 10*time.Millisecond)
 	old, err := f.store.GetThread(f.project.MainThreadID)
 	require.NoError(t, err)
-	fresh, err := svc.Send(context.Background(), f.project.MainThreadID, "/new", nil, Source{})
+	fresh, err := svc.Send(context.Background(), f.project.MainThreadID, "/clear", nil, Source{})
 	require.NoError(t, err)
 	require.Equal(t, old.ID, fresh.ID)
 	require.NotEqual(t, old.SessionID, fresh.SessionID)

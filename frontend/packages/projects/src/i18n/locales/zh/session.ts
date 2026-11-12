@@ -56,7 +56,7 @@ export const session: Dict<typeof sessionEn> = {
     composer: { settings: '会话设置', placeholder: '输入消息…', send: '发送（Enter）', sendShort: '发送', stop: '停止', stopTurn: '停止当前轮次', attach: '添加附件', pastedText: '粘贴的文本 · {{count}} 行', removeAttachment: '移除 {{name}}', attachFailed: '附件上传失败', keys: 'Enter 发送 · Shift+Enter 换行',
         sendOptions: '其他发送方式', sendQueue: '本轮结束后发送', sendQueueHint: '等 Claude 做完再发（Alt+Enter）',
         sendStop: '停止并发送', sendStopHint: '先中断当前这一轮',
-        commands: '命令', compactHint: '可选的说明', compactDescription: '总结当前对话，腾出上下文空间', newDescription: '开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息' },
+        commands: '命令', compactHint: '可选的说明', compactDescription: '总结当前对话，腾出上下文空间', clearDescription: '开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息' },
     queue: { heading: '本轮结束后发送', edit: '编辑', remove: '移除', attachmentsOnly: '附件', returned: '排队的消息已放回输入框。' },
     model: { auto: '默认模型', listFailed: '无法从端点获取模型列表，请直接输入模型 ID。', customPlaceholder: '模型 ID，例如 claude-sonnet-4-5' },
     effort: { default: '默认推理力度', defaultHint: '跟随模型自身的默认值', low: '低', lowHint: '轻量推理——更快、更省', medium: '中', mediumHint: '均衡的推理力度', high: '高', highHint: '为难题进行深入推理', max: '最高', maxHint: '模型所能提供的最充分的推理' },

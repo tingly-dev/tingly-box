@@ -10,7 +10,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => k
 vi.mock('../client', async (actual) => ({ ...await actual<typeof import('../client')>(), api: { GET: m.get, PUT: m.put, POST: m.post, PATCH: m.patch } }));
 vi.mock('../hooks/useProjectEvents', () => ({ useProjectEvents: vi.fn() }));
 vi.mock('../hooks/useTranscript', () => ({ useTranscript: () => ({ events: [], apply: vi.fn(), edit: vi.fn(), catchUp: vi.fn() }) }));
-vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext, disabledReason, onSend, busy }: { composerContext: React.ReactNode; disabledReason: React.ReactNode; onSend: (text: string, attachments: never[]) => Promise<boolean>; busy: boolean }) => <div data-testid="defaults" data-busy={busy}>{disabledReason}{composerContext}<button onClick={() => void onSend("hello", [])}>send message</button><button onClick={() => void onSend("/new", [])}>new session</button></div> }));
+vi.mock('../components/project/ConversationPane', () => ({ ConversationPane: ({ composerContext, disabledReason, onSend, busy }: { composerContext: React.ReactNode; disabledReason: React.ReactNode; onSend: (text: string, attachments: never[]) => Promise<boolean>; busy: boolean }) => <div data-testid="defaults" data-busy={busy}>{disabledReason}{composerContext}<button onClick={() => void onSend("hello", [])}>send message</button><button onClick={() => void onSend("/clear", [])}>new session</button></div> }));
 vi.mock('../components/project/OverviewPane', () => ({ OverviewPane: ({ onOpen, status }: { onOpen: (id: string) => void; status?: React.ReactNode }) => <><button onClick={() => onOpen('a')}>open thread</button><div data-testid="overview-status">{status}</div></> }));
 vi.mock('../components/workspace/WorkspaceLayout', () => ({ useWorkspacePane: () => ({ narrow: false, reveal: vi.fn() }), WorkspaceLayout: ({ main, side }: { main: React.ReactNode; side: React.ReactNode }) => <>{main}{side}</> }));
 vi.mock('../hooks/usePlacement', () => ({ usePlacement: () => m.placement }));
@@ -23,14 +23,14 @@ const b = { id: 'b', project_id: 'p', model_override: 'sibling-choice', status: 
 function Switch() { const nav = useNavigate(); return <button onClick={() => nav('/projects/p?thread=b')}>switch</button>; }
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
-it('does not leave the coordinator busy after the synchronous /new command', async () => {
+it('does not leave the coordinator busy after the synchronous /clear command', async () => {
     m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
         ? { project: p, threads: [], coordinator_busy: false }
         : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
     m.post.mockResolvedValue({ data: { id: 'main' }, response: new Response() });
     render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'new session' }));
-    await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', expect.objectContaining({ body: { content: '/new', attachments: [] } })));
+    await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', expect.objectContaining({ body: { content: '/clear', attachments: [] } })));
     expect(screen.getByTestId('defaults')).toHaveAttribute('data-busy', 'false');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

@@ -57,4 +57,18 @@ func TestRotateThreadSessionAtomicAndPersistent(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events, 2)
 	require.Equal(t, "old history", events[0].Content)
+	require.Equal(t, "clear", events[1].Content)
+	require.JSONEq(t, `{"name":"clear","state":"ok","previous_session_id":"old","session_id":"new"}`, events[1].Payload)
+}
+
+func TestLegacyNewBoundaryStillPreventsHistoryMigration(t *testing.T) {
+	s, err := Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	p := &Project{Name: "Project"}
+	require.NoError(t, s.CreateProjectWithMain(p, &Thread{}, ""))
+	require.NoError(t, s.AddThreadEvent(&ThreadEvent{ThreadID: p.MainThreadID, Kind: EvCommand, Content: "new", Payload: `{"name":"new","session_id":"legacy"}`}))
+	ok, err := s.HasCoordinatorSessionBoundary(p.MainThreadID, "legacy")
+	require.NoError(t, err)
+	require.True(t, ok)
 }

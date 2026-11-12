@@ -619,7 +619,7 @@ export const CommandCard = ({message}: {message: TranscriptEntry}) => {
     const [open, setOpen] = useState(false);
     const running = pl.state === 'running';
     const failed = pl.state === 'failed';
-    const isNew = pl.name === 'new';
+    const isNew = pl.name === 'clear' || pl.name === 'new'; // Older session boundaries used /new.
     const parts: string[] = [];
     if (!isNew && pl.state === 'ok') {
         if (pl.tokens_reported) {

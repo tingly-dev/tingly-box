@@ -190,9 +190,9 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 	if cmd.kind == cmdUnsupported {
 		return nil, &ErrCommandUnsupported{Name: cmd.name}
 	}
-	if cmd.kind == cmdNew {
+	if cmd.kind == cmdClear {
 		if cmd.args != "" {
-			return nil, fmt.Errorf("/new does not take arguments; send your next message separately")
+			return nil, fmt.Errorf("/clear does not take arguments; send your next message separately")
 		}
 		if t.Agent == db.AgentLLM {
 			return s.Coordinator.NewSession(t.ProjectID, src)

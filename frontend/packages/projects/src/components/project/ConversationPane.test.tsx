@@ -58,7 +58,7 @@ describe('conversation presentation', () => {
     });
 
     it('shows the new-session boundary without hiding earlier messages', () => {
-        show(props([event('user', 'Earlier message'), event('command', 'new', { payload: JSON.stringify({ name: 'new', state: 'ok' }) })]));
+        show(props([event('user', 'Earlier message'), event('command', 'clear', { payload: JSON.stringify({ name: 'clear', state: 'ok' }) })]));
         expect(screen.getByText('Earlier message')).toBeInTheDocument();
         expect(screen.getByText('projects.transcript.newStarted')).toBeInTheDocument();
     });

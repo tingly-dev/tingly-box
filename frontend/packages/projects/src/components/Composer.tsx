@@ -14,7 +14,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 /** The commands the slash menu offers; the host runs them (Projects intercepts the text). */
 const SLASH_COMMANDS = [
     { name: 'compact', hint: 'composer.compactHint', description: 'composer.compactDescription' },
-    { name: 'new', hint: '', description: 'composer.newDescription' },
+    { name: 'clear', hint: '', description: 'composer.clearDescription' },
 ];
 
 /** A file on its way into the message: uploading, ready, or refused. */

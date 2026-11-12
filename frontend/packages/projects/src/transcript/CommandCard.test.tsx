@@ -40,14 +40,14 @@ describe('command card', () => {
         expect(status).not.toHaveTextContent('tokens');
     });
 
-    it('shows a fresh session distinctly from compaction', () => {
-        show(card({name: 'new', state: 'ok'}));
+    it.each(['clear', 'new'])('shows a %s session boundary distinctly from compaction', (name) => {
+        show(card({name, state: 'ok'}));
         expect(screen.getByRole('status')).toHaveTextContent('New session started');
         expect(screen.getByRole('status')).not.toHaveTextContent('compact');
     });
 
     it('shows a failed new session with its reason', () => {
-        show(card({name: 'new', state: 'failed', reason: 'Session is busy.'}));
+        show(card({name: 'clear', state: 'failed', reason: 'Session is busy.'}));
         expect(screen.getByRole('status')).toHaveTextContent('Could not start a new session: Session is busy');
     });
 

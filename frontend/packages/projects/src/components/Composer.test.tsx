@@ -207,18 +207,18 @@ describe('Composer slash menu', () => {
     });
 
     it('explains that old messages remain viewable without automatically inheriting their context', () => {
-        expect(en.composer.newDescription).toBe('Start a new session without automatically inheriting previous conversation context; previous messages remain viewable');
-        expect(zh.composer.newDescription).toBe('开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息');
+        expect(en.composer.clearDescription).toBe('Start a new session without automatically inheriting previous conversation context; previous messages remain viewable');
+        expect(zh.composer.clearDescription).toBe('开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息');
     });
 
-    it('offers and sends /new through the normal composer path', async () => {
+    it('offers and sends /clear through the normal composer path', async () => {
         const { send, input } = setup();
-        fireEvent.change(input, { target: { value: '/n' } });
-        expect(screen.getByRole('option', { name: /new/ })).toHaveTextContent('composer.newDescription');
+        fireEvent.change(input, { target: { value: '/cl' } });
+        expect(screen.getByRole('option', { name: /clear/ })).toHaveTextContent('composer.clearDescription');
         fireEvent.keyDown(input, { key: 'Tab' });
-        expect(input).toHaveValue('/new ');
+        expect(input).toHaveValue('/clear ');
         await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
-        expect(send).toHaveBeenCalledExactlyOnceWith('/new', []);
+        expect(send).toHaveBeenCalledExactlyOnceWith('/clear', []);
     });
 
     it('narrows as the name is typed, completes with Tab and with a click', () => {
