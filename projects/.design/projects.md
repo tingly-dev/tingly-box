@@ -106,7 +106,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。**改设置不重启进程**：模型和权限模式用 `set_model` / `set_permission_mode` 控制请求即时切换；线程设置文件里的权限规则（`permissions`、`autoMode`）在下一轮开始前用 `apply_flag_settings` 控制请求推送给存活的进程（`agentboot/engine` 的 `applyLive`），启动签名不再包含它们。进程拒绝推送（太旧的 CLI）时不重启，规则等进程下次自然启动（空闲回收后）再生效，下一轮会再试一次。只有环境变量、网关、profile 的其余设置、MCP 配置这类启动时才读的内容变了才重启。详见 `message-channel.md` 的“设置怎么应用”。
 - **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤带上所属的 Agent 调用（`parent`）一起存下，主对话分页不含它们，打开子代理时再读；思考不显示；后台任务结束时留一行系统事件。
 - 测试用 `agentboot/engine/enginetest` 的脚本替身，另有一个用 agentboot fixture 跑真实 Claude 驱动的用例。
-- **工作区**：项目有仓库 → `git worktree add -b tp/<slug>-<id6> <worktree> <base>`；没有仓库 → 空目录。
+- **工作区**：项目目录可混合 Git 与普通目录，每项独立选择工作区模式；主目录是新线程默认目录，普通目录只能 shared。无目录时使用 scratch。兼容及详细语义见 [workspace.md](workspace.md)「项目目录与逐目录模式」。
 - **上下文注入**（`--append-system-prompt`）：项目名、Goal、Instructions、`MEMORY.md` 内容、记忆/文件库目录说明、线程规则：
   - 只做分配的这一件事；在当前分支上提交（commit），不 push、不改其他分支；
   - 需要的东西缺失时，说明缺什么并停下，不要 mock 或猜；

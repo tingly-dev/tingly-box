@@ -1,6 +1,6 @@
 # 线程工作区：从原始目录出发，共享的东西放在一处
 
-> 状态：草案，对应 TEP（见 PR 描述）。取代 [projects.md](./projects.md) §4.1 里“每个线程一个 worktree，放在 Projects 数据目录”的做法，
+> 状态：草案，对应 TEP（见 PR 描述）。**2026-11 更新**：本文件的“默认用 worktree、不提供设置”和无仓库项目 cwd 决定已被下方「项目目录与逐目录模式」取代；旧线程 cwd 不变。取代 [projects.md](./projects.md) §4.1 里“每个线程一个 worktree，放在 Projects 数据目录”的做法，
 > 并回应 [#2084](https://github.com/tingly-dev/tingly-box/issues/2084)（每个线程都开 worktree 未必合适）。
 > 相关：[../../.design/projects-sessions.md](../../.design/projects-sessions.md)（统一 Thread 模型）、
 > [../../.design/projects-attachments.md](../../.design/projects-attachments.md)（上传）。
@@ -27,6 +27,14 @@
 不新增工具，不做写前拦截钩子。启动 prompt 里加一句话，告诉 agent 它的工作区在哪、共享目录在哪、需要隔离时可以自己用 `EnterWorktree`。
 
 “默认用 worktree”先不做成设置项；以后需要“就地编辑”再加（见后续）。
+
+## 项目目录与逐目录模式（2026-11）
+
+项目可配置 Git 仓库和普通目录。每个 Git 目录分别选 `worktree`（每线程独立分支）或 `shared`（直接在现有 checkout 工作）；普通目录只能 `shared`，多个线程可能同时修改同一批文件。每个有目录的项目有一个主目录：未指定目录的新线程使用它，项目对话里的工作区模式和首次提示修改的也是它；其他目录的模式不随之改变。没有目录时仍用每线程 scratch，允许先创建空项目。
+
+旧项目没有新字段时，目录类型视为 Git、模式继承旧 `disable_worktree`、主目录为第一项；读取时不重新检查磁盘。旧客户端的全局开关仍统一作用于 Git 目录（无法表达混合模式），普通目录始终 shared。修改目录、主目录或模式只影响新线程；已有线程保留自己的 cwd 和分支。删除目录配置只是移除引用，绝不删除共享目录中的文件。检查目录会解析符号链接；Git 子目录沿用仓库根，普通目录保留选定路径；不接收与 Projects 数据根重叠的目录。
+
+线程的其他项目目录继续通过 additionalDirectories 授权，因此模式只决定选中目录的线程 cwd，不为其他目录提供隔离。shared 线程必须协调并发改动；UI 和启动提示明确说明这一点。
 
 ## 验证与事实依据
 

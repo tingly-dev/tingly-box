@@ -543,6 +543,22 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	if err != nil {
 		return nil, err
 	}
+	if repo != nil {
+		effective := p.EffectiveRepo(*repo)
+		// Reject a directory whose type has changed since configuration rather than
+		// silently running in a different workspace than the user selected.
+		info, err := InspectDirectory(ctx, effective.Path)
+		if err != nil {
+			return nil, err
+		}
+		original, err := filepath.EvalSymlinks(effective.Path)
+		if err != nil {
+			return nil, err
+		}
+		if db.PathKey(info.Root) != db.PathKey(original) || info.Kind != effective.Kind {
+			return nil, fmt.Errorf("directory %q has changed since it was configured", effective.Path)
+		}
+	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
 	}
@@ -550,7 +566,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	var note string
 	if repo != nil {
 		t.RepoPath, t.BaseBranch = repo.Path, repo.BaseBranch
-		if p.DisableWorktree {
+		if p.EffectiveRepo(*repo).WorkspaceMode == db.WorkspaceShared {
 			t.Cwd = repo.Path
 		} else {
 			t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
@@ -566,6 +582,9 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 				t.Cwd = inRepo
 			} else {
 				note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
+				// A failed git worktree add can leave its branch behind. Use a
+				// fresh name rather than deleting a branch we may not own.
+				t.Branch += "-fallback-" + t.ID[6:12]
 				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
 					t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
 					_ = m.store.SaveThread(t)
@@ -600,16 +619,26 @@ func pickRepo(p *db.Project, want string) (*db.Repo, error) {
 		return nil, nil
 	}
 	if want == "" {
-		return &p.Repos[0], nil
+		return p.PrimaryRepo(), nil
 	}
 	clean := filepath.Clean(want)
+	var match *db.Repo
 	for i := range p.Repos {
 		r := &p.Repos[i]
-		if filepath.Clean(r.Path) == clean || filepath.Base(r.Path) == want {
+		if filepath.Clean(r.Path) == clean {
 			return r, nil
 		}
+		if filepath.Base(r.Path) == want {
+			if match != nil {
+				return nil, fmt.Errorf("directory name %q is ambiguous; use its full path", want)
+			}
+			match = r
+		}
 	}
-	return nil, fmt.Errorf("repository %q is not part of this project", want)
+	if match != nil {
+		return match, nil
+	}
+	return nil, fmt.Errorf("directory %q is not part of this project", want)
 }
 
 // writeSettings gives the thread's Claude Code session access to the

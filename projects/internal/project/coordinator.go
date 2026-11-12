@@ -507,10 +507,10 @@ func coordinatorTools() []coordinatorTool {
 	threadSpec := map[string]any{
 		"title": str("Thread card title: starts with a verb that names the goal, three to six words, no ids or paths (for example \"Fix Safari export button\")."),
 		"task":  str("Self-contained instructions for the thread: goal, context, acceptance criteria, how to verify."),
-		"repo":  str("Optional. Path of the project repository to work in; \"none\" for no repository."),
+		"repo":  str("Optional. Full path of a project directory; omitted uses the primary directory, \"none\" uses scratch."),
 	}
 	return []coordinatorTool{
-		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the project worktree setting.", Properties: threadSpec, Required: []string{"title", "task"}},
+		{Name: "start_thread", Description: "Start a new thread (a Claude Code session) for one task, using the selected directory's workspace mode.", Properties: threadSpec, Required: []string{"title", "task"}},
 		{Name: "propose_threads", Description: "Propose threads for the user to start, instead of starting them. Use when the user wants to review a plan first.",
 			Properties: map[string]any{"threads": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": threadSpec, "required": []string{"title", "task"}}}},
 			Required:   []string{"threads"}},

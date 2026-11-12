@@ -26,7 +26,7 @@ const MAX_INSTRUCTIONS = 16000;
 const MAX_RUNNING_FALLBACK = 100;
 const mono = { fontFamily: fontMono } as const;
 
-type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'] & { directories?: import('./RepoField').DirectoryConfig[]; primary_repo_path?: string };
+type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'];
 type Mode = NonNullable<Patch['thread_permission_mode']>;
 
 function ModelField({ label, value, onChange, help }: { label: string; value: string; onChange: (v: string) => void; help: string }) {
@@ -217,7 +217,7 @@ function Environment({ project, patch }: { project: Project; patch: (p: Patch) =
     const initial = projectDirectories(project);
     const [repos, setRepos] = useState<RepoEntry[]>(initial);
     const [primary, setPrimary] = useState(primaryPath(project));
-    useEffect(() => { setRepos(projectDirectories(project)); setPrimary(primaryPath(project)); }, [project.repos, (project as typeof project & { primary_repo_path?: string }).primary_repo_path]);
+    useEffect(() => { setRepos(projectDirectories(project)); setPrimary(primaryPath(project)); }, [project.repos, project.primary_repo_path]);
     const dirty = JSON.stringify(directoryPayload(repos, primary)) !== JSON.stringify(directoryPayload(initial, primaryPath(project)));
     return (
         <Stack spacing={2}>

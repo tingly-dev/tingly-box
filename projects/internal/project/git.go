@@ -67,11 +67,8 @@ func HeadBranch(ctx context.Context, dir string) string {
 // AddWorktree creates branch from base in a new worktree at dir.
 func AddWorktree(ctx context.Context, repo, dir, branch, base string) error {
 	_, err := git(ctx, repo, "worktree", "add", "-b", branch, dir, base)
-	if err != nil {
-		// git may have made the branch before failing to make the directory;
-		// leave no stray branch, so the caller can try another place.
-		_, _ = git(ctx, repo, "branch", "-D", branch)
-	}
+	// Do not delete a branch on failure: it may have existed before this call
+	// (or been created concurrently by another process).
 	return err
 }
 

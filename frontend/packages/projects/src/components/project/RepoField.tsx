@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Box, Button, Chip, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { api, unwrap } from '../../client';
+import { api, unwrap, type components, type Project } from '../../client';
 import { Branch, Close, Warning } from '../icons';
 import { DirectoryPicker } from '../common/DirectoryPicker';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -15,9 +15,8 @@ export interface RepoEntry {
     workspace_mode: 'shared' | 'worktree';
 }
 
-// Temporary protocol types until Projects OpenAPI is regenerated.
-export type DirectoryConfig = { path: string; workspace_mode: 'shared' | 'worktree' };
-export type DirectoryProject = { primary_repo_path?: string; repos: { path: string; base_branch: string; kind?: 'git' | 'directory'; workspace_mode?: 'shared' | 'worktree' }[]; disable_worktree?: boolean };
+export type DirectoryConfig = components['schemas']['DirectorySpec'];
+export type DirectoryProject = Pick<Project, 'primary_repo_path' | 'repos' | 'disable_worktree'>;
 export function projectDirectories(project: DirectoryProject): RepoEntry[] {
     return project.repos.map((r) => ({ root: r.path, branch: r.base_branch, kind: r.kind ?? 'git', workspace_mode: r.kind === 'directory' ? 'shared' : r.workspace_mode ?? (project.disable_worktree ? 'shared' : 'worktree') }));
 }
@@ -46,9 +45,8 @@ export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onP
         setBusy(true);
         setError(null);
         try {
-            const post = api.POST as unknown as (url: string, options: { body: { path: string } }) => Promise<{ data?: { ok: boolean; root?: string; kind: 'git' | 'directory'; branch?: string; dirty?: boolean; error?: string }; error?: unknown; response: Response }>;
-            const r = await unwrap(post('/api/v1/projects/directories/inspect', { body: { path: target } }));
-            if (!r.ok || !r.root) {
+            const r = await unwrap(api.POST('/api/v1/projects/directories/inspect', { body: { path: target } }));
+            if (!r.ok || !r.root || (r.kind !== 'git' && r.kind !== 'directory')) {
                 setError(r.error ?? t('repo.invalid'));
                 setPath(target);
                 return;

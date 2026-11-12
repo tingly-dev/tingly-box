@@ -168,7 +168,7 @@ type InspectRepoResponse struct {
 type InspectDirectoryResponse struct {
 	OK     bool   `json:"ok"`
 	Root   string `json:"root"`
-	Kind   string `json:"kind"`
+	Kind   string `json:"kind" enum:",git,directory"`
 	Branch string `json:"branch"`
 	Dirty  bool   `json:"dirty"`
 	Error  string `json:"error"`
@@ -320,6 +320,12 @@ func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
 	return p, true
 }
 
+func projectView(p db.Project) db.Project {
+	p.Repos = append([]db.Repo(nil), p.Repos...)
+	p.ApplyDirectoryDefaults()
+	return p
+}
+
 func (h *Handler) list(c *gin.Context) {
 	projects, err := h.svc.Store.ListProjects(c.Query("q"), c.Query("archived") == "true")
 	if err != nil {
@@ -333,7 +339,7 @@ func (h *Handler) list(c *gin.Context) {
 	}
 	out := make([]ProjectSummary, 0, len(projects))
 	for _, p := range projects {
-		out = append(out, ProjectSummary{Project: p, Threads: db.CountsOf(all[p.ID])})
+		out = append(out, ProjectSummary{Project: projectView(p), Threads: db.CountsOf(all[p.ID])})
 	}
 	c.JSON(http.StatusOK, ProjectListResponse{Projects: out})
 }
@@ -365,7 +371,7 @@ func (h *Handler) create(c *gin.Context) {
 		// Opening a folder returns its project, new or not.
 		status = http.StatusOK
 	}
-	c.JSON(status, p)
+	c.JSON(status, projectView(*p))
 }
 
 func (h *Handler) fork(c *gin.Context) {
@@ -384,7 +390,7 @@ func (h *Handler) fork(c *gin.Context) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, fork)
+	c.JSON(http.StatusCreated, projectView(*fork))
 }
 
 func (h *Handler) models(c *gin.Context) {
@@ -511,7 +517,7 @@ func (h *Handler) get(c *gin.Context) {
 		}
 	}
 	busy := h.svc.Coordinator.Busy(p.ID)
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: projectView(*p), Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
 }
 
 // coordinatorView gives the main thread a thread's own status, so the page reads
@@ -720,7 +726,7 @@ func (h *Handler) update(c *gin.Context) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, p)
+	c.JSON(http.StatusOK, projectView(*p))
 }
 
 func (h *Handler) delete(c *gin.Context) {
