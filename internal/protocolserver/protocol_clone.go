@@ -56,5 +56,15 @@ func CloneResponsesParams(template *responses.ResponseNewParams) (*responses.Res
 	}
 	var out responses.ResponseNewParams
 	err = json.Unmarshal(b, &out)
+	if err == nil {
+		if budget, ok := template.ExtraFields()["thinking_budget"]; ok {
+			extra := out.ExtraFields()
+			if extra == nil {
+				extra = make(map[string]any)
+			}
+			extra["thinking_budget"] = budget
+			out.SetExtraFields(extra)
+		}
+	}
 	return &out, err
 }

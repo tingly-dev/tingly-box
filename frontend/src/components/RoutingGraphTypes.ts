@@ -67,6 +67,7 @@ export interface RuleFlags {
     anthropicEndpointOverride?: string;
     blockTools?: string;
     thinkingEffort?: string;
+    disableThinkingBudget?: boolean;
     sessionAffinity?: number;
     visionProxyService?: VisionProxyServiceRef;
     claudeCodeCompat?: boolean;
@@ -89,6 +90,7 @@ export interface RuleFlagsApi {
     anthropic_endpoint_override?: string;
     block_tools?: string;
     thinking_effort?: string;
+    disable_thinking_budget?: boolean;
     session_affinity?: number;
     vision_proxy_service?: VisionProxyServiceRef;
     claude_code_compat?: boolean;

@@ -276,11 +276,21 @@ func (ph *ProtocolHandler) targetTransforms(c *gin.Context, plan *attemptPlan) [
 	transforms = append(transforms, consistencyTransformFor(plan.Target))
 
 	// preVendor slot: rule transforms that act on the converted, upstream-bound
-	// shape. Placed after Consistency (so its param clamping still applies) and
-	// before Vendor (so Vendor remains the final, immutable step).
-	transforms = append(transforms, plan.PreVendor...)
+	// shape. Run the budget removal after Vendor, which may rebuild thinking
+	// settings; other rule transforms run before Vendor as usual.
+	var removeBudget transform.Transform
+	for _, step := range plan.PreVendor {
+		if _, ok := step.(*transform.RemoveThinkingBudgetTransform); ok {
+			removeBudget = step
+		} else {
+			transforms = append(transforms, step)
+		}
+	}
 
 	transforms = append(transforms, vendorTransformShared)
+	if removeBudget != nil {
+		transforms = append(transforms, removeBudget)
+	}
 
 	// Post-transform recording — snapshots the outbound (upstream) request.
 	// Runs last so it captures the truly-final request dispatched to the provider.

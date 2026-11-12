@@ -446,6 +446,36 @@ func ruleFlagCases() []flagCase {
 			}
 		}},
 
+		{key: "disable_thinking_budget", run: func(t flagTB, env *TestEnv) {
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{DisableThinkingBudget: true})
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, func(m map[string]any) {
+				m["thinking_budget"] = 4096
+				m["reasoning_effort"] = "high"
+			}, nil)
+			body := env.virtual.LastRequest(EndpointChat).JSON()
+			if _, ok := body["thinking_budget"]; ok {
+				t.Errorf("thinking_budget still forwarded: %v", body)
+			}
+			if body["reasoning_effort"] != "high" {
+				t.Errorf("reasoning effort changed: %v", body["reasoning_effort"])
+			}
+			for _, target := range []protocol.APIType{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta} {
+				model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, target, flagScenario(), typ.RuleFlags{DisableThinkingBudget: true})
+				sendFlag(t, env, protocol.TypeAnthropicV1, target, model, false, func(m map[string]any) {
+					m["max_tokens"] = 8192
+					m["thinking"] = map[string]any{"type": "enabled", "budget_tokens": 4096}
+				}, nil)
+				body := env.virtual.LastRequest(EndpointAnthropic).JSON()
+				thinking, ok := body["thinking"].(map[string]any)
+				if !ok || thinking["type"] != "enabled" {
+					t.Errorf("%s: thinking mode changed: %v", target, body["thinking"])
+				}
+				if _, ok := thinking["budget_tokens"]; ok {
+					t.Errorf("%s: budget_tokens still forwarded: %v", target, thinking)
+				}
+			}
+		}},
+
 		// ── thinking_effort ──────────────────────────────────────────────────
 		{key: "thinking_effort", run: func(t flagTB, env *TestEnv) {
 			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, flagScenario(), typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})

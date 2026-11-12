@@ -181,6 +181,13 @@ func RuleFlagRegistry() []FlagSpec {
 		},
 		// ── Reasoning ──────────────────────────────────────────────────────
 		{
+			Key:         "disable_thinking_budget",
+			Label:       "Remove thinking budget",
+			Description: "Remove the top-level thinking_budget extension from OpenAI-compatible requests or thinking.budget_tokens from Anthropic-compatible requests, while leaving the thinking mode unchanged. Useful for Kimi-compatible endpoints that reject a budget.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryReasoning,
+		},
+		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
 			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (low 4K / medium 10K / high 20K / max 32K).",

@@ -43,7 +43,7 @@ func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, m
 		// property of the vendor/model, not the product path, so a host-only
 		// match is enough here (unlike opencode.ai below, a multi-vendor
 		// relay where the path is load-bearing).
-		host == "api.kimi.com":
+		host == "api.kimi.com", host == "api.kimi.ai":
 		return applyKimiTransform(req, providerURL, model, config)
 
 	case host == "generativelanguage.googleapis.com" && strings.Contains(modelLower, "gemini"):

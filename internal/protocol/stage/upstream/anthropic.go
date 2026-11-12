@@ -16,7 +16,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // AnthropicWire is the wire an Anthropic provider is reached over.
@@ -63,6 +65,7 @@ func (e *anthropicEndpoint) Complete(ctx context.Context, call stage.Call) (*sta
 		if err != nil {
 			return nil, err
 		}
+		removeAnthropicBudget(ctx, v1)
 		v1Message, cancel, err := forwarding.ForwardAnthropicV1(fc, wrapper, v1)
 		if cancel != nil {
 			defer cancel()
@@ -75,6 +78,7 @@ func (e *anthropicEndpoint) Complete(ctx context.Context, call stage.Call) (*sta
 			return nil, err
 		}
 	} else {
+		removeAnthropicBudget(ctx, req)
 		var cancel context.CancelFunc
 		message, cancel, err = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
 		if cancel != nil {
@@ -104,6 +108,7 @@ func (e *anthropicEndpoint) Stream(ctx context.Context, call stage.Call) (stage.
 		if err != nil {
 			return nil, err
 		}
+		removeAnthropicBudget(ctx, v1)
 		out.v1, out.cancel, err = forwarding.ForwardAnthropicV1Stream(fc, wrapper, v1)
 		if err != nil {
 			if out.cancel != nil {
@@ -113,6 +118,7 @@ func (e *anthropicEndpoint) Stream(ctx context.Context, call stage.Call) (stage.
 		}
 		return out, nil
 	}
+	removeAnthropicBudget(ctx, req)
 	out.beta, out.cancel, err = forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, req)
 	if err != nil {
 		if out.cancel != nil {
@@ -121,6 +127,15 @@ func (e *anthropicEndpoint) Stream(ctx context.Context, call stage.Call) (stage.
 		return nil, err
 	}
 	return out, nil
+}
+
+// The stage pipeline converts requests between Anthropic SDK types after the
+// target transforms. Reapply the flag after that conversion, which otherwise
+// reconstructs an omitted required budget as zero.
+func removeAnthropicBudget(ctx context.Context, req any) {
+	if typ.GetRuleFlags(ctx).DisableThinkingBudget {
+		_ = transform.NewRemoveThinkingBudgetTransform().Apply(&transform.TransformContext{Request: req})
+	}
 }
 
 func anthropicRequest(value any) (*anthropic.BetaMessageNewParams, error) {
