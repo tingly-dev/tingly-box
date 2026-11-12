@@ -47,3 +47,40 @@ it('refuses anything but a whole number from 1 to the server limit; there is no 
     fireEvent.change(field, { target: { value: '100' } });
     expect(save()).not.toBeDisabled();
 });
+
+const usageOf = (by_model: unknown[], by_thread: unknown[]) =>
+    m.get.mockImplementation((path: string) => Promise.resolve(
+        path.endsWith('/usage')
+            ? { data: { by_model, by_thread }, response: new Response() }
+            : { data: { max_running_threads_limit: 100 }, response: new Response() },
+    ));
+
+const usageThread = { thread_id: 't1', title: 'Fix login', model: 'cc[1m]', turns: 5, input_tokens: 34_500_000, output_tokens: 98_500 };
+
+function openUsage() {
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={project as never} open tab="usage" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+}
+
+it('renders usage as a stat strip over ranked tables with shares', async () => {
+    usageOf(
+        [{ model: 'cc[1m]', threads: 18, input_tokens: 305_000_000, output_tokens: 1_200_000 }],
+        [usageThread, { thread_id: 't2', title: 'Split the i18n files', model: 'cc[1m]', turns: 6, input_tokens: 5_900_000, output_tokens: 50_200 }],
+    );
+    openUsage();
+    expect(await screen.findByText('projectSettings.usage.totalTokens')).toBeTruthy();
+    // The strip: compact totals with the exact figure on hover.
+    expect(screen.getByTitle('40548700')).toBeTruthy();
+    // The thread rows rank by tokens spent, each with its share by the meter.
+    const titles = screen.getAllByText(/Fix login|Split the i18n files/).map((el) => el.textContent);
+    expect(titles.indexOf('Fix login')).toBeLessThan(titles.indexOf('Split the i18n files'));
+    expect(screen.getByText('85.3%')).toBeTruthy();
+    expect(screen.getByText('14.7%')).toBeTruthy();
+    expect(screen.getByText('305M')).toBeTruthy();
+});
+
+it('reads a project without usage as empty, not as empty tables', async () => {
+    usageOf([], []);
+    openUsage();
+    expect(await screen.findByText('projectSettings.usage.emptyTitle')).toBeTruthy();
+    expect(screen.queryByText('projectSettings.usage.totalTokens')).not.toBeInTheDocument();
+});

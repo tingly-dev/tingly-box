@@ -140,7 +140,12 @@ export const project: Dict<typeof projectEn> = {
         runtime: '线程运行环境', runtimeCli: '线程运行的 Claude Code：',
         runtimeMissing: '没有找到 Claude Code CLI，线程无法运行。请安装：',
         runtimeVia: '线程的模型请求发往', runtimeOwnLogin: '模型连接不是 Anthropic 风格，因此线程使用 Claude Code 自己的登录。',
-        usageHelp: '线程上报的 token 用量。每个线程都是一个完整的 Claude Code 会话，并行越多消耗越快。',
-        model: '模型', thread: '线程', turns: '轮次',
+        usage: {
+            help: '线程上报的 token 用量。每个线程都是一个完整的 Claude Code 会话，并行越多消耗越快。',
+            totalTokens: 'Token 总量', input: '输入', output: '输出', threads: '线程',
+            models: '模型', model: '模型', thread: '线程', turns: '轮次', share: '占比', in: '输入', out: '输出',
+            emptyTitle: '还没有 token 用量', emptyBody: '线程运行后，这里会显示它们上报的 token 用量。',
+            loading: '正在加载用量',
+        },
     },
 };
