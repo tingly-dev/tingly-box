@@ -466,7 +466,7 @@ func (r *Relay) deliver(job relayJob) {
 		}
 		for _, b := range candidates {
 			key := chatKey(b.Platform, b.ChatID)
-			if !seen[key] && mayAnswer(r.store, &b, job.request.threadID) == nil {
+			if !seen[key] {
 				bindings = append(bindings, b)
 				seen[key] = true
 			}

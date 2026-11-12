@@ -107,12 +107,12 @@ func TestRebindingDuringTextAuthorizationDoesNotAnswer(t *testing.T) {
 	f, svc, _, deploy := projectChatOnSecondThread(t)
 	other := mkProject(t, f.store, &db.Project{Name: "Other"})
 	called := false
-	handled, err := svc.PostFromChannel("telegram", "up", "allow", nil, func() bool {
+	handled, err := svc.PostFromChannel("telegram", "up", "allow", nil, ChannelAuthorization{Answer: func() bool {
 		called = true
 		_, err := svc.BindChannel("telegram", "up", "", "", other.ID)
 		require.NoError(t, err)
 		return true
-	})
+	}})
 	require.NoError(t, err)
 	require.True(t, called)
 	require.True(t, handled)

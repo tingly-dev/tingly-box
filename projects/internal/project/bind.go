@@ -75,6 +75,12 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 	return b, nil
 }
 
+// ChannelAuthorization checks the current sender at the point of use.
+type ChannelAuthorization struct {
+	Answer func() bool
+	Start  func() bool
+}
+
 // PostFromChannel delivers a message from an IM chat to the thread the chat is
 // bound to, as a message with source im, exactly as the web would send it
 // (Send). handled is false when the chat has no binding, and the caller
@@ -83,7 +89,11 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 // A folder chat that asked for a new session (/new), or whose thread is done
 // (resolved by hand or after idling), starts a new thread in the folder with
 // this message instead, and the chat moves to it.
-func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile, authorizeAnswer ...func() bool) (handled bool, err error) {
+func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile, policies ...ChannelAuthorization) (handled bool, err error) {
+	var policy ChannelAuthorization
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
 	b, err := s.Store.GetChannelBinding(platform, chatID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -92,7 +102,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		return false, err
 	}
 	authorizeStart := func() bool {
-		return len(authorizeAnswer) < 2 || authorizeAnswer[1] == nil || authorizeAnswer[1]()
+		return policy.Start == nil || policy.Start()
 	}
 	denyStart := func() (bool, error) {
 		return true, errors.New("you are not authorized to send messages to this session")
@@ -138,11 +148,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	// A chat that was asked something answers it with its next message
 	// (other than an @N one, or one with files).
 	if len(files) == 0 {
-		var check func() bool
-		if len(authorizeAnswer) > 0 {
-			check = authorizeAnswer[0]
-		}
-		if done, err := s.answerWaiting(b, text, src, check); done {
+		if done, err := s.answerWaiting(b, text, src, policy.Answer); done {
 			return true, err
 		}
 	}
@@ -254,14 +260,22 @@ func (s *Service) MayAnswerChannelText(platform, chatID, text string) bool {
 		if s.mayAnswer(b, q.threadID) != nil {
 			continue
 		}
-		if _, _, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
-			return true
+		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
+			if _, _, fits := decisionReply(d, q.requestID, text); fits {
+				return true
+			}
+			continue
 		}
-		if ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID); ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk) {
+		if s.pendingTextRequest(q) {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *Service) pendingTextRequest(q pendingRequest) bool {
+	ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID)
+	return ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk)
 }
 
 // answerWaiting gives a chat's message to the request it answers. A decision
@@ -291,15 +305,13 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 	}
 	var named []card
 	for _, c := range cards {
-		if rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), decisionCode(c.requestID)); ok && (rest == "" || strings.ContainsAny(rest[:1], " \t:,.-")) {
-			if _, fits := c.d.optionOfReply(rest); fits {
+		if reply, explicit, fits := decisionReply(c.d, c.requestID, text); fits {
+			if explicit {
 				if !s.authorizeChannelAnswer(b, authorize) {
 					return true, nil
 				}
-				return s.chooseFromText(b, c.pendingRequest, c.d, rest, src)
+				return s.chooseFromText(b, c.pendingRequest, c.d, reply, src)
 			}
-		}
-		if _, fits := c.d.optionOfReply(text); fits {
 			named = append(named, c)
 		}
 	}
@@ -320,7 +332,7 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 	}
 	var active []pendingRequest
 	for _, q := range others {
-		if ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID); ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk) {
+		if s.pendingTextRequest(q) {
 			active = append(active, q)
 		}
 	}
@@ -348,6 +360,16 @@ func (s *Service) authorizeChannelAnswer(b *db.ChannelBinding, authorize func() 
 	// still race the later response; the check only narrows that window.
 	current, err := s.Store.GetChannelBinding(b.Platform, b.ChatID)
 	return err == nil && current.UpdatedAt.Equal(b.UpdatedAt)
+}
+
+func decisionReply(d Decision, requestID, text string) (reply string, explicit, fits bool) {
+	if rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), decisionCode(requestID)); ok && (rest == "" || strings.ContainsAny(rest[:1], " \t:,.-")) {
+		if _, fits := d.optionOfReply(rest); fits {
+			return rest, true, true
+		}
+	}
+	_, fits = d.optionOfReply(text)
+	return text, false, fits
 }
 
 // decisionCode is the short code a chat can start a reply with to say which

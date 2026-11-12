@@ -52,7 +52,7 @@ func (a *App) Post(ref ChatRef, text string, files []ChannelFile) (bool, error) 
 			return ref.AuthorizeAnswer()
 		}
 	}
-	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files, checkAnswer, ref.AuthorizeStart)
+	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files, project.ChannelAuthorization{Answer: checkAnswer, Start: ref.AuthorizeStart})
 }
 
 // Command runs a chat command for a bound IM chat; handled is false when the
