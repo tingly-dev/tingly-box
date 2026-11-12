@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SidebarExpand } from '../components/icons';
 import { readLocal, writeLocal } from '../utils/storage';
+import { NotificationsBridge } from '../notifications/NotificationsBridge';
 import { Sidebar } from './Sidebar';
 
 export function Layout() {
@@ -21,6 +22,8 @@ export function Layout() {
     const showExpand = mobile || collapsed;
     return (
         <Box sx={{ display: 'flex', height: '100dvh', bgcolor: 'background.default', overflow: 'hidden' }}>
+            {/* Hands the notification engine this app's strings and routes. */}
+            <NotificationsBridge />
             {mobile ? (
                 <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)}>
                     <Sidebar onNavigate={() => setMobileOpen(false)} />

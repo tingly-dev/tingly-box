@@ -78,7 +78,16 @@ func (h *Hub) Publish(ev Event) {
 		}
 	}
 	send(h.subs[ev.ProjectID])
-	if ev.Type != EventMessageDelta && ev.Type != EventThreadEvent {
+	if ev.Type != EventMessageDelta && (ev.Type != EventThreadEvent || isDecision(ev.Data)) {
 		send(h.subs[AllProjects])
 	}
+}
+
+// isDecision reports whether a thread-event frame is a decision card: the one
+// transcript entry the all-projects stream forwards. A decision asks the user
+// to pick, wherever they are looking; every other entry only matters to the
+// page that shows the thread.
+func isDecision(data any) bool {
+	e, ok := data.(*db.ThreadEvent)
+	return ok && e.Kind == db.EvDecision
 }

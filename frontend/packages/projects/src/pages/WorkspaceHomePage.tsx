@@ -12,6 +12,7 @@ import { ProjectCard } from '../components/project/ProjectCard';
 import { WorkdirCard } from '../components/workdir/WorkdirCard';
 import { useProjectList } from '../hooks/useProjectList';
 import { useProjectsHost } from '../host/ProjectsHost';
+import { NotificationSettingsCard } from '../notifications/NotificationSettings';
 import { readSession, writeSession } from '../utils/storage';
 import { disarmWorkspaceImHint, dismissWorkspaceImHint, imHintArmed, imHintDismissed } from '../utils/imHint';
 
@@ -188,6 +189,10 @@ export default function WorkspaceHomePage() {
                         {recentBindings.map((b) => <ImChatCard key={b.id} b={b} place={directory.get(b.project_id)} />)}
                     </Section>
                 )}
+
+                {/* The one preference the workspace owns everywhere (the standalone
+                    app keeps it in its Settings page instead). */}
+                <NotificationSettingsCard />
             </Box>
 
             {hasIm && (

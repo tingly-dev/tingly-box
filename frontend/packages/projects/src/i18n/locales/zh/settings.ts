@@ -68,5 +68,13 @@ export const settings: Dict<typeof settingsEn> = {
         test: '发送测试消息', testOk: '连接成功——{{ms}} ms 内回复', testFailed: '测试失败',
         testEndpoint: '端点', testModel: '模型', testReply: '回复', testError: '错误',
         appearanceTitle: '外观', theme: '主题', language: '语言',
+        notificationsTitle: '通知',
+        notificationsIntro: '本标签页在后台时，线程需要你会弹系统通知；点击通知会打开等待你的地方。',
+        notificationsEnable: '桌面通知',
+        notificationsOn: '开 — 仅在本标签页隐藏或最小化时提醒',
+        notificationsOff: '关',
+        notificationsScope: '包括：提问、权限批准、失败的轮次、完成的轮次、协调者请求拍板。',
+        notificationsBlocked: '浏览器已拦截本站点的通知。请在本站点的浏览器设置中允许通知，然后重新打开此开关。',
+        notificationsUnsupported: '当前浏览器不支持桌面通知。',
     },
 };

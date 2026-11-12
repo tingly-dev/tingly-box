@@ -7,7 +7,14 @@ export const workspace: Dict<typeof workspaceEn> = {
     common: {
         cancel: '取消', save: '保存', close: '关闭', delete: '删除', edit: '编辑', rename: '重命名',
         copy: '复制', copied: '已复制', more: '更多', star: '收藏', unstar: '取消收藏', retry: '重试',
-        tokensApprox: '≈ {{value}} tokens',
+        tokensApprox: '≈ {{value}} tokens', turnOn: '开启', turnOff: '关闭',
+    },
+    // 标签页在后台时的桌面通知（notifications/engine.ts）。
+    notifications: {
+        waiting: '等待你的输入',
+        failed: '本轮运行失败',
+        finished: '本轮已完成',
+        decision: '等待你拍板',
     },
     nav: {
         newChat: '新对话', chats: '对话', projects: '项目', recentChats: '最近对话',

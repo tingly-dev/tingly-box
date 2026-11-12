@@ -4,7 +4,14 @@ export const workspace = {
     common: {
         cancel: 'Cancel', save: 'Save', close: 'Close', delete: 'Delete', edit: 'Edit', rename: 'Rename',
         copy: 'Copy', copied: 'Copied', more: 'More', star: 'Star', unstar: 'Unstar', retry: 'Retry',
-        tokensApprox: '≈ {{value}} tokens',
+        tokensApprox: '≈ {{value}} tokens', turnOn: 'Turn on', turnOff: 'Turn off',
+    },
+    // Desktop notifications while the tab is in the background (notifications/engine.ts).
+    notifications: {
+        waiting: 'Waits on your input',
+        failed: 'The turn failed',
+        finished: 'Turn finished',
+        decision: 'Wants your decision',
     },
     nav: {
         newChat: 'New chat', chats: 'Chats', projects: 'Projects', recentChats: 'Recent chats',
