@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer';
+import { en } from '../i18n/en';
+import { zh } from '../i18n/zh';
 
 const { mobile } = vi.hoisted(() => ({ mobile: { value: false } }));
 vi.mock('@mui/material', async (original) => ({ ...await original<typeof import('@mui/material')>(), useMediaQuery: () => mobile.value }));
@@ -202,6 +204,11 @@ describe('Composer slash menu', () => {
         expect(input).toHaveValue('/compact ');
         expect(send).not.toHaveBeenCalled();
         expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    });
+
+    it('explains that old messages remain viewable without automatically inheriting their context', () => {
+        expect(en.composer.newDescription).toBe('Start a new session without automatically inheriting previous conversation context; previous messages remain viewable');
+        expect(zh.composer.newDescription).toBe('开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息');
     });
 
     it('offers and sends /new through the normal composer path', async () => {
