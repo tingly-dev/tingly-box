@@ -15,10 +15,8 @@ import (
 
 // Relay sends a thread's finished replies and folded thread reports to the
 // chats bound to that thread (a worker's or folder thread's own turn end
-// included), and a descendant's approvals and questions to the chats bound to
-// it or to any ancestor, to answer by replying (an approval also has buttons
-// where the host can show them, ChannelPrompter, restated once the request is
-// settled wherever it was answered). Messages go out one at a time, in the order
+// included), and requests to its lineage and project-bound chats. Prompts are
+// restated when answered. Messages go out one at a time, in the order
 // they finished. Each includes where it comes from: `[project name]` for a
 // project conversation, `[#N title]` for any other thread. A chat that turned
 // on /verbose also hears each step of its own thread's turns (Step).
@@ -67,6 +65,8 @@ type relayJob struct {
 	// chats that can show them.
 	request *pendingRequest
 	prompt  *agent.Prompt
+	// requestProjectID widens only thread requests to project-bound chats.
+	requestProjectID string
 	// verbose sends it only to the chats that asked for each step.
 	verbose bool
 	// quote, set on a decision card, names the question a chat that got it as
@@ -223,9 +223,9 @@ func (r *Relay) Step(t db.Thread, e db.ThreadEvent) {
 	r.enqueueJob(relayJob{threadIDs: []string{t.ID}, tag: threadTag(t.Seq, t.Title), text: text, verbose: true})
 }
 
-// NeedsUser asks the chats of a thread, and of its ancestors, to answer the
-// approval or question in request by replying (an approval also has buttons
-// where the chat can show them).
+// NeedsUser asks the chats of a thread, its ancestors, and its project to answer
+// the approval or question by replying (an approval also has buttons where the
+// chat can show them).
 func (r *Relay) NeedsUser(t db.Thread, request db.ThreadEvent) {
 	if r == nil || r.sink == nil {
 		return
@@ -238,7 +238,7 @@ func (r *Relay) NeedsUser(t db.Thread, request db.ThreadEvent) {
 	for i, a := range lineage {
 		ids[i] = a.ID
 	}
-	job := relayJob{threadIDs: ids, tag: threadTag(t.Seq, t.Title)}
+	job := relayJob{threadIDs: ids, tag: threadTag(t.Seq, t.Title), requestProjectID: t.ProjectID}
 	var p requestPayload
 	_ = json.Unmarshal([]byte(request.Payload), &p)
 	if p.RequestID == "" {
@@ -455,6 +455,23 @@ func (r *Relay) deliver(job relayJob) {
 	if err != nil {
 		return
 	}
+	if job.requestProjectID != "" && job.request != nil {
+		candidates, err := r.store.ListChannelBindings(db.BindingFilter{ProjectID: job.requestProjectID})
+		if err != nil {
+			return
+		}
+		seen := make(map[string]bool, len(bindings))
+		for _, b := range bindings {
+			seen[chatKey(b.Platform, b.ChatID)] = true
+		}
+		for _, b := range candidates {
+			key := chatKey(b.Platform, b.ChatID)
+			if !seen[key] && mayAnswer(r.store, &b, job.request.threadID) == nil {
+				bindings = append(bindings, b)
+				seen[key] = true
+			}
+		}
+	}
 	if job.verbose {
 		bindings = verboseOnly(bindings)
 	}
@@ -489,10 +506,27 @@ func (r *Relay) deliver(job relayJob) {
 			continue
 		}
 		if job.request != nil {
+			current, err := r.store.GetChannelBinding(b.Platform, b.ChatID)
+			if err != nil || mayAnswer(r.store, current, job.request.threadID) != nil {
+				cancel()
+				continue
+			}
+			b = *current
+			to.BotUUID = b.BotUUID
 			r.await(b, *job.request)
 		}
-		if job.prompt == nil || !r.sendPrompt(ctx, b, "["+tag+"] ", *job.prompt) {
+		promptSent, promptFailed := false, false
+		if job.prompt != nil {
+			promptSent, promptFailed = r.sendPrompt(ctx, b, "["+tag+"] ", *job.prompt)
+		}
+		if promptFailed && job.request != nil {
+			r.unawait(b, *job.request)
+		}
+		if !promptSent && !promptFailed {
 			if err := r.sink.Text(ctx, to, text); err != nil {
+				if job.request != nil {
+					r.unawait(b, *job.request)
+				}
 				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
 			} else if job.quote != "" && job.request != nil {
 				r.mu.Lock()
@@ -523,24 +557,45 @@ func (r *Relay) await(b db.ChannelBinding, q pendingRequest) {
 	r.awaiting[k] = append(r.awaiting[k], q)
 }
 
+func (r *Relay) unawait(b db.ChannelBinding, q pendingRequest) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	k := chatKey(b.Platform, b.ChatID)
+	reqs := r.awaiting[k]
+	kept := reqs[:0]
+	for _, pending := range reqs {
+		if pending != q {
+			kept = append(kept, pending)
+		}
+	}
+	if len(kept) == 0 {
+		delete(r.awaiting, k)
+	} else {
+		r.awaiting[k] = kept
+	}
+}
+
 // sendPrompt sends a request's buttons to a chat and remembers the message
-// for restate. It reports false when the chat should get the request as text
-// instead: no prompter, or no buttons on its platform.
-func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix string, p agent.Prompt) bool {
+// for restate. It reports whether it was sent or failed; neither means the
+// platform has no buttons and the caller should send text instead.
+func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix string, p agent.Prompt) (sent, failed bool) {
 	p.Text = prefix + p.Text
 	ref, err := r.sink.Prompt(ctx, agent.ChatRef{Platform: b.Platform, ChatID: b.ChatID, BotUUID: b.BotUUID}, p)
 	if err != nil {
 		if errors.Is(err, agent.ErrNoButtons) {
-			return false
+			return false, false
 		}
 		// The chat is unreachable now; the text line would fail as well.
 		logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": p.ThreadID}).Warn("projects: send a prompt to IM chat")
-		return true
+		return false, true
+	}
+	if ref == "" {
+		return false, true
 	}
 	r.mu.Lock()
 	r.sent[p.RequestID] = append(r.sent[p.RequestID], sentPrompt{platform: b.Platform, chatID: b.ChatID, ref: ref, text: p.Text})
 	r.mu.Unlock()
-	return true
+	return true, false
 }
 
 // restate rewrites every prompt sent for a request with how it ended and

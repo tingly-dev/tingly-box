@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,29 @@ func startDeploy(t *testing.T, f *testFixture, svc *Service) *db.Thread {
 	_, err = svc.BindChannel("telegram", "own", "", th.ID, "")
 	require.NoError(t, err)
 	return th
+}
+
+func TestFailedPromptDeliveryDoesNotAwaitText(t *testing.T) {
+	f, svc, sink := channelFixtureWith(t, approveScript)
+	sink.err = errors.New("delivery failed")
+	_, err := svc.BindChannel("dingtalk", "up", "", "", f.project.ID)
+	require.NoError(t, err)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Ship", Task: "deploy", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	found := false
+	for range 5 {
+		if strings.Contains(sink.next(t).text, "make deploy") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+	require.Eventually(t, func() bool {
+		return len(svc.Relay.awaitingAll("dingtalk", "up")) == 0
+	}, time.Second, time.Millisecond)
+	_, ok := f.threads.PendingRequest(th.ID, "req-1")
+	require.True(t, ok)
+	require.NoError(t, f.threads.Respond(th.ID, "req-1", Answer{Allow: false}))
 }
 
 func TestApprovalIsAnsweredFromAChat(t *testing.T) {

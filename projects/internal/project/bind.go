@@ -83,7 +83,7 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 // A folder chat that asked for a new session (/new), or whose thread is done
 // (resolved by hand or after idling), starts a new thread in the folder with
 // this message instead, and the chat moves to it.
-func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile) (handled bool, err error) {
+func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile, authorizeAnswer ...func() bool) (handled bool, err error) {
 	b, err := s.Store.GetChannelBinding(platform, chatID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -126,7 +126,11 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	// A chat that was asked something answers it with its next message
 	// (other than an @N one, or one with files).
 	if len(files) == 0 {
-		if done, err := s.answerWaiting(b, text, src); done {
+		var check func() bool
+		if len(authorizeAnswer) > 0 {
+			check = authorizeAnswer[0]
+		}
+		if done, err := s.answerWaiting(b, text, src, check); done {
 			return true, err
 		}
 	}
@@ -226,7 +230,7 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 // of being guessed at: "2" would answer the wrong question. Otherwise the
 // oldest request that takes the reply gets it, and an open card never keeps a
 // later approval or question from being answered.
-func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (done bool, err error) {
+func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, authorize func() bool) (done bool, err error) {
 	type card struct {
 		pendingRequest
 		d Decision
@@ -247,6 +251,9 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (
 	for _, c := range cards {
 		if rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), decisionCode(c.requestID)); ok && (rest == "" || strings.ContainsAny(rest[:1], " \t:,.-")) {
 			if _, fits := c.d.optionOfReply(rest); fits {
+				if !s.authorizeChannelAnswer(b, authorize) {
+					return true, nil
+				}
 				return s.chooseFromText(b, c.pendingRequest, c.d, rest, src)
 			}
 		}
@@ -264,14 +271,31 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (
 			decisionCode(named[0].requestID)+" 1\":\n"+strings.Join(lines, "\n"))
 		return true, nil
 	case len(named) == 1:
+		if !s.authorizeChannelAnswer(b, authorize) {
+			return true, nil
+		}
 		return s.chooseFromText(b, named[0].pendingRequest, named[0].d, text, src)
 	}
 	for _, q := range others {
+		if ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID); !ok || (ev.Kind != db.EvApproval && ev.Kind != db.EvAsk) {
+			continue
+		}
+		if !s.authorizeChannelAnswer(b, authorize) {
+			return true, nil
+		}
 		if done, err := s.answerFromText(q.threadID, q.requestID, text); done {
 			return true, err
 		}
 	}
 	return false, nil
+}
+
+func (s *Service) authorizeChannelAnswer(b *db.ChannelBinding, authorize func() bool) bool {
+	if authorize == nil || authorize() {
+		return true
+	}
+	s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat.")
+	return false
 }
 
 // decisionCode is the short code a chat can start a reply with to say which
@@ -362,7 +386,11 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile strin
 // A chat bound to one session of a folder (TargetThreadID) keeps to that
 // session's lineage, and a chat of another project never answers.
 func (s *Service) mayAnswer(b *db.ChannelBinding, threadID string) error {
-	lineage, err := s.Store.Lineage(threadID)
+	return mayAnswer(s.Store, b, threadID)
+}
+
+func mayAnswer(store *db.Store, b *db.ChannelBinding, threadID string) error {
+	lineage, err := store.Lineage(threadID)
 	if err != nil {
 		return err
 	}
@@ -376,7 +404,7 @@ func (s *Service) mayAnswer(b *db.ChannelBinding, threadID string) error {
 	}
 	project := b.TargetProjectID
 	if project == "" && b.ThreadID != "" {
-		if t, err := s.Store.GetThread(b.ThreadID); err == nil {
+		if t, err := store.GetThread(b.ThreadID); err == nil {
 			project = t.ProjectID
 		}
 	}

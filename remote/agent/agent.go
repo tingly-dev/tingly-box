@@ -18,6 +18,9 @@ type ChatRef struct {
 	// Profile is the launch profile a chat's first session runs under (the
 	// bot's default agent); empty for the default.
 	Profile string
+	// AuthorizeAnswer checks the current sender's approval permission at the
+	// point a text reply is consumed. Nil means the host has no access policy.
+	AuthorizeAnswer func() bool
 }
 
 // ChatPlace says where a chat is. The zero value is a chat with no place yet.

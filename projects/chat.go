@@ -33,7 +33,7 @@ var _ Chat = (*App)(nil)
 // bound. files, which the host saved, go with the message as its attachments;
 // the host may remove them once this returns.
 func (a *App) Post(ref ChatRef, text string, files []ChannelFile) (bool, error) {
-	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files)
+	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files, ref.AuthorizeAnswer)
 }
 
 // Command runs a chat command for a bound IM chat; handled is false when the

@@ -110,6 +110,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	// consumer does with chats — each consumer owns its own machinery.
 	if accessStore != nil && authorizer != nil {
 		ctx = WithPrivilegeChecker(ctx, NewPrivilegeChecker(accessStore, authorizer))
+		ctx = WithAnswerChecker(ctx, NewActionChecker(accessStore, authorizer, access.ActionRemoteControlApprove))
 	}
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {

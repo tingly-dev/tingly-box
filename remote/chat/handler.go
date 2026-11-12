@@ -37,6 +37,7 @@ type BotHandler struct {
 	// privileged tells /help whether a chat may use privileged actions; nil
 	// when the host has no access policy.
 	privileged     bot2.PrivilegeChecker
+	answerAllowed  bot2.PrivilegeChecker
 	projectListsMu sync.Mutex
 	projectLists   map[string][]agent.ProjectChoice
 	folderLists    map[string][]string

@@ -127,7 +127,13 @@ func (h *BotHandler) routeToProject(hCtx HandlerContext, text string) {
 // deliverToProject hands a message to the chat's session and says why when
 // it could not be delivered.
 func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []agent.File) {
-	handled, err := h.projectRouter.Post(h.chatRef(hCtx), text, files)
+	ref := h.chatRef(hCtx)
+	if h.answerAllowed != nil {
+		ref.AuthorizeAnswer = func() bool {
+			return h.answerAllowed(hCtx.Platform, hCtx.BotUUID, hCtx.ChatID, hCtx.SenderID, hCtx.Message.IsGroupMessage())
+		}
+	}
+	handled, err := h.projectRouter.Post(ref, text, files)
 	switch {
 	case !handled:
 		h.SendText(hCtx, noPlace)
