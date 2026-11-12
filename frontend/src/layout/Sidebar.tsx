@@ -29,6 +29,7 @@ import { displayVersion } from '@/utils/version';
 import { sidebarWidth } from './constants';
 import {
     NAV_ROW_SX,
+    navRowSelectedSx,
     navRowTextSlotProps,
     sidebarContainerSx,
     sidebarHeaderSx,
@@ -210,23 +211,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                     ...NAV_ROW_SX,
                                     color: 'text.secondary',
                                     position: 'relative',
-                                    ...(active && {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                        '& img': { filter: 'none !important' },
-                                        '& .MuiListItemIcon-root > div': {
-                                            bgcolor: 'white',
-                                            borderRadius: 0.5,
-                                            p: 0.25,
-                                        },
-                                        '&:hover': { backgroundColor: 'primary.main' },
-                                        '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
-                                        '& .MuiListItemText-primary': { color: 'primary.contrastText' },
-                                    }),
-                                    '&:hover': {
-                                        backgroundColor: active ? 'primary.main' : 'action.hover',
-                                        color: active ? 'primary.contrastText' : 'text.primary',
-                                    },
+                                    '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
+                                    ...(active && navRowSelectedSx),
                                 }}
                             >
                                 {item.icon && (

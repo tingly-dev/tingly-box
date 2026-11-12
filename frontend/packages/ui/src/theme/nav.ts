@@ -13,13 +13,19 @@ export const NAV_ROW_SX = {
     px: 2,
 } as const;
 
-/** The selected row: filled with the primary colour, its text and icon on it. */
+/** The selected nav item — a sidebar row or an activity-rail button: filled
+ *  with the primary colour, its text and icon on it. The one selected look
+ *  for navigation; selections inside a page use the soft look (selection.ts).
+ *  Brand logos (an <img> in a <div>) get a white tile so a dark mark stays
+ *  visible on the fill. */
 export const navRowSelectedSx = {
     backgroundColor: 'primary.main',
     color: 'primary.contrastText',
     '&:hover': { backgroundColor: 'primary.main' },
     '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
     '& .MuiListItemText-primary': { color: 'primary.contrastText' },
+    '& img': { filter: 'none !important' },
+    '& .MuiListItemIcon-root > div': { bgcolor: 'white', borderRadius: 0.5, p: 0.25 },
 } as const;
 
 /** ListItemText slotProps for a nav row: a 14px name, an 11px subtitle. */

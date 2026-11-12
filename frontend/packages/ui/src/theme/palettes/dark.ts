@@ -22,7 +22,7 @@ export const darkPalette: ThemePalette = {
   mode: 'dark',
   // Primary blue: dark mode shifts one notch up (blue-500 instead of
   // blue-600) so text-variant Buttons reach WCAG AA against Paper while
-  // staying visually aligned with the contained-Button gradient.
+  // matching the contained Button fill.
   primary: {
     main: '#3b82f6',
     light: '#60a5fa',
@@ -141,7 +141,6 @@ export const darkTokens: ThemeTokens = {
     outlinedText: '#e2e8f0',
     outlinedHoverBorder: 'rgba(255, 255, 255, 0.4)',
     outlinedHoverBg: 'rgba(255, 255, 255, 0.08)',
-    gradient: ['#3b82f6', '#2563eb', '#60a5fa', '#3b82f6'],
   },
   menuItem: {
     hover: 'rgba(255, 255, 255, 0.08)',

@@ -55,7 +55,8 @@ function Section({ icon, title, body, action, onAction, viewAll, onViewAll, head
                     {steps === null && !loading && onViewAll && (
                         <Button size="small" color="inherit" endIcon={<ArrowForward />} onClick={onViewAll} sx={{ color: 'text.secondary' }}>{viewAll}</Button>
                     )}
-                    <Button variant="contained" startIcon={<Add />} onClick={onAction}>{action}</Button>
+                    {/* Solid only while the section is empty and this is its one next step. */}
+                    <Button variant={steps ? 'contained' : 'outlined'} startIcon={<Add />} onClick={onAction}>{action}</Button>
                 </Box>
             </Box>
             {loading ? (

@@ -166,7 +166,6 @@ export const dsTokens: ThemeTokens = {
     outlinedText: dsPrimaryDark,
     outlinedHoverBorder: 'rgba(85, 128, 250, 0.6)',
     outlinedHoverBg: 'rgba(85, 128, 250, 0.12)',
-    gradient: [dsPrimary, dsPrimaryDark, dsPrimaryDark, dsPrimaryDark],
   },
   menuItem: {
     hover: 'rgba(85, 128, 250, 0.12)',

@@ -67,6 +67,11 @@ The background gradient (`dsBackgroundGradient` — the misty hero wash) is
 untouched; it's independent of the brand-blue accent and wasn't part of the
 readability complaint.
 
+**Update (2026-11, `visual-system.md` step 4):** the gradient variant and
+`buttonVariants.ts` are gone — the primary button is MUI's own contained
+style (`primary.main`, `primary.dark` on hover), which handles the disabled
+state itself, so root cause 1 cannot recur.
+
 ### Where this lives
 
 - `frontend/src/theme/palettes/ds.ts` — palette tokens (`dsPrimary*`,
@@ -133,6 +138,5 @@ same bug existed in every theme.
 
 ### Where this lives
 
-- `frontend/src/theme/components/buttonVariants.ts`
-- `frontend/src/theme/palettes/{light,dark,claude,ds}（sunlit 已于 2026-11 下线，见 `visual-system.md`）.ts`
+- `frontend/packages/ui/src/theme/palettes/{light,dark,claude,ds}.ts` (sunlit was retired in 2026-11, see `visual-system.md`)
 - `frontend/src/components/ConnectProviderDialog.tsx`
