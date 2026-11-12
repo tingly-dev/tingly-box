@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
     Alert, Autocomplete, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack,
-    Switch, FormControlLabel, Tab, TableHead, TableRow, Tabs, TextField, Typography,
+    Tab, TableHead, TableRow, Tabs, TextField, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@tingly/ui';
@@ -15,7 +15,7 @@ import { useProjectsHost } from '../../host/ProjectsHost';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
 import { usageEntries } from '../usage/usageData';
 import { UsageCard, UsageHeadCell, UsageRows, UsageStatStrip } from '../usage/UsageViews';
-import { RepoField, type RepoEntry } from './RepoField';
+import { directoryPayload, primaryPath, projectDirectories, RepoField, type RepoEntry } from './RepoField';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -26,7 +26,7 @@ const MAX_INSTRUCTIONS = 16000;
 const MAX_RUNNING_FALLBACK = 100;
 const mono = { fontFamily: fontMono } as const;
 
-type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'];
+type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'] & { directories?: import('./RepoField').DirectoryConfig[]; primary_repo_path?: string };
 type Mode = NonNullable<Patch['thread_permission_mode']>;
 
 function ModelField({ label, value, onChange, help }: { label: string; value: string; onChange: (v: string) => void; help: string }) {
@@ -67,7 +67,6 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
-    const [disableWorktree, setDisableWorktree] = useState(!!project.disable_worktree);
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
     useEffect(() => {
@@ -75,7 +74,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
     const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || disableWorktree !== !!project.disable_worktree || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
 
     return (
         <Stack spacing={2.5}>
@@ -91,12 +90,8 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
             <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
                 helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
                 slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
-            <Box>
-                <FormControlLabel control={<Switch checked={!disableWorktree} onChange={(e) => setDisableWorktree(!e.target.checked)} />} label={t('projectSettings.worktree')} />
-                <Typography variant="body2" color="text.secondary">{t('projectSettings.worktreeHelp')}</Typography>
-            </Box>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, disable_worktree: disableWorktree, max_running_threads: runningValue })}>{t('common.save')}</Button>
+                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
             <ActionRow
@@ -219,18 +214,19 @@ function Environment({ project, patch }: { project: Project; patch: (p: Patch) =
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/runtime')).then(setRuntime).catch(() => {});
     }, []);
-    const initial = project.repos.map((r) => ({ root: r.path, branch: r.base_branch }));
+    const initial = projectDirectories(project);
     const [repos, setRepos] = useState<RepoEntry[]>(initial);
-    useEffect(() => setRepos(project.repos.map((r) => ({ root: r.path, branch: r.base_branch }))), [project.repos]);
-    const dirty = JSON.stringify(repos.map((r) => r.root)) !== JSON.stringify(initial.map((r) => r.root));
+    const [primary, setPrimary] = useState(primaryPath(project));
+    useEffect(() => { setRepos(projectDirectories(project)); setPrimary(primaryPath(project)); }, [project.repos, (project as typeof project & { primary_repo_path?: string }).primary_repo_path]);
+    const dirty = JSON.stringify(directoryPayload(repos, primary)) !== JSON.stringify(directoryPayload(initial, primaryPath(project)));
     return (
         <Stack spacing={2}>
             <Box>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('project.repos')}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('projectSettings.reposHelp')}</Typography>
-                <RepoField value={repos} onChange={setRepos} />
+                <RepoField value={repos} onChange={setRepos} primary={primary} onPrimaryChange={setPrimary} />
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                    <Button variant="contained" disabled={!dirty} onClick={() => void patch({ repos: repos.map((r) => r.root) })}>{t('common.save')}</Button>
+                    <Button variant="contained" disabled={!dirty} onClick={() => void patch(directoryPayload(repos, primary))}>{t('common.save')}</Button>
                 </Box>
             </Box>
             <Divider />

@@ -84,3 +84,17 @@ it('reads a project without usage as empty, not as empty tables', async () => {
     expect(await screen.findByText('projectSettings.usage.emptyTitle')).toBeTruthy();
     expect(screen.queryByText('projectSettings.usage.totalTokens')).not.toBeInTheDocument();
 });
+
+it('saves a newly selected primary without changing other modes', async () => {
+    const p = { ...project, primary_repo_path: '/git', repos: [
+        { path: '/git', base_branch: 'main', kind: 'git', workspace_mode: 'worktree' },
+        { path: '/docs', base_branch: '', kind: 'directory', workspace_mode: 'shared' },
+    ] };
+    m.get.mockResolvedValue({ data: {}, response: new Response() });
+    m.patch.mockResolvedValue({ data: p, response: new Response() });
+    render(<ProjectsHostProvider host={host}><MemoryRouter><ProjectSettingsDialog project={p as never} open tab="environment" onTab={vi.fn()} onClose={vi.fn()} onChanged={vi.fn()} memoryKey={0} /></MemoryRouter></ProjectsHostProvider>);
+    expect(screen.getByRole('combobox', { name: 'repo.mode /docs' })).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'repo.makePrimary' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/git', workspace_mode: 'worktree' }, { path: '/docs', workspace_mode: 'shared' }], primary_repo_path: '/docs' } }));
+});

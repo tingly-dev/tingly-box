@@ -14,14 +14,15 @@ export const project = {
         resizeBand: 'Drag to resize the thread list. Double-click to reset.',
         name: 'Name', namePlaceholder: 'e.g. Payments API latency', nameHelp: 'Scope it to one stream of work you will keep adding to.',
         goal: 'Goal (optional)', goalPlaceholder: 'e.g. Hold p95 API latency under 200 ms', goalHelp: 'One line. The coordinator works toward it.',
-        repos: 'Repositories (optional)',
-        reposHelp: 'Local git repositories threads work in. By default, each thread gets a worktree and branch starting from the branch shown. Without a repository, threads deliver files to the Library.',
+        repos: 'Directories (optional)',
+        reposHelp: 'Add local directories for threads. Git repositories can use separate worktrees or the shared checkout; other directories are shared. Without a directory, files go to the Library.',
         create: 'Create project', overview: 'Overview',
         pausedBanner: 'This project is paused: threads are stopped and no new work starts.',
         archivedBanner: 'This project is archived. Its threads stay readable; unarchive it to send new work.',
     },
     repo: {
-        placeholder: '/path/to/repository', add: 'Add', invalid: 'Not a git repository',
+        placeholder: '/path/to/directory', add: 'Add', invalid: 'Cannot inspect directory',
+        mode: 'Workspace mode', primary: 'Primary', makePrimary: 'Make primary', primaryModeHelp: 'Only the primary directory ({{path}}) is affected. Other directories keep their settings.',
         baseHint: 'Threads branch from this branch', dirtyHint: 'This checkout has uncommitted changes; threads are unaffected, but merging needs a clean checkout.',
     },
     messageDetail: {
