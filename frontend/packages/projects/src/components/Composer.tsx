@@ -14,6 +14,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 /** The commands the slash menu offers; the host runs them (Projects intercepts the text). */
 const SLASH_COMMANDS = [
     { name: 'compact', hint: 'composer.compactHint', description: 'composer.compactDescription' },
+    { name: 'new', hint: '', description: 'composer.newDescription' },
 ];
 
 /** A file on its way into the message: uploading, ready, or refused. */
@@ -104,7 +105,7 @@ export interface ComposerProps {
     onAccepted?: (sent: string) => void;
     /** Show the send keys under the box (desktop only). */
     keysHint?: boolean;
-    /** Typing "/" at the start offers the slash commands the host runs (just /compact for now). */
+    /** Typing "/" at the start offers the slash commands the host runs. */
     slashCommands?: boolean;
 }
 
@@ -428,7 +429,7 @@ export function Composer({
                     sx={{ display: 'flex', alignItems: 'baseline', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', bgcolor: i === slashActive ? 'action.selected' : 'transparent' }}
                 >
                     <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.base, fontWeight: 600 }}>/{c.name}</Typography>
-                    <Typography component="span" variant="caption" color="text.secondary">{t(c.hint)}</Typography>
+                    {c.hint && <Typography component="span" variant="caption" color="text.secondary">{t(c.hint)}</Typography>}
                     <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 'auto', textAlign: 'right' }}>{t(c.description)}</Typography>
                 </Box>
             ))}

@@ -68,6 +68,8 @@ func (c *Coordinator) ask(projectID string, d Decision) string {
 func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, index int, src Source) (*db.ThreadEvent, error) {
 	c.choosing.Lock()
 	defer c.choosing.Unlock()
+	c.admission.Lock()
+	defer c.admission.Unlock()
 	main, err := c.store.GetThread(mainThreadID)
 	if err != nil {
 		return nil, err
@@ -89,7 +91,7 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 	if index < 0 || index >= len(d.Options) {
 		return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
 	}
-	if _, err := c.Post(main.ProjectID, d.Options[index].Label, nil, src); err != nil {
+	if _, err := c.post(main.ProjectID, d.Options[index].Label, nil, src); err != nil {
 		return nil, err
 	}
 	d.Chosen = &index

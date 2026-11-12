@@ -35,6 +35,9 @@ type commandPayload struct {
 // message it runs after the turn in flight; the user's /compact line is in
 // the transcript at once (or when its turn comes, if it had to wait).
 func (m *Threads) Compact(ctx context.Context, threadID, instructions string, src Source) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	t, err := m.sendable(threadID)
 	if err != nil {
 		return nil, err

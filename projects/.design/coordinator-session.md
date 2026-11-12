@@ -93,6 +93,12 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 线程汇报回合末尾附一个 system 信封（`kind="check-in"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。设置变更不会产生独立回合。
 
+## Workspace `/new`
+
+`/new` replaces the coordinator's session ID in the same main thread while preserving visible conversation, project settings, memory, library, workers and cumulative usage. It is accepted only with no running or unresolved coordinator input or pending decision; input admission and the switch are serialized. The resident process is released before an atomic session-ID, settings-confirmation and boundary-event update. A failed release or database update is reported without committing a switch.
+
+A persisted boundary distinguishes an explicitly fresh session from a legacy migration. The next real input starts without resume and receives current project context and settings, but does not automatically import the earlier conversation. The coordinator can still consult it via `read_conversation`; `/new` is not a privacy boundary. The IM folder command remains a different, existing thread-switching operation. See [slash-commands.md](../../.design/slash-commands.md).
+
 ## 验证与已知边界
 
 - [coordinator_session_test.go](../internal/project/coordinator_session_test.go)：连续两条消息使用相同 session ID，第二轮设置 resume。

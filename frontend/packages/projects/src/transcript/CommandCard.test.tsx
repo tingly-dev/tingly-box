@@ -40,6 +40,17 @@ describe('command card', () => {
         expect(status).not.toHaveTextContent('tokens');
     });
 
+    it('shows a fresh session distinctly from compaction', () => {
+        show(card({name: 'new', state: 'ok'}));
+        expect(screen.getByRole('status')).toHaveTextContent('New session started');
+        expect(screen.getByRole('status')).not.toHaveTextContent('compact');
+    });
+
+    it('shows a failed new session with its reason', () => {
+        show(card({name: 'new', state: 'failed', reason: 'Session is busy.'}));
+        expect(screen.getByRole('status')).toHaveTextContent('Could not start a new session: Session is busy');
+    });
+
     it('says why a compaction could not run', () => {
         show(card({state: 'failed', reason: 'Not enough messages to compact.'}));
         expect(screen.getByRole('status')).toHaveTextContent('Could not compact: Not enough messages to compact');

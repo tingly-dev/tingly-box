@@ -57,6 +57,12 @@ describe('conversation presentation', () => {
         expect(view.container.querySelectorAll('table')).toHaveLength(2);
     });
 
+    it('shows the new-session boundary without hiding earlier messages', () => {
+        show(props([event('user', 'Earlier message'), event('command', 'new', { payload: JSON.stringify({ name: 'new', state: 'ok' }) })]));
+        expect(screen.getByText('Earlier message')).toBeInTheDocument();
+        expect(screen.getByText('projects.transcript.newStarted')).toBeInTheDocument();
+    });
+
     it('offers a way back to the latest messages after scrolling up', () => {
         show(props([event('assistant', 'A reply')]));
         const scroller = screen.getByTestId('conversation-scroll');

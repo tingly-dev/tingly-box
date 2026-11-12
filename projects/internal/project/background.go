@@ -118,6 +118,9 @@ func (m *Threads) releaseSoon(threadID string, d time.Duration) {
 // release sends a held report as the turn's report, unless a turn is running
 // (its end settles the thread and drops the held one) or it is already gone.
 func (m *Threads) release(threadID string) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	m.mu.Lock()
 	h := m.held[threadID]
 	_, running := m.turns[threadID]

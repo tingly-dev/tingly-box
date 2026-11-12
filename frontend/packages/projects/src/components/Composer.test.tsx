@@ -204,6 +204,16 @@ describe('Composer slash menu', () => {
         expect(screen.queryByRole('option')).not.toBeInTheDocument();
     });
 
+    it('offers and sends /new through the normal composer path', async () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/n' } });
+        expect(screen.getByRole('option', { name: /new/ })).toHaveTextContent('composer.newDescription');
+        fireEvent.keyDown(input, { key: 'Tab' });
+        expect(input).toHaveValue('/new ');
+        await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('/new', []);
+    });
+
     it('narrows as the name is typed, completes with Tab and with a click', () => {
         const { input } = setup();
         fireEvent.change(input, { target: { value: '/co' } });

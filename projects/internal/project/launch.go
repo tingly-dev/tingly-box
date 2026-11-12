@@ -183,6 +183,9 @@ func (m *Threads) SetEffort(id, effort string) (*db.Thread, error) {
 // writing one Claude session file corrupt it. A turn in flight is refused
 // rather than killed; a message sent here afterwards starts it again.
 func (m *Threads) Handoff(id string) (string, error) {
+	lock := m.lifecycleLock(id)
+	lock.Lock()
+	defer lock.Unlock()
 	// A message sent while the process was closing waited for it.
 	defer m.next(id)
 	t, err := m.store.GetThread(id)

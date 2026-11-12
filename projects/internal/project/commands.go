@@ -31,6 +31,7 @@ const (
 	// notCommand is ordinary text, however it starts.
 	notCommand commandKind = iota
 	cmdCompact
+	cmdNew
 	// cmdUnsupported is the name of a command people know from Claude Code
 	// that Projects does not run: it is refused, not sent on as text.
 	cmdUnsupported
@@ -49,7 +50,7 @@ var commandRe = regexp.MustCompile(`^/([a-z][a-z0-9-]*)(?:\s+([\s\S]*))?$`)
 // reason. Any other "/word" is ordinary text, so a path or a command-like
 // word in a sentence still reaches the agent.
 var unsupportedCommands = map[string]bool{
-	"clear": true, "reset": true, "new": true, "resume": true, "rewind": true,
+	"clear": true, "reset": true, "resume": true, "rewind": true,
 	"model": true, "effort": true, "fast": true, "config": true, "settings": true,
 	"mcp": true, "memory": true, "permissions": true, "add-dir": true, "agents": true,
 	"init": true, "login": true, "logout": true, "doctor": true, "color": true,
@@ -68,6 +69,8 @@ func parseCommand(text string) command {
 	switch name := m[1]; {
 	case name == "compact":
 		return command{kind: cmdCompact, name: name, args: strings.TrimSpace(m[2])}
+	case name == "new":
+		return command{kind: cmdNew, name: name, args: strings.TrimSpace(m[2])}
 	case unsupportedCommands[name]:
 		return command{kind: cmdUnsupported, name: name}
 	}

@@ -145,6 +145,7 @@ type Threads struct {
 	threadOfSession map[string]string
 	slots           map[string]*limiter
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
+	lifecycle       map[string]*sync.Mutex // serializes message admission and session rotation
 	// allowed holds what the user allowed for the rest of a thread (allowKey).
 	allowed map[string]map[string]bool
 	// cards holds each thread's compaction card while one is running, so its
@@ -279,7 +280,7 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 		store: store, layout: layout, hub: hub, env: env,
 		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
-		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{},
+		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{}, lifecycle: map[string]*sync.Mutex{},
 		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{}, cards: map[string]*db.ThreadEvent{},
 	}
 	m.engine = engine.New(engine.Config{
@@ -421,6 +422,15 @@ func (m *Threads) ApplyLimit(p *db.Project) { m.slot(p) }
 // setQueued marks whether t's next turn waits for a slot.
 func (m *Threads) setQueued(threadID string, queued bool) {
 	_, _ = m.update(threadID, func(t *db.Thread) { t.Queued = queued })
+}
+
+func (m *Threads) lifecycleLock(threadID string) *sync.Mutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.lifecycle[threadID] == nil {
+		m.lifecycle[threadID] = &sync.Mutex{}
+	}
+	return m.lifecycle[threadID]
 }
 
 func (m *Threads) rowLock(threadID string) *sync.Mutex {
@@ -664,6 +674,9 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 // thread runs it after its current turn. A main thread is not run here: its
 // messages go through Service.Send to the coordinator.
 func (m *Threads) Send(ctx context.Context, threadID, text string, src Source, atts []Attachment) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	if _, err := m.sendable(threadID); err != nil {
 		return nil, err
 	}
@@ -1206,6 +1219,9 @@ func (m *Threads) Stop(threadID string) { m.stop(threadID) }
 // is never re-sent and interrupted tool calls are not re-run; a turn that
 // failed before reaching Claude re-sends its prompt.
 func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return nil, err
@@ -1284,6 +1300,9 @@ func (m *Threads) Respond(threadID, requestID string, ans Answer) error {
 
 // Resolve marks a thread done (it stays readable and can be reopened).
 func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	if done := m.stop(threadID); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
@@ -1307,6 +1326,9 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 // ArchiveSession stores an independent archive flag. A stopped waiting or
 // working session becomes idle: there is no longer a live request to answer.
 func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	if done := m.stop(threadID); done != nil {
 		select {
 		case <-done:
@@ -1384,6 +1406,9 @@ func (m *Threads) SetTitle(threadID, title string) (*db.Thread, error) {
 // Merge merges a thread's branch into its base in the main checkout and
 // resolves the thread.
 func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return nil, err

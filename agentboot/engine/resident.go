@@ -127,7 +127,16 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, res *agentboot.Result, err
 		// is still this turn's to settle.
 		r = nil
 	}
+	e.settling[sessionID]++
 	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		e.settling[sessionID]--
+		if e.settling[sessionID] == 0 {
+			delete(e.settling, sessionID)
+		}
+		e.mu.Unlock()
+	}()
 	interrupted := false
 	if r != nil {
 		interrupted = r.stopped.Load()

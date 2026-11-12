@@ -52,7 +52,7 @@ export const session = {
     composer: { settings: 'Session settings', placeholder: 'Write a message…', send: 'Send (Enter)', sendShort: 'Send', stop: 'Stop', stopTurn: 'Stop the current turn', attach: 'Attach files', pastedText: 'Pasted text · {{count}} lines', removeAttachment: 'Remove {{name}}', attachFailed: 'Could not attach the file', keys: 'Enter to send · Shift+Enter for a new line',
         sendOptions: 'Other ways to send', sendQueue: 'Send after this turn', sendQueueHint: 'Holds it until Claude is done (Alt+Enter)',
         sendStop: 'Stop and send', sendStopHint: 'Interrupts the current turn first',
-        commands: 'Commands', compactHint: 'optional instructions', compactDescription: 'Summarise the conversation to free up context' },
+        commands: 'Commands', compactHint: 'optional instructions', compactDescription: 'Summarise the conversation to free up context', newDescription: 'Start a fresh session in this thread while keeping its history' },
     queue: { heading: 'Sends after this turn', edit: 'Edit', remove: 'Remove', attachmentsOnly: 'Attachments', returned: 'Your held messages are back in the box.' },
     model: { auto: 'Default model', listFailed: 'Could not list models from the endpoint. Type a model ID instead.', customPlaceholder: 'Model ID, e.g. claude-sonnet-4-5' },
     effort: { default: 'Default effort', defaultHint: 'Whatever the model’s own default is', low: 'Low', lowHint: 'Light reasoning — fast and cheap', medium: 'Medium', mediumHint: 'Balanced reasoning', high: 'High', highHint: 'Deep reasoning for hard problems', max: 'Max', maxHint: 'The most thorough reasoning the model offers' },

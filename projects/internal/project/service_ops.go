@@ -190,6 +190,15 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 	if cmd.kind == cmdUnsupported {
 		return nil, &ErrCommandUnsupported{Name: cmd.name}
 	}
+	if cmd.kind == cmdNew {
+		if cmd.args != "" {
+			return nil, fmt.Errorf("/new does not take arguments; send your next message separately")
+		}
+		if t.Agent == db.AgentLLM {
+			return s.Coordinator.NewSession(t.ProjectID, src)
+		}
+		return s.Threads.NewSession(t.ID, src)
+	}
 	if t.Agent == db.AgentLLM {
 		// The conversation is compacted by its own session: the command is
 		// queued like any message and the coordinator runs it in its turn.

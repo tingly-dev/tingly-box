@@ -243,6 +243,12 @@ Tests with a fake `sessionControl`: parser table (every example above, leading s
 
 Not covered: skills and custom commands, `/rewind`, `/btw`, PreCompact/PostCompact hooks, a user-facing auto-compact setting, any second backend.
 
+## Workspace `/new` (2026-11-12)
+
+Workspace's `/new` rotates the underlying session **in the current thread** (Project coordinator, Project worker, and Workdir). It accepts no arguments and is never sent to the agent. The old session transcript and all visible events remain; the command leaves a durable boundary card recording both session IDs. The next message starts a new session without resume. The thread identity, cwd, branch, files, project settings and cumulative token usage remain. Session turn count and context/last-turn figures reset; a stale failed or waiting status becomes idle (or ready when unmerged commits exist). Session-scoped approval grants are not carried over.
+
+The operation refuses running or queued work, live background tasks, outstanding approvals and coordinator decisions, and pending/running/uncertain coordinator inputs; it does not stop or discard them. A failed close or database transaction does not move the session ID. The coordinator's first new turn receives current project state, settings and memory, but not an automatic replay of the old conversation; existing history remains available through its history tool, so this is not an isolation or privacy boundary. Legacy first-session migration still imports its recent history. IM's existing folder `/new [message]` and `/clear` retain their separate thread-switching semantics.
+
 ## As built
 
 Phases 0–4 are implemented on three stacked local branches (not pushed).
