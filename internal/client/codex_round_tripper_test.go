@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -361,14 +362,14 @@ func claudeCodeBetaRequest(breakpointAt int) *anthropic.BetaMessageNewParams {
 			},
 		}},
 		Messages: []anthropic.BetaMessageParam{
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: "read a file", CacheControl: cache(breakpointAt == 0)}},
-			}},
-			{Role: "assistant", Content: []anthropic.BetaContentBlockParamUnion{
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: "on it", CacheControl: cache(breakpointAt == 1)}},
 				{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_1", Name: "Read", Input: map[string]any{"p": "x"}}},
-			}},
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
 				{OfToolResult: &anthropic.BetaToolResultBlockParam{
 					ToolUseID:    "toolu_1",
 					CacheControl: cache(breakpointAt == 2),
@@ -376,7 +377,7 @@ func claudeCodeBetaRequest(breakpointAt int) *anthropic.BetaMessageNewParams {
 						{OfText: &anthropic.BetaTextBlockParam{Text: "file contents"}},
 					},
 				}},
-			}},
+			}),
 		},
 	}
 }

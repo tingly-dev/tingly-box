@@ -1,7 +1,7 @@
 package afk
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // Server-side compaction, from the Beta Messages API.

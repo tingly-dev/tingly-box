@@ -1,8 +1,8 @@
 package client
 
 import (
-	anthropicBedrock "github.com/anthropics/anthropic-sdk-go/bedrock"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicBedrock "github.com/anthropics/anthropic-sdk-go/v2/bedrock"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 	awsconfig "github.com/aws/aws-sdk-go-v2/aws"
 	awscreds "github.com/aws/aws-sdk-go-v2/credentials"
 

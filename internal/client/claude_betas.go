@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -328,8 +329,8 @@ func v1ClaudeBetaSignals(ctx context.Context, req *anthropic.MessageNewParams, o
 		}
 	}
 	for i := range req.Messages {
-		for j := range req.Messages[i].Content {
-			if cc := req.Messages[i].Content[j].GetCacheControl(); cc != nil && string(cc.TTL) == "1h" {
+		for j := range msgparam.Content(req.Messages[i]) {
+			if cc := msgparam.Content(req.Messages[i])[j].GetCacheControl(); cc != nil && string(cc.TTL) == "1h" {
 				sig.CacheTTL1h = true
 			}
 		}
@@ -371,8 +372,8 @@ func betaClaudeBetaSignals(ctx context.Context, req *anthropic.BetaMessageNewPar
 		}
 	}
 	for i := range req.Messages {
-		for j := range req.Messages[i].Content {
-			if cc := req.Messages[i].Content[j].GetCacheControl(); cc != nil && string(cc.TTL) == "1h" {
+		for j := range msgparam.BetaContent(req.Messages[i]) {
+			if cc := msgparam.BetaContent(req.Messages[i])[j].GetCacheControl(); cc != nil && string(cc.TTL) == "1h" {
 				sig.CacheTTL1h = true
 			}
 		}

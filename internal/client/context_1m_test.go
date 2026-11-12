@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

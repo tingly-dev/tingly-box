@@ -1,6 +1,6 @@
 package stream
 
-import "github.com/anthropics/anthropic-sdk-go"
+import "github.com/anthropics/anthropic-sdk-go/v2"
 
 const (
 	// Anthropic stop reasons

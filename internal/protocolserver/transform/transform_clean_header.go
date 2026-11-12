@@ -1,10 +1,11 @@
 package transform
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"regexp"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -181,11 +182,11 @@ func cleanBetaSystemMessages(blocks []anthropic.BetaTextBlockParam, stripClaudeC
 func CleanMessages(messages []anthropic.MessageParam) []anthropic.MessageParam {
 	for i := range messages {
 		msg := &messages[i]
-		if msg.Role != anthropic.MessageParamRoleUser {
+		if msgparam.Role(*msg) != "user" {
 			continue
 		}
-		for j := range msg.Content {
-			block := &msg.Content[j]
+		for j := range msgparam.Content(*msg) {
+			block := &msgparam.Content(*msg)[j]
 			if block.OfText != nil && strings.Contains(block.OfText.Text, "<system-reminder>") {
 				block.OfText.Text = NormalizeSteganographyText(block.OfText.Text)
 			}
@@ -199,11 +200,11 @@ func CleanMessages(messages []anthropic.MessageParam) []anthropic.MessageParam {
 func CleanBetaMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
 	for i := range messages {
 		msg := &messages[i]
-		if msg.Role != anthropic.BetaMessageParamRoleUser {
+		if msgparam.BetaRole(*msg) != "user" {
 			continue
 		}
-		for j := range msg.Content {
-			block := &msg.Content[j]
+		for j := range msgparam.BetaContent(*msg) {
+			block := &msgparam.BetaContent(*msg)[j]
 			if block.OfText != nil && strings.Contains(block.OfText.Text, "<system-reminder>") {
 				block.OfText.Text = NormalizeSteganographyText(block.OfText.Text)
 			}

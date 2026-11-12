@@ -3,9 +3,10 @@ package smartcompact
 import (
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -52,10 +53,7 @@ func (t *XMLCompactTransform) applyV1(req *anthropic.MessageNewParams) error {
 	xmlSummary = fmt.Sprintf("<analysis>\nCompact conversation into short\n</analysis>\n\n<summary>\n%s\n</summary>\n", xmlSummary)
 
 	req.Messages = []anthropic.MessageParam{
-		{
-			Role:    anthropic.MessageParamRoleAssistant,
-			Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("Here is the conversation summary:\n\n" + xmlSummary)},
-		},
+		msgparam.New("assistant", []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("Here is the conversation summary:\n\n" + xmlSummary)}),
 	}
 	return nil
 }
@@ -70,10 +68,7 @@ func (t *XMLCompactTransform) applyBeta(req *anthropic.BetaMessageNewParams) err
 	xmlSummary = fmt.Sprintf("<analysis>\nCompact conversation into short</analysis>\n\n<summary>\n%s\n</summary>", xmlSummary)
 
 	req.Messages = []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(xmlSummary)},
-		},
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(xmlSummary)}),
 	}
 	return nil
 }
@@ -98,10 +93,7 @@ func NewXMLCompactionStrategy() *XMLCompactionStrategy {
 func (s *XMLCompactionStrategy) CompressV1(messages []anthropic.MessageParam) []anthropic.MessageParam {
 	xmlContent := buildConversationXML(messages, s.pathUtil)
 	return []anthropic.MessageParam{
-		{
-			Role:    anthropic.MessageParamRoleAssistant,
-			Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(xmlContent)},
-		},
+		msgparam.New("assistant", []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(xmlContent)}),
 	}
 }
 
@@ -109,10 +101,7 @@ func (s *XMLCompactionStrategy) CompressV1(messages []anthropic.MessageParam) []
 func (s *XMLCompactionStrategy) CompressBeta(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
 	xmlContent := buildBetaConversationXML(messages, s.pathUtil)
 	return []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{NewBetaCompactionBlock(xmlContent)},
-		},
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{NewBetaCompactionBlock(xmlContent)}),
 	}
 }
 

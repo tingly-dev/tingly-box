@@ -8,13 +8,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -127,7 +128,7 @@ func betaReqWithImages(prompt string, imageBase64 ...string) *anthropic.BetaMess
 	return &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-latest"),
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: blocks},
+			msgparam.NewBeta("user", blocks),
 		},
 	}
 }
@@ -136,16 +137,13 @@ func v1ReqWithImage(prompt, b64 string) *anthropic.MessageNewParams {
 	return &anthropic.MessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-latest"),
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfText: &anthropic.TextBlockParam{Text: prompt}},
-					anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
-						Data:      b64,
-						MediaType: anthropic.Base64ImageSourceMediaType(tinyPNGMediaType),
-					}),
-				},
-			},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{OfText: &anthropic.TextBlockParam{Text: prompt}},
+				anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
+					Data:      b64,
+					MediaType: anthropic.Base64ImageSourceMediaType(tinyPNGMediaType),
+				}),
+			}),
 		},
 	}
 }
@@ -174,7 +172,7 @@ func openaiReqWithImage(prompt, b64 string) *openai.ChatCompletionNewParams {
 // betaMessage builds a Beta user/assistant message with one optional image
 // followed by a text prompt. Used to assemble multi-turn fixtures for the
 // historical-strip tests.
-func betaMessage(role anthropic.BetaMessageParamRole, text string, imageB64 string) anthropic.BetaMessageParam {
+func betaMessage(role string, text string, imageB64 string) anthropic.BetaMessageParam {
 	var blocks []anthropic.BetaContentBlockParamUnion
 	if text != "" {
 		blocks = append(blocks, anthropic.BetaContentBlockParamUnion{
@@ -187,7 +185,7 @@ func betaMessage(role anthropic.BetaMessageParamRole, text string, imageB64 stri
 			MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
 		}))
 	}
-	return anthropic.BetaMessageParam{Role: role, Content: blocks}
+	return msgparam.NewBeta(role, blocks)
 }
 
 func betaReqWithMessages(msgs ...anthropic.BetaMessageParam) *anthropic.BetaMessageNewParams {
@@ -197,7 +195,7 @@ func betaReqWithMessages(msgs ...anthropic.BetaMessageParam) *anthropic.BetaMess
 	}
 }
 
-func v1Message(role anthropic.MessageParamRole, text string, imageB64 string) anthropic.MessageParam {
+func v1Message(role string, text string, imageB64 string) anthropic.MessageParam {
 	var blocks []anthropic.ContentBlockParamUnion
 	if text != "" {
 		blocks = append(blocks, anthropic.ContentBlockParamUnion{
@@ -210,7 +208,7 @@ func v1Message(role anthropic.MessageParamRole, text string, imageB64 string) an
 			MediaType: anthropic.Base64ImageSourceMediaType(tinyPNGMediaType),
 		}))
 	}
-	return anthropic.MessageParam{Role: role, Content: blocks}
+	return msgparam.New(role, blocks)
 }
 
 func v1ReqWithMessages(msgs ...anthropic.MessageParam) *anthropic.MessageNewParams {
@@ -342,7 +340,7 @@ func countImages(req any) int {
 	case *anthropic.BetaMessageNewParams:
 		n := 0
 		for _, m := range r.Messages {
-			for _, b := range m.Content {
+			for _, b := range msgparam.BetaContent(m) {
 				if b.OfImage != nil {
 					n++
 				}
@@ -359,7 +357,7 @@ func countImages(req any) int {
 	case *anthropic.MessageNewParams:
 		n := 0
 		for _, m := range r.Messages {
-			for _, b := range m.Content {
+			for _, b := range msgparam.Content(m) {
 				if b.OfImage != nil {
 					n++
 				}
@@ -417,7 +415,7 @@ func collectText(req any) string {
 	switch r := req.(type) {
 	case *anthropic.BetaMessageNewParams:
 		for _, m := range r.Messages {
-			for _, b := range m.Content {
+			for _, b := range msgparam.BetaContent(m) {
 				if b.OfText != nil {
 					out += b.OfText.Text + "\n"
 				}
@@ -432,7 +430,7 @@ func collectText(req any) string {
 		}
 	case *anthropic.MessageNewParams:
 		for _, m := range r.Messages {
-			for _, b := range m.Content {
+			for _, b := range msgparam.Content(m) {
 				if b.OfText != nil {
 					out += b.OfText.Text + "\n"
 				}
@@ -669,10 +667,10 @@ func TestVisionProxy_HistoricalImages_StrippedWithoutDescribe(t *testing.T) {
 	p := mkProcessor(t, fake, prov)
 
 	req := betaReqWithMessages(
-		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", tinyPNGBase64),
-		betaMessage(anthropic.BetaMessageParamRoleAssistant, "previous reply", ""),
-		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", tinyPNGBase64),
-		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", tinyPNGBase64),
+		betaMessage("user", "earlier turn", tinyPNGBase64),
+		betaMessage("assistant", "previous reply", ""),
+		betaMessage("user", "second user turn", tinyPNGBase64),
+		betaMessage("user", "current question", tinyPNGBase64),
 	)
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 
@@ -696,8 +694,8 @@ func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
 		p := mkProcessor(t, fake, prov)
 
 		req := v1ReqWithMessages(
-			v1Message(anthropic.MessageParamRoleUser, "old turn", tinyPNGBase64),
-			v1Message(anthropic.MessageParamRoleUser, "current", tinyPNGBase64),
+			v1Message("user", "old turn", tinyPNGBase64),
+			v1Message("user", "current", tinyPNGBase64),
 		)
 		svcs := []*loadbalance.Service{mkService(prov.UUID, true)}
 

@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/afk"
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 	"github.com/tingly-dev/tingly-box/afk/skill"
 )
 
@@ -183,7 +184,7 @@ func TestAgentWithSkill(t *testing.T) {
 
 		// Log the conversation structure for debugging
 		for i, msg := range messages {
-			t.Logf("Message %d: role=%s, content_blocks=%d", i, msg.Role, len(msg.Content))
+			t.Logf("Message %d: role=%s, content_blocks=%d", i, msgparam.BetaRole(msg), len(msgparam.BetaContent(msg)))
 		}
 	})
 }

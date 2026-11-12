@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

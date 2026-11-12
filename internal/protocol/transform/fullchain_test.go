@@ -4,12 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -358,21 +359,15 @@ func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksFiltered(t *testing.T) {
 		MaxTokens: 4096,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock("What is 2+2?")),
-			{
-				Role: "assistant",
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfThinking: &anthropic.ThinkingBlockParam{Thinking: "Let me calculate...", Signature: "sig_abc"}},
-					{OfText: &anthropic.TextBlockParam{Text: "The answer is 4."}},
-				},
-			},
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				{OfThinking: &anthropic.ThinkingBlockParam{Thinking: "Let me calculate...", Signature: "sig_abc"}},
+				{OfText: &anthropic.TextBlockParam{Text: "The answer is 4."}},
+			}),
 			anthropic.NewUserMessage(anthropic.NewTextBlock("What about 3+3?")),
-			{
-				Role: "assistant",
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfThinking: &anthropic.ThinkingBlockParam{Thinking: "Another calculation...", Signature: "sig_def"}},
-					{OfText: &anthropic.TextBlockParam{Text: "The answer is 6."}},
-				},
-			},
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				{OfThinking: &anthropic.ThinkingBlockParam{Thinking: "Another calculation...", Signature: "sig_def"}},
+				{OfText: &anthropic.TextBlockParam{Text: "The answer is 6."}},
+			}),
 		},
 	}
 
@@ -389,11 +384,11 @@ func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksFiltered(t *testing.T) {
 
 	// Thinking blocks removed from both assistant messages, text blocks preserved
 	for _, msgIdx := range []int{1, 3} {
-		for _, block := range out.Messages[msgIdx].Content {
+		for _, block := range msgparam.Content(out.Messages[msgIdx]) {
 			assert.Nil(t, block.OfThinking, "thinking block should be filtered in message %d", msgIdx)
 		}
 		foundText := false
-		for _, block := range out.Messages[msgIdx].Content {
+		for _, block := range msgparam.Content(out.Messages[msgIdx]) {
 			if block.OfText != nil {
 				foundText = true
 				break

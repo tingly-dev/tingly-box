@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // BlockPrefix marks tool_result content already replaced by guardrails.
@@ -26,7 +27,7 @@ func extractToolResultTextV1FromMessage(msg anthropic.MessageParam) (string, int
 	var b strings.Builder
 	var blocks int
 	var parts int
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfToolResult == nil {
 			continue
 		}
@@ -59,7 +60,7 @@ func extractToolResultTextV1BetaFromMessage(msg anthropic.BetaMessageParam) (str
 	var b strings.Builder
 	var blocks int
 	var parts int
-	for _, block := range msg.Content {
+	for _, block := range msgparam.BetaContent(msg) {
 		if block.OfToolResult == nil {
 			continue
 		}
@@ -80,9 +81,9 @@ func extractToolResultTextV1BetaFromMessage(msg anthropic.BetaMessageParam) (str
 
 func ReplaceToolResultContentV1(messages []anthropic.MessageParam, message string) {
 	for i := range messages {
-		msg := &messages[i]
-		for j := range msg.Content {
-			block := &msg.Content[j]
+		blocks := msgparam.Content(messages[i])
+		for j := range blocks {
+			block := &blocks[j]
 			if block.OfToolResult == nil {
 				continue
 			}
@@ -91,14 +92,15 @@ func ReplaceToolResultContentV1(messages []anthropic.MessageParam, message strin
 				OfText: &anthropic.TextBlockParam{Text: message},
 			}}
 		}
+		messages[i] = msgparam.WithContent(messages[i], blocks)
 	}
 }
 
 func ReplaceToolResultContentV1Beta(messages []anthropic.BetaMessageParam, message string) {
 	for i := range messages {
-		msg := &messages[i]
-		for j := range msg.Content {
-			block := &msg.Content[j]
+		blocks := msgparam.BetaContent(messages[i])
+		for j := range blocks {
+			block := &blocks[j]
 			if block.OfToolResult == nil {
 				continue
 			}
@@ -107,6 +109,7 @@ func ReplaceToolResultContentV1Beta(messages []anthropic.BetaMessageParam, messa
 				OfText: &anthropic.BetaTextBlockParam{Text: message},
 			}}
 		}
+		messages[i] = msgparam.WithBetaContent(messages[i], blocks)
 	}
 }
 

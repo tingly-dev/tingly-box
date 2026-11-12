@@ -3,9 +3,10 @@ package smartcompact
 import (
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -41,10 +42,7 @@ func (s *ConversationReplayStrategy) Name() string {
 func (s *ConversationReplayStrategy) CompressV1(messages []anthropic.MessageParam) []anthropic.MessageParam {
 	xmlContent := buildConversationXML(messages, s.pathUtil)
 	return []anthropic.MessageParam{
-		{
-			Role:    anthropic.MessageParamRoleAssistant,
-			Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(xmlContent)},
-		},
+		msgparam.New("assistant", []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(xmlContent)}),
 	}
 }
 
@@ -54,15 +52,11 @@ func (s *ConversationReplayStrategy) CompressBeta(messages []anthropic.BetaMessa
 	var blocks []anthropic.BetaContentBlockParamUnion
 
 	for _, msg := range messages {
-		role := string(msg.Role)
-		blocks = append(blocks, s.replayBetaMessage(role, msg.Content)...)
+		blocks = append(blocks, s.replayBetaMessage(msgparam.BetaRole(msg), msgparam.BetaContent(msg))...)
 	}
 
 	return []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: blocks,
-		},
+		msgparam.NewBeta("assistant", blocks),
 	}
 }
 

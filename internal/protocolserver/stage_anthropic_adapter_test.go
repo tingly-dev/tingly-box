@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
@@ -174,10 +174,12 @@ func runStageAnthropic(t *testing.T, s scenario.Scenario, clientProtocol protoco
 	endpoint, err := stage.Compose(terminal, toolround.New(toolround.Config{}))
 	require.NoError(t, err)
 
-	// The request as the client sends it, with the routed model.
-	body := fmt.Sprintf(`{"model":"virtual-model-%s","max_tokens":1024,"messages":[{"role":"user","content":[{"type":"text","text":"What is the capital of France?"}]}]}`, s.Name)
+	// The request as the client sends it, with the routed model. stream rides
+	// the wire like any other field (as an extra), so include it the way a
+	// real client does.
+	body := fmt.Sprintf(`{"model":"virtual-model-%s","max_tokens":1024,"stream":%v,"messages":[{"role":"user","content":[{"type":"text","text":"What is the capital of France?"}]}]}`, s.Name, streaming)
 	if clientProtocol == protocol.TypeAnthropicV1 {
-		body = fmt.Sprintf(`{"model":"virtual-model-%s","max_tokens":1024,"messages":[{"role":"user","content":"What is the capital of France?"}]}`, s.Name)
+		body = fmt.Sprintf(`{"model":"virtual-model-%s","max_tokens":1024,"stream":%v,"messages":[{"role":"user","content":"What is the capital of France?"}]}`, s.Name, streaming)
 	}
 	var beta anthropic.BetaMessageNewParams
 	if clientProtocol == protocol.TypeAnthropicV1 {

@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -36,17 +37,11 @@ func betaToolResult(toolUseID, content string, isError bool) anthropic.BetaConte
 }
 
 func betaUserMsg(blocks ...anthropic.BetaContentBlockParamUnion) anthropic.BetaMessageParam {
-	return anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleUser,
-		Content: blocks,
-	}
+	return msgparam.NewBeta("user", blocks)
 }
 
 func betaAssistantMsg(blocks ...anthropic.BetaContentBlockParamUnion) anthropic.BetaMessageParam {
-	return anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: blocks,
-	}
+	return msgparam.NewBeta("assistant", blocks)
 }
 
 func betaText(text string) anthropic.BetaContentBlockParamUnion {
@@ -94,8 +89,8 @@ func TestDeduplicationTransform_UniqueToolCalls_NoChange(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	r1 := got.Messages[1].Content[0].OfToolResult
-	r2 := got.Messages[3].Content[0].OfToolResult
+	r1 := msgparam.BetaContent(got.Messages[1])[0].OfToolResult
+	r2 := msgparam.BetaContent(got.Messages[3])[0].OfToolResult
 	require.NotNil(t, r1)
 	require.NotNil(t, r2)
 	assert.Equal(t, "content of a.go", r1.Content[0].OfText.Text)
@@ -117,8 +112,8 @@ func TestDeduplicationTransform_DuplicateToolCalls_KeepsLatest(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	r1 := got.Messages[1].Content[0].OfToolResult
-	r2 := got.Messages[3].Content[0].OfToolResult
+	r1 := msgparam.BetaContent(got.Messages[1])[0].OfToolResult
+	r2 := msgparam.BetaContent(got.Messages[3])[0].OfToolResult
 	require.NotNil(t, r1)
 	require.NotNil(t, r2)
 	assert.Contains(t, r1.Content[0].OfText.Text, "[Output removed")
@@ -142,9 +137,9 @@ func TestDeduplicationTransform_MultipleRounds_KeepsOnlyLast(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	r1 := got.Messages[1].Content[0].OfToolResult
-	r2 := got.Messages[3].Content[0].OfToolResult
-	r3 := got.Messages[5].Content[0].OfToolResult
+	r1 := msgparam.BetaContent(got.Messages[1])[0].OfToolResult
+	r2 := msgparam.BetaContent(got.Messages[3])[0].OfToolResult
+	r3 := msgparam.BetaContent(got.Messages[5])[0].OfToolResult
 
 	assert.Contains(t, r1.Content[0].OfText.Text, "[Output removed")
 	assert.Contains(t, r2.Content[0].OfText.Text, "[Output removed")
@@ -166,8 +161,8 @@ func TestDeduplicationTransform_DifferentParams_NoPruning(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	r1 := got.Messages[1].Content[0].OfToolResult
-	r2 := got.Messages[3].Content[0].OfToolResult
+	r1 := msgparam.BetaContent(got.Messages[1])[0].OfToolResult
+	r2 := msgparam.BetaContent(got.Messages[3])[0].OfToolResult
 	assert.Equal(t, "content a", r1.Content[0].OfText.Text)
 	assert.Equal(t, "content b", r2.Content[0].OfText.Text)
 }
@@ -191,7 +186,7 @@ func TestDeduplicationTransform_NoToolCalls_NoChange(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	assert.Equal(t, "hello", got.Messages[0].Content[0].OfText.Text)
+	assert.Equal(t, "hello", msgparam.BetaContent(got.Messages[0])[0].OfText.Text)
 }
 
 // --- PurgeErrorsTransform Tests ---
@@ -215,7 +210,7 @@ func TestPurgeErrorsTransform_RecentError_NotPruned(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	toolUseBlock := got.Messages[0].Content[0].OfToolUse
+	toolUseBlock := msgparam.BetaContent(got.Messages[0])[0].OfToolUse
 	require.NotNil(t, toolUseBlock)
 	assert.Equal(t, `{"command":"bad_cmd"}`, inputString(toolUseBlock.Input))
 }
@@ -238,7 +233,7 @@ func TestPurgeErrorsTransform_OldError_InputPruned(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	toolUseBlock := got.Messages[0].Content[0].OfToolUse
+	toolUseBlock := msgparam.BetaContent(got.Messages[0])[0].OfToolUse
 	require.NotNil(t, toolUseBlock)
 	assert.Contains(t, inputString(toolUseBlock.Input), "[input removed")
 }
@@ -261,7 +256,7 @@ func TestPurgeErrorsTransform_ErrorOutputPreserved(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	toolResult := got.Messages[1].Content[0].OfToolResult
+	toolResult := msgparam.BetaContent(got.Messages[1])[0].OfToolResult
 	require.NotNil(t, toolResult)
 	assert.Equal(t, "permission denied", toolResult.Content[0].OfText.Text)
 }
@@ -284,7 +279,7 @@ func TestPurgeErrorsTransform_SuccessfulCall_NeverPruned(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	toolUseBlock := got.Messages[0].Content[0].OfToolUse
+	toolUseBlock := msgparam.BetaContent(got.Messages[0])[0].OfToolUse
 	require.NotNil(t, toolUseBlock)
 	assert.Equal(t, `{"path":"/a.go"}`, inputString(toolUseBlock.Input))
 }
@@ -303,7 +298,7 @@ func TestPurgeErrorsTransform_ZeroGracePeriod_Disabled(t *testing.T) {
 	require.NoError(t, tr.Apply(ctx))
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
-	toolUseBlock := got.Messages[0].Content[0].OfToolUse
+	toolUseBlock := msgparam.BetaContent(got.Messages[0])[0].OfToolUse
 	require.NotNil(t, toolUseBlock)
 	assert.Equal(t, `{"command":"bad"}`, inputString(toolUseBlock.Input))
 }
@@ -349,12 +344,12 @@ func TestStrategyChain_DeduplicationAndPurgeErrors_Combined(t *testing.T) {
 
 	got := ctx.Request.(*anthropic.BetaMessageNewParams)
 
-	errorToolUse := got.Messages[0].Content[0].OfToolUse
+	errorToolUse := msgparam.BetaContent(got.Messages[0])[0].OfToolUse
 	assert.Contains(t, inputString(errorToolUse.Input), "[input removed")
 
-	dupeResult := got.Messages[3].Content[0].OfToolResult
+	dupeResult := msgparam.BetaContent(got.Messages[3])[0].OfToolResult
 	assert.Contains(t, dupeResult.Content[0].OfText.Text, "[Output removed")
 
-	latestResult := got.Messages[5].Content[0].OfToolResult
+	latestResult := msgparam.BetaContent(got.Messages[5])[0].OfToolResult
 	assert.Equal(t, "new content", latestResult.Content[0].OfText.Text)
 }

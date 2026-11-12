@@ -40,9 +40,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // Defaults for local debugging — used when the corresponding TINGLY_*
@@ -118,16 +120,13 @@ func TestVisionProxy_E2E_V1Messages(t *testing.T) {
 		Model:     anthropic.Model(model),
 		MaxTokens: 512,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfText: &anthropic.TextBlockParam{Text: defaultPrompt}},
-					anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
-						Data:      b64,
-						MediaType: anthropic.Base64ImageSourceMediaType(mediaType),
-					}),
-				},
-			},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{OfText: &anthropic.TextBlockParam{Text: defaultPrompt}},
+				anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
+					Data:      b64,
+					MediaType: anthropic.Base64ImageSourceMediaType(mediaType),
+				}),
+			}),
 		},
 	})
 	require.NoError(t, err, "Messages.New must succeed against the vision-proxy rule")
@@ -179,16 +178,13 @@ func TestVisionProxy_E2E_BetaMessages(t *testing.T) {
 		Model:     anthropic.Model(model),
 		MaxTokens: 512,
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: defaultPrompt}},
-					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-						Data:      b64,
-						MediaType: anthropic.BetaBase64ImageSourceMediaType(mediaType),
-					}),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: defaultPrompt}},
+				anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+					Data:      b64,
+					MediaType: anthropic.BetaBase64ImageSourceMediaType(mediaType),
+				}),
+			}),
 		},
 	})
 	require.NoError(t, err)

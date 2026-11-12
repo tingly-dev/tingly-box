@@ -3,10 +3,11 @@ package routing
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 )
 
@@ -60,16 +61,13 @@ func betaReqWithImage(prompt string) *anthropic.BetaMessageNewParams {
 	return &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-latest"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: prompt}},
-					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-						Data:      tinyPNG,
-						MediaType: anthropic.BetaBase64ImageSourceMediaType("image/png"),
-					}),
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: prompt}},
+				anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+					Data:      tinyPNG,
+					MediaType: anthropic.BetaBase64ImageSourceMediaType("image/png"),
+				}),
+			}),
 		},
 	}
 }
@@ -179,13 +177,14 @@ func TestSmartRoutingStage_ProcessorMutatesRequest_LoadBalancerSeesMutation(t *t
 			// Simulate vision-proxy mutation: drop image content blocks entirely.
 			if r, ok := pctx.Request.(*anthropic.BetaMessageNewParams); ok {
 				for i := range r.Messages {
-					filtered := r.Messages[i].Content[:0]
-					for _, b := range r.Messages[i].Content {
+					content := msgparam.BetaContent(r.Messages[i])
+					filtered := content[:0]
+					for _, b := range content {
 						if b.OfImage == nil {
 							filtered = append(filtered, b)
 						}
 					}
-					r.Messages[i].Content = filtered
+					r.Messages[i] = msgparam.WithBetaContent(r.Messages[i], filtered)
 				}
 			}
 			return nil
@@ -211,7 +210,7 @@ func TestSmartRoutingStage_ProcessorMutatesRequest_LoadBalancerSeesMutation(t *t
 	betaReq, ok := rec.calls[0].Request.(*anthropic.BetaMessageNewParams)
 	require.True(t, ok)
 	for _, m := range betaReq.Messages {
-		for _, b := range m.Content {
+		for _, b := range msgparam.BetaContent(m) {
 			require.Nil(t, b.OfImage, "no image should remain in the request seen by the LB stage")
 		}
 	}

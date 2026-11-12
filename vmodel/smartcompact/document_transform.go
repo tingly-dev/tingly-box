@@ -1,9 +1,10 @@
 package smartcompact
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -53,12 +54,9 @@ func (s *ConversationDocumentStrategy) CompressV1(messages []anthropic.MessagePa
 	}
 
 	return []anthropic.MessageParam{
-		{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfDocument: &doc},
-			},
-		},
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			{OfDocument: &doc},
+		}),
 	}
 }
 
@@ -77,12 +75,9 @@ func (s *ConversationDocumentStrategy) CompressBeta(messages []anthropic.BetaMes
 	}
 
 	return []anthropic.BetaMessageParam{
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				{OfDocument: &doc},
-			},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			{OfDocument: &doc},
+		}),
 	}
 }
 

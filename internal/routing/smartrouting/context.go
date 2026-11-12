@@ -3,11 +3,12 @@ package smartrouting
 import (
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -123,19 +124,19 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 			// (which cleans historical images) matches when the image
 			// lives in an assistant message or tool result — not only
 			// when it's in a user message.
-			if hasImageInBetaContent(msg.Content) {
+			if hasImageInBetaContent(msgparam.BetaContent(msg)) {
 				ctx.HasImage = true
 			}
-			if string(msg.Role) != "user" {
+			if msgparam.BetaRole(msg) != "user" {
 				continue
 			}
-			if contentStr := extractBetaContent(msg.Content); contentStr != "" {
+			if contentStr := extractBetaContent(msgparam.BetaContent(msg)); contentStr != "" {
 				ctx.UserMessages = append(ctx.UserMessages, contentStr)
 			}
 		}
 
 		// Step 2 — locate: what is the role of the very last message?
-		ctx.LatestRole = string(req.Messages[len(req.Messages)-1].Role)
+		ctx.LatestRole = msgparam.BetaRole(req.Messages[len(req.Messages)-1])
 
 		// Step 3 — locate then analyze: find the last user-role message and
 		// inspect only that message for latest_user op fields. Walking
@@ -143,12 +144,12 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 		// earlier turns.
 		for i := len(req.Messages) - 1; i >= 0; i-- {
 			msg := req.Messages[i]
-			if string(msg.Role) != "user" {
+			if msgparam.BetaRole(msg) != "user" {
 				continue
 			}
-			contentStr := extractBetaContent(msg.Content)
+			contentStr := extractBetaContent(msgparam.BetaContent(msg))
 			ctx.LatestUserHasText = contentStr != ""
-			if hasImageInBetaContent(msg.Content) {
+			if hasImageInBetaContent(msgparam.BetaContent(msg)) {
 				ctx.LatestContentType = "image"
 			}
 			break

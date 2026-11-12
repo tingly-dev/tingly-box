@@ -3,10 +3,11 @@ package routing
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -18,29 +19,20 @@ func betaRequestWithToolResult(keyword string) *anthropic.BetaMessageNewParams {
 	return &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "please search for " + keyword}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "I will search now"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfToolResult: &anthropic.BetaToolResultBlockParam{
-						ToolUseID: "toolu_01",
-						Content: []anthropic.BetaToolResultBlockParamContentUnion{
-							{OfText: &anthropic.BetaTextBlockParam{Text: "search results"}},
-						},
-					}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "please search for " + keyword}},
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "I will search now"}},
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfToolResult: &anthropic.BetaToolResultBlockParam{
+					ToolUseID: "toolu_01",
+					Content: []anthropic.BetaToolResultBlockParamContentUnion{
+						{OfText: &anthropic.BetaTextBlockParam{Text: "search results"}},
+					},
+				}},
+			}),
 		},
 	}
 }
@@ -317,24 +309,15 @@ func TestSmartRouting_LatestUser_TextMatchesAfterToolResult(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "initial message"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "response"}},
-				},
-			},
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "now search for keyword please"}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "initial message"}},
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "response"}},
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "now search for keyword please"}},
+			}),
 		},
 	}
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/require"
 
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"

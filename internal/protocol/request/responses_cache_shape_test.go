@@ -5,9 +5,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // claudeCodeStyleRequest builds an Anthropic beta request shaped like a Claude
@@ -49,14 +50,14 @@ func claudeCodeStyleRequest(breakpointAt int) *anthropic.BetaMessageNewParams {
 			},
 		}},
 		Messages: []anthropic.BetaMessageParam{
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: "read a file", CacheControl: cache(breakpointAt == 0)}},
-			}},
-			{Role: "assistant", Content: []anthropic.BetaContentBlockParamUnion{
+			}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: "on it", CacheControl: cache(breakpointAt == 1)}},
 				{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_1", Name: "Read", Input: map[string]any{"p": "x"}}},
-			}},
-			{Role: "user", Content: []anthropic.BetaContentBlockParamUnion{{OfToolResult: toolResult}}},
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{{OfToolResult: toolResult}}),
 		},
 	}
 }

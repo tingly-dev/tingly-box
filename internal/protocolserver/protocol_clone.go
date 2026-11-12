@@ -3,7 +3,9 @@ package protocolserver
 import (
 	"encoding/json"
 
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tidwall/gjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
@@ -24,17 +26,29 @@ import (
 // CloneAnthropicV1Request rebuilds an Anthropic v1 request from a marshalled
 // template (produced by AnthropicMessagesRequest.MarshalJSON).
 func CloneAnthropicV1Request(template []byte) (*protocol.AnthropicMessagesRequest, error) {
-	var r = &protocol.AnthropicMessagesRequest{}
-	err := json.Unmarshal(template, &r)
-	return r, err
+	params := new(anthropic.MessageNewParams)
+	if err := json.Unmarshal(template, params); err != nil {
+		return nil, err
+	}
+	// Skip the ingress wrapper's filtering: internal extras in a pristine
+	// snapshot must survive failover. stream belongs to the wrapper only.
+	delete(params.ExtraFields(), "stream")
+	return &protocol.AnthropicMessagesRequest{
+		MessageNewParams: params, Stream: gjson.GetBytes(template, "stream").Bool(),
+	}, nil
 }
 
 // CloneAnthropicBetaRequest rebuilds an Anthropic beta request from a marshalled
 // template (produced by AnthropicBetaMessagesRequest.MarshalJSON).
 func CloneAnthropicBetaRequest(template []byte) (*protocol.AnthropicBetaMessagesRequest, error) {
-	var r = &protocol.AnthropicBetaMessagesRequest{}
-	err := json.Unmarshal(template, &r)
-	return r, err
+	params := new(anthropic.BetaMessageNewParams)
+	if err := json.Unmarshal(template, params); err != nil {
+		return nil, err
+	}
+	delete(params.ExtraFields(), "stream")
+	return &protocol.AnthropicBetaMessagesRequest{
+		BetaMessageNewParams: params, Stream: gjson.GetBytes(template, "stream").Bool(),
+	}, nil
 }
 
 // CloneOpenAIChatRequest rebuilds an OpenAI chat request from a marshalled

@@ -3,7 +3,9 @@ package smartcompact
 import (
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // lastUserMessageContainsCompact checks if the last user message contains "compact" (case-insensitive).
@@ -11,7 +13,7 @@ func lastUserMessageContainsCompact(messages []anthropic.MessageParam) bool {
 	// Find the last user message
 	var lastUserMsg anthropic.MessageParam
 	for i := len(messages) - 1; i >= 0; i-- {
-		if string(messages[i].Role) == "user" {
+		if msgparam.Role(messages[i]) == "user" {
 			lastUserMsg = messages[i]
 			break
 		}
@@ -19,7 +21,7 @@ func lastUserMessageContainsCompact(messages []anthropic.MessageParam) bool {
 
 	// Extract text content and check for "compact" (case-insensitive)
 	var textContent strings.Builder
-	for _, block := range lastUserMsg.Content {
+	for _, block := range msgparam.Content(lastUserMsg) {
 		if block.OfText != nil {
 			textContent.WriteString(block.OfText.Text)
 		}
@@ -33,7 +35,7 @@ func lastUserMessageContainsCompactBeta(messages []anthropic.BetaMessageParam) b
 	// Find the last user message
 	var lastUserMsg anthropic.BetaMessageParam
 	for i := len(messages) - 1; i >= 0; i-- {
-		if string(messages[i].Role) == "user" {
+		if msgparam.BetaRole(messages[i]) == "user" {
 			lastUserMsg = messages[i]
 			break
 		}
@@ -41,7 +43,7 @@ func lastUserMessageContainsCompactBeta(messages []anthropic.BetaMessageParam) b
 
 	// Extract text content and check for "compact" (case-insensitive)
 	var textContent strings.Builder
-	for _, block := range lastUserMsg.Content {
+	for _, block := range msgparam.BetaContent(lastUserMsg) {
 		if block.OfText != nil {
 			textContent.WriteString(block.OfText.Text)
 		}

@@ -3,10 +3,11 @@ package smartcompact
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -16,32 +17,20 @@ func TestClaudeCodeReplayStrategy_CompressBeta_ProducesAssistantMessageWithBlock
 	strategy := NewConversationReplayStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("read main.go")},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("reading it"),
-				anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "main.go"}, "1"),
-			},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "package main", false)},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("read main.go")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("reading it"),
+			anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "main.go"}, "1"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("1", "package main", false)}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
 
 	require.Len(t, result, 1)
-	assert.Equal(t, "assistant", string(result[0].Role))
-	assert.NotEmpty(t, result[0].Content)
+	assert.Equal(t, "assistant", msgparam.BetaRole(result[0]))
+	assert.NotEmpty(t, msgparam.BetaContent(result[0]))
 }
 
 // TestClaudeCodeReplayStrategy_CompressBeta_TextBlocksCarryRolePrefix verifies that
@@ -50,18 +39,9 @@ func TestClaudeCodeReplayStrategy_CompressBeta_TextBlocksCarryRolePrefix(t *test
 	strategy := NewConversationReplayStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("what is the answer?")},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("the answer is 42")},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("what is the answer?")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("the answer is 42")}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
@@ -69,7 +49,7 @@ func TestClaudeCodeReplayStrategy_CompressBeta_TextBlocksCarryRolePrefix(t *test
 
 	// Collect all text from blocks
 	var allText string
-	for _, block := range result[0].Content {
+	for _, block := range msgparam.BetaContent(result[0]) {
 		if block.OfText != nil {
 			allText += block.OfText.Text
 		}
@@ -89,25 +69,13 @@ func TestClaudeCodeReplayStrategy_CompressBeta_ToolUseBlocksPreserved(t *testing
 	strategy := NewConversationReplayStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("read file")},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("reading"),
-				anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "src/main.go"}, "tool-1"),
-			},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-1", "file content", false)},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("read file")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("reading"),
+			anthropic.NewBetaToolUseBlock("read_file", map[string]any{"path": "src/main.go"}, "tool-1"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-1", "file content", false)}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
@@ -115,7 +83,7 @@ func TestClaudeCodeReplayStrategy_CompressBeta_ToolUseBlocksPreserved(t *testing
 
 	// Must contain at least one tool_use block
 	var hasToolUse bool
-	for _, block := range result[0].Content {
+	for _, block := range msgparam.BetaContent(result[0]) {
 		if block.OfToolUse != nil {
 			hasToolUse = true
 			assert.Equal(t, "tool-1", block.OfToolUse.Name)
@@ -130,32 +98,20 @@ func TestClaudeCodeReplayStrategy_CompressBeta_ToolResultBlocksPreserved(t *test
 	strategy := NewConversationReplayStrategy()
 
 	input := []anthropic.BetaMessageParam{
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("run tests")},
-		},
-		{
-			Role: anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				anthropic.NewBetaTextBlock("running"),
-				anthropic.NewBetaToolUseBlock("bash", map[string]any{"command": "go test ./..."}, "tool-2"),
-			},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-2", "PASS", false)},
-		},
-		{
-			Role:    anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("run tests")}),
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("running"),
+			anthropic.NewBetaToolUseBlock("bash", map[string]any{"command": "go test ./..."}, "tool-2"),
+		}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolResultBlock("tool-2", "PASS", false)}),
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("compact")}),
 	}
 
 	result := strategy.CompressBeta(input)
 	require.Len(t, result, 1)
 
 	var hasToolResult bool
-	for _, block := range result[0].Content {
+	for _, block := range msgparam.BetaContent(result[0]) {
 		if block.OfToolResult != nil {
 			hasToolResult = true
 			assert.Equal(t, "tool-2", block.OfToolResult.ToolUseID)
@@ -178,9 +134,9 @@ func TestClaudeCodeReplayStrategy_CompressV1_ProducesAssistantTextMessage(t *tes
 	result := strategy.CompressV1(input)
 
 	require.Len(t, result, 1)
-	assert.Equal(t, "assistant", string(result[0].Role))
-	require.NotEmpty(t, result[0].Content)
-	assert.NotNil(t, result[0].Content[0].OfText)
+	assert.Equal(t, "assistant", msgparam.Role(result[0]))
+	require.NotEmpty(t, msgparam.Content(result[0]))
+	assert.NotNil(t, msgparam.Content(result[0])[0].OfText)
 }
 
 // TestConversationReplayTransformer_Beta_CompressesWhenConditionsMet verifies
@@ -190,9 +146,9 @@ func TestConversationReplayTransformer_Beta_CompressesWhenConditionsMet(t *testi
 
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hello")}},
-			{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi")}},
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("<command>compact</command>")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hello")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi")}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("<command>compact</command>")}),
 		},
 		Tools: []anthropic.BetaToolUnionParam{
 			{OfTool: &anthropic.BetaToolParam{Name: "bash", InputSchema: anthropic.BetaToolInputSchemaParam{Type: "object"}}},
@@ -203,5 +159,5 @@ func TestConversationReplayTransformer_Beta_CompressesWhenConditionsMet(t *testi
 	err := transformer.Apply(ctx)
 	assert.NoError(t, err)
 	require.Len(t, req.Messages, 1)
-	assert.Equal(t, "assistant", string(req.Messages[0].Role))
+	assert.Equal(t, "assistant", msgparam.BetaRole(req.Messages[0]))
 }

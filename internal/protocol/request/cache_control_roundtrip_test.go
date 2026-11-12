@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicparam "github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/openai/openai-go/v3"
 	openaiparam "github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func TestAnthropicOpenAIAnthropicPreservesCacheControl(t *testing.T) {
@@ -51,9 +52,9 @@ func TestAnthropicOpenAIAnthropicPreservesCacheControl(t *testing.T) {
 	require.Len(t, out.System, 1)
 	require.False(t, anthropicparam.IsOmitted(out.System[0].CacheControl))
 	require.Len(t, out.Messages, 1)
-	require.Len(t, out.Messages[0].Content, 1)
-	require.NotNil(t, out.Messages[0].Content[0].OfText)
-	require.False(t, anthropicparam.IsOmitted(out.Messages[0].Content[0].OfText.CacheControl))
+	require.Len(t, msgparam.BetaContent(out.Messages[0]), 1)
+	require.NotNil(t, msgparam.BetaContent(out.Messages[0])[0].OfText)
+	require.False(t, anthropicparam.IsOmitted(msgparam.BetaContent(out.Messages[0])[0].OfText.CacheControl))
 }
 
 func TestAnthropicAutomaticCacheControlRoundTripsThroughOpenAIWire(t *testing.T) {
@@ -186,7 +187,7 @@ func TestAnthropicViewPreservesSDKCacheControlShape(t *testing.T) {
 	view := viewAnthropicV1Request(in)
 	require.Equal(t, cache1h.TTL, view.CacheControl.TTL)
 	require.Equal(t, cache5m.TTL, view.System[0].CacheControl.TTL)
-	require.Equal(t, cache1h.TTL, view.Messages[0].Content[0].OfText.CacheControl.TTL)
+	require.Equal(t, cache1h.TTL, msgparam.Content(view.Messages[0])[0].OfText.CacheControl.TTL)
 	require.Equal(t, cache1h.TTL, view.Tools[0].OfTool.CacheControl.TTL)
 
 	betaCache1h := anthropic.BetaCacheControlEphemeralParam{
@@ -220,7 +221,7 @@ func TestAnthropicViewPreservesSDKCacheControlShape(t *testing.T) {
 	betaView := viewAnthropicBetaRequest(betaIn)
 	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.CacheControl.TTL)
 	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL5m, betaView.System[0].CacheControl.TTL)
-	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Messages[0].Content[0].OfText.CacheControl.TTL)
+	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, msgparam.Content(betaView.Messages[0])[0].OfText.CacheControl.TTL)
 	require.Equal(t, anthropic.CacheControlEphemeralTTLTTL1h, betaView.Tools[0].OfTool.CacheControl.TTL)
 }
 
@@ -244,7 +245,7 @@ func TestAnthropicViewUsesSDKCanonicalShape(t *testing.T) {
 		}
 
 		view := viewAnthropicV1Request(in)
-		require.Same(t, in.Messages[0].Content[0].OfText, view.Messages[0].Content[0].OfText)
+		require.Same(t, msgparam.Content(in.Messages[0])[0].OfText, msgparam.Content(view.Messages[0])[0].OfText)
 		require.Same(t, in.Tools[0].OfTool, view.Tools[0].OfTool)
 		require.Same(t, in.ToolChoice.OfTool, view.ToolChoice.OfTool)
 		require.Same(t, in.Thinking.OfEnabled, view.Thinking.OfEnabled)
@@ -272,10 +273,9 @@ func TestAnthropicViewUsesSDKCanonicalShape(t *testing.T) {
 		in := &anthropic.BetaMessageNewParams{
 			Model:     "claude-test",
 			MaxTokens: 256,
-			Messages: []anthropic.BetaMessageParam{{
-				Role:    anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{image, thinkingBlock},
-			}},
+			Messages: []anthropic.BetaMessageParam{
+				msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{image, thinkingBlock}),
+			},
 			Tools:        []anthropic.BetaToolUnionParam{tool},
 			ToolChoice:   toolChoice,
 			Thinking:     thinking,
@@ -283,9 +283,9 @@ func TestAnthropicViewUsesSDKCanonicalShape(t *testing.T) {
 		}
 
 		view := viewAnthropicBetaRequest(in)
-		require.NotNil(t, view.Messages[0].Content[0].OfImage)
-		require.Equal(t, "aGVsbG8=", view.Messages[0].Content[0].OfImage.Source.OfBase64.Data)
-		require.Equal(t, "signature", view.Messages[0].Content[1].OfThinking.Signature)
+		require.NotNil(t, msgparam.Content(view.Messages[0])[0].OfImage)
+		require.Equal(t, "aGVsbG8=", msgparam.Content(view.Messages[0])[0].OfImage.Source.OfBase64.Data)
+		require.Equal(t, "signature", msgparam.Content(view.Messages[0])[1].OfThinking.Signature)
 		require.NotNil(t, view.Tools[0].OfTool)
 		require.Equal(t, []string{"q"}, view.Tools[0].OfTool.InputSchema.Required)
 		require.Equal(t, "lookup", view.ToolChoice.OfTool.Name)
@@ -328,8 +328,8 @@ func TestAnthropicToolCacheControlAdvancesToOpenAICacheableContent(t *testing.T)
 
 	out := ConvertOpenAIToAnthropicRequest(openAIReq, 4096)
 	require.Len(t, out.Messages, 1)
-	require.Len(t, out.Messages[0].Content, 1)
-	require.False(t, anthropicparam.IsOmitted(out.Messages[0].Content[0].OfText.CacheControl))
+	require.Len(t, msgparam.BetaContent(out.Messages[0]), 1)
+	require.False(t, anthropicparam.IsOmitted(msgparam.BetaContent(out.Messages[0])[0].OfText.CacheControl))
 }
 
 func TestAnthropicResponsesAnthropicPreservesCacheControl(t *testing.T) {
@@ -356,7 +356,7 @@ func TestAnthropicResponsesAnthropicPreservesCacheControl(t *testing.T) {
 	require.Len(t, out.System, 1)
 	require.False(t, anthropicparam.IsOmitted(out.System[0].CacheControl))
 	require.Len(t, out.Messages, 1)
-	require.False(t, anthropicparam.IsOmitted(out.Messages[0].Content[0].OfText.CacheControl))
+	require.False(t, anthropicparam.IsOmitted(msgparam.BetaContent(out.Messages[0])[0].OfText.CacheControl))
 
 	betaIn := ConvertAnthropicV1ToBetaRequest(in)
 	require.NotNil(t, betaIn)
@@ -420,8 +420,8 @@ func TestAnthropicResponsesPreservesToolCacheControls(t *testing.T) {
 
 		out := ConvertOpenAIResponsesToAnthropicBetaRequest(*responsesReq, 4096)
 		require.Len(t, out.Messages, 2)
-		require.NotNil(t, out.Messages[1].Content[0].OfToolResult)
-		require.False(t, anthropicparam.IsOmitted(out.Messages[1].Content[0].OfToolResult.CacheControl))
+		require.NotNil(t, msgparam.BetaContent(out.Messages[1])[0].OfToolResult)
+		require.False(t, anthropicparam.IsOmitted(msgparam.BetaContent(out.Messages[1])[0].OfToolResult.CacheControl))
 	})
 }
 

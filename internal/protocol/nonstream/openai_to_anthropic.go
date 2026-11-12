@@ -6,7 +6,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"

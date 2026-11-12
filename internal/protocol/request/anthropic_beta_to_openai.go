@@ -3,9 +3,10 @@ package request
 import (
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // ConvertAnthropicBetaToOpenAIRequest converts Anthropic beta request to
@@ -78,10 +79,10 @@ func betaImageBlockToOpenAIURL(img *anthropic.BetaImageBlockParam) string {
 // convertAnthropicBetaAssistantMessageToOpenAI converts Anthropic beta assistant message to OpenAI format
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam) openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewAssistantToOpenAI(viewAnthropicBetaMessage(msg).Content)
+	return convertAnthropicViewAssistantToOpenAI(msgparam.Content(viewAnthropicBetaMessage(msg)))
 }
 
 // convertAnthropicBetaUserMessageToOpenAI converts Anthropic beta user message to OpenAI format
 func convertAnthropicBetaUserMessageToOpenAI(msg anthropic.BetaMessageParam) []openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewUserToOpenAI(viewAnthropicBetaMessage(msg).Content)
+	return convertAnthropicViewUserToOpenAI(msgparam.Content(viewAnthropicBetaMessage(msg)))
 }

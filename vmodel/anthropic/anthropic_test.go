@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/anthropics/anthropic-sdk-go"
+	sdk "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
@@ -17,14 +18,11 @@ import (
 func makeReq(texts ...string) *protocol.AnthropicBetaMessagesRequest {
 	msgs := make([]sdk.BetaMessageParam, 0, len(texts))
 	for i, t := range texts {
-		role := sdk.BetaMessageParamRoleUser
+		role := "user"
 		if i%2 == 1 {
-			role = sdk.BetaMessageParamRoleAssistant
+			role = "assistant"
 		}
-		msgs = append(msgs, sdk.BetaMessageParam{
-			Role:    role,
-			Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock(t)},
-		})
+		msgs = append(msgs, msgparam.NewBeta(role, []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock(t)}))
 	}
 	return &protocol.AnthropicBetaMessagesRequest{
 		BetaMessageNewParams: &sdk.BetaMessageNewParams{Messages: msgs},
@@ -41,11 +39,11 @@ var _ VirtualModel = (*TransformModel)(nil)
 func TestMockModel_Static_Handle_DoesNotModifyReq(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{ID: "static-test", Content: "hello"})
 	req := makeReq("user message")
-	before := req.Messages[0].Content[0].OfText.Text
+	before := msgparam.BetaContent(req.Messages[0])[0].OfText.Text
 
 	_, _ = vm.HandleAnthropic(req)
 
-	if req.Messages[0].Content[0].OfText.Text != before {
+	if msgparam.BetaContent(req.Messages[0])[0].OfText.Text != before {
 		t.Error("HandleAnthropic() must not modify req for MockModel")
 	}
 }

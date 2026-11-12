@@ -1,7 +1,7 @@
 package toolengine
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 

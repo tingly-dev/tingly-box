@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	guardrails "github.com/tingly-dev/tingly-box/internal/guardrails"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"

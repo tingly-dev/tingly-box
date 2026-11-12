@@ -3,8 +3,10 @@ package thinking
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestToolTurnWithoutThinkingTurnsBudgetThinkingOff pins the wire guard: with
@@ -18,7 +20,7 @@ func TestToolTurnWithoutThinkingTurnsBudgetThinkingOff(t *testing.T) {
 	history := func(assistant ...anthropic.BetaContentBlockParamUnion) []anthropic.BetaMessageParam {
 		return []anthropic.BetaMessageParam{
 			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("run it")),
-			{Role: anthropic.BetaMessageParamRoleAssistant, Content: assistant},
+			msgparam.NewBeta("assistant", assistant),
 			anthropic.NewBetaUserMessage(toolResult),
 		}
 	}
@@ -46,7 +48,7 @@ func TestToolTurnWithoutThinkingTurnsBudgetThinkingOff(t *testing.T) {
 			v1 := &anthropic.MessageNewParams{Model: "third-party-model", MaxTokens: 8192, Thinking: anthropic.ThinkingConfigParamOfEnabled(4096)}
 			for _, m := range tt.messages {
 				var blocks []anthropic.ContentBlockParamUnion
-				for _, b := range m.Content {
+				for _, b := range msgparam.BetaContent(m) {
 					switch {
 					case b.OfToolUse != nil:
 						blocks = append(blocks, anthropic.ContentBlockParamUnion{OfToolUse: &anthropic.ToolUseBlockParam{ID: b.OfToolUse.ID, Name: b.OfToolUse.Name, Input: b.OfToolUse.Input}})
@@ -58,7 +60,7 @@ func TestToolTurnWithoutThinkingTurnsBudgetThinkingOff(t *testing.T) {
 						blocks = append(blocks, anthropic.NewTextBlock("hi"))
 					}
 				}
-				v1.Messages = append(v1.Messages, anthropic.MessageParam{Role: anthropic.MessageParamRole(m.Role), Content: blocks})
+				v1.Messages = append(v1.Messages, msgparam.New(msgparam.BetaRole(m), blocks))
 			}
 			DisableV1ForUnsignedToolTurn(v1)
 			if got := v1.Thinking.OfEnabled != nil; got != tt.wantEnabled {
@@ -97,27 +99,28 @@ func TestReconcileThinkingWithRequest(t *testing.T) {
 	})
 
 	t.Run("sampling made legal", func(t *testing.T) {
-		req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user, Thinking: enabled,
-			Temperature: anthropic.Float(0.2), TopK: anthropic.Int(40), TopP: anthropic.Float(0.5)}
+		req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user, Thinking: enabled}
+		req.SetExtraFields(map[string]any{"temperature": 0.2, "top_k": 40, "top_p": 0.5})
 		ReconcileBetaWithRequest(req)
-		assert.False(t, req.Temperature.Valid())
-		assert.False(t, req.TopK.Valid())
-		assert.Equal(t, 0.95, req.TopP.Value)
+		assert.Equal(t, param.Omit, req.ExtraFields()["temperature"], "temperature dropped")
+		assert.Equal(t, param.Omit, req.ExtraFields()["top_k"], "top_k dropped")
+		assert.Equal(t, 0.95, req.ExtraFields()["top_p"])
 
 		v1 := &anthropic.MessageNewParams{Model: "m", MaxTokens: 4096,
-			Messages:    []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
-			Thinking:    anthropic.ThinkingConfigParamOfEnabled(2048),
-			Temperature: anthropic.Float(1), TopP: anthropic.Float(0.98)}
+			Messages: []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+			Thinking: anthropic.ThinkingConfigParamOfEnabled(2048)}
+		v1.SetExtraFields(map[string]any{"temperature": 1.0, "top_p": 0.98})
 		ReconcileV1WithRequest(v1)
-		assert.Equal(t, 1.0, v1.Temperature.Value, "temperature 1 is allowed")
-		assert.Equal(t, 0.98, v1.TopP.Value, "top_p in range is kept")
+		assert.Equal(t, 1.0, v1.ExtraFields()["temperature"], "temperature 1 is allowed")
+		assert.Equal(t, 0.98, v1.ExtraFields()["top_p"], "top_p in range is kept")
 	})
 
 	t.Run("thinking off leaves the request alone", func(t *testing.T) {
 		req := &anthropic.BetaMessageNewParams{Model: "m", MaxTokens: 4096, Messages: user,
-			Temperature: anthropic.Float(0.2), ToolChoice: anthropic.BetaToolChoiceParamOfTool("x")}
+			ToolChoice: anthropic.BetaToolChoiceParamOfTool("x")}
+		req.SetExtraFields(map[string]any{"temperature": 0.2})
 		ReconcileBetaWithRequest(req)
-		assert.Equal(t, 0.2, req.Temperature.Value)
+		assert.Equal(t, 0.2, req.ExtraFields()["temperature"])
 		assert.Nil(t, req.Thinking.OfDisabled)
 	})
 }

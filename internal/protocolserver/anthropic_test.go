@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 //go:embed anthropic_test.txt
@@ -59,9 +60,10 @@ func TestBetaDecode(t *testing.T) {
 	t.Logf("Model: %s", req.Model)
 	t.Logf("Messages count: %d", len(req.Messages))
 	for i, msg := range req.Messages {
-		t.Logf("Message[%d] Role: %s", i, msg.Role)
-		t.Logf("Message[%d] Content blocks: %d", i, len(msg.Content))
-		for j, block := range msg.Content {
+		blocks := msgparam.BetaContent(msg)
+		t.Logf("Message[%d] Role: %s", i, msgparam.BetaRole(msg))
+		t.Logf("Message[%d] Content blocks: %d", i, len(blocks))
+		for j, block := range blocks {
 			// Handle different block types
 			if block.OfText != nil {
 				contentStr := fmt.Sprintf("%v", block.OfText.Text)
@@ -110,12 +112,12 @@ func TestBetaDecode(t *testing.T) {
 
 	// Verify first message is from user
 	firstMsg := req.Messages[0]
-	if firstMsg.Role != anthropic.BetaMessageParamRoleUser {
-		t.Errorf("Expected first message role 'user', got '%s'", firstMsg.Role)
+	if msgparam.BetaRole(firstMsg) != "user" {
+		t.Errorf("Expected first message role 'user', got '%s'", msgparam.BetaRole(firstMsg))
 	}
 
 	// Verify content blocks exist in first message
-	if len(firstMsg.Content) == 0 {
+	if len(msgparam.BetaContent(firstMsg)) == 0 {
 		t.Fatal("Expected at least one content block in first message, got none")
 	}
 }
@@ -142,9 +144,10 @@ func TestDecode(t *testing.T) {
 	t.Logf("Model: %s", req.Model)
 	t.Logf("Messages count: %d", len(req.Messages))
 	for i, msg := range req.Messages {
-		t.Logf("Message[%d] Role: %s", i, msg.Role)
-		t.Logf("Message[%d] Content blocks: %d", i, len(msg.Content))
-		for j, block := range msg.Content {
+		blocks := msgparam.Content(msg)
+		t.Logf("Message[%d] Role: %s", i, msgparam.Role(msg))
+		t.Logf("Message[%d] Content blocks: %d", i, len(blocks))
+		for j, block := range blocks {
 			// Handle different block types
 			if block.OfText != nil {
 				contentStr := fmt.Sprintf("%v", block.OfText.Text)
@@ -193,12 +196,12 @@ func TestDecode(t *testing.T) {
 
 	// Verify first message is from user
 	firstMsg := req.Messages[0]
-	if firstMsg.Role != anthropic.MessageParamRoleUser {
-		t.Errorf("Expected first message role 'user', got '%s'", firstMsg.Role)
+	if msgparam.Role(firstMsg) != "user" {
+		t.Errorf("Expected first message role 'user', got '%s'", msgparam.Role(firstMsg))
 	}
 
 	// Verify content blocks exist in first message
-	if len(firstMsg.Content) == 0 {
+	if len(msgparam.Content(firstMsg)) == 0 {
 		t.Fatal("Expected at least one content block in first message, got none")
 	}
 }

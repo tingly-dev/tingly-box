@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func Test_AnthropicUnMarshal(t *testing.T) {
@@ -18,7 +19,7 @@ func Test_AnthropicUnMarshal(t *testing.T) {
 		}
 		last := r.Messages[len(r.Messages)-1]
 		content := ""
-		for _, block := range last.Content {
+		for _, block := range msgparam.BetaContent(last) {
 			for _, tb := range block.OfToolResult.Content {
 				content = tb.OfText.Text
 			}

@@ -12,9 +12,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 )
 
 // sseWriter builds an Anthropic streaming SSE response. Each event is written
@@ -177,8 +179,8 @@ func TestEngineRun_PlainText(t *testing.T) {
 
 	// user message + 1 assistant message
 	require.Len(t, msgs, 2)
-	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[0].Role)
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[1].Role)
+	assert.Equal(t, "user", msgparam.BetaRole(msgs[0]))
+	assert.Equal(t, "assistant", msgparam.BetaRole(msgs[1]))
 }
 
 // TestEngineRun_PlainText_Streaming covers the opt-in StreamText mode where each
@@ -249,13 +251,13 @@ func TestEngineRun_ToolCall(t *testing.T) {
 
 	// messages: user, assistant(tool_use), user(tool_result), assistant(text)
 	require.Len(t, msgs, 4)
-	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[0].Role)
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[1].Role)
-	require.NotNil(t, msgs[1].Content[0].OfToolUse, "second message should carry a tool_use block")
-	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[2].Role)
-	require.NotNil(t, msgs[2].Content[0].OfToolResult, "third message should carry a tool_result block")
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[3].Role)
-	require.NotNil(t, msgs[3].Content[0].OfText, "fourth message should carry a text block")
+	assert.Equal(t, "user", msgparam.BetaRole(msgs[0]))
+	assert.Equal(t, "assistant", msgparam.BetaRole(msgs[1]))
+	require.NotNil(t, msgparam.BetaContent(msgs[1])[0].OfToolUse, "second message should carry a tool_use block")
+	assert.Equal(t, "user", msgparam.BetaRole(msgs[2]))
+	require.NotNil(t, msgparam.BetaContent(msgs[2])[0].OfToolResult, "third message should carry a tool_result block")
+	assert.Equal(t, "assistant", msgparam.BetaRole(msgs[3]))
+	require.NotNil(t, msgparam.BetaContent(msgs[3])[0].OfText, "fourth message should carry a text block")
 }
 
 func TestEngineRun_MaxIterations(t *testing.T) {
@@ -715,7 +717,7 @@ func TestEngineRun_ThinkingBlocksSurviveHistoryRoundTrip(t *testing.T) {
 	// The assistant turn must retain the thinking block alongside the tool_use.
 	assistant := msgs[1]
 	var thinking *anthropic.BetaThinkingBlockParam
-	for _, b := range assistant.Content {
+	for _, b := range msgparam.BetaContent(assistant) {
 		if b.OfThinking != nil {
 			thinking = b.OfThinking
 		}
@@ -731,7 +733,7 @@ func TestEngineRun_ThinkingBlocksSurviveHistoryRoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &restored))
 
 	var restoredThinking *anthropic.BetaThinkingBlockParam
-	for _, b := range restored[1].Content {
+	for _, b := range msgparam.BetaContent(restored[1]) {
 		if b.OfThinking != nil {
 			restoredThinking = b.OfThinking
 		}

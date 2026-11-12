@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func TestConvertOpenAIResponsesToAnthropicBetaRequest_SimpleInput(t *testing.T) {
@@ -39,8 +40,8 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_SimpleInput(t *testing.T) 
 	// Verify messages
 	if len(result.Messages) != 1 {
 		t.Errorf("Expected 1 message, got %d", len(result.Messages))
-	} else if string(result.Messages[0].Role) != "user" {
-		t.Errorf("Expected user role, got %s", result.Messages[0].Role)
+	} else if msgparam.BetaRole(result.Messages[0]) != "user" {
+		t.Errorf("Expected user role, got %s", msgparam.BetaRole(result.Messages[0]))
 	}
 
 	// Verify max_tokens
@@ -82,12 +83,12 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_InputItems(t *testing.T) {
 		t.Errorf("Expected 2 messages, got %d", len(result.Messages))
 	}
 
-	if len(result.Messages) >= 1 && string(result.Messages[0].Role) != "user" {
-		t.Errorf("Expected first message role 'user', got %s", result.Messages[0].Role)
+	if len(result.Messages) >= 1 && msgparam.BetaRole(result.Messages[0]) != "user" {
+		t.Errorf("Expected first message role 'user', got %s", msgparam.BetaRole(result.Messages[0]))
 	}
 
-	if len(result.Messages) >= 2 && string(result.Messages[1].Role) != "assistant" {
-		t.Errorf("Expected second message role 'assistant', got %s", result.Messages[1].Role)
+	if len(result.Messages) >= 2 && msgparam.BetaRole(result.Messages[1]) != "assistant" {
+		t.Errorf("Expected second message role 'assistant', got %s", msgparam.BetaRole(result.Messages[1]))
 	}
 }
 
@@ -116,24 +117,24 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_FunctionCall(t *testing.T)
 		t.Fatalf("Expected 2 messages, got %d", len(result.Messages))
 	}
 	placeholder := result.Messages[1]
-	if string(placeholder.Role) != "user" || len(placeholder.Content) != 1 || placeholder.Content[0].OfToolResult == nil {
+	if msgparam.BetaRole(placeholder) != "user" || len(msgparam.BetaContent(placeholder)) != 1 || msgparam.BetaContent(placeholder)[0].OfToolResult == nil {
 		t.Fatalf("Expected a user tool_result placeholder, got %+v", placeholder)
 	}
-	if placeholder.Content[0].OfToolResult.ToolUseID != "call_123" {
-		t.Errorf("Expected placeholder for call_123, got %s", placeholder.Content[0].OfToolResult.ToolUseID)
+	if msgparam.BetaContent(placeholder)[0].OfToolResult.ToolUseID != "call_123" {
+		t.Errorf("Expected placeholder for call_123, got %s", msgparam.BetaContent(placeholder)[0].OfToolResult.ToolUseID)
 	}
 
 	msg := result.Messages[0]
-	if string(msg.Role) != "assistant" {
-		t.Errorf("Expected assistant role, got %s", msg.Role)
+	if msgparam.BetaRole(msg) != "assistant" {
+		t.Errorf("Expected assistant role, got %s", msgparam.BetaRole(msg))
 	}
 
 	// Verify tool_use block
-	if len(msg.Content) != 1 {
-		t.Fatalf("Expected 1 content block, got %d", len(msg.Content))
+	if len(msgparam.BetaContent(msg)) != 1 {
+		t.Fatalf("Expected 1 content block, got %d", len(msgparam.BetaContent(msg)))
 	}
 
-	block := msg.Content[0]
+	block := msgparam.BetaContent(msg)[0]
 	if block.OfToolUse == nil {
 		t.Fatal("Expected tool_use block, got nil")
 	}
@@ -196,13 +197,13 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ParallelToolCalls(t *testi
 		t.Fatalf("expected 3 messages, got %d", len(result.Messages))
 	}
 	assistant := result.Messages[1]
-	if string(assistant.Role) != "assistant" || len(assistant.Content) != 2 ||
-		assistant.Content[0].OfToolUse == nil || assistant.Content[1].OfToolUse == nil {
+	if msgparam.BetaRole(assistant) != "assistant" || len(msgparam.BetaContent(assistant)) != 2 ||
+		msgparam.BetaContent(assistant)[0].OfToolUse == nil || msgparam.BetaContent(assistant)[1].OfToolUse == nil {
 		t.Fatalf("expected messages[1] to hold 2 tool_use blocks, got %v", assistant)
 	}
 	user := result.Messages[2]
-	if string(user.Role) != "user" || len(user.Content) != 2 ||
-		user.Content[0].OfToolResult == nil || user.Content[1].OfToolResult == nil {
+	if msgparam.BetaRole(user) != "user" || len(msgparam.BetaContent(user)) != 2 ||
+		msgparam.BetaContent(user)[0].OfToolResult == nil || msgparam.BetaContent(user)[1].OfToolResult == nil {
 		t.Fatalf("expected messages[2] to hold 2 tool_result blocks, got %v", user)
 	}
 }
@@ -253,7 +254,7 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_SequentialToolCalls(t *tes
 		t.Fatalf("expected 5 messages for sequential calls, got %d", len(result.Messages))
 	}
 	for _, i := range []int{1, 3} {
-		if string(result.Messages[i].Role) != "assistant" || len(result.Messages[i].Content) != 1 {
+		if msgparam.BetaRole(result.Messages[i]) != "assistant" || len(msgparam.BetaContent(result.Messages[i])) != 1 {
 			t.Fatalf("expected messages[%d] to be a single assistant tool_use, got %v", i, result.Messages[i])
 		}
 	}
@@ -316,18 +317,18 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair(t *testing.
 		}, 4096)
 
 		require.Len(t, out.Messages, 4)
-		assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, out.Messages[1].Role)
-		require.Len(t, out.Messages[1].Content, 2)
-		assert.Equal(t, "call_a", out.Messages[1].Content[0].OfToolUse.ID)
-		assert.Equal(t, "call_b", out.Messages[1].Content[1].OfToolUse.ID)
+		assert.Equal(t, "assistant", msgparam.BetaRole(out.Messages[1]))
+		require.Len(t, msgparam.BetaContent(out.Messages[1]), 2)
+		assert.Equal(t, "call_a", msgparam.BetaContent(out.Messages[1])[0].OfToolUse.ID)
+		assert.Equal(t, "call_b", msgparam.BetaContent(out.Messages[1])[1].OfToolUse.ID)
 
 		// Every tool_use is answered in the very next user message.
 		results := out.Messages[2]
-		assert.Equal(t, anthropic.BetaMessageParamRoleUser, results.Role)
-		require.Len(t, results.Content, 2)
-		assert.Equal(t, "call_a", results.Content[0].OfToolResult.ToolUseID)
-		assert.Equal(t, "call_b", results.Content[1].OfToolResult.ToolUseID)
-		assert.Equal(t, missingToolOutputPlaceholder, results.Content[1].OfToolResult.Content[0].OfText.Text)
+		assert.Equal(t, "user", msgparam.BetaRole(results))
+		require.Len(t, msgparam.BetaContent(results), 2)
+		assert.Equal(t, "call_a", msgparam.BetaContent(results)[0].OfToolResult.ToolUseID)
+		assert.Equal(t, "call_b", msgparam.BetaContent(results)[1].OfToolResult.ToolUseID)
+		assert.Equal(t, missingToolOutputPlaceholder, msgparam.BetaContent(results)[1].OfToolResult.Content[0].OfText.Text)
 	})
 
 	t.Run("orphan outputs become user text instead of dangling tool_result", func(t *testing.T) {
@@ -340,13 +341,13 @@ func TestConvertOpenAIResponsesToAnthropicBetaRequest_ToolCallRepair(t *testing.
 		}, 4096)
 
 		for _, msg := range out.Messages {
-			assert.Equal(t, anthropic.BetaMessageParamRoleUser, msg.Role)
-			for _, block := range msg.Content {
+			assert.Equal(t, "user", msgparam.BetaRole(msg))
+			for _, block := range msgparam.BetaContent(msg) {
 				assert.Nil(t, block.OfToolResult, "no tool_result may survive without a tool_use")
 			}
 		}
-		assert.Equal(t, "[tool output: automation_update]\nautomation: nightly", out.Messages[0].Content[0].OfText.Text)
-		assert.Equal(t, "[tool output: call_old]\nstale", out.Messages[1].Content[0].OfText.Text)
+		assert.Equal(t, "[tool output: automation_update]\nautomation: nightly", msgparam.BetaContent(out.Messages[0])[0].OfText.Text)
+		assert.Equal(t, "[tool output: call_old]\nstale", msgparam.BetaContent(out.Messages[1])[0].OfText.Text)
 	})
 }
 
@@ -364,7 +365,7 @@ func TestConvertOpenAIResponsesToAnthropicBeta_NamespaceTools(t *testing.T) {
 
 	var calledAs string
 	for _, msg := range req.Messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfToolUse != nil {
 				calledAs = block.OfToolUse.Name
 			}

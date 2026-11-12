@@ -3,10 +3,12 @@ package request
 import (
 	"encoding/json"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // ConvertAnthropicV1ToResponsesRequest converts Anthropic v1 request to OpenAI Responses API format
@@ -49,13 +51,13 @@ func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewPara
 	}
 
 	// Copy temperature
-	if anthropicReq.Temperature.Value > 0 {
-		params.Temperature = param.NewOpt(anthropicReq.Temperature.Value)
+	if temp := SamplingTemperature(anthropicReq); temp.Value > 0 {
+		params.Temperature = ParamOpt(temp.Value)
 	}
 
 	// Copy top_p
-	if anthropicReq.TopP.Value > 0 {
-		params.TopP = param.NewOpt(anthropicReq.TopP.Value)
+	if topP := SamplingTopP(anthropicReq); topP.Value > 0 {
+		params.TopP = ParamOpt(topP.Value)
 	}
 
 	applyAnthropicThinkingToResponses(params, viewAnthropicV1Request(anthropicReq))
@@ -96,10 +98,10 @@ func convertV1MessagesToResponsesInput(messages []anthropic.MessageParam) respon
 	var inputItems responses.ResponseInputParam
 
 	for _, msg := range messages {
-		if string(msg.Role) == "user" {
+		if msgparam.Role(msg) == "user" {
 			items := convertV1UserMessageToResponsesInput(msg)
 			inputItems = append(inputItems, items...)
-		} else if string(msg.Role) == "assistant" {
+		} else if msgparam.Role(msg) == "assistant" {
 			items := convertV1AssistantMessageToResponsesInput(msg)
 			inputItems = append(inputItems, items...)
 		}
@@ -176,7 +178,7 @@ func convertV1UserMessageToResponsesInput(msg anthropic.MessageParam) []response
 	var items []responses.ResponseInputItemUnionParam
 
 	var hasToolResult bool
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfToolResult != nil {
 			hasToolResult = true
 			break
@@ -185,7 +187,7 @@ func convertV1UserMessageToResponsesInput(msg anthropic.MessageParam) []response
 
 	if hasToolResult {
 		// When there are tool_result blocks, we need to create separate items
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			if block.OfToolResult != nil {
 				items = append(items, responsesFunctionCallOutputFromToolResult(block.OfToolResult))
 			} else if block.OfImage != nil {
@@ -208,8 +210,8 @@ func convertV1UserMessageToResponsesInput(msg anthropic.MessageParam) []response
 		return items
 	}
 
-	contentList := make(responses.ResponseInputMessageContentListParam, 0, len(msg.Content))
-	for _, block := range msg.Content {
+	contentList := make(responses.ResponseInputMessageContentListParam, 0, len(msgparam.Content(msg)))
+	for _, block := range msgparam.Content(msg) {
 		switch {
 		case block.OfText != nil:
 			if block.OfText.Text == "" {
@@ -243,14 +245,14 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 	var textBlocks []anthropic.TextBlockParam
 
 	// Process content blocks to collect text and find tool_use blocks
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfText != nil {
 			textBlocks = append(textBlocks, *block.OfText)
 		}
 	}
 
 	// First, handle tool_use blocks
-	for _, block := range msg.Content {
+	for _, block := range msgparam.Content(msg) {
 		if block.OfToolUse != nil {
 			// Convert tool_use to Responses API function call
 			argsJSON, _ := json.Marshal(block.OfToolUse.Input)
@@ -279,7 +281,7 @@ func convertV1AssistantMessageToResponsesInput(msg anthropic.MessageParam) []res
 
 func anthropicV1MessagesHaveRepresentableCacheControl(messages []anthropic.MessageParam) bool {
 	for _, message := range messages {
-		for _, block := range message.Content {
+		for _, block := range msgparam.Content(message) {
 			cacheControl := block.GetCacheControl()
 			if cacheControl == nil || param.IsOmitted(*cacheControl) {
 				continue
@@ -294,7 +296,7 @@ func anthropicV1MessagesHaveRepresentableCacheControl(messages []anthropic.Messa
 
 func anthropicV1MessagesHaveToolUseCacheControl(messages []anthropic.MessageParam) bool {
 	for _, message := range messages {
-		for _, block := range message.Content {
+		for _, block := range msgparam.Content(message) {
 			if block.OfToolUse != nil && !param.IsOmitted(block.OfToolUse.CacheControl) {
 				return true
 			}

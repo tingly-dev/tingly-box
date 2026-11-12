@@ -4,11 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -506,7 +507,7 @@ func newBetaRequest(model string, thinking anthropic.BetaThinkingConfigParamUnio
 		MaxTokens: 4096,
 		Thinking:  thinking,
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}),
 		},
 	}
 }
@@ -561,7 +562,7 @@ func TestVendorTransform_AnthropicBeta_EmptyModel(t *testing.T) {
 		Model:     "",
 		MaxTokens: 4096,
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}),
 		},
 	}
 
@@ -676,7 +677,7 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderPrepend(t *testing.T) {
 			{Text: "You are a helpful assistant."},
 		},
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}),
 		},
 	}
 
@@ -711,7 +712,7 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderReplace(t *testing.T) {
 			{Text: "Original system prompt."},
 		},
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}),
 		},
 	}
 
@@ -743,7 +744,7 @@ func TestVendorTransform_AnthropicBeta_NoSystemPrompt(t *testing.T) {
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
 		MaxTokens: 4096,
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("test")}),
 		},
 	}
 
@@ -800,15 +801,12 @@ func TestVendorTransform_AnthropicBeta_ThinkingBlocksFiltered(t *testing.T) {
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
 		MaxTokens: 4096,
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hello")}},
-			{
-				Role: "assistant",
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfThinking: &anthropic.BetaThinkingBlockParam{Thinking: "let me think...", Signature: "sig123"}},
-					{OfText: &anthropic.BetaTextBlockParam{Text: "Here is my answer."}},
-				},
-			},
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("thanks")}},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hello")}),
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
+				{OfThinking: &anthropic.BetaThinkingBlockParam{Thinking: "let me think...", Signature: "sig123"}},
+				{OfText: &anthropic.BetaTextBlockParam{Text: "Here is my answer."}},
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("thanks")}),
 		},
 	}
 
@@ -831,16 +829,16 @@ func TestVendorTransform_AnthropicBeta_ThinkingBlocksFiltered(t *testing.T) {
 	require.Len(t, result.Messages, 3, "all 3 messages should be preserved")
 
 	assistantMsg := result.Messages[1]
-	assert.Equal(t, "assistant", string(assistantMsg.Role))
+	assert.Equal(t, "assistant", msgparam.BetaRole(assistantMsg))
 
 	// Should only have text block, no thinking
-	for _, block := range assistantMsg.Content {
+	for _, block := range msgparam.BetaContent(assistantMsg) {
 		assert.Nil(t, block.OfThinking, "thinking blocks should be filtered out")
 	}
 
 	// Text block should still be present
 	foundText := false
-	for _, block := range assistantMsg.Content {
+	for _, block := range msgparam.BetaContent(assistantMsg) {
 		if block.OfText != nil && block.OfText.Text == "Here is my answer." {
 			foundText = true
 			break
@@ -899,15 +897,12 @@ func TestVendorTransform_AnthropicV1_ThinkingBlocksFiltered(t *testing.T) {
 		Model:     anthropic.Model("claude-3-5-haiku-20241022"),
 		MaxTokens: 4096,
 		Messages: []anthropic.MessageParam{
-			{Role: "user", Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("hello")}},
-			{
-				Role: "assistant",
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfThinking: &anthropic.ThinkingBlockParam{Thinking: "let me think...", Signature: "sig123"}},
-					{OfText: &anthropic.TextBlockParam{Text: "Here is my answer."}},
-				},
-			},
-			{Role: "user", Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("thanks")}},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("hello")}),
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				{OfThinking: &anthropic.ThinkingBlockParam{Thinking: "let me think...", Signature: "sig123"}},
+				{OfText: &anthropic.TextBlockParam{Text: "Here is my answer."}},
+			}),
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock("thanks")}),
 		},
 	}
 
@@ -929,14 +924,14 @@ func TestVendorTransform_AnthropicV1_ThinkingBlocksFiltered(t *testing.T) {
 	require.Len(t, result.Messages, 3)
 
 	assistantMsg := result.Messages[1]
-	assert.Equal(t, "assistant", string(assistantMsg.Role))
+	assert.Equal(t, "assistant", msgparam.Role(assistantMsg))
 
-	for _, block := range assistantMsg.Content {
+	for _, block := range msgparam.Content(assistantMsg) {
 		assert.Nil(t, block.OfThinking, "thinking blocks should be filtered out")
 	}
 
 	foundText := false
-	for _, block := range assistantMsg.Content {
+	for _, block := range msgparam.Content(assistantMsg) {
 		if block.OfText != nil && block.OfText.Text == "Here is my answer." {
 			foundText = true
 			break

@@ -3,7 +3,7 @@ package protocol
 import (
 	"encoding/json"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -50,12 +50,12 @@ func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
 	r.BetaMessageNewParams = new(anthropic.BetaMessageNewParams)
 	r.Stream = gjson.GetBytes(data, "stream").Bool()
 
-	return json.Unmarshal(data, r.BetaMessageNewParams)
+	return unmarshalAnthropicIngress(data, r.BetaMessageNewParams)
 }
 
 func (r *AnthropicMessagesRequest) UnmarshalJSON(data []byte) error {
 	r.MessageNewParams = new(anthropic.MessageNewParams)
 	r.Stream = gjson.GetBytes(data, "stream").Bool()
 
-	return json.Unmarshal(data, r.MessageNewParams)
+	return unmarshalAnthropicIngress(data, r.MessageNewParams)
 }

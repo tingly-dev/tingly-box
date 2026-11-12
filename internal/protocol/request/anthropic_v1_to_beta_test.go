@@ -5,9 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestConvertAnthropicV1ToBetaRequest_ToolResultContent guards against
@@ -29,8 +30,8 @@ func TestConvertAnthropicV1ToBetaRequest_ToolResultContent(t *testing.T) {
 	result := ConvertAnthropicV1ToBetaRequest(req)
 
 	require.Len(t, result.Messages, 1)
-	require.Len(t, result.Messages[0].Content, 1)
-	toolResult := result.Messages[0].Content[0].OfToolResult
+	require.Len(t, msgparam.BetaContent(result.Messages[0]), 1)
+	toolResult := msgparam.BetaContent(result.Messages[0])[0].OfToolResult
 	require.NotNil(t, toolResult)
 	require.Len(t, toolResult.Content, 1)
 	assert.Equal(t, "The secret word is ZANZIBAR", toolResult.Content[0].OfText.Text)
@@ -45,26 +46,23 @@ func TestConvertAnthropicV1ToBetaRequest_ToolResultMultipleBlocksPreserved(t *te
 		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 		MaxTokens: 1024,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{
-						OfToolResult: &anthropic.ToolResultBlockParam{
-							ToolUseID: "call_1",
-							Content: []anthropic.ToolResultBlockParamContentUnion{
-								{OfText: &anthropic.TextBlockParam{Text: "line one"}},
-								{OfText: &anthropic.TextBlockParam{Text: "line two"}},
-							},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{
+					OfToolResult: &anthropic.ToolResultBlockParam{
+						ToolUseID: "call_1",
+						Content: []anthropic.ToolResultBlockParamContentUnion{
+							{OfText: &anthropic.TextBlockParam{Text: "line one"}},
+							{OfText: &anthropic.TextBlockParam{Text: "line two"}},
 						},
 					},
 				},
-			},
+			}),
 		},
 	}
 
 	result := ConvertAnthropicV1ToBetaRequest(req)
 
-	toolResult := result.Messages[0].Content[0].OfToolResult
+	toolResult := msgparam.BetaContent(result.Messages[0])[0].OfToolResult
 	require.NotNil(t, toolResult)
 	require.Len(t, toolResult.Content, 2)
 	assert.Equal(t, "line one", toolResult.Content[0].OfText.Text)
@@ -80,27 +78,24 @@ func TestConvertAnthropicV1ToBetaRequest_ImagePreserved(t *testing.T) {
 		Model:     anthropic.Model("claude-3-5-sonnet-20241022"),
 		MaxTokens: 1024,
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{
-						OfImage: &anthropic.ImageBlockParam{
-							Source: anthropic.ImageBlockParamSourceUnion{
-								OfBase64: &anthropic.Base64ImageSourceParam{
-									Data:      "AAAA",
-									MediaType: "image/png",
-								},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{
+					OfImage: &anthropic.ImageBlockParam{
+						Source: anthropic.ImageBlockParamSourceUnion{
+							OfBase64: &anthropic.Base64ImageSourceParam{
+								Data:      "AAAA",
+								MediaType: "image/png",
 							},
 						},
 					},
 				},
-			},
+			}),
 		},
 	}
 
 	result := ConvertAnthropicV1ToBetaRequest(req)
 
-	image := result.Messages[0].Content[0].OfImage
+	image := msgparam.BetaContent(result.Messages[0])[0].OfImage
 	require.NotNil(t, image)
 	require.NotNil(t, image.Source.OfBase64)
 	assert.Equal(t, "AAAA", image.Source.OfBase64.Data)

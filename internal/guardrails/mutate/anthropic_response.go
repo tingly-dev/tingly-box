@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tidwall/sjson"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"

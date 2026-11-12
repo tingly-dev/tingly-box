@@ -33,5 +33,5 @@ func NewVModelAnthropicClient(provider *typ.Provider, base http.RoundTripper) (*
 	}
 	return newAnthropicClientWithTransport(provider,
 		vmodelclient.HTTPBase(provider.APIBase, provider.APIStyle),
-		providerTransportChain(base, provider))
+		providerTransportChain(base, provider), WireV1)
 }

@@ -3,7 +3,7 @@ package usage
 import (
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tidwall/gjson"
 
 	protocol "github.com/tingly-dev/tingly-box/ai"

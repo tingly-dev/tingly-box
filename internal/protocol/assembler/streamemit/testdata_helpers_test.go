@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // v1Event JSON-unmarshals a raw Anthropic v1 stream event into a typed

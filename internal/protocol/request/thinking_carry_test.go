@@ -3,11 +3,12 @@ package request
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // TestAnthropicThinkingToResponsesEffort pins that an Anthropic request's
@@ -92,10 +93,10 @@ func TestOpenAIEffortToAnthropicThinking(t *testing.T) {
 func TestAnthropicHistoryThinkingNotCarriedToResponses(t *testing.T) {
 	messages := []anthropic.BetaMessageParam{
 		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi")),
-		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+		msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
 			anthropic.NewBetaThinkingBlock("sig", "earlier thought"),
 			anthropic.NewBetaTextBlock("hello"),
-		}},
+		}),
 		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("again")),
 	}
 	for name, thinking := range map[string]anthropic.BetaThinkingConfigParamUnion{

@@ -5,7 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // PathUtil extracts and manipulates file paths from tool parameters.
@@ -176,10 +178,7 @@ func CreateBetaVirtualToolCalls(files []string) []any {
 		))
 	}
 
-	result = append(result, anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: toolBlocks,
-	})
+	result = append(result, msgparam.NewBeta("assistant", toolBlocks))
 
 	// Create virtual user message with tool_result blocks
 	var resultBlocks []anthropic.BetaContentBlockParamUnion
@@ -197,10 +196,7 @@ func CreateBetaVirtualToolCalls(files []string) []any {
 		resultBlocks = append(resultBlocks, anthropic.BetaContentBlockParamUnion{OfToolResult: &toolResult})
 	}
 
-	result = append(result, anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleUser,
-		Content: resultBlocks,
-	})
+	result = append(result, msgparam.NewBeta("user", resultBlocks))
 
 	return result
 }

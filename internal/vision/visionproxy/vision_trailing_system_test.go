@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // claudeCodeShapedBeta reproduces the message list Claude Code actually sends
@@ -23,24 +24,21 @@ import (
 //	4 system    <system-reminder>
 func claudeCodeShapedBeta(b64 string) *anthropic.BetaMessageNewParams {
 	sys := func(text string) anthropic.BetaMessageParam {
-		return anthropic.BetaMessageParam{
-			Role: anthropic.BetaMessageParamRoleSystem,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				{OfText: &anthropic.BetaTextBlockParam{Text: text}},
-			},
-		}
+		return msgparam.NewBeta("system", []anthropic.BetaContentBlockParamUnion{
+			{OfText: &anthropic.BetaTextBlockParam{Text: text}},
+		})
 	}
 	return &anthropic.BetaMessageNewParams{
 		Model: anthropic.Model("claude-3-5-sonnet-latest"),
 		Messages: []anthropic.BetaMessageParam{
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: "what registration is on the aircraft?"}},
-			}},
+			}),
 			sys("<system-reminder>context</system-reminder>"),
-			{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{
 				{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_1", Name: "Read"}},
-			}},
-			{Role: anthropic.BetaMessageParamRoleUser, Content: []anthropic.BetaContentBlockParamUnion{
+			}),
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
 				{OfToolResult: &anthropic.BetaToolResultBlockParam{
 					ToolUseID: "toolu_1",
 					Content: []anthropic.BetaToolResultBlockParamContentUnion{
@@ -54,7 +52,7 @@ func claudeCodeShapedBeta(b64 string) *anthropic.BetaMessageNewParams {
 						}},
 					},
 				}},
-			}},
+			}),
 			sys("<system-reminder>tokens left</system-reminder>"),
 		},
 	}
@@ -94,15 +92,12 @@ func TestVisionProxy_Beta_TrailingSystem_KeepsRealHistoryElided(t *testing.T) {
 
 	req := claudeCodeShapedBeta(tinyPNGBase64)
 	// Splice a genuinely historical image in as the opening user turn.
-	historical := anthropic.BetaMessageParam{
-		Role: anthropic.BetaMessageParamRoleUser,
-		Content: []anthropic.BetaContentBlockParamUnion{
-			anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
-				Data:      tinyPNGBase64,
-				MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
-			}),
-		},
-	}
+	historical := msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+		anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+			Data:      tinyPNGBase64,
+			MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
+		}),
+	})
 	req.Messages = append([]anthropic.BetaMessageParam{historical}, req.Messages...)
 
 	svcs := []*loadbalance.Service{mkService(prov.UUID, true)}

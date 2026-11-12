@@ -3,10 +3,11 @@ package transform
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -308,23 +309,20 @@ func TestCleanMessages_NormalizesSteganographyInFirstMessage(t *testing.T) {
 	// The steganographic date string lives in a <system-reminder> block
 	// in the first user message's text content.
 	messages := []anthropic.MessageParam{
-		{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
-			},
-		},
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
+		}),
 	}
 	result := CleanMessages(messages)
 	if len(result) != 1 {
 		t.Fatalf("CleanMessages() returned %d messages, want 1", len(result))
 	}
-	if result[0].Content[0].OfText == nil {
+	if msgparam.Content(result[0])[0].OfText == nil {
 		t.Fatal("CleanMessages() first content block is not text")
 	}
 	want := "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>"
-	if result[0].Content[0].OfText.Text != want {
-		t.Errorf("CleanMessages() = %q, want %q", result[0].Content[0].OfText.Text, want)
+	if msgparam.Content(result[0])[0].OfText.Text != want {
+		t.Errorf("CleanMessages() = %q, want %q", msgparam.Content(result[0])[0].OfText.Text, want)
 	}
 }
 
@@ -332,64 +330,52 @@ func TestCleanMessages_MultipleMessages(t *testing.T) {
 	// First message has <system-reminder> → should be normalized.
 	// Second and third lack <system-reminder> → should NOT be normalized.
 	messages := []anthropic.MessageParam{
-		{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
-			},
-		},
-		{
-			Role: anthropic.MessageParamRoleAssistant,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfText: &anthropic.TextBlockParam{Text: "I will help you with that."}},
-			},
-		},
-		{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfText: &anthropic.TextBlockParam{Text: "What about 2025/12/01?"}},
-			},
-		},
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
+		}),
+		msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+			{OfText: &anthropic.TextBlockParam{Text: "I will help you with that."}},
+		}),
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			{OfText: &anthropic.TextBlockParam{Text: "What about 2025/12/01?"}},
+		}),
 	}
 	result := CleanMessages(messages)
 	if len(result) != 3 {
 		t.Fatalf("CleanMessages() returned %d messages, want 3", len(result))
 	}
 	// First message: has <system-reminder>, should be normalized
-	if result[0].Content[0].OfText.Text != "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>" {
-		t.Errorf("CleanMessages()[0] = %q, want %q", result[0].Content[0].OfText.Text, "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>")
+	if msgparam.Content(result[0])[0].OfText.Text != "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>" {
+		t.Errorf("CleanMessages()[0] = %q, want %q", msgparam.Content(result[0])[0].OfText.Text, "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>")
 	}
 	// Second message: no <system-reminder>, should NOT be modified
-	if result[1].Content[0].OfText.Text != "I will help you with that." {
-		t.Errorf("CleanMessages()[1] = %q, want %q", result[1].Content[0].OfText.Text, "I will help you with that.")
+	if msgparam.Content(result[1])[0].OfText.Text != "I will help you with that." {
+		t.Errorf("CleanMessages()[1] = %q, want %q", msgparam.Content(result[1])[0].OfText.Text, "I will help you with that.")
 	}
 	// Third message: no <system-reminder>, should NOT be modified
-	if result[2].Content[0].OfText.Text != "What about 2025/12/01?" {
-		t.Errorf("CleanMessages()[2] = %q, want %q", result[2].Content[0].OfText.Text, "What about 2025/12/01?")
+	if msgparam.Content(result[2])[0].OfText.Text != "What about 2025/12/01?" {
+		t.Errorf("CleanMessages()[2] = %q, want %q", msgparam.Content(result[2])[0].OfText.Text, "What about 2025/12/01?")
 	}
 }
 
 func TestCleanMessages_NonTextBlocksSkipped(t *testing.T) {
 	// Non-text blocks (e.g., tool_use, image) should not cause panics
 	messages := []anthropic.MessageParam{
-		{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
-				{}, // Empty block, no OfText and no other type
-			},
-		},
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{
+			{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
+			{}, // Empty block, no OfText and no other type
+		}),
 	}
 	result := CleanMessages(messages)
 	if len(result) != 1 {
 		t.Fatalf("CleanMessages() returned %d messages, want 1", len(result))
 	}
-	if result[0].Content[0].OfText == nil {
+	if msgparam.Content(result[0])[0].OfText == nil {
 		t.Fatal("CleanMessages() first text block was incorrectly set to nil")
 	}
 	want := "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>"
-	if result[0].Content[0].OfText.Text != want {
-		t.Errorf("CleanMessages() = %q, want %q", result[0].Content[0].OfText.Text, want)
+	if msgparam.Content(result[0])[0].OfText.Text != want {
+		t.Errorf("CleanMessages() = %q, want %q", msgparam.Content(result[0])[0].OfText.Text, want)
 	}
 }
 
@@ -407,7 +393,7 @@ func TestCleanMessages_EmptyMessages(t *testing.T) {
 func TestCleanMessages_EmptyContent(t *testing.T) {
 	// Message with no content blocks should be safe
 	messages := []anthropic.MessageParam{
-		{Role: anthropic.MessageParamRoleUser, Content: []anthropic.ContentBlockParamUnion{}},
+		msgparam.New("user", []anthropic.ContentBlockParamUnion{}),
 	}
 	result := CleanMessages(messages)
 	if len(result) != 1 {
@@ -421,47 +407,41 @@ func TestCleanMessages_EmptyContent(t *testing.T) {
 
 func TestCleanBetaMessages_NormalizesSteganography(t *testing.T) {
 	messages := []anthropic.BetaMessageParam{
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				{OfText: &anthropic.BetaTextBlockParam{Text: "<system-reminder>\nTodayʼs date is 2026/06/30.\n</system-reminder>"}},
-			},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			{OfText: &anthropic.BetaTextBlockParam{Text: "<system-reminder>\nTodayʼs date is 2026/06/30.\n</system-reminder>"}},
+		}),
 	}
 	result := CleanBetaMessages(messages)
 	if len(result) != 1 {
 		t.Fatalf("CleanBetaMessages() returned %d messages, want 1", len(result))
 	}
-	if result[0].Content[0].OfText == nil {
+	if msgparam.BetaContent(result[0])[0].OfText == nil {
 		t.Fatal("CleanBetaMessages() first content block is not text")
 	}
 	want := "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>"
-	if result[0].Content[0].OfText.Text != want {
-		t.Errorf("CleanBetaMessages() = %q, want %q", result[0].Content[0].OfText.Text, want)
+	if msgparam.BetaContent(result[0])[0].OfText.Text != want {
+		t.Errorf("CleanBetaMessages() = %q, want %q", msgparam.BetaContent(result[0])[0].OfText.Text, want)
 	}
 }
 
 func TestCleanBetaMessages_NonSystemReminderNotModified(t *testing.T) {
 	// Message without <system-reminder> should NOT be normalized
 	messages := []anthropic.BetaMessageParam{
-		{
-			Role: anthropic.BetaMessageParamRoleUser,
-			Content: []anthropic.BetaContentBlockParamUnion{
-				{OfText: &anthropic.BetaTextBlockParam{Text: "Todayʼs date is 2026/06/30."}},
-			},
-		},
+		msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+			{OfText: &anthropic.BetaTextBlockParam{Text: "Todayʼs date is 2026/06/30."}},
+		}),
 	}
 	result := CleanBetaMessages(messages)
 	if len(result) != 1 {
 		t.Fatalf("CleanBetaMessages() returned %d messages, want 1", len(result))
 	}
-	if result[0].Content[0].OfText == nil {
+	if msgparam.BetaContent(result[0])[0].OfText == nil {
 		t.Fatal("CleanBetaMessages() first content block is not text")
 	}
 	// Should remain unchanged because there's no <system-reminder> tag
 	want := "Todayʼs date is 2026/06/30."
-	if result[0].Content[0].OfText.Text != want {
-		t.Errorf("CleanBetaMessages() = %q, want %q", result[0].Content[0].OfText.Text, want)
+	if msgparam.BetaContent(result[0])[0].OfText.Text != want {
+		t.Errorf("CleanBetaMessages() = %q, want %q", msgparam.BetaContent(result[0])[0].OfText.Text, want)
 	}
 }
 
@@ -495,12 +475,9 @@ func TestCleanHeaderTransform_Apply_AnthropicV1(t *testing.T) {
 			{Text: "Today’s date is 2026/06/30."},
 		},
 		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
-				},
-			},
+			msgparam.New("user", []anthropic.ContentBlockParamUnion{
+				{OfText: &anthropic.TextBlockParam{Text: "<system-reminder>\nToday’s date is 2026/06/30.\n</system-reminder>"}},
+			}),
 		},
 	}
 	ctx := &protocoltransform.TransformContext{Request: req}
@@ -519,12 +496,12 @@ func TestCleanHeaderTransform_Apply_AnthropicV1(t *testing.T) {
 	if len(req.Messages) != 1 {
 		t.Fatalf("CleanHeaderTransform.Apply() Messages returned %d, want 1", len(req.Messages))
 	}
-	if req.Messages[0].Content[0].OfText == nil {
+	if msgparam.Content(req.Messages[0])[0].OfText == nil {
 		t.Fatal("CleanHeaderTransform.Apply() first content block is not text")
 	}
 	wantMsg := "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>"
-	if req.Messages[0].Content[0].OfText.Text != wantMsg {
-		t.Errorf("CleanHeaderTransform.Apply() Messages = %q, want %q", req.Messages[0].Content[0].OfText.Text, wantMsg)
+	if msgparam.Content(req.Messages[0])[0].OfText.Text != wantMsg {
+		t.Errorf("CleanHeaderTransform.Apply() Messages = %q, want %q", msgparam.Content(req.Messages[0])[0].OfText.Text, wantMsg)
 	}
 }
 
@@ -589,12 +566,9 @@ func TestCleanHeaderTransform_Apply_AnthropicBeta(t *testing.T) {
 			{Text: "Today‘s date is 2026/06/30."},
 		},
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role: anthropic.BetaMessageParamRoleUser,
-				Content: []anthropic.BetaContentBlockParamUnion{
-					{OfText: &anthropic.BetaTextBlockParam{Text: "<system-reminder>\nToday‘s date is 2026/06/30.\n</system-reminder>"}},
-				},
-			},
+			msgparam.NewBeta("user", []anthropic.BetaContentBlockParamUnion{
+				{OfText: &anthropic.BetaTextBlockParam{Text: "<system-reminder>\nToday‘s date is 2026/06/30.\n</system-reminder>"}},
+			}),
 		},
 	}
 	ctx := &protocoltransform.TransformContext{Request: req}
@@ -613,11 +587,11 @@ func TestCleanHeaderTransform_Apply_AnthropicBeta(t *testing.T) {
 	if len(req.Messages) != 1 {
 		t.Fatalf("CleanHeaderTransform.Apply() Messages returned %d, want 1", len(req.Messages))
 	}
-	if req.Messages[0].Content[0].OfText == nil {
+	if msgparam.BetaContent(req.Messages[0])[0].OfText == nil {
 		t.Fatal("CleanHeaderTransform.Apply() first content block is not text")
 	}
 	wantMsg := "<system-reminder>\nToday's date is 2026-06-30.\n</system-reminder>"
-	if req.Messages[0].Content[0].OfText.Text != wantMsg {
-		t.Errorf("CleanHeaderTransform.Apply() Messages = %q, want %q", req.Messages[0].Content[0].OfText.Text, wantMsg)
+	if msgparam.BetaContent(req.Messages[0])[0].OfText.Text != wantMsg {
+		t.Errorf("CleanHeaderTransform.Apply() Messages = %q, want %q", msgparam.BetaContent(req.Messages[0])[0].OfText.Text, wantMsg)
 	}
 }

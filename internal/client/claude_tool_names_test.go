@@ -6,9 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func TestTitleCaseToolName(t *testing.T) {
@@ -114,13 +116,12 @@ func TestRemapRequestToolNames(t *testing.T) {
 				v1Tool("ls"),
 			},
 			ToolChoice: anthropic.ToolChoiceParamOfTool("read_file"),
-			Messages: []anthropic.MessageParam{{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
+			Messages: []anthropic.MessageParam{
+				msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
 					{OfToolUse: &anthropic.ToolUseBlockParam{ID: "t1", Name: "read_file"}},
 					{OfToolUse: &anthropic.ToolUseBlockParam{ID: "t2", Name: "retired_tool"}},
-				},
-			}},
+				}),
+			},
 		}
 		rev := remapRequestToolNames(req)
 
@@ -129,9 +130,9 @@ func TestRemapRequestToolNames(t *testing.T) {
 		assert.Equal(t, "LS", req.Tools[2].OfTool.Name)
 		assert.Equal(t, "ReadFile", req.ToolChoice.OfTool.Name,
 			"tool_choice must name a tool that exists in tools[]")
-		assert.Equal(t, "ReadFile", req.Messages[0].Content[0].OfToolUse.Name)
+		assert.Equal(t, "ReadFile", msgparam.Content(req.Messages[0])[0].OfToolUse.Name)
 		// History names absent from the plan are untouched.
-		assert.Equal(t, "retired_tool", req.Messages[0].Content[1].OfToolUse.Name)
+		assert.Equal(t, "retired_tool", msgparam.Content(req.Messages[0])[1].OfToolUse.Name)
 		assert.Equal(t, map[string]string{"ReadFile": "read_file", "LS": "ls"}, rev)
 	})
 

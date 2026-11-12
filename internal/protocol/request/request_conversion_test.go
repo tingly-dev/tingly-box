@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"google.golang.org/genai"
 )
 
@@ -220,7 +221,7 @@ func TestConvertOpenAIToAnthropicRequestArrayContent(t *testing.T) {
 		result := ConvertOpenAIToAnthropicRequest(req, 8192)
 
 		require.Len(t, result.Messages, 2)
-		toolResult := result.Messages[1].Content[0].OfToolResult
+		toolResult := msgparam.BetaContent(result.Messages[1])[0].OfToolResult
 		require.NotNil(t, toolResult)
 		require.Len(t, toolResult.Content, 1)
 		assert.Equal(t, "The secret word is ZANZIBAR", toolResult.Content[0].OfText.Text)
@@ -266,8 +267,8 @@ func TestConvertOpenAIToAnthropicRequestArrayContent(t *testing.T) {
 		result := ConvertOpenAIToAnthropicRequest(req, 8192)
 
 		require.Len(t, result.Messages, 1)
-		require.Len(t, result.Messages[0].Content, 1)
-		assert.Equal(t, "The capital of France is Paris.", result.Messages[0].Content[0].OfText.Text)
+		require.Len(t, msgparam.BetaContent(result.Messages[0]), 1)
+		assert.Equal(t, "The capital of France is Paris.", msgparam.BetaContent(result.Messages[0])[0].OfText.Text)
 	})
 }
 

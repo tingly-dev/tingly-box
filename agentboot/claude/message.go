@@ -3,7 +3,7 @@ package claude
 import (
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // Message is the interface for all Claude message types

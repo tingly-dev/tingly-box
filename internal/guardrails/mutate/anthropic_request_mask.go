@@ -1,9 +1,10 @@
 package mutate
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func MaskAnthropicV1RequestCredentials(
@@ -24,7 +25,9 @@ func MaskAnthropicV1RequestCredentials(
 		}
 	}
 	for i := range req.Messages {
-		messageChanged, tailChanged := maskAnthropicV1Blocks(req.Messages[i].Content, credentials, state)
+		blocks := msgparam.Content(req.Messages[i])
+		messageChanged, tailChanged := maskAnthropicV1Blocks(blocks, credentials, state)
+		req.Messages[i] = msgparam.WithContent(req.Messages[i], blocks)
 		if messageChanged {
 			changed = true
 		}
@@ -98,7 +101,9 @@ func MaskAnthropicBetaRequestCredentials(
 		}
 	}
 	for i := range req.Messages {
-		blockChanged := maskAnthropicBetaBlocks(req.Messages[i].Content, credentials, state)
+		blocks := msgparam.BetaContent(req.Messages[i])
+		blockChanged := maskAnthropicBetaBlocks(blocks, credentials, state)
+		req.Messages[i] = msgparam.WithBetaContent(req.Messages[i], blocks)
 		if blockChanged {
 			changed = true
 		}

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicparam "github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
@@ -13,6 +13,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
@@ -162,14 +163,11 @@ func viewAnthropicBetaSystem(blocks []anthropic.BetaTextBlockParam) []anthropic.
 }
 
 func viewAnthropicBetaMessage(msg anthropic.BetaMessageParam) anthropic.MessageParam {
-	blocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
-	for _, block := range msg.Content {
+	blocks := make([]anthropic.ContentBlockParamUnion, 0, len(msgparam.BetaContent(msg)))
+	for _, block := range msgparam.BetaContent(msg) {
 		blocks = append(blocks, viewAnthropicBetaBlock(block))
 	}
-	return anthropic.MessageParam{
-		Role:    anthropic.MessageParamRole(msg.Role),
-		Content: blocks,
-	}
+	return msgparam.New(msgparam.BetaRole(msg), blocks)
 }
 
 func viewAnthropicBetaTools(tools []anthropic.BetaToolUnionParam) []anthropic.ToolUnionParam {
@@ -285,13 +283,13 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 
 	// Convert messages
 	for _, msg := range view.Messages {
-		switch msg.Role {
-		case anthropic.MessageParamRoleUser:
+		switch msgparam.Role(msg) {
+		case "user":
 			// User messages may contain tool_result blocks - need special handling
-			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewUserToOpenAI(msg.Content)...)
-		case anthropic.MessageParamRoleAssistant:
+			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewUserToOpenAI(msgparam.Content(msg))...)
+		case "assistant":
 			// Convert assistant message with potential tool_use blocks
-			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewAssistantToOpenAI(msg.Content))
+			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewAssistantToOpenAI(msgparam.Content(msg)))
 		}
 	}
 
@@ -599,7 +597,7 @@ func blocksHaveCacheControl(blocks []anthropic.ContentBlockParamUnion) bool {
 
 func messagesHaveThinking(messages []anthropic.MessageParam) bool {
 	for _, message := range messages {
-		for _, block := range message.Content {
+		for _, block := range msgparam.Content(message) {
 			if block.OfThinking != nil {
 				return true
 			}
@@ -613,7 +611,7 @@ func viewHasRepresentableCacheControl(view anthropicRequestView) bool {
 		return true
 	}
 	for _, message := range view.Messages {
-		if blocksHaveCacheControl(message.Content) {
+		if blocksHaveCacheControl(msgparam.Content(message)) {
 			return true
 		}
 	}
@@ -631,7 +629,7 @@ func viewHasToolDefinitionCacheControl(view anthropicRequestView) bool {
 
 func viewHasToolUseCacheControl(view anthropicRequestView) bool {
 	for _, message := range view.Messages {
-		for _, block := range message.Content {
+		for _, block := range msgparam.Content(message) {
 			if block.OfToolUse != nil && hasAnthropicCacheControl(block.OfToolUse.CacheControl) {
 				return true
 			}
@@ -782,13 +780,13 @@ func convertAnthropicViewToGoogleRequest(view anthropicRequestView) (string, []*
 // Google content. Returns nil when the message produces no parts or has an
 // unsupported role.
 func convertAnthropicViewMessageToGoogle(msg anthropic.MessageParam) *genai.Content {
-	switch msg.Role {
-	case anthropic.MessageParamRoleUser:
+	switch msgparam.Role(msg) {
+	case "user":
 		content := &genai.Content{
 			Role:  "user",
 			Parts: []*genai.Part{},
 		}
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			switch {
 			case block.OfText != nil:
 				content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))
@@ -831,12 +829,12 @@ func convertAnthropicViewMessageToGoogle(msg anthropic.MessageParam) *genai.Cont
 		}
 		return content
 
-	case anthropic.MessageParamRoleAssistant:
+	case "assistant":
 		content := &genai.Content{
 			Role:  "model",
 			Parts: []*genai.Part{},
 		}
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			switch {
 			case block.OfText != nil:
 				content.Parts = append(content.Parts, genai.NewPartFromText(block.OfText.Text))

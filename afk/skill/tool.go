@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )

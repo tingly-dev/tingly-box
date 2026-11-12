@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
@@ -18,6 +18,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -470,12 +471,9 @@ func buildAnthropicVisionMessages(p probeParams) []anthropic.MessageParam {
 	case VisionTool:
 		return []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(visionproxy.ToolUserText)),
-			{
-				Role: anthropic.MessageParamRoleAssistant,
-				Content: []anthropic.ContentBlockParamUnion{
-					anthropic.NewToolUseBlock(visionproxy.ToolCallID, map[string]any{}, visionproxy.ToolName),
-				},
-			},
+			msgparam.New("assistant", []anthropic.ContentBlockParamUnion{
+				anthropic.NewToolUseBlock(visionproxy.ToolCallID, map[string]any{}, visionproxy.ToolName),
+			}),
 			anthropic.NewUserMessage(anthropic.ContentBlockParamUnion{
 				OfToolResult: &anthropic.ToolResultBlockParam{
 					ToolUseID: visionproxy.ToolCallID,

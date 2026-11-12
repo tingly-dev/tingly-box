@@ -1,7 +1,7 @@
 package anthropic
 
 import (
-	sdk "github.com/anthropics/anthropic-sdk-go"
+	sdk "github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // VModelResponse describes what the virtual model wants to respond.

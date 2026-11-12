@@ -5,7 +5,7 @@
 [submodule "libs/anthropic-sdk-go"]
 	path = libs/anthropic-sdk-go
 	url = https://github.com/tingly-dev/anthropic-sdk-go.git
-	branch = "tingly-dev-v1.84.0"
+	branch = "tingly-dev-v2.7.0"
 [submodule "libs/go-genai"]
 	path = libs/go-genai
 	url = https://github.com/tingly-dev/go-genai.git

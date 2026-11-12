@@ -7,7 +7,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"

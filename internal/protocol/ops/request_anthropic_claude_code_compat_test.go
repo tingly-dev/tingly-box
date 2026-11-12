@@ -3,16 +3,14 @@ package ops
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // systemMessage builds a message with the non-standard "system" role carrying a
 // single text block.
 func systemMessage(text string) anthropic.MessageParam {
-	return anthropic.MessageParam{
-		Role:    "system",
-		Content: []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(text)},
-	}
+	return msgparam.New("system", []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(text)})
 }
 
 // roleTexts flattens a message slice into (role, joined-text) pairs for assertions.
@@ -26,7 +24,7 @@ func roleTexts(msgs []anthropic.MessageParam) []struct {
 	}, 0, len(msgs))
 	for _, m := range msgs {
 		var text string
-		for _, b := range m.Content {
+		for _, b := range msgparam.Content(m) {
 			if b.OfText != nil {
 				if text != "" {
 					text += "|"
@@ -37,7 +35,7 @@ func roleTexts(msgs []anthropic.MessageParam) []struct {
 		out = append(out, struct {
 			Role string
 			Text string
-		}{Role: string(m.Role), Text: text})
+		}{Role: msgparam.Role(m), Text: text})
 	}
 	return out
 }
@@ -259,10 +257,7 @@ func TestApplyClaudeCodeBetaCompatRoleRewrite(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{
 		Messages: []anthropic.BetaMessageParam{
 			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hello")),
-			{
-				Role:    "system",
-				Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("be terse")},
-			},
+			msgparam.NewBeta("system", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("be terse")}),
 		},
 	}
 	ApplyClaudeCodeBetaCompatRoleRewrite(req)
@@ -270,11 +265,11 @@ func TestApplyClaudeCodeBetaCompatRoleRewrite(t *testing.T) {
 	if len(req.Messages) != 1 {
 		t.Fatalf("message count = %d, want 1", len(req.Messages))
 	}
-	if got := req.Messages[0].Role; got != anthropic.BetaMessageParamRoleUser {
+	if got := msgparam.BetaRole(req.Messages[0]); got != "user" {
 		t.Errorf("role = %q, want user", got)
 	}
 	var text string
-	for _, b := range req.Messages[0].Content {
+	for _, b := range msgparam.BetaContent(req.Messages[0]) {
 		if b.OfText != nil {
 			if text != "" {
 				text += "|"

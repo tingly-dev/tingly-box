@@ -53,7 +53,7 @@ func NewOpenCodeAnthropicClient(provider *typ.Provider, model string, sessionID 
 	if !IsOpenCodeZen(provider.APIBase) {
 		return nil, fmt.Errorf("opencode client can only work for OpenCode Zen providers, got API base %q", provider.APIBase)
 	}
-	return newAnthropicClientWithTransport(provider, provider.APIBase, openCodeTransport(provider, model, sessionID))
+	return newAnthropicClientWithTransport(provider, provider.APIBase, openCodeTransport(provider, model, sessionID), WireV1)
 }
 
 // openCodeTransport builds the chain both shapes share: pooled session-bound

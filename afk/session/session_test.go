@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/afk/msgparam"
 )
 
 func userMsg(text string) anthropic.BetaMessageParam {
@@ -19,10 +21,7 @@ func userMsg(text string) anthropic.BetaMessageParam {
 // The SDK ships no assistant-message constructor (assistant turns normally come
 // from Message.ToParam()), so tests build one directly.
 func assistantMsg(text string) anthropic.BetaMessageParam {
-	return anthropic.BetaMessageParam{
-		Role:    anthropic.BetaMessageParamRoleAssistant,
-		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(text)},
-	}
+	return msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock(text)})
 }
 
 func TestOpen_MissingFileIsEmptySession(t *testing.T) {
@@ -44,10 +43,10 @@ func TestAppend_RoundTripsThroughReopen(t *testing.T) {
 	require.Equal(t, 2, reopened.Len())
 
 	msgs := reopened.Messages()
-	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[0].Role)
-	assert.Equal(t, "hello", msgs[0].Content[0].OfText.Text)
-	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[1].Role)
-	assert.Equal(t, "hi there", msgs[1].Content[0].OfText.Text)
+	assert.Equal(t, "user", msgparam.BetaRole(msgs[0]))
+	assert.Equal(t, "hello", msgparam.BetaContent(msgs[0])[0].OfText.Text)
+	assert.Equal(t, "assistant", msgparam.BetaRole(msgs[1]))
+	assert.Equal(t, "hi there", msgparam.BetaContent(msgs[1])[0].OfText.Text)
 }
 
 // The format is one entry per line — that is what makes an append incapable of
@@ -119,8 +118,8 @@ func TestOpen_SkipsCorruptLineAndKeepsTheRest(t *testing.T) {
 	require.NoError(t, err)
 	msgs := reopened.Messages()
 	require.Len(t, msgs, 2, "the readable entries on both sides of the bad line survive")
-	assert.Equal(t, "before", msgs[0].Content[0].OfText.Text)
-	assert.Equal(t, "after", msgs[1].Content[0].OfText.Text)
+	assert.Equal(t, "before", msgparam.BetaContent(msgs[0])[0].OfText.Text)
+	assert.Equal(t, "after", msgparam.BetaContent(msgs[1])[0].OfText.Text)
 }
 
 // Turns carrying tool output blow past bufio.Scanner's 64KB default line size;
@@ -137,8 +136,8 @@ func TestOpen_HandlesVeryLongLines(t *testing.T) {
 	require.NoError(t, err)
 	msgs := reopened.Messages()
 	require.Len(t, msgs, 2, "a large turn must not truncate the scan")
-	assert.Equal(t, huge, msgs[0].Content[0].OfText.Text)
-	assert.Equal(t, "after the big one", msgs[1].Content[0].OfText.Text)
+	assert.Equal(t, huge, msgparam.BetaContent(msgs[0])[0].OfText.Text)
+	assert.Equal(t, "after the big one", msgparam.BetaContent(msgs[1])[0].OfText.Text)
 }
 
 func TestImportLegacy_SeedsFromWholeFileArray(t *testing.T) {

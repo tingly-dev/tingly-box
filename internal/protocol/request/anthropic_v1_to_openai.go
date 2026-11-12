@@ -4,10 +4,11 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // ConvertAnthropicToOpenAIRequest converts Anthropic request to OpenAI format.
@@ -130,7 +131,7 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 // This handles both text content and tool_use blocks
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewAssistantToOpenAI(msg.Content)
+	return convertAnthropicViewAssistantToOpenAI(msgparam.Content(msg))
 }
 
 // convertAnthropicUserMessageToOpenAI converts Anthropic user message to OpenAI format
@@ -138,5 +139,5 @@ func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai
 // tool_result blocks in Anthropic become separate role="tool" messages in OpenAI
 // Returns a slice of messages because tool results become separate messages
 func convertAnthropicUserMessageToOpenAI(msg anthropic.MessageParam) []openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewUserToOpenAI(msg.Content)
+	return convertAnthropicViewUserToOpenAI(msgparam.Content(msg))
 }

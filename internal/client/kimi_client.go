@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -288,6 +288,6 @@ func NewKimiAnthropicClient(provider *typ.Provider, model string, sessionID typ.
 		return nil, fmt.Errorf("kimi anthropic client can only work for Kimi Code OAuth providers")
 	}
 	transport := wrapWithLogging(newKimiRoundTripper(createSessionBoundTransport(provider, sessionID), provider), provider)
-	return newAnthropicClientWithTransport(provider, provider.APIBase, transport,
+	return newAnthropicClientWithTransport(provider, provider.APIBase, transport, WireV1,
 		anthropicOption.WithAuthToken(provider.GetAccessToken()))
 }

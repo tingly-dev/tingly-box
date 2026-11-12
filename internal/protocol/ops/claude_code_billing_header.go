@@ -9,10 +9,11 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/protocol/metaid"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 // Native Claude Code identity (claude_code_version flag): rebuilds the
@@ -155,11 +156,11 @@ func isSystemReminderText(text string) bool {
 // the reminder itself.)
 func extractFirstUserPromptText(messages []anthropic.MessageParam) string {
 	for _, msg := range messages {
-		if msg.Role != "user" {
+		if msgparam.Role(msg) != "user" {
 			continue
 		}
 		reminderOnly := false
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			if block.OfText == nil {
 				continue
 			}
@@ -179,11 +180,11 @@ func extractFirstUserPromptText(messages []anthropic.MessageParam) string {
 // extractFirstBetaUserPromptText is the beta-API twin of extractFirstUserPromptText.
 func extractFirstBetaUserPromptText(messages []anthropic.BetaMessageParam) string {
 	for _, msg := range messages {
-		if msg.Role != "user" {
+		if msgparam.BetaRole(msg) != "user" {
 			continue
 		}
 		reminderOnly := false
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfText == nil {
 				continue
 			}

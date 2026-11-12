@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -102,13 +103,13 @@ func continuationAnswered(segment, request any) bool {
 		if !ok || len(seg) == 0 {
 			return false
 		}
-		for _, block := range seg[0].Content {
+		for _, block := range msgparam.BetaContent(seg[0]) {
 			if block.OfToolUse != nil {
 				calls[block.OfToolUse.ID] = true
 			}
 		}
 		for _, message := range req.Messages {
-			for _, block := range message.Content {
+			for _, block := range msgparam.BetaContent(message) {
 				if block.OfToolResult != nil && calls[block.OfToolResult.ToolUseID] {
 					return true
 				}

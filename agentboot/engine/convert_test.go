@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"

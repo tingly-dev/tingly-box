@@ -3,11 +3,12 @@ package smartcompact
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -93,8 +94,8 @@ func TestRoundOnly_SimpleConversation(t *testing.T) {
 	output := strategy.CompressV1(input)
 
 	assert.Len(t, output, 2)
-	assert.Equal(t, "Hello", output[0].Content[0].OfText.Text)
-	assert.Equal(t, "Hi there!", output[1].Content[0].OfText.Text)
+	assert.Equal(t, "Hello", msgparam.Content(output[0])[0].OfText.Text)
+	assert.Equal(t, "Hi there!", msgparam.Content(output[1])[0].OfText.Text)
 }
 
 func TestRoundOnly_CurrentRoundPreserved(t *testing.T) {
@@ -120,14 +121,14 @@ func TestRoundOnly_CurrentRoundPreserved(t *testing.T) {
 	output := strategy.CompressV1(input)
 
 	// Historical: user text only
-	assert.Equal(t, "Old question", output[0].Content[0].OfText.Text)
+	assert.Equal(t, "Old question", msgparam.Content(output[0])[0].OfText.Text)
 	// Only 3 messages remain: Old question, New question, current assistant
 	assert.Len(t, output, 3)
 
 	// Current: everything preserved
-	assert.Equal(t, "New question", output[1].Content[0].OfText.Text)
-	assert.Len(t, output[2].Content, 2) // thinking + text
-	assert.Equal(t, "Current thinking", output[2].Content[0].OfThinking.Thinking)
+	assert.Equal(t, "New question", msgparam.Content(output[1])[0].OfText.Text)
+	assert.Len(t, msgparam.Content(output[2]), 2) // thinking + text
+	assert.Equal(t, "Current thinking", msgparam.Content(output[2])[0].OfThinking.Thinking)
 }
 
 func TestRoundOnly_RemovesToolResults(t *testing.T) {
@@ -149,9 +150,9 @@ func TestRoundOnly_RemovesToolResults(t *testing.T) {
 
 	// Historical round: only user message remains
 	assert.Len(t, output, 2)
-	assert.Equal(t, "Search", output[0].Content[0].OfText.Text)
+	assert.Equal(t, "Search", msgparam.Content(output[0])[0].OfText.Text)
 	// Current round: preserved
-	assert.Equal(t, "Next question", output[1].Content[0].OfText.Text)
+	assert.Equal(t, "Next question", msgparam.Content(output[1])[0].OfText.Text)
 }
 
 func TestRoundOnly_EmptyMessages(t *testing.T) {
@@ -191,30 +192,30 @@ func TestRoundFiles_VirtualToolCalls(t *testing.T) {
 	assert.Len(t, output, 5)
 
 	// Historical user: text only
-	assert.Equal(t, "Read config", output[0].Content[0].OfText.Text)
+	assert.Equal(t, "Read config", msgparam.Content(output[0])[0].OfText.Text)
 
 	// Historical assistant: text only
-	assert.Equal(t, "I'll read it", output[1].Content[0].OfText.Text)
+	assert.Equal(t, "I'll read it", msgparam.Content(output[1])[0].OfText.Text)
 
 	// Virtual assistant with tool_use
-	assert.Equal(t, "assistant", string(output[2].Role))
-	assert.Len(t, output[2].Content, 1)
-	assert.Equal(t, VirtualReadTool, output[2].Content[0].OfToolUse.Name)
-	if inputMap, ok := output[2].Content[0].OfToolUse.Input.(map[string]any); ok {
+	assert.Equal(t, "assistant", msgparam.Role(output[2]))
+	assert.Len(t, msgparam.Content(output[2]), 1)
+	assert.Equal(t, VirtualReadTool, msgparam.Content(output[2])[0].OfToolUse.Name)
+	if inputMap, ok := msgparam.Content(output[2])[0].OfToolUse.Input.(map[string]any); ok {
 		assert.Equal(t, "internal/config.go", inputMap["path"])
 	} else {
 		t.Fatal("tool_use.Input is not map[string]any")
 	}
 
 	// Virtual user with tool_result
-	assert.Equal(t, "user", string(output[3].Role))
-	assert.Len(t, output[3].Content, 1)
+	assert.Equal(t, "user", msgparam.Role(output[3]))
+	assert.Len(t, msgparam.Content(output[3]), 1)
 	// tool_result content is a union type, check the text field
-	require.NotNil(t, output[3].Content[0].OfToolResult)
-	assert.Equal(t, ExpiredContentMsg, output[3].Content[0].OfToolResult.Content[0].OfText.Text)
+	require.NotNil(t, msgparam.Content(output[3])[0].OfToolResult)
+	assert.Equal(t, ExpiredContentMsg, msgparam.Content(output[3])[0].OfToolResult.Content[0].OfText.Text)
 
 	// Current round: preserved
-	assert.Equal(t, "Current", output[4].Content[0].OfText.Text)
+	assert.Equal(t, "Current", msgparam.Content(output[4])[0].OfText.Text)
 }
 
 func TestRoundFiles_MultipleFilesVirtualTools(t *testing.T) {
@@ -243,8 +244,8 @@ func TestRoundFiles_MultipleFilesVirtualTools(t *testing.T) {
 	// Find virtual assistant message
 	var virtualAsst *anthropic.MessageParam
 	for i := range output {
-		if string(output[i].Role) == "assistant" && len(output[i].Content) > 0 &&
-			output[i].Content[0].OfToolUse != nil {
+		if msgparam.Role(output[i]) == "assistant" && len(msgparam.Content(output[i])) > 0 &&
+			msgparam.Content(output[i])[0].OfToolUse != nil {
 			virtualAsst = &output[i]
 			break
 		}
@@ -252,9 +253,9 @@ func TestRoundFiles_MultipleFilesVirtualTools(t *testing.T) {
 
 	require.NotNil(t, virtualAsst)
 	// Should have 2 tool_use blocks (a.go and b.go)
-	assert.Len(t, virtualAsst.Content, 2)
-	assert.Equal(t, VirtualReadTool, virtualAsst.Content[0].OfToolUse.Name)
-	assert.Equal(t, VirtualReadTool, virtualAsst.Content[1].OfToolUse.Name)
+	assert.Len(t, msgparam.Content(*virtualAsst), 2)
+	assert.Equal(t, VirtualReadTool, msgparam.Content(*virtualAsst)[0].OfToolUse.Name)
+	assert.Equal(t, VirtualReadTool, msgparam.Content(*virtualAsst)[1].OfToolUse.Name)
 }
 
 func TestRoundFiles_FileDeduplication(t *testing.T) {
@@ -282,8 +283,8 @@ func TestRoundFiles_FileDeduplication(t *testing.T) {
 	// Find virtual assistant message
 	var virtualAsst *anthropic.MessageParam
 	for i := range output {
-		if string(output[i].Role) == "assistant" && len(output[i].Content) > 0 &&
-			output[i].Content[0].OfToolUse != nil {
+		if msgparam.Role(output[i]) == "assistant" && len(msgparam.Content(output[i])) > 0 &&
+			msgparam.Content(output[i])[0].OfToolUse != nil {
 			virtualAsst = &output[i]
 			break
 		}
@@ -291,7 +292,7 @@ func TestRoundFiles_FileDeduplication(t *testing.T) {
 
 	require.NotNil(t, virtualAsst)
 	// Should have only 1 tool_use block (deduplicated)
-	assert.Len(t, virtualAsst.Content, 1)
+	assert.Len(t, msgparam.Content(*virtualAsst), 1)
 }
 
 func TestRoundFiles_CurrentRoundFullyPreserved(t *testing.T) {
@@ -316,22 +317,22 @@ func TestRoundFiles_CurrentRoundFullyPreserved(t *testing.T) {
 	output := strategy.CompressV1(input)
 
 	// Historical: user text + virtual tools (no assistant text)
-	assert.Equal(t, "Old", output[0].Content[0].OfText.Text)
+	assert.Equal(t, "Old", msgparam.Content(output[0])[0].OfText.Text)
 	// Next should be virtual assistant with tool_use
-	assert.Equal(t, "assistant", string(output[1].Role))
-	assert.Len(t, output[1].Content, 1)
-	assert.Equal(t, VirtualReadTool, output[1].Content[0].OfToolUse.Name)
+	assert.Equal(t, "assistant", msgparam.Role(output[1]))
+	assert.Len(t, msgparam.Content(output[1]), 1)
+	assert.Equal(t, VirtualReadTool, msgparam.Content(output[1])[0].OfToolUse.Name)
 	// Virtual user with tool_result
-	assert.Equal(t, "user", string(output[2].Role))
+	assert.Equal(t, "user", msgparam.Role(output[2]))
 
 	// Current: fully preserved
-	assert.Equal(t, "New", output[3].Content[0].OfText.Text)
-	assert.Len(t, output[4].Content, 2) // thinking + tool_use
-	assert.Equal(t, "thinking", output[4].Content[0].OfThinking.Thinking)
-	assert.Len(t, output[5].Content, 1) // tool_result with actual content
+	assert.Equal(t, "New", msgparam.Content(output[3])[0].OfText.Text)
+	assert.Len(t, msgparam.Content(output[4]), 2) // thinking + tool_use
+	assert.Equal(t, "thinking", msgparam.Content(output[4])[0].OfThinking.Thinking)
+	assert.Len(t, msgparam.Content(output[5]), 1) // tool_result with actual content
 	// tool_result content is a union type, check the text field
-	require.NotNil(t, output[5].Content[0].OfToolResult)
-	assert.Equal(t, "result", output[5].Content[0].OfToolResult.Content[0].OfText.Text)
+	require.NotNil(t, msgparam.Content(output[5])[0].OfToolResult)
+	assert.Equal(t, "result", msgparam.Content(output[5])[0].OfToolResult.Content[0].OfText.Text)
 }
 
 func TestRoundFiles_EmptyMessages(t *testing.T) {
@@ -434,11 +435,11 @@ func TestTransformAPI_RoundOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// First round: thinking removed
-	assert.Len(t, req.Messages[1].Content, 1)
-	assert.Equal(t, "response", req.Messages[1].Content[0].OfText.Text)
+	assert.Len(t, msgparam.Content(req.Messages[1]), 1)
+	assert.Equal(t, "response", msgparam.Content(req.Messages[1])[0].OfText.Text)
 
 	// Current round: preserved
-	assert.Equal(t, "New", req.Messages[2].Content[0].OfText.Text)
+	assert.Equal(t, "New", msgparam.Content(req.Messages[2])[0].OfText.Text)
 }
 
 func TestTransformAPI_RoundFiles(t *testing.T) {

@@ -3,10 +3,11 @@ package transform
 import (
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -516,9 +517,11 @@ func validateAnthropicCommon(variant string, maxTokens int64, model string, temp
 }
 
 func (t *ConsistencyTransform) validateAnthropicV1(req *anthropic.MessageNewParams) error {
+	temp := request.SamplingTemperature(req)
+	topP := request.SamplingTopP(req)
 	return validateAnthropicCommon("v1", req.MaxTokens, string(req.Model),
-		req.Temperature.Valid(), req.Temperature.Value,
-		req.TopP.Valid(), req.TopP.Value)
+		temp.Valid(), temp.Value,
+		topP.Valid(), topP.Value)
 }
 
 // normalizeAnthropicBetaToolSchemas ensures tool schemas follow Anthropic beta's requirements
@@ -562,9 +565,11 @@ func (t *ConsistencyTransform) normalizeAnthropicBetaMessages(req *anthropic.Bet
 
 // validateAnthropicBeta validates the Anthropic beta request
 func (t *ConsistencyTransform) validateAnthropicBeta(req *anthropic.BetaMessageNewParams) error {
+	temp := request.SamplingTemperature(req)
+	topP := request.SamplingTopP(req)
 	return validateAnthropicCommon("beta", req.MaxTokens, string(req.Model),
-		req.Temperature.Valid(), req.Temperature.Value,
-		req.TopP.Valid(), req.TopP.Value)
+		temp.Valid(), temp.Value,
+		topP.Valid(), topP.Value)
 }
 
 // Constants

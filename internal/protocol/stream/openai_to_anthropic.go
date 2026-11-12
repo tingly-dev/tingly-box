@@ -3,7 +3,7 @@ package stream
 import (
 	"errors"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 )
 

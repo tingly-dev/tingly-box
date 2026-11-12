@@ -4,14 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tiktoken-go/tokenizer"
 )
 
 func EstimateAnthropicTokens(messages []anthropic.MessageParam) int64 {
 	var total int64
 	for _, msg := range messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			if block.OfText != nil {
 				total += EstimateTokensString(block.OfText.Text)
 			}
@@ -24,7 +25,7 @@ func EstimateAnthropicTokens(messages []anthropic.MessageParam) int64 {
 func EstimateBetaAnthropicTokens(messages []anthropic.BetaMessageParam) int64 {
 	var total int64
 	for _, msg := range messages {
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfText != nil {
 				total += EstimateTokensString(block.OfText.Text)
 			}
@@ -38,7 +39,7 @@ func EstimateBetaAnthropicTokens(messages []anthropic.BetaMessageParam) int64 {
 func EstimateAnthropicBetaMessagesTokens(messages []anthropic.BetaMessageParam) int64 {
 	var total int64
 	for _, msg := range messages {
-		for _, b := range msg.Content {
+		for _, b := range msgparam.BetaContent(msg) {
 			if b.OfText != nil {
 				total += EstimateTokensString(b.OfText.Text)
 				total += 5
@@ -80,10 +81,10 @@ func CountTokensViaTiktoken(req *anthropic.MessageCountTokensParams) (int, error
 
 	// Count tokens in regular messages
 	for _, msg := range messages {
-		totalTokens += countOrEstimate(string(msg.Role))
+		totalTokens += countOrEstimate(string(msgparam.Role(msg)))
 
 		// Count content blocks
-		for _, block := range msg.Content {
+		for _, block := range msgparam.Content(msg) {
 			if block.OfText != nil {
 				totalTokens += countOrEstimate(block.OfText.Text)
 			}
@@ -153,10 +154,10 @@ func CountBetaTokensViaTiktoken(req *anthropic.BetaMessageCountTokensParams) (in
 
 	// Count tokens in regular messages
 	for _, msg := range messages {
-		totalTokens += countOrEstimate(string(msg.Role))
+		totalTokens += countOrEstimate(string(msgparam.BetaRole(msg)))
 
 		// Count content blocks
-		for _, block := range msg.Content {
+		for _, block := range msgparam.BetaContent(msg) {
 			if block.OfText != nil {
 				totalTokens += countOrEstimate(block.OfText.Text)
 			}

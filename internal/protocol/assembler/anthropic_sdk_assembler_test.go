@@ -3,7 +3,7 @@ package assembler
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 // TestAnthropicSDKAssembler_New tests constructor

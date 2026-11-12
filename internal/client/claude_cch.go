@@ -7,7 +7,7 @@ import (
 	"math/bits"
 	"net/http"
 
-	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicOption "github.com/anthropics/anthropic-sdk-go/v2/option"
 )
 
 // cch: the billing header's request-body hash. ops emits the placeholder

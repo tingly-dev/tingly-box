@@ -3,8 +3,9 @@ package anthropic
 import (
 	"context"
 	"fmt"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 
-	sdk "github.com/anthropics/anthropic-sdk-go"
+	sdk "github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/vmodel"
@@ -68,7 +69,7 @@ func (m *TransformModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequ
 	text := ""
 	if len(req.Messages) > 0 {
 		last := req.Messages[len(req.Messages)-1]
-		for _, blk := range last.Content {
+		for _, blk := range msgparam.BetaContent(last) {
 			if blk.OfText != nil {
 				text += blk.OfText.Text
 			}

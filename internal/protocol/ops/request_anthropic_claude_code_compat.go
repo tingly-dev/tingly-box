@@ -1,6 +1,10 @@
 package ops
 
-import "github.com/anthropics/anthropic-sdk-go"
+import (
+	"github.com/anthropics/anthropic-sdk-go/v2"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
+)
 
 // ApplyClaudeCodeCompatRoleRewrite normalizes any "system" role inside the
 // Anthropic messages array so the request becomes valid for third-party
@@ -57,29 +61,29 @@ func ApplyClaudeCodeCompatRoleRewrite(req *anthropic.MessageNewParams) {
 		if len(pending) == 0 {
 			return
 		}
-		if n := len(out); n > 0 && out[n-1].Role == anthropic.MessageParamRoleUser {
-			out[n-1].Content = concatBlocks(out[n-1].Content, pending)
+		if n := len(out); n > 0 && msgparam.Role(out[n-1]) == "user" {
+			out[n-1] = msgparam.WithContent(out[n-1], concatBlocks(msgparam.Content(out[n-1]), pending))
 		} else {
-			out = append(out, anthropic.MessageParam{Role: anthropic.MessageParamRoleUser, Content: pending})
+			out = append(out, msgparam.New("user", pending))
 		}
 		pending = nil
 	}
 
 	for _, msg := range req.Messages {
 		switch {
-		case msg.Role == "system":
-			pending = append(pending, msg.Content...)
+		case msgparam.Role(msg) == "system":
+			pending = append(pending, msgparam.Content(msg)...)
 
-		case msg.Role == anthropic.MessageParamRoleUser:
+		case msgparam.Role(msg) == "user":
 			if len(pending) > 0 {
-				if n := len(out); n > 0 && out[n-1].Role == anthropic.MessageParamRoleUser {
+				if n := len(out); n > 0 && msgparam.Role(out[n-1]) == "user" {
 					// prev=user, next=user → collapse all three into the preceding turn.
-					out[n-1].Content = concatBlocks(concatBlocks(out[n-1].Content, pending), msg.Content)
+					out[n-1] = msgparam.WithContent(out[n-1], concatBlocks(concatBlocks(msgparam.Content(out[n-1]), pending), msgparam.Content(msg)))
 					pending = nil
 					continue
 				}
 				// prev=assistant/∅, next=user → merge forward into this user.
-				msg.Content = concatBlocks(pending, msg.Content)
+				msg = msgparam.WithContent(msg, concatBlocks(pending, msgparam.Content(msg)))
 				pending = nil
 			}
 			out = append(out, msg)
@@ -98,7 +102,7 @@ func ApplyClaudeCodeCompatRoleRewrite(req *anthropic.MessageNewParams) {
 // so callers can skip the allocate-and-rebuild pass entirely.
 func hasSystemRole(msgs []anthropic.MessageParam) bool {
 	for i := range msgs {
-		if msgs[i].Role == "system" {
+		if msgparam.Role(msgs[i]) == "system" {
 			return true
 		}
 	}
@@ -129,27 +133,27 @@ func ApplyClaudeCodeBetaCompatRoleRewrite(req *anthropic.BetaMessageNewParams) {
 		if len(pending) == 0 {
 			return
 		}
-		if n := len(out); n > 0 && out[n-1].Role == anthropic.BetaMessageParamRoleUser {
-			out[n-1].Content = concatBetaBlocks(out[n-1].Content, pending)
+		if n := len(out); n > 0 && msgparam.BetaRole(out[n-1]) == "user" {
+			out[n-1] = msgparam.WithBetaContent(out[n-1], concatBetaBlocks(msgparam.BetaContent(out[n-1]), pending))
 		} else {
-			out = append(out, anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleUser, Content: pending})
+			out = append(out, msgparam.NewBeta("user", pending))
 		}
 		pending = nil
 	}
 
 	for _, msg := range req.Messages {
 		switch {
-		case msg.Role == "system":
-			pending = append(pending, msg.Content...)
+		case msgparam.BetaRole(msg) == "system":
+			pending = append(pending, msgparam.BetaContent(msg)...)
 
-		case msg.Role == anthropic.BetaMessageParamRoleUser:
+		case msgparam.BetaRole(msg) == "user":
 			if len(pending) > 0 {
-				if n := len(out); n > 0 && out[n-1].Role == anthropic.BetaMessageParamRoleUser {
-					out[n-1].Content = concatBetaBlocks(concatBetaBlocks(out[n-1].Content, pending), msg.Content)
+				if n := len(out); n > 0 && msgparam.BetaRole(out[n-1]) == "user" {
+					out[n-1] = msgparam.WithBetaContent(out[n-1], concatBetaBlocks(concatBetaBlocks(msgparam.BetaContent(out[n-1]), pending), msgparam.BetaContent(msg)))
 					pending = nil
 					continue
 				}
-				msg.Content = concatBetaBlocks(pending, msg.Content)
+				msg = msgparam.WithBetaContent(msg, concatBetaBlocks(pending, msgparam.BetaContent(msg)))
 				pending = nil
 			}
 			out = append(out, msg)
@@ -165,7 +169,7 @@ func ApplyClaudeCodeBetaCompatRoleRewrite(req *anthropic.BetaMessageNewParams) {
 
 func hasBetaSystemRole(msgs []anthropic.BetaMessageParam) bool {
 	for i := range msgs {
-		if msgs[i].Role == "system" {
+		if msgparam.BetaRole(msgs[i]) == "system" {
 			return true
 		}
 	}

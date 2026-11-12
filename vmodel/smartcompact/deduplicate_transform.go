@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
@@ -48,7 +49,7 @@ func (t *DeduplicationTransform) Apply(ctx *transform.TransformContext) error {
 	lastBySignature := map[string]string{} // sig → last tool_call_id
 
 	for _, msg := range req.Messages {
-		for _, blk := range msg.Content {
+		for _, blk := range msgparam.BetaContent(msg) {
 			if blk.OfToolUse == nil {
 				continue
 			}
@@ -61,8 +62,8 @@ func (t *DeduplicationTransform) Apply(ctx *transform.TransformContext) error {
 
 	// Pass 2: for each tool_result, if its tool_call_id is NOT the latest for
 	// its signature, replace the output with a placeholder.
-	for i, msg := range req.Messages {
-		for j, blk := range msg.Content {
+	for _, msg := range req.Messages {
+		for _, blk := range msgparam.BetaContent(msg) {
 			if blk.OfToolResult == nil {
 				continue
 			}
@@ -75,7 +76,7 @@ func (t *DeduplicationTransform) Apply(ctx *transform.TransformContext) error {
 				continue // this is the latest — keep it
 			}
 			// Replace content with placeholder.
-			req.Messages[i].Content[j].OfToolResult.Content = []anthropic.BetaToolResultBlockParamContentUnion{
+			blk.OfToolResult.Content = []anthropic.BetaToolResultBlockParamContentUnion{
 				{OfText: &anthropic.BetaTextBlockParam{Text: dedupPlaceholder}},
 			}
 		}

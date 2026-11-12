@@ -4,7 +4,7 @@ go 1.26.0
 
 replace github.com/openai/openai-go/v3 => ./libs/openai-go
 
-replace github.com/anthropics/anthropic-sdk-go => ./libs/anthropic-sdk-go
+replace github.com/anthropics/anthropic-sdk-go/v2 => ./libs/anthropic-sdk-go
 
 replace google.golang.org/genai => ./libs/go-genai
 
@@ -32,7 +32,7 @@ require (
 )
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.57.0
+	github.com/anthropics/anthropic-sdk-go/v2 v2.7.0
 	github.com/openai/openai-go/v3 v3.42.0
 	google.golang.org/genai v1.63.0
 )

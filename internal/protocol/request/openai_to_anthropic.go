@@ -3,13 +3,14 @@ package request
 import (
 	"encoding/json"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/openai/openai-go/v3"
 	openaiparam "github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
@@ -104,10 +105,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 			}
 
 			if len(blocks) > 0 {
-				messages = append(messages, anthropic.BetaMessageParam{
-					Content: blocks,
-					Role:    anthropic.BetaMessageParamRoleAssistant,
-				})
+				messages = append(messages, msgparam.NewBeta("assistant", blocks))
 			}
 
 		case msg.OfTool != nil:

@@ -11,7 +11,7 @@ replace github.com/tingly-dev/tingly-box/imbot => ../imbot
 replace github.com/tingly-dev/tingly-box/remote => ../remote
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.57.0
+	github.com/anthropics/anthropic-sdk-go/v2 v2.7.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0

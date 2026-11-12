@@ -3,11 +3,12 @@ package request
 import (
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
+	"github.com/anthropics/anthropic-sdk-go/v2"
+	anthropicparam "github.com/anthropics/anthropic-sdk-go/v2/packages/param"
 	"github.com/openai/openai-go/v3"
 	openaiparam "github.com/openai/openai-go/v3/packages/param"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/protocol/msgparam"
 )
 
 func TestCacheControlProtocolFamilyPreservesMultiblockBoundaries(t *testing.T) {
@@ -202,10 +203,7 @@ func TestCacheControlProtocolFamilyToolUseFallbackPrefersSystemPrefix(t *testing
 		MaxTokens: 128,
 		System:    []anthropic.BetaTextBlockParam{{Text: "stable system"}},
 		Messages: []anthropic.BetaMessageParam{
-			{
-				Role:    anthropic.BetaMessageParamRoleAssistant,
-				Content: []anthropic.BetaContentBlockParamUnion{betaToolUse},
-			},
+			msgparam.NewBeta("assistant", []anthropic.BetaContentBlockParamUnion{betaToolUse}),
 		},
 	}
 
@@ -230,16 +228,16 @@ func requireAnthropicFamilyBoundaries(t *testing.T, out *anthropic.BetaMessageNe
 	require.Len(t, out.Messages, 2)
 
 	user := out.Messages[0]
-	require.Len(t, user.Content, 2)
-	require.NotNil(t, user.Content[0].OfText)
-	require.True(t, anthropicparam.IsOmitted(user.Content[0].OfText.CacheControl))
-	require.NotNil(t, user.Content[1].OfImage)
-	require.False(t, anthropicparam.IsOmitted(user.Content[1].OfImage.CacheControl))
+	require.Len(t, msgparam.BetaContent(user), 2)
+	require.NotNil(t, msgparam.BetaContent(user)[0].OfText)
+	require.True(t, anthropicparam.IsOmitted(msgparam.BetaContent(user)[0].OfText.CacheControl))
+	require.NotNil(t, msgparam.BetaContent(user)[1].OfImage)
+	require.False(t, anthropicparam.IsOmitted(msgparam.BetaContent(user)[1].OfImage.CacheControl))
 
 	assistant := out.Messages[1]
-	require.Len(t, assistant.Content, 1)
-	require.NotNil(t, assistant.Content[0].OfText)
-	require.Equal(t, assistantCacheControl, !anthropicparam.IsOmitted(assistant.Content[0].OfText.CacheControl))
+	require.Len(t, msgparam.BetaContent(assistant), 1)
+	require.NotNil(t, msgparam.BetaContent(assistant)[0].OfText)
+	require.Equal(t, assistantCacheControl, !anthropicparam.IsOmitted(msgparam.BetaContent(assistant)[0].OfText.CacheControl))
 }
 
 func TestCacheControlProtocolFamilyChatResponsesKeepsMultipleBreakpoints(t *testing.T) {
