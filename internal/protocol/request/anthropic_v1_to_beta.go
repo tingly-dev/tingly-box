@@ -3,12 +3,9 @@ package request
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
-	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
 	"github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
 )
 
 // ConvertAnthropicV1ToBetaRequest projects an Anthropic v1 MessageNewParams onto
@@ -52,10 +49,10 @@ func ConvertAnthropicV1ToBetaRequestWithError(req *anthropic.MessageNewParams) (
 }
 
 // ConvertAnthropicBetaToV1Request is the provider-edge downgrade: the inverse
-// projection for providers reached over the V1 wire. It is lossless for any
-// request that originated as V1, so it refuses, rather than silently drops,
-// what V1 cannot express: anthropic-beta header values and Beta-only
-// top-level fields.
+// projection for providers reached over the V1 wire. It is lossless: the SDK
+// preserves keys the target shape does not declare as param extras, so
+// Beta-only fields ride the V1 wire through instead of being dropped. Only
+// anthropic-beta header values have no V1 form at all and are refused.
 func ConvertAnthropicBetaToV1Request(req *anthropic.BetaMessageNewParams) (*anthropic.MessageNewParams, error) {
 	if req == nil {
 		return nil, nil
@@ -72,52 +69,5 @@ func ConvertAnthropicBetaToV1Request(req *anthropic.BetaMessageNewParams) (*anth
 	if err := json.Unmarshal(data, &v1); err != nil {
 		return nil, fmt.Errorf("unmarshal Anthropic Beta request as v1: %w", err)
 	}
-	if betaOnly := betaOnlyTopLevelFields(data); len(betaOnly) > 0 {
-		return nil, fmt.Errorf("downgrade Anthropic Beta request: Beta-only fields %v have no V1 form", betaOnly)
-	}
 	return &v1, nil
-}
-
-// betaOnlyTopLevelFields reports which top-level keys of the Beta request are
-// Beta-only, i.e. declared on the Beta params but not on the V1 params. The
-// SDK preserves unknown keys as param extras on decode (so they survive a
-// decode/re-encode round trip), so "compare before/after JSON" cannot detect
-// drops anymore; declared json tags are the source of truth for what each
-// shape carries natively. Keys the SDK models on neither struct (e.g. the
-// classic sampling fields, carried as extras) pass through untouched.
-func betaOnlyTopLevelFields(from []byte) []string {
-	v1 := declaredJSONFields(reflect.TypeOf(anthropic.MessageNewParams{}))
-	beta := declaredJSONFields(reflect.TypeOf(anthropic.BetaMessageNewParams{}))
-	var betaOnly []string
-	gjson.ParseBytes(from).ForEach(func(key, _ gjson.Result) bool {
-		name := key.String()
-		if beta[name] && !v1[name] {
-			betaOnly = append(betaOnly, name)
-		}
-		return true
-	})
-	return betaOnly
-}
-
-// declaredJSONFields returns the set of wire keys declared by structType's
-// json tags, including fields promoted from embedded structs.
-func declaredJSONFields(structType reflect.Type) map[string]bool {
-	known := map[string]bool{}
-	if structType.Kind() != reflect.Struct {
-		return known
-	}
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
-		if field.Anonymous && field.Type.Kind() == reflect.Struct {
-			for k := range declaredJSONFields(field.Type) {
-				known[k] = true
-			}
-			continue
-		}
-		tag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if tag != "" && tag != "-" {
-			known[tag] = true
-		}
-	}
-	return known
 }

@@ -425,9 +425,9 @@ func TestUpstreamProviderErrorsPassThrough(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, openAIErr.StatusCode)
 }
 
-// A V1-wire provider refuses Beta-only content before any request is sent,
-// rather than forwarding a silently truncated request.
-func TestUpstreamAnthropicV1RefusesBetaOnly(t *testing.T) {
+// A V1-wire provider carries Beta-only content as extras — the wire stays
+// lossless — but refuses anthropic-beta header values, which have no V1 form.
+func TestUpstreamAnthropicV1KeepsBetaOnlyAsExtras(t *testing.T) {
 	fake := newFakeProvider(t, scenario.TextScenario())
 	endpoint, err := NewAnthropic(fake.config(protocol.APIStyleAnthropic), AnthropicWireV1)
 	require.NoError(t, err)
@@ -436,10 +436,16 @@ func TestUpstreamAnthropicV1RefusesBetaOnly(t *testing.T) {
 		"messages":[{"role":"user","content":"hi"}],
 		"context_management":{"edits":[{"type":"clear_tool_uses_20250919"}]}}`), &req))
 
+	resp, err := endpoint.Complete(context.Background(), stage.Call{Request: &req})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	sent := fake.take()
+	require.NotEmpty(t, sent)
+	require.Contains(t, sent[0].Body, "context_management", "Beta-only fields ride the V1 wire as extras")
+
+	req.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaContextManagement2025_06_27}
 	_, err = endpoint.Complete(context.Background(), stage.Call{Request: &req})
-	require.ErrorContains(t, err, "context_management")
-	_, err = endpoint.Stream(context.Background(), stage.Call{Request: &req})
-	require.ErrorContains(t, err, "context_management")
+	require.ErrorContains(t, err, "anthropic-beta")
 	require.Empty(t, fake.take())
 }
 

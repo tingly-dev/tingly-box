@@ -256,6 +256,7 @@ func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req *anthrop
 
 // MessagesCountTokens counts tokens for a message request
 func (c *AnthropicClient) MessagesCountTokens(ctx context.Context, req *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error) {
+	StripCountTokensExtras(req)
 	return c.client.Messages.CountTokens(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
@@ -268,6 +269,7 @@ func betaQuery() anthropicOption.RequestOption {
 
 func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
+	StripCountTokensExtras(req)
 	betaOpts := []anthropicOption.RequestOption{betaQuery()}
 	if c.wire == WireV2 {
 		// V2 API has no ?beta=true routing; drop the classic query.
@@ -300,12 +302,13 @@ func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *ant
 	return c.client.Beta.Messages.NewStreaming(ctx, *req, betaOpts...)
 }
 
-// stripSamplingExtrasV2 drops temperature / top_p / top_k from the request's
-// extra fields on the V2 wire. The decode-preservation patch routes those
-// sampling params through extras (see internal/protocol/request/sampling_extra.go)
-// so the classic 2023-06-01 wire still carries them; the 2026-10-21 wire
-// rejects them outright, so the V2 client must not send them. No-op on the
-// classic client.
+// stripSamplingExtrasV2 applies the WireV2 message egress filter: the
+// 2026-10-21 wire rejects temperature / top_p / top_k, which the decode
+// preservation patch routes through extras (see
+// internal/protocol/request/sampling_extra.go). The classic 2023-06-01 wire
+// still carries them — and every other extra — untouched: ingress decoding is
+// lossless, so what each wire accepts is decided here, per wire, explicitly.
+// No-op on the classic client.
 func (c *AnthropicClient) stripSamplingExtrasV2(req interface {
 	ExtraFields() map[string]any
 	SetExtraFields(map[string]any)
@@ -314,6 +317,40 @@ func (c *AnthropicClient) stripSamplingExtrasV2(req interface {
 		return
 	}
 	stripSamplingExtras(req)
+}
+
+// countTokensExtras are the extras the count_tokens endpoints do not accept.
+// Ingress keeps them (decoding is lossless); they are stripped here so the
+// count_tokens wire stays minimal regardless of the messages body it came
+// from.
+var countTokensExtras = map[string]bool{
+	"stream":      true,
+	"max_tokens":  true,
+	"temperature": true,
+	"top_p":       true,
+	"top_k":       true,
+	"user":        true,
+}
+
+// StripCountTokensExtras removes messages-only fields from a count_tokens
+// request's extras. Runs on both wires: these fields never had a
+// count_tokens form.
+func StripCountTokensExtras(req interface {
+	ExtraFields() map[string]any
+	SetExtraFields(map[string]any)
+}) {
+	extras := req.ExtraFields()
+	if len(extras) == 0 {
+		return
+	}
+	stripped := make(map[string]any, len(extras))
+	for k, v := range extras {
+		if countTokensExtras[k] {
+			continue
+		}
+		stripped[k] = v
+	}
+	req.SetExtraFields(stripped)
 }
 
 // stripSamplingExtras is the unconditional form of stripSamplingExtrasV2, for

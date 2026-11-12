@@ -100,15 +100,16 @@ func TestAnthropicV1BetaWireEquivalence(t *testing.T) {
 	}
 }
 
-// The downgrade refuses what V1 cannot carry instead of dropping it, so a
-// Beta-only addition reaching a V1-wire provider surfaces as an error.
-func TestAnthropicBetaToV1DowngradeRefusesBetaOnly(t *testing.T) {
+// The downgrade keeps Beta-only fields — they ride the V1 wire as extras — but
+// refuses anthropic-beta header values, which have no V1 form at all.
+func TestAnthropicBetaToV1Downgrade(t *testing.T) {
 	var withField anthropic.BetaMessageNewParams
 	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","max_tokens":64,
 		"messages":[{"role":"user","content":"hi"}],
 		"mcp_servers":[{"type":"url","name":"s","url":"https://example.com/mcp"}]}`), &withField))
-	_, err := ConvertAnthropicBetaToV1Request(&withField)
-	require.ErrorContains(t, err, "mcp_servers")
+	back, err := ConvertAnthropicBetaToV1Request(&withField)
+	require.NoError(t, err)
+	require.Contains(t, canonicalWire(t, back), `"mcp_servers"`, "Beta-only fields must survive the downgrade as extras")
 
 	withBetas := anthropic.BetaMessageNewParams{
 		Model:     "m",
