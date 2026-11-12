@@ -35,6 +35,17 @@ it('keeps the coordinator idle when /clear is rejected', async () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
+it('keeps the coordinator idle when an older server accepts /clear synchronously', async () => {
+    m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
+        ? { project: p, threads: [], coordinator_busy: false }
+        : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
+    m.post.mockResolvedValue({ data: { id: 'main' }, response: new Response() });
+    render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'new session' }));
+    await waitFor(() => expect(m.post).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('defaults')).toHaveAttribute('data-busy', 'false'));
+});
+
 it('asks before retrying an interrupted coordinator input', async () => {
     m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
         ? { project: p, threads: [], coordinator_busy: false, coordinator_recovery: 'input-1' }

@@ -8,11 +8,8 @@ import (
 )
 
 func TestRotateRejectsCoordinator(t *testing.T) {
-	s, err := Open(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
-	p := &Project{Name: "Project"}
-	require.NoError(t, s.CreateProjectWithMain(p, &Thread{}, ""))
+	s := newStore(t)
+	p, _ := newProject(t, s, "Project")
 	th, err := s.GetThread(p.MainThreadID)
 	require.NoError(t, err)
 	require.ErrorContains(t, s.RotateThreadSession(th.ID, th.SessionID, "replacement", &ThreadEvent{}), "coordinator")

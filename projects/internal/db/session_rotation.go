@@ -22,7 +22,7 @@ func (s *Store) RotateThreadSession(threadID, expectedID, newID string, event *T
 			"session_id": newID, "turns": 0, "context_tokens": 0, "context_window": 0,
 			"last_turn_ms": 0, "last_turn_at": nil, "reported_model": "",
 		}
-		if thread.Agent != AgentLLM && (thread.Status == ThreadWaiting || thread.Status == ThreadFailed) {
+		if thread.Status == ThreadWaiting || thread.Status == ThreadFailed {
 			updates["status"], updates["wait_reason"] = ThreadIdle, ""
 			if thread.CommitsAhead > 0 && thread.MergedAt == nil {
 				updates["status"] = ThreadReady
@@ -34,9 +34,6 @@ func (s *Store) RotateThreadSession(threadID, expectedID, newID string, event *T
 		}
 		if res.RowsAffected != 1 {
 			return errors.New("session changed while starting a new session")
-		}
-		if err := tx.Where("thread_id = ?", threadID).Delete(&CoordinatorSettingsDelivery{}).Error; err != nil {
-			return err
 		}
 		payload, err := json.Marshal(map[string]string{"name": "clear", "state": "ok", "previous_session_id": expectedID, "session_id": newID})
 		if err != nil {
@@ -53,12 +50,5 @@ func (s *Store) HasCoordinatorSessionBoundary(threadID, sessionID string) (bool,
 	var count int64
 	// Retain recognition of boundaries written by the earlier /new version.
 	err := s.db.Model(&ThreadEvent{}).Where("thread_id = ? AND kind = ? AND content IN ? AND json_extract(payload, '$.session_id') = ?", threadID, EvCommand, []string{"clear", "new"}, sessionID).Count(&count).Error
-	return count != 0, err
-}
-
-// HasOpenCoordinatorInputs includes deliveries whose outcome is uncertain.
-func (s *Store) HasOpenCoordinatorInputs(projectID string) (bool, error) {
-	var count int64
-	err := s.db.Model(&CoordinatorInput{}).Where("project_id = ? AND state IN ?", projectID, []string{CoordinatorPending, CoordinatorRunning, CoordinatorUncertain}).Count(&count).Error
 	return count != 0, err
 }

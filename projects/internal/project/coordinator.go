@@ -46,10 +46,8 @@ type Coordinator struct {
 	// It must not block.
 	OnDecided func(db.ThreadEvent, Source)
 
-	// admission serializes input admission, recovery and session rotation.
-	admission sync.Mutex
-	mu        sync.Mutex
-	queues    map[string]*queue
+	mu     sync.Mutex
+	queues map[string]*queue
 	// choosing serialises Choose, so one card is answered once.
 	choosing sync.Mutex
 }
@@ -93,12 +91,6 @@ func (c *Coordinator) addEvent(projectID string, e *db.ThreadEvent) *db.ThreadEv
 // Post adds a user message to the project's conversation (its main thread)
 // and runs a coordinator turn. src says where the message came from.
 func (c *Coordinator) Post(projectID, text string, atts []Attachment, src Source) (*db.ThreadEvent, error) {
-	c.admission.Lock()
-	defer c.admission.Unlock()
-	return c.post(projectID, text, atts, src)
-}
-
-func (c *Coordinator) post(projectID, text string, atts []Attachment, src Source) (*db.ThreadEvent, error) {
 	p, err := c.store.GetProject(projectID)
 	if err != nil {
 		return nil, err
@@ -211,8 +203,6 @@ func (c *Coordinator) final(m *db.ThreadEvent) {
 }
 
 func (c *Coordinator) onReport(r Report) {
-	c.admission.Lock()
-	defer c.admission.Unlock()
 	p, err := c.store.GetProject(r.Thread.ProjectID)
 	ev := &db.ThreadEvent{
 		Kind:    db.EvThreadUpdate,
@@ -336,8 +326,6 @@ func (c *Coordinator) drainSessionInputs(ctx context.Context, projectID string) 
 // RecoverInput resumes the project queue after an explicit decision about an
 // interrupted input. Retrying may repeat tools that already ran.
 func (c *Coordinator) RecoverInput(projectID, inputID string, retry bool) error {
-	c.admission.Lock()
-	defer c.admission.Unlock()
 	if c.sessions == nil {
 		return errNoSessions
 	}
