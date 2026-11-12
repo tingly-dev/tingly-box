@@ -1,4 +1,5 @@
 import type { ThemePalette } from '../types';
+import type { ThemeTokens } from '../tokens';
 
 // DS theme color tokens — built from deepseek.com's actual brand blue
 // (`--ds-color-brand: #4d6bfe`, `-light-reverse`, `-deep` in its shipped CSS).
@@ -115,5 +116,68 @@ export const dsPalette: ThemePalette = {
       boxShadow: '0 2px 12px rgba(85, 128, 250, 0.16), 0 1px 4px rgba(0, 0, 0, 0.04)',
       emptyIconBg: 'rgba(85, 128, 250, 0.12)',
     },
+  },
+};
+
+export const dsTokens: ThemeTokens = {
+  accent: dsPrimary,
+  text: '#1e232c',
+  textMuted: '#565f70',
+  textHelper: '#565f70',
+  placeholder: '#565f70',
+  error: '#ef4444',
+  surface: {
+    card: 'rgba(255, 255, 255, 0.88)',
+    appBar: 'rgba(255, 255, 255, 0.82)',
+    menu: 'rgba(255, 255, 255, 0.97)',
+    popover: 'rgba(255, 255, 255, 0.97)',
+    dialog: 'rgba(255, 255, 255, 0.94)',
+    tooltip: '#ffffff',
+    drawer: 'rgba(255, 255, 255, 0.82)',
+    paper: 'rgba(255, 255, 255, 0.78)',
+  },
+  // Alphas raised ~1.4-1.6x over the original softened-blue values (see
+  // `.design/theme.md`) — buttons, selected rows and borders were reading as
+  // too low-contrast against the misty background.
+  border: {
+    card: 'rgba(85, 128, 250, 0.26)',
+    chrome: 'rgba(85, 128, 250, 0.26)',
+    menu: 'rgba(85, 128, 250, 0.26)',
+    tooltip: '#e2e6f5',
+    divider: 'rgba(85, 128, 250, 0.18)',
+  },
+  shadow: {
+    card: '0 2px 16px rgba(85, 128, 250, 0.16), 0 1px 6px rgba(0, 0, 0, 0.04)',
+    menu: '0 10px 24px rgba(30, 35, 44, 0.1)',
+    tooltip: '0 4px 12px rgba(30, 35, 44, 0.08)',
+    buttonHover: '0 2px 8px rgba(85, 128, 250, 0.26)',
+  },
+  input: {
+    bg: 'rgba(255, 255, 255, 0.75)',
+    hoverBg: 'rgba(255, 255, 255, 0.85)',
+    border: 'rgba(85, 128, 250, 0.32)',
+    hoverBorder: 'rgba(85, 128, 250, 0.48)',
+    disabledBg: 'rgba(255, 255, 255, 0.5)',
+    disabledBorder: 'rgba(85, 128, 250, 0.16)',
+    filledBg: 'rgba(255, 255, 255, 0.75)',
+    filledHoverBg: 'rgba(255, 255, 255, 0.85)',
+    filledFocusBg: 'rgba(255, 255, 255, 0.92)',
+  },
+  button: {
+    outlinedBorder: 'rgba(85, 128, 250, 0.4)',
+    outlinedText: dsPrimaryDark,
+    outlinedHoverBorder: 'rgba(85, 128, 250, 0.6)',
+    outlinedHoverBg: 'rgba(85, 128, 250, 0.12)',
+    gradient: [dsPrimary, dsPrimaryDark, dsPrimaryDark, dsPrimaryDark],
+  },
+  menuItem: {
+    hover: 'rgba(85, 128, 250, 0.12)',
+    selected: 'rgba(85, 128, 250, 0.22)',
+    selectedHover: 'rgba(85, 128, 250, 0.28)',
+  },
+  table: {
+    headBg: 'rgba(85, 128, 250, 0.09)',
+    cellBorder: 'rgba(85, 128, 250, 0.16)',
+    rowHover: 'rgba(85, 128, 250, 0.06)',
   },
 };

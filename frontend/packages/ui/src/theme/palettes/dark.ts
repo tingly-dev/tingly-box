@@ -1,4 +1,5 @@
 import type { ThemePalette } from '../types';
+import type { ThemeTokens } from '../tokens';
 
 // Dark-mode surface ladder — aligned with MUI's official dark theme
 // (~7% / 12% lightness) but keeps a subtle slate hue instead of pure neutral
@@ -92,5 +93,64 @@ export const darkPalette: ThemePalette = {
       boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
       emptyIconBg: 'rgba(148, 163, 184, 0.1)',
     },
+  },
+};
+
+export const darkTokens: ThemeTokens = {
+  accent: '#3b82f6',
+  text: '#f3f5f9',
+  textMuted: '#cbd5e1',
+  textHelper: '#94a3b8',
+  placeholder: '#94a3b8',
+  error: '#f87171',
+  surface: {
+    card: darkBgPaper,
+    appBar: darkBgPaper,
+    menu: darkBgRaised,
+    popover: darkBgRaised,
+    dialog: darkBgRaised,
+    tooltip: darkBgRaised,
+    drawer: darkBgPaper,
+  },
+  border: {
+    card: 'rgba(255, 255, 255, 0.08)',
+    chrome: 'rgba(255, 255, 255, 0.08)',
+    menu: 'rgba(255, 255, 255, 0.1)',
+    tooltip: 'rgba(255, 255, 255, 0.1)',
+    divider: 'rgba(255, 255, 255, 0.1)',
+    dialog: 'rgba(255, 255, 255, 0.08)',
+    popover: 'rgba(255, 255, 255, 0.1)',
+  },
+  shadow: {
+    card: '0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 4px 12px 0 rgba(0, 0, 0, 0.3)',
+    menu: '0 10px 32px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5)',
+    tooltip: '0 4px 12px rgba(0, 0, 0, 0.4)',
+    buttonHover: '0 1px 2px 0 rgba(0, 0, 0, 0.3)',
+  },
+  input: {
+    bg: darkInputBg,
+    hoverBg: darkInputBgHover,
+    border: darkInputBorder,
+    hoverBorder: darkInputBorderHover,
+    disabledBg: 'rgba(255, 255, 255, 0.02)',
+    disabledBorder: 'rgba(148, 163, 184, 0.18)',
+    filledBg: darkInputBg,
+    filledHoverBg: darkInputBgHover,
+    filledFocusBg: darkInputBgHover,
+  },
+  button: {
+    outlinedBorder: 'rgba(255, 255, 255, 0.23)',
+    outlinedText: '#e2e8f0',
+    outlinedHoverBorder: 'rgba(255, 255, 255, 0.4)',
+    outlinedHoverBg: 'rgba(255, 255, 255, 0.08)',
+    gradient: ['#3b82f6', '#2563eb', '#60a5fa', '#3b82f6'],
+  },
+  menuItem: {
+    hover: 'rgba(255, 255, 255, 0.08)',
+    selected: 'rgba(59, 130, 246, 0.24)',
+    selectedHover: 'rgba(59, 130, 246, 0.32)',
+  },
+  table: {
+    headBg: 'rgba(255, 255, 255, 0.03)',
   },
 };

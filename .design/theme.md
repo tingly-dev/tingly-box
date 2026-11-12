@@ -1,8 +1,14 @@
 # Theme system notes
 
-Design decisions for `frontend/src/theme/`, kept in one place since they all
-touch the same handful of files (`theme/palettes/*.ts`,
-`theme/components/*.ts`). Two entries so far.
+Design decisions for the theme (`frontend/packages/ui/src/theme/`, re-exported
+from `frontend/src/theme/`). Two entries so far.
+
+**Structure (2026-11, `visual-system.md` step 2).** A theme is its MUI palette
+plus a `ThemeTokens` table (`tokens.ts`), both in `palettes/<theme>.ts`. Every
+component override is written once in `components/factory.ts` and reads only
+tokens, so a styling change lands in all themes at once. `components/ds.ts`
+holds the few DeepSeek-only extras (misty background, brand-blue controls).
+`createAppTheme` deep-merges base → factory → extras → MUI locale.
 
 ## DS (DeepSeek) theme palette
 
