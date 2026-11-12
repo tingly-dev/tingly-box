@@ -11,6 +11,7 @@ import Transcript from '../../transcript/Transcript';
 import type { TranscriptBlock } from '../../transcript/model';
 import { ConversationPane } from './ConversationPane';
 import { ProjectsHostProvider } from '../../host/ProjectsHost';
+import { writeLocal } from '../../utils/storage';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 const composer = vi.hoisted(() => vi.fn());
@@ -58,7 +59,7 @@ describe('conversation presentation', () => {
 
     it('offers a way back to the latest messages after scrolling up', () => {
         show(props([event('assistant', 'A reply')]));
-        const scroller = screen.getByText('A reply').closest('[class*="MuiStack"]')!.parentElement!;
+        const scroller = screen.getByTestId('conversation-scroll');
         Object.defineProperties(scroller, {
             scrollHeight: { configurable: true, value: 1000 },
             clientHeight: { configurable: true, value: 300 },
@@ -89,17 +90,18 @@ describe('conversation presentation', () => {
         expect(writeText).toHaveBeenCalledWith('const value = 1;');
     });
 
-    it('preserves attachment-only messages, IM provenance, busy and error actions', () => {
+    it('preserves attachment-only messages, IM provenance and the live-turn line', () => {
         show({ ...props([
             event('user', '', { source: 'im', source_platform: 'telegram', source_chat_id: 'chat', payload: JSON.stringify({ attachments: [{ name: 'log.txt', path: 'uploads/log.txt', type: 'text/plain', size: 32 }] }) }),
             event('error', 'Connection failed'),
         ]), busy: true });
         expect(screen.getByText('log.txt')).toBeInTheDocument();
         expect(screen.getByTestId('entity-label')).toHaveTextContent('Telegram·chat');
-        expect(screen.getByRole('status')).toHaveTextContent('chat.thinking');
+        // The live turn reads through the shared transcript's working line.
+        expect(screen.getByRole('status')).toHaveTextContent('projects.transcript.verb_working');
         expect(within(screen.getByRole('status')).getByRole('progressbar')).toBeInTheDocument();
-        expect(screen.getByRole('alert')).toHaveTextContent('Connection failed');
-        expect(screen.getByRole('link', { name: 'connection.open' })).toHaveAttribute('href', '/settings');
+        // An error reads like a thread's: the same error block, no own actions row.
+        expect(screen.getByText('Connection failed')).toBeInTheDocument();
         expect(composer).toHaveBeenLastCalledWith(expect.objectContaining({ draftKey: 'coordinator', streaming: true, placeholder: 'conversation.queuePlaceholder' }));
     });
 
@@ -159,5 +161,52 @@ describe('conversation presentation', () => {
         expect(configured.context).toBeUndefined();
         await configured.onSend('Hello', []);
         expect(p.onSend).toHaveBeenCalledWith('Hello', []);
+    });
+
+    it('renders the coordinator tool calls as the shared tool rows a thread gets', () => {
+        const messages = [
+            event('user', 'Start work.'),
+            event('tool_use', 'mcp__tingly-projects__start_thread', { request_id: 'call-1', payload: '{"title": "Ship it"}' }),
+            event('tool_result', 'started thread 1234', { request_id: 'call-1' }),
+            event('assistant', 'Started a thread.'),
+        ];
+        show(props(messages));
+        // The call is a row of its own, named like the thread transcript names it.
+        expect(screen.getByText('mcp__tingly-projects__start_thread')).toBeInTheDocument();
+        expect(screen.getByText('Started a thread.')).toBeInTheDocument();
+        // The result stays a click away, not a second row.
+        expect(screen.queryByText('started thread 1234')).not.toBeInTheDocument();
+    });
+
+    it('folds a run of coordinator calls into the shared summary line', () => {
+        const messages = [
+            event('tool_use', 'mcp__tingly-projects__start_thread', { request_id: 'call-1', payload: '{"title": "Ship it"}' }),
+            event('tool_result', 'started thread 1234', { request_id: 'call-1' }),
+            event('tool_use', 'mcp__tingly-projects__list_threads', { request_id: 'call-2', payload: '{"limit": 5}' }),
+            event('tool_result', 'no threads yet', { request_id: 'call-2' }),
+        ];
+        show(props(messages));
+        // One run, folded like a thread's: the summary line stands in for the rows.
+        expect(screen.getByText((content) => typeof content === 'string' && content.toLowerCase().includes('projects.transcript.runother'))).toBeInTheDocument();
+        expect(screen.queryByText('mcp__tingly-projects__start_thread')).not.toBeInTheDocument();
+    });
+
+    it('hides the coordinator tool calls again in concise detail', () => {
+        writeLocal('conversation.messageDetail', 'concise');
+        const messages = [
+            event('tool_use', 'mcp__tingly-projects__start_thread', { request_id: 'call-1', payload: '{"title": "Ship it"}' }),
+            event('tool_result', 'started thread 1234', { request_id: 'call-1' }),
+            event('assistant', 'Started a thread.'),
+        ];
+        show(props(messages));
+        expect(screen.queryByText('mcp__tingly-projects__start_thread')).not.toBeInTheDocument();
+        expect(screen.getByText('Started a thread.')).toBeInTheDocument();
+    });
+
+    it('hands the stop request to the composer while a turn runs', () => {
+        const onStop = vi.fn().mockResolvedValue(undefined);
+        show({ ...props(), busy: true, onStop });
+        const configured = composer.mock.lastCall![0];
+        expect(configured).toMatchObject({ streaming: true, onStop });
     });
 });

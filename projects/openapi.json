@@ -820,6 +820,39 @@
         }
       }
     },
+    "/api/v1/projects/{id}/coordinator/stop": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery",
+        "description": "Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery",
+        "operationId": "apiV1ProjectsIdCoordinatorStopPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/events": {
       "get": {
         "tags": [

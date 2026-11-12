@@ -13,6 +13,8 @@ export interface TranscriptEntry {
     role?: string;
     content: string;
     kind?: string;
+    // The host event's id, when the host keeps one (its cards may act on it).
+    id?: string;
     request_id?: string;
     payload?: unknown;
     parent?: string;
@@ -133,7 +135,10 @@ export type TranscriptBlock =
     | {type: 'error'; message: TranscriptEntry}
     // A slash command's outcome (a compaction): one card whose payload is a CommandPayload.
     | {type: 'command'; message: TranscriptEntry}
-    | {type: 'system'; message: TranscriptEntry};
+    | {type: 'system'; message: TranscriptEntry}
+    // An entry of a kind this transcript doesn't model (a host's own
+    // conversation cards): passed through whole, for the host to render.
+    | {type: 'custom'; message: TranscriptEntry};
 
 // CommandPayload is what a command card shows (projects/internal/project
 // commandPayload). The token figures are only meaningful when
@@ -338,7 +343,11 @@ const buildBlocks = (messages: TranscriptEntry[], byParent: Map<string, Transcri
                 if (!m.content.startsWith(SESSION_INIT_PREFIX)) blocks.push({type: 'system', message: m});
                 break;
             default:
-                blocks.push({type: m.role === 'user' ? 'user' : 'assistant', message: m});
+                // A chat message, or a kind the transcript doesn't model (the
+                // host's own conversation cards): the host renders those.
+                blocks.push(m.role === 'user' || m.role === 'assistant'
+                    ? {type: m.role === 'user' ? 'user' : 'assistant', message: m}
+                    : {type: 'custom', message: m});
         }
     }
     return blocks;

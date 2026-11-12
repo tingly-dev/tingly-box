@@ -125,7 +125,8 @@ func (c *Coordinator) Busy(projectID string) bool {
 // built by NewService); a bare one in a test does not.
 func (c *Coordinator) live() bool { return c != nil && c.sessions != nil }
 
-// stop ends the project's running coordinator turn, if any.
+// stop ends the project's running coordinator turn, if any, as a pause or an
+// archive would: the input is left for the user to resolve.
 func (c *Coordinator) stop(p *db.Project) {
 	if !c.live() {
 		return
@@ -133,6 +134,35 @@ func (c *Coordinator) stop(p *db.Project) {
 	if main, err := c.store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
 		c.sessions.engine.Stop(main.SessionID)
 	}
+}
+
+// StopTurn ends the project's running coordinator turn at the user's request.
+// The message and anything the turn already produced stay in the conversation,
+// the input counts as handled, and the queue moves on to what is behind it —
+// no recovery is asked for.
+func (c *Coordinator) StopTurn(projectID string) error {
+	if !c.live() {
+		return errNoSessions
+	}
+	p, err := c.store.GetProject(projectID)
+	if err != nil {
+		return err
+	}
+	if !c.Busy(p.ID) {
+		return nil
+	}
+	if main, err := c.store.GetThread(p.MainThreadID); err == nil && main.SessionID != "" {
+		// With inputs waiting behind the turn, a stop may also land while one
+		// is claimed but not yet running; it is meant for that input. Without
+		// any, only a running turn is there to stop, and a stop arriving just
+		// after it ended must not swallow the next message.
+		if pending, err := c.store.PendingCoordinatorInputs(p.ID); err == nil && pending > 0 {
+			c.sessions.requestStop(main.SessionID)
+		} else {
+			c.sessions.stopRunning(main.SessionID)
+		}
+	}
+	return nil
 }
 
 func (c *Coordinator) shutdown(ctx context.Context) {
@@ -277,6 +307,14 @@ func (c *Coordinator) drainSessionInputs(ctx context.Context, projectID string) 
 			err = c.store.FinishCoordinatorInput(input.ID, true)
 		}
 		if err != nil {
+			if errors.Is(err, errStopTurn) {
+				// The user stopped the turn on purpose: the message and its
+				// partial reply stay, the queue serves what is behind it.
+				if ferr := c.store.FinishCoordinatorInput(input.ID, true); ferr != nil {
+					return ferr
+				}
+				continue
+			}
 			if finishErr := c.store.FinishCoordinatorInput(input.ID, false); finishErr != nil {
 				return finishErr
 			}

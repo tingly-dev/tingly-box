@@ -313,6 +313,25 @@ func TestCoordinatorRecoveryEndpoint(t *testing.T) {
 	require.Empty(t, after.Recovery)
 }
 
+// The stop endpoint answers with the refreshed detail: an idle coordinator
+// takes a stop as a no-op rather than an error.
+func TestCoordinatorStopEndpoint(t *testing.T) {
+	_, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Stoppable"}, &p))
+	var got struct {
+		Busy        bool   `json:"coordinator_busy"`
+		Recovery    string `json:"coordinator_recovery"`
+		Coordinator struct {
+			Status string `json:"status"`
+		} `json:"coordinator"`
+	}
+	require.Equal(t, 200, c.do("POST", "/projects/"+p.ID+"/coordinator/stop", nil, &got))
+	require.False(t, got.Busy)
+	require.Empty(t, got.Recovery)
+	require.Equal(t, db.ThreadIdle, got.Coordinator.Status)
+}
+
 func TestProjectDetailCarriesTheCoordinatorStatus(t *testing.T) {
 	store, c := newServer(t, commitAgents())
 	var p db.Project

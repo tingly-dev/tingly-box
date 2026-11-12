@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { Box, Button, ButtonBase, Chip, CircularProgress, Collapse, Paper, Stack, Typography } from '@mui/material';
-import { getReadableAccent } from '@tingly/ui/theme/status';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Button, ButtonBase, Chip, Collapse, Paper, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
-import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
 import { ImSourceBadge } from '../im/ImSourceBadge';
@@ -11,19 +9,22 @@ import { ThreadComposer } from '../ThreadComposer';
 import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
-import { showManagerMessage } from './messageDetail';
-import { Check, ChevronRight, DiffIcon, ErrorOutline, ExpandLess, ExpandMore, PlayArrow, Settings } from '../icons';
+import { useTranscriptHost } from '../../transcript/context';
+import { Check, ChevronRight, DiffIcon, ExpandLess, ExpandMore, PlayArrow, Settings } from '../icons';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
+import { Transcript, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
+import { threadTranscript } from './threadTranscript';
 import { radius } from '@tingly/ui/theme/radius';
-import { conversationText, messageSpacing, userBubble, userMessageWidth } from '../../transcript/conversationStyles';
 import { readLocal, writeLocal } from '../../utils/storage';
 
-function parse<T>(payload?: string): T | null {
+/** The cards' payloads arrive parsed (the transcript adapter reads them); accept both shapes. */
+function parse<T>(payload: unknown): T | null {
     if (!payload) return null;
+    if (typeof payload === 'object') return payload as T;
     try {
-        return JSON.parse(payload) as T;
+        return JSON.parse(String(payload)) as T;
     } catch {
         return null;
     }
@@ -88,12 +89,16 @@ interface UpdatePayload {
  * What a thread reported to the coordinator, as its own quiet entry where it
  * happened: the thread, how the turn ended, and the report one click away.
  * The thread's line above keeps the live state; this keeps the history.
+ * Concise detail drops the finished notifications, like a thread's transcript
+ * folds its noise away.
  */
-export function ThreadUpdateRow({ message, onOpen }: { message: ThreadEvent; onOpen: (id: string) => void }) {
+export function ThreadUpdateRow({ message, onOpen }: { message: TranscriptEntry; onOpen: (id: string) => void }) {
     const { t } = useTranslation('projects');
+    const { detail } = useTranscriptHost();
     const [open, setOpen] = useState(false);
     const pl = parse<UpdatePayload>(message.payload);
     if (!pl) return null;
+    if (detail === 'concise' && pl.kind === 'finished') return null;
     const hasText = message.content.trim() !== '';
     const toggle = () => hasText && setOpen((v) => !v);
     return (
@@ -145,7 +150,7 @@ interface Suggestion {
 }
 
 function SuggestionsCard({ message, threads, onStart, onOpen, onTasks, disabled }: {
-    message: ThreadEvent;
+    message: TranscriptEntry;
     threads: Map<string, Thread>;
     onStart: (messageId: string, indexes: number[]) => Promise<void>;
     onOpen: (id: string) => void;
@@ -160,7 +165,7 @@ function SuggestionsCard({ message, threads, onStart, onOpen, onTasks, disabled 
     const start = async (indexes: number[]) => {
         setBusy(true);
         try {
-            await onStart(message.id, indexes);
+            await onStart(message.id!, indexes);
         } finally {
             setBusy(false);
         }
@@ -207,7 +212,7 @@ interface DecisionPayload {
  * card keeps the pick and drops the buttons.
  */
 function DecisionCard({ message, onChoose, disabled }: {
-    message: ThreadEvent;
+    message: TranscriptEntry;
     onChoose: (messageId: string, index: number) => Promise<void>;
     disabled: boolean;
 }) {
@@ -219,7 +224,7 @@ function DecisionCard({ message, onChoose, disabled }: {
     const choose = async (index: number) => {
         setBusy(true);
         try {
-            await onChoose(message.id, index);
+            await onChoose(message.id!, index);
         } finally {
             setBusy(false);
         }
@@ -285,9 +290,11 @@ interface Props {
     onOpenTasks?: (threads: Thread[], anchor: HTMLElement) => void;
     onStartSuggestions: (messageId: string, indexes: number[]) => Promise<void>;
     onChooseDecision: (messageId: string, index: number) => Promise<void>;
+    /** Interrupts the running coordinator turn, like a thread's stop. */
+    onStop?: () => Promise<void>;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -300,6 +307,46 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         setSettingsOpen(!settingsOpen);
     };
 
+    // The conversation IS a thread's transcript: the same adapter and the
+    // same shared renderer a thread's panel uses. Only its own cards differ,
+    // and they render through the transcript's host hook.
+    const blocks = useMemo(
+        () => buildTranscript(threadTranscript(messages, busy, (e) => e.source === 'thread' ? t('thread.fromCoordinator') : undefined).entries),
+        [messages, busy, t],
+    );
+    const renderCustom = useMemo(() => (message: TranscriptEntry) => {
+        switch (message.kind) {
+            case 'thread_started': {
+                const ids = parse<{ thread_ids: string[] }>(message.payload)?.thread_ids ?? [];
+                return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                        {ids.map((id) => {
+                            const th = threads.get(id);
+                            return th ? <ThreadCard key={id} thread={th} onOpen={onOpenThread} onTasks={onOpenTasks} /> : null;
+                        })}
+                    </Box>
+                );
+            }
+            case 'suggestions':
+                return <SuggestionsCard message={message} threads={threads} onStart={onStartSuggestions} onOpen={onOpenThread} onTasks={onOpenTasks} disabled={disabled} />;
+            case 'decision':
+                return <DecisionCard message={message} onChoose={onChooseDecision} disabled={disabled} />;
+            case 'thread_update':
+                return <ThreadUpdateRow message={message} onOpen={onOpenThread} />;
+            case 'system':
+                // The transcript shows system notes as they read; the settings
+                // notice is the conversation's own word for it.
+                if (parse<{ settings_changed?: boolean }>(message.payload)?.settings_changed) {
+                    return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', my: 1.5 }}>{t('conversation.settingsChanged')}</Typography>;
+                }
+                return null;
+            default:
+                return null;
+        }
+    }, [threads, disabled, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, t]);
+    // A user message's files, fetched against the project like a thread's.
+    const attachments = useMemo<AttachmentsComponent>(() => ({ items, align }) => <AttachmentChips owner={{ projectId }} items={items} align={align} />, [projectId]);
+
     useEffect(() => {
         const el = scrollRef.current;
         if (el && stick.current) el.scrollTop = el.scrollHeight;
@@ -309,6 +356,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
             <Box
                 ref={scrollRef}
+                data-testid="conversation-scroll"
                 onScroll={() => {
                     const el = scrollRef.current;
                     if (el) {
@@ -318,7 +366,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                 }}
                 sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}
             >
-                <Stack spacing={messageSpacing} sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
+                <Box sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
                     {more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                     {messages.length === 0 && (
                         <Box sx={{ py: { xs: 3, md: 6 }, maxWidth: 650 }}>
@@ -337,75 +385,19 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                             </Box>
                         </Box>
                     )}
-                    {messages.map((m) => {
-                        if (m.kind !== 'user' && !showManagerMessage(m, detail)) return null;
-                        switch (m.kind) {
-                            case 'user': {
-                                const attachments = parse<{ attachments?: Attachment[] }>(m.payload)?.attachments ?? [];
-                                const showText = showManagerMessage(m, detail);
-                                if (!showText && attachments.length === 0) return null;
-                                return (
-                                    <Box key={m.id} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                        <Box sx={{ maxWidth: userMessageWidth }}>
-                                            <AttachmentChips owner={{ projectId }} items={attachments} />
-                                        </Box>
-                                        {showText && m.content.trim() !== '' && (
-                                            <Box sx={userBubble}>
-                                                <Typography variant="body1" sx={conversationText}>{m.content}</Typography>
-                                            </Box>
-                                        )}
-                                        {m.source === 'im'
-                                            ? <ImSourceBadge platform={m.source_platform ?? ''} chatId={m.source_chat_id ?? ''} />
-                                            : null}
-                                    </Box>
-                                );
-                            }
-                            case 'assistant':
-                                return <Box key={m.id}><Markdown text={m.content} conversation /></Box>;
-                            case 'file':
-                                return <Box key={m.id}>{m.source === 'thread' && <Typography variant="caption" color="text.secondary">{t('attachments.fromThread', { name: threads.get(m.source_ref ?? '')?.title || m.source_ref || '' })}</Typography>}<AttachmentChips owner={{ projectId }} items={parse<{ attachments?: Attachment[] }>(m.payload)?.attachments ?? []} align="flex-start" />{m.content && <Markdown text={m.content} conversation />}</Box>;
-                            case 'thread_started': {
-                                const ids = parse<{ thread_ids: string[] }>(m.payload)?.thread_ids ?? [];
-                                return (
-                                    <Box key={m.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                                        {ids.map((id) => {
-                                            const th = threads.get(id);
-                                            return th ? <ThreadCard key={id} thread={th} onOpen={onOpenThread} onTasks={onOpenTasks} /> : null;
-                                        })}
-                                    </Box>
-                                );
-                            }
-                            case 'suggestions':
-                                return <SuggestionsCard key={m.id} message={m} threads={threads} onStart={onStartSuggestions} onOpen={onOpenThread} onTasks={onOpenTasks} disabled={disabled} />;
-                            case 'decision':
-                                return <DecisionCard key={m.id} message={m} onChoose={onChooseDecision} disabled={disabled} />;
-                            // A thread's line above is its live state; each report is also its
-                            // own folded entry here, in the order things happened.
-                            case 'thread_update':
-                                return <ThreadUpdateRow key={m.id} message={m} onOpen={onOpenThread} />;
-                            case 'system':
-                                return <Typography key={m.id} variant="caption" color="text.secondary" sx={{ display: 'block', my: 1.5 }}>{parse<{ settings_changed?: boolean }>(m.payload)?.settings_changed ? t('conversation.settingsChanged') : m.content}</Typography>;
-                            case 'error':
-                                return (
-                                    <Stack key={m.id} role="alert" direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error') }}>
-                                        <ErrorOutline sx={{ fontSize: 18, mt: 0.25 }} />
-                                        <Box sx={{ minWidth: 0, flex: 1 }}>
-                                            <Typography variant="body2" sx={{ color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.content}</Typography>
-                                            <Button color="inherit" size="small" component={RouterLink} to="/settings" sx={{ px: 0 }}>{t('connection.open')}</Button>
-                                        </Box>
-                                    </Stack>
-                                );
-                            default:
-                                return null;
-                        }
-                    })}
-                    {busy && (
-                        <Stack role="status" direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
-                            <CircularProgress size={12} color="inherit" />
-                            <Typography variant="body2" sx={{ color: 'inherit' }}>{t('chat.thinking')}</Typography>
-                        </Stack>
+                    {messages.length > 0 && (
+                        <Transcript
+                            blocks={blocks}
+                            detail={detail}
+                            working={busy}
+                            expandAll={false}
+                            onRespond={async () => false}
+                            attachments={attachments}
+                            messageSource={(message) => message.imSource ? <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} /> : null}
+                            renderCustom={renderCustom}
+                        />
                     )}
-                </Stack>
+                </Box>
             </Box>
             <Box sx={{ px: 2, pb: 2, position: 'relative' }}>
                 {awayFromBottom && (
@@ -439,6 +431,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     disabled={disabled}
                     seed={seed}
                     streaming={busy}
+                    onStop={onStop}
                     leftSlot={modelControl}
                     model={model}
                     onModelChange={onModelChange}
