@@ -10,6 +10,8 @@ export { default as ProjectPage } from './pages/ProjectPage';
 export { default as WorkdirPage } from './pages/WorkdirPage';
 export { default as WorkspaceHomePage } from './pages/WorkspaceHomePage';
 export { default as ImSettingsPage } from './pages/ImSettingsPage';
+// The browser-notification engine's strings and routes, from the host surface.
+export { NotificationsBridge } from './notifications/NotificationsBridge';
 export {
     ProjectsSidebar,
     type ProjectsSidebarProps,

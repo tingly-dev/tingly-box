@@ -14,7 +14,8 @@
   },
   "types": "./src/embed.ts",
   "sideEffects": [
-    "./src/i18n/index.ts"
+    "./src/i18n/index.ts",
+    "./src/notifications/engine.ts"
   ],
   "scripts": {
     "dev": "vite --port 3010",

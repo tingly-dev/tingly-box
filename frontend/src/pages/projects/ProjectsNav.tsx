@@ -1,7 +1,7 @@
 // The Projects panel's sidebar: @tingly/projects' ProjectsSidebar (the user's
 // projects and working folders) with Tingly Box's host wiring.
 // Lazy-loaded by the nav (useActivityItems), like the Projects pages.
-import { ProjectsHostProvider, ProjectsSidebar } from '@tingly/projects';
+import { NotificationsBridge, ProjectsHostProvider, ProjectsSidebar } from '@tingly/projects';
 import { projectsHost } from './projectsHost';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,7 @@ const ProjectsNav = ({ onNavigate }: ProjectsNavProps) => {
     ];
     return (
     <ProjectsHostProvider host={projectsHost}>
+        <NotificationsBridge />
         <ProjectsSidebar showProjects showWorkdirs imRows={imRows} onNavigate={onNavigate} />
     </ProjectsHostProvider>
 );

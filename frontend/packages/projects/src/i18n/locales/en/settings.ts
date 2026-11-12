@@ -65,5 +65,13 @@ export const settings = {
         test: 'Send test message', testOk: 'Connected — reply in {{ms}} ms', testFailed: 'Test failed',
         testEndpoint: 'Endpoint', testModel: 'Model', testReply: 'Reply', testError: 'Error',
         appearanceTitle: 'Appearance', theme: 'Theme', language: 'Language',
+        notificationsTitle: 'Notifications',
+        notificationsIntro: 'A system notification when a thread needs you and this tab is in the background; clicking it opens the place that waits.',
+        notificationsEnable: 'Desktop notifications',
+        notificationsOn: 'On — only while this tab is hidden or minimised',
+        notificationsOff: 'Off',
+        notificationsScope: 'A question, an approval, a failed turn, a finished turn, a decision the coordinator wants.',
+        notificationsBlocked: 'The browser has notifications blocked for this site. Allow them in the browser’s site settings, then turn this on again.',
+        notificationsUnsupported: 'This browser cannot show desktop notifications.',
     },
 };
