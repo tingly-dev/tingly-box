@@ -579,17 +579,11 @@ func (h *Handler) update(c *gin.Context) {
 		repos := p.Repos
 		var err error
 		if req.Repos != nil {
-			// Preserve the legacy Git-only validation and then retain existing
-			// per-directory modes when resolving the resulting canonical paths.
-			var legacy []db.Repo
-			legacy, err = rt.ResolveRepos(c.Request.Context(), *req.Repos)
-			if err == nil {
-				specs := make([]rt.DirectorySpec, 0, len(legacy))
-				for _, repo := range legacy {
-					specs = append(specs, rt.DirectorySpec{Path: repo.Path})
-				}
-				repos, err = rt.ResolveDirectories(c.Request.Context(), specs, p.Repos, p.DisableWorktree)
+			specs := make([]rt.DirectorySpec, 0, len(*req.Repos))
+			for _, path := range *req.Repos {
+				specs = append(specs, rt.DirectorySpec{Path: path})
 			}
+			repos, err = rt.ResolveDirectories(c.Request.Context(), specs, p.Repos, p.DisableWorktree)
 		} else if req.Directories != nil {
 			repos, err = rt.ResolveDirectories(c.Request.Context(), *req.Directories, p.Repos, p.DisableWorktree)
 		}
@@ -682,23 +676,11 @@ func (h *Handler) update(c *gin.Context) {
 		}
 	}
 	if req.DisableWorktree != nil {
-		// Rows predating per-directory modes inherit the old global setting.
-		// Materialize that meaning before changing the compatibility switch.
 		for i := range p.Repos {
-			repo := &p.Repos[i]
-			if repo.WorkspaceMode == "" {
-				if repo.Kind == db.RepoDirectory || p.DisableWorktree {
-					repo.WorkspaceMode = db.WorkspaceShared
-				} else {
-					repo.WorkspaceMode = db.WorkspaceWorktree
-				}
-			}
-			if repo.Kind == "" || repo.Kind == db.RepoGit {
-				if *req.DisableWorktree {
-					repo.WorkspaceMode = db.WorkspaceShared
-				} else {
-					repo.WorkspaceMode = db.WorkspaceWorktree
-				}
+			if p.EffectiveRepo(p.Repos[i]).Kind == db.RepoDirectory || *req.DisableWorktree {
+				p.Repos[i].WorkspaceMode = db.WorkspaceShared
+			} else {
+				p.Repos[i].WorkspaceMode = db.WorkspaceWorktree
 			}
 		}
 		p.DisableWorktree = *req.DisableWorktree
