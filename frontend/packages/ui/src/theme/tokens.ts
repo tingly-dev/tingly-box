@@ -46,10 +46,8 @@ export interface ThemeTokens {
   };
 
   shadow: {
-    card: string;
     menu: string;
     tooltip: string;
-    buttonHover: string;
   };
 
   input: {

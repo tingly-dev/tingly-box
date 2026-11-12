@@ -97,10 +97,8 @@ export const lightTokens: ThemeTokens = {
     divider: '#e2e8f0',
   },
   shadow: {
-    card: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
     menu: '0 10px 24px rgba(15, 23, 42, 0.08)',
     tooltip: '0 4px 12px rgba(15, 23, 42, 0.08)',
-    buttonHover: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
   },
   input: {
     bg: 'transparent',

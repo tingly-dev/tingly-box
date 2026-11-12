@@ -106,7 +106,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                 <Typography
                     variant="h4"
                     sx={{
-                        fontWeight: 700,
+                        fontWeight: 600,
                         fontSize: { xs: '1.375rem', sm: '1.5rem' },
                         lineHeight: 1.2,
                         color: judged ? colors.text : 'text.primary',

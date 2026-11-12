@@ -147,10 +147,8 @@ export const dsTokens: ThemeTokens = {
     divider: 'rgba(85, 128, 250, 0.18)',
   },
   shadow: {
-    card: '0 2px 16px rgba(85, 128, 250, 0.16), 0 1px 6px rgba(0, 0, 0, 0.04)',
     menu: '0 10px 24px rgba(30, 35, 44, 0.1)',
     tooltip: '0 4px 12px rgba(30, 35, 44, 0.08)',
-    buttonHover: '0 2px 8px rgba(85, 128, 250, 0.26)',
   },
   input: {
     bg: 'rgba(255, 255, 255, 0.75)',

@@ -61,7 +61,7 @@ export function ThreadTitle({ title, onSave }: { title: string; onSave: (title: 
                     }
                 }}
                 inputProps={{ 'aria-label': t('thread.editTitle') }}
-                sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 650, color: 'text.primary', '& .MuiInputBase-input': { p: 0, borderBottom: 1, borderColor: 'divider' } }}
+                sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary', '& .MuiInputBase-input': { p: 0, borderBottom: 1, borderColor: 'divider' } }}
             />
         );
     }
@@ -80,7 +80,7 @@ export function ThreadTitle({ title, onSave }: { title: string; onSave: (title: 
             }}
             sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: 1, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}
         >
-            <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 650, color: 'text.primary' }}>{shown}</Typography>
+            <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{shown}</Typography>
             <Pencil className="edit-hint" sx={{ fontSize: 13, flexShrink: 0, opacity: 0, transition: 'opacity 0.15s', color: 'text.secondary' }} />
         </Box>
     );

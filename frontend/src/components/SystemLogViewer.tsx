@@ -209,7 +209,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     color: active ? 'white' : 'text.secondary',
                                     border: active ? `1px solid ${getLevelColor(level)}` : '1px solid',
                                     borderColor: active ? getLevelColor(level) : 'divider',
-                                    fontWeight: 'bold',
+                                    fontWeight: 600,
                                     fontSize: fontSizes.xs,
                                     height: 24,
                                     '&:hover': {
@@ -349,7 +349,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                     color: 'white',
                                                     fontSize: fontSizes.xs,
                                                     height: 20,
-                                                    fontWeight: 'bold',
+                                                    fontWeight: 600,
                                                 }}
                                             />
                                         </TableCell>
@@ -363,7 +363,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                         color: 'white',
                                                         fontSize: fontSizes.xs,
                                                         height: 20,
-                                                        fontWeight: 'bold',
+                                                        fontWeight: 600,
                                                     }}
                                                 />
                                             ) : (
@@ -385,7 +385,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 'bold', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 600, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                                                                     >
                                                                         ERROR: {typeof log.fields.error === 'object' && log.fields.error !== null ? JSON.stringify(log.fields.error) : String(log.fields.error)}
                                                                     </Typography>

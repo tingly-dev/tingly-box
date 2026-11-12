@@ -69,7 +69,7 @@ export default function HubPage() {
                 {/* Same brand mark the app's activity bar uses */}
                 <Box component="img" src="/assets/icon.svg" alt="" sx={{ width: 28, height: 28, borderRadius: 1 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.3 }} noWrap>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }} noWrap>
                         {t('hub.title')}
                     </Typography>
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

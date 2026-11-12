@@ -122,10 +122,8 @@ export const darkTokens: ThemeTokens = {
     popover: 'rgba(255, 255, 255, 0.1)',
   },
   shadow: {
-    card: '0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 4px 12px 0 rgba(0, 0, 0, 0.3)',
     menu: '0 10px 32px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5)',
     tooltip: '0 4px 12px rgba(0, 0, 0, 0.4)',
-    buttonHover: '0 1px 2px 0 rgba(0, 0, 0, 0.3)',
   },
   input: {
     bg: darkInputBg,

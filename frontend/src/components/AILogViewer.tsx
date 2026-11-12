@@ -337,7 +337,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, scenario }: Requ
                                                             size="small"
                                                             label={req.status ?? t('logViewer.error', { defaultValue: 'Error' })}
                                                             color={req.status != null && req.status >= 400 ? statusColor(req.status) : 'error'}
-                                                            sx={{ fontSize: fontSizes.micro, height: 20, fontWeight: 'bold' }}
+                                                            sx={{ fontSize: fontSizes.micro, height: 20, fontWeight: 600 }}
                                                         />
                                                     ) : (
                                                         <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{req.status}</Typography>

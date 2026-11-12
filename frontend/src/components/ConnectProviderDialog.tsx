@@ -93,7 +93,7 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
                 {icon}
             </Box>
             <Typography variant="subtitle2" sx={{
-                fontWeight: 700
+                fontWeight: 600
             }}>{title}</Typography>
             {typeof count === 'number' && (
                 <Chip label={count} size="small" sx={{height: 18, fontWeight: 600}}/>

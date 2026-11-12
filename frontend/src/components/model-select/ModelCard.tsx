@@ -179,7 +179,7 @@ export default function ModelCard({
                             px: 0.5,
                             py: 0.2,
                             borderRadius: 1,
-                            fontWeight: 'bold',
+                            fontWeight: 600,
                         }}
                     >
                         NEW

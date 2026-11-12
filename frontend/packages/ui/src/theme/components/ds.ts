@@ -8,7 +8,7 @@ export const dsExtraComponents: ThemeOptions['components'] = {
   MuiAlert: {
     styleOverrides: {
       root: {
-        borderRadius: 6,
+        borderRadius: 8,
         backgroundColor: 'rgba(255, 255, 255, 0.94)',
       },
     },

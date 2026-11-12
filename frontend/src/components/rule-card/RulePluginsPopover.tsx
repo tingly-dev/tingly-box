@@ -44,7 +44,7 @@ export const RulePluginsPopover: React.FC<RulePluginsPopoverProps> = ({
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: fontSizes.xs, color: 'text.secondary' }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: fontSizes.xs, color: 'text.secondary' }}>
                     {t('ruleHeader.plugins')} ({enabled.length})
                 </Typography>
             </Box>

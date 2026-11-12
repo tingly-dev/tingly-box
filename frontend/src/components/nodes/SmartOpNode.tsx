@@ -95,7 +95,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontSize: fontSizes.micro,
-                                fontWeight: 700,
+                                fontWeight: 600,
                                 flexShrink: 0,
                                 lineHeight: 1,
                             }}
@@ -107,7 +107,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     <Typography
                         sx={{
                             fontSize: fontSizes.xs,
-                            fontWeight: 700,
+                            fontWeight: 600,
                             color: 'text.secondary',
                             flexGrow: 1,
                             lineHeight: 1,

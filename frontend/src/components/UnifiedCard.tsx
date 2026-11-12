@@ -3,6 +3,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import type { ElementType, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import { EMPTY_SX } from '@/constants/defaults';
+import { radius } from '@tingly/ui/theme/radius';
 
 /**
  * Responsive column span for a card placed inside a `CardGrid` (MUI Grid v7).
@@ -161,7 +162,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
       sx={{
         ...getCardDimensions(size, width, height),
         ...cardVariants[variant],
-        borderRadius: 2,
+        borderRadius: radius.card,
         border: '1px solid',
         borderColor: 'divider',
         backgroundColor: 'background.paper',

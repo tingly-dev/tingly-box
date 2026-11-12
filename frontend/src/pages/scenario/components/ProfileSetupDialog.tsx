@@ -25,7 +25,7 @@ const Step: React.FC<{ n: number; done: boolean; active: boolean; loading?: bool
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             bgcolor: active ? 'primary.main' : 'action.disabledBackground',
             color: active ? 'primary.contrastText' : 'text.disabled',
-            fontSize: fontSizes.xs, fontWeight: 700,
+            fontSize: fontSizes.xs, fontWeight: 600,
         }}>{n}</Box>
     )
 );

@@ -195,7 +195,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     mb: 0.75
                 }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: fontSizes.xs, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: fontSizes.xs, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}

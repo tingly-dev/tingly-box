@@ -74,7 +74,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                         sx={{
                                             color: 'common.white',
                                             fontSize: '12px',
-                                            fontWeight: 'bold',
+                                            fontWeight: 600,
                                         }}
                                     />
                                 </Box>
@@ -96,7 +96,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                         sx={{
                                             color: 'common.white',
                                             fontSize: '12px',
-                                            fontWeight: 'bold',
+                                            fontWeight: 600,
                                         }}
                                     >
                                         !

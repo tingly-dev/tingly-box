@@ -53,7 +53,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 left: '50%',
                 transform: 'translateX(-50%)',
                 fontSize: fontSizes.micro,
-                fontWeight: 700,
+                fontWeight: 600,
                 letterSpacing: '0.02em',
                 color: 'primary.contrastText',
                 bgcolor: 'primary.main',
