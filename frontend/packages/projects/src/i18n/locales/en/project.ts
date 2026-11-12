@@ -137,7 +137,12 @@ export const project = {
         runtime: 'Thread runtime', runtimeCli: 'Threads run Claude Code at',
         runtimeMissing: 'Claude Code CLI was not found, so threads cannot run. Install it:',
         runtimeVia: 'Threads send model calls to', runtimeOwnLogin: 'Threads use Claude Code’s own login, because the model connection is not Anthropic-style.',
-        usageHelp: 'Token use reported by the threads. Each thread is a full Claude Code session; parallel threads use tokens faster.',
-        model: 'Model', thread: 'Thread', turns: 'Turns',
+        usage: {
+            help: 'Token use reported by the threads. Each thread is a full Claude Code session; parallel threads use tokens faster.',
+            totalTokens: 'Total tokens', input: 'Input', output: 'Output', threads: 'Threads',
+            models: 'Models', model: 'Model', thread: 'Thread', turns: 'Turns', share: 'Share', in: 'In', out: 'Out',
+            emptyTitle: 'No token use yet', emptyBody: 'Tokens reported by the threads appear here once they run.',
+            loading: 'Loading usage',
+        },
     },
 };

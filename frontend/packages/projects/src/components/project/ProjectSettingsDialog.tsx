@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack,
-    Switch, FormControlLabel, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Typography,
+    Alert, Autocomplete, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack,
+    Switch, FormControlLabel, Tab, TableHead, TableRow, Tabs, TextField, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { EmptyState } from '@tingly/ui';
 import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type Usage } from '../../client';
 import { TextEditDialog } from '../TextEditDialog';
 import { Add, Close, Delete, Description, Duplicate } from '../icons';
@@ -12,6 +13,8 @@ import { useModels } from '../../hooks/useModels';
 import { useNotify } from '../../hooks/useNotify';
 import { useProjectsHost } from '../../host/ProjectsHost';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
+import { usageEntries } from '../usage/usageData';
+import { UsageCard, UsageHeadCell, UsageRows, UsageStatStrip } from '../usage/UsageViews';
 import { RepoField, type RepoEntry } from './RepoField';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -256,26 +259,53 @@ function UsageTab({ projectId }: { projectId: string }) {
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/{id}/usage', { params: { path: { id: projectId } } })).then(setUsage).catch(() => {});
     }, [projectId]);
-    if (!usage) return null;
+    if (!usage) {
+        return (
+            <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}>
+                <CircularProgress size={24} aria-label={t('projectSettings.usage.loading')} />
+            </Box>
+        );
+    }
+    const { models, threads, totals } = usageEntries(usage);
+    if (models.length === 0 && threads.length === 0) {
+        return <EmptyState compact title={t('projectSettings.usage.emptyTitle')} description={t('projectSettings.usage.emptyBody')} />;
+    }
+    // Compact strings carry the tile and cells; the exact figures ride on
+    // title attributes for the hover.
+    const exact = (n: number) => ({ value: formatTokens(n), title: String(n) });
     return (
         <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">{t('projectSettings.usageHelp')}</Typography>
-            <Table size="small">
-                <TableHead><TableRow><TableCell>{t('projectSettings.model')}</TableCell><TableCell align="right">{t('overview.threads')}</TableCell><TableCell align="right">In</TableCell><TableCell align="right">Out</TableCell></TableRow></TableHead>
-                <TableBody>
-                    {usage.by_model.map((m) => (
-                        <TableRow key={m.model}><TableCell sx={mono}>{m.model || '—'}</TableCell><TableCell align="right">{m.threads}</TableCell><TableCell align="right">{formatTokens(m.input_tokens)}</TableCell><TableCell align="right">{formatTokens(m.output_tokens)}</TableCell></TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-            <Table size="small">
-                <TableHead><TableRow><TableCell>{t('projectSettings.thread')}</TableCell><TableCell align="right">{t('projectSettings.turns')}</TableCell><TableCell align="right">In</TableCell><TableCell align="right">Out</TableCell></TableRow></TableHead>
-                <TableBody>
-                    {usage.by_thread.map((u) => (
-                        <TableRow key={u.thread_id}><TableCell>{u.title}</TableCell><TableCell align="right">{u.turns}</TableCell><TableCell align="right">{formatTokens(u.input_tokens)}</TableCell><TableCell align="right">{formatTokens(u.output_tokens)}</TableCell></TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+            <Typography variant="body2" color="text.secondary">{t('projectSettings.usage.help')}</Typography>
+            <UsageStatStrip stats={[
+                { label: t('projectSettings.usage.totalTokens'), ...exact(totals.total) },
+                { label: t('projectSettings.usage.input'), ...exact(totals.input) },
+                { label: t('projectSettings.usage.output'), ...exact(totals.output) },
+                { label: t('projectSettings.usage.threads'), value: String(totals.threads) },
+            ]} />
+            <UsageCard title={t('projectSettings.usage.models')} count={models.length} maxHeight={280}>
+                <TableHead>
+                    <TableRow>
+                        <UsageHeadCell label={t('projectSettings.usage.model')} />
+                        <UsageHeadCell label={t('projectSettings.usage.threads')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.share')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.in')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.out')} numeric />
+                    </TableRow>
+                </TableHead>
+                <UsageRows rows={models} countTitle={t('projectSettings.usage.threads')} formatTokens={formatTokens} />
+            </UsageCard>
+            <UsageCard title={t('projectSettings.usage.threads')} count={threads.length} maxHeight={320}>
+                <TableHead>
+                    <TableRow>
+                        <UsageHeadCell label={t('projectSettings.usage.thread')} />
+                        <UsageHeadCell label={t('projectSettings.usage.turns')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.share')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.in')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.out')} numeric />
+                    </TableRow>
+                </TableHead>
+                <UsageRows rows={threads} countTitle={t('projectSettings.usage.turns')} formatTokens={formatTokens} />
+            </UsageCard>
         </Stack>
     );
 }
