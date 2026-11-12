@@ -2,6 +2,7 @@
 // nav-level consumers (layout/useActivityItems.tsx, the Power-ups menu,
 // components/dashboard/AgentQuickNav.tsx) can read this list cheaply.
 import { useCallback, useEffect, useState } from 'react';
+import { IconVolume } from '@tabler/icons-react';
 import { setSyncedItem } from '@/services/uiPrefs';
 import {
     CircleOutlined as IconCustom,
@@ -146,6 +147,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.embed',
         path: '/agent/embed',
         icon: (size) => <IconEmbedding sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'tts',
+        labelKey: 'audio.ttsTitle',
+        descKey: 'audio.ttsHint',
+        path: '/agent/tts',
+        icon: (size) => <IconVolume size={size} />,
         hideable: true,
     },
     {
