@@ -1,3 +1,5 @@
+import StatusDot from '@tingly/ui/components/StatusDot';
+import { quietDangerIconSx } from '@tingly/ui/theme/selection';
 import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
 import ConfirmPopover from '@/components/ConfirmPopover';
 import {capabilityEnabled} from '@/types/bot';
@@ -48,7 +50,14 @@ interface BotTableProps {
 // same across tables. A disabled bot is conveyed by the chip alone (default /
 // outlined), NOT by muting the whole row — ApiKeyTable doesn't hatch off rows,
 // and doing so here made the On and Off switches render inconsistently.
-const statusChipSx = {height: 22, minWidth: 40} as const;
+// A capability chip: a status dot carries on/off, the label stays neutral;
+// an off capability is dashed (it can still be opened to turn it on).
+const capabilityChipProps = (on: boolean) => ({
+    size: 'small' as const,
+    variant: 'outlined' as const,
+    icon: <StatusDot tone={on ? 'success' : 'muted'} sx={{ml: '8px !important', mr: '-2px !important'}}/>,
+    sx: {color: on ? 'text.primary' : 'text.secondary', borderStyle: on ? 'solid' : 'dashed'},
+});
 // Fixed table layout with explicit per-column widths (mirrors ApiKeyTable) so
 // column proportions stay stable regardless of content — auto layout let the
 // Pairing column balloon and starved the others. Widths sum to tableMinWidth
@@ -130,15 +139,6 @@ const BotTable: React.FC<BotTableProps> = ({
                                                     disabled={toggling}
                                                 />
                                             </Tooltip>
-                                            <Chip
-                                                label={isActive
-                                                    ? t('common.on', {defaultValue: 'On'})
-                                                    : t('common.off', {defaultValue: 'Off'})}
-                                                size="small"
-                                                color={isActive ? 'success' : 'default'}
-                                                variant={isActive ? 'filled' : 'outlined'}
-                                                sx={statusChipSx}
-                                            />
                                         </Stack>
                                     </TableCell>
                                     {/* Bot: 平台 · alias · id in one cell; the full uuid is the
@@ -149,8 +149,8 @@ const BotTable: React.FC<BotTableProps> = ({
                                     {/* Capability chips open the selected bot’s settings. */}
                                     <TableCell>
                                         <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap'}}>
-                                            <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
-                                            <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
+                                            <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} {...capabilityChipProps(isMounted)}/>
+                                            <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} {...capabilityChipProps(isNotified)}/>
                                         </Box>
                                     </TableCell>
                                     {/* Actions */}
@@ -162,7 +162,6 @@ const BotTable: React.FC<BotTableProps> = ({
                                                 <span>
                                                     <IconButton
                                                         size="small"
-                                                        color="primary"
                                                         aria-label={t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})}
                                                         onClick={() => onRestart(bot.uuid!)}
                                                         disabled={!isActive || toggling || restarting}
@@ -174,7 +173,6 @@ const BotTable: React.FC<BotTableProps> = ({
                                             <Tooltip title={t('remoteControl.card.edit', {defaultValue: 'Edit'})}>
                                                 <IconButton
                                                     size="small"
-                                                    color="primary"
                                                     onClick={() => onEdit(bot.uuid!, bot.platform!)}
                                                     disabled={toggling || restarting}
                                                 >
@@ -184,7 +182,7 @@ const BotTable: React.FC<BotTableProps> = ({
                                             <Tooltip title={t('remoteControl.card.delete', {defaultValue: 'Delete'})}>
                                                 <IconButton
                                                     size="small"
-                                                    color="error"
+                                                    sx={quietDangerIconSx}
                                                     onClick={(e) => handleDeleteClick(bot, e.currentTarget)}
                                                     disabled={toggling || restarting}
                                                 >
@@ -219,17 +217,16 @@ const BotTable: React.FC<BotTableProps> = ({
                                 </Box>
                                 <Stack direction="row" spacing={0.75} sx={{alignItems: 'center'}}>
                                     <Switch checked={isActive} onChange={() => onBotToggle(bot.uuid!, !isActive)} size="small" color="success" disabled={toggling}/>
-                                    <Chip label={isActive ? t('common.on', {defaultValue: 'On'}) : t('common.off', {defaultValue: 'Off'})} size="small" color={isActive ? 'success' : 'default'} variant={isActive ? 'filled' : 'outlined'} sx={statusChipSx}/>
                                 </Stack>
                             </Stack>
                             <Stack direction="row" spacing={0.75} sx={{mt: 1, flexWrap: 'wrap'}}>
-                                <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} size="small" variant={isMounted ? 'filled' : 'outlined'} color={isMounted ? 'primary' : 'default'}/>
-                                <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} size="small" variant={isNotified ? 'filled' : 'outlined'} color={isNotified ? 'primary' : 'default'}/>
+                                <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'remote_control')} : {component: RouterLink, to: '/remote-agent', clickable: true})} label={t('bots.card.remoteAgentChip', {defaultValue: 'Remote'})} {...capabilityChipProps(isMounted)}/>
+                                <Chip {...(onCapabilityClick ? {onClick: () => onCapabilityClick(bot, 'notify')} : {component: RouterLink, to: '/notify', clickable: true})} label={t('bots.card.notifyChip', {defaultValue: 'Notify'})} {...capabilityChipProps(isNotified)}/>
                             </Stack>
                             <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', justifyContent: 'flex-end', mt: 1.25, pt: 1, borderTop: 1, borderColor: 'divider'}}>
-                                <IconButton size="small" color="primary" aria-label={t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})} onClick={() => onRestart(bot.uuid!)} disabled={!isActive || toggling || restarting}><RestartIcon fontSize="small"/></IconButton>
-                                <IconButton size="small" color="primary" onClick={() => onEdit(bot.uuid!, bot.platform!)} disabled={toggling || restarting}><EditIcon fontSize="small"/></IconButton>
-                                <IconButton size="small" color="error" onClick={(e) => handleDeleteClick(bot, e.currentTarget)} disabled={toggling || restarting}><DeleteIcon fontSize="small"/></IconButton>
+                                <IconButton size="small" aria-label={t('remoteControl.card.restartBot', {defaultValue: 'Restart Bot'})} onClick={() => onRestart(bot.uuid!)} disabled={!isActive || toggling || restarting}><RestartIcon fontSize="small"/></IconButton>
+                                <IconButton size="small" onClick={() => onEdit(bot.uuid!, bot.platform!)} disabled={toggling || restarting}><EditIcon fontSize="small"/></IconButton>
+                                <IconButton size="small" sx={quietDangerIconSx} onClick={(e) => handleDeleteClick(bot, e.currentTarget)} disabled={toggling || restarting}><DeleteIcon fontSize="small"/></IconButton>
                             </Stack>
                         </Box>
                     );

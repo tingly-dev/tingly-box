@@ -28,3 +28,10 @@ export const softSelectedSx = (theme: Theme) => {
         '&:hover': { backgroundColor: c.bgHover },
     };
 };
+
+/** A row's delete / remove icon: neutral until hovered, red only then — the
+ *  confirmation that follows carries the warning, not the resting row. */
+export const quietDangerIconSx = {
+    color: 'text.secondary',
+    '&:hover': { color: 'error.main' },
+} as const;
