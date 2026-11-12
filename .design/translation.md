@@ -1,6 +1,6 @@
 # 统一 /translate：交集核心、并集扩展与首版契约
 
-Status: Proposed，设计讨论中；仅文档，尚未实现。
+Status: Prototype implemented：Hunyuan MT / Qwen-MT 文本适配已实现；并集扩展仍为 Proposed。
 Date: 2026-11-12（Asia/Shanghai）。
 Tracking: [TEP-2254](https://github.com/tingly-dev/tingly-box/issues/2254)。
 Evidence: [接口调研](../.research/translation-apis.md)。
@@ -9,7 +9,11 @@ Evidence: [接口调研](../.research/translation-apis.md)。
 
 已确认：以 `/translate` 为统一入口，接入自部署混元 MT、千问翻译及在线翻译服务；调研在 `.research/`，设计在 `.design/`。模型部署由用户在网关之外完成。
 
-下文的字段名、默认值、扩展模型、能力查询及错误语义均为设计建议；尤其“最大并”的类型结构不是已承诺发布的 API。实现继续暂停，先完成协议讨论。
+首版实验采用第 4 节的固定数组契约，默认别名为 `translate`。服务通过 `translation_backend` 显式选择 `hunyuan_mt` 或 `qwen_mt`；此元数据按 service 保存，独立于 provider 协议和部署别名。能力查询、完整错误规划及“最大并”扩展仍是设计建议。真实模型记录见 [实测报告](../.research/translation-smoke-test.md)。
+
+Python SDK 保留调用端 `Client.translate()` 与真实模型 `Server.openai_chat` serving 示例，安装和复现步骤见 [示例文档](../examples/translation/README.md)，SDK 边界见 [Python SDK 设计](python-sdk.md#translation)。
+
+本次仅实现 API-key/no-key OpenAI serving 入口及基础规则的负载均衡/逐项 failover；smart-routing 分区、OAuth、多字段鉴权、专用在线 MT HTTP 服务、HTML/术语/流式/文件和新 UI 仍未实现。未知语种与选项明确拒绝；不增加 guardrails 覆盖承诺。32 项、单项 32 KiB、总 body 256 KiB 是此次实验限制。
 
 ## 2. 三层结构
 
@@ -216,7 +220,7 @@ route 级展示：公共保证来自有效服务的交集；可选择能力来�
 3. 验证同一调用契约切换后端、team 鉴权、有序批量、配置允许的 failover 和取消。
 4. 按实际客户端需求增加兼容入口；再按独立设计扩展 controls、流式和文件任务。
 
-实现验收需要：去敏原生 fixtures、语言对/选项约束、失败索引、累计/增量流、部分执行的计费和取消等检查。真实账号连通与译文质量单独报告；mock 测试不能替代它们。当前只检查文档链接、示例 JSON 和差异，没有实现可运行端点。
+首版检查包含原生 MT 请求、鉴权/team 隔离、语言边界、批量、逐项 failover、不完整输出和取消。通过 Python Transformers 加载固定版本的 Hy-MT2-1.8B，并完成真实 `/translate` 往返。Qwen-MT 仅做 mock 协议检查，未调用真实云账号。流式/文件等后续功能仍需对应验证；这次真实模型 smoke check 不构成质量 benchmark。
 
 ## 9. UX 原则检查
 
@@ -227,8 +231,8 @@ route 级展示：公共保证来自有效服务的交集；可选择能力来�
 
 ## 10. 待决事项
 
-- 最终确认 v1 的 `text[]` 命名、默认别名及能力查询如何呈现。
-- 翻译 adapter/model family 元数据按模型、service 还是 provider 存储；必须允许同一凭据下多个模型能力不同。
+- 实验反馈后冻结 v1 的 `text[]`、默认别名及能力查询呈现。
+- 本版元数据选 service 级；需要补充 UI 编辑和 smart-routing 分区能力过滤。
 - 多目标下 terms、context 和术语资源的语言对绑定；默认不做有损降级。
 - 文件任务的资源授权、生命周期和结果保存，以及流式快照/修订事件契约。
 - 上线前确定实际 byte/item/token 限制；文件中没有借用某一服务的限额作为全网关标准。

@@ -1,7 +1,7 @@
 """Call tingly-box from Python.
 
-`Client.chat()` reaches one tb gateway endpoint
-(`/tingly/{scenario}/v1/chat/completions`). Which rule/model actually
+`Client.chat()` and `Client.translate()` reach the tb gateway's chat and
+translation endpoints. Which rule/model actually
 answers is tb's existing scenario+model routing — the SDK does not
 duplicate that logic.
 
@@ -17,8 +17,18 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from typing import TypedDict, cast
 
 DEFAULT_SCENARIO = "custom"
+
+
+class TranslationResult(TypedDict):
+    text: str
+
+
+class TranslationResponse(TypedDict):
+    model: str
+    translations: list[TranslationResult]
 
 
 class TinglyError(RuntimeError):
@@ -70,6 +80,28 @@ class Client:
         path = f"/tingly/{scenario or self.scenario}/v1/chat/completions"
         payload = {"model": model, "messages": messages, **extra}
         return self._request(path, self.token, method="POST", body=payload)
+
+    def translate(
+        self,
+        text: list[str],
+        target_lang: str,
+        source_lang: str = "auto",
+        model: str = "translate",
+        scenario: str | None = None,
+    ) -> TranslationResponse:
+        """Translate an ordered batch of independent texts through tb.
+
+        Language tags use BCP 47 (e.g. ``zh-Hans``); source may be ``auto``.
+        Returns the gateway JSON with an ordered ``translations`` array.
+        Routing and native model prompts belong to the gateway. A failed
+        batch raises ``TinglyError``; its body retains ``error.input_index``.
+        """
+        path = f"/tingly/{scenario or self.scenario}/v1/translate"
+        payload = {
+            "model": model, "text": text,
+            "source_lang": source_lang, "target_lang": target_lang,
+        }
+        return cast(TranslationResponse, self._request(path, self.token, method="POST", body=payload))
 
     def list_quota(self):
         """`GET /api/v1/provider-quota` — cached quota for every provider
