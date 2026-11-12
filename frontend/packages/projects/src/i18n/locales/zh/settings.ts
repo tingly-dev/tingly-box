@@ -1,0 +1,72 @@
+import type { Dict } from '../../dict';
+import type { settings as settingsEn } from '../en/settings';
+
+// Settings and admin surfaces: global settings, IM chat binding, the
+// directory picker and workdir/worktree notices.
+export const settings: Dict<typeof settingsEn> = {
+    // IM 聊天绑定到项目（TEP #2143，.design/projects-im.md）。
+    im: {
+        title: '绑定',
+        bots_one: '{{count}} 个机器人', bots_other: '{{count}} 个机器人',
+        tags: { label: '已绑定的 IM', bind: '绑定聊天', unbind: '解绑 {{chat}}', more: '+{{count}}', manage: 'IM 聊天' },
+        place: { none: '现在没有绑定', at: '现在绑定在 {{place}}', atFolder: '现在绑定在目录 {{place}}', elsewhere: '另一个项目' },
+        focus: { project: '项目', folder: '目录', coordinator: '当前与协调者对话', nextSession: '等待新会话', thread: '当前对话：#{{number}} · {{title}}', boundSession: '绑定会话：#{{number}} · {{title}}' },
+        bind: {
+            title: '把聊天绑定到 {{project}}', rebind: '将改绑', blocked: '已在访问控制中停用',
+            note: '一个聊天同一时间只绑定一个地方；改绑后旧线程会保留，不会删除。',
+            submit: '绑定', done: '{{chat}} 已绑定到 {{project}}', moved: '{{chat}} 已改绑到 {{project}}', failed: '绑定失败',
+            unbound: '已解绑 {{chat}}', unbindFailed: '解绑失败',
+            loadFailed: '读取绑定失败：{{error}}',
+            noBotsTitle: '还没有连接机器人', noBotsBody: '先连接一个机器人，再到这里把它的聊天绑定到项目。',
+            noChatsTitle: '没有可绑定的聊天', noChatsBody: '从想绑定的聊天里给机器人发一条消息，它就会出现在这里。', allBound: '已知的聊天都已绑定到这个项目。',
+            openSettings: '打开 IM 设置',
+        },
+        settings: {
+            title: '绑定', intro: '和你的项目对话的聊天机器人，以及每个聊天绑定在哪里。',
+            access: '访问控制', online: '已连接', offline: '未运行',
+            chat: '聊天', boundTo: '绑定到', status: '状态', action: '操作', notBound: '未绑定',
+            bindAction: '绑定', rebindAction: '改绑', rebindLabel: '把 {{chat}} 改绑到其他项目或目录',
+            statusOk: '可用', statusBlocked: '已停用', statusUnpaired: '等待配对',
+            noChats: '还没有聊天。给这个机器人发一条消息，聊天就会出现在这里。',
+            getStarted: '开始使用 IM', getStartedSteps: '1. 连接机器人。2. 给机器人发消息并授予访问权限。3. 在下方将聊天绑定到项目。', manageBots: '连接或管理机器人',
+            emptyTitle: '还没有 IM 机器人', emptyBody: '连接 Telegram、飞书等聊天机器人，再把它们的聊天绑定到项目。',
+            loadFailed: '读取机器人失败。',
+            pickProject: '把 {{chat}} 绑定到', pickPlaceholder: '选择项目或目录', noProjects: '先创建一个项目或目录。',
+            moveDone: '{{chat}} 已改绑到 {{project}}',
+        },
+        deleted: '（已删除）',
+        sourceFrom: '来自',
+        group: '{{platform}}群',
+        sourcePlatform: '来自 {{platform}}',
+        sourceBot: '来自 Bot',
+    },
+    directory: { places: '位置', selectedLocation: '所选目录', home: '主目录', parent: '上一级', currentLocation: '当前位置', folders: '目录', blocked: '服务器拒绝了目录请求，请检查连接或代理配置。', unauthorized: '登录已失效，请重新登录。', retry: '重试', title: '选择目录', browse: '浏览', select: '选择此目录', help: '浏览服务器用户主目录中的非隐藏目录。也可以手动输入其他路径。', loading: '正在加载…', empty: '这里没有目录。', failed: '无法浏览此目录。' },
+    worktreeNotice: { title: '项目线程的工作目录', description: '项目关联仓库后，新线程默认使用各自独立的 Git worktree 和分支。合并之前，线程的修改不会出现在原始检出目录中。', worktree: '独立 worktree（默认）', shared: '共享仓库和当前分支', changeLater: '以后可以在项目设置中修改；已有线程保留原来的工作目录。', continue: '继续并发送' },
+    workdir: {
+        title: '工作目录', add: '添加工作目录', actions: '目录操作', remove: '从侧栏移除',
+        removeTitle: '移除此目录？', removeConfirm: '移除',
+        removeRunning_one: '这会停止 {{name}} 中 {{count}} 个正在运行的会话，并把该目录从侧栏移除。历史会话会保留。',
+        removeRunning_other: '这会停止 {{name}} 中 {{count}} 个正在运行的会话，并把该目录从侧栏移除。历史会话会保留。',
+        addHelp: '填写运行本应用的这台机器上已有的目录。在这里开的会话直接在该目录里工作，不建 worktree。',
+        pathExample: '/目录路径',
+    },
+    settings: {
+        title: '设置', saved: '已保存',
+        connectionTitle: '模型连接',
+        connectionIntro: '项目协调者和对话使用这个连接；如果是 Anthropic 风格，线程也会使用它。默认是本地 Tingly Box，它会路由到你在其中配置的服务商。',
+        presets: '预设', preset: { tbAnthropic: 'Tingly Box · Anthropic', tbOpenAI: 'Tingly Box · OpenAI', anthropic: 'Anthropic API', openai: 'OpenAI API' },
+        apiStyle: 'API 风格', styleAnthropic: 'Anthropic Messages', styleOpenAI: 'OpenAI Chat Completions',
+        baseURL: 'Base URL', requestsGoTo: '请求发送到',
+        apiKey: 'API Key', apiKeyKeep: '已保存的 Key {{hint}}——留空则保持不变', apiKeyNone: '未保存 Key',
+        apiKeyHelp: '使用 Tingly Box 时，填入 Tingly Box 的模型 token。Key 仅保存在本地，且不会再次显示。',
+        clearKey: '清除', toggleKey: '显示或隐藏 Key',
+        defaultModel: '默认模型', defaultModelAuto: '留空：使用端点列出的第一个模型',
+        defaultModelFallback_one: '留空，将使用 {{model}}——该端点 {{count}} 个模型中的第一个',
+        defaultModelFallback_other: '留空，将使用 {{model}}——该端点 {{count}} 个模型中的第一个',
+        modelsFound_one: '该端点共 {{count}} 个模型', modelsFound_other: '该端点共 {{count}} 个模型',
+        modelsFailed: '无法获取模型列表：{{error}}', reloadModels: '重新加载模型',
+        test: '发送测试消息', testOk: '连接成功——{{ms}} ms 内回复', testFailed: '测试失败',
+        testEndpoint: '端点', testModel: '模型', testReply: '回复', testError: '错误',
+        appearanceTitle: '外观', theme: '主题', language: '语言',
+    },
+};
