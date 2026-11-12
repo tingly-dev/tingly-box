@@ -276,3 +276,22 @@ TextOutput 包含译文、可选的实际检测结果/字符计费及可空 toke
 缺失/数量不符/空输出均报错；错误不透出可能回显密钥的 vendor body，禁止跟随重定向。
 通用 LLM 支持合法语言标识不等于保证该模型掌握所有语言；质量、格式与抗注入能力
 仍需另行验证，拒答/工具调用/截断不能包装成成功。
+
+## 13. 与 Vision 对照后的待收敛点（尚未实施）
+
+源码事实与限制见 [结构对照](../.research/translation-vision-architecture.md)。
+本节为讨论方向，不改变第 12 节描述的当前代码与实测范围。
+
+- 保留 backend-neutral Translator，但让实现不再捕获 gin.Context。HTTP handler
+  保留解析、鉴权、规则选择、batch/failover 和写回；能力调用以普通 context 与
+  类型化输入/输出表达，由启动装配或明确工厂注入依赖。
+- 参照 visionproxy 的模型能力调用：翻译指令与译文校验属于翻译服务，模型调用复用
+  pool、已有协议转换和 transport。需要先识别可提取的非 HTTP 调用入口，避免在
+  translation handler 继续扩张多协议分发，也不要默认继承完整聊天/agent 策略。
+- 参照 imagegen 的特殊适配：普通模型走已有设施，native MT / traditional 服务
+  仅封装真实差异。能力模块保持叶子依赖；不能让 client 与能力服务相互 import。
+- 单独审视供给侧协议选择：APIStyle 用于整体 wire 协议还是特定操作差异，需按
+  provider 的真实接口决定。保留任意自部署/反代可显式声明的路径，不用 host 猜测
+  取代配置，也不引入新的 LB 字段或泛化配置袋。
+- 不在这次讨论中创建跨 vision/translation 的万能能力框架，不迁移已有 vision。
+  翻译的完整性与未知用量语义继续保留，不能照搬视觉代理的降级策略。
