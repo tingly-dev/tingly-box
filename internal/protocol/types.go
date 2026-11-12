@@ -15,9 +15,11 @@ type OpenAIConfig = publicprotocol.OpenAIConfig
 
 // Re-export constants for backward compatibility
 const (
-	APIStyleOpenAI    APIStyle = publicprotocol.APIStyleOpenAI
-	APIStyleAnthropic APIStyle = publicprotocol.APIStyleAnthropic
-	APIStyleGoogle    APIStyle = publicprotocol.APIStyleGoogle
+	APIStyleOpenAI         APIStyle = publicprotocol.APIStyleOpenAI
+	APIStyleAnthropic      APIStyle = publicprotocol.APIStyleAnthropic
+	APIStyleGoogle         APIStyle = publicprotocol.APIStyleGoogle
+	APIStyleLibreTranslate APIStyle = publicprotocol.APIStyleLibreTranslate
+	APIStyleDeepL          APIStyle = publicprotocol.APIStyleDeepL
 
 	TypeOpenAIChat      APIType = publicprotocol.TypeOpenAIChat
 	TypeOpenAIResponses APIType = publicprotocol.TypeOpenAIResponses

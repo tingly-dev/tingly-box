@@ -28,7 +28,9 @@ type Request struct {
 }
 
 type Result struct {
-	Text string `json:"text"`
+	Text                   string `json:"text"`
+	DetectedSourceLanguage string `json:"detected_source_language,omitempty"`
+	BilledCharacters       *int64 `json:"billed_characters,omitempty"`
 }
 
 type Response struct {
@@ -57,19 +59,20 @@ func (r *Request) Normalize() error {
 	}
 	var err error
 	if r.SourceLang != "auto" {
-		r.SourceLang, err = normalizeLanguage(r.SourceLang)
+		r.SourceLang, err = NormalizeLanguage(r.SourceLang)
 		if err != nil {
 			return fmt.Errorf("source_lang: %w", err)
 		}
 	}
-	r.TargetLang, err = normalizeLanguage(r.TargetLang)
+	r.TargetLang, err = NormalizeLanguage(r.TargetLang)
 	if err != nil {
 		return fmt.Errorf("target_lang: %w", err)
 	}
 	return nil
 }
 
-func normalizeLanguage(s string) (string, error) {
+// NormalizeLanguage canonicalizes a BCP 47 identifier without losing variants.
+func NormalizeLanguage(s string) (string, error) {
 	if s == "" || s == "auto" || len(s) > 63 || strings.Contains(s, "_") {
 		return "", errors.New("expected a BCP 47 language tag")
 	}

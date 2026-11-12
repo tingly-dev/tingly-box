@@ -81,7 +81,8 @@ print(text_of(tb.chat(model="gpt-4o", messages=[{"role": "user", "content": "hi"
 
 ### Translate
 
-Configure a cataloged translation model under an ordinary `translate` rule,
+Configure an LLM, native MT model or traditional translation service under an
+ordinary `translate` rule,
 then call:
 
 ```python
@@ -98,7 +99,9 @@ zero-based `input_index`. It doesn't build model prompts in the client.
 For an actual Tencent 1.8B model loaded through Transformers and served using
 `tingly.Server`, see the [complete setup](examples/translation/README.md).
 The [client example](examples/translation/client.py) calls the ordinary tb instance.
-No new SDK runtime dependency is needed for `Client.translate()`.
+No new SDK runtime dependency is needed for `Client.translate()`. Optional
+`detected_source_language` and `billed_characters` fields are present only when
+reported by the backend; traditional character billing is never converted to tokens.
 
 ### Quota
 

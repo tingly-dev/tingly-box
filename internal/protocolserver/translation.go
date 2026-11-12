@@ -14,8 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 
-	"github.com/tingly-dev/tingly-box/internal/catalog"
-	"github.com/tingly-dev/tingly-box/internal/forwarding"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/translation"
@@ -83,23 +82,21 @@ func (ph *ProtocolHandler) HandleTranslation(c *gin.Context) {
 		return
 	}
 	// A shallow view preserves the stored rule while narrowing all initial and
-	// fallback choices to verified native translation services for this pair.
+	// fallback choices to translation backends compatible with this pair.
 	view := *rule
 	view.Services = nil
 	for _, svc := range rule.GetActiveServices() {
-		if !translation.Supports(catalog.TranslationAdapter(svc.Model), req.SourceLang, req.TargetLang) {
-			continue
-		}
 		p, err := ph.deps.Config.GetProviderByUUID(svc.Provider)
-		if err != nil || p == nil || !p.Enabled || p.IsOAuth() || p.IsVirtual() || p.IsMultiFieldCredential() {
+		if err != nil {
 			continue
 		}
-		if p.ResolveStyle(protocol.APIStyleOpenAI).APIStyle == protocol.APIStyleOpenAI {
+		backend := ph.translationBackend(c, rule, p, svc.Model)
+		if backend != nil && backend.Supports(req.SourceLang, req.TargetLang) {
 			view.Services = append(view.Services, svc)
 		}
 	}
 	if len(view.Services) == 0 {
-		translationError(c, 400, "no_compatible_translation_service", "configure a cataloged translation model with a supported language pair and OpenAI serving endpoint", nil)
+		translationError(c, 400, "no_compatible_translation_service", "configure an LLM, native MT model or translation service supporting this language pair", nil)
 		return
 	}
 	applyRuleFlags(c, ResolveRuleFlags(c, rule))
@@ -128,21 +125,25 @@ func (ph *ProtocolHandler) HandleTranslation(c *gin.Context) {
 					translationError(c, 504, "request_canceled", "translation request canceled", &i)
 					return
 				}
-				backend := catalog.TranslationAdapter(model)
-				native, err := translation.ChatRequest(backend, model, text, req.SourceLang, req.TargetLang)
-				if err != nil {
-					translationError(c, 400, "unsupported_language_pair", err.Error(), &i)
+				backend := ph.translationBackend(c, rule, provider, model)
+				if backend == nil || !backend.Supports(req.SourceLang, req.TargetLang) {
+					translationError(c, 400, "unsupported_language_pair", "backend does not support this language pair", &i)
 					return
 				}
-				provider = provider.ResolveStyle(protocol.APIStyleOpenAI)
 				UpdateTrackingForFailover(c, provider, model)
-				wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, model)
-				resp, cancel, err := forwarding.ForwardOpenAIChat(forwarding.NewForwardContext(c.Request.Context(), provider), wrapper, native)
-				if cancel != nil {
-					defer cancel()
+				result, err := backend.Translate(c.Request.Context(), translation.TextInput{Text: text, SourceLang: req.SourceLang, TargetLang: req.TargetLang})
+				if result.Tokens != nil {
+					ph.trackUsageWithTokenUsage(c, result.Tokens, err)
 				}
 				if err != nil {
 					failure := protocol.ClassifyUpstreamFailure(err, 502)
+					var nativeError *client.TranslationHTTPError
+					if errors.As(err, &nativeError) {
+						failure.Status = nativeError.Status
+						if failure.Status < 400 {
+							failure.Status = 502
+						}
+					}
 					// An upstream failure carries no measured token counts. Report
 					// availability without inserting a fabricated zero-token measurement.
 					if ph.deps.HealthMonitor != nil {
@@ -162,20 +163,12 @@ func (ph *ProtocolHandler) HandleTranslation(c *gin.Context) {
 					translationError(c, status, "upstream_error", failure.Message, &i)
 					return
 				}
-				result, resultErr := translation.CompletionResult(resp)
-				// Only record token measurements when the provider supplies them.
-				if resp != nil && resp.JSON.Usage.Valid() && resp.Usage.JSON.PromptTokens.Valid() && resp.Usage.JSON.CompletionTokens.Valid() && resp.Usage.PromptTokens >= 0 && resp.Usage.CompletionTokens >= 0 {
-					ph.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(resp.Usage.PromptTokens), int(resp.Usage.CompletionTokens), int(resp.Usage.PromptTokensDetails.CachedTokens)), resultErr)
-				}
-				if resultErr != nil {
-					translationError(c, 502, "invalid_translation", resultErr.Error(), &i)
-					return
-				}
+
 				if ph.deps.HealthMonitor != nil {
 					ph.deps.HealthMonitor.ReportSuccess(loadbalance.FormatServiceID(provider.UUID, model))
 				}
 				loadbalance.RecordServiceSuccess(rule.UUID, loadbalance.FormatServiceID(provider.UUID, model))
-				c.JSON(200, result)
+				c.JSON(200, result.Result)
 			})
 		}()
 		if buffer.Status() != 200 {

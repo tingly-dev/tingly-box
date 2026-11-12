@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--scenario", default="custom")
     args = parser.parse_args()
     tb = Client(
-        os.environ.get("TINGLY_BASE_URL", "http://127.0.0.1:12580"),
+        os.environ.get("TINGLY_BASE_URL", "http://127.0.0.1:12680"),
         os.environ["TINGLY_TOKEN"],
         scenario=args.scenario,
     )

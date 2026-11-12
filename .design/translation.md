@@ -1,6 +1,6 @@
 # 统一 /translate：交集核心、并集扩展与首版契约
 
-Status: Prototype implemented：Hunyuan MT / Qwen-MT 文本适配已实现；并集扩展仍为 Proposed。
+Status: Prototype implemented：通用 LLM、原生 MT、LibreTranslate / DeepL 后端；并集扩展仍为 Proposed。
 Date: 2026-11-12（Asia/Shanghai）。
 Tracking: [TEP-2254](https://github.com/tingly-dev/tingly-box/issues/2254)。
 Evidence: [接口调研](../.research/translation-apis.md)。
@@ -9,11 +9,11 @@ Evidence: [接口调研](../.research/translation-apis.md)。
 
 已确认：以 `/translate` 为统一入口，接入自部署混元 MT、千问翻译及在线翻译服务；调研在 `.research/`，设计在 `.design/`。模型部署由用户在网关之外完成。
 
-首版实验采用第 4 节的固定数组契约，默认别名为 `translate`。模型语义复用 catalog 的模型能力描述，按实际选中的 upstream model ID 选择协议适配。LB Service 与规则 schema 不增加翻译字段。当前仅精确支持 `tencent/Hy-MT2-1.8B` 和 `qwen-mt-flash`；任意部署别名绑定暂不支持，不靠子串猜测模型家族。能力查询、完整错误规划及“最大并”扩展仍是设计建议。真实模型记录见 [实测报告](../.research/translation-smoke-test.md)。
+首版采用第 4 节的固定数组契约，默认路由别名 `translate`。后端统一实现 `Translator`：通用 LLM 不需要 catalog 登记；catalog 只选择混元、Qwen-MT 的特殊语义。传统服务直接使用原生 HTTP API，不包装成 Chat、不伪造上游模型。LB Service、规则及 provider 字段结构保持不变；沿既有 `api_style` 增加 `libretranslate` / `deepl` 协议值。
 
-Python SDK 保留调用端 `Client.translate()` 与真实模型 `Server.openai_chat` serving 示例，安装和复现步骤见 [示例文档](../sdk/python/examples/translation/README.md)，SDK 边界见 [Python SDK 设计](python-sdk.md#translation)。
+Python SDK 示例集中于 [示例目录](../sdk/python/examples/translation/README.md)，通过正常 tb 和管理 API 配置，网关新端口 12680；模型示例端口 18681 / 18683。当前后端设计以第 12 节为准，第 11 节保留第一次收敛的历史。
 
-本次仅实现 API-key/no-key OpenAI serving 入口及基础规则的负载均衡/逐项 failover；smart-routing 分区、OAuth、多字段鉴权、专用在线 MT HTTP 服务、HTML/术语/流式/文件和新 UI 仍未实现。未知语种与选项明确拒绝；不增加 guardrails 覆盖承诺。32 项、单项 32 KiB、总 body 256 KiB 是此次实验限制。
+当前支持普通 API-key/no-key 的 Chat / Responses / Anthropic 模型路径、native MT 的 OpenAI serving 路径和两种传统 HTTP 服务。smart-routing 分区、Google-native、OAuth、多字段凭据、vmodel、HTML/术语/流式/文件及新 UI 仍未支持。32 项、单项 32 KiB、总 body 256 KiB。详见 [后端实测记录](../.research/translation-backends-smoke-test.md)。
 
 ## 2. 三层结构
 
@@ -247,3 +247,32 @@ route 级展示：公共保证来自有效服务的交集；可选择能力来�
 当前模型 ID 采用 catalog 精确匹配。公共 `model` 路由别名仍可自由配置；
 上游部署别名→模型族绑定暂不支持，未知模型在调用前拒绝。这个限制明确替代
 早期任意部署别名的实验承诺，后续应在供给侧模型扩展中解决。
+
+## 12. 后端接口与实现（当前）
+
+`Translator` 绑定一次路由选中的后端，暴露 `Supports(source, target)` 与
+`Translate(ctx, TextInput) (TextOutput, error)`。TextInput 只有原文和语言；
+TextOutput 包含译文、可选的实际检测结果/字符计费及可空 token 用量。
+批量、选路、逐项 failover、鉴权/team scope 在接口之外；每次回退重新选择实现。
+
+- 通用 LLM：构造翻译指令与独立 user 文本，复用现有 attempt plan、transform、
+  输出限制、协议转换、池化 client 与 forwarding；无需逐模型登记，不运行 agent 工具循环。
+- 原生 MT：catalog 选择特殊模板/translation_options。避免通用 chat 变换注入不支持的
+  system 消息；调用仍走原有模型 client/forwarding。未登记的部署别名按普通 LLM 处理，
+  不猜测 MT 家族；需要原生语义时必须使用精确 catalog ID。
+- 传统服务：`api_style=libretranslate|deepl` 声明原生 wire 协议；连接、代理、规则
+  headers、超时复用现有传输设施。服务无上游模型，现有 service.model 可为空，HTTP
+  请求里不携带 model。API key 来自 provider，LibreTranslate 放 body，DeepL 用专用头。
+
+没有新增 TranslationBackend LB 字段，也不引入第二套 credential、路由或 agent 系统。
+角色分离仍是 catalog 管特殊模型能力、protocol 管语义、client 管传输。
+传统服务可配置在 T0、LLM 在 T1，回退只使用明确配置且语种兼容的候选。
+
+实际 token 可空；供应商若报告 billed_characters，则作为响应的可选独立字段保留，
+不把本地字符长度冒充计费量或换成 token。现有 usage DB 仍按模型 token 存储，
+未实现传统服务的持久化计费和成本计算，不能宣称成本统计已经统一。
+
+检测语言仅在服务实际报告时返回并规范化为 BCP 47。传统 HTTP 业务失败、非 2xx、
+缺失/数量不符/空输出均报错；错误不透出可能回显密钥的 vendor body，禁止跟随重定向。
+通用 LLM 支持合法语言标识不等于保证该模型掌握所有语言；质量、格式与抗注入能力
+仍需另行验证，拒答/工具调用/截断不能包装成成功。

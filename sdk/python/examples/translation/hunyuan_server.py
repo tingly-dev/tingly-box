@@ -18,11 +18,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="tencent/Hy-MT2-1.8B")
     parser.add_argument("--revision", help="Pin the Hub commit, or pass a local snapshot to --model")
-    parser.add_argument("--served-model-name", default="tencent/Hy-MT2-1.8B")
-    parser.add_argument("--port", type=int, default=18081)
+    parser.add_argument("--served-model-name", help="Defaults to the model ID")
+    parser.add_argument("--generic-chat", action="store_true", help="Allow system/user messages for a general instruction LLM")
+    parser.add_argument("--port", type=int, default=18681)
     parser.add_argument("--dtype", choices=["float32", "bfloat16"], default="bfloat16")
     parser.add_argument("--max-new-tokens", type=int, default=128)
     args = parser.parse_args()
+    args.served_model_name = args.served_model_name or args.model
     torch.set_num_threads(4)
     tokenizer = AutoTokenizer.from_pretrained(args.model, revision=args.revision)
     loaded_model = AutoModelForCausalLM.from_pretrained(
@@ -36,7 +38,10 @@ def main():
     def generate(messages, model=None, stream=False):
         if model != args.served_model_name or stream:
             raise ValueError("unsupported model or streaming")
-        if len(messages) != 1 or messages[0].get("role") != "user" or not isinstance(messages[0].get("content"), str):
+        if args.generic_chat:
+            if not messages or any(m.get("role") not in ("system", "user", "assistant") or not isinstance(m.get("content"), str) for m in messages):
+                raise ValueError("expected text chat messages")
+        elif len(messages) != 1 or messages[0].get("role") != "user" or not isinstance(messages[0].get("content"), str):
             raise ValueError("expected one user text message")
         with lock, torch.inference_mode():
             # Tokenize the rendered template explicitly for consistent SDK versions.

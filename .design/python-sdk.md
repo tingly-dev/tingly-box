@@ -204,6 +204,10 @@ finish status. No new Server endpoint or external serving framework is needed. E
 colocated in `sdk/python/examples/translation/`; `setup.py` registers the provider
 and rule through ordinary tb management APIs, as the existing E2E harness does.
 `sdk/python/examples/translation/client.py` retains the caller side of the same path.
+The same serving example accepts `--generic-chat` for an ordinary instruction LLM;
+setup supports existing `api_style` values and native `libretranslate` / `deepl`
+services without requiring a fabricated upstream model. Optional detection and
+billed-character response fields are annotated with stdlib TypedDict metadata.
 
 ### Quota — the one generated surface
 

@@ -22,6 +22,8 @@ import sys
 import tempfile
 import time
 import unittest
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -53,6 +55,7 @@ class EndToEndThroughTB(unittest.TestCase):
     def setUpClass(cls):
         cls.seen = {}
         cls.plugin_base = cls.start_plugins()
+        cls.native_base = cls.start_native_translation()
         cls.confdir = tempfile.mkdtemp(prefix="tingly-e2e-")
         try:
             cls.start_tb()
@@ -72,7 +75,34 @@ class EndToEndThroughTB(unittest.TestCase):
                 tb.kill()
             cls.tb_log.close()
         shutil.rmtree(cls.confdir, ignore_errors=True)
+        if getattr(cls, "native_server", None):
+            cls.native_server.shutdown()
+            cls.native_server.server_close()
         stop_default()
+
+    @classmethod
+    def start_native_translation(cls):
+        class Native(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                cls.seen["native_translation"] = (self.path, dict(self.headers), body)
+                if self.path == "/translate":
+                    result = {"translatedText": "传统译文", "detectedLanguage": {"language": "en"}}
+                else:
+                    result = {"translations": [{"text": "native result", "billed_characters": 5}]}
+                data = json.dumps(result).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        cls.native_server = HTTPServer(("127.0.0.1", 0), Native)
+        threading.Thread(target=cls.native_server.serve_forever, daemon=True).start()
+        return f"http://127.0.0.1:{cls.native_server.server_port}"
 
     @classmethod
     def start_plugins(cls) -> str:
@@ -94,6 +124,11 @@ class EndToEndThroughTB(unittest.TestCase):
         def answer(messages, system=None):
             cls.seen["anthropic"] = (messages, system)
             return "native: " + text_in(messages[-1]["content"])
+
+        @tingly.openai_chat("sdk-generic-llm")
+        def generic_translate(messages):
+            cls.seen["generic_translation"] = messages
+            return "通用译文"
 
         @tingly.openai_chat("tencent/Hy-MT2-1.8B")
         def translate(messages):
@@ -147,6 +182,7 @@ class EndToEndThroughTB(unittest.TestCase):
         }, cls.admin)
         for scenario, tb_model, provider_uuid, plugin_model in [
             ("custom", "translate", cls.provider_uuid, "tencent/Hy-MT2-1.8B"),
+            ("custom", "translate-llm", cls.provider_uuid, "sdk-generic-llm"),
             ("imagegen", "my-image", cls.provider_uuid, "fake-image"),
             ("openai", "my-chat", cls.provider_uuid, "fake-chat"),
             ("anthropic", "my-chat", cls.provider_uuid, "fake-chat"),
@@ -155,6 +191,16 @@ class EndToEndThroughTB(unittest.TestCase):
             post_json(f"{cls.tb_base}/api/v1/rule", {
                 "scenario": scenario, "request_model": tb_model, "response_model": tb_model, "active": True,
                 "services": [{"provider": provider_uuid, "model": plugin_model, "weight": 1, "active": True}],
+            }, cls.admin)
+
+        for style in ("libretranslate", "deepl"):
+            native = post_json(f"{cls.tb_base}/api/v2/providers", {
+                "name": "native-" + style, "api_base": cls.native_base,
+                "api_style": style, "token": "native-key",
+            }, cls.admin)["data"]
+            post_json(f"{cls.tb_base}/api/v1/rule", {
+                "scenario": "custom", "request_model": style, "active": True,
+                "services": [{"provider": native["uuid"], "model": "", "active": True, "weight": 1}],
             }, cls.admin)
 
     def test_tb_discovers_every_plugin_model(self):
@@ -168,6 +214,28 @@ class EndToEndThroughTB(unittest.TestCase):
         self.assertEqual(len(self.seen["translation"]), 1)
         self.assertEqual(self.seen["translation"][0]["role"], "user")
         self.assertIn("Save changes", self.seen["translation"][0]["content"])
+
+    def test_translation_generic_llm_through_normal_tb(self):
+        client = tingly.Client(self.tb_base, self.gateway["Authorization"].removeprefix("Bearer "))
+        result = client.translate(["hello"], "zh-Hans", model="translate-llm")
+        self.assertEqual(result["translations"], [{"text": "通用译文"}])
+        self.assertEqual(self.seen["generic_translation"][0]["role"], "system")
+        self.assertEqual(self.seen["generic_translation"][1]["content"], "hello")
+
+    def test_translation_native_services_through_normal_tb(self):
+        client = tingly.Client(self.tb_base, self.gateway["Authorization"].removeprefix("Bearer "))
+        libre = client.translate(["hello"], "zh-Hans", model="libretranslate")
+        self.assertEqual(libre["translations"], [{"text": "传统译文", "detected_source_language": "en"}])
+        path, headers, body = self.seen["native_translation"]
+        self.assertEqual(path, "/translate")
+        self.assertEqual(body["api_key"], "native-key")
+        self.assertNotIn("Authorization", headers)
+        deepl = client.translate(["hello"], "en-GB", model="deepl")
+        self.assertEqual(deepl["translations"], [{"text": "native result", "billed_characters": 5}])
+        path, headers, body = self.seen["native_translation"]
+        self.assertEqual(path, "/v2/translate")
+        self.assertEqual(headers["Authorization"], "DeepL-Auth-Key native-key")
+        self.assertNotIn("model", body)
 
     def test_image_generation_through_tb_and_tb_keeps_the_png(self):
         body = post_json(f"{self.tb_base}/tingly/imagegen/v1/images/generations",

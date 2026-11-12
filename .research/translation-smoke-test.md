@@ -1,5 +1,7 @@
 # 统一翻译首版：腾讯 1.8B 真实模型实测
 
+历史实验记录。当前三类后端的实现、限制和复验结果见 [后端实测](translation-backends-smoke-test.md)。
+
 Date: 2026-11-12（Asia/Shanghai）。关联：[TEP-2254](https://github.com/tingly-dev/tingly-box/issues/2254)。
 
 ## 环境与版本

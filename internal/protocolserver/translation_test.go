@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/db"
@@ -50,14 +51,27 @@ func translationTestRouter(t *testing.T, scenario typ.RuleScenario, backends ...
 	services := []*loadbalance.Service{}
 	for i, backend := range backends {
 		id := "translation-" + backend.backend
-		require.NoError(t, cfg.AddProvider(&typ.Provider{UUID: id, Name: id, Enabled: true, APIStyle: protocol.APIStyleOpenAI, APIBase: backend.url + "/v1", AuthType: typ.AuthTypeAPIKey, Token: "provider-key", Timeout: 20}))
+		style := protocol.APIStyleOpenAI
+		base := backend.url + "/v1"
+		mode := typ.Provider{}.OpenAIEndpointMode
+		switch backend.backend {
+		case "libretranslate", "deepl":
+			style = protocol.APIStyle(backend.backend)
+			base = backend.url
+		case "anthropic":
+			style = protocol.APIStyleAnthropic
+			base = backend.url
+		case "responses":
+			mode = "responses"
+		}
+		require.NoError(t, cfg.AddProvider(&typ.Provider{UUID: id, Name: id, Enabled: true, APIStyle: style, APIBase: base, OpenAIEndpointMode: mode, AuthType: typ.AuthTypeAPIKey, Token: "provider-key", Timeout: 20}))
 		services = append(services, &loadbalance.Service{Provider: id, Model: backend.model, Active: true, Tier: i})
 	}
 	require.NoError(t, cfg.AddRule(typ.Rule{UUID: "translation-test-rule", Scenario: scenario, RequestModel: "translate", Active: true, Services: services,
 		LBTactic: typ.Tactic{Type: loadbalance.TacticTier, Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom}}}))
 	hm := loadbalance.NewHealthMonitor(loadbalance.HealthMonitorConfig{ProbeEnabled: false})
 	lb := NewLoadBalancer(cfg, routing.NewHealthFilter(hm))
-	ph := NewHandler(ProtocolHandlerDeps{Config: cfg, ClientPool: client.NewClientPool(), LoadBalancer: lb, HealthMonitor: hm,
+	ph := NewHandler(ProtocolHandlerDeps{Config: cfg, ClientPool: client.NewClientPool(), LoadBalancer: lb, HealthMonitor: hm, TemplateManager: catalog.NewProviderCatalogManager(),
 		RoutingSelector: routing.NewSimpleSelector(routing.NewServiceSelector(cfg, NewAffinityStore(0), lb))})
 	r := gin.New()
 	ph.RegisterRoutes(r, middleware.NewAuthMiddleware(cfg, nil, nil, translationTokenStore{}).ModelAuthMiddleware())
@@ -220,16 +234,97 @@ func TestTranslationRequestCancellation(t *testing.T) {
 	require.Equal(t, 504, w.Code, w.Body.String())
 }
 
-func TestTranslationUnknownDeploymentAliasDoesNotCallUpstream(t *testing.T) {
+func TestTranslationGenericModelDoesNotNeedCatalog(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("unknown model must not reach upstream")
-		translationTestReply(w, "unexpected", "stop")
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		require.Equal(t, "local-mt", body["model"])
+		messages := body["messages"].([]any)
+		require.Equal(t, "system", messages[0].(map[string]any)["role"])
+		require.Contains(t, messages[0].(map[string]any)["content"], "pt-BR")
+		require.Equal(t, "hello", messages[1].(map[string]any)["content"])
+		translationTestReply(w, "olá", "stop")
 	}))
 	defer upstream.Close()
-	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "local-mt"})
-	w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["hello"],"target_lang":"en"}`)
-	require.Equal(t, 400, w.Code)
-	require.Contains(t, w.Body.String(), "no_compatible_translation_service")
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, "llm", "local-mt"})
+	w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["hello"],"source_lang":"en","target_lang":"pt-BR"}`)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "olá")
+}
+
+func TestTranslationTraditionalFailoverToLLM(t *testing.T) {
+	native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/translate", r.URL.Path)
+		require.Empty(t, r.Header.Get("Authorization"))
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		require.Equal(t, "provider-key", body["api_key"])
+		require.Equal(t, "text", body["format"])
+		require.NotContains(t, body, "model")
+		require.NotContains(t, body, "messages")
+		if body["q"] == "second" {
+			w.WriteHeader(503)
+			return
+		}
+		_, _ = w.Write([]byte(`{"translatedText":"第一","detectedLanguage":{"language":"en","confidence":90}}`))
+	}))
+	defer native.Close()
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		messages := body["messages"].([]any)
+		require.Equal(t, "second", messages[1].(map[string]any)["content"])
+		translationTestReply(w, "第二", "stop")
+	}))
+	defer llm.Close()
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{native.URL, "libretranslate", ""}, translationTestService{llm.URL, "llm", "arbitrary-llm"})
+	w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["first","second"],"target_lang":"zh-Hans"}`)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var out translation.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
+	require.Equal(t, []translation.Result{{Text: "第一", DetectedSourceLanguage: "en"}, {Text: "第二"}}, out.Translations)
+}
+
+func TestTranslationDeepLNativeAccounting(t *testing.T) {
+	native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v2/translate", r.URL.Path)
+		require.Equal(t, "DeepL-Auth-Key provider-key", r.Header.Get("Authorization"))
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		require.Equal(t, "EN-GB", body["target_lang"])
+		require.NotContains(t, body, "source_lang")
+		require.NotContains(t, body, "model")
+		_, _ = w.Write([]byte(`{"translations":[{"text":"colour","detected_source_language":"DE","billed_characters":5}]}`))
+	}))
+	defer native.Close()
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{native.URL, "deepl", ""})
+	w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["Farbe"],"target_lang":"en-GB"}`)
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), `"billed_characters":5`)
+	require.Contains(t, w.Body.String(), `"detected_source_language":"de"`)
+	require.NotContains(t, w.Body.String(), "tokens")
+}
+
+func TestTranslationGenericCrossProtocol(t *testing.T) {
+	for _, style := range []string{"anthropic", "responses"} {
+		t.Run(style, func(t *testing.T) {
+			native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if style == "anthropic" {
+					require.Equal(t, "/v1/messages", r.URL.Path)
+					_, _ = w.Write([]byte(`{"id":"msg-1","type":"message","role":"assistant","model":"my-llm","content":[{"type":"text","text":"你好"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":2}}`))
+				} else {
+					require.Equal(t, "/v1/responses", r.URL.Path)
+					_, _ = w.Write([]byte(`{"id":"resp-1","object":"response","status":"completed","model":"my-llm","output":[{"id":"msg-1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"你好","annotations":[]}]}],"usage":{"input_tokens":12,"output_tokens":2,"total_tokens":14}}`))
+				}
+			}))
+			defer native.Close()
+			r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{native.URL, style, "my-llm"})
+			w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["hello"],"target_lang":"zh-Hans"}`)
+			require.Equal(t, 200, w.Code, w.Body.String())
+			require.Contains(t, w.Body.String(), "你好")
+		})
+	}
 }
 
 // Opt-in real model check: run the Python example first and supply its base URL.

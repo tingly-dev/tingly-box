@@ -91,7 +91,8 @@
 `hunyuan.models.json` and `qwen.models.json` contain the small `translation.adapter`
 capability consumed by `/translate` after selecting an ordinary provider/model.
 The source contracts are linked in `translation_model_catalog.go`. IDs are matched
-exactly; unknown models and arbitrary deployment aliases are unsupported. No
+exactly for native MT semantics; other ordinary model IDs use the generic LLM
+translator and require no catalog registration. No
 translation-specific field is added to LB Service, rules, or provider schemas.
 Native payload construction lives in `internal/protocol/translation`. Additional
 models require verified data; deployment alias bindings remain a separate

@@ -22,7 +22,12 @@ from typing import TypedDict, cast
 DEFAULT_SCENARIO = "custom"
 
 
-class TranslationResult(TypedDict):
+class _TranslationMetadata(TypedDict, total=False):
+    detected_source_language: str
+    billed_characters: int
+
+
+class TranslationResult(_TranslationMetadata):
     text: str
 
 
