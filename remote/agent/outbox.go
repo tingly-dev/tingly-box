@@ -25,6 +25,12 @@ type Outbox interface {
 	Restate(ctx context.Context, to ChatRef, ref, text string) error
 }
 
+// RequestTextOutbox reports whether a request's plain text was actually sent.
+// Unlike ordinary Text, a suppressed request must not wait for a reply.
+type RequestTextOutbox interface {
+	RequestText(ctx context.Context, to ChatRef, text string) (delivered bool, err error)
+}
+
 // OutFile is a file to deliver to a chat.
 type OutFile struct {
 	Path      string

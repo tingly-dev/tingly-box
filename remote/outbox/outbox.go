@@ -100,14 +100,19 @@ func (o *Outbox) checkTarget(ctx context.Context, botUUID, platform, chatID stri
 
 // Text implements agent.Outbox.
 func (o *Outbox) Text(ctx context.Context, to agent.ChatRef, text string) error {
+	_, err := o.RequestText(ctx, to, text)
+	return err
+}
+
+// RequestText reports suppressed deliveries to callers that wait for a reply.
+func (o *Outbox) RequestText(ctx context.Context, to agent.ChatRef, text string) (bool, error) {
 	_, err := o.through(ctx, to, func(ch channel.Channel) error {
 		return ch.Send(ctx, channel.Target{ChatID: to.ChatID}, interaction.Notification{Body: text})
 	})
 	if errors.Is(err, errChatDisabled) {
-		// A blocklisted chat gets nothing, bound or not.
-		return nil
+		return false, nil
 	}
-	return err
+	return err == nil, err
 }
 
 // File implements agent.Outbox.

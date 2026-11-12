@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
+	"github.com/tingly-dev/tingly-box/remote/access"
 )
 
 // waitTextWith returns the next text of the chat that contains substr, setting
@@ -82,6 +84,86 @@ func TestTinglyProjectChatAnswersAThreadsRequestInWords(t *testing.T) {
 
 	chat.SendText("deny")
 	chat.WaitRestate(prompt.MessageID, 10*time.Second).AssertContains(t, "Denied in a chat.")
+}
+
+// The chat follows a sibling before a worker asks, not after the prompt arrives.
+func TestTinglyProjectReceivesApprovalAfterSwitch(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("switched").OpenDM(h.chosenID)
+	_, main := bindCoordinator(t, h, "switched project", chat.ChatID)
+	chat.SendText("start worker write docs")
+	waitTextWith(t, chat, "Worker started")
+	chat.SendText("/session 1")
+	waitTextWith(t, chat, "This chat now talks to")
+	// The coordinator starts the sibling via the web while IM follows #1.
+	h.call("POST", "/threads/"+main+"/messages", map[string]any{"content": "start worker request approval"}, nil)
+	prompt := waitTextWith(t, chat, "Approve: Run `echo harness`")
+	allow, ok := prompt.ButtonByLabel("Allow")
+	require.True(t, ok)
+	allow.Click()
+	chat.WaitRestate(prompt.MessageID, 10*time.Second).AssertContains(t, "Allowed in a chat.")
+}
+
+// Text answers must require the same approval permission as buttons.
+func TestTinglyProjectTextApprovalRequiresApprove(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat, prompt := projectChatAskedByAWorker(t, h, "restricted", "request approval")
+	chats, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectDeny))
+	chat.SendText("allow")
+	waitTextWith(t, chat, "not authorized")
+	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventRestate)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectAllow))
+	chat.SendText("allow")
+	chat.WaitRestate(prompt.MessageID, 10*time.Second).AssertContains(t, "Allowed in a chat.")
+}
+
+// An approver need not have permission to start a new session to reply.
+func TestTinglyButtonlessApproveOnlyCanAnswer(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	orig, ok := h.registry.Get(h.chosenID)
+	require.True(t, ok)
+	h.registry.Register(buttonless{orig})
+	chat := h.env.NewUser("approve-only").OpenDM(h.chosenID)
+	bindCoordinator(t, h, "approve-only project", chat.ChatID)
+	chat.SendText("start worker request approval")
+	waitTextWith(t, chat, "Approve: Run `echo harness`")
+	chats, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlStart, access.EffectDeny))
+	chat.SendText("allow")
+	waitTextWith(t, chat, "request approval approved")
+	chat.SendText("ordinary message without start permission")
+	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
+}
+
+func TestTinglyButtonlessTextApprovalRequiresApprove(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	orig, ok := h.registry.Get(h.chosenID)
+	require.True(t, ok)
+	h.registry.Register(buttonless{orig})
+	chat := h.env.NewUser("buttonless-restricted").OpenDM(h.chosenID)
+	bindCoordinator(t, h, "buttonless project", chat.ChatID)
+	chat.SendText("start worker request approval")
+	prompt := waitTextWith(t, chat, "Approve: Run `echo harness`")
+	require.Empty(t, prompt.Buttons)
+	chats, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectDeny))
+	chat.SendText("allow")
+	waitTextWith(t, chat, "not authorized")
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectAllow))
+	chat.SendText("allow")
+	waitTextWith(t, chat, "request approval approved")
 }
 
 // A chat bound to another project cannot answer the request, and the request

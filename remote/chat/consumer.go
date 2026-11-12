@@ -7,6 +7,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/chat/feature"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 	"github.com/tingly-dev/tingly-box/remote/binding"
 	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
 )
@@ -71,6 +72,17 @@ func (c *consumer) Attach(
 		OnMessage: func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
 			handler.HandleMessage(msg, platform, botUUID)
 			return true
+		},
+		MayAnswerText: func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
+			if !handler.projectsOn() || !msg.IsTextContent() || msg.IsCallback() || handler.directoryBrowser.IsWaitingInput(msg.GetReplyTarget()) {
+				return false
+			}
+			text := msg.GetText()
+			if cmd, ok := imbot.ParseSlashCommand(text, msg.IsGroupMessage()); ok && stripAgentPrefix(cmd.Text()) == cmd.Text() {
+				return false
+			}
+			candidate, ok := c.projectRouter.(agent.TextAnswerCandidate)
+			return ok && candidate.MayAnswerText(agent.ChatRef{Platform: string(platform), ChatID: msg.GetReplyTarget(), BotUUID: botUUID}, stripAgentPrefix(text))
 		},
 		CommandRegistry: handler.GetCommandRegistry(),
 	}

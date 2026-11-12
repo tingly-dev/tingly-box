@@ -179,8 +179,9 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 
 ## M3 的落地
 
-- **发给谁**：线程停下来要审批或提问时（`Threads.OnWait`，带请求事件），发给绑在该线程**及其祖先**上的所有 chat，
-  与以前那句“需要你”同一批人；前缀 `[#N 标题]`。
+- **发给谁**：线程停下来要审批或提问时（`Threads.OnWait`，带请求事件），发给绑在该线程**及其祖先**上的 chat，
+  也发给整个 Project 的绑定（即使该 chat 已用 `/session` 跟随同项目另一线程）；明确绑定文件夹会话的 chat 不扩大到其他会话。
+  投递时重新检查绑定并去重。发送失败的请求不会留下等待文字回复的记录；前缀 `[#N 标题]`。
 - **按钮**：Host 可选能力 `ChannelPrompter`（`SendChannelPrompt` / `RestateChannelPrompt`）。审批是“允许 / 本线程都允许 / 拒绝”；
   提问只有**一个单选问题、1 到 8 个选项**时每个选项一个按钮（选项说明列在正文里）。多问题、多选、没有选项的提问，
   以及没有按钮的平台（今天：微信、企业微信、Slack、钉钉、Discord、WhatsApp、QQ）仍发一行“Needs you: …，请到 Web 处理”，同一线程同一 chat 5 分钟一次。
@@ -193,7 +194,9 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
   所以 chat 换了项目后，旧项目遗留的请求不会被它的下一句话答掉。
   （协调者项目里按 `thread_id` 绑到某个工作线程的 chat 也记作项目绑定，因为只有文件夹会话才写 `TargetThreadID`。）
   然后就是 Web 用的同一个 `Threads.Respond`，答案带 `Via = im`，事件载荷里记 `via`。授权上，`pj` 与 `@cc` 的 `perm` 一样要求
-  `remote_control.approve`。
+  `remote_control.approve`。文字回答在 Projects 实际消费请求时，使用该入站消息的 bot、平台、chat 和发送者再次检查同一权限；
+  未授权时保留请求并告知原因；只有 `approve` 权限的用户仍可回答，不能因此发送普通消息。多个线程同时等待文字回答时，
+  不猜测要批准哪个请求：引导使用按钮或 Web。
 - **先答为准**：请求结束（任一边回答、建议答案自动作答、回合被停掉）时 `Threads.OnSettled` 触发，Relay 把发出去的每条按钮消息**改写**为原文加结果
   （“Allowed in a chat.” / “Denied on the web.” / “Answered in a chat: SQLite” / “No longer waiting: the turn ended.”），按钮随之消失；
   不能改写的平台补发一条结果。晚到的按钮回 “This was already answered.”。两条路都走 Relay 的同一个有序队列，所以改写总在发送之后。

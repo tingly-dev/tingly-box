@@ -75,6 +75,12 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 	return b, nil
 }
 
+// ChannelAuthorization checks the current sender at the point of use.
+type ChannelAuthorization struct {
+	Answer func() bool
+	Start  func() bool
+}
+
 // PostFromChannel delivers a message from an IM chat to the thread the chat is
 // bound to, as a message with source im, exactly as the web would send it
 // (Send). handled is false when the chat has no binding, and the caller
@@ -83,7 +89,11 @@ func (s *Service) BindChannel(platform, chatID, title, threadID, projectID strin
 // A folder chat that asked for a new session (/new), or whose thread is done
 // (resolved by hand or after idling), starts a new thread in the folder with
 // this message instead, and the chat moves to it.
-func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile) (handled bool, err error) {
+func (s *Service) PostFromChannel(platform, chatID, text string, files []ChannelFile, policies ...ChannelAuthorization) (handled bool, err error) {
+	var policy ChannelAuthorization
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
 	b, err := s.Store.GetChannelBinding(platform, chatID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -91,10 +101,19 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		}
 		return false, err
 	}
+	authorizeStart := func() bool {
+		return policy.Start == nil || policy.Start()
+	}
+	denyStart := func() (bool, error) {
+		return true, errors.New("you are not authorized to send messages to this session")
+	}
 	src := Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID}
 	// A chat that moved to a folder, or talks for the first time, starts a
 	// thread there with this message.
 	if b.Folder != "" {
+		if !authorizeStart() {
+			return denyStart()
+		}
 		p, err := s.Store.OpenFolder(b.Folder, "")
 		if err != nil {
 			return true, err
@@ -112,6 +131,9 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	}
 	// "@2 ..." talks to thread #2 of the project for this message only.
 	if n, rest, ok := parseMention(text); ok {
+		if !authorizeStart() {
+			return denyStart()
+		}
 		target, err := s.threadBySeq(p.ID, n)
 		if err != nil {
 			return true, err
@@ -126,9 +148,12 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	// A chat that was asked something answers it with its next message
 	// (other than an @N one, or one with files).
 	if len(files) == 0 {
-		if done, err := s.answerWaiting(b, text, src); done {
+		if done, err := s.answerWaiting(b, text, src, policy.Answer); done {
 			return true, err
 		}
+	}
+	if !authorizeStart() {
+		return denyStart()
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved || t.ArchivedAt != nil) {
 		atts, err := s.adoptChannelFiles(t.ProjectID, files)
@@ -218,6 +243,41 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 	})
 }
 
+// MayAnswerChannelText is a conservative classification for the inbound gate.
+// The actual request and permissions are checked again when consuming the text.
+func (s *Service) MayAnswerChannelText(platform, chatID, text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	if _, _, mention := parseMention(text); mention {
+		return false
+	}
+	b, err := s.Store.GetChannelBinding(platform, chatID)
+	if err != nil || b.Folder != "" {
+		return false
+	}
+	for _, q := range s.Relay.awaitingAll(platform, chatID) {
+		if s.mayAnswer(b, q.threadID) != nil {
+			continue
+		}
+		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
+			if _, _, fits := decisionReply(d, q.requestID, text); fits {
+				return true
+			}
+			continue
+		}
+		if s.pendingTextRequest(q) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) pendingTextRequest(q pendingRequest) bool {
+	ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID)
+	return ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk)
+}
+
 // answerWaiting gives a chat's message to the request it answers. A decision
 // card takes only an option's number or label, and the card comes first so a
 // bare "1" is never read as an approval's words. A reply that starts with a
@@ -226,7 +286,7 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 // of being guessed at: "2" would answer the wrong question. Otherwise the
 // oldest request that takes the reply gets it, and an open card never keeps a
 // later approval or question from being answered.
-func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (done bool, err error) {
+func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, authorize func() bool) (done bool, err error) {
 	type card struct {
 		pendingRequest
 		d Decision
@@ -245,12 +305,13 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (
 	}
 	var named []card
 	for _, c := range cards {
-		if rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), decisionCode(c.requestID)); ok && (rest == "" || strings.ContainsAny(rest[:1], " \t:,.-")) {
-			if _, fits := c.d.optionOfReply(rest); fits {
-				return s.chooseFromText(b, c.pendingRequest, c.d, rest, src)
+		if reply, explicit, fits := decisionReply(c.d, c.requestID, text); fits {
+			if explicit {
+				if !s.authorizeChannelAnswer(b, authorize) {
+					return true, nil
+				}
+				return s.chooseFromText(b, c.pendingRequest, c.d, reply, src)
 			}
-		}
-		if _, fits := c.d.optionOfReply(text); fits {
 			named = append(named, c)
 		}
 	}
@@ -264,14 +325,51 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source) (
 			decisionCode(named[0].requestID)+" 1\":\n"+strings.Join(lines, "\n"))
 		return true, nil
 	case len(named) == 1:
+		if !s.authorizeChannelAnswer(b, authorize) {
+			return true, nil
+		}
 		return s.chooseFromText(b, named[0].pendingRequest, named[0].d, text, src)
 	}
+	var active []pendingRequest
 	for _, q := range others {
+		if s.pendingTextRequest(q) {
+			active = append(active, q)
+		}
+	}
+	if len(active) > 1 {
+		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one request is waiting. Use its button or open Projects in the web UI to answer the right request.")
+		return true, nil
+	}
+	for _, q := range active {
+		if !s.authorizeChannelAnswer(b, authorize) {
+			return true, nil
+		}
 		if done, err := s.answerFromText(q.threadID, q.requestID, text); done {
 			return true, err
 		}
 	}
 	return false, nil
+}
+
+func (s *Service) authorizeChannelAnswer(b *db.ChannelBinding, authorize func() bool) bool {
+	if authorize != nil && !authorize() {
+		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat.")
+		return false
+	}
+	// Recheck after the potentially slow access-policy check. A rebind can
+	// still race the later response; the check only narrows that window.
+	current, err := s.Store.GetChannelBinding(b.Platform, b.ChatID)
+	return err == nil && current.UpdatedAt.Equal(b.UpdatedAt)
+}
+
+func decisionReply(d Decision, requestID, text string) (reply string, explicit, fits bool) {
+	if rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), decisionCode(requestID)); ok && (rest == "" || strings.ContainsAny(rest[:1], " \t:,.-")) {
+		if _, fits := d.optionOfReply(rest); fits {
+			return rest, true, true
+		}
+	}
+	_, fits = d.optionOfReply(text)
+	return text, false, fits
 }
 
 // decisionCode is the short code a chat can start a reply with to say which
@@ -362,7 +460,14 @@ func (s *Service) ChannelToFolder(platform, chatID, title, folder, profile strin
 // A chat bound to one session of a folder (TargetThreadID) keeps to that
 // session's lineage, and a chat of another project never answers.
 func (s *Service) mayAnswer(b *db.ChannelBinding, threadID string) error {
-	lineage, err := s.Store.Lineage(threadID)
+	return mayAnswer(s.Store, b, threadID)
+}
+
+func mayAnswer(store *db.Store, b *db.ChannelBinding, threadID string) error {
+	if b.Folder != "" {
+		return ErrNotThisChat
+	}
+	lineage, err := store.Lineage(threadID)
 	if err != nil {
 		return err
 	}
@@ -376,12 +481,18 @@ func (s *Service) mayAnswer(b *db.ChannelBinding, threadID string) error {
 	}
 	project := b.TargetProjectID
 	if project == "" && b.ThreadID != "" {
-		if t, err := s.Store.GetThread(b.ThreadID); err == nil {
+		if t, err := store.GetThread(b.ThreadID); err == nil {
 			project = t.ProjectID
 		}
 	}
 	if project != "" && project == lineage[0].ProjectID && b.TargetThreadID == "" && b.Folder == "" {
-		return nil
+		p, err := store.GetProject(project)
+		if err != nil {
+			return err
+		}
+		if p.Type == db.ProjectProject {
+			return nil
+		}
 	}
 	return ErrNotThisChat
 }

@@ -144,7 +144,7 @@ func inboundAction(msg imbot.Message, pendingCapability access.CapabilityName, p
 //     is not privileged until the operator says so, and without a word the
 //     command just looks broken. A chat that cannot even start still gets
 //     nothing.
-func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDenied func(msg imbot.Message, platform imbot.Platform, botUUID string, action access.ActionName)) OnMessage {
+func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyChats ChatStoreInterface, requirePairing bool, pendingForChat func(string) (access.CapabilityName, access.ActionName), notifyDenied func(msg imbot.Message, platform imbot.Platform, botUUID string, action access.ActionName), mayAnswer ...func(imbot.Message, imbot.Platform, string) bool) OnMessage {
 	return func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
 		if store == nil || authorizer == nil {
 			return false
@@ -199,13 +199,17 @@ func AuthorizationGate(store AccessStore, authorizer access.Authorizer, legacyCh
 			pendingCapability, pendingAction = pendingForChat(externalTarget)
 		}
 		capability, action := inboundAction(msg, pendingCapability, pendingAction)
+		candidateAnswer := pendingAction == "" && action == access.ActionRemoteControlStart && msg.IsTextContent() && !msg.IsCallback() && len(mayAnswer) > 0 && mayAnswer[0] != nil && mayAnswer[0](msg, platform, botUUID)
+		if candidateAnswer {
+			capability, action = access.CapabilityRemoteControl, access.ActionRemoteControlApprove
+		}
 		decision := authorizer.Evaluate(ctx, access.AuthorizationRequest{BotUUID: botUUID, Target: target, ActorID: actor.ID, Capability: capability, Action: action})
 		fields := logrus.Fields{"event": "bot.authorization.decision", "bot_uuid": botUUID, "capability": capability, "action": action, "target_kind": target.Kind, "target_id": target.ID, "actor_id": actor.ID, "allowed": decision.Allowed, "failed_gate": decision.FailedGate, "reason": decision.Reason}
 		if decision.Allowed {
 			logrus.WithFields(fields).Debug("bot authorization decision")
 			return false
 		}
-		if pendingAction != "" {
+		if pendingAction != "" || candidateAnswer {
 			logrus.WithFields(fields).Warn("bot authorization denied a reply to this bot's pending prompt")
 			if notifyDenied != nil {
 				notifyDenied(msg, platform, botUUID, action)

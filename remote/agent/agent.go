@@ -18,6 +18,12 @@ type ChatRef struct {
 	// Profile is the launch profile a chat's first session runs under (the
 	// bot's default agent); empty for the default.
 	Profile string
+	// AuthorizeAnswer checks the current sender's approval permission at the
+	// point a text reply is consumed. Nil means the host has no access policy.
+	AuthorizeAnswer func() bool
+	// AuthorizeStart prevents a message admitted as a possible answer from
+	// starting or continuing a session if its request has settled meanwhile.
+	AuthorizeStart func() bool
 }
 
 // ChatPlace says where a chat is. The zero value is a chat with no place yet.
@@ -68,6 +74,12 @@ type Chat interface {
 	Folders() ([]string, error)
 	// Projects lists the projects, excluding working folders.
 	Projects() ([]ProjectChoice, error)
+}
+
+// TextAnswerCandidate optionally identifies a chat message that may answer a
+// pending request. The final answer and ordinary-message paths still authorize.
+type TextAnswerCandidate interface {
+	MayAnswerText(ref ChatRef, text string) bool
 }
 
 // CommandSpec describes a chat command the agent runs: the platform command

@@ -32,6 +32,34 @@ func PrivilegeCheckerFrom(ctx context.Context) PrivilegeChecker {
 // NewPrivilegeChecker answers from the same authorizer as AuthorizationGate.
 // A failure to resolve the chat or sender is "no".
 func NewPrivilegeChecker(store AccessStore, authorizer access.Authorizer) PrivilegeChecker {
+	return NewActionChecker(store, authorizer, access.ActionRemoteControlPrivileged)
+}
+
+type actionCheckerKey struct{}
+type startCheckerKey struct{}
+
+func WithStartChecker(ctx context.Context, check PrivilegeChecker) context.Context {
+	return context.WithValue(ctx, startCheckerKey{}, check)
+}
+
+func StartCheckerFrom(ctx context.Context) PrivilegeChecker {
+	check, _ := ctx.Value(startCheckerKey{}).(PrivilegeChecker)
+	return check
+}
+
+// WithAnswerChecker supplies the policy check for a text answer at consumption.
+func WithAnswerChecker(ctx context.Context, check PrivilegeChecker) context.Context {
+	return context.WithValue(ctx, actionCheckerKey{}, check)
+}
+
+// AnswerCheckerFrom returns the text-answer policy check, if configured.
+func AnswerCheckerFrom(ctx context.Context) PrivilegeChecker {
+	check, _ := ctx.Value(actionCheckerKey{}).(PrivilegeChecker)
+	return check
+}
+
+// NewActionChecker evaluates the same actor, target and bot policy as the gate.
+func NewActionChecker(store AccessStore, authorizer access.Authorizer, action access.ActionName) PrivilegeChecker {
 	return func(platform imbot.Platform, botUUID, chatID, senderID string, group bool) bool {
 		if store == nil || authorizer == nil || chatID == "" || senderID == "" {
 			return false
@@ -57,7 +85,7 @@ func NewPrivilegeChecker(store AccessStore, authorizer access.Authorizer) Privil
 		}
 		return authorizer.Evaluate(ctx, access.AuthorizationRequest{
 			BotUUID: botUUID, Target: target, ActorID: actor.ID,
-			Capability: access.CapabilityRemoteControl, Action: access.ActionRemoteControlPrivileged,
+			Capability: access.CapabilityRemoteControl, Action: action,
 		}).Allowed
 	}
 }

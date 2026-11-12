@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
+	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 )
 
@@ -85,6 +87,27 @@ func TestTinglyDecisionCardReachesChatAsButtons(t *testing.T) {
 	ship.Click()
 	chat.WaitText(10*time.Second).AssertContains(t, "This was already answered.")
 	require.Equal(t, 0, chosenOption(t, h, main))
+}
+
+// A decision does not turn unrelated conversation into an approval attempt.
+func TestTinglyDecisionAllowsStartOnlyOrdinaryText(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("start-only").OpenDM(h.chosenID)
+	_, main := bindCoordinator(t, h, "Decision project", chat.ChatID)
+	chat.SendText("ask decision")
+	waitTextWith(t, chat, "Ship it now?")
+	waitTextWith(t, chat, "Decision asked")
+	chats, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlApprove, access.EffectDeny))
+	chat.SendText("tell me more")
+	waitTextWith(t, chat, "You said: tell me more")
+	require.Equal(t, -1, chosenOption(t, h, main))
+	chat.SendText("1")
+	waitTextWith(t, chat, "not authorized")
+	require.Equal(t, -1, chosenOption(t, h, main))
 }
 
 // A chat whose platform has no buttons (DingTalk's case) gets the card as

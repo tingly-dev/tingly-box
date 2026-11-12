@@ -43,6 +43,8 @@ func NewBotHandler(
 		pairing:          pairing,
 	}
 	handler.privileged = bot2.PrivilegeCheckerFrom(ctx)
+	handler.answerAllowed = bot2.AnswerCheckerFrom(ctx)
+	handler.startAllowed = bot2.StartCheckerFrom(ctx)
 	handler.InitCommandRegistry()
 	return handler
 }

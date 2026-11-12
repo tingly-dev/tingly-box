@@ -27,13 +27,32 @@ type (
 
 var _ Chat = (*App)(nil)
 
+// MayAnswerText reports whether a message could answer a current request.
+func (a *App) MayAnswerText(ref ChatRef, text string) bool {
+	b, err := a.store.GetChannelBinding(ref.Platform, ref.ChatID)
+	if err != nil || (b.BotUUID != "" && b.BotUUID != ref.BotUUID) {
+		return false
+	}
+	return a.svc.MayAnswerChannelText(ref.Platform, ref.ChatID, text)
+}
+
 // Post hands a message typed in an IM chat to the thread the chat is bound to
 // (a project's main thread is its coordinator), as Send does; replies come
 // back through the host's outbox. handled is false when the chat is not
 // bound. files, which the host saved, go with the message as its attachments;
 // the host may remove them once this returns.
 func (a *App) Post(ref ChatRef, text string, files []ChannelFile) (bool, error) {
-	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files)
+	checkAnswer := ref.AuthorizeAnswer
+	if checkAnswer != nil {
+		checkAnswer = func() bool {
+			b, err := a.store.GetChannelBinding(ref.Platform, ref.ChatID)
+			if err != nil || (b.BotUUID != "" && b.BotUUID != ref.BotUUID) {
+				return false
+			}
+			return ref.AuthorizeAnswer()
+		}
+	}
+	return a.svc.PostFromChannel(ref.Platform, ref.ChatID, text, files, project.ChannelAuthorization{Answer: checkAnswer, Start: ref.AuthorizeStart})
 }
 
 // Command runs a chat command for a bound IM chat; handled is false when the

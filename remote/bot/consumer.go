@@ -21,6 +21,9 @@ type Attached struct {
 	// (after the host's own prompt-reply routing). nil = this consumer needs
 	// no inbound handling.
 	OnMessage OnMessage
+	// MayAnswerText identifies candidate text replies; the consumer must still
+	// check authorization and refuse ordinary messages at the point of use.
+	MayAnswerText func(msg imbot.Message, platform imbot.Platform, botUUID string) bool
 	// CommandRegistry drives platform menu / quick-action setup. The bot host
 	// applies it after the bot connects; nil skips menu setup.
 	CommandRegistry *imbot.CommandRegistry

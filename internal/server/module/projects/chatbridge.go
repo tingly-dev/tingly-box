@@ -166,6 +166,12 @@ func (b *ChatBridge) ForgetBots() { b.out.ForgetBots() }
 // App returns the Projects app while it is switched on, else nil.
 func (b *ChatBridge) App() *projectsapp.App { return b.live() }
 
+// MayAnswerText identifies candidate text replies without consuming them.
+func (b *ChatBridge) MayAnswerText(ref agent.ChatRef, text string) bool {
+	app := b.live()
+	return app != nil && app.MayAnswerText(ref, text)
+}
+
 // Post implements agent.Chat.
 func (b *ChatBridge) Post(ref agent.ChatRef, text string, files []agent.File) (bool, error) {
 	app := b.live()

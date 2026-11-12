@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,54 @@ func startDeploy(t *testing.T, f *testFixture, svc *Service) *db.Thread {
 	_, err = svc.BindChannel("telegram", "own", "", th.ID, "")
 	require.NoError(t, err)
 	return th
+}
+
+func TestFailedPromptDeliveryDoesNotAwaitText(t *testing.T) {
+	f, svc, sink := channelFixtureWith(t, approveScript)
+	sink.err = errors.New("delivery failed")
+	_, err := svc.BindChannel("dingtalk", "up", "", "", f.project.ID)
+	require.NoError(t, err)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Ship", Task: "deploy", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	found := false
+	for range 5 {
+		if strings.Contains(sink.next(t).text, "make deploy") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+	require.Eventually(t, func() bool {
+		return len(svc.Relay.awaitingAll("dingtalk", "up")) == 0
+	}, time.Second, time.Millisecond)
+	_, ok := f.threads.PendingRequest(th.ID, "req-1")
+	require.True(t, ok)
+	require.NoError(t, f.threads.Respond(th.ID, "req-1", Answer{Allow: false}))
+}
+
+func TestAmbiguousTextDoesNotApproveAnotherThread(t *testing.T) {
+	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
+		_, err := turn.Approve(turn.Prompt, "Bash", map[string]any{"command": turn.Prompt})
+		return err
+	})
+	_, err := svc.BindChannel("telegram", "up", "", "", f.project.ID)
+	require.NoError(t, err)
+	first, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "One", Task: "first", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	sink.nextPrompt(t)
+	second, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Two", Task: "second", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	sink.nextPrompt(t)
+	handled, err := svc.PostFromChannel("telegram", "up", "y", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	require.Contains(t, sink.next(t).text, "More than one request")
+	_, ok := f.threads.PendingRequest(first.ID, "first")
+	require.True(t, ok)
+	_, ok = f.threads.PendingRequest(second.ID, "second")
+	require.True(t, ok)
+	require.NoError(t, f.threads.Respond(first.ID, "first", Answer{Allow: false}))
+	require.NoError(t, f.threads.Respond(second.ID, "second", Answer{Allow: false}))
 }
 
 func TestApprovalIsAnsweredFromAChat(t *testing.T) {
