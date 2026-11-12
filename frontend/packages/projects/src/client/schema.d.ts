@@ -2357,6 +2357,7 @@ export interface components {
             name?: string;
             /** @description Field paused */
             paused?: boolean;
+            primary_directory_mode?: components["schemas"]["DirectorySpec"];
             /** @description Field primary_repo_path */
             primary_repo_path?: string;
             /** @description Field repos */

@@ -164,11 +164,30 @@ type NewProjectSpec struct {
 	Path string
 }
 
-// ResolveRepos accepts legacy path lists as well as ordinary directories.
-func ResolveRepos(ctx context.Context, paths []string) ([]db.Repo, error) {
+// LegacyDirectorySpecs preserves the old path-list API's relative paths and blanks.
+func LegacyDirectorySpecs(paths []string) ([]DirectorySpec, error) {
 	specs := make([]DirectorySpec, 0, len(paths))
-	for _, path := range paths {
+	for _, raw := range paths {
+		path := strings.TrimSpace(raw)
+		if path == "" {
+			continue
+		}
+		if !filepath.IsAbs(path) && path != "~" && !strings.HasPrefix(path, "~/") {
+			var err error
+			path, err = filepath.Abs(path)
+			if err != nil {
+				return nil, err
+			}
+		}
 		specs = append(specs, DirectorySpec{Path: path})
+	}
+	return specs, nil
+}
+
+func ResolveRepos(ctx context.Context, paths []string) ([]db.Repo, error) {
+	specs, err := LegacyDirectorySpecs(paths)
+	if err != nil {
+		return nil, err
 	}
 	return ResolveDirectories(ctx, specs, nil, false)
 }

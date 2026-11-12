@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -82,6 +83,7 @@ type UpdateProjectRequest struct {
 	Repos                *[]string           `json:"repos,omitempty"`
 	Directories          *[]rt.DirectorySpec `json:"directories,omitempty"`
 	PrimaryRepoPath      *string             `json:"primary_repo_path,omitempty"`
+	PrimaryDirectoryMode *rt.DirectorySpec   `json:"primary_directory_mode,omitempty"`
 	CoordinatorProfile   *string             `json:"coordinator_profile,omitempty"`
 	ThreadProfile        *string             `json:"thread_profile,omitempty"`
 	CoordinatorModel     *string             `json:"coordinator_model,omitempty"`
@@ -200,7 +202,8 @@ type OKResponse struct {
 
 // Handler is the Projects HTTP module.
 type Handler struct {
-	svc *rt.Service
+	svc      *rt.Service
+	updateMu sync.Mutex
 }
 
 // NewHandler builds the module.
@@ -545,8 +548,14 @@ func (h *Handler) update(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
 	p, ok := h.project(c)
 	if !ok {
+		return
+	}
+	if req.PrimaryDirectoryMode != nil && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "primary_directory_mode cannot be combined with directory settings")
 		return
 	}
 	if req.Repos != nil && (req.Directories != nil || req.PrimaryRepoPath != nil) {
@@ -557,7 +566,7 @@ func (h *Handler) update(c *gin.Context) {
 		apierr.BadRequest(c, "directories cannot be combined with disable_worktree")
 		return
 	}
-	if p.Type == db.ProjectFolder && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil || req.MaxRunningThreads != nil) {
+	if p.Type == db.ProjectFolder && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.PrimaryDirectoryMode != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil || req.MaxRunningThreads != nil) {
 		apierr.BadRequest(c, "repository and project thread settings do not apply to a folder")
 		return
 	}
@@ -579,9 +588,10 @@ func (h *Handler) update(c *gin.Context) {
 		repos := p.Repos
 		var err error
 		if req.Repos != nil {
-			specs := make([]rt.DirectorySpec, 0, len(*req.Repos))
-			for _, path := range *req.Repos {
-				specs = append(specs, rt.DirectorySpec{Path: path})
+			specs, specErr := rt.LegacyDirectorySpecs(*req.Repos)
+			if specErr != nil {
+				apierr.BadRequest(c, specErr.Error())
+				return
 			}
 			repos, err = rt.ResolveDirectories(c.Request.Context(), specs, p.Repos, p.DisableWorktree)
 		} else if req.Directories != nil {
@@ -613,6 +623,23 @@ func (h *Handler) update(c *gin.Context) {
 			apierr.BadRequest(c, err.Error())
 			return
 		}
+	}
+	if req.PrimaryDirectoryMode != nil {
+		primary := p.PrimaryRepo()
+		change := req.PrimaryDirectoryMode
+		if primary == nil || primary.Path != change.Path {
+			apierr.Message(c, http.StatusConflict, "primary directory changed; reload and try again")
+			return
+		}
+		if change.WorkspaceMode != db.WorkspaceShared && change.WorkspaceMode != db.WorkspaceWorktree {
+			apierr.BadRequest(c, "invalid workspace mode")
+			return
+		}
+		if p.EffectiveRepo(*primary).Kind == db.RepoDirectory && change.WorkspaceMode != db.WorkspaceShared {
+			apierr.BadRequest(c, "non-Git directory must use shared mode")
+			return
+		}
+		primary.WorkspaceMode = change.WorkspaceMode
 	}
 	for _, item := range []struct {
 		in  *string
@@ -712,6 +739,8 @@ func (h *Handler) update(c *gin.Context) {
 }
 
 func (h *Handler) delete(c *gin.Context) {
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
 	p, ok := h.project(c)
 	if !ok {
 		return

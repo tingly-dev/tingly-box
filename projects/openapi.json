@@ -5116,6 +5116,9 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_directory_mode": {
+            "$ref": "#/components/schemas/DirectorySpec"
+          },
           "primary_repo_path": {
             "type": "string",
             "description": "Field primary_repo_path"

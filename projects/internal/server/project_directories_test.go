@@ -43,6 +43,28 @@ func TestDirectoryInspectHTTP(t *testing.T) {
 	require.Equal(t, false, invalid["ok"])
 }
 
+func TestPrimaryModeUpdatePreservesConcurrentDirectoryChanges(t *testing.T) {
+	_, c := newServer(t, quietAgents())
+	git1, git2, dir := gitRepo(t), gitRepo(t), t.TempDir()
+	var p map[string]any
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "concurrent", "directories": []map[string]any{{"path": git1, "workspace_mode": "worktree"}, {"path": git2, "workspace_mode": "worktree"}}, "primary_repo_path": git1}, &p))
+	id := p["id"].(string)
+	// A different client changes another directory and adds a third.
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"directories": []map[string]any{{"path": git1, "workspace_mode": "worktree"}, {"path": git2, "workspace_mode": "shared"}, {"path": dir, "workspace_mode": "shared"}}, "primary_repo_path": git1}, &p))
+	// The stale client only requests a change to its original primary.
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"primary_directory_mode": map[string]any{"path": git1, "workspace_mode": "shared"}}, &p))
+	repos := p["repos"].([]any)
+	require.Len(t, repos, 3)
+	require.Equal(t, "shared", repos[0].(map[string]any)["workspace_mode"])
+	require.Equal(t, "shared", repos[1].(map[string]any)["workspace_mode"])
+	// A stale client must not silently change the wrong primary.
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"primary_repo_path": git2}, &p))
+	require.Equal(t, http.StatusConflict, c.do("PATCH", "/projects/"+id, map[string]any{"primary_directory_mode": map[string]any{"path": git1, "workspace_mode": "worktree"}}, nil))
+	require.Equal(t, http.StatusBadRequest, c.do("PATCH", "/projects/"+id, map[string]any{"primary_directory_mode": map[string]any{"path": git2, "workspace_mode": "bad"}}, nil))
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"primary_repo_path": dir}, &p))
+	require.Equal(t, http.StatusBadRequest, c.do("PATCH", "/projects/"+id, map[string]any{"primary_directory_mode": map[string]any{"path": dir, "workspace_mode": "worktree"}}, nil))
+}
+
 func TestProjectDirectoriesHTTP(t *testing.T) {
 	_, c := newServer(t, quietAgents())
 	git1, git2, dir := gitRepo(t), gitRepo(t), t.TempDir()

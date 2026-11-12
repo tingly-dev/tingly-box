@@ -17,6 +17,9 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	// Git diagnostics are interpreted by directory inspection; keep them stable
+	// even when the user's shell uses another locale.
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {

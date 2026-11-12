@@ -13,7 +13,7 @@ import { loadPermissionModes, PermissionModeSelect } from '../components/workdir
 import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
 import { mergeThreadSettings, useThreadSettings } from '../hooks/useThreadSettings';
 import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
-import { directoryPayload, primaryPath, projectDirectories, type DirectoryConfig } from '../components/project/RepoField';
+import { primaryPath, projectDirectories } from '../components/project/RepoField';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
@@ -288,7 +288,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode'> & { directories?: DirectoryConfig[]; primary_repo_path?: string }) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'primary_directory_mode'>) => {
         if (projectSaving.current) return;
         projectSaving.current = true;
         setSavingDefaults(true);
@@ -307,7 +307,7 @@ export default function ProjectPage() {
     };
 
     const primary = project && projectDirectories(project).find((r) => r.root === primaryPath(project));
-    const withPrimaryMode = (p: Project, mode: 'shared' | 'worktree') => directoryPayload(projectDirectories(p).map((r) => r.root === primaryPath(p) ? { ...r, workspace_mode: mode } : r), primaryPath(p));
+    const withPrimaryMode = (p: Project, mode: 'shared' | 'worktree') => ({ primary_directory_mode: { path: primaryPath(p), workspace_mode: mode } });
 
     // A folder is a project too, but its page is the folder page.
     if (project && isFolder(project)) {

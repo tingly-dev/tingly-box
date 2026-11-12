@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -12,6 +13,44 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
+
+func TestLegacyRepoPathsAcceptRelativeAndEmpty(t *testing.T) {
+	repo := gitRepoForDirectoryTest(t)
+	rel, err := filepath.Rel(mustGetwd(t), repo)
+	require.NoError(t, err)
+	repos, err := ResolveRepos(context.Background(), []string{"", "  ", rel})
+	require.NoError(t, err)
+	require.Len(t, repos, 1)
+	require.Equal(t, repo, repos[0].Path)
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	require.NoError(t, err)
+	return dir
+}
+func gitRepoForDirectoryTest(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	run(t, dir, "git", "init", "-b", "main")
+	run(t, dir, "git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-m", "initial")
+	return dir
+}
+
+func TestInspectDirectoryWithLocalizedGitError(t *testing.T) {
+	dir := t.TempDir()
+	gitPath, err := exec.LookPath("git")
+	require.NoError(t, err)
+	bin := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$3\" = rev-parse ] && [ \"$4\" = --show-toplevel ]; then if [ \"$LC_ALL\" = C ]; then printf 'fatal: not a git repository\\n' >&2; else printf 'fatal: kein Git-Repository\\n' >&2; fi; exit 128; fi\nexec \"" + gitPath + "\" \"$@\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0755))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	info, err := InspectDirectory(context.Background(), dir)
+	require.NoError(t, err)
+	assert.Equal(t, db.RepoDirectory, info.Kind)
+}
 
 func TestResolveReposAcceptsNonGitDirectory(t *testing.T) {
 	dir := t.TempDir()

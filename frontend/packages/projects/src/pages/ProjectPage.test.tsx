@@ -143,8 +143,8 @@ it('changes the project workspace default from the composer settings', async () 
     m.get.mockImplementation(async (url: string) => ({ data:
         url === '/api/v1/projects/{id}' ? { project, threads: [], coordinator_busy: false }
             : url.endsWith('permission-modes') ? { modes: ['auto'] } : {}, response: new Response() }));
-    m.patch.mockImplementation(async (_url: string, options: { body: { directories: { path: string; workspace_mode: string }[] } }) => {
-        project = { ...project, repos: project.repos.map((r) => ({ ...r, workspace_mode: options.body.directories.find((d) => d.path === r.path)!.workspace_mode })) };
+    m.patch.mockImplementation(async (_url: string, options: { body: { primary_directory_mode: { path: string; workspace_mode: string } } }) => {
+        project = { ...project, repos: project.repos.map((r) => r.path === options.body.primary_directory_mode.path ? { ...r, workspace_mode: options.body.primary_directory_mode.workspace_mode } : r) };
         return { data: project, response: new Response() };
     });
     render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
@@ -152,11 +152,11 @@ it('changes the project workspace default from the composer settings', async () 
     expect(picker).toHaveTextContent('threadSettings.workspace.worktree');
     fireEvent.mouseDown(picker);
     fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.shared' }));
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/one', workspace_mode: 'shared' }, { path: '/two', workspace_mode: 'shared' }], primary_repo_path: '/one' } }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { primary_directory_mode: { path: '/one', workspace_mode: 'shared' } } }));
     await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.shared'));
     fireEvent.mouseDown(picker);
     fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.worktree' }));
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/one', workspace_mode: 'worktree' }, { path: '/two', workspace_mode: 'shared' }], primary_repo_path: '/one' } }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { primary_directory_mode: { path: '/one', workspace_mode: 'worktree' } } }));
     await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.worktree'));
 });
 
@@ -176,7 +176,7 @@ it('asks once before the first message, saves the chosen mode before sending, an
     fireEvent.click(await screen.findByRole('radio', { name: 'worktreeNotice.shared' }));
     fireEvent.click(screen.getByRole('button', { name: 'worktreeNotice.continue' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledTimes(1));
-    expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/one', workspace_mode: 'shared' }, { path: '/two', workspace_mode: 'shared' }], primary_repo_path: '/one' } });
+    expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { primary_directory_mode: { path: '/one', workspace_mode: 'shared' } } });
     expect(m.patch.mock.invocationCallOrder[0]).toBeLessThan(m.post.mock.invocationCallOrder[0]);
     fireEvent.click(await screen.findByRole('button', { name: 'send message' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledTimes(2));
