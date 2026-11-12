@@ -89,6 +89,7 @@ func (ph *ProtocolHandler) RegisterRoutes(engine *gin.Engine, modelAuth gin.Hand
 func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth gin.HandlerFunc) {
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleOpenAIChatCompletions)...)
+	group.POST("/translate", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("translation"), ph.HandleTranslation)...)
 
 	// Responses API endpoints (OpenAI compatible)
 	group.POST("/responses", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesCreate)...)

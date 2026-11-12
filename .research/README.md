@@ -1,0 +1,11 @@
+# 调研记录
+
+本目录保存来源、接口定义、观察事实、差异和待验证问题；具体协议选择、取舍和实施边界放在 [`../.design/`](../.design/)。调研记录中的能力存在，不代表 Tingly 已实现或默认启用该能力。
+
+| 主题 | 调研 | 设计 | 状态 |
+| --- | --- | --- | --- |
+| 统一翻译网关 / TEP-2254 | [接口对照与能力交并集](translation-apis.md)、[腾讯 1.8B 历史实测](translation-smoke-test.md)、[三类后端实测](translation-backends-smoke-test.md) | [协议结构与路由设计](../.design/translation.md) | 首版实验；并集扩展待实现 |
+
+记录来源的具体产品/版本、查阅日期和验证程度。区分官方定义、提示词示例、网关可编排能力和未知能力；没有查到定义时保留未知，不写成已验证支持或明确不支持。
+
+源码结构对照：[Vision 与翻译](translation-vision-architecture.md)。
