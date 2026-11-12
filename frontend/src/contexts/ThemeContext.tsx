@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { ResolvedThemeMode, ThemeMode } from '@/theme';
-import { isThemeMode, SYSTEM_THEME_MODE_VALUES, THEME_MODE_VALUES } from '@/theme/options';
+import { readStoredThemeMode, SYSTEM_THEME_MODE_VALUES, THEME_MODE_VALUES } from '@/theme/options';
 
 interface ThemeContextType {
   mode: ThemeMode;
@@ -33,13 +33,7 @@ const getSystemMode = (): ResolvedThemeMode => {
 };
 
 export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }) => {
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (isThemeMode(stored)) {
-      return stored;
-    }
-    return 'system';
-  });
+  const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode(localStorage.getItem(STORAGE_KEY)));
   const [systemMode, setSystemMode] = useState<ResolvedThemeMode>(getSystemMode);
 
   const toggleTheme = () => {
@@ -72,7 +66,7 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
   }, [mode]);
 
   useEffect(() => {
-    document.documentElement.classList.remove('light', 'dark', 'system', 'sunlit', 'claude', 'ds');
+    document.documentElement.classList.remove('light', 'dark', 'system', 'claude', 'ds');
     document.documentElement.classList.add(effectiveMode);
     if (mode === 'system') {
       document.documentElement.classList.add('system');

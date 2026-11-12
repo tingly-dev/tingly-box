@@ -30,7 +30,7 @@ const props = (messages: ThreadEvent[] = []): ComponentProps<typeof Conversation
 const show = (p: ComponentProps<typeof ConversationPane>) => render(<MemoryRouter><ProjectsHostProvider host={{ paths: { list: '/projects', project: (id) => `/projects/${id}`, folder: () => '/folders' } }}><ConversationPane {...p} /></ProjectsHostProvider></MemoryRouter>);
 
 describe('conversation presentation', () => {
-    it.each(['light', 'dark', 'sunlit', 'claude', 'ds'] as const)('matches Thread message and Markdown styles in %s', (mode) => {
+    it.each(['light', 'dark', 'claude', 'ds'] as const)('matches Thread message and Markdown styles in %s', (mode) => {
         const text = '# Heading\n\nParagraph with **emphasis** and `inline`.\n\n> Quote\n\n- List item\n\n| Name | Value |\n| --- | --- |\n| One | Two |';
         const blocks: TranscriptBlock[] = [{ type: 'user', message: { kind: 'user', content: 'Same user message', timestamp: '' } }];
         const view = render(<ThemeProvider theme={createAppTheme(mode)}><MemoryRouter>

@@ -5,7 +5,6 @@
 export const Z_INDEX = {
   // Background layers (lowest)
   background: 0,
-  sunlitBackground: 1,
 
   // Main content layers
   main: 10,

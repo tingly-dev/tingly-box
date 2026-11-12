@@ -18,7 +18,7 @@ type Rgb = { r: number; g: number; b: number };
 // into an opaque {r,g,b} triple. rgba() alpha is pre-composited over opaque
 // white so the result is always fully opaque — this is what makes the badge
 // background solid even when the theme's paper is itself translucent (e.g. the
-// sunlit theme uses rgba(255,255,255,0.75) paper).
+// ds theme uses rgba(255,255,255,0.88) paper).
 const toOpaqueRgb = (color: string): Rgb | null => {
     const c = decomposeColor(color);
     const [r, g, b, a = 1] = c.values as number[];

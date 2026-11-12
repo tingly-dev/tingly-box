@@ -158,7 +158,6 @@ export default {
       "light": "浅色",
       "dark": "深色",
       "system": "跟随系统",
-      "sunlit": "日光",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "点击",

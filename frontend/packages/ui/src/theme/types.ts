@@ -1,6 +1,6 @@
 import type { PaletteOptions, ThemeOptions } from '@mui/material/styles';
 
-export type ResolvedThemeMode = 'light' | 'dark' | 'sunlit' | 'claude' | 'ds';
+export type ResolvedThemeMode = 'light' | 'dark' | 'claude' | 'ds';
 export type ThemeMode = ResolvedThemeMode | 'system';
 
 export interface DashboardTokenColors {
@@ -28,7 +28,6 @@ export interface DashboardColors {
 
 export interface ThemePalette extends PaletteOptions {
   dashboard: DashboardColors;
-  isSunlit: boolean;
 }
 
 export interface ThemeConfig {
