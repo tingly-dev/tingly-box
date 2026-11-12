@@ -23,11 +23,11 @@ const b = { id: 'b', project_id: 'p', model_override: 'sibling-choice', status: 
 function Switch() { const nav = useNavigate(); return <button onClick={() => nav('/projects/p?thread=b')}>switch</button>; }
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
-it('does not leave the coordinator busy after the synchronous /clear command', async () => {
+it('keeps the coordinator idle when /clear is rejected', async () => {
     m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
         ? { project: p, threads: [], coordinator_busy: false }
         : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
-    m.post.mockResolvedValue({ data: { id: 'main' }, response: new Response() });
+    m.post.mockResolvedValue({ error: { error: '/clear is not available for the project coordinator' }, response: new Response(null, { status: 400 }) });
     render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'new session' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', expect.objectContaining({ body: { content: '/clear', attachments: [] } })));

@@ -15,6 +15,9 @@ func (s *Store) RotateThreadSession(threadID, expectedID, newID string, event *T
 		if err := tx.Select("agent", "status", "commits_ahead", "merged_at").First(&thread, "id = ?", threadID).Error; err != nil {
 			return notFound(err)
 		}
+		if thread.Agent == AgentLLM {
+			return errors.New("cannot clear the project coordinator session")
+		}
 		updates := map[string]any{
 			"session_id": newID, "turns": 0, "context_tokens": 0, "context_window": 0,
 			"last_turn_ms": 0, "last_turn_at": nil, "reported_model": "",

@@ -95,9 +95,7 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 ## Workspace `/clear`
 
-`/clear` replaces the coordinator's session ID in the same main thread while preserving visible conversation, project settings, memory, library, workers and cumulative usage. It is accepted only with no running or unresolved coordinator input or pending decision; input admission and the switch are serialized. The resident process is released before an atomic session-ID, settings-confirmation and boundary-event update. A failed release or database update is reported without committing a switch.
-
-A persisted boundary distinguishes an explicitly fresh session from a legacy migration. The next real input starts without resume and receives current project context and settings, but does not automatically import the earlier conversation. The coordinator can still consult it via `read_conversation`; `/clear` is not a privacy boundary. The IM folder command remains a different, existing thread-switching operation. See [slash-commands.md](../../.design/slash-commands.md).
+The coordinator session is locked: Workspace `/clear` is rejected on the server and omitted from its command menu. Worker and folder sessions still support it, without deleting their visible history. The storage layer also refuses coordinator rotation. Previously stored explicit session boundaries remain recognized on restart, preventing inadvertent import of old history. The IM folder command retains its existing thread-switching semantics. See [slash-commands.md](../../.design/slash-commands.md).
 
 ## 验证与已知边界
 

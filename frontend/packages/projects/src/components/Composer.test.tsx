@@ -211,6 +211,13 @@ describe('Composer slash menu', () => {
         expect(zh.composer.clearDescription).toBe('开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息');
     });
 
+    it('hides /clear when the host locks the coordinator session', () => {
+        const { input } = setup({ allowClear: false });
+        fireEvent.change(input, { target: { value: '/' } });
+        expect(screen.getByRole('option', { name: /compact/ })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /clear/ })).not.toBeInTheDocument();
+    });
+
     it('offers and sends /clear through the normal composer path', async () => {
         const { send, input } = setup();
         fireEvent.change(input, { target: { value: '/cl' } });

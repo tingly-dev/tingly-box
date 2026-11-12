@@ -7,6 +7,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRotateRejectsCoordinator(t *testing.T) {
+	s, err := Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	p := &Project{Name: "Project"}
+	require.NoError(t, s.CreateProjectWithMain(p, &Thread{}, ""))
+	th, err := s.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	require.ErrorContains(t, s.RotateThreadSession(th.ID, th.SessionID, "replacement", &ThreadEvent{}), "coordinator")
+	got, err := s.GetThread(th.ID)
+	require.NoError(t, err)
+	require.Equal(t, th.SessionID, got.SessionID)
+}
+
 func TestRotateRollsBackWhenBoundaryInsertFails(t *testing.T) {
 	s, err := Open(":memory:")
 	require.NoError(t, err)
@@ -15,6 +29,7 @@ func TestRotateRollsBackWhenBoundaryInsertFails(t *testing.T) {
 	require.NoError(t, s.CreateProjectWithMain(p, &Thread{}, ""))
 	th, err := s.GetThread(p.MainThreadID)
 	require.NoError(t, err)
+	th.Agent = AgentClaudeCode
 	th.SessionID, th.Turns = "old", 2
 	require.NoError(t, s.SaveThread(th))
 	require.NoError(t, s.db.Exec(`CREATE TRIGGER fail_boundary BEFORE INSERT ON thread_events WHEN NEW.kind = 'command' BEGIN SELECT RAISE(ABORT, 'cannot save boundary'); END`).Error)
@@ -33,6 +48,7 @@ func TestRotateThreadSessionAtomicAndPersistent(t *testing.T) {
 	require.NoError(t, s.CreateProjectWithMain(p, &Thread{}, ""))
 	th, err := s.GetThread(p.MainThreadID)
 	require.NoError(t, err)
+	th.Agent = AgentClaudeCode
 	th.SessionID, th.Cwd, th.Turns, th.InputTokens, th.ContextTokens = "old", "/workspace", 3, 42, 12
 	require.NoError(t, s.SaveThread(th))
 	before := &ThreadEvent{ThreadID: th.ID, Kind: EvUser, Content: "old history"}

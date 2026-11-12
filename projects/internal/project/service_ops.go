@@ -195,7 +195,7 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 			return nil, fmt.Errorf("/clear does not take arguments; send your next message separately")
 		}
 		if t.Agent == db.AgentLLM {
-			return s.Coordinator.NewSession(t.ProjectID, src)
+			return nil, fmt.Errorf("/clear is not available for the project coordinator")
 		}
 		return s.Threads.NewSession(t.ID, src)
 	}
