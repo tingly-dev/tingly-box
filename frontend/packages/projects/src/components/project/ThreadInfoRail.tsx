@@ -153,13 +153,13 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             )}
             <StatusCard thread={thread} />
             <RailCard id="env" title={t('rail.environment')}>
-                <Fact label={t('rail.folder')}><CopyValue value={thread.cwd} head /></Fact>
-                {branch && <Fact label={t('rail.branch')}><CopyValue value={branch} /></Fact>}
-                {configuredModel && <Fact label={t('threadSettings.configuredModel')}><CopyValue value={configuredModel} /></Fact>}
-                {folder && thread.model && <Fact label={t('threadSettings.configuredModel')}><CopyValue value={[thread.profile, thread.model].filter(Boolean).join(' · ')} /></Fact>}
-                {thread.reported_model && <Fact label={t('threadSettings.lastModel')}><CopyValue value={thread.reported_model} /></Fact>}
-                {permission && <Fact label={t('rail.permissions')}><CopyValue value={permission} /></Fact>}
-                {thread.session_id && <Fact label={t('rail.session')}><CopyValue value={shortSession(thread.session_id)} copy={thread.session_id} /></Fact>}
+                <Fact label={t('rail.folder')} labelWidth={64}><CopyValue value={thread.cwd} /></Fact>
+                {branch && <Fact label={t('rail.branch')} labelWidth={64}><CopyValue value={branch} /></Fact>}
+                {configuredModel && <Fact label={t('rail.model')} labelWidth={64}><CopyValue value={configuredModel} /></Fact>}
+                {folder && thread.model && <Fact label={t('rail.model')} labelWidth={64}><CopyValue value={[thread.profile, thread.model].filter(Boolean).join(' · ')} /></Fact>}
+                {thread.reported_model && <Fact label={t('rail.lastModel')} labelWidth={64}><CopyValue value={thread.reported_model} /></Fact>}
+                {permission && <Fact label={t('rail.permissions')} labelWidth={64}><CopyValue value={permission} /></Fact>}
+                {thread.session_id && <Fact label={t('rail.session')} labelWidth={64}><CopyValue value={shortSession(thread.session_id)} copy={thread.session_id} /></Fact>}
             </RailCard>
             <UsageCard thread={thread} />
             {extra}

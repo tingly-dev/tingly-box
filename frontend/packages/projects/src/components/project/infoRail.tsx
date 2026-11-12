@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Box, Collapse, LinearProgress, Typography } from '@mui/material';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Box, Collapse, LinearProgress, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -74,40 +74,97 @@ export function RailCard({ id, title, aside, defaultOpen = true, children }: { i
     );
 }
 
-/** A Fact's value that stays on one line: a long path keeps its tail
- * (`…/projects/p-latency/threads/t-cache`), anything long enough to clip
- * tells its whole self on hover, and a click copies it — a check marks the
- * copy for a moment. Short values show, hover and copy just the same. */
-export function CopyValue({ value, copy, head }: { value: string; /** What a click copies (defaults to the value itself), as for a session id shown short. */ copy?: string; /** A path keeps its tail, not its head. */ head?: boolean }) {
+/** The most of a value that fits the rail's value column by default; the real
+ * budget is measured off the rendered row, this only seeds the first paint. */
+const KEEP = 40;
+const KEEP_MIN = 8;
+const PROBE = '0000000000';
+
+/**
+ * The tail of a value too long for its column: the ellipsis leads, the end —
+ * the part that tells values apart — is never cut. A path keeps whole
+ * trailing directories (`…/worktrees/stop-28c4c8`), dropping earlier ones
+ * until it fits; anything else keeps its last characters, stepping over a
+ * separator near the cut so it doesn't start mid-word. Whatever comes back
+ * fits `budget` characters (or is the value itself).
+ */
+export function keepTail(value: string, budget: number): string {
+    if (value.length <= budget) return value;
+    const segs = value.split('/').filter((s) => s.length > 0);
+    // A path (no spaces) keeps its last one or two directories whole.
+    if (segs.length > 1 && !value.includes(' ')) {
+        for (const kept of [2, 1]) {
+            const candidate = `…/${segs.slice(-kept).join('/')}`;
+            if (candidate.length <= budget) return candidate;
+        }
+    } else {
+        const tail = value.slice(-(budget - 1));
+        const sep = tail.slice(0, 8).search(/ · | |:/);
+        if (sep >= 0) return `…${tail.slice(sep + 1)}`;
+    }
+    // Even the last segment overflows: clip its head, the end stays whole.
+    return `…${value.slice(-(budget - 1))}`;
+}
+
+/**
+ * A Fact's value that stays on one line: a long value is cut by `keepTail`
+ * against the width the row really has (never by CSS, so the end can't be
+ * lost to a second, silent truncation), the tooltip tells the whole value on
+ * hover, and a click copies it — a check marks the copy for a moment. Short
+ * values show, hover and copy just the same.
+ */
+export function CopyValue({ value, copy }: { value: string; /** What a click copies (defaults to the value itself), as for a session id shown short. */ copy?: string }) {
     const { t } = useTranslation('projects');
     const { copied, copy: write } = useCopyFeedback();
     const full = copy ?? value;
-    const keep = 40;
-    // A long path drops its middle directories but keeps the tail whole; a clean cut lands on a `/` where one is near.
-    const tail = value.slice(-(keep - 1));
-    const cut = tail.indexOf('/');
-    const shown = head && value.length > keep ? `…${cut > 0 ? tail.slice(cut) : tail}` : value;
+    const textRef = useRef<HTMLSpanElement>(null);
+    const probeRef = useRef<HTMLSpanElement>(null);
+    const measuredFor = useRef('');
+    const [budget, setBudget] = useState(KEEP);
+    // How many characters the row really holds: measured once per value, from
+    // the column the text fills when it overflows and the mono font's advance.
+    useLayoutEffect(() => {
+        const text = textRef.current;
+        const probe = probeRef.current;
+        if (!text || !probe) return;
+        if (measuredFor.current !== value) {
+            measuredFor.current = value;
+            // A new value starts over; when the budget already sits at the
+            // seed there is nothing to reset and the measure runs right away.
+            if (budget !== KEEP) { setBudget(KEEP); return; }
+        }
+        if (text.scrollWidth <= text.clientWidth) return;
+        // Fractions matter: a rounded advance can cost the tail a character.
+        const unit = probe.getBoundingClientRect().width / PROBE.length;
+        const avail = text.getBoundingClientRect().width;
+        if (avail > 0 && unit > 0) setBudget((b) => Math.min(b, Math.max(KEEP_MIN, Math.floor(avail / unit))));
+    }, [value, budget]);
+    const shown = keepTail(value, budget);
     return (
-        <Box component="span" role="button" tabIndex={0} aria-label={t('common.copy')}
-            title={full}
-            onClick={(e) => { e.stopPropagation(); void write(full); }}
-            onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void write(full); } }}
-            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, minWidth: 0, maxWidth: '100%', cursor: 'copy', borderRadius: radius.row, '&:hover': { bgcolor: 'action.hover' } }}>
-            <Box component="span" sx={{ ...mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shown}</Box>
-            {copied && <Check sx={{ fontSize: 14, flexShrink: 0, color: 'primary.main' }} />}
-        </Box>
+        <Tooltip title={full} disableInteractive enterTouchDelay={0}>
+            <Box component="span" role="button" tabIndex={0} aria-label={t('common.copy')}
+                onClick={(e) => { e.stopPropagation(); void write(full); }}
+                onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void write(full); } }}
+                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, minWidth: 0, maxWidth: '100%', cursor: 'copy', borderRadius: radius.row, '&:hover': { bgcolor: 'action.hover' } }}>
+                <Box ref={textRef} component="span" sx={{ ...mono, overflow: 'hidden', whiteSpace: 'nowrap' }}>{shown}</Box>
+                <Box ref={probeRef} component="span" aria-hidden sx={{ ...mono, position: 'absolute', visibility: 'hidden', whiteSpace: 'pre' }}>{PROBE}</Box>
+                {copied && <Check sx={{ fontSize: 14, flexShrink: 0, color: 'primary.main' }} />}
+            </Box>
+        </Tooltip>
     );
 }
 
 /** A label and a value on one line. With `onClick` the whole line opens what
- * the value counts (the status area's running-tasks fact). */
-export function Fact({ label, title, onClick, children }: { label: string; title?: string; /** Opens what the value stands for; without it the line is plain text. */ onClick?: (e: { stopPropagation(): void; currentTarget: HTMLElement }) => void; children: ReactNode }) {
+ * the value counts (the status area's running-tasks fact). With `labelWidth`
+ * the labels take a fixed column, so every value in the card starts at the
+ * same x instead of chasing the longest label above it. */
+export function Fact({ label, title, labelWidth, onClick, children }: { label: string; title?: string; /** A fixed label column (px), as in the Environment card. */ labelWidth?: number; /** Opens what the value stands for; without it the line is plain text. */ onClick?: (e: { stopPropagation(): void; currentTarget: HTMLElement }) => void; children: ReactNode }) {
     return (
         <Box onClick={onClick}
             role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
             onKeyDown={onClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(e); } } : undefined}
-            sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5, py: 0.25, fontSize: fontSizes.sm, ...(onClick && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: radius.row }) }}>
-            <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0 }}>{label}</Box>
+            sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: labelWidth != null ? 0.75 : 1.5, py: 0.25, fontSize: fontSizes.sm, ...(onClick && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: radius.row }) }}>
+            <Box component="span" sx={{ color: 'text.secondary', flexShrink: 0, ...(labelWidth != null && { width: labelWidth, minWidth: 'max-content' }) }}>{label}</Box>
             <Box component="span" title={title} sx={{ ...mono, color: 'text.primary', minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{children}</Box>
         </Box>
     );
