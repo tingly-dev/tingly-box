@@ -33,6 +33,11 @@ var _ AnthropicClientInterface = (*ClaudeClient)(nil)
 type ClaudeClient struct {
 	*AnthropicClient
 	native bool // claude_code_version selects the native profile (claude_version.go)
+	// wire selects the API wire version (see AnthropicWire): WireV2, built by
+	// NewClaudeClientV2: SDK-default version header, Bearer auth for every
+	// credential shape, sampling extras stripped. Selection is held back —
+	// see TODO(v2-rollout) in pool.go.
+	wire AnthropicWire
 }
 
 // NewClaudeClient creates a new Claude client wrapper.
@@ -43,6 +48,33 @@ type ClaudeClient struct {
 // so per-request flags resolved here (the claude_org_id rule flag via
 // typ.GetRuleFlags) are correctly scoped to the request being served.
 func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
+	return newClaudeClientWithWire(ctx, provider, model, sessionID, WireV1)
+}
+
+// NewClaudeClientV2 creates the new-API-version (2026-10-21) variant of the
+// Claude Code client wrapper, mirroring NewAnthropicClientV2 on the generic
+// side. Differences from the classic NewClaudeClient wire:
+//   - no pinned anthropic-version header — the SDK default (2026-10-21) stands;
+//   - Authorization: Bearer for every credential shape (the v2 auth semantics;
+//     the classic client sends x-api-key for non-OAuth tokens);
+//   - temperature/top_p/top_k extras are stripped per-request (the 2026-10-21
+//     wire rejects them).
+//
+// Everything else — Claude Code headers, beta signals, CCH middleware, session
+// transport, tool-name remapping — is identical. The ?beta=true query is KEPT
+// on this variant (see the comment at the WithQuery call in
+// newClaudeClientWithWire).
+//
+// Implemented and unit-tested but NOT selected anywhere yet: the pool still
+// routes Claude Code providers to NewClaudeClient. TODO(v2-rollout): see the
+// Claude Code branch in pool.go GetAnthropicClient.
+func NewClaudeClientV2(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID) (*ClaudeClient, error) {
+	return newClaudeClientWithWire(ctx, provider, model, sessionID, WireV2)
+}
+
+// newClaudeClientWithWire builds the Claude client wrapper for the given wire
+// variant (see NewClaudeClientV2 for what WireV2 changes).
+func newClaudeClientWithWire(ctx context.Context, provider *typ.Provider, model string, sessionID typ.SessionID, wire AnthropicWire) (*ClaudeClient, error) {
 	logrus.Debug("creating claude-client")
 
 	apiBase := anthropicBaseURL(provider.APIBase)
@@ -59,7 +91,7 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	isOAuthToken := IsClaudeOAuthToken(provider.GetAccessToken())
 
 	// Apply Claude Code specific headers
-	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken, typ.GetRuleFlags(ctx).ClaudeOrgID)
+	options = applyClaudeCodeHeaders(options, provider, sessionID.Value, isOAuthToken, typ.GetRuleFlags(ctx).ClaudeOrgID, wire)
 
 	nativeVersion := claudeCodeNativeVersion(ctx)
 	native := nativeVersion != ""
@@ -67,7 +99,14 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 		options = applyNativeClaudeCodeHeaders(options, nativeVersion, model, isOAuthToken)
 	}
 
-	// Add beta query parameter
+	// Keep ?beta=true on BOTH wire variants (classic and V2). Unlike the
+	// generic Anthropic client — where the query is a classic-SDK egress
+	// artifact that the v2 API drops (betaQuery in anthropic.go) — here it is
+	// part of the Claude Code OAuth endpoint wire itself: the real claude-cli
+	// sends /v1/messages?beta=true on OAuth traffic and Anthropic fingerprints
+	// OAuth requests (see claudeCodeAllowedUpstreamBetas in
+	// claude_round_tripper.go), so dropping it would change the request shape
+	// the endpoint expects. WithQuery overwrites, so it stays a single value.
 	options = append(options, anthropicOption.WithQuery("beta", "true"))
 
 	// MENTION: must set timeout, otherwise nonstream and stream may work badly
@@ -96,13 +135,14 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 		httpClient: httpClient,
 	}
 
-	return &ClaudeClient{AnthropicClient: base, native: native}, nil
+	return &ClaudeClient{AnthropicClient: base, native: native, wire: wire}, nil
 }
 
 // applyClaudeCodeHeaders applies Claude Code specific headers via SDK options.
 // orgOverride, when non-empty, replaces the login-time organization as the
-// anthropic-organization-id value (the claude_org_id rule flag).
-func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, sessionID string, isOAuthToken bool, orgOverride string) []anthropicOption.RequestOption {
+// anthropic-organization-id value (the claude_org_id rule flag). wire
+// selects the new-API-version header/auth shape (see NewClaudeClientV2).
+func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *typ.Provider, sessionID string, isOAuthToken bool, orgOverride string, wire AnthropicWire) []anthropicOption.RequestOption {
 	// Build beta header with all required flags
 	baseBetas := anthropicBeta
 
@@ -114,19 +154,28 @@ func applyClaudeCodeHeaders(options []anthropicOption.RequestOption, provider *t
 		baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
 	}
 
-	// Auth header
+	// Auth header. OAuth tokens are always Bearer; a plain API key follows the
+	// wire variant: x-api-key on the classic 2023-06-01 wire, Authorization
+	// Bearer on the v2 wire (matching NewAnthropicClientV2).
 	if isOAuthToken {
+		options = append(options, anthropicOption.WithHeader("Authorization", "Bearer "+provider.GetAccessToken()))
+	} else if wire == WireV2 {
 		options = append(options, anthropicOption.WithHeader("Authorization", "Bearer "+provider.GetAccessToken()))
 	} else {
 		options = append(options, anthropicOption.WithHeader("x-api-key", provider.GetAccessToken()))
 	}
 
-	// Claude Code specific headers
+	// Claude Code specific headers. anthropic-version is pinned only on the
+	// classic wire; the v2 variant keeps the SDK default (2026-10-21).
+	versionOpts := []anthropicOption.RequestOption{}
+	if wire == WireV1 {
+		versionOpts = append(versionOpts, anthropicOption.WithHeader("anthropic-version", anthropicVersion))
+	}
+	options = append(options, versionOpts...)
 	options = append(options,
 		anthropicOption.WithHeader("accept", acceptHeader),
 		anthropicOption.WithHeader("anthropic-beta", baseBetas),
 		anthropicOption.WithHeader("anthropic-dangerous-direct-browser-access", anthropicDangerousDirectBrowserAccess),
-		anthropicOption.WithHeader("anthropic-version", anthropicVersion),
 		anthropicOption.WithHeader("user-agent", claudeCLIUserAgent),
 		anthropicOption.WithHeader("x-app", claudeXApp),
 		anthropicOption.WithHeader("x-stainless-helper-method", stainlessHelperMethod),
@@ -172,6 +221,11 @@ func (c *ClaudeClient) ListModels(ctx context.Context) (*ModelListResult, error)
 }
 
 func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) (*AnthropicClient, map[string]string) {
+	// The v2 wire rejects temperature/top_p/top_k; drop the extras up front so
+	// both the native direct call and the delegated base call are covered.
+	if c.wire == WireV2 {
+		stripSamplingExtras(req)
+	}
 	// Apply thinking transformation for Claude Code OAuth. Thinking can be expressed
 	// either through the thinking union (enabled/adaptive/disabled) or through
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
@@ -215,16 +269,23 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)
 
-	// Wrap in AnthropicClient base
+	// Wrap in AnthropicClient base; carry the wire variant so the delegated
+	// methods (BetaMessagesNew etc.) keep the same V2 behavior.
 	base := &AnthropicClient{
 		client:   anthropicClient,
 		provider: c.AnthropicClient.provider,
+		wire:     c.wire,
 	}
 
 	return base, reverseMap
 }
 
 func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) (*AnthropicClient, map[string]string) {
+	// The v2 wire rejects temperature/top_p/top_k; drop the extras up front so
+	// both the native direct call and the delegated base call are covered.
+	if c.wire == WireV2 {
+		stripSamplingExtras(req)
+	}
 	// Apply thinking transformation for Claude Code OAuth. Thinking can be expressed
 	// either through the thinking union (enabled/adaptive/disabled) or through
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
@@ -281,10 +342,12 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)
 
-	// Wrap in AnthropicClient base
+	// Wrap in AnthropicClient base; carry the wire variant so the delegated
+	// methods (BetaMessagesNew etc.) keep the same V2 behavior.
 	base := &AnthropicClient{
 		client:   anthropicClient,
 		provider: c.AnthropicClient.provider,
+		wire:     c.wire,
 	}
 	return base, reverseMap
 }

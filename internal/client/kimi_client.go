@@ -288,6 +288,6 @@ func NewKimiAnthropicClient(provider *typ.Provider, model string, sessionID typ.
 		return nil, fmt.Errorf("kimi anthropic client can only work for Kimi Code OAuth providers")
 	}
 	transport := wrapWithLogging(newKimiRoundTripper(createSessionBoundTransport(provider, sessionID), provider), provider)
-	return newAnthropicClientWithTransport(provider, provider.APIBase, transport,
+	return newAnthropicClientWithTransport(provider, provider.APIBase, transport, WireV1,
 		anthropicOption.WithAuthToken(provider.GetAccessToken()))
 }
