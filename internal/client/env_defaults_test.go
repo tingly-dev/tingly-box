@@ -34,7 +34,7 @@ func TestAnthropicClient_IgnoresEnvironmentCredentials(t *testing.T) {
 	srv, headers := captureHeaders(t)
 
 	provider := &typ.Provider{Name: "p", APIBase: srv.URL, APIStyle: protocol.APIStyleAnthropic, Token: "provider-key"}
-	c, err := newAnthropicClientWithTransport(provider, srv.URL, http.DefaultTransport)
+	c, err := newAnthropicClientWithTransport(provider, srv.URL, http.DefaultTransport, WireV1)
 	if err != nil {
 		t.Fatal(err)
 	}

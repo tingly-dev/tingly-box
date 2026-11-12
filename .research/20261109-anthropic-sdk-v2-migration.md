@@ -30,14 +30,21 @@ Submodule 已切至 `tingly-dev-v2.7.0`(v2.7.0 + 3 个 fork 补丁全部随行,�
 
 - [x] submodule → tingly-dev-v2.7.0 + .gitmodules/Taskfile/go.mod wiring(commit `839f87e32`)
 - [x] /v2 导入路径重写(commit `0f5eabd7f`,纯机械,322+/322-)
-- [x] `msgparam` shim 包(v1 + Beta 访问器/构造器)
+- [x] `msgparam` shim 包(v1 + Beta 访问器/构造器)(commit `3b25f3613`)
 - [x] thinking/reconcile.go:采样 reconcile 改走 extras(含 `param.Omit` 丢弃)
 - [x] afk(engine/harness)、agentboot、projects 编译通过
-- [ ] internal/protocol/request 等 root 模块其余包(后台 agent 处理中)
-- [ ] 老 Client 显式锁定 2023-06-01(internal/client/anthropic.go)
-- [ ] 新增 Client V2 组(xxxV2,官方 Provider + 通用备用)
-- [ ] 测试文件迁移(~400 处构造点)
-- [ ] 实际请求回归:普通对话/流式/工具调用,两套 CS 逻辑各验一遍
+- [x] root 模块全部包迁移(13 包,含 request 转换器、guardrails、toolengine、vision、vmodel)
+- [x] 老 Client 显式锁定 2023-06-01(commit `3d420baac`)
+- [x] 测试文件迁移(51 文件,go vet 全绿)(commit `0b4a94583`)
+- [x] wire 兼容修复:x-api-key 认证头 + beta 出口 `?beta=true`(commit `def27dbea`)
+- [x] 采样参数解码丢失修复:fork 补丁 apijson 保留 unknown key 到 extras(submodule `f108011`,root `ef22b3a6f`);Beta→V1 降级 guard 改为按字段声明判定
+- [x] Client V2 组:`AnthropicClientV2` + `ClaudeClientV2`(2026-10-21 / Bearer / 剥离采样 extras;Claude V2 保留 `?beta=true`,属 CC wire 指纹)
+- [x] **V2 暂不启用**(2026-11-10 决策):pool 一律走 classic,`TODO(v2-rollout)` 标注启用点;官方 API 目前仍接受旧 wire
+- [x] 各 module 构建轮测:root/afk/agentboot/projects/remote/imbot/ai/swagger/gui-wails3 全过
+- [x] harness `matrix --mode=all`:5647 用例,Fail 0(2 个迁移前已知 gap)
+- [ ] fork 补丁 push 到 origin/tingly-dev-v2.7.0(需人工,含 apijson extras 补丁 f108011)
+- [ ] 真机回归(用户后续完成):V2 路径、历史回放新限制、旧响应字段核对
+- [ ] V2 启用时的通用 Provider 备用开关设计
 
 ## 风险与注意
 

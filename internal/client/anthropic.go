@@ -47,6 +47,12 @@ type AnthropicClient struct {
 	provider   *typ.Provider
 	debugMode  bool
 	httpClient *http.Client
+	// wire selects the API wire version (see AnthropicWire): WireV2, the
+	// keeps the SDK's default version header, authenticates with
+	// Authorization: Bearer, skips the classic ?beta=true routing query, and
+	// strips temperature/top_p/top_k sampling extras the v2 wire rejects.
+	// Classic (2023-06-01) providers keep every old behavior unchanged.
+	wire AnthropicWire
 }
 
 // NewAnthropicClient creates a new Anthropic client wrapper over the standard
@@ -77,7 +83,30 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		// proxy is explicitly configured for the provider.
 		transport = anthropicTransport(provider, model, sessionID)
 	}
-	return newAnthropicClientWithTransport(provider, provider.APIBase, transport, extraOptions...)
+	return newAnthropicClientWithTransport(provider, provider.APIBase, transport, WireV1, extraOptions...)
+}
+
+// NewAnthropicClientV2 creates the new-API-version (2026-10-21) variant of the
+// Anthropic client wrapper. It shares the transport chain and lifecycle with
+// the classic client but differs on the wire:
+//   - no pinned anthropic-version header (SDK default 2026-10-21);
+//   - Authorization: Bearer via the SDK's WithAPIKey instead of the classic
+//     x-api-key header;
+//   - no per-call ?beta=true query — the v2 API has no such routing.
+//
+// Intended for the official Anthropic API; third-party providers keep the
+// classic client.
+func NewAnthropicClientV2(provider *typ.Provider, model string, sessionID typ.SessionID, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
+	// Same transport assembly as the classic client: the only differences
+	// between the two variants are header/query/auth wire details, not
+	// proxying, UA resolution or session binding.
+	var transport http.RoundTripper
+	if provider.AuthType == typ.AuthTypeOAuth {
+		transport = createSessionBoundTransport(provider, sessionID)
+	} else {
+		transport = anthropicTransport(provider, model, sessionID)
+	}
+	return newAnthropicClientWithTransport(provider, provider.APIBase, transport, WireV2, extraOptions...)
 }
 
 // anthropicBaseURL normalizes a provider APIBase for the Anthropic SDK, which
@@ -88,27 +117,38 @@ func anthropicBaseURL(apiBase string) string {
 
 // newAnthropicClientWithTransport builds the SDK client for baseURL on an
 // already assembled transport. Constructors that need a non-pooled base or a
-// rewritten base URL (e.g. vmodel) call this directly.
-func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, transport http.RoundTripper, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
+// rewritten base URL (e.g. vmodel) call this directly. wire selects the API
+// wire variant (see AnthropicWire; WireV2 is the new-API-version wire).
+func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, transport http.RoundTripper, wire AnthropicWire, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
 	options := []anthropicOption.RequestOption{
 		// Provider credentials come only from the provider record; the gateway's
 		// own ANTHROPIC_* environment must never be sent upstream.
 		anthropicOption.WithoutEnvironmentDefaults(),
-		// The v2 SDK defaults to the 2026-10-21 API version, which drops
-		// temperature/top_p/top_k; the ecosystem this gateway serves is on the
-		// classic version, so pin it. The V2 client group opts back in.
-		anthropicOption.WithHeader("anthropic-version", anthropicVersion),
 		anthropicOption.WithBaseURL(anthropicBaseURL(baseURL)),
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
+	}
+	// The v2 SDK defaults to the 2026-10-21 API version, which drops
+	// temperature/top_p/top_k; the classic ecosystem this gateway serves is on
+	// the old version, so the classic client pins the header. The V2 wire
+	// variant keeps the SDK's 2026-10-21 default instead.
+	if wire == WireV1 {
+		options = append(options,
+			anthropicOption.WithHeader("anthropic-version", anthropicVersion))
 	}
 	// Multi-field credential providers (Bedrock / Vertex) carry no bearer token;
 	// their cloud adapter option (appended last) installs its own auth. Setting
 	// an empty key header would only plant a stray x-api-key header.
 	if !provider.IsMultiFieldCredential() {
-		// v2's WithAPIKey sends Authorization: Bearer; the classic ecosystem
-		// this client serves (2023-06-01) expects x-api-key. The V2 client
-		// group uses the new bearer default.
-		options = append(options, anthropicOption.WithHeader("x-api-key", provider.GetAccessToken()))
+		if wire == WireV2 {
+			// v2's WithAPIKey sends Authorization: Bearer — the new-API-version
+			// auth shape. The classic branch below keeps x-api-key for the
+			// 2023-06-01 ecosystem.
+			options = append(options, anthropicOption.WithAPIKey(provider.GetAccessToken()))
+		} else {
+			// v2's WithAPIKey sends Authorization: Bearer; the classic ecosystem
+			// this client serves (2023-06-01) expects x-api-key.
+			options = append(options, anthropicOption.WithHeader("x-api-key", provider.GetAccessToken()))
+		}
 	}
 
 	// context-1m is NOT injected here: it's a request-body/header concern
@@ -137,6 +177,7 @@ func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, tra
 		client:     anthropicClient,
 		provider:   provider,
 		httpClient: httpClient,
+		wire:       wire,
 	}, nil
 }
 
@@ -203,11 +244,13 @@ func context1MHeaderOpts(ctx context.Context) []anthropicOption.RequestOption {
 
 // MessagesNew creates a new message request
 func (c *AnthropicClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
+	c.stripSamplingExtrasV2(req)
 	return c.client.Messages.New(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
 // MessagesNewStreaming creates a new streaming message request
 func (c *AnthropicClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
+	c.stripSamplingExtrasV2(req)
 	return c.client.Messages.NewStreaming(ctx, *req, context1MHeaderOpts(ctx)...)
 }
 
@@ -225,19 +268,74 @@ func betaQuery() anthropicOption.RequestOption {
 
 func (c *AnthropicClient) BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error) {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
-	return c.client.Beta.Messages.CountTokens(ctx, *req, betaQuery())
+	betaOpts := []anthropicOption.RequestOption{betaQuery()}
+	if c.wire == WireV2 {
+		// V2 API has no ?beta=true routing; drop the classic query.
+		betaOpts = nil
+	}
+	return c.client.Beta.Messages.CountTokens(ctx, *req, betaOpts...)
 }
 
 // BetaMessagesNew creates a new beta message request
 func (c *AnthropicClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
-	return c.client.Beta.Messages.New(ctx, *req, betaQuery())
+	betaOpts := []anthropicOption.RequestOption{betaQuery()}
+	if c.wire == WireV2 {
+		// V2 API has no ?beta=true routing; drop the classic query.
+		betaOpts = nil
+	}
+	c.stripSamplingExtrasV2(req)
+	return c.client.Beta.Messages.New(ctx, *req, betaOpts...)
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request
 func (c *AnthropicClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
 	req.Betas = withContext1MBeta(ctx, req.Betas)
-	return c.client.Beta.Messages.NewStreaming(ctx, *req, betaQuery())
+	betaOpts := []anthropicOption.RequestOption{betaQuery()}
+	if c.wire == WireV2 {
+		// V2 API has no ?beta=true routing; drop the classic query.
+		betaOpts = nil
+	}
+	c.stripSamplingExtrasV2(req)
+	return c.client.Beta.Messages.NewStreaming(ctx, *req, betaOpts...)
+}
+
+// stripSamplingExtrasV2 drops temperature / top_p / top_k from the request's
+// extra fields on the V2 wire. The decode-preservation patch routes those
+// sampling params through extras (see internal/protocol/request/sampling_extra.go)
+// so the classic 2023-06-01 wire still carries them; the 2026-10-21 wire
+// rejects them outright, so the V2 client must not send them. No-op on the
+// classic client.
+func (c *AnthropicClient) stripSamplingExtrasV2(req interface {
+	ExtraFields() map[string]any
+	SetExtraFields(map[string]any)
+}) {
+	if c.wire == WireV1 {
+		return
+	}
+	stripSamplingExtras(req)
+}
+
+// stripSamplingExtras is the unconditional form of stripSamplingExtrasV2, for
+// callers that already know they are on the V2 wire (e.g. ClaudeClientV2's
+// Guard entry points). See stripSamplingExtrasV2 for why this exists.
+func stripSamplingExtras(req interface {
+	ExtraFields() map[string]any
+	SetExtraFields(map[string]any)
+}) {
+	extras := req.ExtraFields()
+	if len(extras) == 0 {
+		return
+	}
+	stripped := make(map[string]any, len(extras))
+	for k, v := range extras {
+		switch k {
+		case "temperature", "top_p", "top_k":
+			continue
+		}
+		stripped[k] = v
+	}
+	req.SetExtraFields(stripped)
 }
 
 // GetProvider returns the provider for this client

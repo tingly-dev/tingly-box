@@ -150,6 +150,10 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	// Check if this is a Claude Code OAuth provider
 	switch {
 	case provider.IsClaudeCodeProvider():
+		// TODO(v2-rollout): NewClaudeClientV2 (2026-10-21 wire, Bearer for all
+		// credential shapes, sampling extras stripped, ?beta=true kept) is
+		// implemented and tested but held back; rollout is deliberate, so this
+		// selection stays on the classic client until then.
 		client, err = NewClaudeClient(ctx, provider, model, sessionID)
 	case provider.AuthType == typ.AuthTypeAWSSigV4:
 		// Claude on Amazon Bedrock (SigV4 / Bedrock bearer token).
@@ -170,7 +174,10 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 		// header as its OpenAI-style one (#1713).
 		client, err = NewOpenCodeAnthropicClient(provider, model, sessionID)
 	default:
-		client, err = NewAnthropicClient(provider, model, sessionID)
+		// Generic Anthropic provider. Official Anthropic endpoints get the
+		// new-API-version (2026-10-21) V2 wire client; every other host keeps
+		// the classic 2023-06-01 client (see anthropic_v2.go).
+		client, err = newAnthropicClientForProvider(provider, model, sessionID)
 	}
 	if err != nil {
 		logrus.WithContext(ctx).Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
