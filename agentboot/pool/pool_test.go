@@ -64,6 +64,21 @@ func (f *fakeSession) closedCount() int {
 	return f.closeCalls
 }
 
+type failingCloseSession struct{ *fakeSession }
+
+func (f *failingCloseSession) Close(context.Context) error { return context.DeadlineExceeded }
+
+func TestPoolRetainsSessionWhenCloseFails(t *testing.T) {
+	p := pool.New(pool.Config{})
+	s := &failingCloseSession{newFakeSession(agentboot.SessionStateIdle)}
+	require.NoError(t, p.Open(context.Background(), "a", s))
+	require.ErrorIs(t, p.CloseAndRemove(context.Background(), "a"), context.DeadlineExceeded)
+	got, ok := p.Acquire("a")
+	require.True(t, ok)
+	require.Same(t, s, got)
+	require.ErrorIs(t, p.CloseAndRemove(context.Background(), "a"), context.DeadlineExceeded)
+}
+
 func TestPool_OpenAcquire(t *testing.T) {
 	p := pool.New(pool.Config{})
 	s := newFakeSession(agentboot.SessionStateIdle)

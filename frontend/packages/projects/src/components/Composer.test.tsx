@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer';
+import { en } from '../i18n/en';
+import { zh } from '../i18n/zh';
 
 const { mobile } = vi.hoisted(() => ({ mobile: { value: false } }));
 vi.mock('@mui/material', async (original) => ({ ...await original<typeof import('@mui/material')>(), useMediaQuery: () => mobile.value }));
@@ -202,6 +204,28 @@ describe('Composer slash menu', () => {
         expect(input).toHaveValue('/compact ');
         expect(send).not.toHaveBeenCalled();
         expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    });
+
+    it('explains that old messages remain viewable without automatically inheriting their context', () => {
+        expect(en.composer.clearDescription).toBe('Start a new session without automatically inheriting previous conversation context; previous messages remain viewable');
+        expect(zh.composer.clearDescription).toBe('开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息');
+    });
+
+    it('hides /clear when the host locks the coordinator session', () => {
+        const { input } = setup({ allowClear: false });
+        fireEvent.change(input, { target: { value: '/' } });
+        expect(screen.getByRole('option', { name: /compact/ })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /clear/ })).not.toBeInTheDocument();
+    });
+
+    it('offers and sends /clear through the normal composer path', async () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/cl' } });
+        expect(screen.getByRole('option', { name: /clear/ })).toHaveTextContent('composer.clearDescription');
+        fireEvent.keyDown(input, { key: 'Tab' });
+        expect(input).toHaveValue('/clear ');
+        await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('/clear', []);
     });
 
     it('narrows as the name is typed, completes with Tab and with a click', () => {

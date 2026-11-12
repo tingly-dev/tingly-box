@@ -39,6 +39,9 @@ func (m SendMode) Valid() bool {
 
 // SendWith sends a user's message the way mode says.
 func (m *Threads) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	if _, err := m.sendable(threadID); err != nil {
 		return nil, err
 	}

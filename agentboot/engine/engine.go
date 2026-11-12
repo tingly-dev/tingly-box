@@ -124,6 +124,8 @@ type Engine struct {
 
 	mu   sync.Mutex
 	runs map[string]*run // session id -> live turn, while one is in flight
+	// settling tracks callbacks after the engine has released the turn claim.
+	settling map[string]int
 	// launch records what each resident process was started with (see
 	// launchSignature), so a changed setting restarts it instead of being
 	// silently ignored.
@@ -180,6 +182,7 @@ func New(cfg Config) *Engine {
 		hostPrompter:   cfg.Prompter,
 		onTurnEnd:      cfg.OnTurnEnd,
 		runs:           map[string]*run{},
+		settling:       map[string]int{},
 		launch:         map[string]launchState{},
 		lastTurn:       map[string]lastTurn{},
 		residents:      map[string]*resident{},
@@ -275,13 +278,13 @@ func (e *Engine) Inject(id, prompt string) error {
 
 // Release closes id's resident process so something else (a terminal) can
 // take the Claude session over: two processes writing one session file
-// corrupt it. A turn in flight is refused with ErrBusy rather than killed,
-// and the session is claimed while the process closes, so no turn can
-// start in between and have its process closed under it.
+// corrupt it. A running turn, background task or unfinished turn callback is
+// refused with ErrBusy rather than killed. The session is claimed while the
+// process closes and its event reader drains, preventing a concurrent Start.
 func (e *Engine) Release(id string) error {
 	done := make(chan struct{})
 	e.mu.Lock()
-	if _, busy := e.runs[id]; busy {
+	if _, busy := e.runs[id]; busy || len(e.live[id]) > 0 || e.settling[id] > 0 {
 		e.mu.Unlock()
 		return ErrBusy
 	}
@@ -293,7 +296,27 @@ func (e *Engine) Release(id string) error {
 		e.mu.Unlock()
 		close(done)
 	}()
-	e.Evict(id)
+	if e.pool == nil {
+		return nil
+	}
+	e.mu.Lock()
+	resident := e.residents[id]
+	e.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	if err := e.pool.CloseAndRemove(ctx, id); err != nil {
+		return err
+	}
+	if resident != nil {
+		select {
+		case <-resident.c.Done():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	e.mu.Lock()
+	delete(e.launch, id)
+	e.mu.Unlock()
 	return nil
 }
 

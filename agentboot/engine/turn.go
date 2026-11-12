@@ -101,10 +101,17 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 			r.end = end
 		}
 		delete(e.runs, sessionID)
+		e.settling[sessionID]++
 		e.mu.Unlock()
 		cancel()
 		close(done)
 		e.turnEnded(sessionID, end)
+		e.mu.Lock()
+		e.settling[sessionID]--
+		if e.settling[sessionID] == 0 {
+			delete(e.settling, sessionID)
+		}
+		e.mu.Unlock()
 	}()
 
 	var opts agentboot.ExecutionOptions

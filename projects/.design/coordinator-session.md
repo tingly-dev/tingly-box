@@ -93,6 +93,10 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 线程汇报回合末尾附一个 system 信封（`kind="check-in"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。设置变更不会产生独立回合。
 
+## Workspace `/clear`
+
+The coordinator session is locked: Workspace `/clear` is rejected on the server and omitted from its command menu. Worker and folder sessions still support it, without deleting their visible history. The storage layer also refuses coordinator rotation. Previously stored explicit session boundaries remain recognized on restart, preventing inadvertent import of old history. The IM folder command retains its existing thread-switching semantics. See [slash-commands.md](../../.design/slash-commands.md).
+
 ## 验证与已知边界
 
 - [coordinator_session_test.go](../internal/project/coordinator_session_test.go)：连续两条消息使用相同 session ID，第二轮设置 resume。

@@ -38,6 +38,24 @@ func (m *memStore) count(id string) int {
 	return len(m.entries[id])
 }
 
+func TestReleaseRefusesBackgroundWorkAndSettlingCallback(t *testing.T) {
+	e := New(Config{Store: newMemStore()})
+	t.Cleanup(func() { e.Shutdown(context.Background()) })
+	e.mu.Lock()
+	e.live["s"] = []TaskBrief{{TaskID: "task"}}
+	e.mu.Unlock()
+	if err := e.Release("s"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Release with background work = %v, want ErrBusy", err)
+	}
+	e.mu.Lock()
+	delete(e.live, "s")
+	e.settling["s"] = 1
+	e.mu.Unlock()
+	if err := e.Release("s"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Release during callback = %v, want ErrBusy", err)
+	}
+}
+
 func TestStart_LosingClaimRecordsNothing(t *testing.T) {
 	store := newMemStore()
 	e := New(Config{Store: store})

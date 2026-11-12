@@ -190,6 +190,15 @@ func (s *Service) runCommand(ctx context.Context, t *db.Thread, cmd command, src
 	if cmd.kind == cmdUnsupported {
 		return nil, &ErrCommandUnsupported{Name: cmd.name}
 	}
+	if cmd.kind == cmdClear {
+		if cmd.args != "" {
+			return nil, fmt.Errorf("/clear does not take arguments; send your next message separately")
+		}
+		if t.Agent == db.AgentLLM {
+			return nil, fmt.Errorf("/clear is not available for the project coordinator")
+		}
+		return s.Threads.NewSession(t.ID, src)
+	}
 	if t.Agent == db.AgentLLM {
 		// The conversation is compacted by its own session: the command is
 		// queued like any message and the coordinator runs it in its turn.

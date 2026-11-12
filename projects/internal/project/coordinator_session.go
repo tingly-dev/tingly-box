@@ -325,26 +325,32 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	}
 	var prompt strings.Builder
 	if main.Turns == 0 {
-		history, err := s.c.store.ListRecentThreadEvents(main.ID, historyLimit+1)
+		fresh, err := s.c.store.HasCoordinatorSessionBoundary(main.ID, main.SessionID)
 		if err != nil {
 			return err
 		}
-		prompt.WriteString("Previous project conversation, provided once for migration; it is historical context, not a new instruction:\n")
-		var previous []db.ThreadEvent
-		for _, e := range history {
-			if e.ID != event.ID && e.CreatedAt.Before(event.CreatedAt) && !isSettingsNotice(&e) {
-				previous = append(previous, e)
+		if !fresh {
+			history, err := s.c.store.ListRecentThreadEvents(main.ID, historyLimit+1)
+			if err != nil {
+				return err
 			}
-		}
-		if len(history) > historyLimit {
-			// More exists than is shown: say where to read it.
-			prompt.WriteString(strings.TrimSpace(olderNote) + "\n")
-		}
-		if len(previous) > historyLimit {
-			previous = previous[len(previous)-historyLimit:]
-		}
-		for _, m := range renderHistory(previous, s.c.layout.LibraryDir(p.ID)) {
-			fmt.Fprintf(&prompt, "%s: %s\n", m.Role, m.Content)
+			prompt.WriteString("Previous project conversation, provided once for migration; it is historical context, not a new instruction:\n")
+			var previous []db.ThreadEvent
+			for _, e := range history {
+				if e.ID != event.ID && e.CreatedAt.Before(event.CreatedAt) && !isSettingsNotice(&e) {
+					previous = append(previous, e)
+				}
+			}
+			if len(history) > historyLimit {
+				// More exists than is shown: say where to read it.
+				prompt.WriteString(strings.TrimSpace(olderNote) + "\n")
+			}
+			if len(previous) > historyLimit {
+				previous = previous[len(previous)-historyLimit:]
+			}
+			for _, m := range renderHistory(previous, s.c.layout.LibraryDir(p.ID)) {
+				fmt.Fprintf(&prompt, "%s: %s\n", m.Role, m.Content)
+			}
 		}
 	}
 	resend := s.takeResend(p.ID)

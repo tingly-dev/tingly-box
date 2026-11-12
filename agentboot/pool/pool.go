@@ -206,7 +206,16 @@ func (p *Pool) CloseAndRemove(ctx context.Context, key string) error {
 	if !ok {
 		return nil
 	}
-	return p.closeEntry(ctx, e)
+	if err := p.closeEntry(ctx, e); err != nil {
+		// Retain a handle to a process whose termination could not be confirmed.
+		p.mu.Lock()
+		if _, exists := p.entries[key]; !exists {
+			p.entries[key] = e
+		}
+		p.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 // Remove drops key's bookkeeping without calling Close — for a session the

@@ -57,6 +57,12 @@ describe('conversation presentation', () => {
         expect(view.container.querySelectorAll('table')).toHaveLength(2);
     });
 
+    it('shows the new-session boundary without hiding earlier messages', () => {
+        show(props([event('user', 'Earlier message'), event('command', 'clear', { payload: JSON.stringify({ name: 'clear', state: 'ok' }) })]));
+        expect(screen.getByText('Earlier message')).toBeInTheDocument();
+        expect(screen.getByText('projects.transcript.newStarted')).toBeInTheDocument();
+    });
+
     it('offers a way back to the latest messages after scrolling up', () => {
         show(props([event('assistant', 'A reply')]));
         const scroller = screen.getByTestId('conversation-scroll');
@@ -151,7 +157,7 @@ describe('conversation presentation', () => {
         show(p);
         fireEvent.click(screen.getByText('conversation.example1'));
         const configured = composer.mock.lastCall![0];
-        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, seed: 'conversation.example1' });
+        expect(configured).toMatchObject({ disabled: true, allowClear: false, model: 'chosen-model', onModelChange: p.onModelChange, seed: 'conversation.example1' });
         const settings = screen.getByRole('button', { name: 'threadSettings.settings' });
         expect(settings).toHaveAttribute('aria-expanded', 'false');
         expect(screen.queryByText('Controls')).not.toBeInTheDocument();

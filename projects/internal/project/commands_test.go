@@ -18,10 +18,12 @@ import (
 func TestParseCommand(t *testing.T) {
 	for text, want := range map[string]command{
 		"/compact":                    {cmdCompact, "compact", ""},
+		"/clear":                      {cmdClear, "clear", ""},
+		"/clear extra":                {cmdClear, "clear", "extra"},
 		"/compact keep the API notes": {cmdCompact, "compact", "keep the API notes"},
 		"  /compact  \n":              {cmdCompact, "compact", ""},
 		"/compact\nline two":          {cmdCompact, "compact", "line two"},
-		"/clear":                      {cmdUnsupported, "clear", ""},
+		"/new":                        {cmdUnsupported, "new", ""},
 		"/model sonnet":               {cmdUnsupported, "model", ""},
 		"/usage":                      {cmdUnsupported, "usage", ""},
 		"/Compact":                    {},
@@ -195,11 +197,106 @@ func TestCompactRefusedIsACardNotAFailure(t *testing.T) {
 	assert.Contains(t, sink.next(t).text, "Could not compact: Not enough messages to compact.")
 }
 
+func TestNewReplacesFolderSessionWithoutDeletingHistory(t *testing.T) {
+	ca := &commandAgent{}
+	f, svc, _, th := commandFixture(t, ca)
+	before, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	_, err = svc.Send(context.Background(), th.ID, "/clear", nil, Source{})
+	require.NoError(t, err)
+	after, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, before.SessionID, after.SessionID)
+	require.Equal(t, before.Cwd, after.Cwd)
+	require.Equal(t, before.InputTokens, after.InputTokens)
+	require.Zero(t, after.ContextTokens)
+	require.Len(t, eventsOf(t, f, th.ID, db.EvAssistant), 1)
+	require.Equal(t, []string{"go"}, ca.sent())
+	_, err = svc.Send(context.Background(), th.ID, "next", nil, Source{})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, th.ID)
+	require.Equal(t, []string{"go", "next"}, ca.sent())
+	require.False(t, ca.resumed[1])
+}
+
+func TestNewPreservesWorkerConfigurationAndWorkspace(t *testing.T) {
+	ca := &commandAgent{}
+	f, svc, _, _ := commandFixture(t, ca)
+	worker, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Work", Task: "do it", Origin: "coordinator"})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, worker.ID)
+	before, err := f.store.GetThread(worker.ID)
+	require.NoError(t, err)
+	_, err = svc.Send(context.Background(), worker.ID, "/clear", nil, Source{})
+	require.NoError(t, err)
+	after, err := f.store.GetThread(worker.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, before.SessionID, after.SessionID)
+	require.Equal(t, before.Cwd, after.Cwd)
+	require.Equal(t, before.Branch, after.Branch)
+	require.Equal(t, before.InputTokens, after.InputTokens)
+	require.Equal(t, before.PermissionMode, after.PermissionMode)
+	require.NotEmpty(t, eventsOf(t, f, worker.ID, db.EvAssistant))
+	_, err = svc.Send(context.Background(), worker.ID, "follow up", nil, Source{})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, worker.ID)
+	require.False(t, ca.resumed[len(ca.resumed)-1])
+}
+
+func TestNewClearsStaleFailureStatus(t *testing.T) {
+	ca := &commandAgent{}
+	f, svc, _, th := commandFixture(t, ca)
+	_, err := f.threads.update(th.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "old failure" })
+	require.NoError(t, err)
+	got, err := svc.Send(context.Background(), th.ID, "/clear", nil, Source{})
+	require.NoError(t, err)
+	require.Equal(t, db.ThreadIdle, got.Status)
+	require.Empty(t, got.WaitReason)
+}
+
+func TestNewDoesNotInterpretNonPersonOrAttachmentMessages(t *testing.T) {
+	for _, tc := range []struct {
+		src  Source
+		atts int
+	}{{Source{Kind: db.SourceSystem}, 0}, {fromThread("other"), 0}, {Source{}, 1}} {
+		_, ok := personCommand("/clear", tc.src, tc.atts)
+		require.False(t, ok)
+	}
+}
+
+func TestNewRefusesPendingBackgroundReport(t *testing.T) {
+	ca := &commandAgent{}
+	f, svc, _, th := commandFixture(t, ca)
+	f.threads.hold(Report{Thread: *th, Kind: ReportFinished, Text: "pending"})
+	_, err := svc.Send(context.Background(), th.ID, "/clear", nil, Source{})
+	require.Error(t, err)
+	f.threads.dropHeldReport(th.ID)
+}
+
+func TestNewRefusesRunningAndArguments(t *testing.T) {
+	ca := &commandAgent{gate: make(chan struct{})}
+	f, svc, _, th := commandFixture(t, ca)
+	before, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	_, err = svc.Send(context.Background(), th.ID, "/clear extra", nil, Source{})
+	require.Error(t, err)
+	_, err = svc.Send(context.Background(), th.ID, "work", nil, Source{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(ca.sent()) == 2 }, 5*time.Second, 5*time.Millisecond)
+	_, err = svc.Send(context.Background(), th.ID, "/clear", nil, Source{})
+	require.Error(t, err)
+	after, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	require.Equal(t, before.SessionID, after.SessionID)
+	close(ca.gate)
+	waitQuiet(t, f, svc, th.ID)
+}
+
 func TestUnsupportedCommandsAreRefusedNotSent(t *testing.T) {
 	ca := &commandAgent{}
 	f, svc, _, th := commandFixture(t, ca)
 
-	for _, text := range []string{"/clear", "/model opus", "/usage"} {
+	for _, text := range []string{"/new", "/model opus", "/usage"} {
 		_, err := svc.SendWith(context.Background(), th.ID, text, nil, Source{}, SendNow)
 		var unsupported *ErrCommandUnsupported
 		require.ErrorAs(t, err, &unsupported, text)

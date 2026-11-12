@@ -14,6 +14,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 /** The commands the slash menu offers; the host runs them (Projects intercepts the text). */
 const SLASH_COMMANDS = [
     { name: 'compact', hint: 'composer.compactHint', description: 'composer.compactDescription' },
+    { name: 'clear', hint: '', description: 'composer.clearDescription' },
 ];
 
 /** A file on its way into the message: uploading, ready, or refused. */
@@ -104,8 +105,10 @@ export interface ComposerProps {
     onAccepted?: (sent: string) => void;
     /** Show the send keys under the box (desktop only). */
     keysHint?: boolean;
-    /** Typing "/" at the start offers the slash commands the host runs (just /compact for now). */
+    /** Typing "/" at the start offers the slash commands the host runs. */
     slashCommands?: boolean;
+    /** Whether the host permits replacing this session with a fresh one. */
+    allowClear?: boolean;
 }
 
 /**
@@ -115,7 +118,7 @@ export interface ComposerProps {
  */
 export function Composer({
     onSend, attach, attachBlocked, onAttachmentsChange, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
-    context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands,
+    context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands, allowClear = true,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
     const mobile = useMediaQuery(useTheme().breakpoints.down('sm'));
@@ -194,7 +197,7 @@ export function Composer({
 
     // The "/" menu: while the first word is a strict prefix of a command's
     // name. A complete name closes it, so Enter sends the command.
-    const slash = slashCommands ? SLASH_COMMANDS.filter((c) => /^\/[a-z-]*$/.test(text) && c.name.startsWith(text.slice(1)) && c.name !== text.slice(1)) : [];
+    const slash = slashCommands ? SLASH_COMMANDS.filter((c) => (allowClear || c.name !== 'clear') && /^\/[a-z-]*$/.test(text) && c.name.startsWith(text.slice(1)) && c.name !== text.slice(1)) : [];
     const [slashPick, setSlashPick] = useState(0);
     const [slashClosed, setSlashClosed] = useState('');
     const slashOpen = slash.length > 0 && slashClosed !== text && !disabled;
@@ -428,7 +431,7 @@ export function Composer({
                     sx={{ display: 'flex', alignItems: 'baseline', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', bgcolor: i === slashActive ? 'action.selected' : 'transparent' }}
                 >
                     <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.base, fontWeight: 600 }}>/{c.name}</Typography>
-                    <Typography component="span" variant="caption" color="text.secondary">{t(c.hint)}</Typography>
+                    {c.hint && <Typography component="span" variant="caption" color="text.secondary">{t(c.hint)}</Typography>}
                     <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 'auto', textAlign: 'right' }}>{t(c.description)}</Typography>
                 </Box>
             ))}

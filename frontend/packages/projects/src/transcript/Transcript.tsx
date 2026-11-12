@@ -613,38 +613,45 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
 // CommandCard is a slash command's outcome as one line that settles in
 // place: working, done with the figures the agent reported, or why it could not.
 // A compaction's summary opens under it.
-const CommandCard = ({message}: {message: TranscriptEntry}) => {
+export const CommandCard = ({message}: {message: TranscriptEntry}) => {
     const {t} = useTranslation();
     const pl = (message.payload ?? {}) as CommandPayload;
     const [open, setOpen] = useState(false);
     const running = pl.state === 'running';
     const failed = pl.state === 'failed';
+    const isNew = pl.name === 'clear' || pl.name === 'new'; // Older session boundaries used /new.
     const parts: string[] = [];
-    if (pl.state === 'ok') {
+    if (!isNew && pl.state === 'ok') {
         if (pl.tokens_reported) {
             parts.push(t('projects.transcript.compactTokens', {defaultValue: '{{before}} → {{after}} tokens', before: formatTokens(pl.tokens_before ?? 0), after: formatTokens(pl.tokens_after ?? 0)}));
         }
         if (pl.trigger === 'auto') parts.push(t('projects.transcript.compactAuto', {defaultValue: 'automatic'}));
         if (pl.duration_ms) parts.push(formatDuration(pl.duration_ms));
     }
-    const title = running
-        ? t('projects.transcript.compacting', {defaultValue: 'Compacting conversation…'})
-        : failed
-            ? t('projects.transcript.compactFailed', {defaultValue: 'Could not compact: {{reason}}', reason: (pl.reason || t('projects.transcript.compactNoReason', {defaultValue: 'the agent declined'})).replace(/\.$/, '')})
-            : t('projects.transcript.compacted', {defaultValue: 'Conversation compacted'});
+    const title = isNew
+        ? running
+            ? t('projects.transcript.newStarting', {defaultValue: 'Starting a new session…'})
+            : failed
+                ? t('projects.transcript.newFailed', {defaultValue: 'Could not start a new session: {{reason}}', reason: (pl.reason || t('projects.transcript.newNoReason', {defaultValue: 'unknown error'})).replace(/\.$/, '')})
+                : t('projects.transcript.newStarted', {defaultValue: 'New session started'})
+        : running
+            ? t('projects.transcript.compacting', {defaultValue: 'Compacting conversation…'})
+            : failed
+                ? t('projects.transcript.compactFailed', {defaultValue: 'Could not compact: {{reason}}', reason: (pl.reason || t('projects.transcript.compactNoReason', {defaultValue: 'the agent declined'})).replace(/\.$/, '')})
+                : t('projects.transcript.compacted', {defaultValue: 'Conversation compacted'});
     return (
         <Box role="status" data-command={pl.name} sx={{border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.25, py: 0.75}}>
             <Stack direction="row" spacing={0.75} sx={{alignItems: 'center', color: failed ? (theme) => getReadableAccent(theme, 'warning') : 'text.secondary'}}>
                 {running ? <CircularProgress size={14}/> : failed ? <ErrorOutline sx={{fontSize: 16}}/> : <CheckCircle sx={{fontSize: 16}}/>}
                 <Typography variant="body2" sx={{color: 'inherit', fontWeight: 500}}>{title}</Typography>
                 {parts.length > 0 && <Typography variant="caption" sx={{color: 'text.secondary'}}>{parts.join(' · ')}</Typography>}
-                {pl.summary && (
+                {!isNew && pl.summary && (
                     <Button size="small" onClick={() => setOpen(!open)} sx={{ml: 'auto !important', minWidth: 0, textTransform: 'none'}} aria-expanded={open}>
                         {t('projects.transcript.compactSummary', {defaultValue: 'Summary'})}
                     </Button>
                 )}
             </Stack>
-            {pl.summary && <Collapse in={open} unmountOnExit><Box component="pre" sx={{...preBox, mt: 1}}>{pl.summary}</Box></Collapse>}
+            {!isNew && pl.summary && <Collapse in={open} unmountOnExit><Box component="pre" sx={{...preBox, mt: 1}}>{pl.summary}</Box></Collapse>}
         </Box>
     );
 };
