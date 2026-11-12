@@ -52,14 +52,6 @@ func (r *OpenAIChatCompletionRequest) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, r.ChatCompletionNewParams); err != nil {
 		return err
 	}
-	if value := gjson.GetBytes(data, "thinking_budget"); value.Exists() {
-		extra := r.ChatCompletionNewParams.ExtraFields()
-		if extra == nil {
-			extra = make(map[string]any)
-		}
-		extra["thinking_budget"] = json.RawMessage(value.Raw)
-		r.ChatCompletionNewParams.SetExtraFields(extra)
-	}
 	return nil
 }
 
@@ -108,14 +100,6 @@ func (r *ResponseCreateRequest) UnmarshalJSON(data []byte) error {
 
 	if err := json.Unmarshal(processedData, r.ResponseNewParams); err != nil {
 		return err
-	}
-	if value := gjson.GetBytes(processedData, "thinking_budget"); value.Exists() {
-		extra := r.ResponseNewParams.ExtraFields()
-		if extra == nil {
-			extra = make(map[string]any)
-		}
-		extra["thinking_budget"] = json.RawMessage(value.Raw)
-		r.ResponseNewParams.SetExtraFields(extra)
 	}
 	return nil
 }

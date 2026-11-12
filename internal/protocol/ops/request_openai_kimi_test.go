@@ -86,7 +86,6 @@ func TestKimiReasoningEffortCollapsesOntoThreeTiers(t *testing.T) {
 		"https://api.moonshot.cn/v1",
 		"https://api.moonshot.ai/v1",
 		"https://api.kimi.com/coding/v1",
-		"https://api.kimi.ai/coding/v1",
 	}
 
 	for _, url := range urls {

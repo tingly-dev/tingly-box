@@ -242,7 +242,7 @@ type RuleFlags struct {
 	// budget_tokens for Anthropic (budget as fallback for budget-only models).
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
-	// DisableThinkingBudget removes OpenAI thinking_budget or Anthropic thinking.budget_tokens.
+	// DisableThinkingBudget removes thinking.budget_tokens on Anthropic-compatible requests.
 	DisableThinkingBudget bool `json:"disable_thinking_budget,omitempty" yaml:"disable_thinking_budget,omitempty"`
 
 	// CleanHeader strips x-anthropic-billing-header blocks from system messages.

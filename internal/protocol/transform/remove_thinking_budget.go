@@ -3,8 +3,6 @@ package transform
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/responses"
 )
 
 // RemoveThinkingBudgetTransform removes the budget while leaving the thinking
@@ -36,18 +34,6 @@ func (*RemoveThinkingBudgetTransform) Apply(ctx *TransformContext) error {
 			}
 			extra["budget_tokens"] = anthropicparam.Omit
 			req.Thinking.OfEnabled.SetExtraFields(extra)
-		}
-	case *openai.ChatCompletionNewParams:
-		extra := req.ExtraFields()
-		if _, ok := extra["thinking_budget"]; ok {
-			delete(extra, "thinking_budget")
-			req.SetExtraFields(extra)
-		}
-	case *responses.ResponseNewParams:
-		extra := req.ExtraFields()
-		if _, ok := extra["thinking_budget"]; ok {
-			delete(extra, "thinking_budget")
-			req.SetExtraFields(extra)
 		}
 	}
 	return nil

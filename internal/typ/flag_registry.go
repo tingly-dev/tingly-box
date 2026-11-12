@@ -183,7 +183,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "disable_thinking_budget",
 			Label:       "Remove thinking budget",
-			Description: "Remove the top-level thinking_budget extension from OpenAI-compatible requests or thinking.budget_tokens from Anthropic-compatible requests, while leaving the thinking mode unchanged. Useful for Kimi-compatible endpoints that reject a budget.",
+			Description: "Remove thinking.budget_tokens from Anthropic-compatible upstream requests while retaining the thinking mode. Use for providers that reject a budget; Anthropic's enabled thinking requires one.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryReasoning,
 		},
