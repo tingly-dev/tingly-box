@@ -1,13 +1,22 @@
-package upstream
+package transform
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicparam "github.com/anthropics/anthropic-sdk-go/packages/param"
 )
 
-// omitThinkingBudget removes only the Anthropic budget from the final request.
-func omitThinkingBudget(request any) {
-	switch req := request.(type) {
+// RemoveThinkingBudgetTransform removes the budget while leaving the thinking
+// mode and all other fields untouched.
+type RemoveThinkingBudgetTransform struct{}
+
+func NewRemoveThinkingBudgetTransform() *RemoveThinkingBudgetTransform {
+	return &RemoveThinkingBudgetTransform{}
+}
+
+func (*RemoveThinkingBudgetTransform) Name() string { return "remove_thinking_budget" }
+
+func (*RemoveThinkingBudgetTransform) Apply(ctx *TransformContext) error {
+	switch req := ctx.Request.(type) {
 	case *anthropic.MessageNewParams:
 		if req.Thinking.OfEnabled != nil {
 			extra := req.Thinking.OfEnabled.ExtraFields()
@@ -27,4 +36,5 @@ func omitThinkingBudget(request any) {
 			req.Thinking.OfEnabled.SetExtraFields(extra)
 		}
 	}
+	return nil
 }

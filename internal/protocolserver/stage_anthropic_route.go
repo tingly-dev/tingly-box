@@ -43,10 +43,9 @@ func (ph *ProtocolHandler) serveAnthropicV1Stage(c *gin.Context, reqCtx *transfo
 
 func (ph *ProtocolHandler) serveAnthropicOnAnthropic(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, isStreaming bool, client protocol.APIType, req *anthropic.BetaMessageNewParams, wire upstream.AnthropicWire) {
 	terminal, err := upstream.NewAnthropic(upstream.Config{
-		Clients:                ph.deps.ClientPool,
-		Provider:               provider,
-		Model:                  reqCtx.RequestModel,
-		RecordAnthropicRequest: anthropicWireRecorder(c),
+		Clients:  ph.deps.ClientPool,
+		Provider: provider,
+		Model:    reqCtx.RequestModel,
 	}, wire)
 	if err != nil {
 		ph.FailAttemptSetup(c, err)

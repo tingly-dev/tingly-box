@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -345,56 +344,6 @@ func TestUpstreamAnthropicWiresAgree(t *testing.T) {
 	require.NotNil(t, beta.StreamUsage)
 	require.True(t, beta.StreamUsage.HasUsage())
 	require.Equal(t, beta, collect(AnthropicWireV1))
-}
-
-func TestAnthropicWireBudgetAndRecording(t *testing.T) {
-	for _, wire := range []AnthropicWire{AnthropicWireV1, AnthropicWireBeta} {
-		for _, enabled := range []bool{false, true} {
-			for _, streaming := range []bool{false, true} {
-				t.Run(fmt.Sprintf("wire=%d/flag=%t/stream=%t", wire, enabled, streaming), func(t *testing.T) {
-					fake := newFakeProvider(t, scenario.TextScenario())
-					config := fake.config(protocol.APIStyleAnthropic)
-					var recorded map[string]any
-					config.RecordAnthropicRequest = func(req any) error {
-						data, err := json.Marshal(req)
-						if err != nil {
-							return err
-						}
-						return json.Unmarshal(data, &recorded)
-					}
-					endpoint, err := NewAnthropic(config, wire)
-					require.NoError(t, err)
-					req := &anthropic.BetaMessageNewParams{
-						Model: "provider-model", MaxTokens: 8192,
-						Thinking: anthropic.BetaThinkingConfigParamOfEnabled(4096),
-						Messages: []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hello"))},
-					}
-					ctx := typ.WithRuleFlags(context.Background(), typ.RuleFlags{DisableThinkingBudget: enabled})
-					if streaming {
-						events, err := endpoint.Stream(ctx, stage.Call{Request: req})
-						require.NoError(t, err)
-						drain(t, events)
-					} else {
-						_, err := endpoint.Complete(ctx, stage.Call{Request: req})
-						require.NoError(t, err)
-					}
-					calls := fake.take()
-					require.Len(t, calls, 1)
-					var sent map[string]any
-					require.NoError(t, json.Unmarshal([]byte(calls[0].Body), &sent))
-					require.Equal(t, sent["thinking"], recorded["thinking"])
-					thinking := recorded["thinking"].(map[string]any)
-					budget, present := thinking["budget_tokens"]
-					if enabled {
-						require.False(t, present)
-					} else {
-						require.True(t, present)
-						require.Equal(t, float64(4096), budget)
-					}
-				})
-			}
-		}
-	}
 }
 
 func TestUpstreamOpenAIUsage(t *testing.T) {

@@ -8,7 +8,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/recording"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TransformStage selects which side of the transform pipeline the recorder
@@ -29,22 +28,6 @@ type TransformRecorder struct {
 	recorder *recording.ProtocolRecorder
 	c        *gin.Context
 	stage    TransformStage
-}
-
-// anthropicWireRecorder refreshes the upstream snapshot after the final
-// Anthropic conversion and budget removal. Other requests keep their normal
-// transform-stage recording behavior.
-func anthropicWireRecorder(c *gin.Context) func(any) error {
-	if c == nil || c.Request == nil || !typ.GetRuleFlags(c.Request.Context()).DisableThinkingBudget {
-		return nil
-	}
-	recorder := recording.FromGin(c)
-	if !recorder.Wants(typ.RecordUpstreamRequest) {
-		return nil
-	}
-	return func(req any) error {
-		return NewTransformRecorder(c, recorder, StagePost).Apply(&transform.TransformContext{Request: req})
-	}
 }
 
 // NewTransformRecorder builds a recorder transform for the given stage.

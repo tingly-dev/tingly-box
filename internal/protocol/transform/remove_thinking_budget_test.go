@@ -1,4 +1,4 @@
-package upstream
+package transform
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestRemoveAnthropicThinkingBudget(t *testing.T) {
@@ -18,11 +19,26 @@ func TestRemoveAnthropicThinkingBudget(t *testing.T) {
 			before, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.Contains(t, string(before), `"budget_tokens":4096`)
-			omitThinkingBudget(req)
+			require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(&TransformContext{Request: req}))
 			after, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.NotContains(t, string(after), `"budget_tokens"`)
 			require.Contains(t, string(after), `"type":"enabled"`)
+		})
+	}
+}
+
+func TestKimiVendorPreservesRuleBudgetOmission(t *testing.T) {
+	for _, providerURL := range []string{"https://api.kimi.com/coding/", "https://api.kimi.ai/coding/", "https://api.moonshot.cn/anthropic/"} {
+		t.Run(providerURL, func(t *testing.T) {
+			req := &anthropic.BetaMessageNewParams{Model: "kimi-for-coding", Thinking: anthropic.BetaThinkingConfigParamOfEnabled(4096)}
+			ctx := &TransformContext{Request: req, Provider: &typ.Provider{APIBase: providerURL}}
+			require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(ctx))
+			require.NoError(t, NewVendorTransform().Apply(ctx))
+			data, err := json.Marshal(ctx.Request)
+			require.NoError(t, err)
+			require.NotContains(t, string(data), `"budget_tokens"`)
+			require.Contains(t, string(data), `"type":"enabled"`)
 		})
 	}
 }
@@ -32,7 +48,7 @@ func TestRemoveThinkingBudgetLeavesOpenAIRequest(t *testing.T) {
 	req.SetExtraFields(map[string]any{"thinking_budget": 4096})
 	before, err := json.Marshal(req)
 	require.NoError(t, err)
-	omitThinkingBudget(req)
+	require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(&TransformContext{Request: req}))
 	after, err := json.Marshal(req)
 	require.NoError(t, err)
 	require.JSONEq(t, string(before), string(after))
@@ -48,7 +64,7 @@ func TestRemoveAnthropicThinkingBudgetLeavesOtherModes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			before, err := json.Marshal(req)
 			require.NoError(t, err)
-			omitThinkingBudget(req)
+			require.NoError(t, NewRemoveThinkingBudgetTransform().Apply(&TransformContext{Request: req}))
 			after, err := json.Marshal(req)
 			require.NoError(t, err)
 			require.JSONEq(t, string(before), string(after))
