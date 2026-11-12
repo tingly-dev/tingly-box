@@ -111,6 +111,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 	if accessStore != nil && authorizer != nil {
 		ctx = WithPrivilegeChecker(ctx, NewPrivilegeChecker(accessStore, authorizer))
 		ctx = WithAnswerChecker(ctx, NewActionChecker(accessStore, authorizer, access.ActionRemoteControlApprove))
+		ctx = WithStartChecker(ctx, NewActionChecker(accessStore, authorizer, access.ActionRemoteControlStart))
 	}
 	attachedList := make([]*Attached, 0, len(consumers))
 	for _, consumer := range consumers {
@@ -154,6 +155,13 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, chatStore ChatS
 			opts := &imbot.SendMessageOptions{Text: DeniedActionText(action)}
 			ForwardReplyContext(opts, msg)
 			_, _ = b.SendMessage(ctx, msg.GetReplyTarget(), opts)
+		}, func(msg imbot.Message, platform imbot.Platform, botUUID string) bool {
+			for _, attached := range attachedList {
+				if attached.MayAnswerText != nil && attached.MayAnswerText(msg, platform, botUUID) {
+					return true
+				}
+			}
+			return false
 		}))
 	}
 	handlers = append(handlers, promptReplyRouter(manager, prompter))

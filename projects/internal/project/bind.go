@@ -91,10 +91,19 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		}
 		return false, err
 	}
+	authorizeStart := func() bool {
+		return len(authorizeAnswer) < 2 || authorizeAnswer[1] == nil || authorizeAnswer[1]()
+	}
+	denyStart := func() (bool, error) {
+		return true, errors.New("you are not authorized to send messages to this session")
+	}
 	src := Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID}
 	// A chat that moved to a folder, or talks for the first time, starts a
 	// thread there with this message.
 	if b.Folder != "" {
+		if !authorizeStart() {
+			return denyStart()
+		}
 		p, err := s.Store.OpenFolder(b.Folder, "")
 		if err != nil {
 			return true, err
@@ -112,6 +121,9 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	}
 	// "@2 ..." talks to thread #2 of the project for this message only.
 	if n, rest, ok := parseMention(text); ok {
+		if !authorizeStart() {
+			return denyStart()
+		}
 		target, err := s.threadBySeq(p.ID, n)
 		if err != nil {
 			return true, err
@@ -133,6 +145,9 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		if done, err := s.answerWaiting(b, text, src, check); done {
 			return true, err
 		}
+	}
+	if !authorizeStart() {
+		return denyStart()
 	}
 	if p.Type == db.ProjectFolder && (b.NewThread || t.Status == db.ThreadResolved || t.ArchivedAt != nil) {
 		atts, err := s.adoptChannelFiles(t.ProjectID, files)
@@ -222,6 +237,33 @@ func (s *Service) startFromChannel(b *db.ChannelBinding, prev *db.Thread, projec
 	})
 }
 
+// MayAnswerChannelText is a conservative classification for the inbound gate.
+// The actual request and permissions are checked again when consuming the text.
+func (s *Service) MayAnswerChannelText(platform, chatID, text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	if _, _, mention := parseMention(text); mention {
+		return false
+	}
+	b, err := s.Store.GetChannelBinding(platform, chatID)
+	if err != nil || b.Folder != "" {
+		return false
+	}
+	for _, q := range s.Relay.awaitingAll(platform, chatID) {
+		if s.mayAnswer(b, q.threadID) != nil {
+			continue
+		}
+		if _, _, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
+			return true
+		}
+		if ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID); ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk) {
+			return true
+		}
+	}
+	return false
+}
+
 // answerWaiting gives a chat's message to the request it answers. A decision
 // card takes only an option's number or label, and the card comes first so a
 // bare "1" is never read as an approval's words. A reply that starts with a
@@ -276,10 +318,17 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 		}
 		return s.chooseFromText(b, named[0].pendingRequest, named[0].d, text, src)
 	}
+	var active []pendingRequest
 	for _, q := range others {
-		if ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID); !ok || (ev.Kind != db.EvApproval && ev.Kind != db.EvAsk) {
-			continue
+		if ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID); ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk) {
+			active = append(active, q)
 		}
+	}
+	if len(active) > 1 {
+		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one request is waiting. Use its button or open Projects in the web UI to answer the right request.")
+		return true, nil
+	}
+	for _, q := range active {
 		if !s.authorizeChannelAnswer(b, authorize) {
 			return true, nil
 		}
@@ -291,11 +340,14 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 }
 
 func (s *Service) authorizeChannelAnswer(b *db.ChannelBinding, authorize func() bool) bool {
-	if authorize == nil || authorize() {
-		return true
+	if authorize != nil && !authorize() {
+		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat.")
+		return false
 	}
-	s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "⚠️ You are not authorized to answer this request. Ask the bot owner to grant the approve permission for this chat.")
-	return false
+	// Recheck after the potentially slow access-policy check. A rebind can
+	// still race the later response; the check only narrows that window.
+	current, err := s.Store.GetChannelBinding(b.Platform, b.ChatID)
+	return err == nil && current.UpdatedAt.Equal(b.UpdatedAt)
 }
 
 // decisionCode is the short code a chat can start a reply with to say which
@@ -390,6 +442,9 @@ func (s *Service) mayAnswer(b *db.ChannelBinding, threadID string) error {
 }
 
 func mayAnswer(store *db.Store, b *db.ChannelBinding, threadID string) error {
+	if b.Folder != "" {
+		return ErrNotThisChat
+	}
 	lineage, err := store.Lineage(threadID)
 	if err != nil {
 		return err
@@ -409,7 +464,13 @@ func mayAnswer(store *db.Store, b *db.ChannelBinding, threadID string) error {
 		}
 	}
 	if project != "" && project == lineage[0].ProjectID && b.TargetThreadID == "" && b.Folder == "" {
-		return nil
+		p, err := store.GetProject(project)
+		if err != nil {
+			return err
+		}
+		if p.Type == db.ProjectProject {
+			return nil
+		}
 	}
 	return ErrNotThisChat
 }

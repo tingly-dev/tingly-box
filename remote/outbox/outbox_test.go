@@ -129,7 +129,14 @@ func TestNeverSendsToABlockedChat(t *testing.T) {
 	o.Bind(reg, func(chatID string) bool { return chatID == "blocked" })
 
 	require.NoError(t, o.Text(context.Background(), to("telegram", "blocked"), "x"))
+	delivered, err := o.RequestText(context.Background(), to("telegram", "blocked"), "request")
+	require.NoError(t, err)
+	require.False(t, delivered)
 	assert.Empty(t, ch.sent)
+	delivered, err = o.RequestText(context.Background(), to("telegram", "fine"), "request")
+	require.NoError(t, err)
+	require.True(t, delivered)
+	assert.Equal(t, sent{"fine", "request"}, ch.next(t))
 	require.NoError(t, o.Text(context.Background(), to("telegram", "fine"), "x"))
 	assert.Equal(t, sent{"fine", "x"}, ch.next(t))
 }

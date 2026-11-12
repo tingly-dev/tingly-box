@@ -523,12 +523,21 @@ func (r *Relay) deliver(job relayJob) {
 			r.unawait(b, *job.request)
 		}
 		if !promptSent && !promptFailed {
-			if err := r.sink.Text(ctx, to, text); err != nil {
+			delivered := true
+			var err error
+			if sender, ok := r.sink.(agent.RequestTextOutbox); ok && job.request != nil {
+				delivered, err = sender.RequestText(ctx, to, text)
+			} else {
+				err = r.sink.Text(ctx, to, text)
+			}
+			if err != nil || !delivered {
 				if job.request != nil {
 					r.unawait(b, *job.request)
 				}
-				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
-			} else if job.quote != "" && job.request != nil {
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
+				}
+			} else if job.request != nil && job.quote != "" {
 				r.mu.Lock()
 				r.sent[job.request.requestID] = append(r.sent[job.request.requestID], sentPrompt{platform: b.Platform, chatID: b.ChatID, text: "[" + tag + "] " + job.quote, bot: b.BotUUID})
 				r.mu.Unlock()

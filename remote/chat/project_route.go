@@ -133,6 +133,11 @@ func (h *BotHandler) deliverToProject(hCtx HandlerContext, text string, files []
 			return h.answerAllowed(hCtx.Platform, hCtx.BotUUID, hCtx.ChatID, hCtx.SenderID, hCtx.Message.IsGroupMessage())
 		}
 	}
+	if h.startAllowed != nil {
+		ref.AuthorizeStart = func() bool {
+			return h.startAllowed(hCtx.Platform, hCtx.BotUUID, hCtx.ChatID, hCtx.SenderID, hCtx.Message.IsGroupMessage())
+		}
+	}
 	handled, err := h.projectRouter.Post(ref, text, files)
 	switch {
 	case !handled:

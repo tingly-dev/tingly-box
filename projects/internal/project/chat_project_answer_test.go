@@ -89,6 +89,52 @@ func projectChatReceivesNewApprovalAfterSwitch(t *testing.T, plain bool) {
 	waitStatus(t, f.store, deploy.ID, db.ThreadIdle)
 }
 
+// A chat selecting a new folder has left its old thread even before it sends
+// the first message to start the new session.
+func TestPendingFolderRebindCannotAnswerOldThread(t *testing.T) {
+	f, svc, _, deploy := projectChatOnSecondThread(t)
+	_, err := svc.BindChannel("telegram", "up", "", deploy.ID, "")
+	require.NoError(t, err)
+	require.NoError(t, f.store.SetChannelBindingFolder("telegram", "up", "", t.TempDir(), ""))
+	_, err = svc.AnswerFromChannel("telegram", "up", deploy.ID, "req-1", ChoiceAllow)
+	require.ErrorIs(t, err, ErrNotThisChat)
+	_, waiting := f.threads.PendingRequest(deploy.ID, "req-1")
+	require.True(t, waiting)
+	require.NoError(t, f.threads.Respond(deploy.ID, "req-1", Answer{Allow: false}))
+}
+
+func TestRebindingDuringTextAuthorizationDoesNotAnswer(t *testing.T) {
+	f, svc, _, deploy := projectChatOnSecondThread(t)
+	other := mkProject(t, f.store, &db.Project{Name: "Other"})
+	called := false
+	handled, err := svc.PostFromChannel("telegram", "up", "allow", nil, func() bool {
+		called = true
+		_, err := svc.BindChannel("telegram", "up", "", "", other.ID)
+		require.NoError(t, err)
+		return true
+	})
+	require.NoError(t, err)
+	require.True(t, called)
+	require.True(t, handled)
+	_, waiting := f.threads.PendingRequest(deploy.ID, "req-1")
+	require.True(t, waiting)
+	require.NoError(t, f.threads.Respond(deploy.ID, "req-1", Answer{Allow: false}))
+}
+
+func TestFolderSessionsCannotAnswerSiblingApprovals(t *testing.T) {
+	f, svc, _, deploy := projectChatOnSecondThread(t)
+	folder, err := f.store.OpenFolder(t.TempDir(), "")
+	require.NoError(t, err)
+	first, err := f.threads.StartFolderThread(FolderThreadSpec{ProjectID: folder.ID, Title: "Folder one", Task: "write docs"})
+	require.NoError(t, err)
+	second, err := f.threads.StartFolderThread(FolderThreadSpec{ProjectID: folder.ID, Title: "Folder two", Task: "write docs"})
+	require.NoError(t, err)
+	b := &db.ChannelBinding{Platform: "telegram", ChatID: "folder", ThreadID: first.ID, TargetProjectID: folder.ID}
+	require.NoError(t, svc.mayAnswer(b, first.ID))
+	require.ErrorIs(t, svc.mayAnswer(b, second.ID), ErrNotThisChat)
+	require.NoError(t, f.threads.Respond(deploy.ID, "req-1", Answer{Allow: false}))
+}
+
 // A chat bound to a project answers the approvals of every thread of that
 // project, not only the thread it happens to follow.
 func TestProjectChatApprovesAnotherThreadsRequest(t *testing.T) {

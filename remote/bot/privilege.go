@@ -36,6 +36,16 @@ func NewPrivilegeChecker(store AccessStore, authorizer access.Authorizer) Privil
 }
 
 type actionCheckerKey struct{}
+type startCheckerKey struct{}
+
+func WithStartChecker(ctx context.Context, check PrivilegeChecker) context.Context {
+	return context.WithValue(ctx, startCheckerKey{}, check)
+}
+
+func StartCheckerFrom(ctx context.Context) PrivilegeChecker {
+	check, _ := ctx.Value(startCheckerKey{}).(PrivilegeChecker)
+	return check
+}
 
 // WithAnswerChecker supplies the policy check for a text answer at consumption.
 func WithAnswerChecker(ctx context.Context, check PrivilegeChecker) context.Context {

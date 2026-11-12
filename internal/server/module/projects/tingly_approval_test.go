@@ -122,6 +122,27 @@ func TestTinglyProjectTextApprovalRequiresApprove(t *testing.T) {
 	chat.WaitRestate(prompt.MessageID, 10*time.Second).AssertContains(t, "Allowed in a chat.")
 }
 
+// An approver need not have permission to start a new session to reply.
+func TestTinglyButtonlessApproveOnlyCanAnswer(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	orig, ok := h.registry.Get(h.chosenID)
+	require.True(t, ok)
+	h.registry.Register(buttonless{orig})
+	chat := h.env.NewUser("approve-only").OpenDM(h.chosenID)
+	bindCoordinator(t, h, "approve-only project", chat.ChatID)
+	chat.SendText("start worker request approval")
+	waitTextWith(t, chat, "Approve: Run `echo harness`")
+	chats, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, chats[0].ID,
+		access.CapabilityRemoteControl, access.ActionRemoteControlStart, access.EffectDeny))
+	chat.SendText("allow")
+	waitTextWith(t, chat, "request approval approved")
+	chat.SendText("ordinary message without start permission")
+	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
+}
+
 func TestTinglyButtonlessTextApprovalRequiresApprove(t *testing.T) {
 	h := newTinglyProjectsHarness(t)
 	orig, ok := h.registry.Get(h.chosenID)

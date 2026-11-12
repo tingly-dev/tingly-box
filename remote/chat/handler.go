@@ -38,6 +38,7 @@ type BotHandler struct {
 	// when the host has no access policy.
 	privileged     bot2.PrivilegeChecker
 	answerAllowed  bot2.PrivilegeChecker
+	startAllowed   bot2.PrivilegeChecker
 	projectListsMu sync.Mutex
 	projectLists   map[string][]agent.ProjectChoice
 	folderLists    map[string][]string

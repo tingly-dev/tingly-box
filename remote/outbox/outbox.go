@@ -110,6 +110,17 @@ func (o *Outbox) Text(ctx context.Context, to agent.ChatRef, text string) error 
 	return err
 }
 
+// RequestText reports suppressed deliveries to callers that wait for a reply.
+func (o *Outbox) RequestText(ctx context.Context, to agent.ChatRef, text string) (bool, error) {
+	_, err := o.through(ctx, to, func(ch channel.Channel) error {
+		return ch.Send(ctx, channel.Target{ChatID: to.ChatID}, interaction.Notification{Body: text})
+	})
+	if errors.Is(err, errChatDisabled) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // File implements agent.Outbox.
 func (o *Outbox) File(ctx context.Context, to agent.ChatRef, f agent.OutFile) error {
 	_, err := o.through(ctx, to, func(ch channel.Channel) error {
