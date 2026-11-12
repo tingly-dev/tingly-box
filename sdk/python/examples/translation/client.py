@@ -1,6 +1,6 @@
-"""Call the unified gateway. Start examples/translation's model + gateway first.
+"""Call the unified gateway. Start the model server and normal tb, then run setup.py first.
 
-    python sdk/python/examples/translate.py --target zh-Hans 'Hello, world!'
+    python sdk/python/examples/translation/client.py --target zh-Hans 'Hello, world!'
 
 Override TINGLY_BASE_URL / TINGLY_TOKEN for your own Tingly instance.
 """
@@ -20,8 +20,8 @@ def main():
     parser.add_argument("--scenario", default="custom")
     args = parser.parse_args()
     tb = Client(
-        os.environ.get("TINGLY_BASE_URL", "http://127.0.0.1:18080"),
-        os.environ.get("TINGLY_TOKEN", "local-translation-demo"),
+        os.environ.get("TINGLY_BASE_URL", "http://127.0.0.1:12580"),
+        os.environ["TINGLY_TOKEN"],
         scenario=args.scenario,
     )
     result = tb.translate(args.text, args.target, source_lang=args.source, model=args.model)

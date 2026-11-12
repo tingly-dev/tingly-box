@@ -85,3 +85,14 @@
 - opus-4-7 / opus-4-8 / sonnet-5 / sonnet-5-5 / opus-5 / opus-5-5 / fable-5 / fable-5-1 的 effort 档位按 Anthropic
   官方 effort 文档维护；这些模型明确支持 `xhigh`，运行时不得提前折叠为 `high`。
   thinking dialect 仍需按官方模型 capabilities 持续核对。
+
+## Translation consumer
+
+`hunyuan.models.json` and `qwen.models.json` contain the small `translation.adapter`
+capability consumed by `/translate` after selecting an ordinary provider/model.
+The source contracts are linked in `translation_model_catalog.go`. IDs are matched
+exactly; unknown models and arbitrary deployment aliases are unsupported. No
+translation-specific field is added to LB Service, rules, or provider schemas.
+Native payload construction lives in `internal/protocol/translation`. Additional
+models require verified data; deployment alias bindings remain a separate
+provider/model extension concern.

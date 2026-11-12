@@ -197,11 +197,13 @@ selection and language normalization live in the gateway; see
 [translation.md](translation.md). Model service routes are outside the admin
 OpenAPI generator, so these two small response types mirror that contract.
 
-`examples/translation/hunyuan_server.py` loads actual Tencent weights through
+`sdk/python/examples/translation/hunyuan_server.py` loads actual Tencent weights through
 Transformers and registers its serving function with `Server.openai_chat`.
 It returns the complete ChatCompletion dict to preserve measured usage and
-finish status. No new Server endpoint or external serving framework is needed.
-`sdk/python/examples/translate.py` retains the caller side of the same path.
+finish status. No new Server endpoint or external serving framework is needed. Examples are
+colocated in `sdk/python/examples/translation/`; `setup.py` registers the provider
+and rule through ordinary tb management APIs, as the existing E2E harness does.
+`sdk/python/examples/translation/client.py` retains the caller side of the same path.
 
 ### Quota — the one generated surface
 

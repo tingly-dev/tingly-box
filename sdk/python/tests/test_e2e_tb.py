@@ -95,6 +95,11 @@ class EndToEndThroughTB(unittest.TestCase):
             cls.seen["anthropic"] = (messages, system)
             return "native: " + text_in(messages[-1]["content"])
 
+        @tingly.openai_chat("tencent/Hy-MT2-1.8B")
+        def translate(messages):
+            cls.seen["translation"] = messages
+            return "译文"
+
         return serve_default_in_background()
 
     @classmethod
@@ -141,6 +146,7 @@ class EndToEndThroughTB(unittest.TestCase):
             "api_style": "anthropic", "no_key_required": True, "token": "not-required",
         }, cls.admin)
         for scenario, tb_model, provider_uuid, plugin_model in [
+            ("custom", "translate", cls.provider_uuid, "tencent/Hy-MT2-1.8B"),
             ("imagegen", "my-image", cls.provider_uuid, "fake-image"),
             ("openai", "my-chat", cls.provider_uuid, "fake-chat"),
             ("anthropic", "my-chat", cls.provider_uuid, "fake-chat"),
@@ -154,6 +160,14 @@ class EndToEndThroughTB(unittest.TestCase):
     def test_tb_discovers_every_plugin_model(self):
         for model in ("fake-image", "fake-chat", "fake-claude"):
             self.assertIn(model, json.dumps(self.discovered))
+
+    def test_translation_uses_normal_tb_configuration_and_sdk(self):
+        client = tingly.Client(self.tb_base, self.gateway["Authorization"].removeprefix("Bearer "))
+        result = client.translate(["Hello", "Save changes"], "zh-Hans")
+        self.assertEqual(result, {"model": "translate", "translations": [{"text": "译文"}, {"text": "译文"}]})
+        self.assertEqual(len(self.seen["translation"]), 1)
+        self.assertEqual(self.seen["translation"][0]["role"], "user")
+        self.assertIn("Save changes", self.seen["translation"][0]["content"])
 
     def test_image_generation_through_tb_and_tb_keeps_the_png(self):
         body = post_json(f"{self.tb_base}/tingly/imagegen/v1/images/generations",

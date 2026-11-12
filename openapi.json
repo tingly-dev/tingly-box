@@ -20389,10 +20389,6 @@
             "format": "int64",
             "description": "Field time_window"
           },
-          "translation_backend": {
-            "type": "string",
-            "description": "Field translation_backend"
-          },
           "weight": {
             "type": "integer",
             "format": "int64",

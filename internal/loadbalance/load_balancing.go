@@ -10,17 +10,14 @@ import (
 
 // Service represents a provider-model combination for load balancing
 type Service struct {
-	// TranslationBackend selects translation semantics independently of the
-	// provider protocol and model alias. Empty means not a translation service.
-	TranslationBackend string       `yaml:"translation_backend,omitempty" json:"translation_backend,omitempty"`
-	Provider           string       `yaml:"provider" json:"provider"`                                 // Provider name / uuid
-	Model              string       `yaml:"model" json:"model"`                                       // Model name
-	Weight             int          `yaml:"weight" json:"weight"`                                     // Weight for load balancing
-	Active             bool         `yaml:"active" json:"active"`                                     // Whether this service is active
-	TimeWindow         int          `yaml:"time_window" json:"time_window"`                           // Statistics time window in seconds
-	ModelCapacity      *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
-	Tier               int          `yaml:"tier,omitempty" json:"tier,omitempty"`                     // Tier within a rule: lower number = tried first (T0 is highest priority). Used by TacticTier.
-	Stats              ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
+	Provider      string       `yaml:"provider" json:"provider"`                                 // Provider name / uuid
+	Model         string       `yaml:"model" json:"model"`                                       // Model name
+	Weight        int          `yaml:"weight" json:"weight"`                                     // Weight for load balancing
+	Active        bool         `yaml:"active" json:"active"`                                     // Whether this service is active
+	TimeWindow    int          `yaml:"time_window" json:"time_window"`                           // Statistics time window in seconds
+	ModelCapacity *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
+	Tier          int          `yaml:"tier,omitempty" json:"tier,omitempty"`                     // Tier within a rule: lower number = tried first (T0 is highest priority). Used by TacticTier.
+	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
 }
 
 // NormalizeServiceTiers compacts Service.Tier values so tiers are contiguous

@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="tencent/Hy-MT2-1.8B")
     parser.add_argument("--revision", help="Pin the Hub commit, or pass a local snapshot to --model")
-    parser.add_argument("--served-model-name", default="local-mt")
+    parser.add_argument("--served-model-name", default="tencent/Hy-MT2-1.8B")
     parser.add_argument("--port", type=int, default=18081)
     parser.add_argument("--dtype", choices=["float32", "bfloat16"], default="bfloat16")
     parser.add_argument("--max-new-tokens", type=int, default=128)

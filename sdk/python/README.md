@@ -81,8 +81,8 @@ print(text_of(tb.chat(model="gpt-4o", messages=[{"role": "user", "content": "hi"
 
 ### Translate
 
-Configure a native translation service (`translation_backend=hunyuan_mt` or
-`qwen_mt`) under a `translate` rule, then call:
+Configure a cataloged translation model under an ordinary `translate` rule,
+then call:
 
 ```python
 result = tb.translate(["Hello, world!", "Save changes"], target_lang="zh-Hans")
@@ -96,8 +96,8 @@ method returns the gateway JSON (annotated as `TranslationResponse`) and raises
 zero-based `input_index`. It doesn't build model prompts in the client.
 
 For an actual Tencent 1.8B model loaded through Transformers and served using
-`tingly.Server`, see the [complete setup](../../examples/translation/README.md).
-The [client example](examples/translate.py) uses that demo's loopback defaults.
+`tingly.Server`, see the [complete setup](examples/translation/README.md).
+The [client example](examples/translation/client.py) calls the ordinary tb instance.
 No new SDK runtime dependency is needed for `Client.translate()`.
 
 ### Quota

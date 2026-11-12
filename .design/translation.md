@@ -9,9 +9,9 @@ Evidence: [接口调研](../.research/translation-apis.md)。
 
 已确认：以 `/translate` 为统一入口，接入自部署混元 MT、千问翻译及在线翻译服务；调研在 `.research/`，设计在 `.design/`。模型部署由用户在网关之外完成。
 
-首版实验采用第 4 节的固定数组契约，默认别名为 `translate`。服务通过 `translation_backend` 显式选择 `hunyuan_mt` 或 `qwen_mt`；此元数据按 service 保存，独立于 provider 协议和部署别名。能力查询、完整错误规划及“最大并”扩展仍是设计建议。真实模型记录见 [实测报告](../.research/translation-smoke-test.md)。
+首版实验采用第 4 节的固定数组契约，默认别名为 `translate`。模型语义复用 catalog 的模型能力描述，按实际选中的 upstream model ID 选择协议适配。LB Service 与规则 schema 不增加翻译字段。当前仅精确支持 `tencent/Hy-MT2-1.8B` 和 `qwen-mt-flash`；任意部署别名绑定暂不支持，不靠子串猜测模型家族。能力查询、完整错误规划及“最大并”扩展仍是设计建议。真实模型记录见 [实测报告](../.research/translation-smoke-test.md)。
 
-Python SDK 保留调用端 `Client.translate()` 与真实模型 `Server.openai_chat` serving 示例，安装和复现步骤见 [示例文档](../examples/translation/README.md)，SDK 边界见 [Python SDK 设计](python-sdk.md#translation)。
+Python SDK 保留调用端 `Client.translate()` 与真实模型 `Server.openai_chat` serving 示例，安装和复现步骤见 [示例文档](../sdk/python/examples/translation/README.md)，SDK 边界见 [Python SDK 设计](python-sdk.md#translation)。
 
 本次仅实现 API-key/no-key OpenAI serving 入口及基础规则的负载均衡/逐项 failover；smart-routing 分区、OAuth、多字段鉴权、专用在线 MT HTTP 服务、HTML/术语/流式/文件和新 UI 仍未实现。未知语种与选项明确拒绝；不增加 guardrails 覆盖承诺。32 项、单项 32 KiB、总 body 256 KiB 是此次实验限制。
 
@@ -21,7 +21,7 @@ Python SDK 保留调用端 `Client.translate()` 与真实模型 `Server.openai_c
 2. **翻译操作**：标准化输入、语言、控制和结果；在这里做能力匹配、批量编排和配置允许的 failover。
 3. **后端适配**：Qwen 原生参数、对应版本的 Hunyuan 模板、在线 HTTP API 的 envelope、凭据、usage 和错误。
 
-复用现有鉴权、team scope、配置和可用的路由底座。专用翻译不必经过通用 chat 消息链；需要按后端重新构造原生请求。模板与 serving transport 是两个轴，不根据部署别名猜模型家族。
+复用现有鉴权、team scope、配置和可用的路由底座。专用翻译不必经过通用 chat 消息链；需要按后端重新构造原生请求。模板与 serving transport 是两个轴，不根据部署别名猜模型家族。能力归 catalog，原生请求适配归 `internal/protocol/translation`，连接与鉴权仍由现有 client/forwarding 承担。
 
 遵循 [protocol/client 边界](protocol-client-boundary.md)：纯语义和类型转换与 URL、鉴权、连接、代理、超时分开。当前 [模型路由](../internal/protocolserver/routes.go) 和 [鉴权范围](../internal/middleware/auth.go) 是实现时必须保持的边界。
 
@@ -232,7 +232,18 @@ route 级展示：公共保证来自有效服务的交集；可选择能力来�
 ## 10. 待决事项
 
 - 实验反馈后冻结 v1 的 `text[]`、默认别名及能力查询呈现。
-- 本版元数据选 service 级；需要补充 UI 编辑和 smart-routing 分区能力过滤。
+- 供给侧部署别名→模型族绑定尚未实现；需要沿 provider/model 扩展设计补齐，而不是扩展 LB。smart-routing 分区能力过滤仍待实现。
 - 多目标下 terms、context 和术语资源的语言对绑定；默认不做有损降级。
 - 文件任务的资源授权、生命周期和结果保存，以及流式快照/修订事件契约。
 - 上线前确定实际 byte/item/token 限制；文件中没有借用某一服务的限额作为全网关标准。
+
+## 11. 实现收敛（2026-11-12）
+
+撤销早期 `loadbalance.Service.TranslationBackend` 与独立 Go demo gateway。
+模型能力归 catalog；协议形状归 `internal/protocol/translation`；选路、连接、
+凭据与 failover 复用现有组件。示例仅存于 SDK，并通过管理 API 配置正常 tb。
+不增加第二套服务启动/鉴权链，也不把未实施的 provider extensions 当成现成机制。
+
+当前模型 ID 采用 catalog 精确匹配。公共 `model` 路由别名仍可自由配置；
+上游部署别名→模型族绑定暂不支持，未知模型在调用前拒绝。这个限制明确替代
+早期任意部署别名的实验承诺，后续应在供给侧模型扩展中解决。

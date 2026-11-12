@@ -22,8 +22,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/middleware"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/translation"
 	"github.com/tingly-dev/tingly-box/internal/routing"
-	"github.com/tingly-dev/tingly-box/internal/translation"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -51,7 +51,7 @@ func translationTestRouter(t *testing.T, scenario typ.RuleScenario, backends ...
 	for i, backend := range backends {
 		id := "translation-" + backend.backend
 		require.NoError(t, cfg.AddProvider(&typ.Provider{UUID: id, Name: id, Enabled: true, APIStyle: protocol.APIStyleOpenAI, APIBase: backend.url + "/v1", AuthType: typ.AuthTypeAPIKey, Token: "provider-key", Timeout: 20}))
-		services = append(services, &loadbalance.Service{Provider: id, Model: backend.model, TranslationBackend: backend.backend, Active: true, Tier: i})
+		services = append(services, &loadbalance.Service{Provider: id, Model: backend.model, Active: true, Tier: i})
 	}
 	require.NoError(t, cfg.AddRule(typ.Rule{UUID: "translation-test-rule", Scenario: scenario, RequestModel: "translate", Active: true, Services: services,
 		LBTactic: typ.Tactic{Type: loadbalance.TacticTier, Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom}}}))
@@ -94,7 +94,7 @@ func TestTranslationRoutesNativeBatchAndAuth(t *testing.T) {
 		translationTestReply(w, "译文", "stop")
 	}))
 	defer upstream.Close()
-	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "arbitrary-alias"})
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "tencent/Hy-MT2-1.8B"})
 	for _, path := range []string{"/tingly/custom/translate", "/tingly/custom/v1/translate"} {
 		w := translationTestCall(r, path, "gateway-token", `{"text":["Hello","Save changes"],"target_lang":"zh-CN"}`)
 		require.Equal(t, 200, w.Code, w.Body.String())
@@ -107,7 +107,7 @@ func TestTranslationRoutesNativeBatchAndAuth(t *testing.T) {
 	mu.Lock()
 	require.Len(t, calls, 4)
 	for _, body := range calls {
-		require.Equal(t, "arbitrary-alias", body["model"])
+		require.Equal(t, "tencent/Hy-MT2-1.8B", body["model"])
 		msgs := body["messages"].([]any)
 		require.Len(t, msgs, 1)
 		require.Equal(t, "user", msgs[0].(map[string]any)["role"])
@@ -171,7 +171,7 @@ func TestTranslationFailoverRebuildsNativeRequestWithoutReplayingCompletedItems(
 		translationTestReply(w, "第二", "stop")
 	}))
 	defer qwen.Close()
-	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{hunyuan.URL, translation.HunyuanMT, "local-mt"}, translationTestService{qwen.URL, translation.QwenMT, "qwen-mt-flash"})
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{hunyuan.URL, translation.HunyuanMT, "tencent/Hy-MT2-1.8B"}, translationTestService{qwen.URL, translation.QwenMT, "qwen-mt-flash"})
 	w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["first","second"],"target_lang":"zh-Hans"}`)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var out translation.Response
@@ -186,7 +186,7 @@ func TestTranslationFailoverRebuildsNativeRequestWithoutReplayingCompletedItems(
 func TestTranslationInvalidRequestsAndIncompleteOutputs(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { translationTestReply(w, "partial", "length") }))
 	defer upstream.Close()
-	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "local-mt"})
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "tencent/Hy-MT2-1.8B"})
 	for _, body := range []string{
 		`{"text":"scalar","target_lang":"en"}`, `{"text":["x"],"target_lang":"en","stream":true}`,
 		`{"text":[""],"target_lang":"en"}`, `{"text":["x"],"target_lang":"auto"}`,
@@ -209,7 +209,7 @@ func TestTranslationRequestCancellation(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	defer upstream.Close()
-	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "local-mt"})
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "tencent/Hy-MT2-1.8B"})
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	req := httptest.NewRequest(http.MethodPost, "/tingly/custom/translate", strings.NewReader(`{"text":["x"],"target_lang":"en"}`)).WithContext(ctx)
@@ -220,6 +220,18 @@ func TestTranslationRequestCancellation(t *testing.T) {
 	require.Equal(t, 504, w.Code, w.Body.String())
 }
 
+func TestTranslationUnknownDeploymentAliasDoesNotCallUpstream(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("unknown model must not reach upstream")
+		translationTestReply(w, "unexpected", "stop")
+	}))
+	defer upstream.Close()
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{upstream.URL, translation.HunyuanMT, "local-mt"})
+	w := translationTestCall(r, "/tingly/custom/translate", "gateway-token", `{"text":["hello"],"target_lang":"en"}`)
+	require.Equal(t, 400, w.Code)
+	require.Contains(t, w.Body.String(), "no_compatible_translation_service")
+}
+
 // Opt-in real model check: run the Python example first and supply its base URL.
 // This exercises the authenticated gateway routes, not a direct SDK shortcut.
 func TestTranslationLiveHunyuan(t *testing.T) {
@@ -227,7 +239,7 @@ func TestTranslationLiveHunyuan(t *testing.T) {
 	if base == "" {
 		t.Skip("set TINGLY_TRANSLATION_LIVE_BASE_URL to the local Python MT server")
 	}
-	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{base, translation.HunyuanMT, "local-mt"})
+	r := translationTestRouter(t, typ.ScenarioCustom, translationTestService{base, translation.HunyuanMT, "tencent/Hy-MT2-1.8B"})
 	for _, tt := range []struct {
 		target string
 		text   []string

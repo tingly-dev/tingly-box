@@ -14,10 +14,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 
+	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/translation"
+	"github.com/tingly-dev/tingly-box/internal/protocol/translation"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -86,7 +87,7 @@ func (ph *ProtocolHandler) HandleTranslation(c *gin.Context) {
 	view := *rule
 	view.Services = nil
 	for _, svc := range rule.GetActiveServices() {
-		if !translation.Supports(svc.TranslationBackend, req.SourceLang, req.TargetLang) {
+		if !translation.Supports(catalog.TranslationAdapter(svc.Model), req.SourceLang, req.TargetLang) {
 			continue
 		}
 		p, err := ph.deps.Config.GetProviderByUUID(svc.Provider)
@@ -98,7 +99,7 @@ func (ph *ProtocolHandler) HandleTranslation(c *gin.Context) {
 		}
 	}
 	if len(view.Services) == 0 {
-		translationError(c, 400, "no_compatible_translation_service", "configure translation_backend=hunyuan_mt or qwen_mt with a supported language pair and OpenAI serving endpoint", nil)
+		translationError(c, 400, "no_compatible_translation_service", "configure a cataloged translation model with a supported language pair and OpenAI serving endpoint", nil)
 		return
 	}
 	applyRuleFlags(c, ResolveRuleFlags(c, rule))
@@ -127,13 +128,7 @@ func (ph *ProtocolHandler) HandleTranslation(c *gin.Context) {
 					translationError(c, 504, "request_canceled", "translation request canceled", &i)
 					return
 				}
-				backend := ""
-				for _, candidate := range view.Services {
-					if candidate.Provider == provider.UUID && candidate.Model == model {
-						backend = candidate.TranslationBackend
-						break
-					}
-				}
+				backend := catalog.TranslationAdapter(model)
 				native, err := translation.ChatRequest(backend, model, text, req.SourceLang, req.TargetLang)
 				if err != nil {
 					translationError(c, 400, "unsupported_language_pair", err.Error(), &i)
