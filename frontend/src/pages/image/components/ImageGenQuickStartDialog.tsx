@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { AutoAwesome, Brush, Close } from '@/components/icons';
 import CodeBlock from '@/components/CodeBlock';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ImageGenQuickStartDialogProps {
     open: boolean;
@@ -189,7 +190,7 @@ const ImageGenQuickStartDialog: React.FC<ImageGenQuickStartDialogProps> = ({
             maxWidth="md"
             fullWidth
             slotProps={{
-                paper: { sx: { borderRadius: 3 } }
+                paper: { sx: { borderRadius: radius.card } }
             }}
         >
             <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

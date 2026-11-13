@@ -16,6 +16,7 @@ import {
 import { Add, DeleteOutline, ExpandMore } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import type { MCPKVPair, MCPSourceFormValue } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface MCPSourceEditorProps {
     title?: string;
@@ -150,7 +151,7 @@ export default function MCPSourceEditor({
                 defaultExpanded={!compact}
                 disableGutters
                 elevation={0}
-                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.row, '&:before': { display: 'none' } }}
             >
                 <AccordionSummary expandIcon={<ExpandMore />}>
                     <Typography variant="body2">

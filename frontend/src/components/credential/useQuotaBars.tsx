@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import type { ProviderQuota, QuotaWindow, UsageRedeem } from '@/types/quota';
 import { quotaToWindows } from '@/types/quota';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ResourceEntry {
   key: string;
@@ -63,7 +64,7 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
         .join(' ');
 
       const tooltipContent = (
-        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
+        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: radius.row, p: 1.5, maxWidth: 250 }}>
           <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
             {label} ({total})
           </Typography>

@@ -14,6 +14,7 @@ import { ProbeDialog } from './ProbeDialog';
 import { DEFAULT_AXES } from './probeConfig';
 import { CopyBlock, Journey, StatusBar } from './ResultSections';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface QuickProbeButtonProps {
     ruleUuid: string;
@@ -89,7 +90,7 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
                                 height: 22,
                                 pl: 0.75,
                                 pr: 0.25,
-                                borderRadius: 999,
+                                borderRadius: radius.pill,
                                 cursor: 'pointer',
                                 border: `1px solid ${alpha(pillColor, 0.4)}`,
                                 backgroundColor: alpha(pillColor, 0.08),

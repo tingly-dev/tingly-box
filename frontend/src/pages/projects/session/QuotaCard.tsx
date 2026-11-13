@@ -5,6 +5,7 @@ import {useTranslation} from 'react-i18next';
 import {Fact, RailCard, type SessionLaunch, type Thread} from '@tingly/projects';
 import {quotaColor, resetsIn} from '@/components/claudeCode/RouteStatusLine';
 import {profileApi, type ClaudeCodeRoute} from '@/services/profileApi';
+import { radius } from '@tingly/ui/theme/radius';
 
 // QuotaCard is what the terminal status line shows after the model, as a card
 // in the Projects info rail: the provider the thread's launch routes to, and
@@ -43,7 +44,7 @@ const QuotaCard = ({thread, launch}: {thread: Thread; launch: SessionLaunch}) =>
                         <Fact label={label} title={reset ? t('claudeSession.statusResets', {reset}) : undefined}>{q.text}</Fact>
                         {!q.balance && (
                             <LinearProgress variant="determinate" value={Math.max(0, 100 - q.used_percent)} aria-label={label}
-                                sx={{height: 4, borderRadius: 2, mt: 0.25, '& .MuiLinearProgress-bar': {bgcolor: quotaColor(theme, q)}}}/>
+                                sx={{height: 4, borderRadius: radius.pill, mt: 0.25, '& .MuiLinearProgress-bar': {bgcolor: quotaColor(theme, q)}}}/>
                         )}
                     </Box>
                 );

@@ -2,6 +2,7 @@ import { Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import CopyIconButton from '@/components/CopyIconButton';
 import type { MCPCatalogTool } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 const isEmpty = (schema: unknown) =>
     schema == null || (typeof schema === 'object' && Object.keys(schema as object).length === 0);
@@ -19,7 +20,7 @@ function SchemaBlock({ title, schema }: { title: string; schema: unknown }) {
                     mt: 0.5,
                     border: '1px solid',
                     borderColor: 'divider',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     bgcolor: 'background.paper',
                 }}
             >

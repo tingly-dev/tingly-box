@@ -5,6 +5,7 @@ import { IconTextPlus } from '@tabler/icons-react';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { DeleteOutline, Palette, Refresh, tablerMui } from '@/components/icons';
 import type { PromptRunBase } from './promptRunStore';
+import { radius } from '@tingly/ui/theme/radius';
 
 const TextPlus = tablerMui(IconTextPlus);
 
@@ -42,7 +43,7 @@ const PromptRunCard = ({ run, aside, header, pendingLabel, failedHint, onCommit,
     const time = runTimeLabel(run.createdAt);
 
     return (
-        <Box sx={{ display: 'flex', gap: 1.5, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5, bgcolor: 'background.paper' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, p: 1.5, border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
             {aside}
             <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
                 {header}

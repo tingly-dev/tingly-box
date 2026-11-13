@@ -46,6 +46,7 @@ import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import type {Provider} from "../types/provider";
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface OAuthTableProps {
     providers: Provider[];
@@ -226,7 +227,7 @@ const OAuthTable = ({
             sx={{
                 border: view === "table" ? 1 : 0,
                 borderColor: "divider",
-                borderRadius: 2,
+                borderRadius: radius.card,
                 boxShadow: "none",
                 overflowX: "auto",
             }}
@@ -383,7 +384,7 @@ const OAuthTable = ({
                                                 gap: 0.5,
                                                 border: 1,
                                                 borderColor: "divider",
-                                                borderRadius: 1.5,
+                                                borderRadius: radius.card,
                                                 p: 0.5,
                                                 width: "fit-content",
                                             }}

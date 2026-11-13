@@ -27,6 +27,7 @@ import { writeToClipboard } from '@/utils/clipboard';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 import {CodexCompactChip} from '@/components/rule-card/CodexCompactChip';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
@@ -44,7 +45,7 @@ const strategyButtonSx = {
     height: 26,
     minWidth: 0,
     px: 1,
-    borderRadius: 1.5,
+    borderRadius: radius.card,
     borderColor: 'divider',
     fontSize: fontSizes.sm,
     fontWeight: 600,

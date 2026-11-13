@@ -3,6 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigModalShell } from './config/ConfigModalShell';
 import { ManualFileSection } from './config/ManualFileSection';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface OpenCodeConfigModalProps {
     open: boolean;
@@ -44,7 +45,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
             <DialogContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Config file location info */}
-                    <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: 1 }}>
+                    <Box sx={{ p: 2, bgcolor: 'info.50', borderRadius: radius.row }}>
                         <Typography variant="body2" sx={{
                             color: "info.dark"
                         }}>

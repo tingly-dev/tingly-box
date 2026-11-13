@@ -20,6 +20,7 @@ import {
 } from './UsageMetricCells';
 import { getUsageMetricColumns } from './usageMetricColumns';
 import { ProviderLabel } from '@/components/ProviderLogo';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface AggregatedStat {
     key: string;
@@ -78,7 +79,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
         <Paper
             elevation={0}
             sx={{
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 overflow: 'hidden',
@@ -118,7 +119,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             sx={{
                                                 width: 48,
                                                 height: 48,
-                                                borderRadius: 2,
+                                                borderRadius: radius.card,
                                                 backgroundColor: getEmptyIconBg(),
                                                 display: 'flex',
                                                 alignItems: 'center',

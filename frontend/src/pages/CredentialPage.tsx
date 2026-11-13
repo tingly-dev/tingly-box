@@ -39,6 +39,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 type CredentialView = 'table' | 'list' | 'card';
 const VIEW_STORAGE_KEY = 'tb.credentials.view';
@@ -207,7 +208,7 @@ const CredentialPage = () => {
                     actions={credentialCounts.total === 0 ? undefined : (
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
                             <Tooltip title={`${t('credentialPage.sortBy')}: ${t(sort === 'name' ? 'credentialPage.sortName' : 'credentialPage.sortProvider')}`}>
-                                <IconButton aria-label={t('credentialPage.sortBy')} aria-haspopup="menu" aria-expanded={Boolean(sortAnchor)} onClick={event => setSortAnchor(event.currentTarget)} size="small" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 0.75 }}><IconArrowsSort size={18}/></IconButton>
+                                <IconButton aria-label={t('credentialPage.sortBy')} aria-haspopup="menu" aria-expanded={Boolean(sortAnchor)} onClick={event => setSortAnchor(event.currentTarget)} size="small" sx={{ border: 1, borderColor: 'divider', borderRadius: radius.row, p: 0.75 }}><IconArrowsSort size={18}/></IconButton>
                             </Tooltip>
                             <Menu anchorEl={sortAnchor} open={Boolean(sortAnchor)} onClose={() => setSortAnchor(null)}>
                                 {(['name', 'provider'] as const).map(option => <MenuItem key={option} selected={sort === option} onClick={() => { changeSort(option); setSortAnchor(null); }} sx={{ minWidth: 155, justifyContent: 'space-between', gap: 2 }}>{t(option === 'name' ? 'credentialPage.sortName' : 'credentialPage.sortProvider')}{sort === option && <Check fontSize="small"/>}</MenuItem>)}

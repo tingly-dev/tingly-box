@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { fontMono } from '@tingly/ui/theme/fonts';
 import { apiFetch } from '../../client';
 import { ArrowUpward, ChevronRight, Folder, Home } from '../icons';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Listing { home: string; path: string; directories: string[] }
 
@@ -41,7 +42,7 @@ export function DirectoryPicker({ onClose, onSelect }: { onClose: () => void; on
                 <Box sx={{ display: 'flex', flex: 1, minHeight: 0, borderTop: 1, borderBottom: 1, borderColor: 'divider' }}>
                     <Box component="nav" aria-label={t('directory.places')} sx={{ width: { xs: 56, sm: 150 }, flexShrink: 0, bgcolor: 'action.hover', borderRight: 1, borderColor: 'divider', p: 1 }}>
                         <Typography variant="overline" color="text.secondary" sx={{ px: 1, display: { xs: 'none', sm: 'block' }, lineHeight: 2 }}>{t('directory.places')}</Typography>
-                        <ListItemButton onClick={() => navigate('.')} selected={parts.length === 0} aria-label={t('directory.home')} sx={{ borderRadius: 1, gap: 1, px: 1, minHeight: 36 }}>
+                        <ListItemButton onClick={() => navigate('.')} selected={parts.length === 0} aria-label={t('directory.home')} sx={{ borderRadius: radius.row, gap: 1, px: 1, minHeight: 36 }}>
                             <Home fontSize="small" /><Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>{t('directory.home')}</Typography>
                         </ListItemButton>
                     </Box>
@@ -58,7 +59,7 @@ export function DirectoryPicker({ onClose, onSelect }: { onClose: () => void; on
                             {!listing && !error && <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2, color: 'text.secondary' }}><CircularProgress size={16} /><Typography variant="body2">{t('directory.loading')}</Typography></Box>}
                             {listing && (listing.directories.length === 0 ? <Typography color="text.secondary" variant="body2" sx={{ p: 2 }}>{t('directory.empty')}</Typography> : (
                                 <List dense disablePadding aria-label={t('directory.folders')}>
-                                    {listing.directories.map((name) => <ListItemButton key={name} onClick={() => navigate(request.path === '.' ? name : `${request.path}/${name}`)} sx={{ borderRadius: 1, minHeight: 40 }}>
+                                    {listing.directories.map((name) => <ListItemButton key={name} onClick={() => navigate(request.path === '.' ? name : `${request.path}/${name}`)} sx={{ borderRadius: radius.row, minHeight: 40 }}>
                                         <ListItemIcon sx={{ minWidth: 36, color: 'primary.main' }}><Folder fontSize="small" /></ListItemIcon>
                                         <ListItemText primary={name} slotProps={{ primary: { noWrap: true, variant: 'body2' } }} />
                                         <ChevronRight fontSize="small" color="disabled" />

@@ -12,6 +12,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // DshPrefs mirrors the Go struct in internal/config (DshPrefs). Keys
 // are the literal settings.yaml provider-stanza keys so the object
@@ -213,7 +214,7 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                 sx={{
                                     px: 0.75,
                                     py: 0.25,
-                                    borderRadius: 0.75,
+                                    borderRadius: radius.chip,
                                     bgcolor: 'action.hover',
                                     fontFamily: fontMono,
                                     fontSize: fontSizes.xs,
@@ -259,7 +260,7 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                 sx={{
                                     px: 0.75,
                                     py: 0.25,
-                                    borderRadius: 0.75,
+                                    borderRadius: radius.chip,
                                     bgcolor: 'action.hover',
                                     fontFamily: fontMono,
                                     fontSize: fontSizes.xs,

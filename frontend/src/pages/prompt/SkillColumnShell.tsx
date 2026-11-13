@@ -1,5 +1,6 @@
 import { Paper } from '@mui/material';
 import type { ReactNode } from 'react';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface SkillColumnShellProps {
     width?: number;
@@ -21,7 +22,7 @@ const SkillColumnShell = ({ width, flex, header, children }: SkillColumnShellPro
             flexDirection: 'column',
             border: 1,
             borderColor: 'divider',
-            borderRadius: 2,
+            borderRadius: radius.card,
             overflow: 'hidden',
         }}
     >

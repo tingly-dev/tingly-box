@@ -17,6 +17,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import type { UsageEntry } from './usageData';
+import { radius } from '@tingly/ui/theme/radius';
 
 const mono = { fontFamily: fontMono, fontSize: fontSizes.sm } as const;
 
@@ -27,7 +28,7 @@ export function UsageStatTile({ label, value, title }: { label: string; value: s
     return (
         <Paper
             elevation={0}
-            sx={{ p: 1.5, px: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}
+            sx={{ p: 1.5, px: 2, border: '1px solid', borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}
         >
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block' }}>{label}</Typography>
             <Typography title={title} sx={{ fontWeight: 600, fontSize: '1.25rem', lineHeight: 1.4, color: 'text.primary' }}>{value}</Typography>
@@ -50,7 +51,7 @@ export function UsageCard({ title, count, maxHeight, children }: { title: string
     return (
         <Paper
             elevation={0}
-            sx={{ width: '100%', borderRadius: 2, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}
+            sx={{ width: '100%', borderRadius: radius.card, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}
         >
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 2.5, py: 1.75, borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Typography sx={{ fontWeight: 600, fontSize: fontSizes.sm, color: 'text.primary' }}>{title}</Typography>
@@ -110,7 +111,7 @@ export function UsageShareCell({ share }: { share: number }) {
                     sx={{
                         width: 64,
                         height: 6,
-                        borderRadius: 3,
+                        borderRadius: radius.pill,
                         overflow: 'hidden',
                         bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.2 : 0.12),
                     }}

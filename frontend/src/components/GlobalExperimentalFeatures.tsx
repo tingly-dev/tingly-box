@@ -8,6 +8,7 @@ import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../services/api';
 import {armWorkspaceImHint} from '@tingly/projects/workspace-im-hint';
+import { radius } from '@tingly/ui/theme/radius';
 
 const SKILL_FEATURES = [
     {
@@ -166,7 +167,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 px: 1.5,
                 mx: -1.5,
                 gap: 3,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 borderLeft: '3px solid',
                 borderLeftColor: requestedFeature === featureKey ? 'primary.main' : 'transparent',
                 bgcolor: requestedFeature === featureKey

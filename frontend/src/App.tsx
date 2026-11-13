@@ -17,6 +17,7 @@ import { TeamProvider } from './contexts/TeamContext';
 import { appRoutes } from './routes/appRoutes';
 import createAppTheme from './theme';
 import { elevation } from '@/theme/elevation';
+import { radius } from '@tingly/ui/theme/radius';
 
 
 // Route-switch fallback: Layout/nav chrome is already on screen (it renders
@@ -44,7 +45,7 @@ const AppDialogs = () => {
                 slotProps={{
                     paper: {
                         sx: {
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             boxShadow: elevation.overlay,
                         }
                     }

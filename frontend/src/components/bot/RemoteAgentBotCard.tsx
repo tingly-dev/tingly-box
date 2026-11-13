@@ -30,6 +30,7 @@ import BotAccessDialog from './BotAccessDialog';
 import {useRemoteAccess} from './useRemoteAccess';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface RemoteAgentBotCardProps {
     bot: BotSettings;
@@ -121,7 +122,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
             bgcolor: isActive ? 'background.paper' : 'transparent',
             border: '1px solid',
             borderColor: 'divider',
-            borderRadius: 2,
+            borderRadius: radius.card,
             transition: 'background-color 0.18s ease-out',
         }}>
             {/* Header: platform + bot name, one status line, one switch */}

@@ -21,6 +21,7 @@ import { isPairingRequired } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { writeToClipboard } from '@/utils/clipboard';
+import { radius } from '@tingly/ui/theme/radius';
 
 // formatRemaining returns null once expired so the caller can render a localized label.
 const formatRemaining = (expiresAt: string): string | null => {
@@ -150,7 +151,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                             backgroundColor: 'action.hover',
                             px: 1,
                             py: 0.25,
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                         }}
                     >
                         {revealed ? `/pair ${code}` : '••••••••'}

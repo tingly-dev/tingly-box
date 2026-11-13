@@ -1,3 +1,4 @@
+import { radius } from '@tingly/ui/theme/radius'
 // The Image Playground's repeated styling, in one place. Every image in this
 // feature — a reference thumbnail, a run's output, an imported file, an
 // overview tile — wears the same two pieces of chrome over the picture: a dark
@@ -45,7 +46,7 @@ export const fullBleedDialogPaperSx = {
     maxWidth: 'none',
     maxHeight: 'none',
     m: { xs: 1, sm: 3 },
-    borderRadius: 3,
+    borderRadius: radius.card,
 };
 
 /**
@@ -53,7 +54,7 @@ export const fullBleedDialogPaperSx = {
  * something else — the lightbox's filmstrip, an overview tile's source badge.
  */
 export const overlayPlateSx = {
-    borderRadius: 1.5,
+    borderRadius: radius.card,
     bgcolor: 'rgba(15, 23, 42, 0.62)',
     backdropFilter: 'blur(6px)',
 };

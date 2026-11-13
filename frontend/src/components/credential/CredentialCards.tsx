@@ -8,6 +8,7 @@ import type { ProviderQuota } from '@/types/quota';
 import { Box, Button, IconButton, Paper, Stack, Switch, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { MouseEvent } from 'react';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     providers: Provider[];
@@ -35,7 +36,7 @@ export function CredentialCards({ layout, providers, onEdit, onToggle, onModels,
                     ? [{ label: 'OpenAI', url: provider.api_base_openai }, { label: 'Anthropic', url: provider.api_base_anthropic }]
                     : provider.api_base ? [{ label: t('credentialPage.baseUrl'), url: provider.api_base }] : [];
                 return (
-                    <Paper key={provider.uuid} variant="outlined" sx={{ px: { xs: 2, md: 2.5 }, py: 1, borderRadius: 2.5, minWidth: 0 }}>
+                    <Paper key={provider.uuid} variant="outlined" sx={{ px: { xs: 2, md: 2.5 }, py: 1, borderRadius: radius.card, minWidth: 0 }}>
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) auto auto', md: layout === 'card' ? 'minmax(155px, 1.6fr) minmax(85px, 0.8fr) minmax(85px, 1fr) 20px auto auto' : 'minmax(230px, 1.5fr) minmax(130px, 0.8fr) minmax(130px, 1fr) 24px auto auto' }, gridTemplateAreas: { xs: '"identity identity status" "endpoint endpoint endpoint" "quota quota proxy" "actions actions actions"', md: '"identity endpoint quota proxy actions status"' }, alignItems: 'center', columnGap: { xs: 2, md: layout === 'card' ? 0.75 : 3 }, rowGap: 1 }}>
                             <Box sx={{ gridArea: 'identity', minWidth: 0, display: 'flex', alignItems: 'center', gap: layout === 'card' ? 1 : 2 }}>
                                 <ProviderLogo provider={provider} size={42} sx={{ flexShrink: 0 }} />

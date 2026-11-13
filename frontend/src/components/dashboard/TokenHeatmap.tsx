@@ -6,6 +6,7 @@ import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { fontSizes } from '@/theme/fonts';
 import { heatmapScale } from '@/theme/dataviz';
 import { elevation } from '@/theme/elevation';
+import { radius } from '@tingly/ui/theme/radius';
 
 // BCP-47 tags for date formatting, keyed by the languages the UI ships.
 const HEATMAP_LOCALES: Record<AppLanguage, string> = {
@@ -343,7 +344,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     px: 2,
                                                     py: 1.5,
                                                     bgcolor: 'grey.900',
-                                                    borderRadius: 1.5,
+                                                    borderRadius: radius.card,
                                                     boxShadow: elevation.popover,
                                                     border: '1px solid',
                                                     borderColor: 'grey.700',
@@ -428,7 +429,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 height: cellSize,
                                                 backgroundColor: colorIndex === 0 ? emptyCellBg : fill,
                                                 border: cellBorder,
-                                                borderRadius: '3px',
+                                                borderRadius: radius.mark,
                                                 cursor: 'default',
                                                 transition: 'opacity 0.1s',
                                                 // Highlight with outline/opacity only. A hover
@@ -487,7 +488,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                         height: 10,
                                         backgroundColor: index === 0 ? emptyCellBg : color,
                                         border: cellBorder,
-                                        borderRadius: '2px',
+                                        borderRadius: radius.mark,
                                     }}
                                 />
                             ))}

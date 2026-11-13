@@ -29,6 +29,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatLogTime } from '@/utils/datetime';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ModelRequestSummary {
     request_id: string;
@@ -252,7 +253,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, scenario }: Requ
             )}
             <Box
                 ref={tableContainerRef}
-                sx={{ flex: 1, overflow: 'auto', minHeight: 0, backgroundColor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}
+                sx={{ flex: 1, overflow: 'auto', minHeight: 0, backgroundColor: 'background.paper', borderRadius: radius.row, border: 1, borderColor: 'divider' }}
             >
                 <TableContainer sx={{ maxHeight: 'none' }}>
                     <Table stickyHeader size="small">

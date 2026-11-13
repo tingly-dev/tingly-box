@@ -22,6 +22,7 @@ import { useNotify } from '@/hooks/useNotify';
 import type { RedeemOutcome } from '@/hooks/useProviderQuota';
 import type { UsageRedeem } from '@/types/quota';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Older than this, the figure is dimmed: the cache is refreshed in the
 // background, so a stale snapshot means the refresher could not reach upstream.
@@ -397,7 +398,7 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                     px: 0.75,
                     py: 0.25,
                     mx: -0.75,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     opacity: stale && !refreshing ? 0.5 : 1,
                     cursor: refreshing ? 'progress' : 'pointer',
                     '&:hover': { bgcolor: 'action.hover' },

@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { CODEX_COMPACT, planCodexCompact } from '@/components/rule-card/codexCompact';
+import { radius } from '@tingly/ui/theme/radius';
 
 // CodexPrefs mirrors the Go struct in internal/config (CodexPrefs).
 // Keys are the literal Codex config.toml keys so the object round-trips
@@ -327,7 +328,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                     sx={{
                         px: 0.75,
                         py: 0.25,
-                        borderRadius: 0.75,
+                        borderRadius: radius.chip,
                         bgcolor: 'action.hover',
                         fontFamily: fontMono,
                         fontSize: fontSizes.xs,
@@ -457,7 +458,7 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                         <Box
                             component="span"
                             sx={{
-                                px: 0.75, py: 0.25, borderRadius: 0.75,
+                                px: 0.75, py: 0.25, borderRadius: radius.chip,
                                 bgcolor: 'action.hover', fontFamily: fontMono,
                                 fontSize: fontSizes.xs, color: 'text.secondary', whiteSpace: 'nowrap',
                             }}

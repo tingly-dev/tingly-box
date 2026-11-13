@@ -48,6 +48,7 @@ import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ApiKeyTableProps {
     providers: Provider[];
@@ -214,7 +215,7 @@ const ApiKeyTable = ({
             sx={{
                 border: view === "table" ? 1 : 0,
                 borderColor: "divider",
-                borderRadius: 2,
+                borderRadius: radius.card,
                 boxShadow: "none",
                 overflowX: "auto",
             }}
@@ -397,7 +398,7 @@ const ApiKeyTable = ({
                                             gap: 0.5,
                                             border: 1,
                                             borderColor: "divider",
-                                            borderRadius: 1.5,
+                                            borderRadius: radius.card,
                                             p: 0.5,
                                             width: "fit-content",
                                         }}
@@ -520,7 +521,7 @@ const ApiKeyTable = ({
                         bgcolor: "background.paper",
                         boxShadow: 24,
                         p: 4,
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                     }}
                 >
                     <Typography variant="h6" sx={{mb: 2}}>
@@ -543,7 +544,7 @@ const ApiKeyTable = ({
                                 sx={{
                                     p: 2,
                                     bgcolor: "action.hover",
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     fontFamily: fontMono,
                                     wordBreak: "break-all",
                                     border: "1px solid",

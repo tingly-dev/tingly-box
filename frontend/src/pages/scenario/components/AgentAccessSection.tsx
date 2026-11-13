@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
 import ConfigRow from '@/components/ConfigRow';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Room kept at the card's right edge for the fold chevron, in both states, so
 // the row's own actions (Local | Docker, copy) never run underneath it at narrow
@@ -102,7 +103,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
         <Card
             sx={{
                 position: 'relative',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 boxShadow: 'none',
@@ -118,7 +119,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
                         onClick={handleToggle}
                         aria-expanded
                         aria-label={label}
-                        sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: 1 }}
+                        sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: radius.row }}
                     >
                         {chevron}
                     </ButtonBase>

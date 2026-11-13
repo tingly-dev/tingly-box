@@ -12,6 +12,7 @@ import {
     trackPosition,
     type CodexCompactStatus,
 } from './codexCompact';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CodexCompactChipProps {
     /** The rule's own percent; 0 = follow the Auto Config default. */
@@ -45,7 +46,7 @@ const stripes = (theme: Theme) => {
     return `repeating-linear-gradient(135deg, ${line} 0 2px, transparent 2px 5px)`;
 };
 
-const swatchSx = { width: 18, height: 8, borderRadius: 4, flexShrink: 0 } as const;
+const swatchSx = { width: 18, height: 8, borderRadius: radius.pill, flexShrink: 0 } as const;
 
 const NOTE_COLOR: Record<Exclude<CodexCompactStatus, 'ok'>, 'warning' | 'info'> = {
     low: 'warning',
@@ -189,7 +190,7 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 onClose={close}
                 onClick={(e) => e.stopPropagation()}
-                slotProps={{ paper: { sx: { width: 340, p: 2, borderRadius: 2 } } }}
+                slotProps={{ paper: { sx: { width: 340, p: 2, borderRadius: radius.card } } }}
             >
                 <Stack spacing={1.5}>
                     <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -266,7 +267,7 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
 
                     {noteKind && (
                         <Box sx={{
-                            p: 1, borderRadius: 1, fontSize: fontSizes.sm, lineHeight: 1.45,
+                            p: 1, borderRadius: radius.row, fontSize: fontSizes.sm, lineHeight: 1.45,
                             color: (theme) => theme.palette.mode === 'dark' ? theme.palette[noteKind].light : theme.palette[noteKind].dark,
                             bgcolor: (theme) => alpha(theme.palette[noteKind].main, 0.1),
                             border: '1px solid',

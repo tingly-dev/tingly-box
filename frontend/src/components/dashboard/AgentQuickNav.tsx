@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const QUICK_NAV_ICON_SIZE = 20;
 
@@ -16,7 +17,7 @@ const AgentQuickNav: React.FC = () => {
     return (
         <Card
             sx={{
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 boxShadow: 'none',
@@ -55,7 +56,7 @@ const AgentQuickNav: React.FC = () => {
                                     gap: 1,
                                     py: 1.25,
                                     px: 1,
-                                    borderRadius: 1.25,
+                                    borderRadius: radius.row,
                                     cursor: 'pointer',
                                     transition: 'background-color 0.18s ease-out, color 0.18s ease-out, border-color 0.18s ease-out, transform 0.18s ease-out',
                                     border: '1px solid transparent',
@@ -83,7 +84,7 @@ const AgentQuickNav: React.FC = () => {
                                         justifyContent: 'center',
                                         width: 32,
                                         height: 32,
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         bgcolor: 'action.hover',
                                         flexShrink: 0,
                                     }}

@@ -8,6 +8,7 @@ import { folderName, timeAgo } from '../utils/format';
 import { readLocal, writeLocal } from '../utils/storage';
 import { ChevronRight, ExpandMore, Folder, Terminal } from './icons';
 import { needsUser, stateColor, ThreadStateMark } from './project/threadStatus';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** Sessions shown per open folder before "Show older"; running and waiting ones always show. */
 const VISIBLE = 5;
@@ -16,7 +17,7 @@ const LABEL_SX = { fontSize: fontSizes.md, fontWeight: 600, lineHeight: 1.3 } as
 /** Sessions line up with the node's name: icon column plus its gap. */
 const SESSION_INDENT = 4.5;
 const ROW_SX = {
-    display: 'flex', alignItems: 'center', gap: 1, mx: 1, pl: 2, pr: 1.5, minHeight: 32, borderRadius: 1,
+    display: 'flex', alignItems: 'center', gap: 1, mx: 1, pl: 2, pr: 1.5, minHeight: 32, borderRadius: radius.row,
     textDecoration: 'none', color: 'text.primary',
     '&:hover': { backgroundColor: 'action.hover' },
 } as const;

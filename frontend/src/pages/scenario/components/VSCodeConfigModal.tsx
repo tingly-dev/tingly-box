@@ -1,6 +1,7 @@
 import { Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack, Link } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface VSCodeConfigModalProps {
     open: boolean;
@@ -24,7 +25,7 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 3,
+                        borderRadius: radius.card,
                     }
                 }
             }}

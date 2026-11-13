@@ -26,6 +26,7 @@ import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
 import { useMemo } from 'react';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Owner label is rendered through t() so a live language switch updates it;
 // sharing-key labels carry their own display name instead.
@@ -57,7 +58,7 @@ const TIME_RANGES = Object.keys(TIME_RANGE_CONFIG) as TimeRange[];
 
 // Every select in the bar shares this size so the row stays compact.
 const SELECT_SX = {
-    borderRadius: 2,
+    borderRadius: radius.card,
     '& .MuiOutlinedInput-input': { py: 1 },
 } as const;
 
@@ -140,7 +141,7 @@ export default function DashboardFilterBar({
     return (
         // The Paper is the size container, so the layout reacts to the toolbar's own
         // width (sidebar collapsed or not), not the viewport's.
-        <Paper variant="outlined" sx={{ containerType: 'inline-size', px: 1.5, py: 1, borderRadius: 2 }}>
+        <Paper variant="outlined" sx={{ containerType: 'inline-size', px: 1.5, py: 1, borderRadius: radius.card }}>
             <Box
                 sx={{
                     display: 'flex',

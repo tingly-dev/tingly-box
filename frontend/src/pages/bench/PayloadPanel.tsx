@@ -7,6 +7,7 @@ import { CopyBlock } from '@/components/probe/ResultSections';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import type { ProbeRequest } from '@/types/probe';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // PayloadPanel: "what actually goes out" — the request as POST
 // /api/v2/probe/curl renders it, from the same builders the run uses. The
@@ -79,7 +80,7 @@ export const PayloadPanel: React.FC<{
                     {loading ? t('bench.rebuilding', { defaultValue: 'Rebuilding… (500 ms debounce)' }) : t('bench.builtFrom', { defaultValue: 'Built from POST /api/v2/probe/curl — the same builders the run uses.' })}
                 </Typography>
             </Box>
-            {loading && !data && <LinearProgress sx={{ height: 3, borderRadius: 2 }} />}
+            {loading && !data && <LinearProgress sx={{ height: 3, borderRadius: radius.pill }} />}
 
             {curl && !curl.success && (
                 <Alert severity="error" variant="outlined" sx={{ py: 0.25, fontSize: fontSizes.md }}>
@@ -151,7 +152,7 @@ export const PayloadPanel: React.FC<{
                         )}
                     </Typography>
                     <Box sx={{ position: 'relative' }}>
-                        <Box component="pre" sx={{ m: 0, p: 1.5, pr: 5, bgcolor: 'background.default', borderRadius: 1.5, fontFamily: fontMono, fontSize: fontSizes.xs, lineHeight: 1.5, overflow: 'auto', maxHeight: '60vh', color: 'text.primary' }}>
+                        <Box component="pre" sx={{ m: 0, p: 1.5, pr: 5, bgcolor: 'background.default', borderRadius: radius.card, fontFamily: fontMono, fontSize: fontSizes.xs, lineHeight: 1.5, overflow: 'auto', maxHeight: '60vh', color: 'text.primary' }}>
                             {pretty}
                         </Box>
                         <CopyIconButton value={pretty} label={t('probe.copy')} copiedLabel={t('probe.copied')} sx={{ position: 'absolute', top: 4, right: 4 }} />

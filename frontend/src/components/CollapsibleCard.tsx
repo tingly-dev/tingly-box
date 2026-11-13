@@ -2,6 +2,7 @@ import { Box, ButtonBase, Collapse, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { ExpandMore } from '@/components/icons';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CollapsibleCardProps {
     title: string;
@@ -47,7 +48,7 @@ export const CollapsibleCard = ({ title, description, expanded, onToggle, conten
                     justifyContent: 'space-between',
                     gap: 2,
                     textAlign: 'left',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     p: 0.5,
                     m: -0.5,
                     '&:hover': { bgcolor: 'action.hover' },

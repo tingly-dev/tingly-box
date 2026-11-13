@@ -2,6 +2,7 @@ import { Grid, Box } from '@mui/material';
 import type { GridProps } from '@mui/material';
 import type { ReactNode } from 'react';
 import { useMemo, useRef, useState, useCallback } from 'react';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CardGridProps extends Omit<GridProps, 'container'> {
   children: ReactNode;
@@ -102,11 +103,11 @@ export const CardGrid = ({
         },
         '&::-webkit-scrollbar-track': {
           backgroundColor: 'grey.100',
-          borderRadius: 1,
+          borderRadius: radius.row,
         },
         '&::-webkit-scrollbar-thumb': {
           backgroundColor: 'grey.300',
-          borderRadius: 1,
+          borderRadius: radius.pill,
           '&:hover': {
             backgroundColor: 'grey.400',
           },

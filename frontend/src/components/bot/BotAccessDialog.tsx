@@ -14,6 +14,7 @@ import type {RemoteAccess} from './useRemoteAccess';
 import { fontMono } from '@/theme/fonts';
 import { EntityLabel } from '@tingly/ui';
 import { useEntityLabels } from '@/components/entity/useEntityLabels';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     open: boolean;
@@ -44,10 +45,10 @@ type ChatControl = 'control' | 'none' | 'blocked';
 const PRIVILEGED = 'remote_control.privileged';
 const privilegedOn = (chat: DirectChatDetail) => chatPermissionAllowed(chat, 'remote_control', PRIVILEGED);
 
-const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5} as const;
+const rowSx = {p: 1.5, border: 1, borderColor: 'divider', borderRadius: radius.card} as const;
 
 function AccessEditor({inline, open, onClose, children}: {inline: boolean; open: boolean; onClose: () => void; children: ReactNode}) {
-    if (inline) return open ? <Box sx={{mt: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>{children}</Box> : null;
+    if (inline) return open ? <Box sx={{mt: 1.5, border: 1, borderColor: 'divider', borderRadius: radius.card}}>{children}</Box> : null;
     return <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">{children}</Dialog>;
 }
 

@@ -195,7 +195,7 @@ const IndicatorBadge: React.FC<{ color: IndicatorBadgeColor; children: ReactNode
         sx={{
             height: 14,
             width: 14,
-            borderRadius: 7,
+            borderRadius: '50%',
             bgcolor: `${color}.main`,
             color: 'white',
             display: 'flex',

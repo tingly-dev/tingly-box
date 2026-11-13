@@ -513,7 +513,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         stick.current = true;
                         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
                         setAwayFromBottom(false);
-                    }} sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', mb: 1, borderRadius: 99, boxShadow: 3, whiteSpace: 'nowrap', zIndex: 1 }}>↓ {t('conversation.latest', { defaultValue: 'Latest messages' })}</Button>
+                    }} sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', mb: 1, borderRadius: radius.pill, boxShadow: 3, whiteSpace: 'nowrap', zIndex: 1 }}>↓ {t('conversation.latest', { defaultValue: 'Latest messages' })}</Button>
                 )}
                 <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {handoff && (

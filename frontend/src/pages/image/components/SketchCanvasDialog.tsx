@@ -67,6 +67,7 @@ import {
     type ViewPresetKey,
     drawFigure,
 } from '@tingly/mannequin';
+import { radius } from '@tingly/ui/theme/radius';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 
@@ -861,7 +862,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                             justifyContent: 'center',
                             height: { xs: '55vh', sm: '60vh' },
                             minHeight: 240,
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             bgcolor: 'action.hover',
                             overflow: 'hidden',
                         }}
@@ -885,7 +886,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                     display: 'block',
                                     bgcolor: SKETCH_BACKGROUND,
                                     boxShadow: 1,
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     // Draw, don't scroll: the browser must not steal the gesture.
                                     touchAction: 'none',
                                     cursor: 'crosshair',
@@ -910,7 +911,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                     top: 0,
                                     left: 0,
                                     display: 'block',
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     touchAction: 'none',
                                     userSelect: 'none',
                                     pointerEvents: tool === 'pose' ? 'auto' : 'none',

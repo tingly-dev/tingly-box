@@ -12,6 +12,7 @@ import { useAppliedPrefs } from './config/useAppliedPrefs';
 import { useDebouncedPreview } from './config/useDebouncedPreview';
 import { api } from '@/services/api';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CodexConfigModalProps {
     open: boolean;
@@ -228,7 +229,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
                     <Context1MChangeBanner enabled={pendingContext1MChange} clientName="Codex" />
                 )}
 
-                <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                <Box sx={{ mb: 2, p: 2, borderRadius: radius.card, bgcolor: 'action.hover' }}>
                     {/* One 3-way select for the three valid auth states. Each
                         option's caption carries the concrete consequence
                         (routing + what lands in auth.json) so the two

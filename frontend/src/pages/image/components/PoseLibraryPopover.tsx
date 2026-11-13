@@ -9,6 +9,7 @@ import {
     type PosePresetKey,
     drawFigure,
 } from '@tingly/mannequin';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Thumbnails are drawn by the same renderer as the canvas, not by hand-drawn
 // icons: a library of poses is only useful if what you pick is what you get,
@@ -88,7 +89,7 @@ const PoseLibraryPopover: React.FC<PoseLibraryPopoverProps> = ({ anchorEl, turn,
                                             aria-label={label}
                                             sx={{
                                                 p: 0.5,
-                                                borderRadius: 1,
+                                                borderRadius: radius.row,
                                                 border: '1px solid',
                                                 borderColor: 'divider',
                                                 bgcolor: 'background.paper',

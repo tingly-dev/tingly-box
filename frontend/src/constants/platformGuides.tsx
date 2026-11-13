@@ -5,6 +5,7 @@ import type { ComponentType } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface PlatformGuideConfig {
     id: string;
@@ -29,7 +30,7 @@ const buildFeishuFamilyGuide = (t: TFunction, opts: {
     manualLinkLabel: string;
 }) => (
     <Stack spacing={2}>
-        <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+        <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
             <Typography variant="body2" sx={{
                 color: "info.dark"
             }}>
@@ -128,7 +129,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         color: '#0088cc',
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -212,7 +213,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         color: '#0089ff',
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -268,7 +269,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         color: '#07c160',
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -313,7 +314,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         color: '#10a800',
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>

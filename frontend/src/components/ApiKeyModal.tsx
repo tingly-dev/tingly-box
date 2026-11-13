@@ -12,6 +12,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ApiKeyModalProps {
     open: boolean;
@@ -50,7 +51,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                         sx={{
                             p: 2,
                             bgcolor: 'grey.100',
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             fontFamily: fontMono,
                             fontSize: fontSizes.lg,
                             wordBreak: 'break-all',

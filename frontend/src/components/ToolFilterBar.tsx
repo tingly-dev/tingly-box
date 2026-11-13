@@ -20,6 +20,7 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type ToolFilter = 'all' | 'active' | 'off';
 
@@ -48,7 +49,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
             sx={{
                 display: 'flex',
                 bgcolor: 'rgb(238, 233, 224)',
-                borderRadius: '8px',
+                borderRadius: radius.row,
                 p: '3px',
                 alignItems: 'center',
             }}
@@ -60,7 +61,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                     height: '25.5px',
                     px: '10px',
                     py: '5px',
-                    borderRadius: '5px',
+                    borderRadius: radius.chip,
                     border: 'none',
                     cursor: 'pointer',
                     bgcolor: 'transparent',
@@ -84,7 +85,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                 flexDirection: 'row',
                 gap: '6px',
                 bgcolor: 'rgb(238, 233, 224)',
-                borderRadius: '8px',
+                borderRadius: radius.row,
                 p: '3px',
                 alignItems: 'center',
             }}
@@ -100,7 +101,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                             height: '25.5px',
                             px: '10px',
                             py: '5px',
-                            borderRadius: '5px',
+                            borderRadius: radius.chip,
                             border: 'none',
                             cursor: 'pointer',
                             bgcolor: selected ? 'rgb(255, 255, 255)' : 'transparent',

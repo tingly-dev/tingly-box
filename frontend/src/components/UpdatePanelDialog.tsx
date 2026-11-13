@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useVersion } from '@/contexts/VersionContext';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Paper } from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface UpdatePanelDialogProps {
     open: boolean;
@@ -156,7 +157,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                         overflow: 'hidden',
                         border: '1px solid',
                         borderColor: 'divider',

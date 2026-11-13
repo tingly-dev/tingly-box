@@ -20,6 +20,7 @@ import { api } from '@/services/api.ts';
 import { getThemeOptions } from '@/theme/options.ts';
 import { softSelectedSx } from '@tingly/ui/theme/selection';
 import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
+import { radius } from '@tingly/ui/theme/radius';
 
 const IconPaletteMui = tablerMui(IconPalette);
 
@@ -91,7 +92,7 @@ const ThemePalettePreview = () => {
     const swatchSx = {
         width: 30,
         height: 30,
-        borderRadius: 1,
+        borderRadius: radius.row,
         border: '1px solid',
         borderColor: 'divider',
         flexShrink: 0,

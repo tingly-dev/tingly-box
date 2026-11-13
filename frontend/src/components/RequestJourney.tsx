@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { alpha } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -183,7 +184,7 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
             fontWeight: 600,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
-            borderRadius: 0.5,
+            borderRadius: radius.chip,
             color: tone === 'error' ? 'error.main' : kind === 'stage' ? 'primary.main' : 'text.disabled',
             backgroundColor: (theme) => tone === 'error'
                 ? alpha(theme.palette.error.main, 0.1)

@@ -30,6 +30,7 @@ import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 import { useAddModelSpotlight } from './ActionAddNode.tsx';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const ServiceNodeWrapper = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'forceShowActions',
@@ -176,7 +177,7 @@ const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => 
                             {t('common.confirm')}
                         </Button>
                     </Stack>
-                    <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
+                    <Box sx={{ mt: 1.25, p: 1.25, borderRadius: radius.row, bgcolor: 'action.hover' }}>
                         <Typography
                             variant="body2"
                             sx={{

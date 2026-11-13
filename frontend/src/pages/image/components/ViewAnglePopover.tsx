@@ -12,6 +12,7 @@ import {
     type ViewPresetKey,
     drawFigure,
 } from '@tingly/mannequin';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Where the figure is looked at from. Deliberately not more entries in the
 // pose grid: the same body seen from the side is the same body, and folding a
@@ -81,7 +82,7 @@ const ViewAnglePopover: React.FC<ViewAnglePopoverProps> = ({ anchorEl, figure, o
                                 aria-pressed={selected}
                                 sx={{
                                     p: 0.5,
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     border: '1px solid',
                                     flexDirection: 'column',
                                     borderColor: selected ? 'primary.main' : 'divider',

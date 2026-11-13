@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import api from '@/services/api';
 import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 import { type DailyUsage, TokenHeatmap } from './TokenHeatmap';
+import { radius } from '@tingly/ui/theme/radius';
 
 // The activity heatmap is a fixed, long-window overview: it always shows the
 // last N days regardless of the dashboard's selected range, mirroring the
@@ -124,7 +125,7 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
                 display: 'flex',
                 flexDirection: 'column',
                 p: 2.5,
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 backgroundColor: 'background.paper',
@@ -152,7 +153,7 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
                 {loading && dailyData.length === 0 ? (
                     // First load: a grid-shaped skeleton instead of flashing
                     // the "No activity" empty state before data arrives.
-                    (<Skeleton variant="rounded" height={160} sx={{ borderRadius: 1.5 }} />)
+                    (<Skeleton variant="rounded" height={160} sx={{ borderRadius: radius.card }} />)
                 ) : dailyData.length > 0 ? (
                     <TokenHeatmap data={dailyData} />
                 ) : (

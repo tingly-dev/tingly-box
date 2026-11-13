@@ -3,6 +3,7 @@ import { ButtonBase, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { getModelCardActiveColor, modelCardTransition } from './cardStyles';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface AddCustomModelCardProps {
     onClick: () => void;
@@ -22,7 +23,7 @@ export default function AddCustomModelCard({ onClick }: AddCustomModelCardProps)
                     height: 60,
                     border: '1px dashed',
                     borderColor: theme.palette.divider,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     color: 'text.secondary',
                     transition: modelCardTransition,
                     '&:hover, &.Mui-focusVisible': {

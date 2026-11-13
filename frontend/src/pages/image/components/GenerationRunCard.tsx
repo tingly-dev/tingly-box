@@ -20,6 +20,7 @@ import RunSourceStrip from './RunSourceStrip';
 import ThumbImage from './ThumbImage';
 import { THUMB_EDGE_CARD } from './imageThumbnails';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface GenerationRunCardProps {
     run: GenerationRun;
@@ -278,7 +279,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
                                     return (
                                         <Box
                                             key={`${run.id}-${index}`}
-                                            sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}
+                                            sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, borderRadius: radius.row, overflow: 'hidden', bgcolor: 'action.hover' }}
                                         >
                                             <ButtonBase
                                                 onClick={() => onOpenOutput(runImage(run, 'output', index, src))}
@@ -346,7 +347,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
                                         data-testid={pending ? 'imagegen-slot-pending' : 'imagegen-slot-missing'}
                                         sx={{
                                             minHeight: 0,
-                                            borderRadius: 1,
+                                            borderRadius: radius.row,
                                             border: 1,
                                             borderStyle: 'dashed',
                                             borderColor: 'divider',
