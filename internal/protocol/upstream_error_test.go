@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/stretchr/testify/require"
 )
 
 // newOpenAIError builds an *openai.Error as the SDK itself would: Request set
@@ -224,4 +227,36 @@ func TestClassifyUpstreamFailure_EmptyResponse(t *testing.T) {
 	if got := ClassifyUpstreamFailure(sdk, http.StatusInternalServerError); got.Status != 429 {
 		t.Errorf("empty response with provider status = %d, want 429", got.Status)
 	}
+}
+
+func TestClassifyUpstreamFailure_AnthropicOverflowIsNarrow(t *testing.T) {
+	for _, tc := range []struct {
+		status              int
+		kind, message, code string
+	}{
+		{400, "invalid_request_error", "prompt is too long: 210000 tokens > 200000 maximum", "context_length_exceeded"},
+		{200, "invalid_request_error", "prompt is too long: 210000 tokens > 200000 maximum", "context_length_exceeded"},
+		{400, "invalid_request_error", "max_tokens is too large", ""},
+		{400, "invalid_request_error", "response protection is unavailable", ""},
+		{500, "api_error", "prompt is too long: unavailable", ""},
+	} {
+		t.Run(fmt.Sprintf("%d/%s", tc.status, tc.message), func(t *testing.T) {
+			err := newAnthropicError(t, tc.status, "", "", fmt.Sprintf(`{"type":"error","error":{"type":%q,"message":%q}}`, tc.kind, tc.message))
+			failure := ClassifyUpstreamFailure(fmt.Errorf("wrapped: %w", err), 500)
+			require.Equal(t, tc.code, failure.Code)
+			if tc.code != "" {
+				require.Equal(t, 400, failure.Status)
+			}
+		})
+	}
+}
+
+func TestClassifyUpstreamFailure_SSEPreservesCodeWithoutRawEnvelope(t *testing.T) {
+	err := &openaistream.StreamError{Message: "unsafe raw envelope", Event: openaistream.Event{Data: []byte(`{"error":{"code":"context_length_exceeded","message":"` + strings.Repeat("x", 2000) + `","param":"secret-param"}}`)}}
+	failure := ClassifyUpstreamFailure(fmt.Errorf("wrapped: %w", err), 500)
+	require.Equal(t, 400, failure.Status)
+	require.Equal(t, "context_length_exceeded", failure.Code)
+	require.NotContains(t, failure.Message, "secret-param")
+	require.NotContains(t, failure.Message, "unsafe raw")
+	require.LessOrEqual(t, len(failure.Message), maxClientDetailLen+10)
 }

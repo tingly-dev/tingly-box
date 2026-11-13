@@ -18,6 +18,7 @@ type responsesToChatConverter struct {
 	stream        ResponsesStreamIter
 	responseModel string
 	disableUsage  bool
+	convErr       error
 
 	// state
 	chatID          string
@@ -76,6 +77,9 @@ func (c *responsesToChatConverter) Next() (interface{}, bool, error) {
 		return evt, false, nil
 	}
 
+	if c.convErr != nil {
+		return nil, false, c.convErr
+	}
 	for {
 		if !c.stream.Next() {
 			if err := c.stream.Err(); err != nil {
@@ -214,14 +218,10 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		c.pending = append(c.pending, final)
 		c.completed = true
 
-	case "error":
-		c.pending = append(c.pending, wire.ChatStreamErrorChunk{
-			Error: wire.ChatStreamError{
-				Message: evt.Message,
-				Type:    "error",
-				Code:    evt.Param,
-			},
-		})
+	case "error", "response.failed":
+		failure := responsesStreamFailure(evt)
+		c.pending = append(c.pending, wire.ChatStreamErrorChunk{Error: wire.ChatStreamError{Message: failure.Message, Type: failure.Type, Code: failure.Code}})
+		c.convErr = failure
 	}
 }
 

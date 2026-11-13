@@ -36,7 +36,7 @@ func BuildErrorEvent(err error, code string) map[string]interface{} {
 		"error": map[string]interface{}{
 			"message": protocol.UpstreamMessage(err),
 			"type":    "stream_error",
-			"code":    code,
+			"code":    protocol.ClassifyUpstreamFailure(err, http.StatusBadGateway).CodeOr(code),
 		},
 	}
 }
@@ -79,6 +79,7 @@ func SendStreamingError(c *gin.Context, err error) {
 		Error: protocol.ErrorDetail{
 			Message: "Failed to create streaming request: " + failure.Message,
 			Type:    "api_error",
+			Code:    failure.Code,
 		},
 	})
 }
@@ -92,6 +93,7 @@ func SendForwardingError(c *gin.Context, err error) {
 		Error: protocol.ErrorDetail{
 			Message: "Failed to forward request: " + failure.Message,
 			Type:    "api_error",
+			Code:    failure.Code,
 		},
 	})
 }
