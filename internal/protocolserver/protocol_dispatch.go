@@ -250,7 +250,11 @@ func (ph *ProtocolHandler) dispatchGoogle(
 		}
 		if err != nil {
 			ph.trackUsageWithTokenUsage(c, usage, err)
-			stream.SendInternalError(c, err.Error())
+			// Streaming handlers already emitted a protocol error once the
+			// response started; appending a JSON HTTP error corrupts the SSE body.
+			if !c.Writer.Written() {
+				stream.SendInternalError(c, err.Error())
+			}
 			if recorder != nil {
 				recorder.RecordError(err)
 			}

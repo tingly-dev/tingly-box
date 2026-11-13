@@ -152,7 +152,7 @@ func TestHandleGoogleToOpenAIStreamResponse(t *testing.T) {
 
 		err := HandleGoogleToOpenAIStreamResponse(c, stream, "gemini-pro")
 
-		assert.NoError(t, err) // Error is handled internally
+		assert.ErrorIs(t, err, assert.AnError) // Upstream failure must reach routing/recording.
 	})
 
 	t.Run("max tokens finish reason", func(t *testing.T) {
