@@ -24,6 +24,10 @@ These get reinvented locally often enough that it's worth naming explicitly:
 - **Copy-to-clipboard feedback** (a "copied" flag that auto-resets after ~2s): use `hooks/useCopyFeedback.ts`, not a local `useState` + `setTimeout`. It also takes an optional `onCopied` callback for a toast, and a `reset()` for clearing the flag early (e.g. on dialog close).
 - **Toast/snackbar notifications**: use `useNotify()` (`hooks/useNotify.ts`) — it renders globally via `NotificationProvider`, so there's no local `Snackbar`/`Alert`/open-state to wire up. Don't add a component-local `Snackbar`.
 
+## Style literals
+
+Colours, text sizes, font weights and corner radii come from the theme in `@tingly/ui` (palette and tokens, typography variants or `fontSizes`, `radius`) — see `.design/visual-system.md` §2. `pnpm lint` runs `scripts/check-style-literals.mjs`, which fails when a file outside the theme gains a hex / `rgba()` colour, a `rem`/`px` font size, a weight outside 400/500/600, or a literal `borderRadius`. Existing literals are frozen in `scripts/style-literals-baseline.json`. When one is genuinely deliberate (a chart series, a brand colour, an overlay on an image), run `node scripts/check-style-literals.mjs --update` and say why in the PR; after removing literals, run it too so the baseline tightens.
+
 ## Type checking
 
 `pnpm typecheck` runs in CI (`release-cli.yml`) as a non-blocking, `continue-on-error` step — the repo has pre-existing legacy type errors that aren't being fixed as part of unrelated changes, so this only warns instead of failing the build. Still run `pnpm typecheck` locally before opening a PR and fix anything your change introduces; don't rely on CI to catch it.
