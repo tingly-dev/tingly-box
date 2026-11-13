@@ -111,6 +111,8 @@ import TypeSafePng from '@/assets/icons/typesafe.png?url';
 import LlamaCppSvg from '@/assets/icons/llamacpp.svg?url';
 import OmlxSvg from '@/assets/icons/omlx.svg?url';
 import OmlxDarkSvg from '@/assets/icons/omlx-dark.svg?url';
+import RuncratePng from '@/assets/icons/runcrate.png?url';
+import CloudGPUSvg from '@/assets/icons/cloudgpu.svg?url';
 
 interface BrandIconProps {
     size?: number;
@@ -256,6 +258,8 @@ export const Lemonade = createBrandIcon(LemonadeSvg, 'Lemonade');
 export const Vercel = createBrandIcon(VercelSvg, 'Vercel', false, true);
 export const Cloudflare = createBrandIcon(CloudflareSvg, 'Cloudflare', false, false, CloudflareMonoSvg);
 export const TypeSafe = createBrandIcon(TypeSafePng, 'TypeSafe AI');
+export const Runcrate = createBrandIcon(RuncratePng, 'Runcrate');
+export const CloudGPU = createBrandIcon(CloudGPUSvg, 'CloudGPU');
 export const LlamaCpp = createBrandIcon(LlamaCppSvg, 'llama.cpp');
 export const Omlx = createBrandIcon(OmlxSvg, 'oMLX', false, false, undefined, OmlxDarkSvg);
 export const Tencent = createBrandIcon(TencentSvg, 'Tencent', false, false, TencentMonoSvg);
