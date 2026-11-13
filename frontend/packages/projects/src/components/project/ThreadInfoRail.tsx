@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type Subagent, type Thread } from '../../client';
-import { Cancel, CheckCircle, ChevronRight, DiffIcon, ExpandMore, PlayerStop, Robot, Terminal } from '../icons';
+import { Cancel, CheckCircle, ChevronRight, DiffIcon, PlayerStop, Robot, Terminal } from '../icons';
+import { DisclosureRow } from '../common/Disclosure';
 import { useNotify } from '../../hooks/useNotify';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
@@ -180,12 +181,9 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}
                     {finished.length > 0 && (
                         <>
-                            <Box role="button" tabIndex={0} aria-expanded={showFinished} onClick={() => setShowFinished(!showFinished)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowFinished(!showFinished); } }}
-                                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderTop: running.length > 0 ? 1 : 0, borderColor: 'divider', fontSize: fontSizes.sm, color: 'text.secondary', cursor: 'pointer', userSelect: 'none' }}>
-                                {showFinished ? <ExpandMore sx={{ fontSize: 16 }} /> : <ChevronRight sx={{ fontSize: 16 }} />}
-                                {t('rail.finished', { count: finished.length })}
-                            </Box>
+                            <DisclosureRow variant="inline" open={showFinished} onToggle={() => setShowFinished(!showFinished)} sx={{ fontSize: fontSizes.sm }}>
+                                <Box component="span" sx={{ flex: 1 }}>{t('rail.finished', { count: finished.length })}</Box>
+                            </DisclosureRow>
                             <Collapse in={showFinished} unmountOnExit>
                                 {finished.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}
                             </Collapse>

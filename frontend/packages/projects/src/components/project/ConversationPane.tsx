@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, ButtonBase, Chip, Collapse, Paper, Typography } from '@mui/material';
+import { Box, Button, Chip, Collapse, Paper, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
@@ -10,7 +10,8 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { useTranscriptHost } from '../../transcript/context';
-import { Check, ChevronRight, DiffIcon, ExpandLess, ExpandMore, PlayArrow, Settings } from '../icons';
+import { Check, DiffIcon, PlayArrow, Settings } from '../icons';
+import { DisclosureRow } from '../common/Disclosure';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
@@ -103,36 +104,18 @@ export function ThreadUpdateRow({ message, onOpen }: { message: TranscriptEntry;
     const toggle = () => hasText && setOpen((v) => !v);
     return (
         <Box>
-            <Box
-                role="button"
-                tabIndex={0}
-                aria-expanded={hasText ? open : undefined}
-                onClick={toggle}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        toggle();
-                    }
-                }}
-                sx={{
-                    display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row,
-                    cursor: 'default', userSelect: 'none', color: 'text.secondary', fontSize: fontSizes.sm, outline: 'none',
-                    '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-                    '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
-                }}
-            >
+            <DisclosureRow variant="inline" open={open} onToggle={hasText ? toggle : undefined} sx={{ fontSize: fontSizes.sm }}>
                 <Box component="span" title={t(`thread.status.${pl.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
                     <ThreadStateMark status={pl.status} />
                 </Box>
                 <Typography noWrap component="span" sx={{ minWidth: 0, fontSize: 'inherit', fontWeight: 600, color: 'text.primary' }}>{pl.title}</Typography>
                 <Typography noWrap component="span" sx={{ flexShrink: 0, fontSize: 'inherit' }}>{t(`conversation.updateKind.${pl.kind}`, { defaultValue: pl.kind })}</Typography>
-                {hasText && (open ? <ExpandMore sx={{ fontSize: 16, flexShrink: 0 }} /> : <ChevronRight sx={{ fontSize: 16, flexShrink: 0 }} />)}
                 <Box sx={{ flex: 1 }} />
                 <Box component="button" type="button" onClick={(e) => { e.stopPropagation(); onOpen(pl.thread_id); }}
                     sx={{ flexShrink: 0, p: 0, border: 0, bgcolor: 'transparent', font: 'inherit', color: 'text.disabled', cursor: 'pointer', '&:hover': { color: 'text.primary', textDecoration: 'underline' } }}>
                     {t('conversation.openThread')}
                 </Box>
-            </Box>
+            </DisclosureRow>
             <Collapse in={open} unmountOnExit>
                 <Box sx={{ mt: 0.5, ml: 0.5, pl: 1.5, borderLeft: 2, borderColor: 'divider', color: 'text.secondary', fontSize: fontSizes.sm }}>
                     <Markdown text={message.content} />
@@ -412,12 +395,10 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                 <MessageDetailControl detail={detail} onChange={setDetail} surface="conversation" />
                 {composerContext && (
                     <Box sx={{ mb: 0.75, borderRadius: radius.card, bgcolor: 'action.hover', fontSize: fontSizes.sm, color: 'text.secondary', overflow: 'hidden' }}>
-                        <ButtonBase onClick={toggleSettings} aria-expanded={settingsOpen}
-                            sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, minHeight: 30, px: 1.25, justifyContent: 'flex-start', font: 'inherit', color: 'inherit', textAlign: 'left', '&:hover': { color: 'text.primary' } }}>
+                        <DisclosureRow open={settingsOpen} onToggle={toggleSettings} sx={{ minHeight: 30, px: 1.25, py: 0, gap: 1 }}>
                             <Settings sx={{ fontSize: 15 }} />
                             <Box component="span" sx={{ flex: 1 }}>{t('threadSettings.settings')}</Box>
-                            {settingsOpen ? <ExpandMore sx={{ fontSize: 16 }} /> : <ExpandLess sx={{ fontSize: 16 }} />}
-                        </ButtonBase>
+                        </DisclosureRow>
                         <Collapse in={settingsOpen} unmountOnExit>
                             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, px: 1.25, pb: 1 }}>{composerContext}</Box>
                         </Collapse>

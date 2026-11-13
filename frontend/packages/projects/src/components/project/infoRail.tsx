@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import type { Thread } from '../../client';
-import { Check, ChevronRight, ExpandMore } from '../icons';
+import { Check } from '../icons';
+import { DisclosureRow } from '../common/Disclosure';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
@@ -59,14 +60,12 @@ export function RailCard({ id, title, aside, defaultOpen = true, children }: { i
         setOpen(!open);
     };
     return (
-        <Box component="section" aria-label={title} sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
-            <Box role="button" tabIndex={0} aria-expanded={open} onClick={toggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, py: 1, cursor: 'pointer', userSelect: 'none' }}>
+        <Box component="section" aria-label={title} sx={{ border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper', overflow: 'hidden' }}>
+            <DisclosureRow open={open} onToggle={toggle}>
                 <Typography sx={{ fontSize: fontSizes.sm, fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
-                {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
                 <Box sx={{ flex: 1 }} />
-                {aside != null && <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{aside}</Typography>}
-            </Box>
+                {aside != null && <Typography component="span" sx={{ fontSize: fontSizes.sm, color: 'inherit' }}>{aside}</Typography>}
+            </DisclosureRow>
             <Collapse in={open}>
                 <Box sx={{ px: 1.5, pb: 1.25 }}>{children}</Box>
             </Collapse>

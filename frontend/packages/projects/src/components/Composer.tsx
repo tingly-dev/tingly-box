@@ -3,6 +3,7 @@ import { Box, Button, CircularProgress, IconButton, InputBase, ListItemText, Men
 import { useTranslation } from 'react-i18next';
 import type { Attachment } from '../client';
 import { isLongText, lineCount, pastedTextFile } from './attachments';
+import { DisclosureChevron } from './common/Disclosure';
 import { ArrowUpward, Attach, Close, Description, ExpandMore, Stop } from './icons';
 import { ControlTooltip } from './ControlTooltip';
 import { ModelPicker } from './ModelPicker';
@@ -469,7 +470,7 @@ export function Composer({
         >
             {context && contextCollapsible && (
                 <Button size="small" color="inherit" onClick={() => setContextOpen((open) => !open)} aria-expanded={contextOpen}
-                    endIcon={<ExpandMore fontSize="small" />} sx={{ color: 'text.secondary', textTransform: 'none', mb: 0.5, px: 0.5 }}>
+                    endIcon={<DisclosureChevron open={contextOpen} />} sx={{ color: 'text.secondary', textTransform: 'none', mb: 0.5, px: 0.5 }}>
                     {contextLabel ?? t('composer.settings', { defaultValue: 'Session settings' })}
                 </Button>
             )}

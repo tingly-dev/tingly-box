@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { CopyIconButton } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
-import { AutoFixHigh, Branch, Check, ExpandLess, ExpandMore, FolderOpen } from '../icons';
+import { AutoFixHigh, Branch, Check, ExpandMore, FolderOpen } from '../icons';
+import { DisclosureRow } from '../common/Disclosure';
 import { ControlTooltip } from '../ControlTooltip';
 import { folderName } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
@@ -95,17 +96,16 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
     return (
         <Box data-testid="composer-strip" sx={{ mb: 0.75, borderRadius: radius.card, bgcolor: 'action.hover', fontSize: fontSizes.sm, lineHeight: 1.4, color: 'text.secondary', overflow: 'hidden' }}>
             {/* Folded: the one fact that matters now; the whole line unfolds it. */}
-            <ButtonBase
-                onClick={() => setOpen(!open)}
-                aria-expanded={open}
+            <DisclosureRow
+                open={open}
+                onToggle={() => setOpen(!open)}
                 aria-label={t(open ? 'strip.collapse' : 'strip.expand')}
-                sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1.25, minHeight: ROW_H, px: 1.25, justifyContent: 'flex-start', font: 'inherit', color: 'inherit', textAlign: 'left', '&:hover': { color: 'text.primary' } }}
+                sx={{ gap: 1.25, minHeight: ROW_H, px: 1.25, py: 0 }}
             >
                 {open
                     ? <Box component="span" sx={{ flex: 1, fontWeight: 600 }}>{t(folder ? 'strip.sessionTitle' : 'strip.title')}</Box>
                     : <Box component="span" sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75, overflow: 'hidden' }}>{summary}</Box>}
-                {open ? <ExpandMore sx={{ fontSize: 16 }} /> : <ExpandLess sx={{ fontSize: 16 }} />}
-            </ButtonBase>
+            </DisclosureRow>
             <Collapse in={open} unmountOnExit>
                 <Box sx={{ pb: 0.5 }}>
                     {thread.cwd && (
