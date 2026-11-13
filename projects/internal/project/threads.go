@@ -1017,6 +1017,16 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		m.mu.Unlock()
 		slot.release()
 		m.next(threadID)
+		return
+	}
+	// A Stop that landed while the turn was launching found nothing to
+	// interrupt in the engine, and its cancel does not reach a turn the engine
+	// owns. It left a.stopped for us: stop the turn now that it exists.
+	m.mu.Lock()
+	stopped := a.stopped
+	m.mu.Unlock()
+	if stopped {
+		m.engine.Stop(m.sessionOf(threadID))
 	}
 }
 
