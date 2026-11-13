@@ -124,7 +124,7 @@ interface BrandIconProps {
 // Lobehub 的品牌 SVG 用 fill="currentColor" 是单色设计，但 <img> 加载是独立文档，
 // currentColor 没有外部颜色继承，会落到默认黑色，导致暗色主题下黑图不可见。
 // 解决：暗色主题下对单色图标加 invert(1)（黑→白），亮色主题保持原样。
-// 高亮态由 Sidebar 处理（白底 + 强制清零 filter，保持黑图在白底上的效果）。
+// 高亮态由 navRowSelectedSx 处理（白底 + 强制清零 filter，保持黑图在白底上的效果）。
 const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, monochrome = false, monoSrc?: string, darkSrc?: string) => {
     return ({size = 24, sx, style, grayscale = defaultGrayscale, mono = false}: BrandIconProps) => {
         const theme = useTheme();
@@ -139,8 +139,12 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
             // their light shades visible against a light routing-graph node.
             filter = isDark ? 'grayscale(100%) brightness(1.8)' : 'grayscale(100%) brightness(0.55)';
         } else if (grayscale) {
+            // Dark: dim rather than brighten. Brightening a grey logo that has
+            // a filled background (Telegram's disc, Codex's blob, WorkBuddy's
+            // tile) washes the background and the mark into one white block.
+            // A black single-colour mark still needs its invert to show at all.
             filter = isDark
-                ? 'grayscale(100%) brightness(1.6)'
+                ? monochrome ? 'invert(1) opacity(0.7)' : 'grayscale(100%) opacity(0.7)'
                 : 'grayscale(100%) brightness(1.15) contrast(1.1)';
         } else if (monochrome && isDark) {
             filter = 'invert(1)';
