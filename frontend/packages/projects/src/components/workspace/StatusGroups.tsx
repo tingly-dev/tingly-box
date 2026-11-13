@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Box, Collapse, Typography } from '@mui/material';
-import { ExpandMore } from '../icons';
+import { DisclosureRow } from '../common/Disclosure';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { ListRow } from '../ListRow';
@@ -71,17 +71,11 @@ export function StatusGroups({ groups, rows, onOpen, onGroupClick, empty }: { gr
                 const open = !g.collapsed || (expanded[g.key] ?? list.some((r) => r.selected));
                 return (
                     <Box key={g.key} component="section" aria-label={g.label} sx={{ mb: 1.5 }}>
-                        <Box
-                            role={g.collapsed ? 'button' : undefined}
-                            aria-expanded={g.collapsed ? open : undefined}
-                            onClick={g.collapsed ? () => setExpanded((e) => ({ ...e, [g.key]: !open })) : undefined}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, cursor: g.collapsed ? 'pointer' : undefined }}
-                        >
+                        <DisclosureRow open={open} onToggle={g.collapsed ? () => setExpanded((e) => ({ ...e, [g.key]: !open })) : undefined} sx={{ gap: 1, py: 0.5 }}>
                             {/* A collapsed group's heading is its toggle; only open groups open their list from here. */}
                             <StatusHeading label={g.label} status={g.key} count={list.length}
                                 onClick={onGroupClick && !g.collapsed ? ((e) => { e.stopPropagation(); onGroupClick(g.key, g.label, e.currentTarget); }) : undefined} />
-                            {g.collapsed && <ExpandMore sx={{ fontSize: 16, color: 'text.secondary', transform: open ? 'rotate(180deg)' : 'none' }} />}
-                        </Box>
+                        </DisclosureRow>
                         <Collapse in={open}>
                             {list.map((r) => <Row key={r.id} row={r} onOpen={onOpen} />)}
                         </Collapse>

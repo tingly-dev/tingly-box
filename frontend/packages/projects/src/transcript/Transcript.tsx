@@ -1,4 +1,4 @@
-import {Block, Build, Cancel, Check, CheckCircle, ChevronRight, Close, ErrorOutline, ExpandMore, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
+import {Block, Build, Cancel, Check, CheckCircle, Close, ErrorOutline, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
 import {Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material';
 import type {Theme} from '@mui/material/styles';
 import {getReadableAccent} from '@tingly/ui/theme/status';
@@ -14,6 +14,7 @@ import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubjec
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import {serverNow} from '../utils/serverClock';
+import {DisclosureChevron, DisclosureRow} from '../components/common/Disclosure';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 import {conciseBlock, type MessageDetail} from './messageDetail';
@@ -175,27 +176,15 @@ const OutcomeTag = ({outcome}: {outcome: RequestOutcome}) => {
 // A quiet, clickable line: what a tool call or a thought is, one click away
 // from its detail. The reply stays the visual anchor.
 const RowLine = ({open, onToggle, children, error = false}: {open: boolean; onToggle: () => void; children: ReactNode; error?: boolean}) => (
-    <Box
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onClick={onToggle}
-        onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onToggle();
-            }
-        }}
-        sx={{
-            display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row,
-            cursor: 'default', userSelect: 'none',
-            color: (theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.secondary,
-            '&:hover': {bgcolor: 'action.hover', color: (theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.primary},
-        }}
+    <DisclosureRow
+        variant="inline"
+        open={open}
+        onToggle={onToggle}
+        color={(theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.secondary}
+        hoverColor={(theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.primary}
     >
         {children}
-        {open ? <ExpandMore sx={{fontSize: 16, flexShrink: 0}}/> : <ChevronRight sx={{fontSize: 16, flexShrink: 0}}/>}
-    </Box>
+    </DisclosureRow>
 );
 
 const Section = ({label, children}: {label: string; children: string}) => (
@@ -447,19 +436,9 @@ const RequestCard = ({block, onRespond}: {
                 <Subject tool={message.content} input={message.payload}/>
                 {input && (
                     <>
-                        <Box
-                            component="button"
-                            type="button"
-                            aria-expanded={details}
-                            onClick={() => setDetails((v) => !v)}
-                            sx={{
-                                display: 'inline-flex', alignItems: 'center', gap: 0.25, mt: 0.5, p: 0, border: 0, bgcolor: 'transparent',
-                                font: 'inherit', fontSize: fontSizes.sm, color: 'text.secondary', cursor: 'pointer', '&:hover': {color: 'text.primary'},
-                            }}
-                        >
+                        <DisclosureRow variant="inline" open={details} onToggle={() => setDetails((v) => !v)} sx={{mt: 0.5, fontSize: fontSizes.sm}}>
                             {t('projects.transcript.details', {defaultValue: 'Details'})}
-                            {details ? <ExpandMore sx={{fontSize: 14}}/> : <ChevronRight sx={{fontSize: 14}}/>}
-                        </Box>
+                        </DisclosureRow>
                         <Collapse in={details} unmountOnExit>
                             <Box component="pre" sx={{...preBox, mt: 0.5}}>{input}</Box>
                         </Collapse>
@@ -646,7 +625,7 @@ export const CommandCard = ({message}: {message: TranscriptEntry}) => {
                 <Typography variant="body2" sx={{color: 'inherit', fontWeight: 500}}>{title}</Typography>
                 {parts.length > 0 && <Typography variant="caption" sx={{color: 'text.secondary'}}>{parts.join(' · ')}</Typography>}
                 {!isNew && pl.summary && (
-                    <Button size="small" onClick={() => setOpen(!open)} sx={{ml: 'auto !important', minWidth: 0, textTransform: 'none'}} aria-expanded={open}>
+                    <Button size="small" onClick={() => setOpen(!open)} endIcon={<DisclosureChevron open={open}/>} sx={{ml: 'auto !important', minWidth: 0, textTransform: 'none'}} aria-expanded={open}>
                         {t('projects.transcript.compactSummary', {defaultValue: 'Summary'})}
                     </Button>
                 )}
@@ -707,12 +686,8 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
 
     return (
         <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: radius.card, overflow: 'hidden'}}>
-            <Box
-                role="button"
-                aria-expanded={open}
-                onClick={toggle}
-                sx={{px: 1.5, py: 1, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
-            >
+            <DisclosureRow open={open} onToggle={toggle} chevron={false} sx={{py: 1, '& > .MuiBox-root, & > .MuiStack-root': {flex: 1, minWidth: 0}}}>
+                <Box>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
                     <Robot sx={{fontSize: 18, color: 'text.secondary', flexShrink: 0}}/>
                     <Typography variant="body2" noWrap sx={{fontWeight: 600, color: 'text.primary', minWidth: 0}}>
@@ -742,14 +717,15 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                             </IconButton>
                         </Tooltip>
                     )}
-                    {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
+                    <DisclosureChevron open={open}/>
                 </Stack>
                 {(running && task?.activity) || meta ? (
                     <Typography variant="caption" noWrap component="div" sx={{color: 'text.secondary', pl: 3.25, mt: 0.25}}>
                         {[running ? task?.activity : statusLabel(t, status), meta].filter(Boolean).join(' · ')}
                     </Typography>
                 ) : null}
-            </Box>
+                </Box>
+            </DisclosureRow>
             <Collapse in={open} unmountOnExit>
                 <Stack spacing={1.5} sx={{px: 1.5, pb: 1.5, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
                     <AgentBody block={block} running={running} report={report} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>
@@ -869,19 +845,14 @@ export const ChecklistCard = ({todos, working, history = []}: {todos: Todo[]; wo
     const current = todos.find((x) => x.status === 'in_progress');
     return (
         <Paper variant="outlined" data-checklist sx={{borderRadius: radius.card, overflow: 'hidden', bgcolor: 'background.paper'}}>
-            <Stack
-                direction="row" spacing={1} role="button" tabIndex={0} aria-expanded={open} onClick={() => setChoice(!open)}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setChoice(!open); } }}
-                sx={{alignItems: 'center', px: 1.5, py: 0.75, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
-            >
+            <DisclosureRow open={open} onToggle={() => setChoice(!open)} sx={{gap: 1}}>
                 <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', flexShrink: 0}}>{t('projects.transcript.checklist', {defaultValue: 'Progress'})}</Typography>
                 <Typography variant="body2" sx={{color: 'text.secondary', flexShrink: 0, fontVariantNumeric: 'tabular-nums'}}>
                     {todos.length ? t('projects.transcript.checklistCount', {defaultValue: '{{done}} of {{total}} done', done, total: todos.length}) : t('projects.transcript.checklistEmpty', {defaultValue: 'No current tasks'})}
                 </Typography>
                 {!open && current && <Typography variant="body2" noWrap sx={{color: 'text.secondary', minWidth: 0}}>· {current.activeForm || current.content}</Typography>}
                 <Box sx={{flex: 1}}/>
-                {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
-            </Stack>
+            </DisclosureRow>
             <Collapse in={open} unmountOnExit>
                 <Stack component="ul" spacing={0.5} sx={{m: 0, listStyle: 'none', px: 1.5, pb: 1, pt: 0.5, borderTop: 1, borderColor: 'divider', maxHeight: 220, overflowY: 'auto'}}>
                     {todos.map((x, i) => (
@@ -906,16 +877,19 @@ export const ChecklistCard = ({todos, working, history = []}: {todos: Todo[]; wo
                     ))}
                 </Stack>
             </Collapse>
-            {history.length > 0 && <Box sx={{px: 1.5, pb: 0.5, borderTop: 1, borderColor: 'divider'}}>
-                <Button size="small" color="inherit" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
-                    {t('projects.transcript.checklistHistory', {defaultValue: 'Previous task groups ({{count}})', count: history.length})}
-                </Button>
+            {history.length > 0 && <>
+                <DisclosureRow open={historyOpen} onToggle={() => setHistoryOpen(!historyOpen)} sx={{borderTop: 1, borderColor: 'divider'}}>
+                    <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary'}}>
+                        {t('projects.transcript.checklistHistory', {defaultValue: 'Previous task groups ({{count}})', count: history.length})}
+                    </Typography>
+                    <Box sx={{flex: 1}}/>
+                </DisclosureRow>
                 <Collapse in={historyOpen} unmountOnExit>
-                    <Stack spacing={1} sx={{maxHeight: 240, overflowY: 'auto', pb: 1}}>
+                    <Stack spacing={1} sx={{maxHeight: 240, overflowY: 'auto', px: 1.5, pb: 1}}>
                         {[...history].reverse().map((group) => <ChecklistCard key={group.id} todos={group.todos} working={false}/>)}
                     </Stack>
                 </Collapse>
-            </Box>}
+            </>}
         </Paper>
     );
 };

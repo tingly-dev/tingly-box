@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type components } from '../../client';
-import { Block, Cancel, CheckCircle, ChevronRight, ExpandMore, PlayerStop, Robot, Terminal } from '../icons';
+import { Block, Cancel, CheckCircle, PlayerStop, Robot, Terminal } from '../icons';
+import { DisclosureChevron } from '../common/Disclosure';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
 import { serverNow } from '../../utils/serverClock';
@@ -154,7 +155,7 @@ function TaskRow({ sessionId, task, open, onToggle, onChanged, onReveal }: {
                 subtitle={[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}
                 end={<>
                     <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }} title={state}>{icon}</Box>
-                    {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                    <DisclosureChevron open={open} sx={{ color: 'text.secondary' }} />
                 </>} />
             <Collapse in={open} unmountOnExit>
                 <Stack spacing={1.25} sx={{ px: 1.5, pb: 1.5, pl: 4.5 }}>

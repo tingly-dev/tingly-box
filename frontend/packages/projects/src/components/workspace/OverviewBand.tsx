@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Box, Button, IconButton, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
-import { ExpandLess, ExpandMore } from '../icons';
+import { DisclosureChevron } from '../common/Disclosure';
 import { STATUS_ORDER } from '../project/threadStatus';
 import { StatusHeading } from './StatusGroups';
 import { StatusColumns } from './StatusColumns';
@@ -84,7 +84,7 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTa
                 <Button size="small" onClick={onStatus}>{t('overview.status')}</Button>
                 <Tooltip title={open ? t('band.collapse') : t('band.expand')}>
                     <IconButton size="small" onClick={onToggle} aria-expanded={open} aria-label={open ? t('band.collapse') : t('band.expand')}>
-                        {open ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                        <DisclosureChevron open={open} fontSize={20} />
                     </IconButton>
                 </Tooltip>
             </Box>
