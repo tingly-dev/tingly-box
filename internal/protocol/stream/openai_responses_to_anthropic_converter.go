@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"sort"
+	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
@@ -22,6 +23,7 @@ type responsesToAnthropicToolCall struct {
 	truncatedID string
 	name        string
 	completed   bool
+	arguments   strings.Builder
 }
 
 // responsesToAnthropicConverter is a stateful iterator that reads OpenAI Responses API
@@ -37,6 +39,7 @@ type responsesToAnthropicConverter struct {
 	state              *streamState
 	toolCalls          map[string]*responsesToAnthropicToolCall
 	lastOutputItemType string
+	textParts          responseTextTracker
 
 	// iterator
 	pending []interface{}
@@ -56,6 +59,7 @@ func newResponsesToAnthropicConverter(ctx context.Context, stream ResponsesStrea
 		state:         newStreamState(),
 		toolCalls:     make(map[string]*responsesToAnthropicToolCall),
 		usage:         protocol.ZeroTokenUsage(),
+		textParts:     make(responseTextTracker),
 	}
 }
 
@@ -236,6 +240,7 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 				r.emitContentBlockStart(r.state.textBlockIndex, anthropicTextBlockStart())
 			}
 			if partAdded.Part.Text != "" {
+				r.rememberText(currentEvent, "text", partAdded.Part.Text)
 				r.emitContentBlockDelta(r.state.textBlockIndex, anthropicTextDelta(partAdded.Part.Text))
 			}
 			r.lastOutputItemType = "text"
@@ -249,10 +254,16 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 			r.emitContentBlockStart(r.state.textBlockIndex, anthropicTextBlockStart())
 		}
 		textDelta := currentEvent.AsResponseOutputTextDelta()
+		r.rememberText(currentEvent, "text", textDelta.Delta)
 		r.emitContentBlockDelta(r.state.textBlockIndex, anthropicTextDelta(textDelta.Delta))
 		r.lastOutputItemType = "text"
 
 	case "response.output_text.done", "response.content_part.done":
+		text := currentEvent.Text
+		if currentEvent.Type == "response.content_part.done" {
+			text = currentEvent.Part.Text
+		}
+		r.emitTextSnapshot(int(currentEvent.OutputIndex), int(currentEvent.ContentIndex), "text", text)
 		if r.state.textBlockIndex != -1 {
 			r.emitContentBlockStop(r.state.textBlockIndex)
 			r.state.textBlockIndex = -1
@@ -267,9 +278,11 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 			logrus.WithContext(r.ctx).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", r.state.thinkingBlockIndex)
 			r.emitContentBlockStart(r.state.thinkingBlockIndex, anthropicThinkingBlockStart())
 		}
+		r.rememberText(currentEvent, "reasoning", reasoningDelta.Delta)
 		r.emitContentBlockDelta(r.state.thinkingBlockIndex, anthropicThinkingDelta(reasoningDelta.Delta))
 
 	case "response.reasoning_text.done":
+		r.emitTextSnapshot(int(currentEvent.OutputIndex), responsePartIndex(currentEvent), "reasoning", currentEvent.Text)
 		logrus.WithContext(r.ctx).Debugf("[Thinking][ResponsesAPI] Thinking block done at index %d", r.state.thinkingBlockIndex)
 		if r.state.thinkingBlockIndex != -1 && !r.state.stoppedBlocks[r.state.thinkingBlockIndex] {
 			r.emitThinkingSignature(r.state.thinkingBlockIndex)
@@ -286,9 +299,11 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 			r.state.thinkingBlocks[r.state.reasoningSummaryBlockIndex] = true
 			r.emitContentBlockStart(r.state.reasoningSummaryBlockIndex, anthropicThinkingBlockStart())
 		}
+		r.rememberText(currentEvent, "summary", summaryDelta.Delta)
 		r.emitContentBlockDelta(r.state.reasoningSummaryBlockIndex, anthropicThinkingDelta(summaryDelta.Delta))
 
 	case "response.reasoning_summary_text.done":
+		r.emitTextSnapshot(int(currentEvent.OutputIndex), responsePartIndex(currentEvent), "summary", currentEvent.Text)
 		if r.state.reasoningSummaryBlockIndex != -1 && !r.state.stoppedBlocks[r.state.reasoningSummaryBlockIndex] {
 			r.emitThinkingSignature(r.state.reasoningSummaryBlockIndex)
 			r.emitContentBlockStop(r.state.reasoningSummaryBlockIndex)
@@ -302,9 +317,11 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 			r.state.nextBlockIndex++
 			r.emitContentBlockStart(r.state.refusalBlockIndex, anthropicTextBlockStart())
 		}
+		r.rememberText(currentEvent, "refusal", refusalDelta.Delta)
 		r.emitContentBlockDelta(r.state.refusalBlockIndex, anthropicTextDelta(refusalDelta.Delta))
 
 	case "response.refusal.done":
+		r.emitTextSnapshot(int(currentEvent.OutputIndex), responsePartIndex(currentEvent), "refusal", currentEvent.Refusal)
 		if r.state.refusalBlockIndex != -1 {
 			r.emitContentBlockStop(r.state.refusalBlockIndex)
 			r.state.refusalBlockIndex = -1
@@ -322,6 +339,7 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 				logrus.WithContext(r.ctx).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", r.state.thinkingBlockIndex)
 				r.emitContentBlockStart(r.state.thinkingBlockIndex, anthropicThinkingBlockStart())
 			}
+			r.rememberText(currentEvent, "reasoning", reasoningDelta.Delta)
 			r.emitContentBlockDelta(r.state.thinkingBlockIndex, anthropicThinkingDelta(reasoningDelta.Delta))
 		case "message":
 			if r.state.textBlockIndex == -1 {
@@ -331,6 +349,7 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 				r.emitContentBlockStart(r.state.textBlockIndex, anthropicTextBlockStart())
 			}
 			textDelta := currentEvent.AsResponseOutputTextDelta()
+			r.rememberText(currentEvent, "text", textDelta.Delta)
 			r.emitContentBlockDelta(r.state.textBlockIndex, anthropicTextDelta(textDelta.Delta))
 		case "function_call", "custom_tool_call", "mcp_call":
 			itemID := itemAdded.Item.ID
@@ -358,44 +377,44 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 	case "response.function_call_arguments.delta":
 		argsDelta := currentEvent.AsResponseFunctionCallArgumentsDelta()
 		if tc, ok := r.toolCalls[argsDelta.ItemID]; ok {
+			tc.arguments.WriteString(argsDelta.Delta)
 			r.emitContentBlockDelta(tc.blockIndex, anthropicInputJSONDelta(argsDelta.Delta))
 		}
 
 	case "response.function_call_arguments.done":
 		argsDone := currentEvent.AsResponseFunctionCallArgumentsDone()
 		if tc, ok := r.toolCalls[argsDone.ItemID]; ok {
-			r.emitContentBlockStop(tc.blockIndex)
-			tc.completed = true
+			r.finishTool(tc, argsDone.Arguments)
 		}
 
 	case "response.custom_tool_call_input.delta":
 		customDelta := currentEvent.AsResponseCustomToolCallInputDelta()
 		if tc, ok := r.toolCalls[customDelta.ItemID]; ok {
+			tc.arguments.WriteString(customDelta.Delta)
 			r.emitContentBlockDelta(tc.blockIndex, anthropicInputJSONDelta(customDelta.Delta))
 		}
 
 	case "response.custom_tool_call_input.done":
 		customDone := currentEvent.AsResponseCustomToolCallInputDone()
 		if tc, ok := r.toolCalls[customDone.ItemID]; ok {
-			r.emitContentBlockStop(tc.blockIndex)
-			tc.completed = true
+			r.finishTool(tc, customDone.Input)
 		}
 
 	case "response.mcp_call_arguments.delta":
 		mcpDelta := currentEvent.AsResponseMcpCallArgumentsDelta()
 		if tc, ok := r.toolCalls[mcpDelta.ItemID]; ok {
+			tc.arguments.WriteString(mcpDelta.Delta)
 			r.emitContentBlockDelta(tc.blockIndex, anthropicInputJSONDelta(mcpDelta.Delta))
 		}
 
 	case "response.mcp_call_arguments.done":
 		mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
 		if tc, ok := r.toolCalls[mcpDone.ItemID]; ok {
-			r.emitContentBlockStop(tc.blockIndex)
-			tc.completed = true
+			r.finishTool(tc, mcpDone.Arguments)
 		}
 
 	case "response.output_item.done":
-		// handled by respective .done events above
+		r.emitOutputSnapshot(int(currentEvent.OutputIndex), currentEvent.Item)
 
 	case "response.completed":
 		completed := currentEvent.AsResponseCompleted()
@@ -431,6 +450,7 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 				r.emitContentBlockStart(r.state.reasoningSummaryBlockIndex, anthropicThinkingBlockStart())
 			}
 			if summaryPartAdded.Part.Text != "" {
+				r.rememberText(currentEvent, "summary", summaryPartAdded.Part.Text)
 				r.emitContentBlockDelta(r.state.reasoningSummaryBlockIndex, anthropicThinkingDelta(summaryPartAdded.Part.Text))
 			}
 		}
@@ -539,46 +559,12 @@ func (r *responsesToAnthropicConverter) finalize(resp *responses.Response, stopR
 
 	logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Finalize: input_tokens=%d, output_tokens=%d", r.usage.InputTokens, r.usage.OutputTokens)
 
-	// Handle non-streamed tool calls from the final output array.
-	for _, outputItem := range resp.Output {
-		if outputItem.Type != "function_call" && outputItem.Type != "custom_tool_call" && outputItem.Type != "mcp_call" {
-			continue
-		}
-		itemID := outputItem.ID
-		if _, wasProcessed := r.toolCalls[itemID]; wasProcessed {
-			continue
-		}
-
-		callID := outputItem.CallID
-		if callID == "" {
-			callID = itemID
-		}
-		truncatedID := truncateToolCallID(callID)
-		blockIndex := r.state.nextBlockIndex
-		r.state.nextBlockIndex++
-
-		var toolName, arguments string
-		switch outputItem.Type {
-		case "function_call":
-			fn := outputItem.AsFunctionCall()
-			toolName = fn.Name
-			arguments = fn.Arguments
-		case "custom_tool_call":
-			cc := outputItem.AsCustomToolCall()
-			toolName = cc.Name
-			arguments = cc.Input
-		case "mcp_call":
-			mc := outputItem.AsMcpCall()
-			toolName = mc.Name
-			arguments = mc.Arguments
-		}
-
-		r.lastOutputItemType = "function_call"
-		r.emitContentBlockStart(blockIndex, anthropicToolUseBlockStart(truncatedID, toolName))
-		if arguments != "" {
-			r.emitContentBlockDelta(blockIndex, anthropicInputJSONDelta(arguments))
-		}
-		r.emitContentBlockStop(blockIndex)
+	for index, item := range resp.Output {
+		r.emitOutputSnapshot(index, item)
+	}
+	// Providers may omit individual done events and the final output array.
+	for _, tc := range r.toolCalls {
+		r.finishTool(tc, "")
 	}
 
 	r.emitStopEvents()
@@ -592,4 +578,81 @@ func (r *responsesToAnthropicConverter) finalize(resp *responses.Response, stopR
 	}
 	r.emitMessageDelta(stopReason)
 	r.emitMessageStop() // sets r.done = true
+}
+
+func (r *responsesToAnthropicConverter) finishTool(tc *responsesToAnthropicToolCall, arguments string) {
+	if tc.completed {
+		return
+	}
+	if suffix := snapshotSuffix(tc.arguments.String(), arguments); suffix != "" {
+		r.emitContentBlockDelta(tc.blockIndex, anthropicInputJSONDelta(suffix))
+		tc.arguments.WriteString(suffix)
+	}
+	r.emitContentBlockStop(tc.blockIndex)
+	tc.completed = true
+}
+
+func (r *responsesToAnthropicConverter) emitOutputSnapshot(index int, item responses.ResponseOutputItemUnion) {
+	switch item.Type {
+	case "message":
+		for partIndex, part := range item.Content {
+			switch part.Type {
+			case "output_text":
+				r.emitTextSnapshot(index, partIndex, "text", part.Text)
+			case "refusal":
+				r.emitTextSnapshot(index, partIndex, "refusal", part.Refusal)
+			}
+		}
+	case "reasoning":
+		for partIndex, part := range item.Summary {
+			r.emitTextSnapshot(index, partIndex, "summary", part.Text)
+		}
+	case "function_call", "custom_tool_call", "mcp_call":
+		tc, exists := r.toolCalls[item.ID]
+		if !exists {
+			callID := item.CallID
+			if callID == "" {
+				callID = item.ID
+			}
+			tc = &responsesToAnthropicToolCall{blockIndex: r.state.nextBlockIndex, itemID: item.ID, truncatedID: truncateToolCallID(callID), name: item.Name}
+			r.state.nextBlockIndex++
+			r.toolCalls[item.ID] = tc
+			r.lastOutputItemType = "function_call"
+			r.emitContentBlockStart(tc.blockIndex, anthropicToolUseBlockStart(tc.truncatedID, tc.name))
+		}
+		arguments := item.Arguments.OfString
+		if item.Type == "custom_tool_call" {
+			arguments = item.Input
+		}
+		r.finishTool(tc, arguments)
+	}
+}
+
+func (r *responsesToAnthropicConverter) rememberText(event responses.ResponseStreamEventUnion, kind, text string) {
+	r.textParts.retain(int(event.OutputIndex), responsePartIndex(event), kind, text, false)
+}
+
+func (r *responsesToAnthropicConverter) emitTextSnapshot(index, partIndex int, kind, text string) {
+	text = r.textParts.retain(index, partIndex, kind, text, true)
+	if text == "" {
+		return
+	}
+	block := &r.state.textBlockIndex
+	start, delta := anthropicTextBlockStart(), anthropicTextDelta(text)
+	switch kind {
+	case "summary", "reasoning":
+		block = &r.state.reasoningSummaryBlockIndex
+		start, delta = anthropicThinkingBlockStart(), anthropicThinkingDelta(text)
+	case "refusal":
+		block = &r.state.refusalBlockIndex
+	}
+	if *block == -1 || r.state.stoppedBlocks[*block] {
+		*block = r.state.nextBlockIndex
+		r.state.nextBlockIndex++
+		if kind == "summary" || kind == "reasoning" {
+			r.state.thinkingBlocks[*block] = true
+		}
+		r.emitContentBlockStart(*block, start)
+	}
+	r.emitContentBlockDelta(*block, delta)
 }

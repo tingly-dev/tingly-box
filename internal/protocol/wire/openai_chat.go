@@ -27,6 +27,7 @@ type ChatStreamChoice struct {
 type ChatStreamDelta struct {
 	Role      string               `json:"role,omitempty"`
 	Content   string               `json:"content,omitempty"`
+	Refusal   string               `json:"refusal,omitempty"`
 	ToolCalls []ChatStreamToolCall `json:"tool_calls,omitempty"`
 	// ReasoningContent carries extended-thinking text (DeepSeek-style extension;
 	// not part of the official OpenAI Chat schema).
