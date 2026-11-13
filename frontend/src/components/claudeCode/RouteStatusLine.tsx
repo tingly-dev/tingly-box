@@ -128,7 +128,7 @@ const RouteStatusLine = ({status, usage}: RouteStatusLineProps) => {
             component="div"
             variant="caption"
             sx={{
-                mt: 0.75, px: 1.5, color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.xs,
+                mt: 0.75, px: 1.5, color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.micro,
                 display: 'flex', flexWrap: 'wrap', columnGap: 1, rowGap: 0.25,
                 '& > *:not(:last-child)::after': {content: '"|"', ml: 1, color: 'text.disabled'},
             }}

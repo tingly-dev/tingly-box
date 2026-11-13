@@ -146,7 +146,7 @@ export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: Prob
                 }))}
                 onChange={(_, v) => onChange(THINKING_LADDER[v as number])}
                 sx={{
-                    '& .MuiSlider-markLabel': { fontSize: fontSizes.xs },
+                    '& .MuiSlider-markLabel': { fontSize: fontSizes.micro },
                     '& .MuiSlider-markLabel[data-index="0"]': { transform: 'translateX(0%)' },
                     [`& .MuiSlider-markLabel[data-index="${THINKING_LADDER.length - 1}"]`]: { transform: 'translateX(-100%)' },
                 }}

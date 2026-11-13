@@ -92,7 +92,7 @@ const ContentMenu: React.FC<{
             <ListItemText
                 primary={primary}
                 secondary={secondary}
-                slotProps={{ primary: { sx: { fontSize: fontSizes.lg, fontWeight: 600 } }, secondary: { sx: { fontSize: fontSizes.xs } } }}
+                slotProps={{ primary: { sx: { fontSize: fontSizes.md, fontWeight: 600 } }, secondary: { sx: { fontSize: fontSizes.micro } } }}
             />
         </MenuItem>
     );

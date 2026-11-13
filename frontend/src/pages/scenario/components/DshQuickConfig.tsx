@@ -217,7 +217,7 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                     borderRadius: radius.chip,
                                     bgcolor: 'action.hover',
                                     fontFamily: fontMono,
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     color: 'text.secondary',
                                     whiteSpace: 'nowrap',
                                 }}
@@ -230,10 +230,10 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                 size="small"
                                 value={protocolValue}
                                 onChange={(e) => setProtocolValue(e.target.value)}
-                                sx={{ minWidth: 220, fontSize: fontSizes.lg }}
+                                sx={{ minWidth: 220, fontSize: fontSizes.md }}
                             >
                                 {PROTOCOL_VALUES.map((v) => (
-                                    <MenuItem key={v} value={v} sx={{ fontSize: fontSizes.lg }}>{protocolValueLabel[v]}</MenuItem>
+                                    <MenuItem key={v} value={v} sx={{ fontSize: fontSizes.md }}>{protocolValueLabel[v]}</MenuItem>
                                 ))}
                             </Select>
                         </Box>
@@ -263,7 +263,7 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                     borderRadius: radius.chip,
                                     bgcolor: 'action.hover',
                                     fontFamily: fontMono,
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     color: 'text.secondary',
                                     whiteSpace: 'nowrap',
                                 }}
@@ -277,13 +277,13 @@ const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
                                 value={value}
                                 displayEmpty
                                 onChange={(e) => setValue(e.target.value)}
-                                sx={{ minWidth: 220, fontSize: fontSizes.lg }}
+                                sx={{ minWidth: 220, fontSize: fontSizes.md }}
                             >
                                 <MenuItem value={UNSET}>
                                     <Typography variant="body2" sx={{ color: 'text.disabled' }}>{uiText.unsetLabel}</Typography>
                                 </MenuItem>
                                 {DEFAULT_INPUT_VALUES.map((v) => (
-                                    <MenuItem key={v} value={v} sx={{ fontSize: fontSizes.lg }}>{valueLabel[v]}</MenuItem>
+                                    <MenuItem key={v} value={v} sx={{ fontSize: fontSizes.md }}>{valueLabel[v]}</MenuItem>
                                 ))}
                             </Select>
                         </Box>

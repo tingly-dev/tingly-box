@@ -39,7 +39,7 @@ export function StatusThreadsPopover({ label, threads, onOpen, subtitleFor, onTa
     return (
         <Box sx={{ width: 480, maxWidth: '92vw', maxHeight: '75vh', overflowY: 'auto', py: 0.5 }}>
             <Typography variant="caption" component="div"
-                sx={{ px: 1.5, pt: 1, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.xs }}>
+                sx={{ px: 1.5, pt: 1, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.micro }}>
                 {label} · {threads.length}
             </Typography>
             {threads.map((th) => (

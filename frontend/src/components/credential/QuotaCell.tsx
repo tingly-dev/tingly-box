@@ -533,7 +533,7 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
                 {value}
             </Typography>
             {detail && (
-                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.xs, lineHeight: 1.3 }}>
+                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.micro, lineHeight: 1.3 }}>
                     {detail}
                 </Typography>
             )}

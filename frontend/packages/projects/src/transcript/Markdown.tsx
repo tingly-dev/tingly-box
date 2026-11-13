@@ -6,6 +6,7 @@ import {Children, isValidElement} from 'react';
 import {useTranscriptHost} from './context';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from './conversationStyles';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // Plain text of a rendered node tree: a fenced block's code reaches the code
 // component as parsed children, but a code block takes a string.
@@ -20,7 +21,7 @@ const textOf = (node: ReactNode): string => {
 const PlainCode = ({code}: {code: string; language: string}) => (
     <Box
         component="pre"
-        sx={{fontFamily: fontMono, fontSize: '0.85em', m: 0, my: 1.5, p: 1.5, borderRadius: radius.row, bgcolor: 'action.hover', overflow: 'auto', maxHeight: 480}}
+        sx={{fontFamily: fontMono, fontSize: fontSizes.inlineCode, m: 0, my: 1.5, p: 1.5, borderRadius: radius.row, bgcolor: 'action.hover', overflow: 'auto', maxHeight: 480}}
     >
         {code}
     </Box>
@@ -35,7 +36,7 @@ const Code = ({block, lang, children}: ComponentProps) => {
     return (
         <Box
             component="code"
-            sx={{fontFamily: fontMono, fontSize: '0.85em', px: 0.5, py: 0.125, borderRadius: radius.chip, bgcolor: 'action.hover'}}
+            sx={{fontFamily: fontMono, fontSize: fontSizes.inlineCode, px: 0.5, py: 0.125, borderRadius: radius.chip, bgcolor: 'action.hover'}}
         >
             {children}
         </Box>

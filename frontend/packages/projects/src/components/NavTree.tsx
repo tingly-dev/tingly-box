@@ -84,7 +84,7 @@ function SessionRow({ thread, to, selected, onNavigate }: { thread: Thread; to: 
                 sx={{ ...ROW_SX, pl: SESSION_INDENT, ...(selected && { backgroundColor: 'action.selected' }) }}
             >
                 <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 500, color: 'inherit' }}>{thread.title}</Typography>
-                <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.xs, color: 'text.disabled' }}>{timeAgo(thread.updated_at, i18n.language, true)}</Typography>
+                <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.micro, color: 'text.disabled' }}>{timeAgo(thread.updated_at, i18n.language, true)}</Typography>
                 <Box sx={{ width: 14, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
                     {thread.status !== 'idle' && <ThreadStateMark status={thread.status} queued={thread.queued} />}
                 </Box>

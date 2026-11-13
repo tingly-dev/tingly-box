@@ -107,7 +107,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                     <Typography
                         sx={{
-                            fontSize: fontSizes.xs,
+                            fontSize: fontSizes.micro,
                             fontWeight: 600,
                             color: 'text.secondary',
                             flexGrow: 1,
@@ -133,7 +133,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                     aria-label="Move smart rule up"
                                 >
-                                    <KeyboardArrowUp sx={{ fontSize: '0.875rem' }} />
+                                    <KeyboardArrowUp sx={{ fontSize: 14 }} />
                                 </IconButton>
                             </NodeTooltip>
                         )}
@@ -145,7 +145,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                     aria-label="Move smart rule down"
                                 >
-                                    <KeyboardArrowDown sx={{ fontSize: '0.875rem' }} />
+                                    <KeyboardArrowDown sx={{ fontSize: 14 }} />
                                 </IconButton>
                             </NodeTooltip>
                         )}
@@ -156,7 +156,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                 aria-label={t('rule.smart.deleteTooltip')}
                             >
-                                <DeleteIcon sx={{ fontSize: '0.875rem' }} />
+                                <DeleteIcon sx={{ fontSize: 14 }} />
                             </IconButton>
                         </NodeTooltip>
                     </Stack>
@@ -178,7 +178,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         <Typography
                             sx={{
-                                fontSize: fontSizes.xs,
+                                fontSize: fontSizes.micro,
                                 color: 'text.disabled',
                                 fontStyle: 'italic',
                                 textAlign: 'center',

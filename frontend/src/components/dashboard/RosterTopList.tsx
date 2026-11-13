@@ -5,6 +5,7 @@
 
 import { Box, Stack, Typography, alpha, useTheme } from '@mui/material';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface ShareBarItem {
     key: string;
@@ -155,7 +156,7 @@ export default function RosterTopList({
                 borderBottom: '1px solid',
                 borderColor: 'divider',
             }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {title}
                 </Typography>
             </Box>

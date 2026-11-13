@@ -192,7 +192,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         onClick={() => setSelectedLevels(new Set())}
                         sx={{
                             fontWeight: 600,
-                            fontSize: fontSizes.xs,
+                            fontSize: fontSizes.micro,
                             height: 24,
                         }}
                     />
@@ -211,7 +211,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     border: active ? `1px solid ${getLevelColor(level)}` : '1px solid',
                                     borderColor: active ? getLevelColor(level) : 'divider',
                                     fontWeight: 600,
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     height: 24,
                                     '&:hover': {
                                         backgroundColor: active
@@ -348,7 +348,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                 sx={{
                                                     backgroundColor: getLevelColor(log.level),
                                                     color: 'white',
-                                                    fontSize: fontSizes.xs,
+                                                    fontSize: fontSizes.micro,
                                                     height: 20,
                                                     fontWeight: 600,
                                                 }}
@@ -362,7 +362,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                     sx={{
                                                         backgroundColor: getStatusCodeColor(log.fields.status as number),
                                                         color: 'white',
-                                                        fontSize: fontSizes.xs,
+                                                        fontSize: fontSizes.micro,
                                                         height: 20,
                                                         fontWeight: 600,
                                                     }}
@@ -393,7 +393,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                     {log.fields.error_type && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'error.contrastText', opacity: 0.8 }}
+                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'error.contrastText', opacity: 0.8 }}
                                                                         >
                                                                             Type: {typeof log.fields.error_type === 'object' && log.fields.error_type !== null ? JSON.stringify(log.fields.error_type) : String(log.fields.error_type)}
                                                                         </Typography>

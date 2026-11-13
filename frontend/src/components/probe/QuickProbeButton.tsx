@@ -104,7 +104,7 @@ export const QuickProbeButton: React.FC<QuickProbeButtonProps> = ({ ruleUuid, ru
                             )}
                             <Typography
                                 sx={{
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     fontWeight: 600,
                                     lineHeight: 1,
                                     color: pillColor,

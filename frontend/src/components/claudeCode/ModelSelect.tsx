@@ -81,7 +81,7 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
                 <MenuItem key={tier.alias} value={tier.alias}>
                     <Box>
                         <Typography variant="body2" sx={{color: 'text.primary'}}>{data.unified ? concrete(tier) : tierLabel(tier.alias)}</Typography>
-                        <Typography sx={{color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.xs}}>{route(tier)}</Typography>
+                        <Typography sx={{color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.micro}}>{route(tier)}</Typography>
                     </Box>
                 </MenuItem>
             ))}

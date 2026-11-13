@@ -293,7 +293,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                                     sx={{
                                         fontFamily: fontMono,
                                         color: 'text.primary',
-                                        fontSize: '0.875rem',
+                                        fontSize: fontSizes.base,
                                         pr: 5,
                                         wordBreak: 'break-all',
                                     }}

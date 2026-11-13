@@ -32,7 +32,7 @@ const AgentQuickNav: React.FC = () => {
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: fontSizes.md }}>
                         {t('dashboard.agentNav.title', { defaultValue: 'Quick Start' })}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: fontSizes.xs }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: fontSizes.micro }}>
                         {t('dashboard.agentNav.description', { defaultValue: 'Jump to agent' })}
                     </Typography>
                 </Box>

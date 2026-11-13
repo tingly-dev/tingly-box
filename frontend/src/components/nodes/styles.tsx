@@ -89,8 +89,8 @@ export const ConnectionLine = styled(Box)(() => ({
     display: 'flex',
     alignItems: 'center',
     color: 'text.secondary',
-    fontSize: '1.5rem',
-    '& svg': { fontSize: '2rem' },
+    fontSize: fontSizes.display,
+    '& svg': { fontSize: 32 },
 }));
 
 export const graphNodeHoverStyles = (theme: Theme) => {

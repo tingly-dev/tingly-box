@@ -93,7 +93,7 @@ export function InlineCode({ text }: { text: string }) {
     return (
         <>
             {parts.map((p, i) => (i % 2 === 1
-                ? <Box key={i} component="code" sx={{ ...mono, fontSize: '0.95em', px: 0.5, borderRadius: radius.chip, bgcolor: 'action.hover', color: 'text.primary' }}>{p}</Box>
+                ? <Box key={i} component="code" sx={{ ...mono, fontSize: fontSizes.inlineCode, px: 0.5, borderRadius: radius.chip, bgcolor: 'action.hover', color: 'text.primary' }}>{p}</Box>
                 : p))}
         </>
     );

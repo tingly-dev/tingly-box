@@ -205,7 +205,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 <Typography
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         color: matched === rule.rule_index ? 'success.main' : 'text.disabled',
                     }}
                 >
@@ -214,7 +214,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 {rule.ops?.map((op, i) => (
                     <Typography
                         key={i}
-                        sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', pl: 2 }}
+                        sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled', pl: 2 }}
                     >
                         {op.position}.{op.operation} — {op.reason}
                     </Typography>
@@ -311,7 +311,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             <Typography
                                 sx={{
                                     fontFamily: fontMono,
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     color: toneColor(row.tone),
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
@@ -326,7 +326,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                 <Typography
                                     sx={{
                                         fontFamily: fontMono,
-                                        fontSize: fontSizes.xs,
+                                        fontSize: fontSizes.micro,
                                         color: row.tone === 'error' ? 'error.main' : 'text.secondary',
                                         whiteSpace: 'nowrap',
                                     }}
@@ -337,7 +337,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell}>
                             <Typography
-                                sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', textAlign: 'right' }}
+                                sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled', textAlign: 'right' }}
                             >
                                 {row.durationMs != null ? formatDuration(row.durationMs) : ''}
                             </Typography>
@@ -352,7 +352,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                     {row.payload.map(([k, v], i) => (
                                         <Typography
                                             key={`${k}:${i}`}
-                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: k === 'error' ? 'error.main' : 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: k === 'error' ? 'error.main' : 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                                         >
                                             {k}={v}
                                         </Typography>

@@ -1,7 +1,5 @@
 import type { Theme } from '@mui/material/styles';
-import { fontSizes } from '@/theme/fonts';
 import { lightPalette } from '@/theme/palettes/light';
-import { radius } from '@tingly/ui/theme/radius';
 
 // Token color palette with semantic meaning
 // These colors should be used with theme palette in components
@@ -27,54 +25,6 @@ export const getThemeChartStyles = (theme: Theme) => {
 // Quota bar colours: status tones come from theme/status (quotaTone/getStatusColor);
 // the unfilled track and "secondary" quota follow the palette too.
 export const getQuotaTrackColor = (theme: Theme) => theme.palette.action.hover;
-
-// Common grid style - very subtle (deprecated, use theme)
-export const gridStyle = {
-    stroke: '#f1f5f9',
-    strokeDasharray: '4 4',
-    strokeOpacity: 0.5,
-};
-
-// Common axis style (deprecated, use theme)
-export const axisStyle = {
-    stroke: '#e2e8f0',
-    strokeWidth: 1,
-};
-
-// Common tooltip style (deprecated, use theme)
-export const tooltipStyle = {
-    borderRadius: radius.card,
-    border: '1px solid #e2e8f0',
-    boxShadow: 'none',
-    backgroundColor: 'white',
-    padding: '12px',
-    minWidth: 200,
-};
-
-// Tooltip text styles
-export const tooltipTextStyles = {
-    title: {
-        fontWeight: 600,
-        mb: 1,
-        fontSize: '0.875rem',
-        color: '#0f172a',
-    },
-    body: {
-        color: '#0f172a',
-        fontSize: '0.875rem',
-    },
-    caption: {
-        color: '#64748b',
-        fontSize: fontSizes.sm,
-    },
-    divider: '1px solid #e2e8f0',
-};
-
-// Bar radius for rounded corners
-export const barRadius: [number, number, number, number] = [4, 4, 0, 0];
-
-// Animation duration for chart transitions
-export const ANIMATION_DURATION = 600;
 
 // Format large numbers compactly (999, 50K, 1.5M, 20.4B, 1.1T).
 //

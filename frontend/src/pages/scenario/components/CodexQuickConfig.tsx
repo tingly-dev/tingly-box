@@ -331,7 +331,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         borderRadius: radius.chip,
                         bgcolor: 'action.hover',
                         fontFamily: fontMono,
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         color: 'text.secondary',
                         whiteSpace: 'nowrap',
                     }}
@@ -356,7 +356,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         placeholder={String(CONTEXT_PERCENT_DEFAULTS[field.key as keyof typeof CONTEXT_PERCENT_DEFAULTS])}
                         onChange={(e) => setValue(e.target.value)}
                         slotProps={{ htmlInput: { min: CONTEXT_PERCENT_MIN, max: CONTEXT_PERCENT_MAX, step: 1 } }}
-                        sx={{ width: 160, '& input': { fontSize: fontSizes.lg } }}
+                        sx={{ width: 160, '& input': { fontSize: fontSizes.md } }}
                     />
                 )}
                 {field.kind === 'enum' && (
@@ -365,7 +365,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         value={value}
                         displayEmpty
                         onChange={(e) => setValue(e.target.value)}
-                        sx={{ minWidth: 160, fontSize: fontSizes.lg }}
+                        sx={{ minWidth: 160, fontSize: fontSizes.md }}
                     >
                         <MenuItem value={UNSET}>
                             <Typography variant="body2" sx={{
@@ -373,7 +373,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                             }}>{unsetLabel}</Typography>
                         </MenuItem>
                         {field.enumValues!.map((v) => (
-                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.lg }}>{v}</MenuItem>
+                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>{v}</MenuItem>
                         ))}
                     </Select>
                 )}
@@ -460,7 +460,7 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                             sx={{
                                 px: 0.75, py: 0.25, borderRadius: radius.chip,
                                 bgcolor: 'action.hover', fontFamily: fontMono,
-                                fontSize: fontSizes.xs, color: 'text.secondary', whiteSpace: 'nowrap',
+                                fontSize: fontSizes.micro, color: 'text.secondary', whiteSpace: 'nowrap',
                             }}
                         >
                             ~/.codex/tingly-model-catalog.json

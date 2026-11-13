@@ -101,7 +101,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
             sx={{
                 transition: 'transform 0.2s',
                 transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                fontSize: '1.1rem',
+                fontSize: 18,
                 color: 'text.secondary',
                 flexShrink: 0,
             }}
@@ -217,7 +217,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                     {key.display_name}
                                                 </Typography>
                                                 {!key.enabled && (
-                                                    <Chip label={t('sharingKeys.table.inactive')} size="small" variant="outlined" sx={{ height: 18, fontSize: fontSizes.xs }} />
+                                                    <Chip label={t('sharingKeys.table.inactive')} size="small" variant="outlined" sx={{ height: 18, fontSize: fontSizes.micro }} />
                                                 )}
                                             </Stack>
                                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0, opacity: key.enabled ? 1 : 0.55 }}>

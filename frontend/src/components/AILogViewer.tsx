@@ -322,7 +322,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, scenario }: Requ
                                                 <TableCell sx={{ fontSize: fontSizes.sm, fontFamily: fontMono }}>
                                                     {req.request_model || '-'}
                                                     {req.routed_model && req.routed_model !== req.request_model && (
-                                                        <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.secondary' }}>
+                                                        <Typography component="span" sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.secondary' }}>
                                                             {' → '}{req.routed_model}
                                                         </Typography>
                                                     )}

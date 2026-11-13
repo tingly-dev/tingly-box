@@ -53,7 +53,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                             bgcolor: 'grey.100',
                             borderRadius: radius.row,
                             fontFamily: fontMono,
-                            fontSize: fontSizes.lg,
+                            fontSize: fontSizes.md,
                             wordBreak: 'break-all',
                             border: '1px solid',
                             borderColor: 'grey.300',

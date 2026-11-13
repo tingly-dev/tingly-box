@@ -693,7 +693,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
                 <GridView fontSize="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: fontSizes.title }}>
                         {t('playground.slice.title', { defaultValue: 'Split into tiles' })}
                     </Typography>
                     <Typography
@@ -962,7 +962,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     size="small"
                                     disabled={isFullCrop(crop)}
                                     onClick={() => setCrop(FULL_CROP)}
-                                    sx={{ minWidth: 0, px: 0.75, py: 0, fontSize: fontSizes.xs }}
+                                    sx={{ minWidth: 0, px: 0.75, py: 0, fontSize: fontSizes.micro }}
                                 >
                                     {t('playground.slice.frameReset', { defaultValue: 'Whole image' })}
                                 </Button>

@@ -105,7 +105,7 @@
 | micro | 11 / 16 / 500 | `overline` / 徽标 | 只用于徽标、计数、rail 标签 |
 | code | 13，等宽 | — | URL、Key、命令、模型名 |
 
-`fontSizes` 同步收为 `micro 11 / sm 12 / md 13 / base 14`，旧的 `xs`、`lg` 先作为别名保留，迁移完删除。
+`fontSizes` 与上表同一套步进：`micro 11 / sm 12 / md 13 / base 14 / title 16 / lead 18 / heading 20 / display 24`，另有相对单位的 `inlineCode`（0.85em，行内代码）；旧别名 `xs`、`lg` 已删除（第二轮 R4）。图标尺寸写 px 数字（`fontSize: 16`），不算字号。
 
 ### 2.2 颜色（语义 token，每套主题只填这一张表）
 

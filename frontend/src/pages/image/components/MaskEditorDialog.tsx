@@ -34,6 +34,7 @@ import {
 } from '@tingly/vision';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface MaskEditorDialogProps {
     open: boolean;
@@ -295,7 +296,7 @@ const MaskEditorDialog: React.FC<MaskEditorDialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
                 <Brush fontSize="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: fontSizes.title }}>
                         {t('playground.mask.title', { defaultValue: 'Mask' })}
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>

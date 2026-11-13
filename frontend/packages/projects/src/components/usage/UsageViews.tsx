@@ -31,7 +31,7 @@ export function UsageStatTile({ label, value, title }: { label: string; value: s
             sx={{ p: 1.5, px: 2, border: '1px solid', borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}
         >
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block' }}>{label}</Typography>
-            <Typography title={title} sx={{ fontWeight: 600, fontSize: '1.25rem', lineHeight: 1.4, color: 'text.primary' }}>{value}</Typography>
+            <Typography title={title} sx={{ fontWeight: 600, fontSize: fontSizes.heading, lineHeight: 1.4, color: 'text.primary' }}>{value}</Typography>
         </Paper>
     );
 }
@@ -60,7 +60,7 @@ export function UsageCard({ title, count, maxHeight, children }: { title: string
                         size="small"
                         variant="outlined"
                         label={count}
-                        sx={{ height: 20, fontSize: fontSizes.xs, color: 'text.secondary', '.MuiChip-label': { px: 0.75 } }}
+                        sx={{ height: 20, fontSize: fontSizes.micro, color: 'text.secondary', '.MuiChip-label': { px: 0.75 } }}
                     />
                 )}
             </Stack>

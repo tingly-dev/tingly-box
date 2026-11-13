@@ -86,7 +86,7 @@ const ImBotNode: React.FC<ImBotNodeProps> = ({imbot, active = true, onClick, var
                     {imbot.uuid && (
                         <>
                             <br/>
-                            <Box component="span" sx={{fontSize: fontSizes.xs}}>
+                            <Box component="span" sx={{fontSize: fontSizes.micro}}>
                                 {t('nodes.imBotUUID', {defaultValue: 'Bot UUID'})}: {imbot.uuid}
                             </Box>
                         </>

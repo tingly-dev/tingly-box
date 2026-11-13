@@ -6,6 +6,7 @@ import { useTheme } from '@mui/material/styles';
 import { formatNumber, getQuotaTrackColor } from '../dashboard/chartStyles';
 import { getStatusColor, quotaTone } from '@/theme/status';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface QuotaBarItemProps {
   window: QuotaWindow;
@@ -143,7 +144,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
           variant="body2"
           sx={{
             color: "text.secondary",
-            fontSize: '12px',
+            fontSize: fontSizes.sm,
             whiteSpace: 'nowrap'
           }}>
           {window.label}:
@@ -186,7 +187,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
           variant="body2"
           sx={{
             color: percentLabel || !countable ? 'text.secondary' : barColor,
-            fontSize: '12px',
+            fontSize: fontSizes.sm,
             whiteSpace: 'nowrap',
           }}
         >

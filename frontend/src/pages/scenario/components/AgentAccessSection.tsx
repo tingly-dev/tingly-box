@@ -93,7 +93,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
             sx={{
                 transition: 'transform 0.2s',
                 transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                fontSize: '1.1rem',
+                fontSize: 18,
                 color: 'text.secondary',
                 flexShrink: 0,
             }}

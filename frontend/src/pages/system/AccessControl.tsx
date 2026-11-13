@@ -30,6 +30,7 @@ import CardGrid from "@/components/CardGrid.tsx";
 import ConfirmDialog from '@/components/ConfirmDialog.tsx';
 import { fontMono } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface TokenInfo {
     token: string;
@@ -63,7 +64,7 @@ const MaskedTokenRow = ({
             bgcolor: 'action.hover',
             borderRadius: radius.row,
             fontFamily: fontMono,
-            fontSize: '0.875rem',
+            fontSize: fontSizes.base,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -132,7 +133,7 @@ const TokenResetSuccessAlert = ({
                 bgcolor: 'action.hover',
                 borderRadius: radius.row,
                 fontFamily: fontMono,
-                fontSize: '0.875rem',
+                fontSize: fontSizes.base,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',

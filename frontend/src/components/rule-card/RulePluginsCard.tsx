@@ -159,7 +159,7 @@ export const RulePluginsList: React.FC<RulePluginsListProps> = ({ flags, enabled
                                 onClick={(e) => { e.stopPropagation(); onRemoveFlag(spec.key); }}
                                 sx={{ p: 0, ml: 'auto', flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
                             >
-                                <CloseIcon sx={{ fontSize: fontSizes.xs }} />
+                                <CloseIcon sx={{ fontSize: fontSizes.micro }} />
                             </IconButton>
                         )}
                     </Box>
@@ -196,7 +196,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     mb: 0.75
                 }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: fontSizes.xs, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: fontSizes.micro, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}
@@ -213,7 +213,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'text.disabled',
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         lineHeight: 1.25,
                         textAlign: 'center',
                         px: 1,

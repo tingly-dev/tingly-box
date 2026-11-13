@@ -17,6 +17,7 @@ import { Add, Remove } from '@/components/icons';
 import { appendTextListValue, removeTextListValue, textListRows, updateTextListValue } from './listField';
 import type { OversizedListField } from './types';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 type CompactListEditorProps = {
     title: string;
@@ -148,7 +149,7 @@ const CompactListEditor = ({
                                             placeholder={index === 0 ? placeholder : 'Add another entry'}
                                             onFocus={() => onSelectedIndexChange(index)}
                                             onChange={(e) => onChange(updateTextListValue(value, index, e.target.value))}
-                                            sx={{ fontSize: '0.9rem' }}
+                                            sx={{ fontSize: fontSizes.base }}
                                         />
                                     </TableCell>
                                 </TableRow>

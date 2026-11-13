@@ -68,6 +68,7 @@ import {
     drawFigure,
 } from '@tingly/mannequin';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 
@@ -665,7 +666,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
                 <Create fontSize="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: fontSizes.title }}>
                         {t('playground.sketch.title', { defaultValue: 'Sketch' })}
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>

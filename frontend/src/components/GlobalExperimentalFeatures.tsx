@@ -259,7 +259,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             {/* MCP Section */}
             {featureRow(
                 'mcp',
-                <SettingsApplications sx={{ fontSize: '1rem', color: 'text.secondary' }} />,
+                <SettingsApplications sx={{ fontSize: 16, color: 'text.secondary' }} />,
                 `${t('system.experimentalFeatures.mcp')} Tools`,
                 t('system.experimentalFeatures.enableMCP'),
                 mcpEnabled,

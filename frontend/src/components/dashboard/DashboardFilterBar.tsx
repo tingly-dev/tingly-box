@@ -38,7 +38,7 @@ const identityLabel = (t: (key: string, options?: Record<string, unknown>) => st
 // Shared by the provider and sharing-key pickers so both group the same way.
 const GROUP_SUBHEADER_SX = {
     fontWeight: 600,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.micro,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     lineHeight: '28px',
@@ -185,7 +185,7 @@ export default function DashboardFilterBar({
                     }}
                 >
                     <FormControl size="small" sx={{ width: { xs: 140, md: 114 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.agent', { defaultValue: 'Agent' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.agent', { defaultValue: 'Agent' })}</InputLabel>
                         <Select
                             value={selectedScenario}
                             label={t('dashboard.overview.agent', { defaultValue: 'Agent' })}
@@ -202,7 +202,7 @@ export default function DashboardFilterBar({
                     </FormControl>
 
                     <FormControl size="small" sx={{ width: { xs: 140, md: 124 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
                         <Select
                             value={selectedProvider}
                             label={t('dashboard.overview.provider', { defaultValue: 'Provider' })}
@@ -227,7 +227,7 @@ export default function DashboardFilterBar({
                     </FormControl>
 
                     <FormControl size="small" sx={{ width: { xs: 140, md: 114 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.model', { defaultValue: 'Model' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.model', { defaultValue: 'Model' })}</InputLabel>
                         <Select
                             value={selectedModel}
                             label={t('dashboard.overview.model', { defaultValue: 'Model' })}
@@ -244,7 +244,7 @@ export default function DashboardFilterBar({
                     </FormControl>
 
                     <FormControl size="small" sx={{ width: { xs: 160, md: 130 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.identity', { defaultValue: 'Identity' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.identity', { defaultValue: 'Identity' })}</InputLabel>
                         <Select
                             value={selectedUser}
                             label={t('dashboard.overview.identity', { defaultValue: 'Identity' })}
