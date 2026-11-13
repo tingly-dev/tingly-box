@@ -86,3 +86,31 @@ func TestBashApprovalButtonSaysItIsForThatCommand(t *testing.T) {
 	assert.Equal(t, "Allow this command for this thread", allowThreadLabel("Bash"))
 	assert.Equal(t, "Allow for this thread", allowThreadLabel("Write"))
 }
+
+func TestPendingRequestsListsWhatTheThreadWaitsOn(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		resp, err := turn.Approve("req-1", "Bash", map[string]any{"command": "make test"})
+		if err != nil {
+			return err
+		}
+		if resp.Approved {
+			turn.Say("ran", 1, 1)
+		} else {
+			turn.Say("blocked", 1, 1)
+		}
+		return nil
+	})
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "build"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, th.ID, db.ThreadWaiting)
+
+	pending := f.threads.PendingRequests(th.ID)
+	require.Len(t, pending, 1)
+	assert.Equal(t, db.EvApproval, pending[0].Kind)
+	assert.Contains(t, pending[0].Payload, `"request_id":"req-1"`)
+	assert.Contains(t, pending[0].Payload, `"state":"pending"`)
+
+	require.NoError(t, f.threads.Respond(th.ID, "req-1", Answer{Allow: false}))
+	assert.Empty(t, f.threads.PendingRequests(th.ID), "an answered request is no longer pending")
+	assert.NotNil(t, f.threads.PendingRequests("no-such-thread"), "a thread with nothing pending lists an empty set, not null")
+}

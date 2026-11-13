@@ -24,6 +24,7 @@ import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/Works
 import { ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
+import { ThreadRequestsProvider, useThreadRequestsStore } from '../hooks/threadRequests';
 import { useTranscript } from '../hooks/useTranscript';
 import { usePlacement } from '../hooks/usePlacement';
 import { useProjectsHost } from '../host/ProjectsHost';
@@ -59,6 +60,9 @@ export default function ProjectPage() {
 
     const [project, setProject] = useState<Project | null>(null);
     const [threads, setThreads] = useState<Thread[]>([]);
+    // What the threads wait on, answered from their cards.
+    const requests = useThreadRequestsStore(threads);
+    const { observe: observeRequest, refresh: refreshRequests, hydrated: requestsRead, review: reviewRequests } = requests;
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
     const [worktreeMenuOpen, setWorktreeMenuOpen] = useState(false);
@@ -180,6 +184,7 @@ export default function ProjectPage() {
             }
             case 'thread_event': {
                 const e = ev.data as ThreadEvent;
+                if (e.thread_id !== mainThreadId) observeRequest(e);
                 if (e.thread_id === mainThreadId) applyMain(e);
                 else if (e.thread_id === threadId) {
                     applyOpened(e);
@@ -199,7 +204,7 @@ export default function ProjectPage() {
                 break;
             }
         }
-    }, [threadId, mainThreadId, applyMain, editMain, applyOpened, load, loadThread]);
+    }, [threadId, mainThreadId, observeRequest, applyMain, editMain, applyOpened, load, loadThread]);
 
     const resolveRecovery = async () => {
         if (!recovery || !recoveryAction) return;
@@ -231,6 +236,7 @@ export default function ProjectPage() {
 
     useProjectEvents(id, onEvent, () => {
         void load();
+        refreshRequests();
         conversation.catchUp().catch(() => undefined);
         if (threadId) {
             void loadThread(threadId);
@@ -252,6 +258,7 @@ export default function ProjectPage() {
         // A drill-in names the one subagent (focus) or background task (task) to open with the thread.
         setParams((p) => {
             p.set('thread', tid);
+            p.delete('review');
             if (drill?.focus) p.set('focus', drill.focus); else p.delete('focus');
             if (drill?.task) p.set('task', drill.task); else p.delete('task');
             return p;
@@ -259,6 +266,25 @@ export default function ProjectPage() {
         if (threadAt === 'side') pane.reveal();
         else if (pane.narrow) pane.setDrawerOpen(false);
     };
+    // A notification's deep link (?review=<thread>): the card opens what the thread
+    // waits on; a thread that waits on nothing answerable opens as a page instead.
+    const review = params.get('review');
+    useEffect(() => {
+        if (!review) return;
+        const th = threads.find((x) => x.id === review);
+        if (!th || (th.status === 'waiting' && !requestsRead(review))) return;
+        if ((requests.byThread[review]?.length ?? 0) > 0) {
+            setParams((p) => {
+                p.delete('review');
+                return p;
+            }, { replace: true });
+            reviewRequests(review);
+        } else {
+            openThread(review);
+        }
+        // openThread only reads state the effect's inputs already cover.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [review, threads, requests.byThread, requestsRead, reviewRequests]);
     // The status area's counts, opened into their lists (the band's pill, the
     // coordinator's fact): what they count, one click from each entry.
     const [activity, setActivity] = useState<{ targets: Thread[]; anchor: HTMLElement } | null>(null);
@@ -404,7 +430,7 @@ export default function ProjectPage() {
             : undefined;
 
     return (
-        <>
+        <ThreadRequestsProvider value={requests}>
             <WorkspaceLayout
                 pane={pane}
                 headerInsetXs={embedded ? 2 : 6}
@@ -661,6 +687,6 @@ export default function ProjectPage() {
                     memoryKey={memoryKey}
                 />
             )}
-        </>
+        </ThreadRequestsProvider>
     );
 }

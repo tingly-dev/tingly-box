@@ -61,6 +61,12 @@ type EventsResponse struct {
 	More bool `json:"more"`
 }
 
+// RequestsResponse is what a thread is waiting on: its pending approvals and
+// questions as the transcript entries that asked them, oldest first.
+type RequestsResponse struct {
+	Requests []db.ThreadEvent `json:"requests"`
+}
+
 // SubagentsResponse lists a thread's subagents.
 type SubagentsResponse struct {
 	Subagents []db.Subagent `json:"subagents"`
@@ -202,6 +208,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/threads/:id/subagents", h.subagents, tag,
 		swagger.WithDescription("A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it"),
 		swagger.WithResponseModel(SubagentsResponse{}))
+	api.GET("/threads/:id/requests", h.requests, tag,
+		swagger.WithDescription("The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond"),
+		swagger.WithResponseModel(RequestsResponse{}))
 	api.POST("/threads/:id/messages", h.send, tag,
 		swagger.WithDescription("Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream"),
 		swagger.WithRequestModel(SendRequest{}),
@@ -417,6 +426,14 @@ func (h *Handler) events(c *gin.Context) {
 		events = []db.ThreadEvent{}
 	}
 	c.JSON(http.StatusOK, EventsResponse{Events: events, More: more})
+}
+
+func (h *Handler) requests(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, RequestsResponse{Requests: h.svc.Threads.PendingRequests(t.ID)})
 }
 
 func (h *Handler) subagents(c *gin.Context) {

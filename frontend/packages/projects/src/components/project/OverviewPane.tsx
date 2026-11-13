@@ -3,7 +3,8 @@ import { Box, Tab, Tabs, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { timeAgo } from '../../utils/format';
-import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, needsUser } from './threadStatus';
+import { STATUS_ORDER, ThreadBadges, needsUser } from './threadStatus';
+import { ThreadRequestSubtitle, ThreadRequestsStrip } from './ThreadRequests';
 import { StatusGroups } from '../workspace/StatusGroups';
 import { StatusBoard } from '../workspace/StatusBoard';
 import { useThreadsView, ViewSwitch, type ThreadsView } from '../workspace/ViewSwitch';
@@ -23,7 +24,7 @@ function ThreadGroups({ threads, selectedId, onOpen, onTasks, onStatus, view, pi
     }));
     const rows = threads.map((th) => ({
         id: th.id, group: th.status, title: th.title, selected: th.id === selectedId,
-        subtitle: <ThreadSubtitle thread={th} />, badges: <ThreadBadges thread={th} onTasks={onTasks} />, meta: timeAgo(th.updated_at, i18n.language),
+        subtitle: <ThreadRequestSubtitle thread={th} />, footer: <ThreadRequestsStrip thread={th} onOpen={onOpen} />, badges: <ThreadBadges thread={th} onTasks={onTasks} />, meta: timeAgo(th.updated_at, i18n.language),
     }));
     return <StatusGroups groups={groups} rows={rows} onOpen={onOpen} onGroupClick={onStatus && ((key, _label, anchor) => onStatus(key, anchor))} empty={t('overview.noThreads')} />;
 }

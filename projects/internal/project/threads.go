@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1293,6 +1294,13 @@ func (m *Threads) PendingRequest(threadID, requestID string) (db.ThreadEvent, bo
 	return m.prompter(threadID).request(requestID)
 }
 
+// PendingRequests returns the transcript events of every approval and
+// question the thread is still waiting on, oldest first: what a card must
+// show to be answered without opening the thread.
+func (m *Threads) PendingRequests(threadID string) []db.ThreadEvent {
+	return m.prompter(threadID).requests()
+}
+
 // Respond answers a pending approval or question in a thread.
 func (m *Threads) Respond(threadID, requestID string, ans Answer) error {
 	return m.prompter(threadID).resolve(requestID, ans)
@@ -1946,6 +1954,18 @@ func (p *threadPrompter) request(requestID string) (db.ThreadEvent, bool) {
 		return db.ThreadEvent{}, false
 	}
 	return pd.event, true
+}
+
+// requests returns the transcript events of every pending request, oldest first.
+func (p *threadPrompter) requests() []db.ThreadEvent {
+	p.mu.Lock()
+	out := make([]db.ThreadEvent, 0, len(p.pending))
+	for _, pd := range p.pending {
+		out = append(out, pd.event)
+	}
+	p.mu.Unlock()
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out
 }
 
 func (p *threadPrompter) cancelAll() {

@@ -133,7 +133,7 @@ function onThread(thread: Thread): void {
             ? firstLine(thread.last_report)
             : t(`notifications.${attention}`);
     engine.finishedAt.set(thread.id, Date.now());
-    notify(thread.title, body, `tb-thread-${thread.id}`, () => threadUrl(thread));
+    notify(thread.title, body, `tb-thread-${thread.id}`, () => threadUrl(thread, attention === 'waiting'));
 }
 
 function onThreadEvent(event: ThreadEvent, projectId: string): void {
@@ -172,14 +172,17 @@ function notify(title: string, body: string, tag: string, url: () => string | un
 }
 
 /** Where answering a thread's ping happens: the folder session or the
- * project page with the thread open; the conversation itself is the project page. */
-export function threadUrl(thread: Thread): string | undefined {
+ * project page with the thread open; the conversation itself is the project page.
+ * A thread that waits on the user opens its card's requests on the project page
+ * (`review`), where the approval or question is answered in place; the page
+ * opens the thread instead when nothing answerable is pending. */
+export function threadUrl(thread: Thread, review = false): string | undefined {
     const ui = engine.ui;
     const project = listRows()?.find((p) => p.id === thread.project_id);
     if (!ui || !project) return undefined;
     if (isFolder(project)) return withParams(ui.paths.folder(project.path), { session: thread.id });
     if (thread.id === project.main_thread_id) return ui.paths.project(project.id);
-    return withParams(ui.paths.project(project.id), { thread: thread.id });
+    return withParams(ui.paths.project(project.id), review ? { review: thread.id } : { thread: thread.id });
 }
 
 function projectUrl(projectId: string): string | undefined {

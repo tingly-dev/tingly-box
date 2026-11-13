@@ -76,6 +76,13 @@ export const project: Dict<typeof projectEn> = {
         noRepo: '无仓库——文件放入文件库', fromBase: '基于 {{base}}', uncommitted: '有未提交的改动',
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview',
         editTitle: '重命名线程',
+        requests: {
+            approval: '需要你批准', question: '有问题等你回答', many: '{{count}} 个请求等你处理', review: '查看',
+            more: '另有 {{count}} 个', answered: '已处理', openThread: '打开线程',
+            dialog: '等你处理：{{title}}',
+            settled: '已在别处处理——这一项不再需要回应。',
+            cleared: '这里已没有等你处理的事项。',
+        },
         review: 'Review 改动', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
         retry: '重试本轮',
         showTrajectory: '查看轨迹', showChat: '查看对话', expandTools: '展开所有工具调用', collapseTools: '折叠工具调用',
