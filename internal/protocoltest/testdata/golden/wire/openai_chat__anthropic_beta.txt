@@ -221,7 +221,7 @@ data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-
 
 data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-incomplete","choices":[{"index":0,"delta":{"content":"This response was truncated due to output limit."},"finish_reason":null}],"service_tier":null}
 
-data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-incomplete","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":50,"total_tokens":60},"service_tier":null}
+data: {"id":"<ID1>","object":"chat.completion.chunk","created":<TS>,"model":"pv-openai_chat-to-anthropic_beta-incomplete","choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":50,"total_tokens":60},"service_tier":null}
 
 data: [DONE]
 
@@ -442,7 +442,7 @@ POST /v1/messages
   "model": "virtual-model-thinking"
 }
 --- client response (status 200)
-{"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"The capital of France is Paris.","refusal":null,"role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-anthropic_beta-thinking","moderation":null,"object":"chat.completion","service_tier":null,"usage":{"completion_tokens":30,"prompt_tokens":10,"total_tokens":40}}
+{"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"content":"The capital of France is Paris.","reasoning_content":"Let me reason about this step by step...","refusal":null,"role":"assistant"}}],"created":<TS>,"id":"<ID1>","model":"pv-openai_chat-to-anthropic_beta-thinking","moderation":null,"object":"chat.completion","service_tier":null,"usage":{"completion_tokens":30,"prompt_tokens":10,"total_tokens":40}}
 
 === thinking stream=true
 --- upstream request

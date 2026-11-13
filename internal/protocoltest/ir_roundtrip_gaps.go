@@ -16,7 +16,6 @@ var irGapCategories = map[string]string{
 	"I6": "input image detail is dropped",
 	"R1": "response, output item and function call IDs are minted anew instead of carried from the provider",
 	"R2": "the Responses object type is normalized to \"response\" instead of carried from the provider",
-	"R3": "a streamed length stop (finish_reason length) arrives as stop",
 	"R4": "when the provider streams no usage, the IR's estimated usage differs from the direct path's",
 }
 
@@ -43,13 +42,11 @@ var irGaps = map[string][]string{
 	"TestIRRoundTripRequest/openai_responses->openai_responses/tools":        {"I1"},
 
 	"TestIRRoundTripResponse/openai_chat->openai_chat/incomplete/nonstream":                {"R1"},
-	"TestIRRoundTripResponse/openai_chat->openai_chat/incomplete/stream":                   {"R3"},
 	"TestIRRoundTripResponse/openai_chat->openai_chat/multi_turn/nonstream":                {"R1"},
 	"TestIRRoundTripResponse/openai_chat->openai_chat/text/nonstream":                      {"R1"},
 	"TestIRRoundTripResponse/openai_chat->openai_chat/thinking/nonstream":                  {"R1"},
 	"TestIRRoundTripResponse/openai_chat->openai_chat/tool_result/nonstream":               {"R1"},
 	"TestIRRoundTripResponse/openai_chat->openai_chat/tool_use/nonstream":                  {"R1"},
-	"TestIRRoundTripResponse/openai_chat->openai_responses/incomplete/stream":              {"R3"},
 	"TestIRRoundTripResponse/openai_responses->openai_chat/multi_turn/stream":              {"R4"},
 	"TestIRRoundTripResponse/openai_responses->openai_chat/streaming_text/stream":          {"R4"},
 	"TestIRRoundTripResponse/openai_responses->openai_chat/streaming_tool_use/stream":      {"R4"},

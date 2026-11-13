@@ -1,7 +1,6 @@
 package nonstream
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -33,17 +32,17 @@ func ConvertAnthropicBetaToOpenAIChat(bm *anthropic.BetaMessage, responseModel s
 		case "text":
 			textContent += block.Text
 		case "tool_use":
-			argsJSON, _ := json.Marshal(block.Input)
+			argsJSON := protocol.AnthropicToolInputJSON(block.RawJSON(), block.Input)
 			toolCalls = append(toolCalls, wire.ChatCompletionToolCallWire{
 				ID:   block.ID,
 				Type: "function",
 				Function: wire.ChatCompletionFunctionWire{
 					Name:      block.Name,
-					Arguments: string(argsJSON),
+					Arguments: argsJSON,
 				},
 			})
 		case "thinking":
-			thinking += block.Text
+			thinking += block.Thinking
 		}
 	}
 
