@@ -10,7 +10,7 @@ describe('provider icon coverage', () => {
     it('renders a brand image for every catalog entry', () => {
         render(<>{Object.values(catalog.providers).map(provider => (
             <div key={provider.id} data-testid={provider.id}>
-                <ProviderIcon identifier={provider.icon || provider.id} />
+                <ProviderIcon identifier={(provider as { icon?: string }).icon || provider.id} />
             </div>
         ))}</>);
         for (const provider of Object.values(catalog.providers)) {

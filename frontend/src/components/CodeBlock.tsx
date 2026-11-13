@@ -1,13 +1,16 @@
 import { ContentCopy as CopyIcon, Check as CheckIcon } from '@/components/icons';
 import { Box, IconButton, Typography } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import React from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import './prismLanguages';
 import type { Language } from 'prism-react-renderer';
-import { EMPTY_STYLE } from '@/constants/defaults';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+
+// Object form only: the style is spread into the root's own sx.
+type SxObject = Exclude<SxProps<Theme>, ReadonlyArray<unknown> | ((theme: Theme) => unknown)>;
 
 export interface CodeBlockProps {
     code: string;
@@ -15,7 +18,7 @@ export interface CodeBlockProps {
     filename?: string;
     showCopy?: boolean;
     onCopy?: (code: string) => void;
-    sx?: React.CSSProperties;
+    sx?: SxObject;
     maxHeight?: number | string;
     minHeight?: number | string;
     headerActions?: React.ReactNode;
@@ -79,7 +82,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     filename,
     showCopy = true,
     onCopy,
-    sx = EMPTY_STYLE,
+    sx,
     maxHeight = 400,
     minHeight,
     headerActions,
