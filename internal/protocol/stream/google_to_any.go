@@ -17,6 +17,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // HandleGoogleToOpenAIStreamResponse processes Google streaming events and converts them to OpenAI format
@@ -49,10 +50,12 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 	// Track streaming state
 	var (
-		chatID     = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
-		created    = time.Now().Unix()
-		toolCalls  []map[string]interface{}
-		hasStarted bool
+		chatID       = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
+		created      = time.Now().Unix()
+		toolCalls    []map[string]interface{}
+		hasStarted   bool
+		finishReason string
+		lastUsage    *genai.GenerateContentResponseUsageMetadata
 	)
 
 	// Process the stream
@@ -72,9 +75,16 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 				return nil
 			}
 			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
-			return nil
+			sendOpenAIStreamError(c, protocol.UpstreamMessage(err), "stream_error")
+			return err
 		}
 
+		if googleResp == nil {
+			continue
+		}
+		if googleResp.UsageMetadata != nil {
+			lastUsage = googleResp.UsageMetadata
+		}
 		// Send initial chunk if not already sent
 		if !hasStarted {
 			// First SSE byte for this stream — open the failover gate so
@@ -128,8 +138,9 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 					// Handle function calls
 					if part.FunctionCall != nil {
 						toolCall := map[string]interface{}{
-							"id":   part.FunctionCall.ID,
-							"type": "function",
+							"id":    part.FunctionCall.ID,
+							"index": len(toolCalls),
+							"type":  "function",
 							"function": map[string]interface{}{
 								"name": part.FunctionCall.Name,
 							},
@@ -163,52 +174,61 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 			// Check for finish reason
 			if candidate.FinishReason != "" {
-				finishReason := nonstream.MapGoogleFinishReasonToOpenAI(candidate.FinishReason)
+				finishReason = nonstream.MapGoogleFinishReasonToOpenAI(candidate.FinishReason)
 
 				// If there were tool calls, set finish reason accordingly
 				if len(toolCalls) > 0 && finishReason == "stop" {
 					finishReason = "tool_calls"
 				}
 
-				// Send final chunk with finish reason and usage
-				chunk := map[string]interface{}{
-					"id":      chatID,
-					"object":  "chat.completion.chunk",
-					"created": created,
-					"model":   responseModel,
-					"choices": []map[string]interface{}{
-						{
-							"index":         0,
-							"delta":         map[string]interface{}{},
-							"finish_reason": finishReason,
-						},
-					},
-				}
-
-				// Add usage if available
-				if googleResp.UsageMetadata != nil {
-					chunk["usage"] = map[string]interface{}{
-						"prompt_tokens":     googleResp.UsageMetadata.PromptTokenCount,
-						"completion_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
-						"total_tokens":      googleResp.UsageMetadata.TotalTokenCount,
-					}
-				}
-
-				sendOpenAIStreamChunkForce(c, chunk)
-				// Send final [DONE] message
-				c.Writer.Write([]byte("data: [DONE]\n\n"))
-				flusher.Flush()
-				return nil
 			}
 		}
 	}
 
+	if finishReason == "" {
+		err := fmt.Errorf("Google stream ended without a finish reason")
+		sendOpenAIStreamError(c, err.Error(), "stream_error")
+		return err
+	}
+
+	// Send final chunk with finish reason and usage
+	chunk := map[string]interface{}{
+		"id":      chatID,
+		"object":  "chat.completion.chunk",
+		"created": created,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"delta":         map[string]interface{}{},
+				"finish_reason": finishReason,
+			},
+		},
+	}
+
+	// Add usage if available
+	if lastUsage != nil {
+		usageWire := usageconv.ToChatStreamUsageWire(usageconv.FromGoogle(lastUsage))
+		if lastUsage.TotalTokenCount != 0 {
+			usageWire.TotalTokens = int64(lastUsage.TotalTokenCount)
+		}
+		chunk["usage"] = usageWire
+	}
+
+	sendOpenAIStreamChunkForce(c, chunk)
+	// Send final [DONE] message
+	c.Writer.Write([]byte("data: [DONE]\n\n"))
+	flusher.Flush()
 	return nil
 }
 
 // HandleGoogleToAnthropicStreamResponse processes Google streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (*protocol.TokenUsage, error) {
+	return handleGoogleToAnthropicStream(c, stream, responseModel, nonstream.MapGoogleFinishReasonToAnthropic)
+}
+
+func handleGoogleToAnthropicStream(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string, mapFinish func(genai.FinishReason) string) (*protocol.TokenUsage, error) {
 	logrus.WithContext(c.Request.Context()).Info("Starting Google to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -242,6 +262,9 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 	var (
 		textBlockIndex = -1
 		toolBlockIndex = -1
+		nextBlockIndex = 0
+		stopReason     string
+		hasTools       bool
 		usage          = protocol.ZeroTokenUsage()
 	)
 
@@ -273,6 +296,9 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 			return usage, err
 		}
 
+		if googleResp == nil {
+			continue
+		}
 		// Process candidates
 		if len(googleResp.Candidates) > 0 {
 			candidate := googleResp.Candidates[0]
@@ -284,7 +310,8 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 					if part.Text != "" {
 						// Send content_block_start for text on first occurrence
 						if textBlockIndex == -1 {
-							textBlockIndex = 0
+							textBlockIndex = nextBlockIndex
+							nextBlockIndex++
 							sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
 								Type:         eventTypeContentBlockStart,
 								Index:        textBlockIndex,
@@ -302,7 +329,13 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 					// Handle function calls
 					if part.FunctionCall != nil {
-						toolBlockIndex++
+						if textBlockIndex != -1 {
+							sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{Type: eventTypeContentBlockStop, Index: textBlockIndex}, flusher)
+							textBlockIndex = -1
+						}
+						toolBlockIndex = nextBlockIndex
+						nextBlockIndex++
+						hasTools = true
 						// Send content_block_start for tool_use
 						sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
 							Type:         eventTypeContentBlockStart,
@@ -321,232 +354,54 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 			// Check for finish reason
 			if candidate.FinishReason != "" {
-				stopReason := nonstream.MapGoogleFinishReasonToAnthropic(candidate.FinishReason)
-
-				// Send content_block_stop for text if applicable
-				if textBlockIndex != -1 {
-					sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
-						Type:  eventTypeContentBlockStop,
-						Index: textBlockIndex,
-					}, flusher)
+				stopReason = mapFinish(candidate.FinishReason)
+				if hasTools && stopReason == "end_turn" {
+					stopReason = "tool_use"
 				}
 
-				// Collect usage info
-				if googleResp.UsageMetadata != nil {
-					usage = protocol.NewTokenUsageWithCache(
-						int(googleResp.UsageMetadata.PromptTokenCount),
-						int(googleResp.UsageMetadata.CandidatesTokenCount),
-						int(googleResp.UsageMetadata.CachedContentTokenCount),
-					)
-				}
-
-				// Send message_delta with stop reason and usage
-				messageDeltaEvent := map[string]interface{}{
-					"type": "message_delta",
-					"delta": map[string]interface{}{
-						"stop_reason":   stopReason,
-						"stop_sequence": nil,
-					},
-					"usage": usage.ToAnthropicMessageDeltaUsageMap(),
-				}
-				sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
-
-				// Send message_stop
-				sendAnthropicStreamEvent(c, eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop}, flusher)
-				return usage, nil
 			}
 		}
 
 		// Track usage
 		if googleResp.UsageMetadata != nil {
-			usage = protocol.NewTokenUsageWithCache(
-				int(googleResp.UsageMetadata.PromptTokenCount),
-				int(googleResp.UsageMetadata.CandidatesTokenCount),
-				int(googleResp.UsageMetadata.CachedContentTokenCount),
-			)
+			usage = usageconv.FromGoogle(googleResp.UsageMetadata)
 		}
 	}
 
+	if stopReason == "" {
+		err := fmt.Errorf("Google stream ended without a finish reason")
+		sendAnthropicStreamEvent(c, "error", BuildErrorEvent(err, "stream_failed"), flusher)
+		return usage, err
+	}
+
+	// Send content_block_stop for text if applicable
+	if textBlockIndex != -1 {
+		sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
+			Type:  eventTypeContentBlockStop,
+			Index: textBlockIndex,
+		}, flusher)
+	}
+
+	// Send message_delta with stop reason and usage
+	messageDeltaEvent := map[string]interface{}{
+		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":   stopReason,
+			"stop_sequence": nil,
+		},
+		"usage": usage.ToAnthropicMessageDeltaUsageMap(),
+	}
+	sendAnthropicStreamEvent(c, "message_delta", messageDeltaEvent, flusher)
+
+	// Send message_stop
+	sendAnthropicStreamEvent(c, eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop}, flusher)
 	return usage, nil
 }
 
-// HandleGoogleToAnthropicBetaStreamResponse processes Google streaming events and converts them to Anthropic beta format.
-// Returns UsageStat containing token usage information for tracking.
+// HandleGoogleToAnthropicBetaStreamResponse shares the event lifecycle with V1;
+// only the finish-reason vocabulary differs.
 func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (*protocol.TokenUsage, error) {
-	logrus.WithContext(c.Request.Context()).Info("Starting Google to Anthropic beta streaming response handler")
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.WithContext(c.Request.Context()).Errorf("Panic in Google to Anthropic beta streaming handler: %v", r)
-			if c.Writer != nil {
-				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
-				if flusher, ok := c.Writer.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-		}
-		logrus.WithContext(c.Request.Context()).Info("Finished Google to Anthropic beta streaming response handler")
-	}()
-
-	// Set SSE headers
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
-	}
-
-	// Generate message ID for Anthropic beta format
-	messageID := ids.Message()
-
-	// Track streaming state
-	var (
-		textBlockIndex = -1
-		toolBlockIndex = -1
-		usage          = protocol.ZeroTokenUsage()
-	)
-
-	// Send message_start event first.
-	// First SSE byte for this stream — open the failover gate so buffered
-	// output flushes and subsequent writes pass straight through.
-	protocol.CommitFirstChunk(c)
-	sendAnthropicStreamEvent(c, eventTypeMessageStart, newAnthropicMessageStartEvent(messageID, responseModel, 0), flusher)
-
-	// Process the stream
-	for googleResp, err := range stream {
-		// Check context cancellation
-		select {
-		case <-c.Request.Context().Done():
-			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Google to Anthropic beta stream")
-			return usage, nil
-		default:
-		}
-
-		if err != nil {
-			// Check if it was a client cancellation
-			if errors.Is(err, context.Canceled) {
-				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
-				return usage, nil
-			}
-			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
-			errorEvent := BuildErrorEvent(err, "stream_failed")
-			sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
-			return usage, err
-		}
-
-		// Process candidates
-		if len(googleResp.Candidates) > 0 {
-			candidate := googleResp.Candidates[0]
-
-			// Extract content
-			if candidate.Content != nil {
-				for _, part := range candidate.Content.Parts {
-					// Handle text parts
-					if part.Text != "" {
-						// Send content_block_start for text on first occurrence
-						if textBlockIndex == -1 {
-							textBlockIndex = 0
-							sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
-								Type:         eventTypeContentBlockStart,
-								Index:        textBlockIndex,
-								ContentBlock: anthropicTextBlockStart(),
-							}, flusher)
-						}
-
-						// Send content_block_delta with text
-						sendAnthropicStreamEvent(c, eventTypeContentBlockDelta, anthropicContentBlockDeltaEvent{
-							Type:  eventTypeContentBlockDelta,
-							Index: textBlockIndex,
-							Delta: anthropicTextDelta(part.Text),
-						}, flusher)
-					}
-
-					// Handle function calls
-					if part.FunctionCall != nil {
-						toolBlockIndex++
-						// Send content_block_start for tool_use
-						sendAnthropicStreamEvent(c, eventTypeContentBlockStart, anthropicContentBlockStartEvent{
-							Type:         eventTypeContentBlockStart,
-							Index:        toolBlockIndex,
-							ContentBlock: anthropicToolUseBlockStartWithInput(part.FunctionCall.ID, part.FunctionCall.Name, part.FunctionCall.Args),
-						}, flusher)
-
-						// Send content_block_stop for this tool block
-						sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
-							Type:  eventTypeContentBlockStop,
-							Index: toolBlockIndex,
-						}, flusher)
-					}
-				}
-			}
-
-			// Check for finish reason
-			if candidate.FinishReason != "" {
-				stopReason := nonstream.MapGoogleFinishReasonToAnthropicBeta(candidate.FinishReason)
-
-				// Send content_block_stop for text if applicable
-				if textBlockIndex != -1 {
-					sendAnthropicStreamEvent(c, eventTypeContentBlockStop, anthropicContentBlockStopEvent{
-						Type:  eventTypeContentBlockStop,
-						Index: textBlockIndex,
-					}, flusher)
-				}
-
-				// Collect usage info
-				if googleResp.UsageMetadata != nil {
-					usage = protocol.NewTokenUsageWithCache(
-						int(googleResp.UsageMetadata.PromptTokenCount),
-						int(googleResp.UsageMetadata.CandidatesTokenCount),
-						int(googleResp.UsageMetadata.CachedContentTokenCount),
-					)
-				}
-
-				// Send message_delta with stop reason and usage
-				messageDeltaEvent := map[string]interface{}{
-					"type": eventTypeMessageDelta,
-					"delta": map[string]interface{}{
-						"stop_reason":   string(stopReason),
-						"stop_sequence": "",
-					},
-					"usage": usage.ToAnthropicMessageDeltaUsageMap(),
-				}
-				sendAnthropicStreamEvent(c, eventTypeMessageDelta, messageDeltaEvent, flusher)
-
-				// Send message_stop
-				messageStopEvent := map[string]interface{}{
-					"type": eventTypeMessageStop,
-					"message": map[string]interface{}{
-						"id":            messageID,
-						"type":          "message",
-						"role":          "assistant",
-						"content":       []interface{}{},
-						"model":         responseModel,
-						"stop_reason":   string(stopReason),
-						"stop_sequence": "",
-						"usage":         usage.ToAnthropicMessageDeltaUsageMap(),
-					},
-				}
-				sendAnthropicStreamEvent(c, eventTypeMessageStop, messageStopEvent, flusher)
-
-				// Send final simple data with type (without event, aka empty)
-				c.SSEvent("", map[string]interface{}{"type": eventTypeMessageStop})
-				flusher.Flush()
-				return usage, nil
-			}
-		}
-
-		// Track usage
-		if googleResp.UsageMetadata != nil {
-			usage = protocol.NewTokenUsageWithCache(
-				int(googleResp.UsageMetadata.PromptTokenCount),
-				int(googleResp.UsageMetadata.CandidatesTokenCount),
-				int(googleResp.UsageMetadata.CachedContentTokenCount),
-			)
-		}
-	}
-
-	return usage, nil
+	return handleGoogleToAnthropicStream(c, stream, responseModel, func(reason genai.FinishReason) string {
+		return string(nonstream.MapGoogleFinishReasonToAnthropicBeta(reason))
+	})
 }

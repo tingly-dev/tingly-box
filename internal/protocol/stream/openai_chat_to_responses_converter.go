@@ -86,7 +86,13 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 				return nil, false, err
 			}
 			if !c.completedSent {
-				return nil, false, fmt.Errorf("chat stream ended without a finish reason")
+				if c.finishReason == "" {
+					return nil, false, fmt.Errorf("chat stream ended without a finish reason")
+				}
+				// include_usage is a trailing chunk after finish_reason. Only finalize
+				// after draining it; Codex uses the completed usage to trigger compaction.
+				c.emitCompletionEvents()
+				return c.Next()
 			}
 			return nil, true, nil
 		}
@@ -197,17 +203,6 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 	// Check for completion
 	if choice.FinishReason != "" {
 		c.finishReason = string(choice.FinishReason)
-
-		if !c.hasUsage && c.usage.OutputTokens == 0 {
-			outputTokens := int64(c.accumulatedText.Len() / 4)
-			for _, ptc := range c.pendingToolCalls {
-				outputTokens += int64(ptc.arguments.Len() / 4)
-			}
-			c.usage = protocol.NewTokenUsageFull(c.usage.InputTokens, int(outputTokens),
-				c.usage.CacheReadTokens, c.usage.CacheWriteTokens, c.usage.ReasoningTokens)
-		}
-
-		c.emitCompletionEvents()
 	}
 }
 
@@ -216,6 +211,14 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 func (c *chatToResponsesConverter) emitCompletionEvents() {
 	if c.completedSent {
 		return
+	}
+	if !c.hasUsage && c.usage.OutputTokens == 0 {
+		outputTokens := int64(c.accumulatedText.Len() / 4)
+		for _, ptc := range c.pendingToolCalls {
+			outputTokens += int64(ptc.arguments.Len() / 4)
+		}
+		c.usage = protocol.NewTokenUsageFull(c.usage.InputTokens, int(outputTokens),
+			c.usage.CacheReadTokens, c.usage.CacheWriteTokens, c.usage.ReasoningTokens)
 	}
 	c.completedSent = true
 
