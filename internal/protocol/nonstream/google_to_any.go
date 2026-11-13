@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
+	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"google.golang.org/genai"
@@ -90,11 +91,11 @@ func HandleGoogleToOpenAI(googleResp *genai.GenerateContentResponse, responseMod
 
 	// Add usage info if available
 	if googleResp.UsageMetadata != nil {
-		response["usage"] = map[string]interface{}{
-			"prompt_tokens":     googleResp.UsageMetadata.PromptTokenCount,
-			"completion_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
-			"total_tokens":      googleResp.UsageMetadata.TotalTokenCount,
+		usageWire := usageconv.FromGoogle(googleResp.UsageMetadata).ToOpenAIChatUsageMap()
+		if googleResp.UsageMetadata.TotalTokenCount != 0 {
+			usageWire["total_tokens"] = googleResp.UsageMetadata.TotalTokenCount
 		}
+		response["usage"] = usageWire
 	}
 
 	return response
@@ -178,16 +179,7 @@ func HandleGoogleToAnthropic(googleResp *genai.GenerateContentResponse, response
 
 	// Add usage info if available
 	if googleResp.UsageMetadata != nil {
-		usage := map[string]interface{}{
-			"input_tokens":  googleResp.UsageMetadata.PromptTokenCount,
-			"output_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
-		}
-		// Gemini's cached-content tokens map to Anthropic cache-read so the
-		// client-facing response reports the cache hit instead of dropping it.
-		if googleResp.UsageMetadata.CachedContentTokenCount > 0 {
-			usage["cache_read_input_tokens"] = googleResp.UsageMetadata.CachedContentTokenCount
-		}
-		responseJSON["usage"] = usage
+		responseJSON["usage"] = usageconv.FromGoogle(googleResp.UsageMetadata).ToAnthropicMessageDeltaUsageMap()
 	}
 
 	// Marshal and unmarshal to create proper Message struct
@@ -276,16 +268,7 @@ func HandleGoogleToAnthropicBeta(googleResp *genai.GenerateContentResponse, resp
 
 	// Add usage info if available
 	if googleResp.UsageMetadata != nil {
-		usage := map[string]interface{}{
-			"input_tokens":  googleResp.UsageMetadata.PromptTokenCount,
-			"output_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
-		}
-		// Gemini's cached-content tokens map to Anthropic cache-read so the
-		// client-facing response reports the cache hit instead of dropping it.
-		if googleResp.UsageMetadata.CachedContentTokenCount > 0 {
-			usage["cache_read_input_tokens"] = googleResp.UsageMetadata.CachedContentTokenCount
-		}
-		responseJSON["usage"] = usage
+		responseJSON["usage"] = usageconv.FromGoogle(googleResp.UsageMetadata).ToAnthropicMessageDeltaUsageMap()
 	}
 
 	// Marshal and unmarshal to create proper BetaMessage struct
