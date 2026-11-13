@@ -163,6 +163,8 @@ type activeThread struct {
 	slot    *limiter           // held while current runs
 	queue   []queued
 	stopped bool
+	// stoppedBy is who stopped the turn, for the "Stopped" note.
+	stoppedBy Source
 }
 
 type queued struct {
@@ -228,6 +230,18 @@ func (m *Threads) threadPrompt(q queued, p *db.Project, t *db.Thread) string {
 
 // fromThread is the source of a message another thread sent.
 func fromThread(id string) Source { return Source{Kind: db.SourceThread, Ref: id} }
+
+// actor says who acted, for a note in the thread ("Stopped by the
+// coordinator."). The web is the default and says nothing.
+func (s Source) actor() string {
+	switch s.Kind {
+	case db.SourceIM:
+		return " from a chat"
+	case db.SourceThread:
+		return " by the coordinator"
+	}
+	return ""
+}
 
 func (s Source) stamp(e *db.ThreadEvent) {
 	e.Source, e.SourceRef, e.SourcePlatform, e.SourceChatID = s.Kind, s.Ref, s.Platform, s.ChatID
@@ -1266,7 +1280,13 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	}
 	switch {
 	case report.Kind == "":
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped."})
+		m.mu.Lock()
+		var by Source
+		if a := m.active[threadID]; a != nil {
+			by = a.stoppedBy
+		}
+		m.mu.Unlock()
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
 	case end.Err != nil:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: end.Err.Error()})
 	case session, tally.compact:
@@ -1300,9 +1320,23 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	}
 }
 
+// StopResult says what a Stop did.
+type StopResult struct {
+	// Interrupted is true when a turn was running or waiting for a slot.
+	Interrupted bool
+	// Dropped is how many queued messages the stop discarded.
+	Dropped int
+}
+
 // Stop interrupts a thread's running turn and drops its queued messages.
-// Its resident process, and the background work in it, survive.
-func (m *Threads) Stop(threadID string) { m.stop(threadID) }
+// Its resident process, and the background work in it, survive. by is who
+// asked, for the note in the thread; stopping a thread with nothing running
+// does nothing.
+func (m *Threads) Stop(threadID string, by Source) StopResult {
+	done, res := m.stop(threadID, by)
+	res.Interrupted = res.Interrupted || done != nil
+	return res
+}
 
 // Retry re-runs a failed turn without adding anything to the transcript.
 // A turn that crashed mid-turn (with staged output) resumes the interrupted
@@ -1343,10 +1377,12 @@ func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error
 
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
-func (m *Threads) stop(threadID string) <-chan struct{} {
+func (m *Threads) stop(threadID string, by Source) (<-chan struct{}, StopResult) {
+	var res StopResult
 	m.mu.Lock()
 	if a, ok := m.active[threadID]; ok {
-		a.stopped = true
+		res.Interrupted, res.Dropped = true, len(a.queue)
+		a.stopped, a.stoppedBy = true, by
 		m.dropHeld(threadID, a.queue)
 		a.queue = nil
 		if a.cancel != nil {
@@ -1355,7 +1391,7 @@ func (m *Threads) stop(threadID string) <-chan struct{} {
 	}
 	m.mu.Unlock()
 	done, _ := m.engine.Stop(m.sessionOf(threadID))
-	return done
+	return done, res
 }
 
 // Running reports whether a thread has a turn in flight or waiting.
@@ -1374,7 +1410,7 @@ func (m *Threads) StopProject(projectID string) {
 		return
 	}
 	for _, t := range threads {
-		m.Stop(t.ID)
+		m.Stop(t.ID, Source{Kind: db.SourceSystem})
 	}
 }
 
@@ -1394,7 +1430,7 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done := m.stop(threadID); done != nil {
+	if done, _ := m.stop(threadID, Source{}); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
 		case <-done:
@@ -1420,7 +1456,7 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done := m.stop(threadID); done != nil {
+	if done, _ := m.stop(threadID, Source{}); done != nil {
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):
@@ -1455,15 +1491,35 @@ func (m *Threads) releaseChats(t *db.Thread) {
 	}
 }
 
-// Reopen brings a resolved thread back.
-func (m *Threads) Reopen(threadID string) (*db.Thread, error) {
-	return m.update(threadID, func(t *db.Thread) {
+// ErrNotWorker is for an action that only makes sense on a worker or session,
+// asked of a project's main thread (its conversation with the coordinator).
+var ErrNotWorker = errors.New("not available on a project's main thread")
+
+// Reopen brings a resolved thread back; by is who asked. A thread that is not
+// resolved is returned as it is: there is nothing to reopen, and its status
+// belongs to the turn that may be running.
+func (m *Threads) Reopen(threadID string, by Source) (*db.Thread, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Agent == db.AgentLLM {
+		return nil, ErrNotWorker
+	}
+	if t.Status != db.ThreadResolved {
+		return t, nil
+	}
+	t, err = m.update(threadID, func(t *db.Thread) {
 		t.ResolvedAt = nil
 		t.Status = db.ThreadIdle
 		if t.CommitsAhead > 0 && t.MergedAt == nil {
 			t.Status = db.ThreadReady
 		}
 	})
+	if err == nil {
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Reopened" + by.actor() + "."})
+	}
+	return t, err
 }
 
 // MaxTitleLength caps a thread's title, like the column that stores it.

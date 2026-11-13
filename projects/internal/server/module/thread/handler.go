@@ -532,7 +532,7 @@ func (h *Handler) stop(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.svc.Threads.Stop(cur.ID)
+	h.svc.Threads.Stop(cur.ID, rt.Source{})
 	h.reply(c, cur.ID)
 }
 
@@ -622,7 +622,7 @@ func (h *Handler) reopen(c *gin.Context) {
 	if !ok {
 		return
 	}
-	t, err := h.svc.Threads.Reopen(cur.ID)
+	t, err := h.svc.Threads.Reopen(cur.ID, rt.Source{})
 	if err != nil {
 		fail(c, err)
 		return
