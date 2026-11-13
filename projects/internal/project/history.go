@@ -198,7 +198,7 @@ func (c *Coordinator) listThreads(p *db.Project, status, contains string, limit 
 			continue
 		}
 		matched++
-		line := fmt.Sprintf("- %s %q status=%s%s updated=%s", short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), stamp(t.UpdatedAt))
+		line := fmt.Sprintf("- %s %q status=%s%s%s updated=%s", short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), linksNote(t.Links), stamp(t.UpdatedAt))
 		if t.LastReport != "" {
 			line += " last report: " + clip(strings.ReplaceAll(t.LastReport, "\n", " "), 200)
 		}

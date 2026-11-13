@@ -1,0 +1,320 @@
+package project
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
+)
+
+// call runs a tool as the worker's session would and returns its text.
+func (f *linksFixture) call(t *testing.T, cs *mcp.ClientSession, name string, args map[string]any) (string, bool) {
+	t.Helper()
+	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
+	require.NoError(t, err)
+	var text []string
+	for _, c := range res.Content {
+		text = append(text, c.(*mcp.TextContent).Text)
+	}
+	return strings.Join(text, "\n"), res.IsError
+}
+
+func TestCreatePRPushesOwnBranchOpensPRAndRecordsIt(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+
+	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "Add a", "body": "Adds a.", "draft": true})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "opened PR #11")
+	assert.Contains(t, out, "tp/work → main")
+	assert.True(t, f.remoteHas(t, "tp/work"), "the thread's branch was pushed")
+	assert.Contains(t, f.gh.called(), `create-pr acme/widgets "Add a" head=tp/work base=main draft=true`)
+
+	links, err := f.store.ThreadLinks(f.worker.ID)
+	require.NoError(t, err)
+	require.Len(t, links, 1)
+	assert.Equal(t, db.LinkPR, links[0].Kind)
+	assert.Equal(t, db.LinkOpened, links[0].Role)
+	assert.Equal(t, "acme/widgets", links[0].Repo)
+	assert.Equal(t, 11, links[0].Number)
+	assert.Equal(t, db.LinkStateOpen, links[0].State)
+	assert.True(t, links[0].Draft)
+	assert.Equal(t, []string{f.worker.ID}, f.events, "open pages are told")
+}
+
+func TestCreatePRIsIdempotentForABranchThatHasAPR(t *testing.T) {
+	f := newLinksFixture(t)
+	existing := f.gh.add(db.LinkPR, "Already", nil)
+	f.gh.existing = &existing
+	cs, _ := f.client(t, f.worker.ID)
+
+	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "already open")
+	for _, c := range f.gh.called() {
+		assert.NotContains(t, c, "create-pr", "no second PR")
+	}
+	assert.False(t, f.remoteHas(t, "tp/work"), "nothing is pushed when the PR exists")
+	links, _ := f.store.ThreadLinks(f.worker.ID)
+	require.Len(t, links, 1)
+	assert.Equal(t, existing.Number, links[0].Number)
+}
+
+func TestCreatePRRefusals(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(f *linksFixture)
+		args  map[string]any
+		want  string
+	}{
+		{"no title", func(*linksFixture) {}, map[string]any{"title": "  "}, "title is required"},
+		{"base is the head", func(*linksFixture) {}, map[string]any{"title": "x", "base": "tp/work"}, "never pushed to"},
+		{"head is the default branch", func(f *linksFixture) { f.gh.def = "tp/work" }, map[string]any{"title": "x"}, "never pushed to"},
+		{"origin is not GitHub", func(f *linksFixture) {
+			run(t, f.repo, "git", "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git")
+		}, map[string]any{"title": "x"}, "only work with github.com"},
+		{"no origin", func(f *linksFixture) { run(t, f.repo, "git", "remote", "remove", "origin") }, map[string]any{"title": "x"}, "no origin remote"},
+		{"no commit beyond base", func(f *linksFixture) { run(t, f.repo, "git", "reset", "-q", "--hard", "main") }, map[string]any{"title": "x"}, "no commit beyond main"},
+		{"option as base", func(*linksFixture) {}, map[string]any{"title": "x", "base": "--force"}, "not a valid branch name"},
+		{"GitHub down", func(f *linksFixture) { f.gh.fail = ErrGitHubUnavailable }, map[string]any{"title": "x"}, "not available"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newLinksFixture(t)
+			c.setup(f)
+			cs, _ := f.client(t, f.worker.ID)
+			out, isErr := f.call(t, cs, "create_pr", c.args)
+			assert.True(t, isErr, out)
+			assert.Contains(t, out, c.want)
+			assert.False(t, f.remoteHas(t, "tp/work"), "a refused call pushes nothing")
+			links, _ := f.store.ThreadLinks(f.worker.ID)
+			assert.Empty(t, links, "a refused call records nothing")
+		})
+	}
+}
+
+func TestCreatePRNeverForcesAPush(t *testing.T) {
+	f := newLinksFixture(t)
+	// origin already has a different tp/work: a plain push is rejected, and the
+	// tool must not answer with a force.
+	other := newRepo(t)
+	require.NoError(t, os.WriteFile(filepath.Join(other, "b.txt"), []byte("other\n"), 0o644))
+	run(t, other, "git", "add", ".")
+	run(t, other, "git", "commit", "-qm", "diverged")
+	run(t, other, "git", "remote", "add", "origin", f.remote)
+	run(t, other, "git", "push", "-q", "origin", "HEAD:refs/heads/tp/work")
+	cs, _ := f.client(t, f.worker.ID)
+
+	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x"})
+	require.True(t, isErr, out)
+	assert.Contains(t, out, "rebase")
+	assert.Contains(t, out, "a force push is not available")
+	for _, c := range f.gh.called() {
+		assert.NotContains(t, c, "create-pr")
+	}
+	// The remote branch is the other repository's commit, untouched.
+	assert.Equal(t, run(t, other, "git", "rev-parse", "HEAD"), run(t, f.remote, "git", "rev-parse", "tp/work"))
+}
+
+func TestCreatePRWorksFromAFolderSessionOnABranch(t *testing.T) {
+	f := newLinksFixture(t)
+	f.folder.Cwd, f.folder.Branch = f.repo, ""
+	require.NoError(t, f.store.SaveThread(f.folder))
+	cs, _ := f.client(t, f.folder.ID)
+
+	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "From folder"})
+	require.False(t, isErr, out)
+	// With no base of its own it targets the repository's default branch.
+	assert.Contains(t, f.gh.called(), `create-pr acme/widgets "From folder" head=tp/work base=main draft=false`)
+}
+
+func TestIssueAndCommentRecordTheirRoles(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+
+	out, isErr := f.call(t, cs, "create_issue", map[string]any{"title": "Flaky test", "body": "It flakes."})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "opened issue #11")
+
+	someones := f.gh.add(db.LinkIssue, "Someone's issue", nil)
+	out, isErr = f.call(t, cs, "comment_issue", map[string]any{"number": someones.Number, "body": "I am on it."})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "commented on issue")
+
+	pr := f.gh.add(db.LinkPR, "Their PR", nil)
+	out, isErr = f.call(t, cs, "comment_issue", map[string]any{"number": pr.Number, "body": "Looks good."})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "commented on pr")
+
+	links, err := f.store.ThreadLinks(f.worker.ID)
+	require.NoError(t, err)
+	require.Len(t, links, 3)
+	got := map[int][2]string{}
+	for _, l := range links {
+		got[l.Number] = [2]string{l.Kind, l.Role}
+	}
+	assert.Equal(t, [2]string{db.LinkIssue, db.LinkOpened}, got[11])
+	assert.Equal(t, [2]string{db.LinkIssue, db.LinkCommented}, got[someones.Number])
+	assert.Equal(t, [2]string{db.LinkPR, db.LinkCommented}, got[pr.Number])
+
+	// Commenting on an issue the thread opened keeps it "opened".
+	_, isErr = f.call(t, cs, "comment_issue", map[string]any{"number": 11, "body": "More."})
+	require.False(t, isErr)
+	l, err := f.store.GetThreadLink(f.worker.ID, db.LinkIssue, 11)
+	require.NoError(t, err)
+	assert.Equal(t, db.LinkOpened, l.Role)
+}
+
+func TestUpdatePROnlyEditsPRsTheThreadOpened(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	_, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
+	require.False(t, isErr)
+
+	out, isErr := f.call(t, cs, "update_pr", map[string]any{"title": "Add a, properly", "body": "New text", "base": "release"})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "title, description, base")
+	assert.Contains(t, f.gh.called(), "update-pr acme/widgets #11 title=Add a, properly body=New text base=release")
+	l, _ := f.store.GetThreadLink(f.worker.ID, db.LinkPR, 11)
+	assert.Equal(t, "Add a, properly", l.Title)
+
+	out, isErr = f.call(t, cs, "update_pr", map[string]any{})
+	assert.True(t, isErr)
+	assert.Contains(t, out, "nothing to change")
+
+	// Someone else's PR: unknown to the thread, and a PR it only commented on.
+	theirs := f.gh.add(db.LinkPR, "Theirs", nil)
+	out, isErr = f.call(t, cs, "update_pr", map[string]any{"number": theirs.Number, "title": "Hijacked"})
+	assert.True(t, isErr)
+	assert.Contains(t, out, "not one of this thread's PRs")
+	_, isErr = f.call(t, cs, "comment_issue", map[string]any{"number": theirs.Number, "body": "hi"})
+	require.False(t, isErr)
+	out, isErr = f.call(t, cs, "update_pr", map[string]any{"number": theirs.Number, "title": "Hijacked"})
+	assert.True(t, isErr)
+	assert.Contains(t, out, "was not opened by this thread")
+	for _, c := range f.gh.called() {
+		assert.NotContains(t, c, "Hijacked")
+	}
+
+	// Two PRs and no number asks which.
+	f.gh.existing = nil
+	f.gh.add(db.LinkPR, "Second", nil)
+	_, err := f.links.record(f.thread(t), GitHubRepo{Host: "github.com", Owner: "acme", Name: "widgets"}, db.LinkPR, db.LinkOpened, f.gh.items[f.gh.next])
+	require.NoError(t, err)
+	out, isErr = f.call(t, cs, "update_pr", map[string]any{"title": "x"})
+	assert.True(t, isErr)
+	assert.Contains(t, out, "several PRs")
+}
+
+func TestUpdatePRRefusesAClosedPR(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	_, _ = f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
+	f.gh.set(11, func(it *GitHubItem) { it.State = "merged" })
+	_, _ = f.call(t, cs, "get_pr_status", map[string]any{})
+	out, isErr := f.call(t, cs, "update_pr", map[string]any{"title": "x"})
+	assert.True(t, isErr)
+	assert.Contains(t, out, "is merged")
+}
+
+func TestGetPRStatusReadsAndThrottles(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	_, _ = f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
+	f.gh.set(11, func(it *GitHubItem) { it.CI, it.MergeState = "failing", "conflicts" })
+	reads := func() int {
+		n := 0
+		for _, c := range f.gh.called() {
+			if strings.HasPrefix(c, "pr ") {
+				n++
+			}
+		}
+		return n
+	}
+
+	// The record has no CI reading yet, so the first call asks GitHub.
+	out, isErr := f.call(t, cs, "get_pr_status", map[string]any{})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "checks: failing")
+	assert.Contains(t, out, "mergeable: conflicts")
+	assert.Equal(t, 1, reads())
+
+	// A model that polls gets the stored reading.
+	f.advance(10 * time.Second)
+	_, _ = f.call(t, cs, "get_pr_status", map[string]any{})
+	assert.Equal(t, 1, reads())
+	f.advance(linkMinGap)
+	_, _ = f.call(t, cs, "get_pr_status", map[string]any{"number": 11})
+	assert.Equal(t, 2, reads())
+
+	out, isErr = f.call(t, cs, "get_pr_status", map[string]any{"number": 99})
+	assert.True(t, isErr)
+	assert.Contains(t, out, "not one of this thread's PRs")
+}
+
+func TestToolsNeverShowACredential(t *testing.T) {
+	f := newLinksFixture(t)
+	f.gh.fail = assert.AnError
+	f.gh.fail = errString("HTTP 500 with ghp_abcdefghijklmnopqrstuvwxyz0123456789 and https://user:s3cret@github.com/x Authorization: Bearer abc.def")
+	cs, _ := f.client(t, f.worker.ID)
+	out, isErr := f.call(t, cs, "create_issue", map[string]any{"title": "x"})
+	require.True(t, isErr)
+	assert.NotContains(t, out, "ghp_abcdef")
+	assert.NotContains(t, out, "s3cret")
+	assert.NotContains(t, out, "abc.def")
+}
+
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
+func TestGitHubToolsBelongToThreadsNotTheCoordinator(t *testing.T) {
+	f := newLinksFixture(t)
+	for _, c := range []struct {
+		id   string
+		want bool
+	}{{f.worker.ID, true}, {f.folder.ID, true}, {f.p.MainThreadID, false}} {
+		cs, _ := f.client(t, c.id)
+		names := toolNames(listTools(t, cs))
+		for _, tool := range append(githubWriteTools, toolPRStatus) {
+			assert.Equal(t, c.want, contains(names, tool), "%s for %s", tool, c.id)
+		}
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+func TestParseGitHubRemote(t *testing.T) {
+	for remote, want := range map[string]string{
+		"https://github.com/acme/widgets.git":                           "acme/widgets",
+		"https://github.com/acme/widgets":                               "acme/widgets",
+		"git@github.com:acme/widgets.git":                               "acme/widgets",
+		"ssh://git@github.com/acme/widgets.git":                         "acme/widgets",
+		"https://x-access-token:ghs_secret@github.com/acme/widgets.git": "acme/widgets",
+		"https://gitlab.com/acme/widgets.git":                           "",
+		"https://github.com/acme":                                       "",
+		"/some/local/path":                                              "",
+		"https://github.com/acme/widgets/extra.git":                     "",
+	} {
+		r, err := parseGitHubRemote(remote)
+		if want == "" {
+			assert.Error(t, err, remote)
+			continue
+		}
+		require.NoError(t, err, remote)
+		assert.Equal(t, want, r.Slug(), remote)
+	}
+}

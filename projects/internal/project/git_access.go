@@ -54,3 +54,42 @@ func grantAutoGit(doc map[string]any, p *db.Project, t *db.Thread) {
 func ruleSafe(name string) bool {
 	return name != "" && !strings.ContainsAny(name, "()*? \t\n")
 }
+
+// GitHubAccess values of db.Project.ThreadGitHubAccess.
+const (
+	GitHubAsk   = "ask"
+	GitHubAllow = "allow"
+)
+
+// githubToolRule is the permission rule that names one of the Projects tools.
+func githubToolRule(tool string) string { return "mcp__tingly-projects__" + tool }
+
+// grantGitHubTools sets up the permission rules of a thread's GitHub tools
+// (see .design/github-tools.md). The tools are answered like the `gh` command
+// each replaces; the project setting only decides whether the answer is
+// remembered:
+//
+//   - get_pr_status only reads the thread's own PRs and is always allowed;
+//   - the tools that write to GitHub are allowed without a card when the
+//     project's access is "allow", in every permission mode;
+//   - otherwise they ask in auto mode, whose classifier would deny an unlisted
+//     tool with no card (the same reason as for `gh pr create`); the other
+//     modes already prompt for a tool nobody allowed, and bypassPermissions
+//     keeps meaning "run without asking".
+//
+// Nothing here touches the Bash rules: `gh pr create`, `gh pr merge` and
+// `gh issue create` stay on the ask list of grantAutoGit.
+func grantGitHubTools(doc map[string]any, p *db.Project, mode string) {
+	perms := permissionsOf(doc)
+	addRules(perms, "allow", githubToolRule(toolPRStatus))
+	var rules []string
+	for _, tool := range githubWriteTools {
+		rules = append(rules, githubToolRule(tool))
+	}
+	switch {
+	case p.ThreadGitHubAccess == GitHubAllow:
+		addRules(perms, "allow", rules...)
+	case mode == permissionModeAuto:
+		addRules(perms, "ask", rules...)
+	}
+}

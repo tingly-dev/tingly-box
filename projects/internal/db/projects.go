@@ -88,6 +88,9 @@ func (s *Store) DeleteProjectCascade(projectID string) error {
 		if err := tx.Exec("DELETE FROM thread_events WHERE thread_id IN (SELECT id FROM threads WHERE project_id = ?)", projectID).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("project_id = ?", projectID).Delete(&ThreadLink{}).Error; err != nil {
+			return err
+		}
 		if err := tx.Where("project_id = ?", projectID).Delete(&Thread{}).Error; err != nil {
 			return err
 		}

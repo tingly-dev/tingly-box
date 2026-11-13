@@ -39,12 +39,14 @@ type Model struct {
 
 // Service bundles the project runtime for the HTTP modules.
 type Service struct {
-	Store           *db.Store
-	Layout          Layout
-	Hub             *Hub
-	Threads         *Threads
-	Coordinator     *Coordinator
-	Relay           *Relay
+	Store       *db.Store
+	Layout      Layout
+	Hub         *Hub
+	Threads     *Threads
+	Coordinator *Coordinator
+	Relay       *Relay
+	// Links runs the thread's issue and PR tools; nil offers none.
+	Links           *Links
 	Host            Host
 	sessionToolsMCP *sessionToolsMCP
 	stopOnce        sync.Once
@@ -80,10 +82,17 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 		Coordinator: coord, Relay: relay,
 		Host: host,
 	}
+	svc.Links = NewLinks(store, nil, threads.republish)
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
 	coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
 	return svc
+}
+
+// SetGitHub replaces what the issue and PR tools talk to (the host's gh by
+// default). Call it before any thread session starts: tests give a fake.
+func (s *Service) SetGitHub(gh GitHub) {
+	s.Links = NewLinks(s.Store, gh, s.Threads.republish)
 }
 
 // Start recovers interrupted threads and runs housekeeping until ctx ends,
@@ -98,6 +107,9 @@ func (s *Service) Start(ctx context.Context) {
 		for _, id := range ids {
 			s.Coordinator.wake(id)
 		}
+	}
+	if s.Links != nil {
+		go s.Links.Run(ctx)
 	}
 	go func() {
 		tick := time.NewTicker(time.Minute)

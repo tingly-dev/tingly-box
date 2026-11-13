@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -204,10 +205,14 @@ func (c *Coordinator) getThread(_ context.Context, p *db.Project, in struct {
 	}
 	lines, oldest, hidden := fit(entries, in.Full, func(id string) string { return "get_thread full for the whole" })
 	lines += footer(hidden, more, oldest, "get_thread")
-	t.RunningTasks = c.threads.RunningTasks(t.ID)
-	return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\nrecent transcript:\n%s",
+	c.threads.AnnotateOne(t)
+	links := ""
+	if len(t.Links) > 0 {
+		links = "issues and PRs (read from GitHub by the thread's tools):\n" + linksDetail(t.Links, time.Now())
+	}
+	return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\n%srecent transcript:\n%s",
 		short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
-		clip(t.Task, 1500), clip(t.LastReport, 2000), lines), "source", "thread", "kind", "get_thread"), nil
+		clip(t.Task, 1500), clip(t.LastReport, 2000), links, lines), "source", "thread", "kind", "get_thread"), nil
 }
 
 func (c *Coordinator) readConversationTool(_ context.Context, p *db.Project, in struct {

@@ -464,6 +464,7 @@ func (m *Threads) rowLock(threadID string) *sync.Mutex {
 // publish tells open pages a thread changed, with its project's fresh counts.
 func (m *Threads) publish(t *db.Thread) {
 	t.RunningTasks = m.RunningTasks(t.ID)
+	t.Links, _ = m.store.ThreadLinks(t.ID)
 	ev := Event{Type: EventThread, ProjectID: t.ProjectID, Data: t}
 	if c, err := m.store.ProjectThreadCounts(t.ProjectID); err == nil {
 		ev.Threads = &c
@@ -774,6 +775,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	addDirectories(doc, dirs...)
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
 	grantAutoGit(doc, p, t)
+	grantGitHubTools(doc, p, threadPermissionMode(p, t))
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -1056,6 +1058,7 @@ func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (stri
 		return "", err
 	}
 	m.grantProjectAccess(doc, p, t)
+	grantGitHubTools(doc, p, threadPermissionMode(p, t))
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

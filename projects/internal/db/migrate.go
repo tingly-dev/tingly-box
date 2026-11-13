@@ -135,7 +135,7 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 			return fmt.Errorf("rename threads.worktree: %w", err)
 		}
 	}
-	if err = tx.AutoMigrate(&Project{}, &Thread{}, &ThreadEvent{}, &Conversation{}, &Message{}, &Setting{}, &ChannelBinding{}, &CoordinatorInput{}, &CoordinatorSettingsDelivery{}); err != nil {
+	if err = tx.AutoMigrate(&Project{}, &Thread{}, &ThreadEvent{}, &Conversation{}, &Message{}, &Setting{}, &ChannelBinding{}, &CoordinatorInput{}, &CoordinatorSettingsDelivery{}, &ThreadLink{}); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	// Columns added to old rows are NULL, not "".

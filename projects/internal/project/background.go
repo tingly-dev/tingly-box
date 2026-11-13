@@ -39,11 +39,27 @@ func (m *Threads) republish(threadID string) {
 	}
 }
 
-// Annotate fills in each thread's RunningTasks from the live processes.
-// Everything that sends threads out (the API, events, the coordinator's
-// view) goes through it, so a count means the same everywhere.
+// AnnotateOne fills in a thread's RunningTasks from the live process and its
+// Links from the store. Everything that sends threads out (the API, events, the
+// coordinator's view) goes through it or Annotate, so a count means the same
+// everywhere.
+func (m *Threads) AnnotateOne(t *db.Thread) {
+	t.RunningTasks = m.RunningTasks(t.ID)
+	t.Links, _ = m.store.ThreadLinks(t.ID)
+}
+
+// Annotate is AnnotateOne for a list.
 func (m *Threads) Annotate(ts []db.Thread) {
+	if len(ts) == 0 {
+		return
+	}
+	ids := make([]string, len(ts))
 	for i := range ts {
+		ids[i] = ts[i].ID
+	}
+	links, _ := m.store.ThreadLinksOf(ids)
+	for i := range ts {
+		ts[i].Links = links[ts[i].ID]
 		if m.backgroundCount != nil {
 			ts[i].RunningTasks = m.backgroundCount(ts[i].ID)
 		} else {

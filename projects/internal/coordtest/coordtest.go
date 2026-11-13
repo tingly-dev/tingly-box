@@ -9,6 +9,7 @@
 package coordtest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -212,6 +213,17 @@ func (t *Turn) ThreadRef(title string) string {
 		return ""
 	}
 	return m[1]
+}
+
+// ToolSession connects to the Projects tools of a session whose MCP config is
+// at configPath (ExecutionOptions.MCPConfigPath). The caller closes it.
+func ToolSession(ctx context.Context, configPath string) (*mcp.ClientSession, error) {
+	url, err := serverURL(configPath)
+	if err != nil {
+		return nil, err
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "coordtest", Version: "1"}, nil)
+	return client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: url}, nil)
 }
 
 func (t *Turn) connect() (*mcp.ClientSession, error) {

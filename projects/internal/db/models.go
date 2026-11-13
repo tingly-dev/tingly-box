@@ -94,6 +94,10 @@ type Project struct {
 	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
+	// ThreadGitHubAccess is how a thread's issue and PR tools that write to
+	// GitHub are approved: ask (the default, also when empty) or allow, which
+	// lets them run without a card. Reads are always allowed.
+	ThreadGitHubAccess string `gorm:"size:10" json:"thread_github_access,omitempty"`
 	// DisableWorktree makes new threads share the selected repository checkout.
 	DisableWorktree bool `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads caps how many of the project's threads run at once
@@ -164,6 +168,9 @@ type Thread struct {
 	// thread's process runs right now. It is read from the live process when a
 	// thread is sent out, never stored: the set dies with the process.
 	RunningTasks int `gorm:"-" json:"running_tasks"`
+	// Links are the issues and PRs the thread touched through its tools. They
+	// live in thread_links and are filled in when a thread is sent out.
+	Links []ThreadLink `gorm:"-" json:"links,omitempty"`
 	// WaitReason says why a waiting thread needs the user.
 	WaitReason string `gorm:"type:text" json:"wait_reason,omitempty"`
 	// Queued is true while a working thread's turn waits for a free slot under

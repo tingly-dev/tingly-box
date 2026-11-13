@@ -37,6 +37,7 @@ func newToolsFixture(t *testing.T) *toolsFixture {
 	require.NoError(t, store.CreateThread(folder))
 	svc := &Service{Store: store, Layout: Layout{Root: t.TempDir()}, Hub: NewHub()}
 	svc.Coordinator = &Coordinator{store: store, layout: svc.Layout, hub: svc.Hub}
+	svc.Links = NewLinks(store, newFakeGitHub(), nil)
 	return &toolsFixture{store: store, svc: svc, tools: &sessionToolsMCP{service: svc}, p: p, worker: worker, folder: folder}
 }
 
@@ -92,14 +93,17 @@ func TestToolsOfEachScope(t *testing.T) {
 	coordinator := []string{"forget", "get_thread", "list_shared_files", "list_threads", "message_thread", "no_update", "propose_threads",
 		"read_conversation", "read_shared_file", "remember", "rename_thread", "request_decision", "resolve_thread", "send_file",
 		"start_thread", "update_instructions"}
+	// The GitHub tools are the thread's own: they act on its checkout, which the
+	// coordinator does not have.
+	thread := []string{"comment_issue", "create_issue", "create_pr", "get_pr_status", "send_file", "update_pr"}
 	for _, c := range []struct {
 		name     string
 		threadID string
 		want     []string
 	}{
 		{"coordinator", f.p.MainThreadID, coordinator},
-		{"worker", f.worker.ID, []string{"send_file"}},
-		{"folder session", f.folder.ID, []string{"send_file"}},
+		{"worker", f.worker.ID, thread},
+		{"folder session", f.folder.ID, thread},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			cs, _ := f.client(t, c.threadID)
@@ -110,6 +114,8 @@ func TestToolsOfEachScope(t *testing.T) {
 				assert.NotContains(t, props, "project_id", "%s: the project comes from the capability URL", tool.Name)
 				if c.name != "coordinator" {
 					assert.NotContains(t, props, "thread_id", "%s: a worker's tools act on itself only", tool.Name)
+					assert.NotContains(t, props, "repo", "%s: a thread's repository is its own, never named", tool.Name)
+					assert.NotContains(t, props, "head", "%s: a thread's branch is its own, never named", tool.Name)
 				}
 			}
 		})
