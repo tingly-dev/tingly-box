@@ -1,20 +1,19 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { getResponse } from 'msw';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handlers } from '@/mocks/handlers';
 import { flagsToApi } from './flagHelpers';
 import FlagCatalogDialog from './FlagCatalogDialog';
 
-const server = setupServer(...handlers);
-
-beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
-afterEach(() => { cleanup(); server.resetHandlers(); });
-afterAll(() => server.close());
+afterEach(cleanup);
 
 describe('thinking budget rule flag', () => {
     it('appears under Reasoning and saves the API flag', async () => {
-        const response = await fetch(`${window.location.origin}/api/v1/rule/flags/registry`);
-        const { data } = await response.json();
+        // Resolve the mock handler directly: a real fetch can leave the msw
+        // interceptor when the dialog's import graph is loaded and hit whatever
+        // listens on the jsdom origin.
+        const response = await getResponse(handlers, new Request(`${window.location.origin}/api/v1/rule/flags/registry`));
+        const { data } = await response!.json();
         expect(data).toContainEqual(expect.objectContaining({
             key: 'disable_thinking_budget', type: 'bool', category: 'reasoning',
         }));

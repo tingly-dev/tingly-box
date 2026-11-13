@@ -96,6 +96,9 @@ export default {
     "saved": "Сохранено"
   },
   "layout": {
+    "workspace": "Рабочее пространство",
+    "workspaceTip": { "title": "Знакомьтесь: рабочее пространство", "text": "Проекты, рабочие каталоги и чаты IM — в одном месте." },
+    "workspaceGate": { "title": "Включите рабочее пространство", "text": "Включите расширение «Рабочее пространство», чтобы пользоваться проектами, рабочими каталогами и чатами IM.", "enable": "Включить рабочее пространство", "error": "Не удалось включить рабочее пространство. Попробуйте ещё раз." },
     "projects": "Проекты",
     "projectsWaiting": "Claude ждёт вашего ответа",
     "appTitle": "Tingly Box",
@@ -140,6 +143,7 @@ export default {
       "doneEditing": "Готово",
       "expand": "Развернуть боковую панель"
     },
+    "featureSwitch": { "disable": "Отключить {{name}}", "disabledTitle": "{{name}} отключено", "disabledText": "Включить снова можно в Настройки → Расширения.", "teamTitle": "Команда включена", "teamText": "Команда включена по умолчанию. Эта кнопка её отключает." },
     "coachMarks": {
       "gotIt": "Понятно",
       "agentVisibility": {
@@ -195,6 +199,7 @@ export default {
     "imagePlayground": "Песочница",
     "remoteControl": "Удалённый доступ",
     "notify": "Уведомления IM",
+    "imBots": "IM-боты",
     "bots": "Боты",
     "overview": "Обзор",
     "platforms": {

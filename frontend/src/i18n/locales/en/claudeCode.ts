@@ -5,6 +5,7 @@ export default {
     "profile": "Configuration profile",
     "profileDefaultShort": "Default profile",
     "profileDefault": "Default configuration profile",
+    "projectProfile": "Project profile",
     "model": "Model",
     "modelDefault": "Default",
     "modelUnifiedHint": "This profile uses one model for every tier. Change it in the profile's rules.",

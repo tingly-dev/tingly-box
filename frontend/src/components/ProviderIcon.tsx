@@ -54,6 +54,8 @@ import {
     Vercel,
     Cloudflare,
     TypeSafe,
+    Runcrate,
+    CloudGPU,
     LlamaCpp,
     Omlx,
 } from './BrandIcons';
@@ -144,6 +146,8 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'vercel-ai-gateway': Vercel,
     'cloudflare-ai-gateway': Cloudflare,
     'typesafe-ai': TypeSafe,
+    'runcrate-ai': Runcrate,
+    'cloudgpu-app': CloudGPU,
     'claude_code': ClaudeCode,
     'claude-code': ClaudeCode,
     'kimi_code': Kimi,
