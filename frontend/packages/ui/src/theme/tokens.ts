@@ -67,8 +67,6 @@ export interface ThemeTokens {
     outlinedText: string;
     outlinedHoverBorder: string;
     outlinedHoverBg: string;
-    /** Primary contained button gradient: from, to, hover from, hover to. */
-    gradient: readonly [string, string, string, string];
   };
 
   menuItem: {

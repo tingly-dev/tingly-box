@@ -121,7 +121,6 @@ export const claudeTokens: ThemeTokens = {
     outlinedText: '#141413',
     outlinedHoverBorder: '#B0AEA5',
     outlinedHoverBg: '#F2EFE3',
-    gradient: [claudePrimary, claudePrimaryDark, claudePrimaryDark, '#A85138'],
   },
   menuItem: {
     hover: '#F2EFE3',

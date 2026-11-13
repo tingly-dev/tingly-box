@@ -16,6 +16,7 @@ import {
     activityExpandHandleSx,
     activityIconsScrollSx,
     activityItemSx,
+    navRowSelectedSx,
     activityLogoButtonSx,
     activityLogoCellSx,
     activityRailSx,
@@ -125,14 +126,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             to={targetPath}
                             onClick={() => { if (item.key === 'projects') dismissWorkspaceTip(); onActivityClick(item); }}
                             sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isActiveItem ? 'primary.main' : 'action.hover',
-                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isActiveItem && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                }),
+                                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                ...(isActiveItem && navRowSelectedSx),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
@@ -181,14 +176,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             to="/help"
                             onClick={onStandaloneNavigate}
                             sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isHelpActive ? 'primary.main' : 'action.hover',
-                                    color: isHelpActive ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isHelpActive && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                }),
+                                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                ...(isHelpActive && navRowSelectedSx),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
@@ -292,7 +281,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             width: '100%',
                             '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
                             // On a System page the gear is the lit rail item.
-                            ...(activeActivity === 'system' && { color: 'primary.main', bgcolor: 'action.selected' }),
+                            ...(activeActivity === 'system' && navRowSelectedSx),
                         })}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>

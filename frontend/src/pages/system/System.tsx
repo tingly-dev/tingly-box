@@ -18,6 +18,7 @@ import { useThemeMode } from '@/contexts/ThemeContext.tsx';
 import { useNotify } from '@/hooks/useNotify.ts';
 import { api } from '@/services/api.ts';
 import { getThemeOptions } from '@/theme/options.ts';
+import { softSelectedSx } from '@tingly/ui/theme/selection';
 import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
 
 const IconPaletteMui = tablerMui(IconPalette);
@@ -64,17 +65,14 @@ const SettingsRow = ({
 /**
  * chipSx — one selected/unselected Chip style, shared by Language + Theme.
  */
-const chipSx = (selected: boolean): SxProps<Theme> => ({
-    bgcolor: selected ? 'primary.main' : 'action.hover',
-    color: selected ? 'primary.contrastText' : 'text.primary',
-    fontWeight: selected ? 600 : 400,
-    border: selected ? 'none' : '1px solid',
-    borderColor: 'divider',
+const chipSx = (selected: boolean): SxProps<Theme> => (theme) => ({
+    border: '1px solid',
+    borderColor: selected ? 'transparent' : 'divider',
     cursor: 'pointer',
     '& .MuiChip-icon': { color: 'inherit' },
-    '&:hover': {
-        bgcolor: selected ? 'primary.dark' : 'action.selected',
-    },
+    ...(selected
+        ? softSelectedSx(theme)
+        : { bgcolor: 'action.hover', color: 'text.primary', fontWeight: 400, '&:hover': { bgcolor: 'action.selected' } }),
 });
 
 /**

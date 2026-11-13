@@ -114,7 +114,6 @@ export const lightTokens: ThemeTokens = {
     outlinedText: '#374151',
     outlinedHoverBorder: '#9ca3af',
     outlinedHoverBg: '#f9fafb',
-    gradient: ['#2563eb', '#1d4ed8', '#1d4ed8', '#1e40af'],
   },
   menuItem: {
     hover: '#f1f5f9',

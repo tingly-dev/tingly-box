@@ -1,6 +1,6 @@
 import type { ThemeOptions } from '@mui/material/styles';
 import type { ThemeTokens } from '../tokens';
-import { primaryGradientButton } from './buttonVariants';
+import { softSelectedColors } from '../selection';
 
 const solid = (color: string) => `1px solid ${color}`;
 
@@ -43,7 +43,24 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
         },
       },
     },
-    variants: primaryGradientButton(...t.button.gradient),
+  },
+  // A filled primary chip is a selected in-page option (a slot, a filter):
+  // the soft selected look, not a solid block. See selection.ts.
+  MuiChip: {
+    variants: [
+      {
+        props: { variant: 'filled', color: 'primary' },
+        style: ({ theme }) => {
+          const c = softSelectedColors(theme);
+          return {
+            backgroundColor: c.bg,
+            color: c.ink,
+            '& .MuiChip-icon, & .MuiChip-deleteIcon': { color: 'inherit' },
+            '&.MuiChip-clickable:hover, &.Mui-focusVisible': { backgroundColor: c.bgHover },
+          };
+        },
+      },
+    ],
   },
   MuiOutlinedInput: {
     styleOverrides: {
@@ -197,8 +214,8 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
   MuiTabs: {
     styleOverrides: {
       indicator: {
-        height: 4,
-        borderRadius: 2,
+        height: 2,
+        borderRadius: 1,
         backgroundColor: t.accent,
       },
     },
