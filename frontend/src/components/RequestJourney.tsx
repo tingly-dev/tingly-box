@@ -180,7 +180,7 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
             width: 58,
             height: 17,
             fontSize: fontSizes.micro,
-            fontWeight: 700,
+            fontWeight: 600,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
             borderRadius: 0.5,

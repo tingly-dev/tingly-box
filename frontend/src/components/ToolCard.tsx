@@ -184,7 +184,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                 {/* Name + badges + tags */}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75, mb: 0.5 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                             {name}
                         </Typography>
                         {badges.map((b) => (

@@ -10,16 +10,16 @@ export const fontSans =
 export const fontMono =
   '"Fira Code", "Cascadia Code", ui-monospace, "SF Mono", Consolas, Menlo, Monaco, "Courier New", monospace';
 
-// Small-text size scale. Dozens of call sites used to hand-pick values between
-// 0.6rem and 0.86rem (0.62, 0.68, 0.72, 0.76, 0.78, 0.8125, 0.82 ...), so the
-// same "small label" came out at a different size on every page. Use these
-// instead of a literal; values are the nearest step of the old spread, so no
-// call site moves by more than ~0.5px.
+// Small-text size scale, matching the theme's type scale (base.ts): 11 for
+// badges and counts, 12 for meta, 13 for compact body, 14 for body and
+// titles. Use these instead of a literal.
 export const fontSizes = {
-  micro: '0.65rem', // 10.4px — badges, kbd hints, dense chips
-  xs: '0.7rem', //   11.2px — secondary meta
-  sm: '0.75rem', //  12px   — captions, helper text
-  md: '0.8rem', //   12.8px — compact body (matches theme body2)
-  lg: '0.85rem', //  13.6px — compact emphasis
-  base: '0.875rem', // 14px — titles and body in Projects (one size for both)
+  micro: '0.6875rem', // 11px — badges, kbd hints, counts, rail labels
+  sm: '0.75rem', //      12px — captions, helper text, meta
+  md: '0.8125rem', //    13px — compact body (theme body2)
+  base: '0.875rem', //   14px — body and titles
+  /** @deprecated Use `micro` (the 11.2px step folded into it). */
+  xs: '0.6875rem',
+  /** @deprecated Use `md` (the 13.6px step folded into it). */
+  lg: '0.8125rem',
 } as const;

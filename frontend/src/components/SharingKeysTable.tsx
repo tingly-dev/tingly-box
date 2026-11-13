@@ -79,7 +79,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                         sx={{
                             bgcolor: 'action.hover',
                             '& th': {
-                                fontWeight: 700,
+                                fontWeight: 600,
                                 fontSize: fontSizes.sm,
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',

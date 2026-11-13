@@ -105,7 +105,7 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                             return (
                                 <Typography key={metric.key} sx={{ whiteSpace: 'nowrap', fontSize: fontSizes.sm, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
                                     {metric.title}{' '}
-                                    <Box component="span" sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650 }}>{value}</Box>
+                                    <Box component="span" sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 600 }}>{value}</Box>
                                 </Typography>
                             );
                         })}

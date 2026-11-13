@@ -231,7 +231,7 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                 <Typography
                     variant="subtitle1"
                     sx={{
-                        fontWeight: 700,
+                        fontWeight: 600,
                         fontSize: '1rem'
                     }}>
                     {ok ? t('probe.success') : t('probe.failed')}

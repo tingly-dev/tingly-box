@@ -122,7 +122,7 @@ export default function RosterTopList({
                 </Typography>
                 {/* Share % only — the absolute token counts sit one glance away
                     in the adjacent table; repeating them here is noise. */}
-                <Typography variant="body2" sx={{ flexShrink: 0, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
+                <Typography variant="body2" sx={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                     {row.share.toFixed(1)}%
                 </Typography>
             </Box>

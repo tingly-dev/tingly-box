@@ -346,7 +346,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                                         value: 'npx', label: 'NPX', tooltip: 'Use npx command',
                                                         // The same green "n" disc the old icon-only switch used for npx.
                                                         icon: (
-                                                            <Box component="span" sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'success.main', color: 'background.paper', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>
+                                                            <Box component="span" sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'success.main', color: 'background.paper', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, lineHeight: 1 }}>
                                                                 n
                                                             </Box>
                                                         ),

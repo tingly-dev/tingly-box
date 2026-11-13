@@ -22,7 +22,7 @@ export function PlatformMark({ platform, size = 18, colored = false }: { platfor
             sx={{
                 width: size, height: size, borderRadius: '50%', flexShrink: 0, bgcolor: 'action.selected', color: 'text.secondary',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: Math.max(9, Math.round(size * 0.5)), fontWeight: 700, lineHeight: 1,
+                fontSize: Math.max(9, Math.round(size * 0.5)), fontWeight: 600, lineHeight: 1,
             }}
         >
             {capitalise(platform).charAt(0)}

@@ -13,7 +13,9 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
   MuiCard: {
     styleOverrides: {
       root: {
-        boxShadow: t.shadow.card,
+        // Surfaces on the page are flat: a border, no shadow. Shadows are for
+        // things that float (menus, popovers, dialogs, tooltips).
+        boxShadow: 'none',
         borderRadius: 12,
         border: solid(t.border.card),
         backgroundColor: t.surface.card,
@@ -26,10 +28,10 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
       root: {
         textTransform: 'none',
         fontWeight: 500,
-        borderRadius: 6,
+        borderRadius: 8,
         boxShadow: 'none',
         '&:hover': {
-          boxShadow: t.shadow.buttonHover,
+          boxShadow: 'none',
         },
       },
       outlined: {
@@ -46,7 +48,7 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
   MuiOutlinedInput: {
     styleOverrides: {
       root: {
-        borderRadius: 6,
+        borderRadius: 8,
         backgroundColor: t.input.bg,
         transition: 'background-color 120ms ease, border-color 120ms ease',
         // MUI keeps adornment icons at 24px inside size="small" inputs, which
@@ -159,6 +161,7 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
   MuiDialog: {
     styleOverrides: {
       paper: {
+        borderRadius: 12,
         backgroundColor: t.surface.dialog,
         backgroundImage: 'none',
         ...(t.border.dialog && { border: solid(t.border.dialog) }),

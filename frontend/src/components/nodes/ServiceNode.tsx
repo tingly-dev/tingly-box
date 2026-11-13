@@ -55,7 +55,7 @@ const TierDisk = styled(Box, {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: fontSizes.sm,
-    fontWeight: 700,
+    fontWeight: 600,
     lineHeight: 1,
     userSelect: 'none',
     cursor: active ? 'pointer' : 'not-allowed',
@@ -148,7 +148,7 @@ const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => 
                 onClick={(e) => e.stopPropagation()}
             >
                 <Box sx={{ p: 2, width: 240 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                         {t('rule.tier.editTitle')}
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{

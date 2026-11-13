@@ -141,7 +141,7 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // One inline stat in the footer strip: bold value followed by a muted label.
 const StatInline = ({ value, label }: { value: string; label: string }) => (
     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, whiteSpace: 'nowrap' }}>
-        <Typography sx={{ fontSize: fontSizes.md, fontWeight: 700 }}>{value}</Typography>
+        <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600 }}>{value}</Typography>
         <Typography sx={{ fontSize: fontSizes.xs, color: 'text.secondary' }}>{label}</Typography>
     </Box>
 );

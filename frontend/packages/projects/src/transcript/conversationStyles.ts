@@ -24,7 +24,7 @@ export const conversationMarkdown = {
     wordBreak: 'break-word',
     '& p': { m: 0, mb: 1.25 },
     '& p:last-child': { mb: 0 },
-    '& h1, & h2, & h3, & h4': { mt: 2, mb: 1, lineHeight: 1.35, fontWeight: 650, color: 'text.primary' },
+    '& h1, & h2, & h3, & h4': { mt: 2, mb: 1, lineHeight: 1.35, fontWeight: 600, color: 'text.primary' },
     '& h1': { fontSize: '1.25rem' },
     '& h2': { fontSize: '1.125rem' },
     '& h3, & h4': { fontSize: '1rem' },

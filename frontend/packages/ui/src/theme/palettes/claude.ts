@@ -104,10 +104,8 @@ export const claudeTokens: ThemeTokens = {
     divider: '#E8E6DC',
   },
   shadow: {
-    card: '0 1px 3px 0 rgba(20, 20, 19, 0.08), 0 1px 2px 0 rgba(20, 20, 19, 0.04)',
     menu: '0 10px 24px rgba(20, 20, 19, 0.08)',
     tooltip: '0 4px 12px rgba(20, 20, 19, 0.08)',
-    buttonHover: '0 1px 2px 0 rgba(20, 20, 19, 0.06)',
   },
   input: {
     bg: 'transparent',
