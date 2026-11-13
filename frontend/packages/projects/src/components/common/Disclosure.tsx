@@ -23,7 +23,7 @@ export function DisclosureChevron({ open, fontSize = 16, sx }: { open: boolean; 
  * row greys to text.secondary and lifts on hover.
  *
  * `header` fills the top of a card (the card keeps its own border and radius);
- * `inline` is a quiet line inside running content. Without `onToggle` the row
+ * `inline` is a quiet line inside running content. Either way the row spans the full width and the chevron is pinned to its end. Without `onToggle` the row
  * is plain: no role, no chevron, no hover (a group that cannot fold).
  */
 export function DisclosureRow({ open, onToggle, variant = 'header', chevron = true, color, hoverColor, children, sx, ...rest }: {
@@ -70,7 +70,7 @@ export function DisclosureRow({ open, onToggle, variant = 'header', chevron = tr
             ]}
         >
             {children}
-            {toggleable && chevron && <DisclosureChevron open={open} />}
+            {toggleable && chevron && <DisclosureChevron open={open} sx={{ ml: 'auto' }} />}
         </Box>
     );
 }

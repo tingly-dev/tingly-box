@@ -436,7 +436,7 @@ const RequestCard = ({block, onRespond}: {
                 <Subject tool={message.content} input={message.payload}/>
                 {input && (
                     <>
-                        <DisclosureRow variant="inline" open={details} onToggle={() => setDetails((v) => !v)} sx={{display: 'inline-flex', mt: 0.5, fontSize: fontSizes.sm}}>
+                        <DisclosureRow variant="inline" open={details} onToggle={() => setDetails((v) => !v)} sx={{mt: 0.5, fontSize: fontSizes.sm}}>
                             {t('projects.transcript.details', {defaultValue: 'Details'})}
                         </DisclosureRow>
                         <Collapse in={details} unmountOnExit>
