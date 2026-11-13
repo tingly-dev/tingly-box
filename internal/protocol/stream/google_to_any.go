@@ -17,6 +17,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
+	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // HandleGoogleToOpenAIStreamResponse processes Google streaming events and converts them to OpenAI format
@@ -187,11 +188,11 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 
 				// Add usage if available
 				if googleResp.UsageMetadata != nil {
-					chunk["usage"] = map[string]interface{}{
-						"prompt_tokens":     googleResp.UsageMetadata.PromptTokenCount,
-						"completion_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
-						"total_tokens":      googleResp.UsageMetadata.TotalTokenCount,
+					usageWire := usageconv.ToChatStreamUsageWire(usageconv.FromGoogle(googleResp.UsageMetadata))
+					if googleResp.UsageMetadata.TotalTokenCount != 0 {
+						usageWire.TotalTokens = int64(googleResp.UsageMetadata.TotalTokenCount)
 					}
+					chunk["usage"] = usageWire
 				}
 
 				sendOpenAIStreamChunkForce(c, chunk)
@@ -333,11 +334,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 				// Collect usage info
 				if googleResp.UsageMetadata != nil {
-					usage = protocol.NewTokenUsageWithCache(
-						int(googleResp.UsageMetadata.PromptTokenCount),
-						int(googleResp.UsageMetadata.CandidatesTokenCount),
-						int(googleResp.UsageMetadata.CachedContentTokenCount),
-					)
+					usage = usageconv.FromGoogle(googleResp.UsageMetadata)
 				}
 
 				// Send message_delta with stop reason and usage
@@ -359,11 +356,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 
 		// Track usage
 		if googleResp.UsageMetadata != nil {
-			usage = protocol.NewTokenUsageWithCache(
-				int(googleResp.UsageMetadata.PromptTokenCount),
-				int(googleResp.UsageMetadata.CandidatesTokenCount),
-				int(googleResp.UsageMetadata.CachedContentTokenCount),
-			)
+			usage = usageconv.FromGoogle(googleResp.UsageMetadata)
 		}
 	}
 
@@ -497,11 +490,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 
 				// Collect usage info
 				if googleResp.UsageMetadata != nil {
-					usage = protocol.NewTokenUsageWithCache(
-						int(googleResp.UsageMetadata.PromptTokenCount),
-						int(googleResp.UsageMetadata.CandidatesTokenCount),
-						int(googleResp.UsageMetadata.CachedContentTokenCount),
-					)
+					usage = usageconv.FromGoogle(googleResp.UsageMetadata)
 				}
 
 				// Send message_delta with stop reason and usage
@@ -540,11 +529,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 
 		// Track usage
 		if googleResp.UsageMetadata != nil {
-			usage = protocol.NewTokenUsageWithCache(
-				int(googleResp.UsageMetadata.PromptTokenCount),
-				int(googleResp.UsageMetadata.CandidatesTokenCount),
-				int(googleResp.UsageMetadata.CachedContentTokenCount),
-			)
+			usage = usageconv.FromGoogle(googleResp.UsageMetadata)
 		}
 	}
 

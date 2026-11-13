@@ -78,9 +78,9 @@ func TestConvertGoogleToOpenAIResponseComplex(t *testing.T) {
 
 		// Check usage
 		usage := result["usage"].(map[string]interface{})
-		assert.Equal(t, int32(20), usage["prompt_tokens"])
-		assert.Equal(t, int32(30), usage["completion_tokens"])
-		assert.Equal(t, int32(50), usage["total_tokens"])
+		assert.EqualValues(t, int32(20), usage["prompt_tokens"])
+		assert.EqualValues(t, int32(30), usage["completion_tokens"])
+		assert.EqualValues(t, int32(50), usage["total_tokens"])
 	})
 
 	t.Run("function call with complex nested arguments", func(t *testing.T) {
@@ -694,8 +694,8 @@ func TestHandleGoogleToAnthropic(t *testing.T) {
 		if anthropicResp.Usage.CacheReadInputTokens != 12 {
 			t.Errorf("expected cache_read_input_tokens 12, got %d", anthropicResp.Usage.CacheReadInputTokens)
 		}
-		if anthropicResp.Usage.InputTokens != 30 {
-			t.Errorf("expected input_tokens 30, got %d", anthropicResp.Usage.InputTokens)
+		if anthropicResp.Usage.InputTokens != 18 {
+			t.Errorf("expected uncached input_tokens 18, got %d", anthropicResp.Usage.InputTokens)
 		}
 	})
 
