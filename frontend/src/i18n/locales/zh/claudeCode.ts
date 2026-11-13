@@ -5,6 +5,7 @@ export default {
     "profile": "配置方案",
     "profileDefaultShort": "默认配置",
     "profileDefault": "默认配置方案",
+    "projectProfile": "项目配置方案",
     "model": "模型",
     "modelDefault": "默认",
     "modelUnifiedHint": "这个配置方案的所有档位都用同一个模型，要换请改配置方案的规则。",

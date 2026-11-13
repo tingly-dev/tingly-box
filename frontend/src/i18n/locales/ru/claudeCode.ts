@@ -5,6 +5,7 @@ export default {
     "profile": "Профиль конфигурации",
     "profileDefaultShort": "Профиль по умолчанию",
     "profileDefault": "Профиль конфигурации по умолчанию",
+    "projectProfile": "Профиль проекта",
     "model": "Модель",
     "modelDefault": "По умолчанию",
     "modelUnifiedHint": "Этот профиль использует одну модель для всех уровней. Изменить её можно в правилах профиля.",
