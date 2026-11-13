@@ -38,6 +38,7 @@ export function DisclosureRow({ open, onToggle, variant = 'header', chevron = tr
     children: ReactNode;
     sx?: SxProps<Theme>;
     'aria-label'?: string;
+    'aria-haspopup'?: 'dialog' | 'menu';
 }) {
     const toggleable = onToggle != null;
     return (

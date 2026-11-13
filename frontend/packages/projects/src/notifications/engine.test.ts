@@ -119,6 +119,14 @@ describe('thread notifications', () => {
         expect(n.options.body).toBe('Approve: rm -rf');
         expect(n.options.tag).toBe('tb-thread-t1');
         n.onclick?.();
+        expect(navigate).toHaveBeenCalledWith('/p/p1?review=t1');
+    });
+
+    it('a failed thread opens as a page: there is nothing to answer on its card', () => {
+        emit({ type: 'thread', project_id: 'p1', data: thread({}) });
+        visible('hidden');
+        emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'failed', wait_reason: 'Failed: no' }) });
+        FakeNotification.instances[0].onclick?.();
         expect(navigate).toHaveBeenCalledWith('/p/p1?thread=t1');
     });
 

@@ -25,6 +25,8 @@ export interface StatusRow {
     badges?: ReactNode;
     /** At the far right: when it last moved. */
     meta?: ReactNode;
+    /** Under the text: a control of this row (what the thread waits on, answered in place). */
+    footer?: ReactNode;
     selected?: boolean;
     /** Changed since the user last looked. */
     unseen?: boolean;
@@ -48,7 +50,7 @@ export function StatusHeading({ label, status, count, onClick }: { label: string
 }
 
 function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) {
-    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} selected={row.selected} unseen={row.unseen} onClick={() => onOpen(row.id)} />;
+    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} footer={row.footer} selected={row.selected} unseen={row.unseen} onClick={() => onOpen(row.id)} />;
 }
 
 /**

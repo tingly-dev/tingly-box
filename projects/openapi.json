@@ -2390,6 +2390,39 @@
         }
       }
     },
+    "/api/v1/threads/{id}/requests": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond",
+        "description": "The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond",
+        "operationId": "apiV1ThreadsIdRequestsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/resolve": {
       "post": {
         "tags": [
@@ -4267,6 +4300,21 @@
         "required": [
           "path",
           "base_branch"
+        ]
+      },
+      "RequestsResponse": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "description": "Field requests",
+            "items": {
+              "$ref": "#/components/schemas/ThreadEvent"
+            }
+          }
+        },
+        "required": [
+          "requests"
         ]
       },
       "SendMessageRequest": {

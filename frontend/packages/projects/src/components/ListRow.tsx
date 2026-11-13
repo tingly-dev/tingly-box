@@ -16,6 +16,8 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onClick'
     /** Controls at the far right (a menu, a chevron). */
     end?: ReactNode;
     selected?: boolean;
+    /** Under the text, inside the row: a control that belongs to this row alone (it must stop its own clicks). */
+    footer?: ReactNode;
     /** Changed since the user last looked: the title goes bolder. */
     unseen?: boolean;
     /** Draw it as a bordered card (a column of the Overview band). */
@@ -31,7 +33,7 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onClick'
  * background tasks all use it, so the same level of information sits in the
  * same place with the same type.
  */
-export function ListRow({ mark, title, subtitle, badges, meta, end, selected, unseen, outlined, stacked, onClick, sx, ...rest }: Props & { sx?: object }) {
+export function ListRow({ mark, title, subtitle, badges, meta, footer, end, selected, unseen, outlined, stacked, onClick, sx, ...rest }: Props & { sx?: object }) {
     return (
         <Box
             role={onClick ? 'button' : undefined}
@@ -60,6 +62,7 @@ export function ListRow({ mark, title, subtitle, badges, meta, end, selected, un
                         {meta != null && <Typography component="span" sx={{ flexShrink: 0, ml: 'auto', fontSize: fontSizes.sm, color: 'text.disabled' }}>{meta}</Typography>}
                     </Box>
                 )}
+                {footer}
             </Box>
             {!stacked && badges}
             {!stacked && meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{meta}</Typography>}

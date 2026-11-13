@@ -105,6 +105,7 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ev('assistant', 'Raised the pool to 40 open / 10 idle. To confirm under load I need to run the benchmark against staging.', 5),
             ev('tool_use', 'Bash', 4, { payload: JSON.stringify({ command: 'go test ./... -run Bench -staging' }) }),
             ev('approval', 'Run go test ./... -run Bench -staging', 4, { payload: JSON.stringify({ request_id: 'req-pool', tool: 'Bash', input: { command: 'go test ./... -run Bench -staging' }, state: 'pending' }) }),
+            ev('approval', 'Edit bench/results.md', 4, { payload: JSON.stringify({ request_id: 'req-pool-notes', tool: 'Edit', input: { file_path: 'bench/results.md' }, state: 'pending' }) }),
         ]
     }
     if (th.id === 't-backoff') {
@@ -241,6 +242,8 @@ const coordinatorOf = (p: Proj) => {
 }
 
 const stoppedTasks = new Set<string>()
+// Requests answered from a card or a thread page, so they stop being pending.
+const answeredRequests = new Set<string>()
 
 const sessionEvents = (s: (typeof sessions)[number]) => {
     let n = 0
@@ -359,6 +362,26 @@ export const projectsHandlers = [
         const th = findThread(id)
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         return HttpResponse.json({ events: th.id.startsWith('t-') ? threadEvents(th as (typeof threads)[number]) : sessionEvents(th as (typeof sessions)[number]) })
+    }),
+    // What a thread waits on right now: its transcript's pending approvals and questions that were not answered since.
+    http.get('/api/v1/threads/:tid/requests', ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        if (th.status !== 'waiting' || !th.id.startsWith('t-')) return HttpResponse.json({ requests: [] })
+        const requests = threadEvents(th as (typeof threads)[number]).filter((e) => {
+            if (e.kind !== 'approval' && e.kind !== 'ask') return false
+            const pl = JSON.parse((e as { payload: string }).payload) as { request_id: string; state: string }
+            return pl.state === 'pending' && !answeredRequests.has(pl.request_id)
+        })
+        return HttpResponse.json({ requests })
+    }),
+    http.post('/api/v1/threads/:tid/respond', async ({ params, request }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const { request_id } = (await request.json()) as { request_id: string }
+        if (answeredRequests.has(request_id)) return HttpResponse.json({ error: 'no pending request with that id' }, { status: 409 })
+        answeredRequests.add(request_id)
+        return HttpResponse.json(th)
     }),
     http.post('/api/v1/threads/:tid/messages', ({ params }) => {
         const th = findThread(params.tid as string)

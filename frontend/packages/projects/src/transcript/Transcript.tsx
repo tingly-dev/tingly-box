@@ -464,6 +464,25 @@ const RequestCard = ({block, onRespond}: {
     );
 };
 
+// PendingRequestCard is the card of whatever the live turn waits on, an
+// approval or a question; the thread page and a thread's card on the board
+// answer with the same one.
+export const PendingRequestCard = ({block, onRespond}: {block: RequestBlock; onRespond: Respond}) => {
+    const {message} = block;
+    const requestId = message.request_id ?? '';
+    return message.kind === 'ask_request'
+        ? (
+            <QuestionCard
+                requestId={requestId}
+                title={message.content}
+                questions={askQuestions(message.payload)}
+                autoAt={message.autoAt}
+                onRespond={(...args) => onRespond(requestId, ...args)}
+            />
+        )
+        : <RequestCard block={block} onRespond={(...args) => onRespond(requestId, ...args)}/>;
+};
+
 interface BlockListProps {
     blocks: TranscriptBlock[];
     pendingRequestId?: string;
@@ -528,24 +547,7 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                     return <AgentCard key={i} block={b} turnLive={working} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>;
                 case 'request':
                     if (!b.message.request_id || b.message.request_id !== pendingRequestId) return <SettledRequest key={b.message.request_id ?? i} block={b}/>;
-                    return b.message.kind === 'ask_request'
-                        ? (
-                            <QuestionCard
-                                key={b.message.request_id}
-                                requestId={b.message.request_id}
-                                title={b.message.content}
-                                questions={askQuestions(b.message.payload)}
-                                autoAt={b.message.autoAt}
-                                onRespond={(...args) => onRespond(b.message.request_id ?? '', ...args)}
-                            />
-                        )
-                        : (
-                            <RequestCard
-                                key={b.message.request_id}
-                                block={b}
-                                onRespond={(...args) => onRespond(b.message.request_id ?? '', ...args)}
-                            />
-                        );
+                    return <PendingRequestCard key={b.message.request_id} block={b} onRespond={onRespond}/>;
                 case 'error':
                     return (
                         <Stack key={i} {...anchor} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error')}}>

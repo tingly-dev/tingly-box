@@ -38,6 +38,7 @@ func TestWorkerActionsAreRefusedOnAMainThread(t *testing.T) {
 		{"POST", "/handoff", nil},
 		{"POST", "/stop", nil},
 		{"POST", "/respond", map[string]any{"request_id": "r", "allow": true}},
+		{"GET", "/requests", nil},
 		{"PUT", "/model", map[string]any{"model": "m"}},
 		{"PUT", "/effort", map[string]any{"effort": "high"}},
 		{"PUT", "/profile", map[string]any{"profile": "x"}},
@@ -53,6 +54,21 @@ func TestWorkerActionsAreRefusedOnAMainThread(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.ThreadIdle, th.Status, "the conversation was not touched")
 	assert.Empty(t, th.PermissionMode)
+}
+
+func TestRequestsOfAThreadWithNothingPendingIsEmpty(t *testing.T) {
+	_, c := newServer(t, quietAgents())
+	var p db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &p))
+	var th db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+p.ID+"/threads", map[string]any{"content": "look around"}, &th))
+	var out struct {
+		Requests []db.ThreadEvent `json:"requests"`
+	}
+	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/requests", nil, &out))
+	assert.NotNil(t, out.Requests)
+	assert.Empty(t, out.Requests)
+	assert.Equal(t, 404, c.do("GET", "/threads/nope/requests", nil, &map[string]any{}))
 }
 
 func TestProjectThreadsOfAnUnknownProjectIs404(t *testing.T) {

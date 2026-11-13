@@ -1076,6 +1076,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond
+         * @description The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond
+         */
+        get: operations["apiV1ThreadsIdRequestsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/resolve": {
         parameters: {
             query?: never;
@@ -1916,6 +1936,10 @@ export interface components {
              * @enum {string}
              */
             workspace_mode?: "shared" | "worktree";
+        };
+        RequestsResponse: {
+            /** @description Field requests */
+            requests: components["schemas"]["ThreadEvent"][];
         };
         SendMessageRequest: {
             /** @description Field content */
@@ -4000,6 +4024,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdRequestsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestsResponse"];
                 };
             };
         };

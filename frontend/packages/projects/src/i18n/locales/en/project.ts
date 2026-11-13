@@ -74,6 +74,13 @@ export const project = {
         noRepo: 'No repository — files go to the Library', fromBase: 'from {{base}}', uncommitted: 'uncommitted changes',
         copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
         editTitle: 'Rename thread',
+        requests: {
+            approval: 'Needs your approval', question: 'Has a question for you', many: '{{count}} requests need you', review: 'Review',
+            more: '+{{count}} more', answered: 'Answered', openThread: 'Open thread',
+            dialog: 'Waiting on you: {{title}}',
+            settled: 'Already answered elsewhere — nothing is waiting on that one any more.',
+            cleared: 'Nothing is waiting on you here any more.',
+        },
         review: 'Review changes', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
         retry: 'Retry turn',
         showTrajectory: 'Show trajectory', showChat: 'Show conversation', expandTools: 'Expand all tool calls', collapseTools: 'Collapse tool calls',
