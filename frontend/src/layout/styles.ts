@@ -29,12 +29,13 @@ export const mobileContentSx = {
     pb: 3,
     overflowY: 'auto',
     scrollBehavior: 'smooth',
+    // Theme-aware: a light-grey track read as a bright stripe in dark mode.
     '&::-webkit-scrollbar': { width: 8 },
-    '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
+    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
-        backgroundColor: 'grey.300',
+        backgroundColor: 'divider',
         borderRadius: 1,
-        '&:hover': { backgroundColor: 'grey.400' },
+        '&:hover': { backgroundColor: 'text.disabled' },
     },
 } as const;
 
