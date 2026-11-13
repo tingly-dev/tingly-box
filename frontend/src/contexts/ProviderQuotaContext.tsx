@@ -59,8 +59,8 @@ export function ProviderQuotaProvider({ providerUuids, children }: {
     usePageVisibility(load, STALE_AFTER_MS);
 
     // Unlike load, this asks the upstream provider, so a click while one is in
-    // flight is ignored rather than stacked. A failure keeps the old snapshot
-    // and is only reported in the node's tooltip.
+    // flight is ignored rather than stacked. A failure keeps the last good
+    // reading and is only reported in the node's tooltip.
     const inFlight = useRef<Set<string>>(new Set());
     const refresh = useCallback(async (providerUuid: string) => {
         if (inFlight.current.has(providerUuid)) return;
@@ -68,15 +68,22 @@ export function ProviderQuotaProvider({ providerUuids, children }: {
         setRefreshing(r => new Set(r).add(providerUuid));
         try {
             const usage = await fetchUIAPI(`/provider-quota/${providerUuid}/refresh`, { method: 'POST' });
+            if (!usage?.provider_uuid) {
+                setFailed(f => new Set(f).add(providerUuid));
+                return;
+            }
             // A refused upstream still answers 200, as a record carrying
-            // last_error and no windows; replacing the old reading with it
-            // would make the ring vanish instead of saying the refresh failed.
-            if (!usage?.provider_uuid || (usage.last_error && !usage.windows?.length)) {
+            // last_error. The server keeps the last good reading in it, so
+            // that record is the newest state and replaces the old one; only
+            // one with no reading at all (never succeeded) would blank the ring,
+            // so it leaves the old snapshot alone.
+            const readFailed = !!usage.last_error;
+            if (readFailed && !usage.windows?.length) {
                 setFailed(f => new Set(f).add(providerUuid));
                 return;
             }
             setQuota(q => ({ ...q, [providerUuid]: usage }));
-            setFailed(f => without(f, providerUuid));
+            setFailed(f => (readFailed ? new Set(f).add(providerUuid) : without(f, providerUuid)));
         } catch (error) {
             console.debug('[ProviderQuotaProvider] refresh failed:', error);
             setFailed(f => new Set(f).add(providerUuid));

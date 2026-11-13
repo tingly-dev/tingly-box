@@ -276,12 +276,13 @@ type ProviderUsageConfig struct {
 // Config quota fetch configuration
 type Config struct {
 	// Global settings
-	Enabled         bool                           `json:"enabled"`          // whether quota tracking is enabled
-	RefreshInterval time.Duration                  `json:"refresh_interval"` // background refresh interval (default 5 minutes)
-	CacheTTL        time.Duration                  `json:"cache_ttl"`        // stored-data validity period (default 20 minutes; keep > RefreshInterval so data survives missed ticks)
-	RetryOnFailure  bool                           `json:"retry_on_failure"` // whether to retry on failure
-	MaxRetries      int                            `json:"max_retries"`      // maximum retry attempts
-	Providers       map[string]ProviderUsageConfig `json:"providers"`        // provider-specific configuration
+	Enabled         bool          `json:"enabled"`          // whether quota tracking is enabled
+	RefreshInterval time.Duration `json:"refresh_interval"` // background refresh interval (default 5 minutes)
+	CacheTTL        time.Duration `json:"cache_ttl"`        // stored-data validity period (default 20 minutes; keep > RefreshInterval so data survives missed ticks)
+	// MaxBackoff caps how far repeated failures push a provider's next
+	// automatic refresh (default 6 hours). See .design/quota-backoff.md.
+	MaxBackoff time.Duration                  `json:"max_backoff"`
+	Providers  map[string]ProviderUsageConfig `json:"providers"` // provider-specific configuration
 	// AutoClaimRewards lets the background refresher take rewards marked
 	// UsageRedeem.Auto (a daily check-in) once a day.
 	AutoClaimRewards bool `json:"auto_claim_rewards"`
@@ -293,8 +294,7 @@ func DefaultConfig() *Config {
 		Enabled:         true,
 		RefreshInterval: 5 * time.Minute,
 		CacheTTL:        20 * time.Minute,
-		RetryOnFailure:  true,
-		MaxRetries:      3,
+		MaxBackoff:      6 * time.Hour,
 		Providers:       make(map[string]ProviderUsageConfig),
 
 		AutoClaimRewards: true,

@@ -106,7 +106,7 @@ func (m *Manager) Redeem(ctx context.Context, providerUUID, rewardID string) (*R
 	}
 
 	result := &RedeemResult{Message: message}
-	if usage, err := m.fetchProviderQuota(ctx, provider); err == nil {
+	if usage, err := m.fetchProviderQuota(ctx, provider, false); err == nil {
 		result.Usage = usage
 	}
 	return result, redeemErr

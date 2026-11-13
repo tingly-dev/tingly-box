@@ -87,7 +87,7 @@
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |
 | [quota-semantics.md](./quota-semantics.md) | Quota 语义归一 | 设计说明；局部实施状态见正文 |
 | [quota-relay.md](./quota-relay.md) | Quota 中继：端侧看到中央的 quota | 设计说明；局部实施状态见正文 |
-| [quota-backoff.md](./quota-backoff.md) | Quota 请求失败退避 | 设计提案，尚未实现 |
+| [quota-backoff.md](./quota-backoff.md) | Quota 请求失败退避 | 已实现；"下次重试时间"UI 一行未做 |
 | [team.md](./team.md) | Team and Sharing Key Authorization | 设计说明；局部实施状态见正文 |
 | [security.md](./security.md) | Security: Design Decisions | 设计说明；局部实施状态见正文 |
 ## Agent、Bot 与会话

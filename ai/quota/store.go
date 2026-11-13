@@ -282,7 +282,8 @@ func getInt(i *int) int {
 
 // Store persists provider quota data.
 type Store interface {
-	// Save persists a quota snapshot.
+	// Save persists a quota snapshot. A failure (LastError with no reading) does
+	// not replace the stored reading; see GormStore.Save.
 	Save(ctx context.Context, usage *ProviderUsage) error
 
 	// Get returns the latest quota data for a provider.
@@ -388,7 +389,30 @@ func (s *GormStore) Save(ctx context.Context, usage *ProviderUsage) error {
 		ProviderUsageRecordFields: record.ProviderUsageRecordFields,
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(record).Error; err != nil {
+		latest := record
+		// A failed read has nothing to show, and storing it as is would wipe the
+		// last good reading. The current row keeps that reading — with its
+		// FetchedAt, so it still says how old it is — and takes only the error,
+		// so the latest state is plainly one or the other: LastErrorAt after
+		// FetchedAt means the newest attempt failed. History is a log of
+		// attempts, so it records the failure as it happened.
+		if usage.LastError != "" && !usage.hasReading() {
+			var prev ProviderUsageRecord
+			err := tx.Where("provider_uuid = ?", record.ProviderUUID).First(&prev).Error
+			switch {
+			case err == nil:
+				if prev.toProviderUsage().hasReading() {
+					prev.ProviderName = record.ProviderName
+					prev.ProviderType = record.ProviderType
+					prev.LastError = record.LastError
+					prev.LastErrorAt = record.LastErrorAt
+					latest = &prev
+				}
+			case !errors.Is(err, gorm.ErrRecordNotFound):
+				return err
+			}
+		}
+		if err := tx.Save(latest).Error; err != nil {
 			return err
 		}
 		return tx.Create(history).Error

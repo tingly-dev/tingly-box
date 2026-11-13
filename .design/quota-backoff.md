@@ -3,11 +3,11 @@
 > 适用对象：改 `ai/quota/{manager,refresher}.go`、`internal/server/module/providerquota`、
 > `frontend/src/components/credential/QuotaCell.tsx` 的贡献者。
 > 结构：现状（§1）→ 设计（§2–§5）→ 刻意不做的（§6）→ 通用性（§7）→ 实施（§8）→ 待定（§9）。
-> 状态：**设计提案，尚未实现**。
+> 状态：**已实现**（退避、失败保留上次读数）；"下次重试时间"的 UI 一行与对应 API 字段未做，见 §5。
 
 ---
 
-## 1. 现状（代码里实际是什么样）
+## 1. 实现前的现状（代码里原先是什么样）
 
 | 项 | 现状 | 位置 |
 |---|---|---|
@@ -54,20 +54,31 @@ ticker 按 5 分钟整数倍触发，而失败发生在 tick 之后若干秒。`
 
 **per-provider（以 provider UUID 为键）**，不是 per fetcher 类型：同一类型的两个账号互不连坐。
 
-`Manager` 里一张内存 `map[uuid]*backoffState{failures int, next time.Time}`，互斥锁保护（5 个 worker 并发）。
-**只放内存，不持久化**——最简实现。代价：进程重启后窗口清零（启动时本来就会立即全量刷一次）。
-这与"只在成功时清零"有一处出入，仅在崩溃循环/频繁重启时才有意义，见 §9 Q2。
+`Manager` 里一张内存 `map[uuid]*backoffEntry{failures int, next time.Time}`（`backoffBook`），互斥锁保护（5 个 worker 并发）。
+**只放内存，不持久化**（已决定）：进程重启后窗口清零，启动时本来就会立即全量刷一次。
+与"只在成功时清零"的唯一出入就是重启，这是有意为之——重启时用户通常想看到最新状态，失败本身会照常展示。
 
-删除 provider 时丢弃其状态。
+provider 变为不支持（无 fetcher）时丢弃其状态。
 
-## 5. UI
+## 5. 失败时保留上次读数，与 UI
 
-原则（`ux-principles.md` §6/§12）：不加开关，不加常驻元素。
+**最近一次要么是成功、要么是失败，二者明确可辨；失败不再抹掉上次成功的读数。**
 
-- `ProviderUsage` 增加可选字段 `backoff { failures, next_attempt_at }`（仅有窗口时才有），需要 `task codegen`。
-- `QuotaCell` 提示层在现有错误行下追加一行："下次自动重试 14:35"。
-- "点击单元格即刷新"保持不变，且它就是强制刷新——用户永远有一条立即重试的路，无需新按钮。
-- 不向用户暴露"退避 / backoff"字样；文案走 i18n（en/zh）。
+- `GormStore.Save`：一次失败（`LastError` 非空且没有任何读数）**不覆盖**当前行里的 windows / breakdowns / cost，只换上
+  `LastError` / `LastErrorAt`；`FetchedAt` 仍是上次成功的时间。于是 `LastErrorAt > FetchedAt` 即"最新一次失败了，读数是旧的"。
+  之前从未成功过的 provider 仍然只有一条错误。成功一次则整行换新、错误清空。
+- **历史表照旧记录这次失败**（无读数的失败行）：历史是尝试的日志，`QuotaHistoryView` 也靠它标出失败点；
+  不能用带旧读数的行冒充一次新的采样。
+- `Manager.fetchProviderQuota` 失败时返回**落库后的那条记录**（旧读数 + 错误），所以手动刷新的响应与之后的读取一致。
+- **只展示，不用于决策**：带 `LastError` 的记录里的读数可能已是数小时前的，所以智能路由（`service_quota`）、状态栏、
+  `Summary` 的"接近用尽"计数都把它当作**未知**——与以前失败即无读数时的行为完全一致。展示面（Credentials 列表、
+  `QuotaCell`、`ProviderQuotaContext`）显示旧读数，并把它变暗（与过期快照同一种处理），tooltip 里仍显示"Updated N ago"
+  （取自上次成功时间）和错误原文。点击单元格 = 强制刷新，不变。
+- 前端 `ProviderQuotaContext.refresh`：响应里带 `last_error` 但仍有 windows 时，用它替换旧记录并标记 failed；
+  只有"从未成功过"（无 windows）时才保留旧快照不动。
+
+**未做（后续）**：`ProviderUsage` 增加 `backoff{failures,next_attempt_at}`，在 `QuotaCell` tooltip 错误行下显示"下次自动重试 14:35"。
+它要改 swagger 模型并重新生成 `openapi.json` 与前端 client，不影响退避本身，单独一个小 PR 更好评审。
 
 ## 6. 刻意不做的（先保持简单，需要时再加）
 
@@ -87,22 +98,22 @@ ticker 按 5 分钟整数倍触发，而失败发生在 tick 之后若干秒。`
 
 ## 8. 实施
 
-一个小 PR 即可：
+已实现（一个 PR）：
 
-1. `backoff.go` + 表驱动单测（第 n 次间隔、封顶、jitter 边界、整数倍 tick 的松弛）。
-2. `Manager.Refresh` 加参数区分自动/主动（ticker 传自动，handler 与 CLI 传主动）；`fetchProviderQuota` 末尾按规则更新状态。
-   单测用假 fetcher + 假时钟：自动失败翻倍、自动跳过未到点、主动强制请求、主动失败不动窗口、成功清零。
-3. 删除死配置 `RetryOnFailure/MaxRetries`。
-4. （可拆出）API 字段 + codegen + `QuotaCell` 一行文案 + i18n。
+1. `ai/quota/backoff.go`：`backoffDelay`（`base×2^n`、封顶、只往后延的 jitter）与每 provider 的内存状态 `backoffBook`
+   （`due` 带松弛量、`failed(auto)`、`succeeded`），时钟与随机源可注入。
+2. `Manager.RefreshDue`（后台 ticker 用，跳过未到点的 provider）与 `Manager.Refresh` / `RefreshProvider` /
+   兑换后的刷新（都是主动触发，强制请求）。`Config.MaxBackoff`（默认 6h）取代两个无人读取的死配置 `RetryOnFailure/MaxRetries`。
+3. `GormStore.Save` 保留上次读数（§5）；路由 / 状态栏 / `Summary` 把带错误的记录当未知；前端两处小改。
 
 被跳过的 provider 不进入本 tick 返回的 usage 列表，`AutoRedeem` 只处理实际得到的读数，无影响。
 `ErrProviderUnsupported`（无 fetcher / OAuth-only 的 API key）不发上游请求，也不进退避。
 
-## 9. 待决问题
+## 9. 已定的取舍与待决
 
-1. （已定）统一封顶 6h，不分类别。
-2. **重启是否清零**：内存方案下重启即清零，崩溃循环时退避形同虚设。要不要把 `failures / next_attempt_at` 存进
-   `provider_usage` 行（加两列、启动时加载）？建议先不做，出现问题再加。
-3. **失败是否保留上次成功的读数**（现状：整行覆盖，windows 丢失）。退避让失败状态持续更久，这个问题会更显眼。
-   保留（标注过期）对展示友好，但 `service_quota` 智能路由会读到陈旧窗口。需要产品决定，本设计不擅自改。
-4. 是否需要在长期失败后**主动提示**用户，还是只在 `QuotaCell` 被动展示？
+已定：统一封顶 6h；不分错误类型；只放内存，重启清零；"全部刷新"是主动触发，强制请求；失败保留上次读数（只展示，不用于决策）。
+
+待决：
+
+1. 长期失败后是否要**主动提示**用户（如 key 疑似失效的通知），还是只在 `QuotaCell` 被动展示？目前是后者。
+2. "下次自动重试"一行的文案与位置（§5 未做部分）。

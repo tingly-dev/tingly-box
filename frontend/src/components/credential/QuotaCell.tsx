@@ -179,6 +179,10 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
     const stale = Number.isFinite(fetchedAt) && now - fetchedAt > STALE_AFTER_MS;
     const lastError = quota?.last_error;
     const hasRaw = quota?.raw_response != null;
+    // The server keeps the last good reading past a failed refresh, with its
+    // own fetched_at and the error beside it: the figure is then old, which the
+    // dimming says the same way as a snapshot nobody has refreshed.
+    const dimmed = stale || !!lastError;
 
     // A cost that restates a money window (e.g. Kimi's booster wallet) would
     // show the same amount twice; it only earns a row when nothing else does.
@@ -399,7 +403,7 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                     py: 0.25,
                     mx: -0.75,
                     borderRadius: radius.row,
-                    opacity: stale && !refreshing ? 0.5 : 1,
+                    opacity: dimmed && !refreshing ? 0.5 : 1,
                     cursor: refreshing ? 'progress' : 'pointer',
                     '&:hover': { bgcolor: 'action.hover' },
                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
