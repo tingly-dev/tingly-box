@@ -78,7 +78,8 @@ export function ProviderQuotaProvider({ providerUuids, children }: {
             // one with no reading at all (never succeeded) would blank the ring,
             // so it leaves the old snapshot alone.
             const readFailed = !!usage.last_error;
-            if (readFailed && !usage.windows?.length) {
+            const hasReading = !!(usage.windows?.length || usage.breakdowns?.length || usage.cost);
+            if (readFailed && !hasReading) {
                 setFailed(f => new Set(f).add(providerUuid));
                 return;
             }

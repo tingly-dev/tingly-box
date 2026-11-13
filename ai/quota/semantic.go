@@ -198,7 +198,7 @@ func Unreadable(providerUUID, providerName string, providerType ProviderType, re
 // a window, a breakdown or a cost. An account alone is who the key belongs to,
 // not a reading.
 func (p *ProviderUsage) hasReading() bool {
-	return p != nil && (len(p.Windows) > 0 || len(p.Breakdowns) > 0 || p.Cost != nil)
+	return (len(p.Windows) > 0 || len(p.Breakdowns) > 0 || p.Cost != nil)
 }
 
 // MarkUnreadable records why a usage could not be read, leaving whatever the

@@ -339,7 +339,6 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	if !ok {
 		log.Debug("skipping quota fetch: no fetcher for this provider type")
 		_ = m.store.Delete(ctx, provider.UUID)
-		m.backoff.succeeded(provider.UUID)
 		return nil, ErrProviderUnsupported
 	}
 	// An OAuth-only usage endpoint has nothing to say about an API key on the
@@ -348,7 +347,6 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 	if f.RequiresAuth() == typ.AuthTypeOAuth && provider.AuthType != typ.AuthTypeOAuth {
 		log.Debug("skipping quota fetch: this provider type only reports usage for OAuth credentials")
 		_ = m.store.Delete(ctx, provider.UUID)
-		m.backoff.succeeded(provider.UUID)
 		return nil, ErrProviderUnsupported
 	}
 	log = log.WithField("fetcher", f.Name())
@@ -401,13 +399,16 @@ func (m *Manager) saveUsage(ctx context.Context, log *logrus.Entry, uuid string,
 		m.backoff.succeeded(uuid)
 		return usage
 	}
-	m.backoff.failed(uuid, auto, m.config.RefreshInterval, m.config.MaxBackoff)
+	// Only an automatic refresh widens the window, and a cancelled context is
+	// the server stopping, not the upstream refusing.
+	if auto && ctx.Err() == nil {
+		m.backoff.failed(uuid, m.config.RefreshInterval, cmp.Or(m.config.MaxBackoff, defaultMaxBackoff))
+	}
 	if !usage.hasReading() {
 		if stored, err := m.store.Get(ctx, uuid); err == nil && stored.hasReading() {
 			usage = stored
 		}
 	}
-	usage.ProviderUUID = cmp.Or(usage.ProviderUUID, uuid)
 	m.annotateBackoff(usage)
 	return usage
 }

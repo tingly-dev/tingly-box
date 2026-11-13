@@ -13,6 +13,11 @@ import (
 // request every tick. Only a success clears the window. A manual refresh
 // ignores the window and leaves it alone on failure.
 
+// defaultMaxBackoff is the cap when Config.MaxBackoff is unset: a Config built
+// without DefaultConfig (decoded from JSON, a test fixture) would otherwise cap
+// the window at zero and silently turn backoff off.
+const defaultMaxBackoff = 6 * time.Hour
+
 // backoffJitter spreads providers that failed together, so they do not all
 // come due on the same tick. The delay only ever grows by it.
 const backoffJitter = 0.1
@@ -84,13 +89,8 @@ func (b *backoffBook) succeeded(uuid string) {
 	delete(b.state, uuid)
 }
 
-// failed widens the window after an automatic refresh and returns when the
-// next one may run. A manual failure (auto == false) leaves the window as it
-// was.
-func (b *backoffBook) failed(uuid string, auto bool, base, limit time.Duration) {
-	if !auto {
-		return
-	}
+// failed widens the window after an automatic refresh failed.
+func (b *backoffBook) failed(uuid string, base, limit time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	e := b.state[uuid]

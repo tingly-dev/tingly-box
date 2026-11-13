@@ -62,7 +62,7 @@ func TestBackoffDueLeavesSlackForTheTicker(t *testing.T) {
 	if _, ok := b.due("p", tick/4); !ok {
 		t.Fatal("a provider with no failures must be due")
 	}
-	b.failed("p", true, tick, 6*time.Hour) // window: 10m
+	b.failed("p", tick, 6*time.Hour) // window: 10m
 	clock = clock.Add(tick - 7*time.Second)
 	if _, ok := b.due("p", tick/4); ok {
 		t.Fatal("due after one tick of a two-tick window")
@@ -73,22 +73,16 @@ func TestBackoffDueLeavesSlackForTheTicker(t *testing.T) {
 	}
 }
 
-func TestBackoffManualFailureLeavesTheWindow(t *testing.T) {
+func TestBackoffSuccessClearsTheWindow(t *testing.T) {
 	t.Parallel()
 	const tick = 5 * time.Minute
 	b := newBackoffBook()
 	b.rand = func() float64 { return 0 }
 
-	b.failed("p", false, tick, 6*time.Hour)
-	if _, ok := b.due("p", 0); !ok {
-		t.Fatal("a manual failure must not open a window")
-	}
-	b.failed("p", true, tick, 6*time.Hour)
-	b.failed("p", true, tick, 6*time.Hour) // 20m
-	until, _ := b.due("p", 0)
-	b.failed("p", false, tick, 6*time.Hour)
-	if again, _ := b.due("p", 0); !again.Equal(until) {
-		t.Fatalf("a manual failure moved the window: %v -> %v", until, again)
+	b.failed("p", tick, 6*time.Hour)
+	b.failed("p", tick, 6*time.Hour)
+	if failures, _, open := b.window("p"); !open || failures != 2 {
+		t.Fatalf("window = %d failures, open=%v, want 2 and open", failures, open)
 	}
 	b.succeeded("p")
 	if _, ok := b.due("p", 0); !ok {
@@ -313,5 +307,43 @@ func TestReadsSayWhenAutomaticRefreshesResume(t *testing.T) {
 	ok, _ := m.RefreshProvider(ctx, "p1")
 	if ok.Backoff != nil || mustGet(t, m, "p1").Backoff != nil {
 		t.Error("a success must clear the backoff")
+	}
+}
+
+func TestUnsetMaxBackoffFallsBackToTheDefault(t *testing.T) {
+	m, f, clock := newBackoffTestManager(t)
+	m.config.MaxBackoff = 0 // a Config that did not come from DefaultConfig
+	ctx := context.Background()
+
+	f.set(true, 0)
+	m.RefreshDue(ctx)
+	*clock = clock.Add(m.config.RefreshInterval)
+	if _, ok := m.backoff.due("p1", 0); ok {
+		t.Fatal("with no cap configured the window collapsed to zero and backoff did nothing")
+	}
+}
+
+func TestCancelledRefreshIsNotAFailure(t *testing.T) {
+	m, f, _ := newBackoffTestManager(t)
+	f.set(true, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	m.RefreshDue(ctx)
+	if _, _, open := m.backoff.window("p1"); open {
+		t.Fatal("a refresh cut short by shutdown widened the provider's window")
+	}
+}
+
+func TestAutoRedeemLeavesAReadingKeptPastAFailure(t *testing.T) {
+	m, _, _ := newBackoffTestManager(t)
+	usage := &ProviderUsage{
+		ProviderUUID: "p1",
+		LastError:    "unexpected status code: 403",
+		Breakdowns:   []*UsageBreakdown{{Key: "card", Redeem: &UsageRedeem{ID: "daily", Scope: "daily", Auto: true}}},
+	}
+	m.AutoRedeem(context.Background(), []*ProviderUsage{usage})
+	if !m.autoClaimed.firstToday("p1|daily", time.Now()) {
+		t.Fatal("a stale reward was tried automatically, which used up today's attempt")
 	}
 }
