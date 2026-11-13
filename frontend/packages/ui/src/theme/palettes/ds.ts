@@ -116,5 +116,4 @@ export const dsPalette: ThemePalette = {
       emptyIconBg: 'rgba(85, 128, 250, 0.12)',
     },
   },
-  isSunlit: false,
 };

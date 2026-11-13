@@ -71,5 +71,4 @@ export const lightPalette: ThemePalette = {
       emptyIconBg: 'rgba(100, 116, 139, 0.1)',
     },
   },
-  isSunlit: false,
 };

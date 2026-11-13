@@ -5,7 +5,7 @@ import type { SxProps, Theme } from '@mui/material';
 import { getThemeOptions } from '@tingly/ui/theme/options';
 import type { ResolvedThemeMode, ThemeMode } from '@tingly/ui/theme';
 
-export { THEME_MODE_VALUES, isThemeMode } from '@tingly/ui/theme/options';
+export { THEME_MODE_VALUES, isThemeMode, readStoredThemeMode } from '@tingly/ui/theme/options';
 
 export const resolveThemeMode = (mode: ThemeMode, prefersDark: boolean): ResolvedThemeMode =>
     mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;

@@ -93,5 +93,4 @@ export const darkPalette: ThemePalette = {
       emptyIconBg: 'rgba(148, 163, 184, 0.1)',
     },
   },
-  isSunlit: false,
 };

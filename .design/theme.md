@@ -128,5 +128,5 @@ same bug existed in every theme.
 ### Where this lives
 
 - `frontend/src/theme/components/buttonVariants.ts`
-- `frontend/src/theme/palettes/{light,dark,claude,sunlit,ds}.ts`
+- `frontend/src/theme/palettes/{light,dark,claude,ds}（sunlit 已于 2026-11 下线，见 `visual-system.md`）.ts`
 - `frontend/src/components/ConnectProviderDialog.tsx`

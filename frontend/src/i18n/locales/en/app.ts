@@ -161,7 +161,6 @@ export default {
       "light": "Light",
       "dark": "Dark",
       "system": "System",
-      "sunlit": "Sunlit",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "Click",

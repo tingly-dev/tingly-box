@@ -162,7 +162,6 @@ export default {
       "light": "Светлая",
       "dark": "Тёмная",
       "system": "Системная",
-      "sunlit": "Солнечная",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "Нажмите",
