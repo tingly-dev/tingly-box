@@ -454,7 +454,7 @@ func coordinatorCurrentSettings(p *db.Project) string {
 		b.WriteString("This project has no repositories: threads work in a scratch directory and deliver files to the project Library.\n")
 	} else {
 		primary := p.PrimaryRepo()
-		b.WriteString("Project directories (shared means concurrent threads use the same files; worktree creates an isolated Git branch):\n")
+		b.WriteString("Project directories (shared means concurrent threads use the same files; worktree creates an isolated Git branch; for a worktree directory start_thread and propose_threads take base, a branch to start from, and branch, a name for the new one):\n")
 		for _, repo := range p.Repos {
 			r := p.EffectiveRepo(repo)
 			role := ""

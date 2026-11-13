@@ -29,6 +29,8 @@ var (
 	ErrNoPrompt       = errors.New("no pending request with that id")
 	// ErrNotProject is for starting a worker in a project that is a folder.
 	ErrNotProject = errors.New("only a project's main thread starts threads in it")
+	// ErrNoOwnBranch is for choosing a base or branch where the thread gets none.
+	ErrNoOwnBranch = errors.New("base and branch need a repository and its own worktree: the thread uses no directory, or its directory is shared by every thread (a plain directory, or a Git one set to share)")
 	// ErrMainThread is for running a main thread as an agent session.
 	ErrMainThread = errors.New("a main thread is the project conversation; send to it through the coordinator")
 	// ErrEmptyTitle is for renaming a thread to nothing.
@@ -497,8 +499,12 @@ type StartSpec struct {
 	Task  string
 	// Repo is the path of one of the project's repos; empty picks the first,
 	// "none" works without a repository.
-	Repo   string
-	Origin string
+	Repo string
+	// Base is the local branch the thread's branch starts from; empty uses
+	// the repository's base branch. Branch names the new branch; empty
+	// generates one. Both need a worktree.
+	Base, Branch string
+	Origin       string
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -559,6 +565,10 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 			return nil, fmt.Errorf("directory %q has changed since it was configured", effective.Path)
 		}
 	}
+	base, branch, err := chooseBranch(ctx, p, repo, spec)
+	if err != nil {
+		return nil, err
+	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
 	}
@@ -566,17 +576,23 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	var note string
 	if repo != nil {
 		t.RepoPath, t.BaseBranch = repo.Path, repo.BaseBranch
+		if base != "" {
+			t.BaseBranch = base
+		}
 		if p.EffectiveRepo(*repo).WorkspaceMode == db.WorkspaceShared {
 			t.Cwd = repo.Path
 		} else {
-			t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			t.Branch = branch
+			if t.Branch == "" {
+				t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			}
 			// In the repository's own .claude/worktrees; if that cannot be used
 			// (read-only repository, ...) fall back to the data directory, where
 			// threads used to live, and say so.
 			inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
 			err := excludeWorktrees(ctx, repo.Path)
 			if err == nil {
-				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, repo.BaseBranch)
+				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, t.BaseBranch)
 			}
 			if err == nil {
 				t.Cwd = inRepo
@@ -585,7 +601,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 				// A failed git worktree add can leave its branch behind. Use a
 				// fresh name rather than deleting a branch we may not own.
 				t.Branch += "-fallback-" + t.ID[6:12]
-				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
+				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, t.BaseBranch); err != nil {
 					t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
 					_ = m.store.SaveThread(t)
 					m.publish(t)
@@ -612,6 +628,52 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	}
 	m.enqueue(t.ID, queued{text: t.Task, src: src})
 	return t, nil
+}
+
+// chooseBranch checks the base and branch name a caller asked for, before
+// anything is created. Both empty means the defaults.
+func chooseBranch(ctx context.Context, p *db.Project, repo *db.Repo, spec StartSpec) (base, branch string, err error) {
+	base, branch = strings.TrimSpace(spec.Base), strings.TrimSpace(spec.Branch)
+	if base == "" && branch == "" {
+		return "", "", nil
+	}
+	if repo == nil || p.EffectiveRepo(*repo).WorkspaceMode == db.WorkspaceShared {
+		return "", "", ErrNoOwnBranch
+	}
+	if base != "" && !BranchExists(ctx, repo.Path, base) {
+		return "", "", fmt.Errorf("base %q is not a local branch of %s", base, repo.Path)
+	}
+	if branch != "" {
+		if err := checkNewBranch(ctx, repo.Path, branch); err != nil {
+			return "", "", err
+		}
+	}
+	return base, branch, nil
+}
+
+// checkProposals refuses a proposed card Start would refuse later: the user
+// cannot edit a card, so a bad base or a taken branch could never start. Two
+// cards naming the same branch collide too, so the second is refused here.
+func checkProposals(ctx context.Context, p *db.Project, threads []Suggestion) error {
+	taken := map[string]bool{}
+	for i, s := range threads {
+		repo, err := pickRepo(p, s.Repo)
+		if err != nil {
+			return fmt.Errorf("thread %d: %w", i+1, err)
+		}
+		_, branch, err := chooseBranch(ctx, p, repo, StartSpec{Base: s.Base, Branch: s.Branch})
+		if err != nil {
+			return fmt.Errorf("thread %d: %w", i+1, err)
+		}
+		if branch != "" {
+			key := repo.Path + "\x00" + branch
+			if taken[key] {
+				return fmt.Errorf("thread %d: branch %q is used by another proposed thread", i+1, branch)
+			}
+			taken[key] = true
+		}
+	}
+	return nil
 }
 
 func pickRepo(p *db.Project, want string) (*db.Repo, error) {
