@@ -181,7 +181,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}
                     {finished.length > 0 && (
                         <>
-                            <DisclosureRow variant="inline" open={showFinished} onToggle={() => setShowFinished(!showFinished)} sx={{ fontSize: fontSizes.sm }}>
+                            <DisclosureRow open={showFinished} onToggle={() => setShowFinished(!showFinished)} sx={{ mx: -1.5, borderTop: 1, borderColor: 'divider', fontSize: fontSizes.sm }}>
                                 <Box component="span" sx={{ flex: 1 }}>{t('rail.finished', { count: finished.length })}</Box>
                             </DisclosureRow>
                             <Collapse in={showFinished} unmountOnExit>
