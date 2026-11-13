@@ -1320,23 +1320,11 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	}
 }
 
-// StopResult says what a Stop did.
-type StopResult struct {
-	// Interrupted is true when a turn was running or waiting for a slot.
-	Interrupted bool
-	// Dropped is how many queued messages the stop discarded.
-	Dropped int
-}
-
 // Stop interrupts a thread's running turn and drops its queued messages.
 // Its resident process, and the background work in it, survive. by is who
 // asked, for the note in the thread; stopping a thread with nothing running
 // does nothing.
-func (m *Threads) Stop(threadID string, by Source) StopResult {
-	done, res := m.stop(threadID, by)
-	res.Interrupted = res.Interrupted || done != nil
-	return res
-}
+func (m *Threads) Stop(threadID string, by Source) { m.stop(threadID, by) }
 
 // Retry re-runs a failed turn without adding anything to the transcript.
 // A turn that crashed mid-turn (with staged output) resumes the interrupted
@@ -1377,11 +1365,9 @@ func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error
 
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
-func (m *Threads) stop(threadID string, by Source) (<-chan struct{}, StopResult) {
-	var res StopResult
+func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
 	m.mu.Lock()
 	if a, ok := m.active[threadID]; ok {
-		res.Interrupted, res.Dropped = true, len(a.queue)
 		a.stopped, a.stoppedBy = true, by
 		m.dropHeld(threadID, a.queue)
 		a.queue = nil
@@ -1391,7 +1377,7 @@ func (m *Threads) stop(threadID string, by Source) (<-chan struct{}, StopResult)
 	}
 	m.mu.Unlock()
 	done, _ := m.engine.Stop(m.sessionOf(threadID))
-	return done, res
+	return done
 }
 
 // Running reports whether a thread has a turn in flight or waiting.
@@ -1430,7 +1416,7 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done, _ := m.stop(threadID, Source{}); done != nil {
+	if done := m.stop(threadID, Source{}); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
 		case <-done:
@@ -1456,7 +1442,7 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done, _ := m.stop(threadID, Source{}); done != nil {
+	if done := m.stop(threadID, Source{}); done != nil {
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):
@@ -1509,14 +1495,21 @@ func (m *Threads) Reopen(threadID string, by Source) (*db.Thread, error) {
 	if t.Status != db.ThreadResolved {
 		return t, nil
 	}
+	// update reads the row again under its lock, so check again there: a
+	// Reopen or Resolve may have got in between.
+	reopened := false
 	t, err = m.update(threadID, func(t *db.Thread) {
+		if t.Status != db.ThreadResolved {
+			return
+		}
+		reopened = true
 		t.ResolvedAt = nil
 		t.Status = db.ThreadIdle
 		if t.CommitsAhead > 0 && t.MergedAt == nil {
 			t.Status = db.ThreadReady
 		}
 	})
-	if err == nil {
+	if err == nil && reopened {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Reopened" + by.actor() + "."})
 	}
 	return t, err

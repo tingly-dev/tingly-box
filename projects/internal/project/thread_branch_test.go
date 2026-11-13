@@ -61,7 +61,7 @@ func TestStartThreadRefusesBadBaseOrBranchBeforeCreatingAnything(t *testing.T) {
 			assert.Contains(t, err.Error(), c.want)
 		})
 	}
-	assert.Empty(t, mustListThreads(t, f.store, f.project.ID), "a refused start leaves no thread behind")
+	assert.Empty(t, threadsOf(t, f), "a refused start leaves no thread behind")
 	assert.True(t, BranchExists(context.Background(), f.repo, "keep-me"), "the user's branch is never deleted")
 }
 
@@ -90,13 +90,6 @@ func TestAddWorktreeNeverDeletesAnExistingBranch(t *testing.T) {
 	err := AddWorktree(context.Background(), repo, t.TempDir()+"/wt", "precious", "main")
 	require.Error(t, err)
 	assert.True(t, BranchExists(context.Background(), repo, "precious"))
-}
-
-func mustListThreads(t *testing.T, store *db.Store, projectID string) []db.Thread {
-	t.Helper()
-	threads, err := store.ListThreads(projectID)
-	require.NoError(t, err)
-	return threads
 }
 
 func TestCoordinatorStartsThreadFromChosenBase(t *testing.T) {
