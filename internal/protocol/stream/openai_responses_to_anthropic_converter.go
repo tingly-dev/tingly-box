@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"sort"
 
@@ -511,16 +510,9 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 		logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] MCP list tools failed")
 
 	case "error", "response.failed":
-		logrus.WithContext(r.ctx).Errorf("Responses API error event: %v", currentEvent)
-		errMsg := fmt.Sprintf("Responses API error: %v", currentEvent)
-		r.emitAnthropic("error", map[string]interface{}{
-			"type": "error",
-			"error": map[string]interface{}{
-				"message": errMsg,
-				"type":    "api_error",
-			},
-		})
-		r.convErr = fmt.Errorf("%s", errMsg)
+		failure := responsesStreamFailure(&currentEvent)
+		r.emitAnthropic("error", map[string]interface{}{"type": "error", "error": map[string]interface{}{"message": failure.Message, "type": failure.Type, "code": failure.Code}})
+		r.convErr = failure
 		r.done = true
 
 	default:
