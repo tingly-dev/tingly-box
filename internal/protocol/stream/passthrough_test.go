@@ -2,8 +2,11 @@ package stream
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -707,4 +710,103 @@ func TestHandleOpenAIChatStream_Passthrough_NoTTFTOnRoleOnly(t *testing.T) {
 
 	_, ok := c.Get(constant.CtxKeyFirstTokenTime)
 	assert.False(t, ok, "role-only delta must not mark TTFT")
+}
+
+// failingResponsesDecoder delivers events, then ends the stream with err.
+type failingResponsesDecoder struct {
+	*fakeResponsesDecoder
+	err error
+}
+
+func (d *failingResponsesDecoder) Err() error { return d.err }
+
+// runResponsesPassthrough drives HandleOpenAIResponsesStream over raw event
+// payloads, ends the stream with endErr (nil: a clean end), and returns the
+// client body split into (event name, data) pairs.
+func runResponsesPassthrough(t *testing.T, endErr error, events ...string) (names, datas []string, err error) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	decoder := &failingResponsesDecoder{fakeResponsesDecoder: newFakeResponsesDecoder(events), err: endErr}
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+	_, err = HandleOpenAIResponsesStream(newTestHandleContext(c), stream, "gpt-4o")
+	for _, block := range strings.Split(w.Body.String(), "\n\n") {
+		var name, data string
+		for _, line := range strings.Split(block, "\n") {
+			if v, ok := strings.CutPrefix(line, "event: "); ok {
+				name = v
+			}
+			if v, ok := strings.CutPrefix(line, "data: "); ok {
+				data = v
+			}
+		}
+		if name != "" || data != "" {
+			names, datas = append(names, name), append(datas, data)
+		}
+	}
+	return names, datas, err
+}
+
+const (
+	passthroughCreated = `{"type":"response.created","sequence_number":0,"response":{"id":"resp_1"}}`
+	passthroughDelta   = `{"type":"response.output_text.delta","sequence_number":1,"item_id":"item_1","output_index":0,"delta":"partial"}`
+)
+
+// An upstream API error with a code ends a stream that has already started:
+// the error event keeps the code in the flat Responses shape, and
+// response.failed follows so Codex stops instead of retrying the stream as
+// dropped (#2417). The rule does not depend on the code's value.
+func TestHandleOpenAIResponsesStream_CodedAPIErrorMidStream(t *testing.T) {
+	apiErr := &openai.Error{StatusCode: http.StatusBadRequest, Code: "some_future_code", Message: "flagged"}
+	endErr := fmt.Errorf("stream error: %w", apiErr)
+	names, datas, err := runResponsesPassthrough(t, endErr, passthroughCreated, passthroughDelta)
+	require.ErrorIs(t, err, endErr, "usage tracking gets the original error")
+
+	require.Equal(t, []string{"response.created", "response.output_text.delta", "error", "response.failed"}, names)
+	assert.Equal(t, "some_future_code", gjson.Get(datas[2], "code").String())
+	assert.Equal(t, "flagged", gjson.Get(datas[2], "message").String(), "the upstream's own message")
+	assert.Equal(t, int64(2), gjson.Get(datas[2], "sequence_number").Int(), "continues after the last forwarded event")
+	assert.Equal(t, int64(3), gjson.Get(datas[3], "sequence_number").Int())
+	assert.Equal(t, "failed", gjson.Get(datas[3], "response.status").String())
+	assert.Equal(t, "resp_1", gjson.Get(datas[3], "response.id").String(), "the id response.created carried")
+	assert.Equal(t, "some_future_code", gjson.Get(datas[3], "response.error.code").String())
+	assert.Equal(t, "flagged", gjson.Get(datas[3], "response.error.message").String())
+	assert.Equal(t, "gpt-4o", gjson.Get(datas[3], "response.model").String())
+}
+
+func TestHandleOpenAIResponsesStream_CodedAPIErrorMessage(t *testing.T) {
+	long := strings.Repeat("x", 600)
+	_, datas, _ := runResponsesPassthrough(t, &openai.Error{StatusCode: http.StatusBadRequest, Code: "c", Message: long}, passthroughCreated)
+	require.NotEmpty(t, datas)
+	assert.Less(t, len(gjson.Get(datas[len(datas)-1], "response.error.message").String()), len(long), "a vendor message is capped")
+
+	_, datas, _ = runResponsesPassthrough(t, &openai.Error{StatusCode: http.StatusBadRequest, Code: "c"}, passthroughCreated)
+	require.NotEmpty(t, datas)
+	assert.Equal(t, "Upstream error: 400 Bad Request (code=c)", gjson.Get(datas[len(datas)-1], "response.error.message").String(),
+		"without a vendor message the client message names status and code")
+}
+
+// Any other error keeps stream_failed. A policy code inside an in-stream error
+// event does not change that here: recognizing it is the upstream client's job
+// (internal/client/codex_stream_errors.go).
+func TestHandleOpenAIResponsesStream_UncodedStreamErrorUnchanged(t *testing.T) {
+	policyEvent := `{"type":"error","sequence_number":2,"error":{"type":"invalid_request","code":"cyber_policy","message":"flagged"}}`
+	cases := map[string]struct {
+		endErr error
+		events []string
+	}{
+		"in-stream error event":  {nil, []string{passthroughCreated, passthroughDelta, policyEvent}},
+		"api error without code": {&openai.Error{StatusCode: http.StatusBadRequest}, []string{passthroughCreated, passthroughDelta}},
+		"transport error":        {errors.New("connection reset by peer"), []string{passthroughCreated, passthroughDelta}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			names, datas, err := runResponsesPassthrough(t, tc.endErr, tc.events...)
+			require.Error(t, err)
+			require.Equal(t, []string{"response.created", "response.output_text.delta", "error"}, names)
+			assert.Equal(t, "stream_failed", gjson.Get(datas[2], "code").String())
+		})
+	}
 }

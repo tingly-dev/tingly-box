@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -354,6 +355,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 	sawTerminal := false
 	// Sequence number for any error event we synthesize after upstream events.
 	var nextSeq int64
+	// Id and creation time of the upstream response, for a synthesized
+	// response.failed.
+	var responseID string
+	var responseCreatedAt int64
 
 	protocol.RunLoop(c, func(w io.Writer) bool {
 		select {
@@ -384,6 +389,12 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		// high-frequency *.delta events don't, so they pay a single top-level
 		// scan here instead of half a dozen full gjson re-parses.
 		if resp := gjson.Get(eventRaw, "response"); resp.Exists() {
+			if id := resp.Get("id").String(); id != "" {
+				responseID = id
+			}
+			if createdAt := resp.Get("created_at").Int(); createdAt != 0 {
+				responseCreatedAt = createdAt
+			}
 			// Accumulate usage from the raw JSON (SDK struct fields may be zero for
 			// providers that use custom serialisation or in unit-test fake decoders).
 			promptTokensTotal := int64(0)
@@ -464,6 +475,21 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		// instead of a 200 SSE error event.
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
+			return usage, err
+		}
+		// An upstream API error with a code keeps that code instead of
+		// stream_failed, and the stream ends with response.failed: Codex
+		// reads a content-policy code only from there (or an HTTP 400 body)
+		// and retries a stream that has no terminal event. openai-go builds
+		// *openai.Error only for an HTTP status >= 400, so mid-stream one
+		// comes from an upstream client that reports an in-stream error that
+		// way (the Codex client's content-policy blocks, #2417).
+		if code, message, ok := protocol.UpstreamErrorCode(err); ok {
+			errorEvent := wire.NewResponsesStreamErrorEvent(nextSeq, code, message)
+			OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
+			failed := wire.NewResponsesFailedEvent(nextSeq+1, responseID, cmp.Or(responseCreatedAt, time.Now().Unix()), responseModel,
+				wire.ResponsesFailedErrorWire{Code: code, Message: message})
+			OpenAIResponsesEvent(c, failed.EventType(), failed)
 			return usage, err
 		}
 		errorEvent := wire.NewResponsesStreamErrorEvent(nextSeq, "stream_failed", protocol.UpstreamMessage(err))

@@ -330,7 +330,15 @@ OpenAI 原生 chat/responses 的错误 chunk 根本没有外层 `"type":"error"`
 `{"error": {...}}` 形状(没有外层 `"type":"error"` 包裹),这两处保留手写
 字面量,只是把 message 换成 `protocol.UpstreamMessage(err)`——**给这类
 error 帧加字段前,先确认它是 Anthropic 形状还是 OpenAI 形状,两者不能共用
-一个 builder**。
+一个 builder**。两处的具体形状不同:Chat 那一处是裸 `{"error": {...}}` 手写
+字面量;Responses 那一处是扁平的 `{"type":"error","code","message"}`,由
+`wire.NewResponsesStreamErrorEvent` 构造。Responses 那一处还有一条规则:错误
+带上游 code(`protocol.UpstreamErrorCode`)时,error 帧用这个 code 和上游原文
+message(截断),随后补一个带上游 response id 的 `response.failed`
+(`wire.NewResponsesFailedEvent`),因为 Codex 只从 `response.failed`(或 HTTP
+400 body)读内容策略 code。SDK 只在 HTTP 状态 ≥ 400 时构造 `*openai.Error`,
+所以推流中出现它只可能来自 `internal/client` 的转换(Codex client 报告的内容
+策略拦截,#2417,见第 8 节);其余错误仍是 `stream_failed`。
 
 新增失败出口时,检查清单:
 
@@ -373,3 +381,11 @@ error 帧加字段前,先确认它是 Anthropic 形状还是 OpenAI 形状,两�
   路径才需要这层处理。
 - **没有把 `BuildErrorEvent` 挪进 `protocol` 包**——见第 5 节,这是 wire-format
   归属问题,不是效率或分类问题。
+- **内容策略拦截(#2417)的识别不在 `protocol`**——Codex client 把 Codex 后端的
+  流内拦截报告成上游 400 的 `*openai.Error`(`.design/codex.md` §6),之后走第 3
+  节的分类;`protocol` 的非测试代码不匹配这些 code。这个 400 是合成的(上游回的
+  是 200)。有意没做的:错误响应 body 不单独带 `code` 字段,因为改出口会影响所有
+  带 code 的上游 4xx。客户端消息由 `safeOpenAIMessage`
+  (`internal/protocol/upstream_error_detail.go`)按白名单只给 status / type /
+  code / 截断后的 message;上游原始 error 对象只经 `UpstreamLogDetail` 进服务端
+  日志。
