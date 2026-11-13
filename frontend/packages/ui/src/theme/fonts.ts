@@ -1,8 +1,13 @@
 // Single source of truth for font stacks.
 // Import these instead of writing font strings inline.
 
+// Inter is bundled (@fontsource-variable/inter, SIL OFL 1.1 — loaded by each
+// app's main.tsx) so Latin text looks the same on macOS, Windows, Linux and the
+// desktop WebView instead of falling to whatever sans the OS has. Its
+// @font-face rules cover Latin, Cyrillic, Greek and Vietnamese only, so
+// Chinese characters fall through to the system CJK fonts below.
 export const fontSans =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Roboto", "Helvetica", "Arial", system-ui, sans-serif';
+  '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Roboto", "Helvetica", "Arial", system-ui, sans-serif';
 
 // Keeps the existing look (Fira/Cascadia first); ui-monospace / SF Mono only
 // fill the gap on macOS before the generic fallbacks.
