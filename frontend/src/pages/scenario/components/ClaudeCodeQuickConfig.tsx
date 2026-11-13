@@ -96,7 +96,7 @@ export const CLAUDE_CONFIG_KEY_SX = {
     borderRadius: radius.chip,
     bgcolor: 'action.hover',
     fontFamily: fontMono,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.micro,
     lineHeight: 1.5,
     color: 'text.secondary',
     whiteSpace: 'nowrap',
@@ -1032,7 +1032,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                                     color: "text.disabled"
                                 }}>{field.unit}</Typography></InputAdornment>
                                     : undefined,
-                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.lg },
+                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.md },
                             }
                         }}
                     />

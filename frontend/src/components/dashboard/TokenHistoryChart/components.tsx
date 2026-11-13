@@ -175,7 +175,7 @@ export function ChartWrapper({ title, hasData, children }: ChartWrapperProps) {
             }}
         >
             <Box sx={{ mb: 1.5 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>
+                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>
                     {title}
                 </Typography>
             </Box>

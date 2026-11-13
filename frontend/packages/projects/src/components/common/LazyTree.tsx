@@ -189,7 +189,7 @@ export function LazyTree<N extends TreeNode>({ ariaLabel, load, expanded, onExpa
                         {(renderMeta || renderActions) && (
                             // Meta and actions share one slot: the actions replace the meta while the row is hovered or focused.
                             <Box sx={{ position: 'relative', flexShrink: 0, minWidth: 100, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                {renderMeta && <Box className="meta" sx={{ color: 'text.secondary', fontSize: fontSizes.xs, whiteSpace: 'nowrap' }}>{renderMeta(node)}</Box>}
+                                {renderMeta && <Box className="meta" sx={{ color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap' }}>{renderMeta(node)}</Box>}
                                 {renderActions && <Box className="act" onClick={(e) => e.stopPropagation()} sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>{renderActions(node, { tabIndex: isCurrent ? 0 : -1 })}</Box>}
                             </Box>
                         )}

@@ -117,7 +117,7 @@ const PolicyListSection = ({
                                                 size="small"
                                                 label="Built-in"
                                                 variant="outlined"
-                                                sx={{ height: 20, fontSize: fontSizes.xs, '& .MuiChip-label': { px: 0.5 } }}
+                                                sx={{ height: 20, fontSize: fontSizes.micro, '& .MuiChip-label': { px: 0.5 } }}
                                             />
                                         )}
                                         {effectiveState.inheritedDisabled && (

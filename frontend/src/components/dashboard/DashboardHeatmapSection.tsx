@@ -7,6 +7,7 @@ import api from '@/services/api';
 import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 import { type DailyUsage, TokenHeatmap } from './TokenHeatmap';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // The activity heatmap is a fixed, long-window overview: it always shows the
 // last N days regardless of the dashboard's selected range, mirroring the
@@ -133,7 +134,7 @@ export default function DashboardHeatmapSection({ provider, model = 'all', user 
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {t('dashboard.heatmap.title', { defaultValue: 'Token Activity' })}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>

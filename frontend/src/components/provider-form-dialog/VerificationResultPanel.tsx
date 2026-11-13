@@ -74,7 +74,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                         fontSize="small"
                                         sx={{
                                             color: 'common.white',
-                                            fontSize: '12px',
+                                            fontSize: fontSizes.sm,
                                             fontWeight: 600,
                                         }}
                                     />
@@ -96,7 +96,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                         variant="caption"
                                         sx={{
                                             color: 'common.white',
-                                            fontSize: '12px',
+                                            fontSize: fontSizes.sm,
                                             fontWeight: 600,
                                         }}
                                     >

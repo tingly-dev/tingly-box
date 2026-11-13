@@ -53,7 +53,7 @@ export const RequestEditor: React.FC<{
                 <Box sx={{ flex: 1 }} />
                 {seedBody && (
                     <Tooltip title={t('bench.startFromPresetHint', { defaultValue: "What the probe's own request would send right now." })}>
-                        <Button size="small" variant="outlined" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: fontSizes.xs }}>
+                        <Button size="small" variant="outlined" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: fontSizes.micro }}>
                             {t('bench.startFromPreset', { defaultValue: 'Copy the preset request' })}
                         </Button>
                     </Tooltip>

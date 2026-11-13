@@ -104,7 +104,7 @@ const SkillLocationsColumn = ({
                                     label={getIdeSourceLabel(location.ide_source)}
                                     size="small"
                                     variant="outlined"
-                                    sx={{ alignSelf: 'flex-start', height: 20, fontSize: fontSizes.xs }}
+                                    sx={{ alignSelf: 'flex-start', height: 20, fontSize: fontSizes.micro }}
                                 />
                             </Box>
                             <Stack direction="row" spacing={0.25} sx={{

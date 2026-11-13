@@ -257,7 +257,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                                                 label={p.stage === 'exp'
                                                     ? t('scenarioOverview.powerUps.experimental')
                                                     : t('scenarioOverview.powerUps.beta')}
-                                                sx={{ height: 18, fontSize: fontSizes.xs }}
+                                                sx={{ height: 18, fontSize: fontSizes.micro }}
                                             />
                                         </Tooltip>
                                     )}

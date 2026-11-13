@@ -32,6 +32,7 @@ import {
     zoomScrimSx,
 } from './ImageGenPlayground.chrome';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // Up to three of a run's reference images, in the corner of its tile. In a
 // grid of finished pictures there is otherwise nothing to say a tile came from
@@ -204,7 +205,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
             slotProps={{ paper: { sx: fullBleedDialogPaperSx } }}
         >
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, pr: 1.5, flexWrap: 'wrap' }}>
-                <Typography variant="h6" component="span" sx={{ fontSize: '1.05rem' }}>
+                <Typography variant="h6" component="span" sx={{ fontSize: fontSizes.title }}>
                     {t('playground.gallery.title', { defaultValue: 'All session images' })}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>

@@ -1,6 +1,7 @@
 import { Box, useTheme, alpha } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import { EMPTY_SX } from '@/constants/defaults';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface AuthTypeBadgeProps {
     authType: string;
@@ -49,7 +50,7 @@ export const AuthTypeBadge = ({ authType, sx = EMPTY_SX }: AuthTypeBadgeProps) =
                 justifyContent: 'center',
                 px: 1,
                 py: 0.5,
-                fontSize: '10px',
+                fontSize: fontSizes.micro,
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 height: '20px',

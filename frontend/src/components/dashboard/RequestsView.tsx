@@ -111,7 +111,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
             {/* Header */}
             <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {t('dashboard.requestsView.title', { defaultValue: 'Requests' })}
                     <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
                         {!loading && t('dashboard.requestsView.total', { total: total.toLocaleString() })}
@@ -169,7 +169,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Time */}
                                 <TableCell>
                                     <Tooltip title={new Date(r.timestamp).toLocaleString()} placement="right">
-                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.secondary', cursor: 'default' }}>
+                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.secondary', cursor: 'default' }}>
                                             {fmtTime(r.timestamp)}
                                         </Typography>
                                     </Tooltip>
@@ -283,7 +283,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                     {r.streamed && (
                                         <Tooltip title={t('dashboard.requestsView.streamed', { defaultValue: 'Streamed' })}>
                                             <Box sx={{ display: 'inline-flex', color: 'primary.main' }}>
-                                                <StreamIcon sx={{ fontSize: '0.95rem' }} />
+                                                <StreamIcon sx={{ fontSize: 16 }} />
                                             </Box>
                                         </Tooltip>
                                     )}

@@ -357,7 +357,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ maxWidth: '100%' }}
                                 leading={providerWarning ? (
                                     <NodeTooltip title={providerWarning} placement="bottom">
-                                        <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                                        <WarningIcon sx={{ fontSize: 16, color: 'warning.main', flexShrink: 0 }} />
                                     </NodeTooltip>
                                 ) : undefined}
                             >
@@ -370,11 +370,11 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             <Box sx={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', lineHeight: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
-                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: fontSizes.micro, width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: fontSizes.micro, width: 20, height: 20 }} />
                                     </>
                                 ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: fontSizes.micro, width: 20, height: 20 }} />
                                 )}
                             </Box>
                         </Box>
@@ -390,7 +390,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={(e) => { e.stopPropagation(); onMoveTierUp(); }}
                                 sx={{ p: 0.5 }}
                             >
-                                <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
+                                <KeyboardArrowUp sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -401,7 +401,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={(e) => { e.stopPropagation(); onMoveTierDown(); }}
                                 sx={{ p: 0.5 }}
                             >
-                                <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
+                                <KeyboardArrowDown sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -412,7 +412,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={handleProbeClick}
                                 sx={{ p: 0.5 }}
                             >
-                                <PlayIcon sx={{ fontSize: '1rem' }} />
+                                <PlayIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -423,7 +423,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={(e) => { e.stopPropagation(); handleEditProvider(); }}
                                 sx={{ p: 0.5 }}
                             >
-                                <EditIcon sx={{ fontSize: '1rem' }} />
+                                <EditIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -433,7 +433,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             onClick={handleMenuClick}
                             sx={{ p: 0.5 }}
                         >
-                            <DeleteIcon sx={{ fontSize: '1rem' }} />
+                            <DeleteIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                     </NodeTooltip>
                 </ActionButtonsBox>

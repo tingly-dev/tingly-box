@@ -138,7 +138,7 @@ const Trajectory = ({blocks, working, pendingRequestId, project, onOpen}: Trajec
                                     '&:hover': {bgcolor: 'action.hover'},
                                 }}
                             >
-                                <Typography component="span" sx={{fontFamily: fontMono, fontSize: fontSizes.xs, fontWeight: 600, textTransform: 'uppercase', color: (theme) => kindColor(theme, r.kind), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                                <Typography component="span" sx={{fontFamily: fontMono, fontSize: fontSizes.micro, fontWeight: 600, textTransform: 'uppercase', color: (theme) => kindColor(theme, r.kind), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
                                     {kindLabel[r.kind]}
                                 </Typography>
                                 <Typography component="span" variant="body2" noWrap sx={{color: r.kind === 'note' || r.kind === 'system' ? 'text.secondary' : 'text.primary', minWidth: 0}}>

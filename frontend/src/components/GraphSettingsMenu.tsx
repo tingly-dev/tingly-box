@@ -16,6 +16,7 @@ import { Box, IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProbeMenu } from './probe';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface GraphSettingsMenuProps {
     allowDeleteRule: boolean;
@@ -95,7 +96,7 @@ export const GraphSettingsMenu = ({
                     <MenuItem onClick={() => { closeMenu(); onOpenPlugins(); }}>
                         <PluginsIcon fontSize="small" sx={{ mr: 1 }} />{t('ruleHeader.plugins')}
                         {pluginsCount > 0 && (
-                            <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: '0.8125rem' }}>{pluginsCount}</Box>
+                            <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: fontSizes.md }}>{pluginsCount}</Box>
                         )}
                     </MenuItem>
                 )}

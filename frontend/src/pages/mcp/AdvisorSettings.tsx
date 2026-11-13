@@ -5,6 +5,7 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BUILTIN_ADVISOR_ID, type MCPSourceConfig } from './types';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 interface AdvisorCardProps {
     advisorSource: MCPSourceConfig | undefined;
     onSave: (patch: MCPSourceConfig) => Promise<void>;
@@ -62,7 +63,7 @@ const AdvisorSettings: React.FC<AdvisorCardProps> = ({ advisorSource, onSave }) 
                 </Button>
                 <Typography
                     variant="body2"
-                    sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'text.secondary' }}
+                    sx={{ fontFamily: 'monospace', fontSize: fontSizes.md, color: 'text.secondary' }}
                 >
                     {selectedProvider
                         ? `${selectedProvider.name} (${selectedProvider.api_style}) / ${model || label('noModel', 'No model selected')}`

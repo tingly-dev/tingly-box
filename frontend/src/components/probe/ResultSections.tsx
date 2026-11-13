@@ -233,7 +233,7 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                     variant="subtitle1"
                     sx={{
                         fontWeight: 600,
-                        fontSize: '1rem'
+                        fontSize: fontSizes.title
                     }}>
                     {ok ? t('probe.success') : t('probe.failed')}
                 </Typography>
@@ -280,7 +280,7 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                     variant="body2"
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: fontSizes.lg,
+                        fontSize: fontSizes.md,
                         mt: 1,
                         color: 'text.primary',
                         wordBreak: 'break-word',

@@ -249,7 +249,7 @@ const SkillDetailDialog = ({ open, skill, location, onClose }: SkillDetailDialog
                                         p: 3,
                                         bgcolor: 'background.default',
                                         fontFamily: fontMono,
-                                        fontSize: '0.875rem',
+                                        fontSize: fontSizes.base,
                                         whiteSpace: 'pre-wrap',
                                         wordBreak: 'break-word',
                                         border: 1,

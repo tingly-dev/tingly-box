@@ -129,7 +129,7 @@ const TaskTag = ({task}: {task: TaskState}) => {
             variant="outlined"
             icon={task.status === 'running' ? <CircularProgress size={10} sx={{ml: '6px !important'}}/> : undefined}
             label={`${t('projects.transcript.background', {defaultValue: 'background'})} · ${statusLabel(t, task.status)}`}
-            sx={{height: 20, flexShrink: 0, color: 'text.secondary', '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
+            sx={{height: 20, flexShrink: 0, color: 'text.secondary', '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.micro}}}
         />
     );
 };
@@ -724,7 +724,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                         </Typography>
                     )}
                     {task?.background && (
-                        <Chip size="small" variant="outlined" label={t('projects.transcript.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}/>
+                        <Chip size="small" variant="outlined" label={t('projects.transcript.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.micro}}}/>
                     )}
                     <Box sx={{flex: 1}}/>
                     <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', flexShrink: 0}} title={statusLabel(t, status)}>

@@ -55,7 +55,7 @@ const CCProfileNode: React.FC<CCProfileNodeProps> = ({
                 <NodeTooltip title={tooltip} placement="top">
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                         {active && missing && (
-                            <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main' }} />
+                            <WarningIcon sx={{ fontSize: 16, color: 'warning.main' }} />
                         )}
                         <Typography
                             variant="body2"

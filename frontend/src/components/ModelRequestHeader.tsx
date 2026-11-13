@@ -111,7 +111,7 @@ const ActionsSection = styled(Box)(({ theme }) => ({
 
 const ModelNameText = styled(Typography)(({ theme }) => ({
     fontWeight: 600,
-    fontSize: '0.875rem',
+    fontSize: fontSizes.base,
     color: theme.palette.text.primary,
     letterSpacing: '-0.01em',
     fontFamily: fontMono,
@@ -234,7 +234,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                             '& .MuiInputBase-input': {
                                 color: 'text.primary',
                                 fontWeight: 600,
-                                fontSize: '0.875rem',
+                                fontSize: fontSizes.base,
                                 px: 0.5,
                             },
                             '& .MuiOutlinedInput-notchedOutline': {
@@ -248,13 +248,13 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     <Tooltip title={tempValue.trim() ? 'Save (Enter)' : 'Model name cannot be empty'}>
                         <span>
                             <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleSave(); }} disabled={!tempValue.trim()} sx={{ p: 0.5 }}>
-                                <CheckIcon sx={{ fontSize: '1rem' }} />
+                                <CheckIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </span>
                     </Tooltip>
                     <Tooltip title="Cancel (Esc)">
                         <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleCancel(); }} sx={{ p: 0.5 }}>
-                            <CloseIcon sx={{ fontSize: '1rem' }} />
+                            <CloseIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -324,7 +324,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 '&:hover': { opacity: 1 }
                             }}
                         >
-                            <EditIcon sx={{ fontSize: '0.95rem' }} />
+                            <EditIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -494,7 +494,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 cursor: 'pointer',
                                 transition: 'transform 0.2s',
                                 transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                fontSize: '1.1rem',
+                                fontSize: fontSizes.lead,
                                 color: 'text.secondary',
                                 '&:hover': { color: 'text.primary' },
                             }}

@@ -28,6 +28,7 @@ import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLib
 import ThumbImage from './components/ThumbImage';
 import { THUMB_EDGE_TILE } from './components/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 type Tab = 'images' | 'snippets';
 
@@ -169,7 +170,7 @@ const ImageLibraryPage: React.FC = () => {
             <Dialog open={openAsset !== null} onClose={() => setOpenAsset(null)} maxWidth="sm" fullWidth>
                 {openAsset && (
                     <>
-                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: '1.05rem' }}>
+                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: fontSizes.title }}>
                             {renaming ? (
                                 <TextField
                                     autoFocus
@@ -238,7 +239,7 @@ const ImageLibraryPage: React.FC = () => {
             </Dialog>
 
             <Dialog open={snippetDraft !== null} onClose={() => setSnippetDraft(null)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontSize: '1.05rem' }}>
+                <DialogTitle sx={{ fontSize: fontSizes.title }}>
                     {snippetDraft?.id
                         ? t('imageLibrary.editSnippetTitle', { defaultValue: 'Edit snippet' })
                         : t('imageLibrary.newSnippet', { defaultValue: 'New snippet' })}

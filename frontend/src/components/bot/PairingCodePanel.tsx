@@ -146,7 +146,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                         aria-label={revealed ? 'pairing code' : 'hidden pairing code'}
                         sx={{
                             fontFamily: fontMono,
-                            fontSize: fontSizes.lg,
+                            fontSize: fontSizes.md,
                             letterSpacing: revealed ? 0.5 : 2,
                             backgroundColor: 'action.hover',
                             px: 1,

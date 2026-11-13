@@ -4,6 +4,7 @@ import { Fragment, type ReactNode } from 'react';
 import { fontMono } from '../theme/fonts';
 import { DEFAULT_GROUP_LABEL, entityText, groupMark, platformGroupText, shortId, type EntityKind, type EntityParts } from '../utils/entityLabel';
 import { CopyIconButton } from './CopyIconButton';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface EntityLabelProps extends EntityParts {
     /** Drives id shortening; defaults to `group` / `direct` from `group`. */
@@ -81,7 +82,7 @@ export const EntityLabel = ({
             component="span"
             sx={{
                 fontFamily: fontMono,
-                fontSize: '0.8125rem',
+                fontSize: fontSizes.md,
                 color: idAnchor ? 'text.primary' : 'text.secondary',
                 fontWeight: idAnchor ? 600 : 400,
                 flexShrink: 0,
@@ -134,7 +135,7 @@ export const EntityLabel = ({
                 </Fragment>
             ))}
             {!resolved && (
-                <Box component="span" sx={{ fontSize: '0.75rem', color: 'warning.main', flexShrink: 0 }}>{deletedLabel}</Box>
+                <Box component="span" sx={{ fontSize: fontSizes.sm, color: 'warning.main', flexShrink: 0 }}>{deletedLabel}</Box>
             )}
             {copy && showId && (
                 <CopyIconButton

@@ -126,7 +126,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 {label ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.primary' }}>
                         {icon === 'close' ? <CloseIcon sx={{ fontSize: 16 }} /> : <AddIcon sx={{ fontSize: 16 }} />}
-                        <Typography variant="caption" sx={{ color: 'inherit', fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
+                        <Typography variant="caption" sx={{ color: 'inherit', fontSize: fontSizes.micro, lineHeight: 1 }}>{label}</Typography>
                     </Box>
                 ) : (<>
                 <AddIcon sx={{ fontSize: 24, color: 'text.primary' }} />

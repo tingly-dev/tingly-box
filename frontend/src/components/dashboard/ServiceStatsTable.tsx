@@ -21,6 +21,7 @@ import {
 import { getUsageMetricColumns } from './usageMetricColumns';
 import { ProviderLabel } from '@/components/ProviderLogo';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface AggregatedStat {
     key: string;
@@ -97,7 +98,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                     alignItems: 'center',
                 }}
             >
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {t('dashboard.usageByModel.title', { defaultValue: 'Usage by Model' })}
                 </Typography>
             </Box>

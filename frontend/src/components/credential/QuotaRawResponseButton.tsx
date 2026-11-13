@@ -33,7 +33,7 @@ export function QuotaRawResponseButton({ providerName, response }: QuotaRawRespo
             minWidth: 0,
             px: 0.75,
             color: 'text.secondary',
-            fontSize: fontSizes.xs,
+            fontSize: fontSizes.micro,
             fontWeight: 400,
             textTransform: 'none',
             whiteSpace: 'nowrap',

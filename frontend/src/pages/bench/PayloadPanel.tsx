@@ -72,8 +72,8 @@ export const PayloadPanel: React.FC<{
         <Stack spacing={1.5}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ToggleButtonGroup size="small" exclusive value={tab} onChange={(_, v) => v && setTab(v)}>
-                    <ToggleButton value="request" sx={{ px: 1.5, py: 0.25, fontSize: fontSizes.xs }}>{t('bench.request', { defaultValue: 'Request' })}</ToggleButton>
-                    <ToggleButton value="curl" sx={{ px: 1.5, py: 0.25, fontSize: fontSizes.xs }}>{t('probe.curl')}</ToggleButton>
+                    <ToggleButton value="request" sx={{ px: 1.5, py: 0.25, fontSize: fontSizes.micro }}>{t('bench.request', { defaultValue: 'Request' })}</ToggleButton>
+                    <ToggleButton value="curl" sx={{ px: 1.5, py: 0.25, fontSize: fontSizes.micro }}>{t('probe.curl')}</ToggleButton>
                 </ToggleButtonGroup>
                 <Box sx={{ flex: 1 }} />
                 <Typography variant="caption" sx={{ color: loading ? 'primary.main' : 'text.disabled', fontSize: fontSizes.micro }}>
@@ -99,7 +99,7 @@ export const PayloadPanel: React.FC<{
                     <Typography variant="overline" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: fontSizes.micro, mt: 1.5, '&::after': { content: '""', flex: 1, height: '1px', bgcolor: 'divider' } }}>
                         {t('bench.headers', { defaultValue: 'Headers' })}
                     </Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) 24px', gap: '2px 12px', fontFamily: fontMono, fontSize: fontSizes.xs, alignItems: 'center' }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) 24px', gap: '2px 12px', fontFamily: fontMono, fontSize: fontSizes.micro, alignItems: 'center' }}>
                         {headerRows.map(([name, value]) => {
                             const edited = overriddenHeader(name);
                             return (
@@ -128,15 +128,15 @@ export const PayloadPanel: React.FC<{
                     </Box>
                     {newHeader ? (
                         <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
-                            <TextField size="small" placeholder={t('bench.headerName', { defaultValue: 'Name' })} value={newHeader.name} onChange={(e) => setNewHeader({ ...newHeader, name: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: fontSizes.xs, py: 0.5, fontFamily: fontMono } } }} sx={{ width: 160 }} />
-                            <TextField size="small" placeholder={t('bench.headerValue', { defaultValue: 'Value' })} value={newHeader.value} onChange={(e) => setNewHeader({ ...newHeader, value: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: fontSizes.xs, py: 0.5, fontFamily: fontMono } } }} sx={{ flex: 1 }} />
+                            <TextField size="small" placeholder={t('bench.headerName', { defaultValue: 'Name' })} value={newHeader.name} onChange={(e) => setNewHeader({ ...newHeader, name: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: fontSizes.micro, py: 0.5, fontFamily: fontMono } } }} sx={{ width: 160 }} />
+                            <TextField size="small" placeholder={t('bench.headerValue', { defaultValue: 'Value' })} value={newHeader.value} onChange={(e) => setNewHeader({ ...newHeader, value: e.target.value })} slotProps={{ htmlInput: { sx: { fontSize: fontSizes.micro, py: 0.5, fontFamily: fontMono } } }} sx={{ flex: 1 }} />
                             <Button size="small" variant="contained" disabled={!newHeader.name.trim() || !newHeader.value} onClick={() => { setHeader(newHeader.name.trim(), newHeader.value); setNewHeader(null); }}>
                                 {t('bench.applyBody', { defaultValue: 'Apply' })}
                             </Button>
                             <Button size="small" onClick={() => setNewHeader(null)}>{t('bench.cancelEdit', { defaultValue: 'Cancel' })}</Button>
                         </Box>
                     ) : (
-                        <Button size="small" sx={{ mt: 0.5, fontSize: fontSizes.xs, minWidth: 0 }} onClick={() => setNewHeader({ name: '', value: '' })}>
+                        <Button size="small" sx={{ mt: 0.5, fontSize: fontSizes.micro, minWidth: 0 }} onClick={() => setNewHeader({ name: '', value: '' })}>
                             {t('bench.addHeader', { defaultValue: '+ Header' })}
                         </Button>
                     )}
@@ -152,7 +152,7 @@ export const PayloadPanel: React.FC<{
                         )}
                     </Typography>
                     <Box sx={{ position: 'relative' }}>
-                        <Box component="pre" sx={{ m: 0, p: 1.5, pr: 5, bgcolor: 'background.default', borderRadius: radius.card, fontFamily: fontMono, fontSize: fontSizes.xs, lineHeight: 1.5, overflow: 'auto', maxHeight: '60vh', color: 'text.primary' }}>
+                        <Box component="pre" sx={{ m: 0, p: 1.5, pr: 5, bgcolor: 'background.default', borderRadius: radius.card, fontFamily: fontMono, fontSize: fontSizes.micro, lineHeight: 1.5, overflow: 'auto', maxHeight: '60vh', color: 'text.primary' }}>
                             {pretty}
                         </Box>
                         <CopyIconButton value={pretty} label={t('probe.copy')} copiedLabel={t('probe.copied')} sx={{ position: 'absolute', top: 4, right: 4 }} />

@@ -204,7 +204,7 @@ const ProviderCard: React.FC<{
                             color: "text.disabled",
                             display: 'block',
                             mt: 0.25,
-                            fontSize: fontSizes.xs,
+                            fontSize: fontSizes.micro,
                             letterSpacing: '0.01em'
                         }}>
                         {meta}

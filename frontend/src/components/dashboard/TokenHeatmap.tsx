@@ -143,7 +143,7 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const StatInline = ({ value, label }: { value: string; label: string }) => (
     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, whiteSpace: 'nowrap' }}>
         <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600 }}>{value}</Typography>
-        <Typography sx={{ fontSize: fontSizes.xs, color: 'text.secondary' }}>{label}</Typography>
+        <Typography sx={{ fontSize: fontSizes.micro, color: 'text.secondary' }}>{label}</Typography>
     </Box>
 );
 
@@ -280,7 +280,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                 <Typography
                                     key={day}
                                     sx={{
-                                        fontSize: '10px',
+                                        fontSize: fontSizes.micro,
                                         color: 'text.secondary',
                                         pr: 1,
                                         gridColumn: 1,
@@ -302,7 +302,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                 <Typography
                                     key={`month-${weekIndex}`}
                                     sx={{
-                                        fontSize: '10px',
+                                        fontSize: fontSizes.micro,
                                         color: 'text.secondary',
                                         gridColumn: weekIndex + 2,
                                         gridRow: 1,
@@ -353,7 +353,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                             >
                                                 <Typography
                                                     sx={{
-                                                        fontSize: '13px',
+                                                        fontSize: fontSizes.md,
                                                         fontWeight: 600,
                                                         mb: 1,
                                                         color: '#ffffff',
@@ -368,7 +368,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 </Typography>
                                                 <Typography
                                                     sx={{
-                                                        fontSize: '13px',
+                                                        fontSize: fontSizes.md,
                                                         fontWeight: 600,
                                                         color: '#86efac',
                                                         mb: 0.5,
@@ -379,7 +379,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 {dayData && (dayData.inputTokens > 0 || dayData.outputTokens > 0 || (dayData.cacheTokens ?? 0) > 0) && (
                                                     <Typography
                                                         sx={{
-                                                            fontSize: '12px',
+                                                            fontSize: fontSizes.sm,
                                                             color: 'rgba(255, 255, 255, 0.85)',
                                                             mt: 0.5,
                                                         }}
@@ -395,7 +395,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                             <Typography
                                                                 key={`${day}-${model.name}`}
                                                                 sx={{
-                                                                    fontSize: '12px',
+                                                                    fontSize: fontSizes.sm,
                                                                     color: 'rgba(255, 255, 255, 0.75)',
                                                                 }}
                                                             >

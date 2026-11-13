@@ -10,6 +10,7 @@ import { CollapsibleCard } from '@/components/CollapsibleCard';
 import ImageModelPicker from '@/pages/image/components/ImageModelPicker';
 import CodeBlock from '@/components/CodeBlock';
 import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 type QuestionType = 'choice' | 'noul' | 'score';
 interface DecisionAnswer {
@@ -128,7 +129,7 @@ export default function DecisionTryCard({ rules, showNotification, onRulesReload
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>{t('decisionTry.type')}</Typography>
                             <ToggleButtonGroup exclusive fullWidth size="small" aria-label={t('decisionTry.type')} value={kind} disabled={running}
                                 onChange={(_, next: QuestionType | null) => { if (next) changeKind(next); }}
-                                sx={{ ...toggleButtonGroupStyle, '& .MuiToggleButton-root': { ...((toggleButtonGroupStyle as Record<string, any>)['& .MuiToggleButton-root'] ?? {}), flex: 1, px: 1, height: 'auto', minHeight: 32, fontSize: '0.8125rem', lineHeight: 1.3 } }}>
+                                sx={{ ...toggleButtonGroupStyle, '& .MuiToggleButton-root': { ...((toggleButtonGroupStyle as Record<string, any>)['& .MuiToggleButton-root'] ?? {}), flex: 1, px: 1, height: 'auto', minHeight: 32, fontSize: fontSizes.md, lineHeight: 1.3 } }}>
                                 <ToggleButton value="choice">{t('decisionTry.choice')}</ToggleButton>
                                 <ToggleButton value="noul">{t('decisionTry.predicate')}</ToggleButton>
                                 <ToggleButton value="score">{t('decisionTry.score')}</ToggleButton>

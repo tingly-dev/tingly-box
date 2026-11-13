@@ -58,6 +58,7 @@ import { useSnippets } from '../library/assetStore';
 import type { ImageAsset } from '../library/assetTypes';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const TextPlus = tablerMui(IconTextPlus);
 const Writing = tablerMui(IconWriting);
@@ -730,7 +731,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             }}
                             onFocus={(event) => event.target.select()}
                             slotProps={{ htmlInput: { 'aria-label': t('imageProfile.name', { defaultValue: 'Profile name' }) } }}
-                            sx={{ width: 320, '& input': { fontSize: '1.25rem', fontWeight: 600, py: 0.5 } }}
+                            sx={{ width: 320, '& input': { fontSize: fontSizes.heading, fontWeight: 600, py: 0.5 } }}
                         />
                     ) : (
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -1178,7 +1179,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 fullWidth
             >
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
-                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: fontSizes.title }}>
                         {t('playground.promptEditorTitle', { defaultValue: 'Prompt' })}
                     </Typography>
                     <PromptEditorCopyButton store={promptStore} label={copyPromptLabel} copiedLabel={promptCopiedLabel} />

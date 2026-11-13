@@ -15,16 +15,18 @@ export const fontSans =
 export const fontMono =
   '"Fira Code", "Cascadia Code", ui-monospace, "SF Mono", Consolas, Menlo, Monaco, "Courier New", monospace';
 
-// Small-text size scale, matching the theme's type scale (base.ts): 11 for
-// badges and counts, 12 for meta, 13 for compact body, 14 for body and
-// titles. Use these instead of a literal.
+// Text size scale, the same steps as the theme's typography (base.ts). Use
+// these — or a typography variant — instead of a literal; the style-literal
+// lint rejects rem/px font sizes outside the theme. Icon sizes are plain px
+// numbers (`fontSize: 16`), not text sizes.
 export const fontSizes = {
-  micro: '0.6875rem', // 11px — badges, kbd hints, counts, rail labels
-  sm: '0.75rem', //      12px — captions, helper text, meta
-  md: '0.8125rem', //    13px — compact body (theme body2)
-  base: '0.875rem', //   14px — body and titles
-  /** @deprecated Use `micro` (the 11.2px step folded into it). */
-  xs: '0.6875rem',
-  /** @deprecated Use `md` (the 13.6px step folded into it). */
-  lg: '0.8125rem',
+  micro: '0.6875rem', //  11px — badges, kbd hints, counts, rail labels
+  sm: '0.75rem', //       12px — captions, helper text, meta, table heads
+  md: '0.8125rem', //     13px — compact body (theme body2)
+  base: '0.875rem', //    14px — body, card and row titles
+  title: '1rem', //       16px — section and dialog titles (theme h4)
+  lead: '1.125rem', //    18px — second-level headings in rendered Markdown
+  heading: '1.25rem', //  20px — page titles, headline numbers (theme h3)
+  display: '1.5rem', //   24px — the largest figures (theme h2)
+  inlineCode: '0.85em', // relative — code inside running text
 } as const;

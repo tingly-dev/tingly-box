@@ -81,7 +81,7 @@ export function BackgroundTasksPanel({ sessionId, tasks, initialOpenId, onChange
 function GroupHeader({ label, count }: { label: string; count: number }) {
     return (
         <Typography variant="caption" component="div"
-            sx={{ px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.xs }}>
+            sx={{ px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.micro }}>
             {label} · {count}
         </Typography>
     );

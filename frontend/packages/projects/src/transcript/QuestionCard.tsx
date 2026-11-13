@@ -60,7 +60,7 @@ const OptionButton = ({option, selected, multi, disabled, onClick}: {
                 <Stack direction="row" spacing={0.75} sx={{alignItems: 'center', minWidth: 0}}>
                     <Typography variant="body2" sx={{fontWeight: 600, color: 'inherit', fontSize: fontSizes.base, wordBreak: 'break-word'}}>{option.text}</Typography>
                     {option.recommended && (
-                        <Chip size="small" color="primary" variant="outlined" label={t('projects.transcript.recommended', {defaultValue: 'Recommended'})} sx={{height: 18, fontSize: fontSizes.xs}}/>
+                        <Chip size="small" color="primary" variant="outlined" label={t('projects.transcript.recommended', {defaultValue: 'Recommended'})} sx={{height: 18, fontSize: fontSizes.micro}}/>
                     )}
                 </Stack>
                 {option.description && (
