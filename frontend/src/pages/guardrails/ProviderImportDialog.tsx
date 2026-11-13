@@ -86,8 +86,8 @@ const ProviderImportDialog = ({
                                                 onChange={(event) => onToggleAll(event.target.checked)}
                                             />
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                                        <TableCell>Name</TableCell>
+                                        <TableCell>Type</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>

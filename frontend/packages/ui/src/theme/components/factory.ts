@@ -232,13 +232,27 @@ export const createComponents = (t: ThemeTokens): ThemeOptions['components'] => 
       },
     },
   },
-  ...(t.table && {
-    MuiTableCell: {
-      styleOverrides: {
-        ...(t.table.cellBorder && { root: { borderBottom: solid(t.table.cellBorder) } }),
-        ...(t.table.headBg && { head: { backgroundColor: t.table.headBg, fontWeight: 600 } }),
-      },
+  // One table head everywhere: small secondary labels in sentence case, no
+  // fill (a theme may tint it via `table.headBg`). Sticky heads need an opaque
+  // background so rows scroll under them, so they take the card's surface.
+  MuiTableCell: {
+    styleOverrides: {
+      ...(t.table?.cellBorder && { root: { borderBottom: solid(t.table.cellBorder) } }),
+      head: ({ theme }) => ({
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        lineHeight: 1.5,
+        color: theme.palette.text.secondary,
+        whiteSpace: 'nowrap',
+        backgroundColor: t.table?.headBg ?? 'transparent',
+        '&.MuiTableCell-sizeMedium': { paddingTop: 10, paddingBottom: 10 },
+      }),
+      stickyHeader: ({ theme }) => ({
+        backgroundColor: t.table?.headBg ?? theme.palette.background.paper,
+      }),
     },
+  },
+  ...(t.table && {
     ...(t.table.rowHover && {
       MuiTableRow: {
         styleOverrides: {

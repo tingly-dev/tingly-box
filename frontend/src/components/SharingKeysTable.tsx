@@ -15,7 +15,7 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono } from '@/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 
 export interface SharingKey {
@@ -75,21 +75,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                     <col style={{ width: 96 }} />
                 </colgroup>
                 <TableHead>
-                    <TableRow
-                        sx={{
-                            bgcolor: 'action.hover',
-                            '& th': {
-                                fontWeight: 600,
-                                fontSize: fontSizes.sm,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                color: 'text.secondary',
-                                borderBottom: '2px solid',
-                                borderColor: 'divider',
-                                py: 1.5,
-                            },
-                        }}
-                    >
+                    <TableRow>
                         <TableCell>{t('sharingKeys.table.name')}</TableCell>
                         <TableCell>{t('sharingKeys.table.user')}</TableCell>
                         <TableCell>{t('sharingKeys.table.token')}</TableCell>

@@ -120,7 +120,7 @@ const CompactListEditor = ({
                 <Table size="small">
                     <TableHead>
                         <TableRow>
-                            <TableCell sx={{ fontWeight: 600 }}>{columnLabel}</TableCell>
+                            <TableCell>{columnLabel}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>

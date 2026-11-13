@@ -23,7 +23,6 @@ import { UsageMetricValueCells } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, RosterAxisState } from '@/components/dashboard';
 import { formatDateTime, getModelKey, getProviderKey, accountKey } from './userUsageModel';
 import type { UserUsageRow, ViewMode, PrimaryColumn } from './userUsageModel';
-import { fontSizes } from '@/theme/fonts';
 
 // Shared card anatomy for the roster table and the detail card below it.
 export const usageTableCardSx = {
@@ -144,20 +143,7 @@ export default function RosterTable({
             >
                 <Table stickyHeader sx={{ minWidth: showCacheWrite ? 1080 : 980 }}>
                     <TableHead>
-                        <TableRow
-                            sx={{
-                                backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                                '& .MuiTableCell-root': {
-                                    fontWeight: 600,
-                                    fontSize: fontSizes.sm,
-                                    whiteSpace: 'nowrap',
-                                    color: 'text.secondary',
-                                    py: 1.25,
-                                    borderBottom: '1px solid',
-                                    borderColor: 'divider',
-                                },
-                            }}
-                        >
+                        <TableRow>
                             {primaryColumns.map((col, index) => (
                                 <TableCell
                                     key={col.kind === 'sort' ? col.field : `label-${index}`}

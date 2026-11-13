@@ -135,7 +135,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                 )}
                 <Table stickyHeader size="small" sx={{ tableLayout: 'auto' }}>
                     <TableHead>
-                        <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 600, fontSize: fontSizes.xs, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', py: 1, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', whiteSpace: 'nowrap' } }}>
+                        <TableRow>
                             <TableCell>{t('dashboard.requestsView.colTime', { defaultValue: 'Time' })}</TableCell>
                             <TableCell>{t('dashboard.requestsView.colModel', { defaultValue: 'Model' })}</TableCell>
                             <TableCell>{t('dashboard.requestsView.colScenario', { defaultValue: 'Scenario' })}</TableCell>

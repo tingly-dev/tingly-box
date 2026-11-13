@@ -9,7 +9,6 @@ import {
     TableRow,
     TablePagination,
     Box,
-    alpha,
     useTheme,
 } from '@mui/material';
 import { useState } from 'react';
@@ -20,7 +19,6 @@ import {
     UsageMetricValueCells,
 } from './UsageMetricCells';
 import { getUsageMetricColumns } from './usageMetricColumns';
-import { fontSizes } from '@/theme/fonts';
 import { ProviderLabel } from '@/components/ProviderLogo';
 
 export interface AggregatedStat {
@@ -105,25 +103,9 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
             <TableContainer sx={{ maxHeight: 600 }}>
                 <Table stickyHeader>
                     <TableHead>
-                        <TableRow
-                            sx={{
-                                backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                                '& .MuiTableCell-root': {
-                                    fontWeight: 600,
-                                    fontSize: fontSizes.sm,
-                                    // Sentence case on one line: uppercase labels wrapped
-                                    // into two ("CACHE / READ") at common widths.
-                                    whiteSpace: 'nowrap',
-                                    color: 'text.secondary',
-                                    py: 1.25,
-                                    px: 1.25,
-                                    borderBottom: '1px solid',
-                                    borderColor: 'divider',
-                                },
-                            }}
-                        >
-                            <TableCell sx={{ fontWeight: 600 }}>{t('dashboard.usageByModel.provider', { defaultValue: 'Provider' })}</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>{t('dashboard.usageByModel.model', { defaultValue: 'Model' })}</TableCell>
+                        <TableRow sx={{ '& .MuiTableCell-root': { px: 1.25 } }}>
+                            <TableCell>{t('dashboard.usageByModel.provider', { defaultValue: 'Provider' })}</TableCell>
+                            <TableCell>{t('dashboard.usageByModel.model', { defaultValue: 'Model' })}</TableCell>
                             <UsageMetricHeaderCells showCacheWrite={showCacheWrite} />
                         </TableRow>
                     </TableHead>

@@ -8,13 +8,10 @@ import {
     TableHead,
     TableRow,
     Typography,
-    alpha,
-    useTheme,
 } from '@mui/material';
 import { getTotalTokens, getCacheHitRate, hasCacheWrites } from './chartStyles';
 import { UsageMetricHeaderCells, UsageMetricValueCells } from './UsageMetricCells';
 import type { UsageMetricKey, UsageMetricLabels } from './usageMetricColumns';
-import { fontSizes } from '@/theme/fonts';
 
 export type SortField = 'name' | UsageMetricKey;
 export type SortDirection = 'asc' | 'desc';
@@ -213,7 +210,6 @@ export function RosterBreakdownTable<D extends MetricRow>({
     noUsageHint?: string;
     usageMetricLabels: UsageMetricLabels;
 }) {
-    const theme = useTheme();
     const showCacheWrite = hasCacheWrites(items);
     if (items.length === 0) {
         return (
@@ -237,20 +233,7 @@ export function RosterBreakdownTable<D extends MetricRow>({
         >
             <Table stickyHeader sx={{ minWidth: showCacheWrite ? 1080 : 980 }}>
                 <TableHead>
-                    <TableRow
-                        sx={{
-                            // Same translucent sticky-header background as the
-                            // roster table, so both tables read as one style.
-                            backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                            '& .MuiTableCell-root': {
-                                fontWeight: 600,
-                                fontSize: fontSizes.sm,
-                                whiteSpace: 'nowrap',
-                                color: 'text.secondary',
-                                py: 1.25,
-                            },
-                        }}
-                    >
+                    <TableRow>
                         {identityColumns.map((col) => <TableCell key={col.key}>{col.label}</TableCell>)}
                         <UsageMetricHeaderCells
                             labels={usageMetricLabels}
