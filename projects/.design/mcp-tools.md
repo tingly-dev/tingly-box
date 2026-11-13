@@ -1,15 +1,22 @@
 # Projects MCP tools: grow the surface one action at a time
 
-> Status: **proposed**, narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
+> Status: **in progress**: step 1 (creation with base and branch) is built; the rest is proposed. Narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
 > Builds on [coordinator-session.md](./coordinator-session.md) (how the coordinator's MCP server is scoped and serialised) and [message-channel.md](./message-channel.md).
 > Related, not on `main` yet: `.design/slash-commands.md` (session control API; PRs #2454–#2456), `pr-issue-awareness.md`, `branch-tracking.md`.
-> Nothing here is implemented. `file:line` references are on `main` at `d7b849ccc`.
+> `file:line` references are on `main` at `d7b849ccc`.
 
 ## Approach
 
 The coordinator and every thread are Claude Code sessions, so MCP tools are the only way they can act on Projects. Today the coordinator has 13 business tools plus 2 shared-file readers, and a thread has `send_file`. The web UI and IM commands reach many more actions.
 
-We do **not** design the whole surface up front. Each step moves one small group of actions behind a proper service method and exposes it as a tool. The architecture changes only as far as that group needs, and every step leaves HTTP, IM and MCP calling the same code. A step is done when it has shipped, not when the catalogue is complete.
+We do **not** design the whole surface up front. The order, each step small and shipped before the next:
+
+1. **Creation, done well** (built): `start_thread` can choose the base and the branch name.
+2. **A thread state-management API** in the service layer (stop, reopen, resolve alike), guarded and with an actor.
+3. **Tool boundaries**: who may call what, and what needs the user's word, decided when the first tool needs it.
+4. **The tools** on top (`stop_thread`, `reopen_thread`, then the rest).
+
+ Each step moves one small group of actions behind a proper service method and exposes it as a tool. The architecture changes only as far as that group needs, and every step leaves HTTP, IM and MCP calling the same code. A step is done when it has shipped, not when the catalogue is complete.
 
 The rule that carries over every step: **an action is a method on `Threads` or `Service` that validates, persists, publishes and records the system event; HTTP handlers, IM commands and MCP tools only parse input and map the result and the error.** Guards that make an action safe belong in the method, because a model will call it in states a button would never offer (see Reopen below for a real example).
 
@@ -22,7 +29,7 @@ Gates every coordinator call passes (`coordinator_mcp.go:62-99`): schema validat
 
 Actions only the web UI or HTTP can do (a selection, with the method they end in): stop (`Threads.Stop`), retry (`Retry`), reopen (`Reopen`), permission mode / model / effort / auto-answer (`sessions.go:166`, `launch.go`), diff (`Diff`), merge (`Merge`, `threads.go:1340`), project settings such as the concurrency limit (inline in `project/handler.go:448`, no service method), library delete (`Layout.RemoveLibraryFile`), channel bindings, usage. Not in Projects at all: push and PR. Most thread actions are already clean `Threads` methods; the project `PATCH` handler is the exception.
 
-## The thread lifecycle, and why the first step is stop + reopen
+## The thread lifecycle, and why stop + reopen come before the other thread tools
 
 A thread has two independent things going on:
 
@@ -39,9 +46,41 @@ The displayed `status` (`working / waiting / failed / ready / idle / resolved`) 
 
 Why not one `set_thread_state(stopped | resolved | open)`: it is a mode picker over three operations with different preconditions and side effects (stop drops queued messages and may drop a pending question; resolve also evicts the process, hands IM chats back to the parent and cleans the tmp dir; reopen restores). It would also force renaming the existing `resolve_thread`. Three verbs stay clearer to the model and to the audit trail. What we keep from the "state change" view: the three service methods are shaped alike (thread id, who is acting, the thread back) and each says in its result what the thread's status is now.
 
-## Step 1 (the first slice)
+## Step 1: creation with base and branch (built)
 
-### Service changes (one small PR, no new tool yet)
+Problem: a new thread always branched from the repository's base branch (the branch that was checked out when the repository was added, usually `main`), with a generated name `tp/<title>-<id>`. Work that has to build on a release or feature branch could not be started from the coordinator.
+
+`start_thread` and `propose_threads` take two optional fields; `StartSpec` carries them (`threads.go`), and so does a stored suggestion, so a proposal started from its card keeps them:
+
+| Field | Meaning | Rules |
+| --- | --- | --- |
+| `base` | the local branch the thread's branch starts from, and that its work is merged back into (`Thread.BaseBranch`; diff and merge already use it) | must be an existing local branch; default is the repository's base branch |
+| `branch` | name of the new branch (`Thread.Branch`) | must be a valid ref name and must not exist yet; default is generated |
+
+Both need a repository and a worktree: with no repository, or a project whose threads share the checkout (`DisableWorktree`), they are refused with `ErrNoOwnBranch` instead of being ignored.
+
+Decisions, small on purpose:
+
+- **Validate before anything is created.** A bad `base` or `branch` fails before the thread row, the worktree or the branch exist, so a refused start leaves nothing to clean up. The coordinator gets the reason as the tool error.
+- **`AddWorktree` no longer deletes a branch it did not create.** Its failure path ran `git branch -D <branch>` to remove a half-made branch; with a caller-chosen name that would have deleted the user's own branch of that name. It now refuses an existing branch first.
+- **Local branches only.** `origin/x` or a tag is not accepted as `base` yet; the error names the repository so the coordinator can say so.
+- **No taking over an existing branch** (continue work on a branch or PR that exists). That is a different intent (the branch is not new, and its base must be found), and belongs with the `set_branch` / PR-awareness designs.
+- **Not merged into one creation method.** `Threads.Start` (branch-based worker) and `StartFolderThread` (in-place session) stay apart.
+- **No UI change.** The suggestion card does not show base or branch yet; the thread's badges already show both once it exists.
+
+Tests (`thread_branch_test.go`): the worktree starts at the chosen base's commit and not at `main`; the default is unchanged; a missing base, a taken, invalid or option-like branch name are refused and leave no thread; `DisableWorktree` and `repo: "none"` refuse; `AddWorktree` keeps an existing branch (mutation-checked: removing the guard fails the test); through the real MCP tool and through a proposal card.
+
+## Step 2: the thread state-management API (next)
+
+The service-layer part of "Step 3" below, done first and without any new tool: a guarded `Reopen`, an actor on `Stop` and `Reopen`, and handlers that only bind, call and map. It stands on its own: it fixes a latent bug (`Reopen` on a thread that is not resolved corrupts its status) and makes the later tools thin.
+
+## Step 3: tool boundaries (when the first new tool needs it)
+
+Decide only what stop and reopen need: coordinator-only, reversible, recorded in the thread, no approval. The approval rule for irreversible actions (merge) and per-scope tool lists for worker tools are designed when those tools come, not before.
+
+## Step 4: stop + reopen tools (the original first slice)
+
+### Service changes (this is Step 2; one small PR, no new tool yet)
 
 - `Reopen` gets a guard: it acts only on a resolved thread. Today it sets `ResolvedAt = nil` and `Status = idle/ready` unconditionally (`threads.go:1300`), so calling it on a working thread would flip its status while a turn runs. The button never offers that; a model can. On an open thread it is a no-op that says so.
 - `Stop` and `Reopen` take who is acting (the existing `Source`; a coordinator call is `fromThread(mainThreadID)`, as `message_thread` already uses) and write one system event that names it: "Stopped by the coordinator." A web stop keeps its current wording. `Stop` also reports how many queued messages it dropped, so the coordinator and the user can see if a message was lost.
