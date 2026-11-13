@@ -18,6 +18,8 @@ import (
 //	wait.has-reason        a thread waiting on the user says what for
 //	status.ready-has-commits  a thread is only "ready for review" when its
 //	                       branch has commits to review
+//	status.resolved-consistent  a thread is resolved exactly when it has a
+//	                       resolved time, so reopening cannot leave one behind
 //	memory.index-resolves  every link in MEMORY.md names a file that exists
 func (w *World) CheckInvariants() {
 	t := w.T
@@ -46,6 +48,12 @@ func (w *World) CheckInvariants() {
 	for _, th := range w.ThreadList() {
 		if th.Status == db.ThreadReady && th.Branch != "" && th.CommitsAhead == 0 {
 			t.Errorf("status.ready-has-commits: thread %q is ready with no commits", th.Title)
+		}
+	}
+
+	for _, th := range w.ThreadList() {
+		if (th.Status == db.ThreadResolved) != (th.ResolvedAt != nil) {
+			t.Errorf("status.resolved-consistent: thread %q is %s with resolved time %v", th.Title, th.Status, th.ResolvedAt)
 		}
 	}
 
