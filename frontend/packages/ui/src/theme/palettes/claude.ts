@@ -1,4 +1,5 @@
 import type { ThemePalette } from '../types';
+import type { ThemeTokens } from '../tokens';
 
 // Claude theme color tokens — sourced from Anthropic brand guidelines:
 //   Dark #141413 · Light #FAF9F5 · Mid Gray #B0AEA5 · Light Gray #E8E6DC
@@ -77,5 +78,56 @@ export const claudePalette: ThemePalette = {
       boxShadow: '0 2px 4px rgba(20, 20, 19, 0.08)',
       emptyIconBg: 'rgba(217, 119, 87, 0.1)',
     },
+  },
+};
+
+export const claudeTokens: ThemeTokens = {
+  accent: claudePrimary,
+  text: '#141413',
+  textMuted: '#6B6863',
+  textHelper: '#6B6863',
+  placeholder: '#B0AEA5',
+  error: '#BF4434',
+  surface: {
+    card: '#FFFFFF',
+    appBar: '#FAF9F5',
+    menu: '#FFFFFF',
+    popover: '#FFFFFF',
+    dialog: '#FFFFFF',
+    tooltip: '#FFFFFF',
+  },
+  border: {
+    card: '#E8E6DC',
+    chrome: '#E8E6DC',
+    menu: '#E8E6DC',
+    tooltip: '#E8E6DC',
+    divider: '#E8E6DC',
+  },
+  shadow: {
+    card: '0 1px 3px 0 rgba(20, 20, 19, 0.08), 0 1px 2px 0 rgba(20, 20, 19, 0.04)',
+    menu: '0 10px 24px rgba(20, 20, 19, 0.08)',
+    tooltip: '0 4px 12px rgba(20, 20, 19, 0.08)',
+    buttonHover: '0 1px 2px 0 rgba(20, 20, 19, 0.06)',
+  },
+  input: {
+    bg: 'transparent',
+    border: '#D6D3C7',
+    hoverBorder: '#B0AEA5',
+    disabledBorder: '#E8E6DC',
+    filledBg: 'rgba(20, 20, 19, 0.04)',
+    filledHoverBg: 'rgba(20, 20, 19, 0.06)',
+    filledFocusBg: 'rgba(20, 20, 19, 0.06)',
+  },
+  button: {
+    outlinedBorder: '#D6D3C7',
+    outlinedText: '#141413',
+    outlinedHoverBorder: '#B0AEA5',
+    outlinedHoverBg: '#F2EFE3',
+    gradient: [claudePrimary, claudePrimaryDark, claudePrimaryDark, '#A85138'],
+  },
+  menuItem: {
+    hover: '#F2EFE3',
+    selected: '#E8E6DC',
+    selectedHover: '#DCD9CB',
   },
 };
