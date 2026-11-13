@@ -16,28 +16,7 @@ import (
 func (f *sessionToolsMCP) tools(t *db.Thread, p *db.Project) []Tool {
 	var out []Tool
 	if c := f.service.Coordinator; c != nil {
-		out = append(out, c.coordinatorTools()...)
-		for _, item := range []struct {
-			name, description string
-			list              bool
-		}{
-			{"read_shared_file", "Read a UTF-8 text file or image in this project's library or memory. Accepts the absolute path shown for an attachment, or a path beginning library/ or memory/.", false},
-			{"list_shared_files", "List a directory in this project's library or memory. Use library or memory as the root path.", true},
-		} {
-			out = append(out, Tool{Name: item.name, Description: item.description, CoordinatorOnly: true,
-				Properties: map[string]any{"path": strProp("Path in the project's library or memory")}, Required: []string{"path"},
-				Handle: func(_ context.Context, call ToolCall) (*mcp.CallToolResult, error) {
-					var in struct{ Path string }
-					if err := json.Unmarshal(call.Input, &in); err != nil {
-						return nil, err
-					}
-					content, err := c.sharedFile(call.Project.ID, in.Path, item.list)
-					if err != nil {
-						return nil, err
-					}
-					return &mcp.CallToolResult{Content: content}, nil
-				}})
-		}
+		out = c.coordinatorTools()
 	}
 	return append(out, Tool{Name: "send_file", Description: f.sendFileDescription(t, p), Strict: true,
 		Properties: map[string]any{

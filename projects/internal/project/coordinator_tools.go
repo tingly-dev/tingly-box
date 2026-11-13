@@ -84,7 +84,27 @@ func (c *Coordinator) coordinatorTools() []Tool {
 		{Name: "forget", CoordinatorOnly: true, Description: "Delete a memory file.", Properties: map[string]any{"file": strProp("Memory file name, e.g. release-date.md.")}, Required: []string{"file"}, Handle: textTool(c.forget)},
 		{Name: "update_instructions", CoordinatorOnly: true, EditsProject: true, Description: "Replace the project instructions (only when the user asks).",
 			Properties: map[string]any{"instructions": strProp("The full new instructions (max 16000 characters).")}, Required: []string{"instructions"}, Handle: textTool(c.updateInstructions)},
+		c.sharedFileTool("read_shared_file", "Read a UTF-8 text file or image in this project's library or memory. Accepts the absolute path shown for an attachment, or a path beginning library/ or memory/.", false),
+		c.sharedFileTool("list_shared_files", "List a directory in this project's library or memory. Use library or memory as the root path.", true),
 	}
+}
+
+// sharedFileTool is read_shared_file or list_shared_files: they answer with
+// content blocks (text or an image) rather than a line of text.
+func (c *Coordinator) sharedFileTool(name, description string, list bool) Tool {
+	return Tool{Name: name, Description: description, CoordinatorOnly: true,
+		Properties: map[string]any{"path": strProp("Path in the project's library or memory")}, Required: []string{"path"},
+		Handle: func(_ context.Context, call ToolCall) (*mcp.CallToolResult, error) {
+			var in struct{ Path string }
+			if err := json.Unmarshal(call.Input, &in); err != nil {
+				return nil, err
+			}
+			content, err := c.sharedFile(call.Project.ID, in.Path, list)
+			if err != nil {
+				return nil, err
+			}
+			return &mcp.CallToolResult{Content: content}, nil
+		}}
 }
 
 func (c *Coordinator) startThread(ctx context.Context, p *db.Project, in struct {
