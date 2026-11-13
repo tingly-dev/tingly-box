@@ -56,12 +56,13 @@ Problem: a new thread always branched from the repository's base branch (the bra
 | `base` | the local branch the thread's branch starts from, and that its work is merged back into (`Thread.BaseBranch`; diff and merge already use it) | must be an existing local branch; default is the repository's base branch |
 | `branch` | name of the new branch (`Thread.Branch`) | must be a valid ref name and must not exist yet; default is generated |
 
-Both need a repository and a worktree: with no repository, or a project whose threads share the checkout (`DisableWorktree`), they are refused with `ErrNoOwnBranch` instead of being ignored.
+Both need a Git directory in worktree mode: with no directory, a plain (non-Git) directory, or a directory whose threads share the checkout (`WorkspaceShared`), they are refused with `ErrNoOwnBranch` instead of being ignored.
 
 Decisions, small on purpose:
 
 - **Validate before anything is created.** A bad `base` or `branch` fails before the thread row, the worktree or the branch exist, so a refused start leaves nothing to clean up. The coordinator gets the reason as the tool error.
-- **`AddWorktree` no longer deletes a branch it did not create.** Its failure path ran `git branch -D <branch>` to remove a half-made branch; with a caller-chosen name that would have deleted the user's own branch of that name. It now refuses an existing branch first.
+- **A branch the thread did not create is never deleted.** A failed `git worktree add` used to run `git branch -D <branch>`; with a caller-chosen name that would have deleted the user's own branch. The failure path now leaves the branch alone (the fallback uses a fresh name), and `AddWorktree` also refuses an existing branch first.
+- **`propose_threads` checks the same things when it proposes.** A suggestion card cannot be edited, so a card with a bad base or a taken branch could never start; the model is told at proposal time, and two cards naming the same branch are refused (`checkProposals`).
 - **Local branches only.** `origin/x` or a tag is not accepted as `base` yet; the error names the repository so the coordinator can say so.
 - **No taking over an existing branch** (continue work on a branch or PR that exists). That is a different intent (the branch is not new, and its base must be found), and belongs with the `set_branch` / PR-awareness designs.
 - **Not merged into one creation method.** `Threads.Start` (branch-based worker) and `StartFolderThread` (in-place session) stay apart.
