@@ -25,6 +25,7 @@ import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Link as RouterLink} from 'react-router-dom';
 import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 // BotTable is the RESOURCE table for connected bots — the table counterpart
 // of ApiKeyTable, replacing the former BotCard. Every bot, across every
@@ -98,8 +99,7 @@ const BotTable: React.FC<BotTableProps> = ({
     return (
         <>
             <TableContainer
-                // No Paper, no border — the page's UnifiedCard is the shell.
-                sx={{display: {xs: 'none', md: 'block'}, overflowX: 'auto'}}
+                sx={{...tableFrameSx, display: {xs: 'none', md: 'block'}, overflowX: 'auto'}}
             >
                 <Table sx={{tableLayout: 'fixed', minWidth: tableMinWidth}}>
                     <TableHead>

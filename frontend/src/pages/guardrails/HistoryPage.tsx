@@ -9,7 +9,6 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
-    Paper,
     Stack,
     Table,
     TableBody,
@@ -32,6 +31,7 @@ import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { formatTimestamp } from '@/utils/datetime';
 import { fontSizes } from '@/theme/fonts';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 type GuardrailsHistoryEntry = {
     time: string;
@@ -274,7 +274,7 @@ const GuardrailsHistoryPage = () => {
                             )}
                         </Stack>
 
-                        <TableContainer component={Paper} variant="outlined">
+                        <TableContainer sx={tableFrameSx}>
                             <Table size="small">
                                 <TableHead>
                                     <TableRow>
