@@ -66,6 +66,17 @@ func (b *backoffBook) due(uuid string, slack time.Duration) (until time.Time, ok
 	return e.next, !b.now().Before(e.next.Add(-slack))
 }
 
+// window returns the provider's open window, if it has one.
+func (b *backoffBook) window(uuid string) (failures int, next time.Time, ok bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	e := b.state[uuid]
+	if e == nil {
+		return 0, time.Time{}, false
+	}
+	return e.failures, e.next, true
+}
+
 // succeeded clears the window.
 func (b *backoffBook) succeeded(uuid string) {
 	b.mu.Lock()

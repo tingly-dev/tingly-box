@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -182,12 +183,35 @@ func (m *Manager) RefreshProvider(ctx context.Context, providerUUID string) (*Pr
 // here (as this used to do, via fmt.Errorf) silently broke that comparison
 // and turned every "no quota data" provider into a hard error upstream.
 func (m *Manager) GetQuota(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
-	return m.store.Get(ctx, providerUUID)
+	usage, err := m.store.Get(ctx, providerUUID)
+	if err == nil {
+		m.annotateBackoff(usage)
+	}
+	return usage, err
 }
 
 // ListQuota returns quota data for all providers.
 func (m *Manager) ListQuota(ctx context.Context) ([]*ProviderUsage, error) {
-	return m.store.List(ctx)
+	usages, err := m.store.List(ctx)
+	if err == nil {
+		for _, usage := range usages {
+			m.annotateBackoff(usage)
+		}
+	}
+	return usages, err
+}
+
+// annotateBackoff tells a reader that automatic refreshes of this provider are
+// being held back, and until when. A window already past is not reported: the
+// next tick asks, so there is nothing left to wait for.
+func (m *Manager) annotateBackoff(usage *ProviderUsage) {
+	if usage == nil {
+		return
+	}
+	usage.Backoff = nil
+	if failures, next, ok := m.backoff.window(usage.ProviderUUID); ok && next.After(m.backoff.now()) {
+		usage.Backoff = &UsageBackoff{Failures: failures, NextAttemptAt: next}
+	}
 }
 
 // QuotaHistory returns stored snapshots without contacting upstream providers.
@@ -380,9 +404,11 @@ func (m *Manager) saveUsage(ctx context.Context, log *logrus.Entry, uuid string,
 	m.backoff.failed(uuid, auto, m.config.RefreshInterval, m.config.MaxBackoff)
 	if !usage.hasReading() {
 		if stored, err := m.store.Get(ctx, uuid); err == nil && stored.hasReading() {
-			return stored
+			usage = stored
 		}
 	}
+	usage.ProviderUUID = cmp.Or(usage.ProviderUUID, uuid)
+	m.annotateBackoff(usage)
 	return usage
 }
 

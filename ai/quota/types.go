@@ -89,12 +89,25 @@ type ProviderUsage struct {
 	// Group breakdowns (e.g., by model, by region)
 	Breakdowns []*UsageBreakdown `json:"breakdowns,omitempty"`
 
-	// Error information (if fetch failed)
+	// Error information (if fetch failed). A failed fetch keeps the last good
+	// reading in Windows/Breakdowns/Cost, with FetchedAt the time of that
+	// success: LastErrorAt after FetchedAt means the newest attempt failed.
 	LastError   string     `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 
+	// Backoff is set while automatic refreshes are being held back after
+	// repeated failures. Runtime state, never stored.
+	Backoff *UsageBackoff `json:"backoff,omitempty"`
+
 	// Raw response data (for debugging and review)
 	RawResponse json.RawMessage `json:"raw_response,omitempty"`
+}
+
+// UsageBackoff says when the background refresher will next ask a provider
+// that keeps failing. A manual refresh is never held back.
+type UsageBackoff struct {
+	Failures      int       `json:"failures"`        // consecutive automatic failures
+	NextAttemptAt time.Time `json:"next_attempt_at"` // earliest next automatic refresh
 }
 
 // UsageBreakdown represents grouped quota breakdowns (e.g., by model, by region)

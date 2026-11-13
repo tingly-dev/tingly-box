@@ -199,6 +199,7 @@ export default {
       "leftOf": "{{value}} left of {{limit}}",
       "cost": "Cost",
       "readFailed": "Couldn't read quota",
+      "retryAt": "Next automatic retry at {{time}}",
       "noLimits": "No quota limits reported",
       "none": "No quota reading yet",
       "refresh": "Refresh",

@@ -3,7 +3,7 @@
 > 适用对象：改 `ai/quota/{manager,refresher}.go`、`internal/server/module/providerquota`、
 > `frontend/src/components/credential/QuotaCell.tsx` 的贡献者。
 > 结构：现状（§1）→ 设计（§2–§5）→ 刻意不做的（§6）→ 通用性（§7）→ 实施（§8）→ 待定（§9）。
-> 状态：**已实现**（退避、失败保留上次读数）；"下次重试时间"的 UI 一行与对应 API 字段未做，见 §5。
+> 状态：**已实现**（退避、失败保留上次读数、"下次自动重试"一行）。
 
 ---
 
@@ -77,8 +77,10 @@ provider 变为不支持（无 fetcher）时丢弃其状态。
 - 前端 `ProviderQuotaContext.refresh`：响应里带 `last_error` 但仍有 windows 时，用它替换旧记录并标记 failed；
   只有"从未成功过"（无 windows）时才保留旧快照不动。
 
-**未做（后续）**：`ProviderUsage` 增加 `backoff{failures,next_attempt_at}`，在 `QuotaCell` tooltip 错误行下显示"下次自动重试 14:35"。
-它要改 swagger 模型并重新生成 `openapi.json` 与前端 client，不影响退避本身，单独一个小 PR 更好评审。
+**"下次自动重试"**：`ProviderUsage.backoff{failures,next_attempt_at}`（运行时状态，不入库）在 `GetQuota` / `ListQuota` /
+刷新返回时由 `Manager` 按内存窗口补上；窗口已过期或已清零则不带。`QuotaCell` tooltip 在错误原文下加一行
+"Next automatic retry at 14:35"（非当天带日期），不提"退避"。点击单元格仍是立即刷新。
+Mock 模式有两个状态可看：Anthropic（从未读到，错误 + 重试时间）与 Kimi（成功后被拒：旧读数变暗、`Updated 3h ago`、错误与重试时间）。
 
 ## 6. 刻意不做的（先保持简单，需要时再加）
 
@@ -105,6 +107,7 @@ provider 变为不支持（无 fetcher）时丢弃其状态。
 2. `Manager.RefreshDue`（后台 ticker 用，跳过未到点的 provider）与 `Manager.Refresh` / `RefreshProvider` /
    兑换后的刷新（都是主动触发，强制请求）。`Config.MaxBackoff`（默认 6h）取代两个无人读取的死配置 `RetryOnFailure/MaxRetries`。
 3. `GormStore.Save` 保留上次读数（§5）；路由 / 状态栏 / `Summary` 把带错误的记录当未知；前端两处小改。
+4. `ProviderUsage.backoff` + `openapi.json` + `QuotaCell` 一行 + i18n（en/zh/ru）+ mock 状态。
 
 被跳过的 provider 不进入本 tick 返回的 usage 列表，`AutoRedeem` 只处理实际得到的读数，无影响。
 `ErrProviderUnsupported`（无 fetcher / OAuth-only 的 API key）不发上游请求，也不进退避。
@@ -113,7 +116,4 @@ provider 变为不支持（无 fetcher）时丢弃其状态。
 
 已定：统一封顶 6h；不分错误类型；只放内存，重启清零；"全部刷新"是主动触发，强制请求；失败保留上次读数（只展示，不用于决策）。
 
-待决：
-
-1. 长期失败后是否要**主动提示**用户（如 key 疑似失效的通知），还是只在 `QuotaCell` 被动展示？目前是后者。
-2. "下次自动重试"一行的文案与位置（§5 未做部分）。
+待决：长期失败后是否要**主动提示**用户（如 key 疑似失效的通知），还是只在 `QuotaCell` 被动展示？目前是后者。

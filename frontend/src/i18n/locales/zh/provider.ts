@@ -199,6 +199,7 @@ export default {
       "leftOf": "剩余 {{value}} / {{limit}}",
       "cost": "费用",
       "readFailed": "无法读取额度",
+      "retryAt": "下次自动重试：{{time}}",
       "noLimits": "上游未报告额度限制",
       "none": "暂无额度数据",
       "refresh": "刷新",

@@ -280,3 +280,38 @@ func mustGet(t *testing.T, m *Manager, uuid string) *ProviderUsage {
 	}
 	return u
 }
+
+func TestReadsSayWhenAutomaticRefreshesResume(t *testing.T) {
+	m, f, clock := newBackoffTestManager(t)
+	ctx := context.Background()
+	tick := m.config.RefreshInterval
+
+	m.RefreshDue(ctx) // success
+	f.set(true, 0)
+	*clock = clock.Add(tick)
+	failed, _ := m.RefreshDue(ctx)
+	if len(failed) != 1 || failed[0].Backoff == nil {
+		t.Fatalf("a failed automatic refresh should come back with its backoff: %+v", failed)
+	}
+	want := clock.Add(2 * tick)
+	for name, u := range map[string]*ProviderUsage{"returned": failed[0], "GetQuota": mustGet(t, m, "p1")} {
+		if u.Backoff == nil || u.Backoff.Failures != 1 || !u.Backoff.NextAttemptAt.Equal(want) {
+			t.Errorf("%s: backoff = %+v, want 1 failure, next %v", name, u.Backoff, want)
+		}
+	}
+	all, err := m.ListQuota(ctx)
+	if err != nil || len(all) != 1 || all[0].Backoff == nil {
+		t.Errorf("ListQuota: %+v err=%v", all, err)
+	}
+
+	// Past its time, the window has nothing left to say; so does a success.
+	*clock = clock.Add(3 * tick)
+	if u := mustGet(t, m, "p1"); u.Backoff != nil {
+		t.Errorf("window already over, still reported: %+v", u.Backoff)
+	}
+	f.set(false, 10)
+	ok, _ := m.RefreshProvider(ctx, "p1")
+	if ok.Backoff != nil || mustGet(t, m, "p1").Backoff != nil {
+		t.Error("a success must clear the backoff")
+	}
+}
