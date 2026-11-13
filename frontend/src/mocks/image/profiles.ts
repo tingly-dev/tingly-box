@@ -1,5 +1,5 @@
-import type { ReferenceImage } from '../components/ImageGenReferenceImages';
-import type { ImageProfile } from './imageProfileTypes';
+import type { ReferenceImage } from '@/pages/image/components/ImageGenReferenceImages';
+import type { ImageProfile } from '@/pages/image/profiles/imageProfileTypes';
 
 // Placeholder artwork for the prototype: flat SVGs, so the library looks like
 // a library without shipping binary fixtures.

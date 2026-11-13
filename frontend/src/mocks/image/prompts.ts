@@ -1,6 +1,6 @@
-import type { ImagePromptRun } from './imagePromptStore';
-import { DEFAULT_INSTRUCTIONS, INSTRUCTION_STARTERS } from './imagePromptTemplates';
-import { cat, portrait, svgDataUrl, swatch } from '../profiles/mockProfiles';
+import type { ImagePromptRun } from '@/pages/image/prompt/imagePromptStore';
+import { DEFAULT_INSTRUCTIONS, INSTRUCTION_STARTERS } from '@/pages/image/prompt/imagePromptTemplates';
+import { cat, portrait, svgDataUrl, swatch } from './profiles';
 
 const MINUTE = 60 * 1000;
 const now = Date.now();

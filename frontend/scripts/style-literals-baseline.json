@@ -128,15 +128,6 @@
   "src/pages/image/library/AssetPickerDialog.tsx": {
     "colour": 1
   },
-  "src/pages/image/library/mockAssets.ts": {
-    "colour": 17
-  },
-  "src/pages/image/profiles/mockProfiles.ts": {
-    "colour": 32
-  },
-  "src/pages/image/prompt/mockImagePrompts.ts": {
-    "colour": 9
-  },
   "src/pages/image/prompt/preparePicture.ts": {
     "colour": 1
   },
