@@ -1,4 +1,5 @@
 import {Box} from '@mui/material';
+import { oauthBrandColors } from '@/theme/brand';
 import {Claude, Codex, Gemini, Google, Kimi, Qwen, WorkBuddy, XAI, ZCode} from '../BrandIcons';
 
 export interface OAuthProvider {
@@ -33,7 +34,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Anthropic Claude Code',
         description: 'Access Claude Code models via OAuth',
         icon: <Claude size={32} grayscale={false}/>,
-        color: '#D97757',
+        color: oauthBrandColors.claude,
         enabled: true,
         callbackPort: 54545,
     },
@@ -43,7 +44,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Google Gemini CLI',
         description: 'Access Gemini CLI models via OAuth',
         icon: <Gemini size={32}/>,
-        color: '#4285F4',
+        color: oauthBrandColors.gemini,
         enabled: true,
     },
     {
@@ -52,7 +53,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Antigravity (Experimental)',
         description: 'Access Antigravity services via Google OAuth',
         icon: <Google size={32}/>,
-        color: '#7B1FA2',
+        color: oauthBrandColors.antigravity,
         enabled: true,
     },
     {
@@ -61,7 +62,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Qwen Code',
         description: 'Access Qwen Code via device code flow',
         icon: <Qwen size={32}/>,
-        color: '#00A8E1',
+        color: oauthBrandColors.qwen,
         enabled: false,  // DISABLED: Aliyun WAF blocking OAuth requests
         deviceCodeFlow: true,
     },
@@ -71,7 +72,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'OpenAI Codex / ChatGPT',
         description: 'Access OpenAI Codex via OAuth',
         icon: <Codex size={32} grayscale={false}/>,
-        color: '#10A37F',
+        color: oauthBrandColors.codex,
         enabled: true,
         callbackPort: 1455,
     },
@@ -81,7 +82,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Kimi Code CN (kimi.com)',
         description: 'Access Kimi Code with a kimi.com account via device code flow',
         icon: <Kimi size={32}/>,
-        color: '#6366F1',
+        color: oauthBrandColors.kimi,
         enabled: true,
         deviceCodeFlow: true,
     },
@@ -91,7 +92,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Kimi Code International (kimi.ai)',
         description: 'Access Kimi Code with a kimi.ai account via device code flow',
         icon: <Kimi size={32}/>,
-        color: '#6366F1',
+        color: oauthBrandColors.kimi,
         enabled: true,
         deviceCodeFlow: true,
     },
@@ -101,7 +102,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'xAI Grok',
         description: 'Access Grok via SuperGrok / X Premium+ OAuth login',
         icon: <XAI size={32}/>,
-        color: '#000000',
+        color: oauthBrandColors.xai,
         enabled: true,
     },
     // ZCode / GLM Coding Plan. The sign-in is a login link: zcode.z.ai owns the
@@ -113,7 +114,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'ZCode CN (智谱 BigModel)',
         description: 'Sign in with your BigModel account to use ZCode CN',
         icon: <ZCode size={32}/>,
-        color: '#3859FF',
+        color: oauthBrandColors.zcode,
         enabled: true,
     },
     {
@@ -122,7 +123,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'ZCode International (Z.ai)',
         description: 'Sign in with your Z.ai account to use ZCode International',
         icon: <ZCode size={32}/>,
-        color: '#3859FF',
+        color: oauthBrandColors.zcode,
         enabled: true,
     },
     // WorkBuddy (Tencent). Same login-link flow as ZCode: the site owns the
@@ -136,7 +137,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         descriptionKey: 'workbuddyConnection.cnDescription',
         summaryKey: 'workbuddyConnection.cardSummary',
         icon: <WorkBuddy size={32}/>,
-        color: '#14C38E',
+        color: oauthBrandColors.workbuddy,
         enabled: true,
     },
     {
@@ -147,7 +148,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         descriptionKey: 'workbuddyConnection.globalDescription',
         summaryKey: 'workbuddyConnection.cardSummary',
         icon: <WorkBuddy size={32}/>,
-        color: '#14C38E',
+        color: oauthBrandColors.workbuddy,
         enabled: true,
     },
     {
@@ -156,7 +157,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         displayName: 'Mock OAuth',
         description: 'Test OAuth flow with mock provider',
         icon: <Box sx={{fontSize: 32}}>🧪</Box>,
-        color: '#9E9E9E',
+        color: oauthBrandColors.generic,
         enabled: true,
         dev: true,
     },

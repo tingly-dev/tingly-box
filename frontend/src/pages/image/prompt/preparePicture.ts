@@ -1,4 +1,4 @@
-import { fetchBlob } from '@tingly/vision';
+import { EXPORT_BACKGROUND, fetchBlob } from '@tingly/vision';
 
 // The picture as it is sent to the vision model: a raster data URL, no
 // longer than MAX_SIDE on its long side. Vision APIs refuse SVG, cap the
@@ -59,7 +59,7 @@ export const preparePicture = async (source: File | string, name?: string): Prom
     canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('no canvas');
-    context.fillStyle = '#fff';
+    context.fillStyle = EXPORT_BACKGROUND;
     context.fillRect(0, 0, width, height);
     context.drawImage(image, 0, 0, width, height);
     try {

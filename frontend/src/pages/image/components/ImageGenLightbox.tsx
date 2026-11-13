@@ -24,6 +24,7 @@ import { handOffPicture } from '../prompt/pictureHandoff';
 import ThumbImage from './ThumbImage';
 import { THUMB_EDGE_BADGE } from './imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 // Kept shows as a check: Tabler's filled bookmark loses its fill through
 // tablerMui and would render as nothing.
@@ -33,8 +34,8 @@ const PhotoScan = tablerMui(IconPhotoScan);
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
     color: 'common.white',
-    bgcolor: 'rgba(255, 255, 255, 0.08)',
-    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
+    bgcolor: overlay.onDark.fill,
+    '&:hover': { bgcolor: overlay.onDark.fillHover },
 } as const;
 
 interface ImageGenLightboxProps {
@@ -166,7 +167,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     borderRadius: radius.row,
                                     overflow: 'hidden',
                                     outline: active ? '2px solid' : '1px solid',
-                                    outlineColor: active ? 'primary.main' : 'rgba(255, 255, 255, 0.24)',
+                                    outlineColor: active ? 'primary.main' : overlay.onDark.line,
                                     outlineOffset: -1,
                                     opacity: active ? 1 : 0.72,
                                     transition: 'opacity 0.16s ease-out',
@@ -207,7 +208,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
-                    bgcolor: 'rgba(15, 23, 42, 0.96)',
+                    bgcolor: overlay.backdrop,
                     color: 'common.white',
                 }}
             >
@@ -221,7 +222,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     flexShrink: 0,
                                     px: 0.75,
                                     borderRadius: radius.row,
-                                    bgcolor: 'rgba(255, 255, 255, 0.14)',
+                                    bgcolor: overlay.onDark.fillStrong,
                                     color: 'grey.200',
                                     fontWeight: 600,
                                 }}
@@ -265,7 +266,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     ...overlayIconSx,
                                     // Pressed reads as pressed: the button takes
                                     // the tint the overlay is drawn in.
-                                    ...(showMask ? { color: 'warning.light', bgcolor: 'rgba(255, 255, 255, 0.2)' } : {}),
+                                    ...(showMask ? { color: 'warning.light', bgcolor: overlay.onDark.fillActive } : {}),
                                 }}
                             >
                                 <Brush fontSize="small" />

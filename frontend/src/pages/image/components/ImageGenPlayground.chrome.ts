@@ -1,4 +1,5 @@
 import { radius } from '@tingly/ui/theme/radius'
+import { overlay } from '@tingly/ui/theme/overlay'
 // The Image Playground's repeated styling, in one place. Every image in this
 // feature — a reference thumbnail, a run's output, an imported file, an
 // overview tile — wears the same two pieces of chrome over the picture: a dark
@@ -11,9 +12,9 @@ export const overlayActionSx = (size = 30) => ({
     width: size,
     height: size,
     color: 'common.white',
-    bgcolor: 'rgba(15, 23, 42, 0.58)',
+    bgcolor: overlay.button,
     backdropFilter: 'blur(4px)',
-    '&:hover': { bgcolor: 'rgba(15, 23, 42, 0.82)' },
+    '&:hover': { bgcolor: overlay.buttonHover },
 });
 
 /** The hover scrim behind the zoom cue. Revealed by the parent's hover rule. */
@@ -24,7 +25,7 @@ export const zoomScrimSx = {
     alignItems: 'center',
     justifyContent: 'center',
     color: 'common.white',
-    bgcolor: 'rgba(15, 23, 42, 0.38)',
+    bgcolor: overlay.dimSoft,
     opacity: 0,
     transition: 'opacity 0.16s ease-out',
 };
@@ -55,7 +56,7 @@ export const fullBleedDialogPaperSx = {
  */
 export const overlayPlateSx = {
     borderRadius: radius.card,
-    bgcolor: 'rgba(15, 23, 42, 0.62)',
+    bgcolor: overlay.plate,
     backdropFilter: 'blur(6px)',
 };
 

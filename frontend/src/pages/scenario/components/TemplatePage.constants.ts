@@ -1,14 +1,15 @@
 import { radius } from '@tingly/ui/theme/radius'
+import { overlay } from '@tingly/ui/theme/overlay';
 export const SCROLLBAR_STYLES = {
     width: '8px',
     track: {
         backgroundColor: 'transparent',
     },
     thumb: {
-        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        backgroundColor: overlay.scrollThumb,
         borderRadius: radius.pill,
         '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            backgroundColor: overlay.scrollThumbHover,
         },
     },
 };

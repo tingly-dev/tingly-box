@@ -16,7 +16,7 @@ import {
 } from './constants';
 import { Z_INDEX } from '../constants/zIndex';
 import type { SxProps } from '@mui/material';
-import type { Theme } from '@mui/material/styles';
+import { alpha, type Theme } from '@mui/material/styles';
 import { radius } from '@tingly/ui/theme/radius';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ export const activityBottomClusterSx: SxProps<Theme> = {
  *  there is more content beyond it. */
 export const activityIconsScrollSx: SxProps<Theme> = (theme) => {
     const paper = theme.palette.background.paper;
-    const shadow = theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.12)';
+    const shadow = alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.5 : 0.12);
     return {
         flex: 1,
         minHeight: 0,

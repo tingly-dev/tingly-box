@@ -4,6 +4,7 @@ import type { ElementType, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import { EMPTY_SX } from '@/constants/defaults';
 import { radius } from '@tingly/ui/theme/radius';
+import { elevation } from '@tingly/ui/theme/elevation';
 
 /**
  * Responsive column span for a card placed inside a `CardGrid` (MUI Grid v7).
@@ -130,7 +131,7 @@ const cardVariants = {
     boxShadow: 'none',
   },
   elevated: {
-    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.10)',
+    boxShadow: elevation.lifted,
     border: 'none',
   },
 };

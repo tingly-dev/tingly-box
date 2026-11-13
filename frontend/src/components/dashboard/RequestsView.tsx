@@ -18,6 +18,7 @@ import {
     ToggleButton,
     CircularProgress,
     useTheme,
+    alpha,
 } from '@mui/material';
 import { ProviderLabel } from '@/components/ProviderLogo';
 import { WaveSine as StreamIcon } from '@/components/icons';
@@ -130,7 +131,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
             {/* Table */}
             <TableContainer sx={{ maxHeight: 420, maxWidth: '100%', overflow: 'auto', position: 'relative' }}>
                 {loading && (
-                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.6)' }}>
+                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, backgroundColor: alpha(theme.palette.background.paper, 0.6) }}>
                         <CircularProgress size={28} />
                     </Box>
                 )}
@@ -270,10 +271,10 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Status */}
                                 <TableCell align="center">
                                     {r.status === 'success' ? (
-                                        <Chip label={t('dashboard.requestsView.ok', { defaultValue: 'OK' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 600, backgroundColor: getStatusColor(theme, 'success'), color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
+                                        <Chip label={t('dashboard.requestsView.ok', { defaultValue: 'OK' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 600, backgroundColor: getStatusColor(theme, 'success'), color: 'common.white', '& .MuiChip-label': { px: 0.75 } }} />
                                     ) : (
                                         <Tooltip title={r.error_code || r.status} placement="top">
-                                            <Chip label={t('dashboard.requestsView.err', { defaultValue: 'ERR' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 600, backgroundColor: getStatusColor(theme, 'error'), color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
+                                            <Chip label={t('dashboard.requestsView.err', { defaultValue: 'ERR' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 600, backgroundColor: getStatusColor(theme, 'error'), color: 'common.white', '& .MuiChip-label': { px: 0.75 } }} />
                                         </Tooltip>
                                     )}
                                 </TableCell>

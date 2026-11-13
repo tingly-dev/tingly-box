@@ -76,12 +76,8 @@ export const brushWidthFor = (key: BrushSizeKey, dims: CanvasDimensions): number
 // replaces, because erasing is a coarser gesture than drawing.
 export const ERASER_WIDTH_MULTIPLIER = 2.5;
 
-export const SKETCH_BACKGROUND = '#ffffff';
-
-// A small, opinionated palette: black for outlines plus a handful of clearly
-// distinct hues that a model can name back ("the red circle"). Not a colour
-// picker — a picker is a decision the user did not come here to make.
-export const SKETCH_COLORS = ['#111827', '#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#9333ea'] as const;
+import { SKETCH_BACKGROUND, SKETCH_COLORS } from './colors';
+export { SKETCH_BACKGROUND, SKETCH_COLORS };
 
 // Snapshot-per-stroke undo. Each entry is the frame *before* a stroke, so
 // undo is a single putImageData. Capped, because a 1024² ImageData is 4 MB

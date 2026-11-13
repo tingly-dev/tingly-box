@@ -35,6 +35,7 @@ import { RunHistory } from './RunHistory';
 import { MESSAGE_ID, matchTemplateId, templatesForProtocol } from './contentOptions';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 // BenchPage — the customizable end-to-end test workbench
 // (.design/bench.md). Three columns answer the user's three questions:
@@ -290,7 +291,7 @@ const BenchPage: React.FC = () => {
                 actions={
                     <Button variant="contained" startIcon={<RunIcon />} onClick={run} disabled={!request || running} sx={{ minWidth: 120 }} title={t('bench.runHint', { defaultValue: '⌘ / Ctrl + Enter' })}>
                         {running ? t('bench.running', { defaultValue: 'Running…' }) : t('bench.run', { defaultValue: 'Run' })}
-                        <Box component="kbd" sx={{ ml: 1, fontFamily: fontMono, fontSize: fontSizes.micro, opacity: 0.75, border: '1px solid', borderColor: 'rgba(255,255,255,.4)', borderRadius: radius.chip, px: 0.5 }}>⌘↵</Box>
+                        <Box component="kbd" sx={{ ml: 1, fontFamily: fontMono, fontSize: fontSizes.micro, opacity: 0.75, border: '1px solid', borderColor: overlay.onDark.lineMedium, borderRadius: radius.chip, px: 0.5 }}>⌘↵</Box>
                     </Button>
                 }
             />

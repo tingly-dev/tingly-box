@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { formatNumber } from './chartStyles';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { fontSizes } from '@/theme/fonts';
-import { heatmapScale } from '@/theme/dataviz';
+import { heatmapCellLine, heatmapEmpty, heatmapScale } from '@/theme/dataviz';
+import { overlay } from '@tingly/ui/theme/overlay';
 import { elevation } from '@/theme/elevation';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -23,11 +24,11 @@ const HEATMAP_COLORS = heatmapScale; // level 0 (none) .. 4 (very high)
 
 // Theme-aware background for the "no activity" cells / legend swatch.
 const emptyCellBg = (theme: { palette: { mode: string } }) =>
-    theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#ebedf0';
+    heatmapEmpty[theme.palette.mode === 'dark' ? 'dark' : 'light'];
 
 // Faint hairline so individual cells stay defined against the card background.
 const cellBorder = (theme: { palette: { mode: string } }) =>
-    `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(27,31,35,0.06)'}`;
+    `1px solid ${heatmapCellLine[theme.palette.mode === 'dark' ? 'dark' : 'light']}`;
 
 export interface DailyUsage {
     date: string;           // YYYY-MM-DD format
@@ -356,7 +357,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                         fontSize: fontSizes.md,
                                                         fontWeight: 600,
                                                         mb: 1,
-                                                        color: '#ffffff',
+                                                        color: 'common.white',
                                                     }}
                                                 >
                                                     {new Date(`${day}T00:00:00`).toLocaleDateString(heatmapLocale, {
@@ -370,7 +371,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     sx={{
                                                         fontSize: fontSizes.md,
                                                         fontWeight: 600,
-                                                        color: '#86efac',
+                                                        color: overlay.onDark.positive,
                                                         mb: 0.5,
                                                     }}
                                                 >
@@ -380,7 +381,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     <Typography
                                                         sx={{
                                                             fontSize: fontSizes.sm,
-                                                            color: 'rgba(255, 255, 255, 0.85)',
+                                                            color: overlay.onDark.text,
                                                             mt: 0.5,
                                                         }}
                                                     >
@@ -390,13 +391,13 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     </Typography>
                                                 )}
                                                 {dayData?.breakdown && dayData.breakdown.length > 0 && (
-                                                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'rgba(255,255,255,0.1)' }}>
+                                                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: overlay.onDark.lineSoft }}>
                                                         {dayData.breakdown.slice(0, 3).map((model) => (
                                                             <Typography
                                                                 key={`${day}-${model.name}`}
                                                                 sx={{
                                                                     fontSize: fontSizes.sm,
-                                                                    color: 'rgba(255, 255, 255, 0.75)',
+                                                                    color: overlay.onDark.textSoft,
                                                                 }}
                                                             >
                                                                 {model.name}: {formatTokenTotal(model.tokens)}

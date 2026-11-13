@@ -3,16 +3,18 @@
 //
 // Colours, text sizes and corner radii come from the theme: palette / tokens,
 // typography variants or `fontSizes`, and `radius`. This check counts the
-// literals that bypass it in every source file outside the theme and compares
-// each file with a frozen baseline. Existing literals are tolerated; a file
-// that gains new ones fails `pnpm lint`.
+// literals that bypass it in every source file outside the theme.
+//
+// Colours, radii and font weights are strict: none are allowed outside the
+// theme (or `src/mocks/`, or a canvas package's `colors.ts`), there is no
+// baseline for them. Text sizes are compared with a frozen baseline, which
+// holds the one deliberate exception.
 //
 //   node scripts/check-style-literals.mjs           # check (runs in `pnpm lint`)
 //   node scripts/check-style-literals.mjs --update  # re-freeze after removing literals
 //
-// A literal that really belongs at a call site (a chart series, a brand
-// colour, a dark overlay on an image) is fine — run --update and say why in
-// the PR.
+// A colour that really is fixed (a brand colour, a chart series, a scrim over
+// an image) goes in a named module under `src/theme/`, not at the call site.
 
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -22,12 +24,23 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASELINE = join(ROOT, 'scripts', 'style-literals-baseline.json');
 const SCAN = ['src', 'packages'];
 const SKIP_DIR = new Set(['node_modules', 'dist', 'client', 'mocks', 'locales', 'assets']);
-// The theme is where these values are supposed to live.
-const ALLOWED = [`packages${sep}ui${sep}src${sep}theme${sep}`, `src${sep}theme${sep}`];
+// The theme is where these values are supposed to live. The two canvas
+// packages cannot import the app theme, so each keeps its fixed pixel colours
+// in one `colors.ts` of its own.
+const ALLOWED = [
+  `packages${sep}ui${sep}src${sep}theme${sep}`,
+  `src${sep}theme${sep}`,
+  `packages${sep}vision${sep}src${sep}colors.ts`,
+  `packages${sep}mannequin${sep}src${sep}colors.ts`,
+];
+
+// Rules with no baseline: any hit fails.
+const STRICT = new Set(['colour', 'radius', 'weight']);
 
 const RULES = {
-  // '#2563eb', 'rgba(0, 0, 0, 0.1)' — use the palette or theme tokens.
-  colour: /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b|\brgba?\(/g,
+  // '#2563eb', 'rgba(0, 0, 0, 0.1)' — use the palette or theme tokens. A hex
+  // that continues into a word ('#add-team', a hash route) is not a colour.
+  colour: /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])|\brgba?\(/g,
   // fontSize: '0.85rem' / '13px' — use a typography variant or `fontSizes`.
   // (Bare numbers are icon sizes and stay allowed.)
   textSize: /fontSize:\s*['"`][\d.]+(?:rem|px|em)['"`]/g,
@@ -72,8 +85,13 @@ const count = () => {
 const now = count();
 
 if (process.argv.includes('--update')) {
-  writeFileSync(BASELINE, `${JSON.stringify(now, null, 2)}\n`);
-  console.log(`style literals: baseline written (${Object.keys(now).length} files)`);
+  const frozen = {};
+  for (const [file, hits] of Object.entries(now)) {
+    const kept = Object.fromEntries(Object.entries(hits).filter(([rule]) => !STRICT.has(rule)));
+    if (Object.keys(kept).length) frozen[file] = kept;
+  }
+  writeFileSync(BASELINE, `${JSON.stringify(frozen, null, 2)}\n`);
+  console.log(`style literals: baseline written (${Object.keys(frozen).length} files)`);
   process.exit(0);
 }
 
@@ -82,7 +100,7 @@ const grown = [];
 let shrunk = 0;
 for (const [file, hits] of Object.entries(now)) {
   for (const [rule, n] of Object.entries(hits)) {
-    const was = base[file]?.[rule] ?? 0;
+    const was = STRICT.has(rule) ? 0 : base[file]?.[rule] ?? 0;
     if (n > was) grown.push(`  ${file}: ${rule} ${was} → ${n}`);
   }
 }
@@ -94,7 +112,7 @@ if (grown.length) {
   console.error('style literals: new colour / size / weight / radius literals outside the theme');
   console.error(grown.join('\n'));
   console.error('Use the palette, theme tokens, typography variants, fontSizes or radius instead.');
-  console.error('If the literal is deliberate, run `node scripts/check-style-literals.mjs --update`.');
+  console.error('Colours, radii and weights have no baseline: add a named token under src/theme/ instead.');
   process.exit(1);
 }
 if (shrunk) console.log(`style literals: ok (${shrunk} entries below baseline — run with --update to lock them in)`);

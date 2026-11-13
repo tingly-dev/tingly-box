@@ -14,6 +14,7 @@ import {
     NearMeOutlined as DirectIcon,
 } from '@/components/icons';
 import { NodeTooltip } from './NodeTooltip';
+import { routeGraphShadows } from '@/theme/routeGraph';
 
 // Styled EntryNode matching ActionAddNode style
 const StyledEntryNode = styled('div')<{ active: boolean; compact?: boolean }>(
@@ -43,8 +44,7 @@ const StyledEntryNode = styled('div')<{ active: boolean; compact?: boolean }>(
             borderColor: getRouteGraphActiveColor(theme),
             boxShadow: [
                 `0 0 0 4px ${alpha(getRouteGraphActiveColor(theme), 0.18)}`,
-                '0 14px 34px rgba(31, 41, 55, 0.14)',
-                '0 3px 10px rgba(31, 41, 55, 0.08)',
+                ...routeGraphShadows.nodeLift,
             ].join(','),
             transform: 'translateY(-2px)',
         } : {},

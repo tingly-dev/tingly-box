@@ -14,6 +14,7 @@
 // to erase (`destination-out`) — paint white here and the region would mean
 // the opposite of what the user drew.
 
+import { MASK_FILL, MASK_PAINT_COLOR } from './colors';
 import { strokeWidthFor, type CanvasDimensions, type Stroke } from './sketchCanvas';
 
 export interface MaskLayers {
@@ -29,7 +30,7 @@ export interface MaskLayers {
 
 // Warm and clearly artificial, so the painted region reads as an overlay
 // rather than as part of the photograph underneath.
-export const MASK_PAINT_COLOR = '#f43f5e';
+export { MASK_PAINT_COLOR } from './colors';
 export const MASK_PREVIEW_ALPHA = 0.5;
 
 // A mask made only of erasures selects nothing, and an empty selection is not
@@ -94,12 +95,12 @@ export const renderMaskExport = (
     ctx.clearRect(0, 0, dims.width, dims.height);
     if (!layers.inverted) {
         ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = MASK_FILL;
         ctx.fillRect(0, 0, dims.width, dims.height);
-        renderMaskCoverage(ctx, layers.strokes, dims, '#000000', 'subtract');
+        renderMaskCoverage(ctx, layers.strokes, dims, MASK_FILL, 'subtract');
         return;
     }
-    renderMaskCoverage(ctx, layers.strokes, dims, '#000000', 'add');
+    renderMaskCoverage(ctx, layers.strokes, dims, MASK_FILL, 'add');
 };
 
 // What the user sees, in both the dialog and on the thumbnail: the region that

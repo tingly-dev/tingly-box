@@ -18,6 +18,7 @@
  */
 
 import React from 'react';
+import { toneColors, type Tone } from '@tingly/ui/theme/tone';
 import { Box, Switch, Typography } from '@mui/material';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -62,36 +63,38 @@ export interface ToolCardProps {
 
 // ─── Badge color map ──────────────────────────────────────────────────────────
 
-const BADGE_STYLES: Record<BadgeColor, { bg: string; color: string }> = {
-    blue: { bg: 'rgb(238, 242, 255)', color: 'rgb(30, 64, 175)' },
-    green: { bg: 'rgba(10, 124, 90, 0.1)', color: 'rgb(10, 124, 90)' },
-    orange: { bg: 'rgb(255, 247, 237)', color: 'rgb(194, 65, 12)' },
-    gray: { bg: 'rgb(241, 243, 246)', color: 'rgb(107, 114, 128)' },
+const BADGE_TONES: Record<BadgeColor, Tone> = {
+    blue: 'primary',
+    green: 'success',
+    orange: 'warning',
+    gray: 'neutral',
 };
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 const Badge: React.FC<{ label: string; color: BadgeColor }> = ({ label, color }) => {
-    const s = BADGE_STYLES[color];
     return (
         <Box
             component="span"
-            sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                height: 18,
-                px: '6px',
-                py: '2px',
-                bgcolor: s.bg,
-                color: s.color,
-                borderRadius: radius.chip,
-                border: '1px solid',
-                borderColor: s.color,
-                fontSize: fontSizes.micro,
-                fontWeight: 600,
-                letterSpacing: '-0.05px',
-                lineHeight: 1,
-                flexShrink: 0,
+            sx={(theme) => {
+                const c = toneColors(theme, BADGE_TONES[color]);
+                return {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    height: 18,
+                    px: '6px',
+                    py: '2px',
+                    bgcolor: c.bg,
+                    color: c.ink,
+                    borderRadius: radius.chip,
+                    border: '1px solid',
+                    borderColor: c.line,
+                    fontSize: fontSizes.micro,
+                    fontWeight: 600,
+                    letterSpacing: '-0.05px',
+                    lineHeight: 1,
+                    flexShrink: 0,
+                };
             }}
         >
             {label}
@@ -109,7 +112,7 @@ const Tag: React.FC<{ label: string }> = ({ label }) => (
             px: '6px',
             py: '2px',
             bgcolor: 'action.selected',
-            color: 'rgb(75, 85, 99)',
+            color: 'text.secondary',
             borderRadius: radius.chip,
             fontSize: fontSizes.micro,
             fontWeight: 500,
@@ -152,31 +155,37 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     return (
         <Box
             onClick={handleCardClick}
-            sx={{
-                bgcolor: 'background.paper',
-                borderRadius: radius.card,
-                border: '1px solid',
-                borderColor: enabled ? 'rgb(10, 124, 90)' : 'rgb(229, 231, 236)',
-                boxShadow: enabled ? 'rgba(10, 124, 90, 0.08) 0px 0px 0px 3px' : 'none',
-                p: '14px 16px',
-                cursor: (settings && !noExpand) ? 'pointer' : 'default',
-                transition: 'border-color 0.2s, box-shadow 0.2s',
+            sx={(theme) => {
+                const on = toneColors(theme, 'success');
+                return {
+                    bgcolor: 'background.paper',
+                    borderRadius: radius.card,
+                    border: '1px solid',
+                    borderColor: enabled ? on.line : 'divider',
+                    boxShadow: enabled ? `0 0 0 3px ${on.ring}` : 'none',
+                    p: '14px 16px',
+                    cursor: (settings && !noExpand) ? 'pointer' : 'default',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                };
             }}
         >
             {/* ── Header row ── */}
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
                 {/* Icon */}
                 <Box
-                    sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: radius.row,
-                        bgcolor: enabled ? 'rgba(10, 124, 90, 0.08)' : 'rgb(241, 243, 246)',
-                        color: enabled ? 'rgb(10, 124, 90)' : 'rgb(107, 114, 128)',
-                        display: 'grid',
-                        placeItems: 'center',
-                        flexShrink: 0,
-                        transition: 'background-color 0.2s, color 0.2s',
+                    sx={(theme) => {
+                        const c = toneColors(theme, enabled ? 'success' : 'neutral');
+                        return {
+                            width: 36,
+                            height: 36,
+                            borderRadius: radius.row,
+                            bgcolor: c.bg,
+                            color: c.ink,
+                            display: 'grid',
+                            placeItems: 'center',
+                            flexShrink: 0,
+                            transition: 'background-color 0.2s, color 0.2s',
+                        };
                     }}
                 >
                     {icon}

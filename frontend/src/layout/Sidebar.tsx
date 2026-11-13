@@ -38,6 +38,7 @@ import {
 import type { NavItem } from './types';
 import { VersionDisplay } from '@/components/VersionDisplay';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 
 // Shared sizing for the sidebar's nav-style rows now lives in ./styles
@@ -235,7 +236,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                                 flexShrink: 0,
                                                 ml: 1,
                                                 fontVariantNumeric: 'tabular-nums',
-                                                color: active ? 'rgba(255,255,255,0.75)' : 'text.secondary',
+                                                color: active ? overlay.onDark.textSoft : 'text.secondary',
                                             }}
                                         >
                                             {item.count.value}

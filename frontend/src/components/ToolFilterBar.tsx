@@ -48,7 +48,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
         <Box
             sx={{
                 display: 'flex',
-                bgcolor: 'rgb(238, 233, 224)',
+                bgcolor: 'action.hover',
                 borderRadius: radius.row,
                 p: '3px',
                 alignItems: 'center',
@@ -65,13 +65,13 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                     border: 'none',
                     cursor: 'pointer',
                     bgcolor: 'transparent',
-                    color: 'rgb(107, 114, 128)',
+                    color: 'text.secondary',
                     fontSize: fontSizes.md,
                     fontWeight: 600,
                     lineHeight: 1,
                     transition: 'color 0.15s',
-                    '&:hover': { color: 'rgb(13, 17, 23)' },
-                    '&:focus-visible': { outline: '2px solid rgb(10, 124, 90)', outlineOffset: '1px' },
+                    '&:hover': { color: 'text.primary' },
+                    '&:focus-visible': { outline: '2px solid', outlineColor: 'success.dark', outlineOffset: '1px' },
                 }}
             >
                 {allExpanded ? 'Collapse all' : 'Expand all'}
@@ -84,7 +84,7 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                 display: 'flex',
                 flexDirection: 'row',
                 gap: '6px',
-                bgcolor: 'rgb(238, 233, 224)',
+                bgcolor: 'action.hover',
                 borderRadius: radius.row,
                 p: '3px',
                 alignItems: 'center',
@@ -104,14 +104,14 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                             borderRadius: radius.chip,
                             border: 'none',
                             cursor: 'pointer',
-                            bgcolor: selected ? 'rgb(255, 255, 255)' : 'transparent',
-                            color: selected ? 'rgb(13, 17, 23)' : 'rgb(107, 114, 128)',
+                            bgcolor: selected ? 'background.paper' : 'transparent',
+                            color: selected ? 'text.primary' : 'text.secondary',
                             fontSize: fontSizes.md,
                             fontWeight: 600,
                             lineHeight: 1,
-                            boxShadow: selected ? 'rgba(0, 0, 0, 0.06) 0px 1px 2px 0px' : 'none',
+                            boxShadow: selected ? 1 : 'none',
                             transition: 'background-color 0.15s, color 0.15s, box-shadow 0.15s',
-                            '&:focus-visible': { outline: '2px solid rgb(10, 124, 90)', outlineOffset: '1px' },
+                            '&:focus-visible': { outline: '2px solid', outlineColor: 'success.dark', outlineOffset: '1px' },
                         }}
                     >
                         {label}

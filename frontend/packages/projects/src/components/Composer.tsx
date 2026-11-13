@@ -11,6 +11,7 @@ import { EffortPicker } from './EffortPicker';
 import type { ModelSource } from '../hooks/useModels';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { elevation } from '@tingly/ui/theme/elevation';
 
 /** The commands the slash menu offers; the host runs them (Projects intercepts the text). */
 const SLASH_COMMANDS = [
@@ -450,7 +451,7 @@ export function Composer({
                 pt: inline ? 0.75 : 1.25,
                 pb: 0.75,
                 bgcolor: 'background.paper',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                boxShadow: elevation.faint,
                 transition: 'border-color .15s, box-shadow .15s',
                 '&:focus-within': { borderColor: 'primary.main', boxShadow: (theme) => `0 0 0 3px ${theme.palette.action.selected}` },
                 ...(dragging && { borderColor: 'primary.main', borderStyle: 'dashed' }),

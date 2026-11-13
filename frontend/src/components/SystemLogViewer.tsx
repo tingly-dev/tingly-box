@@ -378,7 +378,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     <TableRow>
                                         <TableCell colSpan={5} sx={{ pb: 0, pt: 0, border: 'none' }}>
                                             <Collapse in={expandedRows.has(key)} timeout="auto" unmountOnExit>
-                                                <Box sx={{ p: 2, backgroundColor: 'rgba(0,0,0,0.03)' }}>
+                                                <Box sx={{ p: 2, backgroundColor: 'action.hover' }}>
                                                     <Typography component="pre" sx={{ m: 0, mb: 1, fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{log.message}</Typography>
                                                     {log.fields && Object.keys(log.fields).length > 0 ? (
                                                         <Stack spacing={1}>

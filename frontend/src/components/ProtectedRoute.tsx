@@ -1,4 +1,5 @@
 import React from 'react';
+import { Box } from '@mui/material';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -14,17 +15,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   // This prevents any content from flashing before auth check is complete
   if (isLoading) {
     return (
-      <div style={{
+      <Box sx={{
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
-        backgroundColor: '#f5f5f5',
-        margin: 0,
-        padding: 0
+        bgcolor: 'background.default',
+        color: 'text.secondary',
       }}>
-        <div>Loading...</div>
-      </div>
+        Loading...
+      </Box>
     );
   }
 

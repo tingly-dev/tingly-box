@@ -278,7 +278,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         if (!el) return;
         stick.current = false;
         el.scrollIntoView({ block: 'center' });
-        el.animate?.([{ outline: '2px solid transparent' }, { outline: '2px solid var(--mui-palette-primary-main, #1976d2)' }, { outline: '2px solid transparent' }], { duration: 1600 });
+        el.animate?.([{ outline: '2px solid transparent' }, { outline: '2px solid var(--mui-palette-primary-main, currentColor)' }, { outline: '2px solid transparent' }], { duration: 1600 });
     };
     // Shows a message in the conversation, reading the conversation back to
     // it first when it is older than the loaded page.

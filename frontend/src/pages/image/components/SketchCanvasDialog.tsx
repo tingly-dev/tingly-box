@@ -13,6 +13,7 @@ import {
     ToggleButtonGroup,
     Tooltip,
     Typography,
+    alpha,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Rotate3d, Undo } from '@/components/icons';
@@ -794,7 +795,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                                     bgcolor: swatch,
                                                     border: '2px solid',
                                                     borderColor: selected ? 'primary.main' : 'background.paper',
-                                                    boxShadow: selected ? '0 0 0 2px rgba(25, 118, 210, 0.35)' : '0 0 0 1px rgba(0,0,0,0.18)',
+                                                    boxShadow: (theme) => selected ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.35)}` : `0 0 0 1px ${alpha(theme.palette.common.black, 0.18)}`,
                                                     transition: 'box-shadow 0.12s ease-out',
                                                 }}
                                             />
