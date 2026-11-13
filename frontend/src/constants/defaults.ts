@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import type { SxProps, Theme } from '@mui/material/styles';
 
 /**
@@ -12,6 +11,3 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 /** Shared empty `sx` for `SxProps<Theme>`-typed props. */
 export const EMPTY_SX: SxProps<Theme> = {};
-
-/** Shared empty `sx` for `React.CSSProperties`-typed props. */
-export const EMPTY_STYLE: CSSProperties = {};

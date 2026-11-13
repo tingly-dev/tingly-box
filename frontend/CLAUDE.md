@@ -31,3 +31,5 @@ Colours, text sizes, font weights and corner radii come from the theme in `@ting
 ## Type checking
 
 `pnpm typecheck` runs in CI (`release-cli.yml`) as a non-blocking, `continue-on-error` step — the repo has pre-existing legacy type errors that aren't being fixed as part of unrelated changes, so this only warns instead of failing the build. Still run `pnpm typecheck` locally before opening a PR and fix anything your change introduces; don't rely on CI to catch it.
+
+`src/client/schema.d.ts` is generated and git-ignored. Run `pnpm gen:api` first in a fresh checkout or worktree: without it every API type is missing and `pnpm typecheck` reports ~140 bogus errors (implicit `any` in the MCP pages, quota types, bot types); with it the tree is clean.
