@@ -205,6 +205,16 @@ func TestRulePreVendorTransforms_ThinkingEffort(t *testing.T) {
 	}
 }
 
+func TestRulePreVendorTransforms_DisableThinkingBudget(t *testing.T) {
+	got := RulePreVendorTransforms(typ.RuleFlags{DisableThinkingBudget: true})
+	if len(got) != 1 {
+		t.Fatalf("expected one transform, got %d", len(got))
+	}
+	if _, ok := got[0].(*transform.RemoveThinkingBudgetTransform); !ok {
+		t.Fatalf("expected RemoveThinkingBudgetTransform, got %T", got[0])
+	}
+}
+
 func TestRulePreVendorTransforms_ThinkingEffortEmpty_NoTransform(t *testing.T) {
 	got := RulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault})
 	if got != nil {

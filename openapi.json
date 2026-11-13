@@ -19885,6 +19885,10 @@
             "type": "string",
             "description": "Field custom_user_agent"
           },
+          "disable_thinking_budget": {
+            "type": "boolean",
+            "description": "Field disable_thinking_budget"
+          },
           "extra_headers": {
             "type": "object",
             "description": "Field extra_headers",

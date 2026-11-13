@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 )
@@ -46,6 +47,16 @@ func ConvertAnthropicV1ToBetaRequestWithError(req *anthropic.MessageNewParams) (
 	if err := json.Unmarshal(data, &beta); err != nil {
 		return nil, fmt.Errorf("unmarshal Anthropic v1 request as Beta: %w", err)
 	}
+	// The SDK models budget_tokens as required, so decoding an intentionally
+	// omitted budget would otherwise marshal it again as zero.
+	if req.Thinking.OfEnabled != nil && beta.Thinking.OfEnabled != nil && budgetExplicitlyOmitted(req.Thinking.OfEnabled.ExtraFields()) {
+		extra := beta.Thinking.OfEnabled.ExtraFields()
+		if extra == nil {
+			extra = make(map[string]any)
+		}
+		extra["budget_tokens"] = param.Omit
+		beta.Thinking.OfEnabled.SetExtraFields(extra)
+	}
 	return &beta, nil
 }
 
@@ -70,6 +81,14 @@ func ConvertAnthropicBetaToV1Request(req *anthropic.BetaMessageNewParams) (*anth
 	if err := json.Unmarshal(data, &v1); err != nil {
 		return nil, fmt.Errorf("unmarshal Anthropic Beta request as v1: %w", err)
 	}
+	if req.Thinking.OfEnabled != nil && v1.Thinking.OfEnabled != nil && budgetExplicitlyOmitted(req.Thinking.OfEnabled.ExtraFields()) {
+		extra := v1.Thinking.OfEnabled.ExtraFields()
+		if extra == nil {
+			extra = make(map[string]any)
+		}
+		extra["budget_tokens"] = param.Omit
+		v1.Thinking.OfEnabled.SetExtraFields(extra)
+	}
 	v1Data, err := json.Marshal(&v1)
 	if err != nil {
 		return nil, fmt.Errorf("marshal Anthropic v1 request: %w", err)
@@ -78,6 +97,11 @@ func ConvertAnthropicBetaToV1Request(req *anthropic.BetaMessageNewParams) (*anth
 		return nil, fmt.Errorf("downgrade Anthropic Beta request: Beta-only fields %v have no V1 form", dropped)
 	}
 	return &v1, nil
+}
+
+func budgetExplicitlyOmitted(extra map[string]any) bool {
+	value, ok := extra["budget_tokens"]
+	return ok && value == param.Omit
 }
 
 func droppedTopLevelFields(from, to []byte) []string {
