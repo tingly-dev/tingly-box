@@ -173,7 +173,7 @@
 | [icon-hierarchy.md](./icon-hierarchy.md) | Icon Hierarchy | 设计说明；局部实施状态见正文 |
 | [i18n.md](./i18n.md) | 前端 i18n 文案按功能大类分文件 | 现行契约 |
 | [theme.md](./theme.md) | Theme system notes | 设计说明；局部实施状态见正文 |
-| [visual-system.md](./visual-system.md) | 视觉规范与整体升级 — 审计、目标规范、分步计划 | 规划已确认，堆叠实施中 |
+| [visual-system.md](./visual-system.md) | 视觉规范与整体升级 — 审计、目标规范、分步计划 | 第一轮已合并；第二轮进行中 |
 | [gui-host-bridge.md](./gui-host-bridge.md) | Host bridge: one frontend for the browser tab and the desktop window | 设计说明；局部实施状态见正文 |
 | [gui-packaging.md](./gui-packaging.md) | Desktop GUI packaging | 设计说明；局部实施状态见正文 |
 | [host-binding.md](./host-binding.md) | Host Binding: Design and Decision | 设计说明；局部实施状态见正文 |
