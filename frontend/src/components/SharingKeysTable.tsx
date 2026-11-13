@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 export interface SharingKey {
     token_id: string;
@@ -60,7 +61,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     const colSpan = 7;
 
     return (
-        <TableContainer>
+        <TableContainer sx={tableFrameSx}>
             {/* Fixed layout + explicit widths so several tables stacked on one
                 page (one per Team) line their columns up; minWidth keeps the
                 columns readable and lets narrow screens scroll the table

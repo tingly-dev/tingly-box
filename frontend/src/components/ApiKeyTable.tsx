@@ -28,7 +28,6 @@ import {
     Menu,
     MenuItem,
     Modal,
-    Paper,
     Stack,
     Switch,
     Table,
@@ -49,6 +48,7 @@ import api from "../services/api";
 import type {Provider} from "../types/provider";
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 interface ApiKeyTableProps {
     providers: Provider[];
@@ -210,13 +210,8 @@ const ApiKeyTable = ({
 
     return (
         <TableContainer
-            component={Paper}
-            elevation={0}
             sx={{
-                border: view === "table" ? 1 : 0,
-                borderColor: "divider",
-                borderRadius: radius.card,
-                boxShadow: "none",
+                ...(view === "table" && tableFrameSx),
                 overflowX: "auto",
             }}
         >

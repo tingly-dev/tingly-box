@@ -2,7 +2,6 @@ import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import {
     Box,
     Chip,
-    Paper,
     Stack,
     Switch,
     Table,
@@ -15,6 +14,7 @@ import {
     Typography,
 } from '@mui/material';
 import type { Provider } from '../types/provider';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 // Fixed chip width so rows form an aligned grid instead of ragged
 // flex-wrap lines whose chip widths vary with label length.
@@ -32,7 +32,7 @@ interface VirtualModelsTableProps {
 // CRUD layer. Only Enabled is user-controllable.
 const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) => {
     return (
-        <TableContainer component={Paper} variant="outlined">
+        <TableContainer sx={tableFrameSx}>
             <Table size="small">
                 <TableHead>
                     <TableRow>

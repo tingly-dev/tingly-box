@@ -7,7 +7,6 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Paper,
     Stack,
     Table,
     TableBody,
@@ -17,6 +16,7 @@ import {
     TableRow,
     Typography,
 } from '@mui/material';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 export type ImportableProvider = {
     uuid: string;
@@ -75,7 +75,7 @@ const ProviderImportDialog = ({
                             No importable credentials found.
                         </Typography>
                     ) : (
-                        <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+                        <TableContainer sx={tableFrameSx}>
                             <Table size="small">
                                 <TableHead>
                                     <TableRow>

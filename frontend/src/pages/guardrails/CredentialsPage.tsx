@@ -9,7 +9,6 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Paper,
     Stack,
     Switch,
     Table,
@@ -35,6 +34,7 @@ import CredentialEditorDialog, { type CredentialEditorState } from './Credential
 import ProviderImportDialog, { type ImportableProvider } from './ProviderImportDialog';
 import { fontMono } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 type ProtectedCredential = {
     id: string;
@@ -402,7 +402,7 @@ const GuardrailsCredentialsPage = () => {
                             </Stack>
                         </Box>
                     ) : (
-                        <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+                        <TableContainer sx={tableFrameSx}>
                             <Table>
                                 <TableHead>
                                     <TableRow>
