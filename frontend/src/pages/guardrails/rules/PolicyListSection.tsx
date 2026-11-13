@@ -4,6 +4,7 @@ import EmptyState from '@/components/EmptyState';
 import { getEffectivePolicyState, buildPolicySummary } from './policyPresentation';
 import type { DisplayPolicy, PolicyGroup } from './types';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 type PolicyListSectionProps = {
     title: string;
@@ -42,7 +43,7 @@ const PolicyListSection = ({
             {description}
         </Typography>
         {items.length === 0 ? (
-            <Box sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+            <Box sx={{ border: '1px dashed', borderColor: 'divider', borderRadius: radius.card }}>
                 <EmptyState
                     title={
                         kind === 'resource_access'
@@ -66,7 +67,7 @@ const PolicyListSection = ({
                 />
             </Box>
         ) : (
-            <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
+            <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, py: 0, overflow: 'hidden' }}>
                 {items.map((policy) => {
                     const effectiveState = getEffectivePolicyState(policy, groupsById);
                     return (

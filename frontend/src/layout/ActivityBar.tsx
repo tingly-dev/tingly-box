@@ -102,7 +102,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             component="img"
                             src="/assets/icon.svg"
                             alt="Tingly-Box"
-                            sx={{ width: 36, height: 36, borderRadius: 8 }}
+                            sx={{ width: 36, height: 36, borderRadius: '50%' }}
                         />
                     </Box>
                 </Tooltip>

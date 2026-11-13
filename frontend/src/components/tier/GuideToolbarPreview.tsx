@@ -8,6 +8,7 @@ import {
     Key as KeyIcon,
 } from '@/components/icons';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type GuideToolbarButton = 'connectAI' | 'newRule';
 
@@ -59,7 +60,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 bgcolor: 'primary.main',
                 px: 0.75,
                 py: 0.15,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 whiteSpace: 'nowrap',
                 boxShadow: 1,
                 pointerEvents: 'none',
@@ -90,7 +91,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 px: 1.5,
                 pt: 3,
                 pb: 1,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 border: '1px dashed',
                 borderColor: 'divider',
                 bgcolor: 'background.paper',

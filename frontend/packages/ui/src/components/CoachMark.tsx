@@ -7,6 +7,7 @@
 import { Button, Paper, Popper, Stack, Typography } from '@mui/material';
 import type { FC } from 'react';
 import { Z_INDEX } from '../theme/zIndex';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CoachMarkProps {
     open: boolean;
@@ -42,7 +43,7 @@ export const CoachMark: FC<CoachMarkProps> = ({ open, anchorEl, title, text, got
                     position: 'relative',
                     width: 260,
                     p: 1.75,
-                    borderRadius: 2,
+                    borderRadius: radius.card,
                     border: '1px solid',
                     borderColor: 'primary.main',
                     // Arrow pointing back at the anchor.

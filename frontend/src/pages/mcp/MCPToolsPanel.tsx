@@ -5,6 +5,7 @@ import MCPToolList from './MCPToolList';
 import MCPToolTestDialog from './MCPToolTestDialog';
 import { connectionSummary, isBuiltinSource, isServerToolSource, isServerWebtoolsSource, toolPolicyPatch, toolsPolicyPatch, type MCPToolPatch } from './toolPresentation';
 import type { MCPCatalogTool, MCPRouteSource, MCPSourceConfig } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Every connection and Server Tool in one list. The applied routing snapshot is
 // the source of tool state, so what is shown is what the gateway will do.
@@ -82,7 +83,7 @@ export default function MCPToolsPanel({
                         variant="outlined"
                         aria-label={source.name || source.id}
                         key={source.id}
-                        sx={{ minWidth: 0, borderRadius: 1.5, overflow: 'hidden' }}
+                        sx={{ minWidth: 0, borderRadius: radius.card, overflow: 'hidden' }}
                     >
                         <Stack
                             direction="row"

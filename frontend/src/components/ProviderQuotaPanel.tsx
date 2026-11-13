@@ -9,6 +9,7 @@ import { QuotaCell } from '@/components/credential/QuotaCell';
 import { quotaRemainingPercent, quotaToWindows, tightestWindow, type ProviderQuota } from '@/types/quota';
 import { api } from '@/services/api';
 import { SHELL_ROUTES } from '@/routes/shellRoutes';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface HubProvider {
     uuid: string;
@@ -91,7 +92,7 @@ export function ProviderQuotaPanel({ onNavigate }: { onNavigate: (path: string) 
         <Paper
             elevation={0}
             sx={{
-                borderRadius: 2,
+                borderRadius: radius.card,
                 bgcolor: 'background.paper',
                 flex: 1,
                 minWidth: 0,
@@ -172,7 +173,7 @@ export function ProviderQuotaPanel({ onNavigate }: { onNavigate: (path: string) 
                                         flex: 1,
                                         minWidth: 0,
                                         justifyContent: 'flex-start',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         '&:hover .hub-provider-name': { color: 'primary.main' },
                                     }}
                                 >

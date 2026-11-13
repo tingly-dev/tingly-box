@@ -17,6 +17,7 @@ import { type FieldSpec } from '@/types/bot.ts';
 import { WeixinQRAuth } from './WeixinQRAuth.tsx';
 import { FeishuQRAuth } from './FeishuQRAuth.tsx';
 import { useTranslation } from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface BotAuthFormProps {
     platform: string;
@@ -93,7 +94,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
                         sx={{
                             border: 1,
                             borderColor: 'divider',
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             p: 2,
                             bgcolor: 'background.default',
                         }}
@@ -170,7 +171,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
 
     if (!fields || fields.length === 0) {
         return (
-            <Box sx={{ p: 2, bgcolor: 'warning.main', borderRadius: 1 }}>
+            <Box sx={{ p: 2, bgcolor: 'warning.main', borderRadius: radius.row }}>
                 <Typography variant="body2" sx={{
                     color: "warning.contrastText"
                 }}>

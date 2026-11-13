@@ -24,6 +24,7 @@ import {
 } from './prompt/ideaPromptStore';
 import { useInstructions, useRememberedModel } from './prompt/instructionStarters';
 import { PROMPT_TOOLS_SCENARIO as SCENARIO } from './prompt/promptRunStore';
+import { radius } from '@tingly/ui/theme/radius';
 
 const Writing = tablerMui(IconWriting);
 
@@ -185,7 +186,7 @@ const IdeaToPromptPage: React.FC = () => {
                             flexDirection: 'column',
                             border: 1,
                             borderColor: 'divider',
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             overflow: 'hidden',
                         }}
                     >

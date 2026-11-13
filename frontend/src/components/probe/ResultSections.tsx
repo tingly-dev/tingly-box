@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProbeResult, ProbeProtocol, ProbeTargetType } from '@/types/probe';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ResultSections: the probe result vocabulary shared by the probe dialog and
 // the Bench page — one-glance verdict (StatusBar), the request's path
@@ -138,7 +139,7 @@ export const CollapsibleSection = memo(({ title, defaultExpanded = false, childr
             sx={{
                 mt: 2,
                 border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 1.5,
+                borderRadius: radius.card,
                 overflow: 'hidden',
             }}
         >
@@ -186,7 +187,7 @@ export const CopyBlock = memo(({ text, maxHeight, fontSize = '0.78rem' }: { text
                     pr: 5,
                     bgcolor: 'background.default',
                     color: 'text.primary',
-                    borderRadius: 1.5,
+                    borderRadius: radius.card,
                     fontFamily: fontMono,
                     fontSize,
                     whiteSpace: 'pre-wrap',
@@ -219,7 +220,7 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
             variant="outlined"
             sx={{
                 mt: 2,
-                borderRadius: 2,
+                borderRadius: radius.card,
                 borderWidth: 2,
                 '& .MuiAlert-icon': {
                     fontSize: 28,

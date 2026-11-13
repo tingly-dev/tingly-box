@@ -60,6 +60,7 @@ import {
     type TileRect,
 } from '@tingly/vision';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Rows, columns, frame duration and loop count are all numbers you nudge
 // while watching the result, so each is a stepper with a typable field rather
@@ -725,7 +726,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             bgcolor: 'action.hover',
                             p: 1,
                         }}
@@ -841,7 +842,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                     bgcolor: 'common.white',
                                                     border: '2px solid',
                                                     borderColor: 'primary.main',
-                                                    borderRadius: '3px',
+                                                    borderRadius: radius.mark,
                                                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.light' },
                                                 }
                                                 : {
@@ -857,7 +858,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                         transform: 'translate(-50%, -50%)',
                                                         width: handle.mode === 'n' || handle.mode === 's' ? 22 : 5,
                                                         height: handle.mode === 'n' || handle.mode === 's' ? 5 : 22,
-                                                        borderRadius: 3,
+                                                        borderRadius: radius.pill,
                                                         bgcolor: 'common.white',
                                                         border: '1px solid',
                                                         borderColor: 'primary.main',
@@ -1115,7 +1116,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                         sx={{
                                                             width: 12,
                                                             height: 12,
-                                                            borderRadius: '2px',
+                                                            borderRadius: radius.mark,
                                                             border: '1px solid',
                                                             borderColor: 'divider',
                                                             bgcolor: `rgb(${keyColor.join(',')})`,
@@ -1193,7 +1194,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                         width: 88,
                                         height: 88,
                                         flexShrink: 0,
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         border: 1,
                                         borderColor: 'divider',
                                         backgroundImage: CHECKERBOARD_IMAGE,
@@ -1315,7 +1316,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                 p: 0.25,
                                                 border: 1,
                                                 borderColor: 'divider',
-                                                borderRadius: 1,
+                                                borderRadius: radius.row,
                                                 bgcolor: 'transparent',
                                                 cursor: 'pointer',
                                             }}
@@ -1352,7 +1353,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                             width: '100%',
                             maxWidth: 420,
                             aspectRatio: '1 / 1',
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             border: 1,
                             borderColor: 'divider',
                             backgroundImage: CHECKERBOARD_IMAGE,

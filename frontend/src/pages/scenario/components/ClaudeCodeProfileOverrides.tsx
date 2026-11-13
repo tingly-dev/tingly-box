@@ -41,6 +41,7 @@ import {
 } from './ClaudeCodeQuickConfig';
 import { fontMono } from '@/theme/fonts';
 import { useNotify } from '@/hooks/useNotify';
+import { radius } from '@tingly/ui/theme/radius';
 
 type OverrideKey = PrefsKey | 'defaultMode';
 
@@ -591,7 +592,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 onClose={() => setAddAnchor(null)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                slotProps={{ paper: { sx: { mt: 0.5, width: 'min(620px, calc(100vw - 32px))', borderRadius: 1.5 } } }}
+                slotProps={{ paper: { sx: { mt: 0.5, width: 'min(620px, calc(100vw - 32px))', borderRadius: radius.card } } }}
             >
                 <Box
                     sx={{

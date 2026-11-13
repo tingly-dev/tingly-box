@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProviderQuotaPanel } from '@/components/ProviderQuotaPanel';
 import { QuotaRing } from '@/components/credential/QuotaRing';
 import { activityItemSx } from './styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 export function QuotaMenu({ onNavigate }: { onNavigate?: () => void }) {
     const { t } = useTranslation();
@@ -50,7 +51,7 @@ export function QuotaMenu({ onNavigate }: { onNavigate?: () => void }) {
                     id,
                     role: 'dialog',
                     'aria-label': t('hub.quota.title'),
-                    sx: { width: 380, maxWidth: 'calc(100vw - 32px)', borderRadius: 2, ml: 0.5 },
+                    sx: { width: 380, maxWidth: 'calc(100vw - 32px)', borderRadius: radius.card, ml: 0.5 },
                 } }}
             >
                 {open && (

@@ -3,6 +3,7 @@ import { Alert, Box, Button, Chip, List, ListItem, Stack, Typography } from '@mu
 import { ArticleOutlined, Refresh } from '@/components/icons';
 import UnifiedCard from '@/components/UnifiedCard';
 import type { GuardrailsPolicy, RegistryPolicyEntry } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 type RegistryCardProps = {
     registryURL: string;
@@ -71,7 +72,7 @@ const RegistryCard = ({
                     <Alert severity="info">No downloadable policies are currently listed in the remote registry.</Alert>
                 )}
                 {!registryLoadError && !registryLoading && downloadablePolicies.length > 0 && (
-                    <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
+                    <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, py: 0, overflow: 'hidden' }}>
                         {downloadablePolicies.map((policy) => {
                             const installedPolicy = policies.find((item) => item.id === policy.id);
                             const isInstalled = Boolean(installedPolicy);

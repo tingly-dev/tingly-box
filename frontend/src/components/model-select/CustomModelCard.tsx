@@ -12,6 +12,7 @@ import { ModelCopyButton } from './ModelCopyButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 import ConfirmPopover from '@/components/ConfirmPopover';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CustomModelCardProps {
     model: string;
@@ -74,7 +75,7 @@ export default function CustomModelCard({
                     width: '100%',
                     height: 60,
                     border: 1,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     cursor: loading ? 'wait' : 'pointer',
                     transition: modelCardTransition,
                     position: 'relative',

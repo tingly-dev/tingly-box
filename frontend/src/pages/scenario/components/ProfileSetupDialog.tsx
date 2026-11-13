@@ -3,6 +3,7 @@ import { CheckCircle as CheckCircleIcon, ContentCopy as ContentCopyIcon } from '
 import { useTranslation } from 'react-i18next';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ProfileSetupDialogProps {
     open: boolean;
@@ -44,7 +45,7 @@ export const ProfileSetupDialog: React.FC<ProfileSetupDialogProps> = ({ open, on
     const firstOpen = !providerDone ? 1 : !launchDone ? 2 : 0;
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: radius.card } } }}>
             <DialogTitle sx={{ pb: 1 }}>
                 <Typography variant="h6" component="span" sx={{ fontWeight: 600 }}>{t('agentSetup.profile.title')}</Typography>
             </DialogTitle>
@@ -70,7 +71,7 @@ export const ProfileSetupDialog: React.FC<ProfileSetupDialogProps> = ({ open, on
                     {!launchDone && (
                         <Box sx={{ pl: 4.25, mt: 0.75 }}>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>{t('agentSetup.profile.step2Hint')}</Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: 640, px: 1.5, py: 0.5, borderRadius: 1.5, bgcolor: 'action.hover' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: 640, px: 1.5, py: 0.5, borderRadius: radius.card, bgcolor: 'action.hover' }}>
                                 <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.md, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{command}</Typography>
                                 <Tooltip title={copied ? t('common.copied', { defaultValue: 'Copied' }) : t('agentSetup.profile.copy')}>
                                     <IconButton size="small" aria-label={t('agentSetup.profile.copy')} onClick={() => copy(command)}>

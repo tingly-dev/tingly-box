@@ -9,6 +9,7 @@
 
 import type { SxProps, Theme } from '@mui/material/styles';
 import { elevation } from '@/theme/elevation';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ============================================================================
 // ToggleButtonGroup Styles (Multi-Choice Selection)
@@ -20,7 +21,7 @@ import { elevation } from '@/theme/elevation';
  */
 export const toggleButtonGroupStyle: SxProps<Theme> = {
     backgroundColor: 'action.hover',
-    borderRadius: 1,
+    borderRadius: radius.row,
     display: 'flex',
     border: '1px solid',
     borderColor: 'divider',
@@ -73,7 +74,7 @@ export const switchControlLabelStyle: SxProps<Theme> = {
 export const switchBaseStyle: SxProps<Theme> = {
     padding: 8,
     '& .MuiSwitch-track': {
-        borderRadius: 12,
+        borderRadius: radius.pill,
         borderWidth: 1,
         borderColor: 'divider',
     },
@@ -121,7 +122,7 @@ export const switchSmallStyle: SxProps<Theme> = {
     },
     '& .MuiSwitch-track': {
         height: 20,
-        borderRadius: 10,
+        borderRadius: radius.pill,
     },
 };
 

@@ -8,56 +8,26 @@
   "packages/mannequin/src/render3d.ts": {
     "colour": 1
   },
-  "packages/projects/src/components/common/DirectoryPicker.tsx": {
-    "radius": 2
-  },
   "packages/projects/src/components/Composer.tsx": {
-    "colour": 1,
-    "radius": 1
-  },
-  "packages/projects/src/components/composerPicker.ts": {
-    "radius": 1
+    "colour": 1
   },
   "packages/projects/src/components/Markdown.tsx": {
     "textSize": 5
   },
-  "packages/projects/src/components/NavTree.tsx": {
-    "radius": 1
-  },
-  "packages/projects/src/components/project/ConversationPane.tsx": {
-    "radius": 1
-  },
-  "packages/projects/src/components/project/infoRail.tsx": {
-    "radius": 1
-  },
   "packages/projects/src/components/project/ThreadPanel.tsx": {
-    "colour": 1,
-    "radius": 1
+    "colour": 1
   },
   "packages/projects/src/components/project/threadStatus.tsx": {
     "textSize": 1
   },
-  "packages/projects/src/components/project/ThreadTitle.tsx": {
-    "radius": 1
-  },
   "packages/projects/src/components/usage/UsageViews.tsx": {
-    "textSize": 1,
-    "radius": 3
-  },
-  "packages/projects/src/components/workspace/ViewSwitch.tsx": {
-    "radius": 1
+    "textSize": 1
   },
   "packages/projects/src/transcript/conversationStyles.ts": {
     "textSize": 3
   },
   "packages/projects/src/transcript/Markdown.tsx": {
     "textSize": 2
-  },
-  "packages/ui/src/components/CoachMark.tsx": {
-    "radius": 1
-  },
-  "packages/ui/src/components/EmptyState.tsx": {
-    "radius": 1
   },
   "packages/ui/src/components/EntityLabel.tsx": {
     "textSize": 2
@@ -68,135 +38,63 @@
   "packages/vision/src/sketchCanvas.ts": {
     "colour": 7
   },
-  "src/App.tsx": {
-    "radius": 1
-  },
-  "src/components/AILogViewer.tsx": {
-    "radius": 1
-  },
-  "src/components/ApiKeyModal.tsx": {
-    "radius": 1
-  },
-  "src/components/ApiKeyTable.tsx": {
-    "radius": 4
-  },
   "src/components/ApiStyleBadge.tsx": {
     "colour": 6
   },
   "src/components/AuthTypeBadge.tsx": {
     "textSize": 1
   },
-  "src/components/bot/BotAccessDialog.tsx": {
-    "radius": 2
-  },
-  "src/components/bot/BotAuthForm.tsx": {
-    "radius": 2
-  },
-  "src/components/bot/BotTable.tsx": {
-    "radius": 1
-  },
   "src/components/bot/FeishuQRAuth.tsx": {
-    "colour": 2,
-    "radius": 1
-  },
-  "src/components/bot/PairingCodePanel.tsx": {
-    "radius": 1
-  },
-  "src/components/bot/PlatformPicker.tsx": {
-    "radius": 1
-  },
-  "src/components/bot/RemoteAgentBotCard.tsx": {
-    "radius": 1
+    "colour": 2
   },
   "src/components/bot/WeixinQRAuth.tsx": {
-    "colour": 2,
-    "radius": 1
+    "colour": 2
   },
   "src/components/BrandIcons.tsx": {
     "colour": 2
   },
-  "src/components/CardGrid.tsx": {
-    "radius": 2
-  },
   "src/components/CodeBlock.tsx": {
-    "colour": 1,
-    "radius": 1
-  },
-  "src/components/CollapsibleCard.tsx": {
-    "radius": 1
-  },
-  "src/components/ConfigRow.tsx": {
-    "radius": 1
-  },
-  "src/components/ConnectProviderDialog.tsx": {
-    "radius": 4
+    "colour": 1
   },
   "src/components/credential/CredentialCards.tsx": {
-    "textSize": 1,
-    "radius": 1
+    "textSize": 1
   },
   "src/components/credential/QuotaBarItem.tsx": {
-    "textSize": 2,
-    "radius": 3
-  },
-  "src/components/credential/QuotaCell.tsx": {
-    "radius": 1
-  },
-  "src/components/credential/useQuotaBars.tsx": {
-    "radius": 1
-  },
-  "src/components/dashboard/AgentQuickNav.tsx": {
-    "radius": 3
+    "textSize": 2
   },
   "src/components/dashboard/chartStyles.ts": {
     "colour": 7,
-    "textSize": 2,
-    "radius": 1
+    "textSize": 2
   },
   "src/components/dashboard/DashboardFilterBar.tsx": {
-    "textSize": 4,
-    "radius": 2
+    "textSize": 4
   },
   "src/components/dashboard/DashboardHeatmapSection.tsx": {
-    "textSize": 1,
-    "radius": 2
+    "textSize": 1
   },
   "src/components/dashboard/PerformanceSummary.tsx": {
-    "textSize": 1,
-    "radius": 1
-  },
-  "src/components/dashboard/QuotaHistoryView.tsx": {
-    "radius": 2
+    "textSize": 1
   },
   "src/components/dashboard/RequestsView.tsx": {
     "colour": 4,
-    "textSize": 2,
-    "radius": 1
-  },
-  "src/components/dashboard/RosterAxis.tsx": {
-    "radius": 1
+    "textSize": 2
   },
   "src/components/dashboard/RosterTopList.tsx": {
-    "textSize": 1,
-    "radius": 2
+    "textSize": 1
   },
   "src/components/dashboard/ServiceStatsTable.tsx": {
     "colour": 2,
-    "textSize": 1,
-    "radius": 2
+    "textSize": 1
   },
   "src/components/dashboard/StatCard.tsx": {
-    "colour": 1,
-    "radius": 2
+    "colour": 1
   },
   "src/components/dashboard/TokenHeatmap.tsx": {
     "colour": 9,
-    "textSize": 6,
-    "radius": 3
+    "textSize": 6
   },
   "src/components/dashboard/TokenHistoryChart/components.tsx": {
-    "textSize": 1,
-    "radius": 6
+    "textSize": 1
   },
   "src/components/dashboard/TokenHistoryChart/DailyChart.tsx": {
     "colour": 1
@@ -205,34 +103,19 @@
     "colour": 1
   },
   "src/components/GlobalExperimentalFeatures.tsx": {
-    "textSize": 1,
-    "radius": 1
+    "textSize": 1
   },
   "src/components/GraphSettingsMenu.tsx": {
     "textSize": 1
-  },
-  "src/components/model-select/AddCustomModelCard.tsx": {
-    "radius": 1
   },
   "src/components/model-select/cardStyles.ts": {
     "colour": 4
   },
   "src/components/model-select/CustomModelCard.tsx": {
-    "colour": 1,
-    "radius": 1
-  },
-  "src/components/model-select/CustomModelDialog.tsx": {
-    "radius": 1
-  },
-  "src/components/model-select/ModelCard.tsx": {
-    "radius": 2
-  },
-  "src/components/model-select/ProviderSidebar.tsx": {
-    "radius": 1
+    "colour": 1
   },
   "src/components/ModelRequestHeader.tsx": {
-    "textSize": 6,
-    "radius": 1
+    "textSize": 6
   },
   "src/components/nodes/AgentNode.tsx": {
     "colour": 1
@@ -244,123 +127,44 @@
     "colour": 2
   },
   "src/components/nodes/ServiceNode.tsx": {
-    "textSize": 6,
-    "radius": 1
+    "textSize": 6
   },
   "src/components/nodes/SmartOpNode.tsx": {
-    "textSize": 3,
-    "radius": 1
+    "textSize": 3
   },
   "src/components/nodes/styles.tsx": {
     "colour": 9,
-    "textSize": 2,
-    "radius": 2
-  },
-  "src/components/notify/BotNotifyGroup.tsx": {
-    "radius": 3
+    "textSize": 2
   },
   "src/components/oauth/fallbackProviders.tsx": {
     "colour": 13
   },
-  "src/components/oauth/OAuthAuthorizationDialog.tsx": {
-    "radius": 1
-  },
-  "src/components/OAuthDialog.tsx": {
-    "radius": 3
-  },
-  "src/components/OAuthTable.tsx": {
-    "radius": 2
-  },
-  "src/components/paste-detect/PasteDetectPanel.tsx": {
-    "radius": 2
-  },
-  "src/components/probe/ProbeDialog.tsx": {
-    "radius": 4
-  },
-  "src/components/probe/QuickProbeButton.tsx": {
-    "radius": 1
-  },
   "src/components/probe/ResultSections.tsx": {
-    "textSize": 1,
-    "radius": 3
+    "textSize": 1
   },
   "src/components/prompt/skill/SkillDetailDialog.tsx": {
     "textSize": 1
   },
-  "src/components/prompt/skill/SkillListDialog.tsx": {
-    "radius": 2
-  },
-  "src/components/prompt/skill/SkillLocationCard.tsx": {
-    "radius": 1
-  },
   "src/components/ProtectedRoute.tsx": {
     "colour": 1
   },
-  "src/components/provider-form-dialog/KeyNameField.tsx": {
-    "radius": 1
-  },
-  "src/components/provider-form-dialog/ProtocolSlot.tsx": {
-    "radius": 1
-  },
   "src/components/provider-form-dialog/VerificationResultPanel.tsx": {
-    "textSize": 2,
-    "radius": 2
-  },
-  "src/components/ProviderFormDialog.tsx": {
-    "radius": 1
-  },
-  "src/components/ProviderIcon.tsx": {
-    "radius": 1
-  },
-  "src/components/ProviderQuotaPanel.tsx": {
-    "radius": 2
-  },
-  "src/components/remote-control/CollapsibleGuide.tsx": {
-    "radius": 1
-  },
-  "src/components/RequestJourney.tsx": {
-    "radius": 1
-  },
-  "src/components/rule-card/CodexCompactChip.tsx": {
-    "radius": 3
-  },
-  "src/components/rule-card/dialogs.tsx": {
-    "radius": 1
-  },
-  "src/components/rule-card/FlagCatalogDialog.tsx": {
-    "radius": 1
-  },
-  "src/components/rule-card/RulePluginsCard.tsx": {
-    "radius": 2
-  },
-  "src/components/rule-card/SmartRuleCatalogDialog.tsx": {
-    "radius": 2
-  },
-  "src/components/SharingKeysTable.tsx": {
-    "radius": 1
+    "textSize": 2
   },
   "src/components/SystemLogViewer.tsx": {
-    "colour": 1,
-    "radius": 2
+    "colour": 1
   },
   "src/components/tier/EntryGuideDialog.tsx": {
-    "colour": 1,
-    "radius": 5
-  },
-  "src/components/tier/GuideToolbarPreview.tsx": {
-    "radius": 2
+    "colour": 1
   },
   "src/components/tier/TierGuideDialog.tsx": {
-    "colour": 1,
-    "radius": 3
+    "colour": 1
   },
   "src/components/ToolCard.tsx": {
-    "colour": 16,
-    "radius": 4
+    "colour": 16
   },
   "src/components/ToolFilterBar.tsx": {
-    "colour": 10,
-    "radius": 4
+    "colour": 10
   },
   "src/components/UnifiedCard.tsx": {
     "colour": 1
@@ -369,156 +173,55 @@
     "colour": 2
   },
   "src/components/UpdatePanelDialog.tsx": {
-    "textSize": 1,
-    "radius": 1
-  },
-  "src/components/VersionDisplay.tsx": {
-    "radius": 1
+    "textSize": 1
   },
   "src/constants/platformGuides.tsx": {
-    "colour": 7,
-    "radius": 5
-  },
-  "src/contexts/AuthContext.tsx": {
-    "radius": 1
-  },
-  "src/layout/ActivityBar.tsx": {
-    "radius": 1
-  },
-  "src/layout/PowerUpsMenu.tsx": {
-    "radius": 1
-  },
-  "src/layout/PreferencesMenu.tsx": {
-    "radius": 1
-  },
-  "src/layout/QuotaMenu.tsx": {
-    "radius": 1
+    "colour": 7
   },
   "src/layout/Sidebar.tsx": {
     "colour": 3
   },
   "src/layout/styles.ts": {
-    "colour": 2,
-    "radius": 2
+    "colour": 2
   },
   "src/layout/useActivityItems.tsx": {
-    "colour": 2,
-    "radius": 1
+    "colour": 2
   },
   "src/pages/bench/BenchPage.tsx": {
-    "colour": 1,
-    "radius": 2
-  },
-  "src/pages/bench/PayloadPanel.tsx": {
-    "radius": 2
-  },
-  "src/pages/CredentialPage.tsx": {
-    "radius": 1
-  },
-  "src/pages/DashboardPage.tsx": {
-    "radius": 4
-  },
-  "src/pages/guardrails/CredentialEditorDialog.tsx": {
-    "radius": 1
-  },
-  "src/pages/guardrails/CredentialsPage.tsx": {
-    "radius": 1
-  },
-  "src/pages/guardrails/FragmentExportDialog.tsx": {
-    "radius": 1
-  },
-  "src/pages/guardrails/GroupsPage.tsx": {
-    "radius": 4
+    "colour": 1
   },
   "src/pages/guardrails/rules/CompactListEditor.tsx": {
-    "textSize": 1,
-    "radius": 1
-  },
-  "src/pages/guardrails/rules/PolicyEditorDialog.tsx": {
-    "radius": 14
-  },
-  "src/pages/guardrails/rules/PolicyKindCards.tsx": {
-    "radius": 1
-  },
-  "src/pages/guardrails/rules/PolicyListSection.tsx": {
-    "radius": 2
-  },
-  "src/pages/guardrails/rules/RegistryCard.tsx": {
-    "radius": 1
-  },
-  "src/pages/guardrails/rules/ScenarioScopeSelector.tsx": {
-    "radius": 2
-  },
-  "src/pages/HubPage.tsx": {
-    "radius": 2
-  },
-  "src/pages/image/components/GenerationRunCard.tsx": {
-    "radius": 2
+    "textSize": 1
   },
   "src/pages/image/components/ImageGenGalleryDialog.tsx": {
-    "textSize": 1,
-    "radius": 3
+    "textSize": 1
   },
   "src/pages/image/components/ImageGenLightbox.tsx": {
-    "colour": 6,
-    "radius": 2
+    "colour": 6
   },
   "src/pages/image/components/ImageGenPlayground.chrome.ts": {
-    "colour": 4,
-    "radius": 2
+    "colour": 4
   },
   "src/pages/image/components/ImageGenPlaygroundCard.tsx": {
     "textSize": 2
   },
-  "src/pages/image/components/ImageGenQuickStartDialog.tsx": {
-    "radius": 1
-  },
-  "src/pages/image/components/ImageGenReferenceImages.tsx": {
-    "radius": 4
-  },
-  "src/pages/image/components/ImageGenResultsPanel.tsx": {
-    "radius": 3
-  },
   "src/pages/image/components/ImageSliceDialog.tsx": {
     "colour": 12,
-    "textSize": 1,
-    "radius": 7
-  },
-  "src/pages/image/components/ImportedImageCard.tsx": {
-    "radius": 1
+    "textSize": 1
   },
   "src/pages/image/components/MaskEditorDialog.tsx": {
-    "textSize": 1,
-    "radius": 3
-  },
-  "src/pages/image/components/PoseLibraryPopover.tsx": {
-    "radius": 1
-  },
-  "src/pages/image/components/RunSourceStrip.tsx": {
-    "radius": 1
+    "textSize": 1
   },
   "src/pages/image/components/SketchCanvasDialog.tsx": {
     "colour": 2,
-    "textSize": 1,
-    "radius": 3
-  },
-  "src/pages/image/components/ViewAnglePopover.tsx": {
-    "radius": 1
-  },
-  "src/pages/image/IdeaToPromptPage.tsx": {
-    "radius": 1
+    "textSize": 1
   },
   "src/pages/image/ImageLibraryPage.tsx": {
-    "textSize": 2,
-    "radius": 3
-  },
-  "src/pages/image/ImageToPromptPage.tsx": {
-    "radius": 3
+    "textSize": 2
   },
   "src/pages/image/library/AssetPickerDialog.tsx": {
     "colour": 1,
-    "textSize": 1,
-    "radius": 1
+    "textSize": 1
   },
   "src/pages/image/library/mockAssets.ts": {
     "colour": 17
@@ -526,141 +229,34 @@
   "src/pages/image/profiles/mockProfiles.ts": {
     "colour": 32
   },
-  "src/pages/image/profiles/ProfilePromptTabs.tsx": {
-    "radius": 1
-  },
   "src/pages/image/prompt/mockImagePrompts.ts": {
     "colour": 9
   },
   "src/pages/image/prompt/preparePicture.ts": {
     "colour": 1
   },
-  "src/pages/image/prompt/PromptRunCard.tsx": {
-    "radius": 1
-  },
   "src/pages/mcp/AdvisorSettings.tsx": {
     "textSize": 1
-  },
-  "src/pages/mcp/MCPProfilesPage.tsx": {
-    "radius": 1
-  },
-  "src/pages/mcp/MCPSourceEditor.tsx": {
-    "radius": 1
-  },
-  "src/pages/mcp/MCPToolParameters.tsx": {
-    "radius": 1
-  },
-  "src/pages/mcp/MCPToolsPanel.tsx": {
-    "radius": 1
-  },
-  "src/pages/ModelTestPage.tsx": {
-    "radius": 2
-  },
-  "src/pages/projects/session/QuotaCard.tsx": {
-    "radius": 1
-  },
-  "src/pages/prompt/SkillColumnShell.tsx": {
-    "radius": 1
   },
   "src/pages/prompt/SkillDetailColumn.tsx": {
     "textSize": 2
   },
-  "src/pages/QuotaHistoryPage.tsx": {
-    "radius": 1
-  },
   "src/pages/scenario/components/AgentAccessSection.tsx": {
-    "textSize": 1,
-    "radius": 2
-  },
-  "src/pages/scenario/components/ClaudeCodeConfigModal.tsx": {
-    "radius": 2
-  },
-  "src/pages/scenario/components/ClaudeCodeProfileOverrides.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/ClaudeCodeQuickConfig.tsx": {
-    "radius": 3
-  },
-  "src/pages/scenario/components/ClaudeDesktopConfigModal.tsx": {
-    "radius": 8
-  },
-  "src/pages/scenario/components/CodexConfigModal.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/CodexQuickConfig.tsx": {
-    "radius": 2
-  },
-  "src/pages/scenario/components/config/ConfigModalShell.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/config/InstructionSteps.tsx": {
-    "radius": 1
+    "textSize": 1
   },
   "src/pages/scenario/components/config/ManualFileSection.tsx": {
     "textSize": 1
   },
-  "src/pages/scenario/components/Context1MChangeBanner.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/CursorConfigModal.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/DecisionsGuideModal.tsx": {
-    "radius": 1
-  },
   "src/pages/scenario/components/DecisionTryCard.tsx": {
-    "textSize": 1,
-    "radius": 3
-  },
-  "src/pages/scenario/components/DshQuickConfig.tsx": {
-    "radius": 2
-  },
-  "src/pages/scenario/components/OpenCodeConfigModal.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/PiConfigModal.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/ProfileSetupDialog.tsx": {
-    "radius": 2
-  },
-  "src/pages/scenario/components/ScenarioPageSkeleton.tsx": {
-    "radius": 3
+    "textSize": 1
   },
   "src/pages/scenario/components/TeamKeysOverview.tsx": {
-    "textSize": 1,
-    "radius": 3
+    "textSize": 1
   },
   "src/pages/scenario/components/TemplatePage.constants.ts": {
-    "colour": 2,
-    "radius": 1
-  },
-  "src/pages/scenario/components/VSCodeConfigModal.tsx": {
-    "radius": 1
-  },
-  "src/pages/scenario/components/WorkBuddyConfigModal.tsx": {
-    "radius": 2
-  },
-  "src/pages/scenario/components/XcodeConfigModal.tsx": {
-    "radius": 2
+    "colour": 2
   },
   "src/pages/system/AccessControl.tsx": {
-    "textSize": 2,
-    "radius": 2
-  },
-  "src/pages/system/System.tsx": {
-    "radius": 1
-  },
-  "src/pages/userUsage/RosterTable.tsx": {
-    "radius": 1
-  },
-  "src/pages/UserUsagePage.tsx": {
-    "radius": 1
-  },
-  "src/styles/textStyles.ts": {
-    "radius": 1
-  },
-  "src/styles/toggleStyles.tsx": {
-    "radius": 3
+    "textSize": 2
   }
 }

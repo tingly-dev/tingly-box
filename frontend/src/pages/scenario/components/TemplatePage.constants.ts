@@ -1,3 +1,4 @@
+import { radius } from '@tingly/ui/theme/radius'
 export const SCROLLBAR_STYLES = {
     width: '8px',
     track: {
@@ -5,7 +6,7 @@ export const SCROLLBAR_STYLES = {
     },
     thumb: {
         backgroundColor: 'rgba(0, 0, 0, 0.2)',
-        borderRadius: '4px',
+        borderRadius: radius.pill,
         '&:hover': {
             backgroundColor: 'rgba(0, 0, 0, 0.3)',
         },

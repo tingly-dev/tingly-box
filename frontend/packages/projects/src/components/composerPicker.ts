@@ -1,4 +1,5 @@
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** Composer menus open above their trigger to leave room at the bottom of the page. */
 export const composerPickerMenuProps = {
@@ -14,7 +15,7 @@ export const composerPickerMenuProps = {
  */
 export const composerPickerSx = {
     px: 0.75,
-    borderRadius: 1,
+    borderRadius: radius.row,
     maxWidth: '100%',
     minWidth: 0,
     color: 'text.secondary',

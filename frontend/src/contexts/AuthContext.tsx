@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
 import { elevation } from '@/theme/elevation';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface AuthContextType {
     token: string | null;
@@ -55,7 +56,7 @@ const AuthPromptDialog: React.FC<{
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                         boxShadow: elevation.overlay,
                     }
                 }

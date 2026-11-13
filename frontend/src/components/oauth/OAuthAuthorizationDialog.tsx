@@ -17,6 +17,7 @@ import {useEffect, useState} from 'react';
 import WorkBuddyConnectionNote from './WorkBuddyConnectionNote';
 import api from "@/services/api.ts";
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Type for timer (browser vs Node.js)
 type TimerId = ReturnType<typeof setTimeout>;
@@ -312,7 +313,7 @@ const OAuthAuthorizationDialog = ({
                                         gap: 2,
                                         p: 2,
                                         bgcolor: 'action.hover',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         border: '2px dashed',
                                         borderColor: 'primary.main',
                                     }}

@@ -5,6 +5,7 @@ import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageConte
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface XcodeConfigModalProps {
     open: boolean;
@@ -30,7 +31,7 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 3,
+                        borderRadius: radius.card,
                     }
                 }
             }}
@@ -76,7 +77,7 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
                         alt="Xcode Intelligence Settings"
                         sx={{
                             width: '100%',
-                            borderRadius: 6,
+                            borderRadius: radius.card,
                             border: 1,
                             borderColor: 'divider',
                             boxShadow: 3,

@@ -3,6 +3,7 @@ import {Box, Button, IconButton, Stack, Typography, alpha} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface VerificationResultPanelProps {
     result: VerificationResult;
@@ -19,7 +20,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
             sx={{
                 mt: 1,
                 p: 1.5,
-                borderRadius: 1.5,
+                borderRadius: radius.card,
                 bgcolor: 'background.default',
                 border: '1px solid',
                 borderColor: 'divider',
@@ -118,7 +119,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                         alignItems: "center",
                         mt: 1.5,
                         p: 1,
-                        borderRadius: 1,
+                        borderRadius: radius.row,
                         bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08),
                         border: '1px solid',
                         borderColor: 'warning.light'

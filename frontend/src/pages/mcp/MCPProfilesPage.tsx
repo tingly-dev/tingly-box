@@ -45,6 +45,7 @@ import {
 import { nextMCPId } from './workspaceState';
 import { publishMCPProfiles } from './profileStore';
 import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Keyed by profile so each one remembers its own folded state.
 function ProfileAccess({ profile, url }: { profile: MCPProfile; url: string }) {
@@ -260,7 +261,7 @@ export default function MCPProfilesPage() {
                         </Typography>
                     )}
                     {rows.length > 0 && (
-                        <Card variant="outlined" sx={{ mt: 1, borderRadius: 1.5, overflow: 'hidden' }}>
+                        <Card variant="outlined" sx={{ mt: 1, borderRadius: radius.card, overflow: 'hidden' }}>
                             <Box sx={{ px: 2, py: 1, bgcolor: 'action.hover' }}>
                                 <Typography variant="caption" sx={{ fontWeight: 600 }}>
                                     {label('toolsOn', '{{on}} of {{total}} tools on', {

@@ -23,11 +23,12 @@ import { UsageMetricValueCells } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, RosterAxisState } from '@/components/dashboard';
 import { formatDateTime, getModelKey, getProviderKey, accountKey } from './userUsageModel';
 import type { UserUsageRow, ViewMode, PrimaryColumn } from './userUsageModel';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Shared card anatomy for the roster table and the detail card below it.
 export const usageTableCardSx = {
     width: '100%',
-    borderRadius: 2,
+    borderRadius: radius.card,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',

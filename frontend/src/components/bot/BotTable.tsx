@@ -24,6 +24,7 @@ import {
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Link as RouterLink} from 'react-router-dom';
+import { radius } from '@tingly/ui/theme/radius';
 
 // BotTable is the RESOURCE table for connected bots — the table counterpart
 // of ApiKeyTable, replacing the former BotCard. Every bot, across every
@@ -210,7 +211,7 @@ const BotTable: React.FC<BotTableProps> = ({
                     const toggling = isToggling?.(bot.uuid!) ?? false;
                     const restarting = isRestarting?.(bot.uuid!) ?? false;
                     return (
-                        <Box key={bot.uuid} sx={{p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1.5}}>
+                        <Box key={bot.uuid} sx={{p: 1.5, border: 1, borderColor: 'divider', borderRadius: radius.card}}>
                             <Stack direction="row" sx={{alignItems: 'flex-start', justifyContent: 'space-between', gap: 1}}>
                                 <Box sx={{minWidth: 0}}>
                                     <EntityLabel {...entities.bot(bot)} copy/>

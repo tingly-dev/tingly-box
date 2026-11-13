@@ -17,6 +17,7 @@ import type { Team } from '@/types/team';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
+import { radius } from '@tingly/ui/theme/radius';
 
 const PREF_KEY = 'team-keys-overview-expanded';
 
@@ -138,7 +139,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
         <Card
             sx={{
                 position: 'relative',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 boxShadow: 'none',
@@ -156,7 +157,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                             onClick={handleToggle}
                             aria-expanded
                             aria-label={label}
-                            sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: 1 }}
+                            sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: radius.row }}
                         >
                             {chevron}
                         </ButtonBase>
@@ -207,7 +208,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                 columnGap: { xs: 1, sm: 3 },
                                                 gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: '168px minmax(0, 1fr) auto' },
                                                 py: 0.25,
-                                                borderRadius: 1,
+                                                borderRadius: radius.row,
                                                 '&:hover': { backgroundColor: 'action.hover' },
                                             }}
                                         >

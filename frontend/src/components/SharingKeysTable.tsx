@@ -17,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface SharingKey {
     token_id: string;
@@ -173,7 +174,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         sx={{
                                             px: 1, py: 0.5,
                                             bgcolor: 'action.selected',
-                                            borderRadius: 1,
+                                            borderRadius: radius.row,
                                             border: '1px solid',
                                             borderColor: 'divider',
                                             display: 'flex',

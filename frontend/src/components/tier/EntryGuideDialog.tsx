@@ -22,6 +22,7 @@ import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideToolbarPreview } from './GuideToolbarPreview';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface EntryGuideDialogProps {
     open: boolean;
@@ -233,7 +234,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                             sx={{
                                                 p: 1.5,
                                                 bgcolor: 'action.hover',
-                                                borderRadius: 1,
+                                                borderRadius: radius.row,
                                                 flex: '1 1 45%',
                                             }}
                                         >
@@ -247,7 +248,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                         </Box>
 
                         {currentStep.panel ? (
-                            <Box sx={{ bgcolor: 'background.default', p: { xs: 2, sm: 3 }, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                            <Box sx={{ bgcolor: 'background.default', p: { xs: 2, sm: 3 }, borderRadius: radius.row, border: '1px solid', borderColor: 'divider' }}>
                                 {currentStep.panel === 'install' && agent && (
                                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                         {[
@@ -256,7 +257,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                         ].filter((row) => row.command).map((row) => (
                                             <Box key={row.label}>
                                                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>{row.label}</Typography>
-                                                <Box sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, p: 1, borderRadius: 1, bgcolor: 'action.hover', wordBreak: 'break-all' }}>
+                                                <Box sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, p: 1, borderRadius: radius.row, bgcolor: 'action.hover', wordBreak: 'break-all' }}>
                                                     {row.command}
                                                 </Box>
                                             </Box>
@@ -291,7 +292,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                             minHeight: 280,
                             maxHeight: 400,
                             overflow: 'auto',
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             border: '1px solid',
                             borderColor: 'divider',
                             position: 'relative',
@@ -314,7 +315,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                 color: 'white',
                                 px: 1.5,
                                 py: 0.5,
-                                borderRadius: 1,
+                                borderRadius: radius.row,
                                 fontSize: fontSizes.sm,
                                 opacity: 0.8,
                             }}>

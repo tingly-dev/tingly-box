@@ -25,6 +25,7 @@ import { formatNumber, hasCacheWrites } from './chartStyles';
 import api from '@/services/api';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { getStatusColor } from '@/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
     const showCacheWrite = hasCacheWrites(records);
 
     return (
-        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
             {/* Header */}
             <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
                 <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>

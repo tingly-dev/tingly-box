@@ -34,6 +34,7 @@ import { blurActiveElement } from '@/utils/dom';
 import CredentialEditorDialog, { type CredentialEditorState } from './CredentialEditorDialog';
 import ProviderImportDialog, { type ImportableProvider } from './ProviderImportDialog';
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 type ProtectedCredential = {
     id: string;
@@ -367,7 +368,7 @@ const GuardrailsCredentialsPage = () => {
                                     sx={{
                                         width: 72,
                                         height: 72,
-                                        borderRadius: 2,
+                                        borderRadius: radius.card,
                                         bgcolor: 'primary.main',
                                         color: 'primary.contrastText',
                                         display: 'flex',

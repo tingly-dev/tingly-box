@@ -26,6 +26,7 @@ import { type SkillLocation, type Skill, type ScanResult } from '@/types/prompt'
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface SkillListDialogProps {
     open: boolean;
@@ -199,7 +200,7 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                                     sx={{
                                         border: 1,
                                         borderColor: 'divider',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         maxHeight: 400,
                                         overflow: 'auto',
                                     }}
@@ -275,7 +276,7 @@ const SkillListDialog = ({ open, location, onClose, onSkillClick }: SkillListDia
                                         py: 4,
                                         border: 1,
                                         borderColor: 'divider',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                     }}
                                 >
                                     <FolderOpen

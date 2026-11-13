@@ -21,6 +21,7 @@ import ProviderIcon from '@/components/ProviderIcon';
 import {isHttpUrl} from '@/components/provider-form-dialog/validation';
 import ProviderExportButton from '@/components/ProviderExportButton';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from '@/components/provider-form-dialog/ProviderFormLayout';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -598,7 +599,7 @@ const ProviderFormDialog = ({
                         gap: 0.75,
                         px: 1.5,
                         py: 1,
-                        borderRadius: 1,
+                        borderRadius: radius.row,
                         bgcolor: 'action.hover',
                         flexWrap: 'wrap',
                     }}

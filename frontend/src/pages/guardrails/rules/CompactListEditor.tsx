@@ -16,6 +16,7 @@ import {
 import { Add, Remove } from '@/components/icons';
 import { appendTextListValue, removeTextListValue, textListRows, updateTextListValue } from './listField';
 import type { OversizedListField } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 type CompactListEditorProps = {
     title: string;
@@ -59,7 +60,7 @@ const CompactListEditor = ({
                     {description}
                 </Typography>
             </Box>
-            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, boxShadow: 'none' }}>
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: radius.card, boxShadow: 'none' }}>
                 <Stack
                     direction="row"
                     spacing={0.5}

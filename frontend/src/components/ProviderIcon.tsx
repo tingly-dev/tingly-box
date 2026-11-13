@@ -59,6 +59,7 @@ import {
 } from './BrandIcons';
 import type {SxProps, Theme} from '@mui/material';
 import {Box} from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface BrandIconProps {
     size?: number;
@@ -212,7 +213,7 @@ const FallbackIcon: React.FC<BrandIconProps> = ({size = 20, sx, style}) => {
                 justifyContent: 'center',
                 flexShrink: 0,
                 bgcolor: 'action.hover',
-                borderRadius: 1,
+                borderRadius: radius.row,
                 ...sx,
             }}
             style={style}

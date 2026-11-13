@@ -31,6 +31,7 @@ import { uniqueIdFromName } from './rules/editorState';
 import { buildPolicySummary } from './rules/policyPresentation';
 import { DEFAULT_GROUP_ID, type GuardrailsPolicy, type PolicyGroup } from './rules/types';
 import { useGuardrailsConfig } from './rules/useGuardrailsConfig';
+import { radius } from '@tingly/ui/theme/radius';
 
 type GroupEditorState = {
     id: string;
@@ -263,7 +264,7 @@ const GuardrailsGroupsPage = () => {
                 {loadError && <Alert severity="error">{loadError}</Alert>}
 
                 <UnifiedCard title={`Groups (${groups.length})`} size="full">
-                    <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
+                    <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, py: 0, overflow: 'hidden' }}>
                         {sortedGroups.map((group) => {
                             const selected = selectedGroupId === group.id;
                             const isDefaultGroup = group.id === DEFAULT_GROUP_ID;
@@ -393,7 +394,7 @@ const GuardrailsGroupsPage = () => {
                     subtitle="Check a policy to include it in this group. Only enabled policies appear here."
                     size="full"
                 >
-                    <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
+                    <List dense sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, py: 0, overflow: 'hidden' }}>
                         {visiblePolicies.length === 0 ? (
                             <ListItem>
                                 <Typography variant="body2" sx={{
@@ -476,7 +477,7 @@ const GuardrailsGroupsPage = () => {
                 <DialogTitle>{editingGroupId ? 'Edit Group' : 'New Group'}</DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2 }}>
                             <Stack spacing={2}>
                                 <Typography variant="subtitle2">Basic Settings</Typography>
                                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
@@ -501,7 +502,7 @@ const GuardrailsGroupsPage = () => {
                             </Stack>
                         </Box>
 
-                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2 }}>
                             <Stack spacing={2}>
                                 <Typography variant="subtitle2">Group State</Typography>
 

@@ -30,6 +30,7 @@ import {writeToClipboard} from '@/utils/clipboard';
 import {useTranslation} from 'react-i18next';
 import {EntityLabel, aliasOrName, bareId} from '@tingly/ui';
 import {useEntityLabels} from '@/components/entity/useEntityLabels';
+import { radius } from '@tingly/ui/theme/radius';
 
 // BotNotifyGroup is one bot's panel on the IM Notify page: a header (name +
 // platform + the enabled switch that governs whether this bot can be driven)
@@ -79,7 +80,7 @@ const ProbeResultLine: React.FC<{result: ChatProbeResult; onDismiss: () => void}
             severity={v.severity}
             variant="outlined"
             icon={false}
-            sx={{py: 0.5, borderRadius: 1, '& .MuiAlert-message': {width: '100%'}}}
+            sx={{py: 0.5, borderRadius: radius.row, '& .MuiAlert-message': {width: '100%'}}}
         >
             <Box sx={{display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap'}}>
                 <Chip label={result.capability} size="small" sx={{textTransform: 'capitalize', fontWeight: 600}} />
@@ -102,7 +103,7 @@ const ProbeResultLine: React.FC<{result: ChatProbeResult; onDismiss: () => void}
                 </Tooltip>
             </Box>
             <Collapse in={showRaw}>
-                <Box sx={{mt: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
+                <Box sx={{mt: 1, p: 1, bgcolor: 'action.hover', borderRadius: radius.row, fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', wordBreak: 'break-all'}}>
                     {JSON.stringify(result.raw ?? result, null, 2)}
                 </Box>
             </Collapse>
@@ -278,7 +279,7 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
                 bgcolor: enabled ? 'background.paper' : 'transparent',
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 transition: 'background-color 0.18s ease-out',
             }}
         >

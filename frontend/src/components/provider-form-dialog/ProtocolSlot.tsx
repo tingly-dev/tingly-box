@@ -3,6 +3,7 @@ import {Box, Checkbox, FormControlLabel, Link, Stack, TextField, Typography} fro
 import {useTranslation} from 'react-i18next';
 import ProviderIcon from '@/components/ProviderIcon';
 import {fontMono} from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ProtocolSlotData {url: string; enabled: boolean;}
 export type ProtocolKind = 'openai' | 'anthropic';
@@ -26,7 +27,7 @@ const ProtocolSlot = ({kind, slot, onUrlChange, onUrlBlur, onToggle, helperText,
         <Box><Typography variant="body2" sx={{fontWeight: 600}}>{label}</Typography>
             <Typography variant="caption" color="text.secondary" sx={{display: 'block', mt: 0.25}}>{helper}</Typography></Box>
     </Stack>;
-    return <Box sx={{p: 1.5, border: 1, borderColor: urlError ? 'error.main' : 'divider', borderRadius: 1.5, bgcolor: slot.enabled ? 'action.hover' : 'transparent'}}>
+    return <Box sx={{p: 1.5, border: 1, borderColor: urlError ? 'error.main' : 'divider', borderRadius: radius.card, bgcolor: slot.enabled ? 'action.hover' : 'transparent'}}>
         {selectionMode === 'fixed' ? header : <FormControlLabel labelPlacement="start" sx={{m: 0, width: '100%', gap: 1, justifyContent: 'space-between', alignItems: 'flex-start'}}
             control={<Checkbox size="small" checked={slot.enabled} onChange={onToggle} sx={{p: 0.25}}/>}
             label={header}/>}

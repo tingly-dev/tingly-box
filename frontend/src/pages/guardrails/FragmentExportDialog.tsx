@@ -8,6 +8,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type GuardrailsImportRef = {
     path: string;
@@ -72,7 +73,7 @@ const FragmentExportDialog = ({
                                 alignItems: "flex-start",
                                 border: '1px solid',
                                 borderColor: 'divider',
-                                borderRadius: 2,
+                                borderRadius: radius.card,
                                 p: 1.5
                             }}>
                             <Checkbox

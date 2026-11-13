@@ -7,6 +7,7 @@ import type { Language } from 'prism-react-renderer';
 import { EMPTY_STYLE } from '@/constants/defaults';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface CodeBlockProps {
     code: string;
@@ -104,7 +105,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
             sx={{
                 position: 'relative',
                 bgcolor: 'grey.900',
-                borderRadius: 1,
+                borderRadius: radius.row,
                 overflow: 'hidden',
                 ...sx,
             }}

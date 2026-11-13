@@ -17,6 +17,7 @@ import {
 import { Z_INDEX } from '../constants/zIndex';
 import type { SxProps } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ---------------------------------------------------------------------------
 // Layout — main content area
@@ -34,7 +35,7 @@ export const mobileContentSx = {
     '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
         backgroundColor: 'divider',
-        borderRadius: 1,
+        borderRadius: radius.pill,
         '&:hover': { backgroundColor: 'text.disabled' },
     },
 } as const;
@@ -244,7 +245,7 @@ export const sidebarListScrollSx: SxProps<Theme> = {
     '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
         backgroundColor: 'grey.300',
-        borderRadius: 1,
+        borderRadius: radius.pill,
         '&:hover': { backgroundColor: 'grey.400' },
     },
 };

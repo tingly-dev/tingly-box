@@ -27,6 +27,7 @@ import type { ImageAsset, PromptSnippet } from './library/assetTypes';
 import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';
 import ThumbImage from './components/ThumbImage';
 import { THUMB_EDGE_TILE } from './components/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
 
 type Tab = 'images' | 'snippets';
 
@@ -124,9 +125,9 @@ const ImageLibraryPage: React.FC = () => {
                                 <ButtonBase
                                     key={asset.id}
                                     onClick={() => { setConfirmingDelete(false); setRenaming(false); setOpenAsset(asset); }}
-                                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: 1.5 }}
+                                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: radius.card }}
                                 >
-                                    <Box sx={{ aspectRatio: '1 / 1', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                                    <Box sx={{ aspectRatio: '1 / 1', borderRadius: radius.card, overflow: 'hidden', bgcolor: 'action.hover' }}>
                                         <ThumbImage src={asset.src} alt={asset.name} edge={THUMB_EDGE_TILE} fit="contain" />
                                     </Box>
                                     <Typography noWrap sx={{ mt: 0.75, fontSize: 13 }}>{asset.name}</Typography>
@@ -204,7 +205,7 @@ const ImageLibraryPage: React.FC = () => {
                             </IconButton>
                         </DialogTitle>
                         <DialogContent dividers>
-                            <Box sx={{ bgcolor: 'action.hover', borderRadius: 1.5, display: 'flex', justifyContent: 'center', mb: confirmingDelete ? 2 : 0 }}>
+                            <Box sx={{ bgcolor: 'action.hover', borderRadius: radius.card, display: 'flex', justifyContent: 'center', mb: confirmingDelete ? 2 : 0 }}>
                                 <Box component="img" src={openAsset.src} alt={openAsset.name} sx={{ maxWidth: '100%', maxHeight: 360, display: 'block' }} />
                             </Box>
                             {confirmingDelete && (

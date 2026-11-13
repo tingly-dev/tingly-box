@@ -2,6 +2,7 @@ import { Box } from '@mui/material';
 import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
 import { fontSizes } from '@/theme/fonts';
 import { routeGraphColors } from '@/theme/routeGraph';
+import { radius } from '@tingly/ui/theme/radius';
 
 export const routeGraphActive = routeGraphColors.active;
 export const routeGraphActiveBg = routeGraphColors.activeBg;
@@ -183,7 +184,7 @@ export const graphRowStyles = (theme: Theme) => ({
     '&::-webkit-scrollbar-track': { background: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
         backgroundColor: theme.palette.mode === 'dark' ? '#555' : '#ccc',
-        borderRadius: 3,
+        borderRadius: radius.pill,
         '&:hover': {
             backgroundColor: theme.palette.mode === 'dark' ? '#777' : '#999',
         },
@@ -383,7 +384,7 @@ export const NODE_LAYER_STYLES = {
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',
-        borderRadius: 1.25,
+        borderRadius: radius.row,
         lineHeight: 1,
     } as const,
 };

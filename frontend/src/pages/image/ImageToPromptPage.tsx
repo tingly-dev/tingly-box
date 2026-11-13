@@ -40,6 +40,7 @@ import { useInstructions, useRememberedModel } from './prompt/instructionStarter
 import { PROMPT_TOOLS_SCENARIO as SCENARIO } from './prompt/promptRunStore';
 import { takeHandedPicture } from './prompt/pictureHandoff';
 import { preparePicture, type Picture } from './prompt/preparePicture';
+import { radius } from '@tingly/ui/theme/radius';
 
 const PhotoScan = tablerMui(IconPhotoScan);
 const LibraryPhoto = tablerMui(IconLibraryPhoto);
@@ -198,7 +199,7 @@ const ImageToPromptPage: React.FC = () => {
                                     height: 220,
                                     border: '1px dashed',
                                     borderColor: 'divider',
-                                    borderRadius: 1.5,
+                                    borderRadius: radius.card,
                                     bgcolor: 'action.hover',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -299,7 +300,7 @@ const ImageToPromptPage: React.FC = () => {
                             flexDirection: 'column',
                             border: 1,
                             borderColor: 'divider',
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             overflow: 'hidden',
                         }}
                     >
@@ -373,7 +374,7 @@ const ImagePromptRunCard = memo(({ run, onReuse, onUse, onSaveSnippet }: ImagePr
                 <ButtonBase
                     onClick={() => onReuse(run)}
                     aria-label={t('imagePrompt.reuse', { defaultValue: 'Put this picture and its instructions back in the panel' })}
-                    sx={{ flexShrink: 0, width: 96, height: 96, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover', alignSelf: 'flex-start' }}
+                    sx={{ flexShrink: 0, width: 96, height: 96, borderRadius: radius.row, overflow: 'hidden', bgcolor: 'action.hover', alignSelf: 'flex-start' }}
                 >
                     <ThumbImage src={run.image} alt={run.imageName} edge={THUMB_EDGE_TILE} />
                 </ButtonBase>

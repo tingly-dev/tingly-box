@@ -183,7 +183,7 @@ export function ContextMeter({ thread }: { thread: Thread }) {
             </Fact>
             {pct != null && (
                 <LinearProgress variant="determinate" value={pct} color={pct >= 90 ? 'error' : pct >= 70 ? 'warning' : 'primary'}
-                    aria-label={t('rail.context')} sx={{ height: 4, borderRadius: 2, mt: 0.25 }} />
+                    aria-label={t('rail.context')} sx={{ height: 4, borderRadius: radius.pill, mt: 0.25 }} />
             )}
         </Box>
     );

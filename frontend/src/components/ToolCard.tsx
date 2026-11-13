@@ -20,6 +20,7 @@
 import React from 'react';
 import { Box, Switch, Typography } from '@mui/material';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ const Badge: React.FC<{ label: string; color: BadgeColor }> = ({ label, color })
                 py: '2px',
                 bgcolor: s.bg,
                 color: s.color,
-                borderRadius: '6px',
+                borderRadius: radius.chip,
                 border: '1px solid',
                 borderColor: s.color,
                 fontSize: fontSizes.micro,
@@ -109,7 +110,7 @@ const Tag: React.FC<{ label: string }> = ({ label }) => (
             py: '2px',
             bgcolor: 'action.selected',
             color: 'rgb(75, 85, 99)',
-            borderRadius: '4px',
+            borderRadius: radius.chip,
             fontSize: fontSizes.micro,
             fontWeight: 500,
             fontFamily: fontMono,
@@ -153,7 +154,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
             onClick={handleCardClick}
             sx={{
                 bgcolor: 'background.paper',
-                borderRadius: '12px',
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: enabled ? 'rgb(10, 124, 90)' : 'rgb(229, 231, 236)',
                 boxShadow: enabled ? 'rgba(10, 124, 90, 0.08) 0px 0px 0px 3px' : 'none',
@@ -169,7 +170,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                     sx={{
                         width: 36,
                         height: 36,
-                        borderRadius: '9px',
+                        borderRadius: radius.row,
                         bgcolor: enabled ? 'rgba(10, 124, 90, 0.08)' : 'rgb(241, 243, 246)',
                         color: enabled ? 'rgb(10, 124, 90)' : 'rgb(107, 114, 128)',
                         display: 'grid',

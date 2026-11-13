@@ -1,5 +1,6 @@
 import { Box, ButtonBase, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface PlatformPickerItem {
     id: string;
@@ -51,7 +52,7 @@ const PlatformPicker: React.FC<PlatformPickerProps> = ({ items, value, onChange 
                         gap: 1,
                         px: 1.5,
                         py: 1,
-                        borderRadius: 1.5,
+                        borderRadius: radius.card,
                         border: 1,
                         borderColor: active ? 'primary.main' : 'divider',
                         bgcolor: active ? 'action.selected' : 'background.paper',

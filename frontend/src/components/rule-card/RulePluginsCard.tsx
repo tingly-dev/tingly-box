@@ -13,6 +13,7 @@ import {
 import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
 import { getFlagValue, headersValue, isFlagActive } from './flagHelpers';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const CARD_STYLES = {
     width: MODEL_NODE_STYLES.width,
@@ -106,7 +107,7 @@ export const RulePluginsList: React.FC<RulePluginsListProps> = ({ flags, enabled
                             cursor: 'pointer',
                             px: 0.75,
                             py: 0.35,
-                            borderRadius: 0.75,
+                            borderRadius: radius.chip,
                             border: '1px solid',
                             borderColor: 'transparent',
                             backgroundColor: 'action.hover',
@@ -234,7 +235,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                         '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
                         '&::-webkit-scrollbar-thumb': {
                             backgroundColor: (theme) => alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.34 : 0.24),
-                            borderRadius: 3,
+                            borderRadius: radius.pill,
                         },
                         '&::-webkit-scrollbar-thumb:hover': {
                             backgroundColor: (theme) => alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.5 : 0.36),

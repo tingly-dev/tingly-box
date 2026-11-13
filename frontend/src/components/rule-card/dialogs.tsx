@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, TextField, Typography } from '@mui/material';
 import type { ConfigRecord } from '@/components/RoutingGraphTypes';
 import ConfirmPopover from '@/components/ConfirmPopover';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ============================================================================
 // Delete Confirmation Popover
@@ -63,7 +64,7 @@ export function RuleFlagEditDialog({ open, value, error, onChange, onClose, onSa
                         '& .MuiInputBase-root': {
                             border: '1px solid',
                             borderColor: 'divider',
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             padding: '10px 12px',
                         },
                         '& .MuiInputBase-input': {

@@ -21,6 +21,7 @@ import Context1MChangeBanner from './Context1MChangeBanner';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ClaudeDesktopConfigModalProps {
     open: boolean;
@@ -98,7 +99,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
             maxWidth="sm"
             fullWidth
             slotProps={{
-                paper: { sx: { borderRadius: 3 } }
+                paper: { sx: { borderRadius: radius.card } }
             }}
         >
             <DialogTitle sx={{ pb: 1 }}>
@@ -114,7 +115,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                 )}
                 <Stack spacing={2}>
                     {/* Step 1 */}
-                    <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                    <Box sx={{ p: 2, borderRadius: radius.row, border: 1, borderColor: 'divider' }}>
                         <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
                             Step 1: Enable Developer Mode
                         </Typography>
@@ -127,7 +128,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                         <Typography variant="subtitle2" sx={{ mb: 1 }}>
                             Launch the app, then enable developer mode:
                         </Typography>
-                        <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1 }}>
+                        <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: radius.row }}>
                             <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>
                                 Help → Troubleshooting → Enable Developer Mode
                             </Typography>
@@ -135,11 +136,11 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                     </Box>
 
                     {/* Step 2 */}
-                    <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                    <Box sx={{ p: 2, borderRadius: radius.row, border: 1, borderColor: 'divider' }}>
                         <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
                             Step 2: Configure Third-Party Inference
                         </Typography>
-                        <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1, mb: 1.5 }}>
+                        <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: radius.row, mb: 1.5 }}>
                             <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>
                                 Developer → Configure third-party inference
                             </Typography>
@@ -166,7 +167,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                     />
 
                     {/* Step 3 */}
-                    <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                    <Box sx={{ p: 2, borderRadius: radius.row, border: 1, borderColor: 'divider' }}>
                         <Stack
                             direction="row"
                             sx={{
@@ -214,7 +215,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                         <Box
                             sx={{
                                 bgcolor: 'background.default',
-                                borderRadius: 1,
+                                borderRadius: radius.row,
                                 p: 1.5,
                                 mb: 2,
                                 fontFamily: fontMono,
@@ -239,7 +240,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                     key={rule.uuid}
                                     direction="row"
                                     spacing={1}
-                                    sx={{ alignItems: 'center', bgcolor: 'background.default', borderRadius: 1, px: 1.5, py: 0.5 }}>
+                                    sx={{ alignItems: 'center', bgcolor: 'background.default', borderRadius: radius.row, px: 1.5, py: 0.5 }}>
                                     <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.md, flex: 2, minWidth: 0 }}>
                                         {rule.request_model}
                                     </Typography>

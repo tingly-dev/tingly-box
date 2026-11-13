@@ -16,6 +16,7 @@ import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { Z_INDEX } from '../constants/zIndex';
 import { PowerUpsMenu } from './PowerUpsMenu';
 import { FEEDBACK_URL } from './links';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PreferencesMenuProps {
     anchorEl: HTMLElement | null;
@@ -59,7 +60,7 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
             // The Power-ups submenu is portaled outside this popover; without
             // this the focus trap would pull focus back from its switches.
             disableEnforceFocus
-            slotProps={{ paper: { sx: { width: 300, ml: 1, borderRadius: 2 } } }}
+            slotProps={{ paper: { sx: { width: 300, ml: 1, borderRadius: radius.card } } }}
         >
             <Box sx={{ px: 2, pt: 1.75, pb: 1.25 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>

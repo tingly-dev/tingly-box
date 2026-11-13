@@ -47,6 +47,7 @@ import {
     fetchAccountsForProvider,
 } from './userUsage/userUsageModel';
 import type { TimeRange, ViewMode, UserUsageRow, PrimaryColumn } from './userUsage/userUsageModel';
+import { radius } from '@tingly/ui/theme/radius';
 
 const UserUsageSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -322,7 +323,7 @@ export default function UserUsagePage() {
             <Box component="h1" sx={visuallyHidden}>
                 {t('dashboard.userUsage.title', { defaultValue: 'Team usage' })}
             </Box>
-            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: radius.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
                     <ToggleButtonGroup
                             size="small"
                             exclusive

@@ -17,6 +17,7 @@ import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Raw statusline script URLs in the tingly-box repo — the installers must
 // download from the same source the JSON tab links below (they used to point
@@ -474,7 +475,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 maxWidth="lg"
                 fullWidth
                 slotProps={{
-                    paper: { sx: { borderRadius: 3, maxHeight: '90vh' } }
+                    paper: { sx: { borderRadius: radius.card, maxHeight: '90vh' } }
                 }}
             >
                 <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
@@ -724,7 +725,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 maxWidth="md"
                 fullWidth
                 slotProps={{
-                    paper: { sx: { borderRadius: 3 } }
+                    paper: { sx: { borderRadius: radius.card } }
                 }}
             >
                 <DialogTitle>

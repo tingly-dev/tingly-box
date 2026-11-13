@@ -12,6 +12,7 @@ import {
 import { getTotalTokens, getCacheHitRate, hasCacheWrites } from './chartStyles';
 import { UsageMetricHeaderCells, UsageMetricValueCells } from './UsageMetricCells';
 import type { UsageMetricKey, UsageMetricLabels } from './usageMetricColumns';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type SortField = 'name' | UsageMetricKey;
 export type SortDirection = 'asc' | 'desc';
@@ -213,7 +214,7 @@ export function RosterBreakdownTable<D extends MetricRow>({
     const showCacheWrite = hasCacheWrites(items);
     if (items.length === 0) {
         return (
-            <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 1.5 }}>
+            <Box sx={{ py: 4, textAlign: 'center', bgcolor: 'action.hover', borderRadius: radius.card }}>
                 <Typography variant="body1">{noUsageLabel}</Typography>
                 {noUsageHint && <Typography variant="body2">{noUsageHint}</Typography>}
             </Box>

@@ -5,6 +5,7 @@ import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPerc
 import { useTheme } from '@mui/material/styles';
 import { formatNumber, getQuotaTrackColor } from '../dashboard/chartStyles';
 import { getStatusColor, quotaTone } from '@/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface QuotaBarItemProps {
   window: QuotaWindow;
@@ -75,7 +76,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
         backgroundColor: 'background.paper',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 1,
+        borderRadius: radius.row,
         p: 1.5,
                         maxWidth: 250,
       }}
@@ -162,7 +163,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
             sx={{
               height: '100%',
               bgcolor: getQuotaTrackColor(theme),
-              borderRadius: 1,
+              borderRadius: radius.row,
               position: 'relative',
               overflow: 'hidden',
             }}
@@ -173,7 +174,7 @@ export function QuotaBarItem({ window, showDetails = false, percentLabel, barCol
                 height: '100%',
                 width: `${remainingPercent}%`,
                 bgcolor: barColor,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 transition: 'width 0.3s ease',
               }}
             />

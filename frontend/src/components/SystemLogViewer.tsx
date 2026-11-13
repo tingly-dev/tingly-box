@@ -30,6 +30,7 @@ import { formatLogTime } from '@/utils/datetime';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { alpha, useTheme } from '@mui/material/styles';
 import { getStatusColor, logLevelTone, httpStatusTone } from '@/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface SystemLogEntry {
     time: string;
@@ -259,7 +260,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     overflow: 'auto',
                     minHeight: 0,
                     backgroundColor: 'background.paper',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     border: 1,
                     borderColor: 'divider',
                 }}
@@ -382,7 +383,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                     {log.fields && Object.keys(log.fields).length > 0 ? (
                                                         <Stack spacing={1}>
                                                             {log.fields.error && (
-                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
+                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: radius.row }}>
                                                                     <Typography
                                                                         variant="body2"
                                                                         sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 600, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}

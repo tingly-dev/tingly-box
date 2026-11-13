@@ -16,6 +16,7 @@ import { useVersion } from '@/contexts/VersionContext';
 import { ProviderQuotaPanel } from '@/components/ProviderQuotaPanel';
 import { fetchUIAPI } from '@/services/api';
 import { SHELL_ROUTES } from '@/routes/shellRoutes';
+import { radius } from '@tingly/ui/theme/radius';
 
 // HubPage is the tray's compact panel — a dedicated small window (see
 // gui/wails3/systray.go's useSystray) separate from the main app window. It
@@ -67,7 +68,7 @@ export default function HubPage() {
             {/* Header: identity + status, like a menu-bar app's masthead */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 0.5, pt: 0.25 }}>
                 {/* Same brand mark the app's activity bar uses */}
-                <Box component="img" src="/assets/icon.svg" alt="" sx={{ width: 28, height: 28, borderRadius: 1 }} />
+                <Box component="img" src="/assets/icon.svg" alt="" sx={{ width: 28, height: 28, borderRadius: radius.row }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.3 }} noWrap>
                         {t('hub.title')}
@@ -103,7 +104,7 @@ export default function HubPage() {
             </Stack>
 
             {/* Jumps into the main window, mirroring its rail */}
-            <Paper elevation={0} sx={{ borderRadius: 2, bgcolor: 'background.paper', display: 'flex', justifyContent: 'space-around', py: 0.5 }}>
+            <Paper elevation={0} sx={{ borderRadius: radius.card, bgcolor: 'background.paper', display: 'flex', justifyContent: 'space-around', py: 0.5 }}>
                 {navItems.map(({ path, label, icon }) => (
                     <Tooltip key={path} title={label} arrow>
                         <IconButton aria-label={label} onClick={() => openMainWindow(path)} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>

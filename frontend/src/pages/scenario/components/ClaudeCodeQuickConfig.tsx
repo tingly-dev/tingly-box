@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -92,7 +93,7 @@ export const CLAUDE_CONFIG_KEY_SX = {
     maxWidth: '100%',
     px: 0.75,
     py: 0.25,
-    borderRadius: 0.75,
+    borderRadius: radius.chip,
     bgcolor: 'action.hover',
     fontFamily: fontMono,
     fontSize: fontSizes.xs,
@@ -1081,7 +1082,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
     const toggleExpanded = () => setExpanded(!expanded);
 
     return (
-        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden' }}>
             <Box
                 onClick={hasAdvancedFields ? toggleExpanded : undefined}
                 sx={{
@@ -1156,7 +1157,7 @@ const SettingsRowSection: React.FC<{
     settingsKey: string;
     control: React.ReactNode;
 }> = ({ title, hint, label, tooltip, settingsKey, control }) => (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden' }}>
         <Box sx={{ px: 1.5, py: 1.15, bgcolor: 'action.hover' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.35 }}>{title}</Typography>
             <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{hint}</Typography>

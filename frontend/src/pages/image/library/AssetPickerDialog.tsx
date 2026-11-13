@@ -14,6 +14,7 @@ import type { ImageAsset } from './assetTypes';
 import { useAssets } from './assetStore';
 import ThumbImage from '../components/ThumbImage';
 import { THUMB_EDGE_TILE } from '../components/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     open: boolean;
@@ -54,7 +55,7 @@ const AssetPickerDialog: React.FC<Props> = ({ open, remaining, onClose, onPick }
                                 sx={{
                                     position: 'relative',
                                     aspectRatio: '1 / 1',
-                                    borderRadius: 1.5,
+                                    borderRadius: radius.card,
                                     overflow: 'hidden',
                                     bgcolor: 'action.hover',
                                     outline: selected ? '3px solid' : 'none',

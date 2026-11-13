@@ -4,6 +4,7 @@
 // information; no bar-track decoration.
 
 import { Box, Stack, Typography, alpha, useTheme } from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ShareBarItem {
     key: string;
@@ -87,7 +88,7 @@ export default function RosterTopList({
                     gap: 1.25,
                     py: 0.875,
                     px: 1.25,
-                    borderRadius: 1.5,
+                    borderRadius: radius.card,
                     cursor: clickable ? 'pointer' : 'default',
                     position: 'relative',
                     transition: 'background-color 0.15s ease',
@@ -136,7 +137,7 @@ export default function RosterTopList({
                 flexGrow: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 backgroundColor: 'background.paper',

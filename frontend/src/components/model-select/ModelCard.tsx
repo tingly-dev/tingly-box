@@ -11,6 +11,7 @@ import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ModelCardProps {
     model: string;
@@ -43,7 +44,7 @@ export default function ModelCard({
             width: '100%',
             height: 60,
             border: 1,
-            borderRadius: 1,
+            borderRadius: radius.row,
             cursor: loading ? 'wait' : 'pointer',
             transition: modelCardTransition,
             position: 'relative' as const,
@@ -178,7 +179,7 @@ export default function ModelCard({
                             fontSize: fontSizes.micro,
                             px: 0.5,
                             py: 0.2,
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             fontWeight: 600,
                         }}
                     >

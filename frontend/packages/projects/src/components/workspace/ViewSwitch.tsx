@@ -3,6 +3,7 @@ import { ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { Kanban, KanbanRows, ViewList } from '../icons';
+import { radius } from '@tingly/ui/theme/radius';
 
 /** `vertical`: a column per status; `horizontal`: a lane per status. */
 export type ThreadsView = 'list' | 'vertical' | 'horizontal';
@@ -28,7 +29,7 @@ export function ViewSwitch({ view, onChange }: { view: ThreadsView; onChange: (v
     const { t } = useTranslation('projects');
     const button = (value: ThreadsView, label: string, icon: ReactNode) => (
         <Tooltip title={label}>
-            <ToggleButton value={value} aria-label={label} sx={{ p: 0.5, border: 0, borderRadius: 1, color: 'text.disabled', '& svg': { fontSize: 18 }, '&.Mui-selected': { color: 'text.primary', bgcolor: 'action.selected' } }}>
+            <ToggleButton value={value} aria-label={label} sx={{ p: 0.5, border: 0, borderRadius: radius.row, color: 'text.disabled', '& svg': { fontSize: 18 }, '&.Mui-selected': { color: 'text.primary', bgcolor: 'action.selected' } }}>
                 {icon}
             </ToggleButton>
         </Tooltip>

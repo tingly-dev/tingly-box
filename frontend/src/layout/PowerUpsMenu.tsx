@@ -30,6 +30,7 @@ import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry
 import { Z_INDEX } from '../constants/zIndex';
 import { fontSizes } from '@/theme/fonts';
 import { announceFeatureDisabled } from './featureNotice';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PowerUp {
     key: string;
@@ -211,7 +212,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                 elevation={8}
                 onMouseEnter={onMouseEnter}
                 onMouseLeave={onMouseLeave}
-                sx={{ width: 380, maxHeight: '80vh', overflowY: 'auto', borderRadius: 2 }}
+                sx={{ width: 380, maxHeight: '80vh', overflowY: 'auto', borderRadius: radius.card }}
             >
             <Box sx={{ px: 2, pt: 1.5, pb: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>

@@ -22,6 +22,7 @@ import {
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
@@ -202,7 +203,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         cursor: 'pointer',
                                         px: 0.75,
                                         py: 0.35,
-                                        borderRadius: 0.75,
+                                        borderRadius: radius.chip,
                                         border: '1px solid',
                                         borderColor: 'transparent',
                                         backgroundColor: 'action.hover',

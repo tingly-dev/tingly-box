@@ -49,6 +49,7 @@ import {
     type GuardrailsPolicy,
     type OversizedListField,
 } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Describes how the editor was opened. Built by the page for each open intent
 // (list click, New Policy, deep link, location-state draft).
@@ -319,7 +320,7 @@ const PolicyEditorDialog = ({
 
                     {editorState.kind ? (
                         <>
-                            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2 }}>
                                 <Stack spacing={1.25}>
                                     <Box>
                                         <Typography variant="subtitle2">Assign Groups</Typography>
@@ -341,7 +342,7 @@ const PolicyEditorDialog = ({
                                                             border: '1px solid',
                                                             borderColor: selected ? 'primary.main' : 'divider',
                                                             bgcolor: selected ? 'action.selected' : 'background.paper',
-                                                            borderRadius: 2,
+                                                            borderRadius: radius.card,
                                                             p: 1.25,
                                                             cursor: 'pointer',
                                                             transition: 'all 0.15s ease',
@@ -381,7 +382,7 @@ const PolicyEditorDialog = ({
                                         gap: 2,
                                     }}
                                 >
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                         <Stack spacing={1.5}>
                                             <Stack direction="row" spacing={0.75} sx={{
                                                 alignItems: "center"
@@ -415,7 +416,7 @@ const PolicyEditorDialog = ({
                                                                 border: '1px solid',
                                                                 borderColor: selected ? 'primary.main' : 'divider',
                                                                 bgcolor: selected ? 'action.selected' : 'background.paper',
-                                                                borderRadius: 2,
+                                                                borderRadius: radius.card,
                                                                 p: 1.5,
                                                                 cursor: 'pointer',
                                                                 transition: 'all 0.15s ease',
@@ -458,7 +459,7 @@ const PolicyEditorDialog = ({
                                         </Stack>
                                     </Box>
 
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                         <Stack spacing={1.5}>
                                             <CompactListEditor
                                                 title="Protected Resources"
@@ -499,7 +500,7 @@ const PolicyEditorDialog = ({
                                         gap: 2,
                                     }}
                                 >
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                         <Stack spacing={1.5}>
                                             <Stack direction="row" spacing={0.75} sx={{
                                                 alignItems: "center"
@@ -533,7 +534,7 @@ const PolicyEditorDialog = ({
                                                                 border: '1px solid',
                                                                 borderColor: selected ? 'primary.main' : 'divider',
                                                                 bgcolor: selected ? 'action.selected' : 'background.paper',
-                                                                borderRadius: 2,
+                                                                borderRadius: radius.card,
                                                                 p: 1.5,
                                                                 cursor: 'pointer',
                                                                 transition: 'all 0.15s ease',
@@ -573,7 +574,7 @@ const PolicyEditorDialog = ({
                                         </Stack>
                                     </Box>
 
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                         <CompactListEditor
                                             title={editorState.actions.includes('install') ? 'Install Match' : 'Command Match'}
                                             description={
@@ -594,7 +595,7 @@ const PolicyEditorDialog = ({
                                         />
                                     </Box>
 
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                         <Stack spacing={1.5}>
                                             <CompactListEditor
                                                 title="Limit To Resources"
@@ -639,7 +640,7 @@ const PolicyEditorDialog = ({
                                         gap: 2,
                                     }}
                                 >
-                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2, gridColumn: { md: '1 / span 2' } }}>
+                                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2, gridColumn: { md: '1 / span 2' } }}>
                                         <Stack spacing={1.5}>
                                             <CompactListEditor
                                                 title="Content Patterns"
@@ -685,7 +686,7 @@ const PolicyEditorDialog = ({
                                 </Box>
                             )}
 
-                            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2 }}>
                                 <Stack spacing={1.5}>
                                     <Stack
                                         direction={{ xs: 'column', md: 'row' }}
@@ -736,7 +737,7 @@ const PolicyEditorDialog = ({
                                 sx={{
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    borderRadius: 2,
+                                    borderRadius: radius.card,
                                     '&:before': { display: 'none' },
                                     overflow: 'hidden',
                                 }}
@@ -753,7 +754,7 @@ const PolicyEditorDialog = ({
                                 </AccordionSummary>
                                 <AccordionDetails>
                                     <Stack spacing={2}>
-                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                                        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2 }}>
                                             <Stack spacing={2}>
                                                 <Box>
                                                     <Typography variant="subtitle2">Set Verdict</Typography>
@@ -805,7 +806,7 @@ const PolicyEditorDialog = ({
                                                                             border: '1px solid',
                                                                             borderColor: selected ? 'primary.main' : 'divider',
                                                                             bgcolor: selected ? 'action.selected' : 'background.paper',
-                                                                            borderRadius: 2,
+                                                                            borderRadius: radius.card,
                                                                             p: 1.5,
                                                                             cursor: disabled ? 'not-allowed' : 'pointer',
                                                                             opacity: disabled ? 0.5 : 1,

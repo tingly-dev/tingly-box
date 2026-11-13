@@ -444,7 +444,7 @@ export function Composer({
         <Paper
             variant="outlined"
             sx={{
-                borderRadius: 3,
+                borderRadius: radius.card,
                 px: inline ? 1.5 : 1.75,
                 pt: inline ? 0.75 : 1.25,
                 pb: 0.75,

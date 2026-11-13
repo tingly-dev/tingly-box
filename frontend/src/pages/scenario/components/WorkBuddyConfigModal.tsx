@@ -5,6 +5,7 @@ import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageConte
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface WorkBuddyConfigModalProps {
     open: boolean;
@@ -42,7 +43,7 @@ const WorkBuddyConfigModal: React.FC<WorkBuddyConfigModalProps> = ({
             onClose={onClose}
             maxWidth="sm"
             fullWidth
-            slotProps={{ paper: { sx: { borderRadius: 3 } } }}
+            slotProps={{ paper: { sx: { borderRadius: radius.card } } }}
         >
             <DialogTitle sx={{ pb: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -60,7 +61,7 @@ const WorkBuddyConfigModal: React.FC<WorkBuddyConfigModalProps> = ({
                         sx={{
                             m: 0,
                             p: 1.5,
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             border: 1,
                             borderColor: 'divider',
                             bgcolor: 'background.paper',

@@ -3,6 +3,7 @@ import { Box, InputBase, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Pencil } from '../icons';
+import { radius } from '@tingly/ui/theme/radius';
 
 /**
  * The thread's title in the header, edited in place: click it to edit, Enter
@@ -78,7 +79,7 @@ export function ThreadTitle({ title, onSave }: { title: string; onSave: (title: 
                     edit();
                 }
             }}
-            sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: 1, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}
+            sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: radius.row, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}
         >
             <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{shown}</Typography>
             <Pencil className="edit-hint" sx={{ fontSize: 13, flexShrink: 0, opacity: 0, transition: 'opacity 0.15s', color: 'text.secondary' }} />

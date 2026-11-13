@@ -9,6 +9,7 @@ import { runProbe, formatLatency } from '@/components/probe/runProbe';
 import { CollapsibleCard } from '@/components/CollapsibleCard';
 import ImageModelPicker from '@/pages/image/components/ImageModelPicker';
 import CodeBlock from '@/components/CodeBlock';
+import { radius } from '@tingly/ui/theme/radius';
 
 type QuestionType = 'choice' | 'noul' | 'score';
 interface DecisionAnswer {
@@ -154,7 +155,7 @@ export default function DecisionTryCard({ rules, showNotification, onRulesReload
                                 <Typography variant="body2" color="text.secondary">{t('decisionTry.runningHint')}</Typography>
                             </Stack>
                         ) : !result ? (
-                            <Stack spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 140, px: 3, py: 3, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: 2 }}>
+                            <Stack spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: 140, px: 3, py: 3, textAlign: 'center', border: '1px dashed', borderColor: 'divider', borderRadius: radius.card }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('decisionTry.emptyTitle')}</Typography>
                                 <Typography variant="caption" color="text.secondary">{t('decisionTry.emptyBody')}</Typography>
                             </Stack>
@@ -171,7 +172,7 @@ export default function DecisionTryCard({ rules, showNotification, onRulesReload
                                 </Tabs>
                                 {tab === 'answer' && (
                                     <Stack spacing={2}>
-                                        <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
+                                        <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: radius.card }}>
                                             <Typography variant="caption" color="text.secondary">{t('decisionTry.answer')}</Typography>
                                             {answer.type === 'choice' && <Typography variant="h5" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{answer.choice}</Typography>}
                                             {answer.type === 'noul' && typeof answer.noul === 'number' && <Typography variant="h5" sx={{ fontWeight: 600 }}>{percent(answer.noul)}</Typography>}
@@ -193,7 +194,7 @@ export default function DecisionTryCard({ rules, showNotification, onRulesReload
                                                                 </Typography>
                                                             </Stack>
                                                             <LinearProgress variant="determinate" value={value * 100}
-                                                                sx={{ height: 6, borderRadius: 3, ...(isTop ? {} : { '& .MuiLinearProgress-bar': { backgroundColor: 'text.disabled' } }) }} />
+                                                                sx={{ height: 6, borderRadius: radius.pill, ...(isTop ? {} : { '& .MuiLinearProgress-bar': { backgroundColor: 'text.disabled' } }) }} />
                                                         </Box>
                                                     );
                                                 })}

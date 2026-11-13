@@ -31,6 +31,7 @@ import {
     overlayPlateSx,
     zoomScrimSx,
 } from './ImageGenPlayground.chrome';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Up to three of a run's reference images, in the corner of its tile. In a
 // grid of finished pictures there is otherwise nothing to say a tile came from
@@ -57,7 +58,7 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
                     top: 6,
                     left: 6,
                     p: 0.25,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     alignItems: 'center',
                 }}
             >
@@ -71,7 +72,7 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
                             defaultValue: 'View original image {{number}}',
                             number: i + 1,
                         })}
-                        sx={{ display: 'block', borderRadius: 0.5, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
+                        sx={{ display: 'block', borderRadius: radius.chip, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
                     >
                         <ThumbImage src={src} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 22, height: 22 }} />
                     </ButtonBase>
@@ -304,7 +305,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                     sx={{
                                         position: 'relative',
                                         aspectRatio: '1 / 1',
-                                        borderRadius: 1.5,
+                                        borderRadius: radius.card,
                                         overflow: 'hidden',
                                         border: '1px solid',
                                         borderColor: tile.kind === 'failed' ? 'error.main' : 'divider',
