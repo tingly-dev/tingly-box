@@ -344,13 +344,14 @@ const OAuthTable = ({
                                         <Stack direction="row" spacing={1} sx={{
                                             alignItems: "center"
                                         }}>
+                                            {/* A healthy expiry is plain; only "soon" and "expired" take colour. */}
                                             <Schedule
                                                 fontSize="small"
-                                                color={getExpirationColor(expiresAt) as any}
+                                                color={(getExpirationColor(expiresAt) === "success" ? "action" : getExpirationColor(expiresAt)) as any}
                                             />
                                             <Typography
                                                 variant="body2"
-                                                color={(getExpirationColor(expiresAt) + ".main") as any}
+                                                color={getExpirationColor(expiresAt) === "error" ? "error.main" : "text.primary"}
                                             >
                                                 {formatExpiresAt(expiresAt)}
                                             </Typography>
