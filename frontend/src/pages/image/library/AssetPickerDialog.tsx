@@ -67,7 +67,7 @@ const AssetPickerDialog: React.FC<Props> = ({ open, remaining, onClose, onPick }
                             >
                                 <ThumbImage src={asset.src} alt={asset.name} edge={THUMB_EDGE_TILE} fit="contain" />
                                 {selected && (
-                                    <Box sx={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: '#fff', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {order + 1}
                                     </Box>
                                 )}

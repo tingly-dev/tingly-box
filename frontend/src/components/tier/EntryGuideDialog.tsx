@@ -23,6 +23,7 @@ import { GuideToolbarPreview } from './GuideToolbarPreview';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 export interface EntryGuideDialogProps {
     open: boolean;
@@ -311,7 +312,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                                 position: 'absolute',
                                 bottom: 8,
                                 right: 8,
-                                bgcolor: 'rgba(0,0,0,0.7)',
+                                bgcolor: overlay.badge,
                                 color: 'white',
                                 px: 1.5,
                                 py: 0.5,

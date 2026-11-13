@@ -27,7 +27,7 @@ export const reviveProfile = (profile: ImageProfile): ImageProfile => {
 
 const store = createWorkspaceCollection<ImageProfile>(
     'profiles',
-    USE_MOCK ? () => import('./mockProfiles').then((module) => module.mockProfiles()) : null,
+    USE_MOCK ? () => import('@/mocks/image/profiles').then((module) => module.mockProfiles()) : null,
     reviveProfile,
 );
 

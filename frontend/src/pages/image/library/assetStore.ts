@@ -20,12 +20,12 @@ export const reviveAsset = (asset: ImageAsset): ImageAsset => {
 
 const assetStore = createWorkspaceCollection<ImageAsset>(
     'assets',
-    USE_MOCK ? () => import('./mockAssets').then((module) => module.mockAssets) : null,
+    USE_MOCK ? () => import('@/mocks/image/assets').then((module) => module.mockAssets) : null,
     reviveAsset,
 );
 const snippetStore = createWorkspaceCollection<PromptSnippet>(
     'snippets',
-    USE_MOCK ? () => import('./mockAssets').then((module) => module.mockSnippets) : null,
+    USE_MOCK ? () => import('@/mocks/image/assets').then((module) => module.mockSnippets) : null,
 );
 const newId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 

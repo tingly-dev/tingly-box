@@ -29,6 +29,7 @@ import {
 import { figureSolids, toneFor } from './body';
 import { projectionOf, projectPoint } from './camera';
 import { figureUnit, type PoseFigure } from './skeleton';
+import { FIGURE_OUTLINE } from './colors';
 
 // The projection is in canvas pixels with y down; three's is y up. Nothing
 // else differs, so the mapping is one sign.
@@ -149,7 +150,7 @@ const drawFlat = (ctx: CanvasRenderingContext2D, figure: PoseFigure, hex: string
     const projection = projectionOf(figure);
     ctx.save();
     ctx.fillStyle = hex;
-    ctx.strokeStyle = '#5b6066';
+    ctx.strokeStyle = FIGURE_OUTLINE;
     ctx.lineWidth = Math.max(figureUnit(figure) * 0.006, 1);
     ctx.lineJoin = 'round';
     for (const solid of figureSolids(figure)) {

@@ -10,6 +10,7 @@ import {
     TablePagination,
     Box,
     useTheme,
+    alpha,
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,8 +58,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
     // Get theme-aware empty icon background
     const getEmptyIconBg = () => {
         const palette = theme.palette as any;
-        if (palette.mode === 'dark') return 'rgba(148, 163, 184, 0.1)';
-        return 'rgba(100, 116, 139, 0.1)';
+        return alpha(palette.text.secondary, 0.1);
     };
 
     const handleChangePage = (_event: unknown, newPage: number) => {

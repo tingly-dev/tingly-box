@@ -167,7 +167,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                     overflowY: 'auto',
                     maxHeight,
                     minHeight,
-                    bgcolor: '#282c34', // Match oneDark theme background
+                    bgcolor: themes.oneDark.plain.backgroundColor,
                 }}
             >
                 <Highlight

@@ -26,6 +26,7 @@ import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
 import {useResponsesToggle} from '@/hooks/useResponsesToggle';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -139,7 +140,7 @@ const StyledCard = styled(Card, {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
+            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, ${overlay.hatch} 10px, ${overlay.hatch} 20px)`,
             pointerEvents: 'none',
             borderRadius: theme.shape.borderRadius,
         },

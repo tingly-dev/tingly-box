@@ -4,6 +4,7 @@ import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 type AgentType = 'claude-code' | 'custom' | 'mock';
 
@@ -139,7 +140,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                     </Box>
                 ))}
             </Box>
-            <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.24)' }} />
+            <Divider sx={{ my: 0.75, borderColor: overlay.onDark.line }} />
             <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: 'inherit' }}>
                 {info.config}
             </Typography>

@@ -1,5 +1,5 @@
-import type { ImageAsset, PromptSnippet } from './assetTypes';
-import { cat, mockProfiles, portrait, svgDataUrl, swatch } from '../profiles/mockProfiles';
+import type { ImageAsset, PromptSnippet } from '@/pages/image/library/assetTypes';
+import { cat, mockProfiles, portrait, svgDataUrl, swatch } from './profiles';
 
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();

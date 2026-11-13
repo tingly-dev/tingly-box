@@ -3,6 +3,8 @@ import {alpha, decomposeColor} from '@mui/material/styles';
 import type {SxProps, Theme} from '@mui/material';
 import { EMPTY_SX } from '@/constants/defaults';
 import { AnthropicStyleMark, GoogleStyleMark, OpenAIStyleMark } from '@/components/icons';
+import { apiStyleTints } from '@/theme/brand';
+import { cssRgb } from '@tingly/ui/theme/overlay';
 
 interface ApiStyleBadgeProps {
     apiStyle: string;
@@ -32,9 +34,9 @@ const toOpaqueRgb = (color: string): Rgb | null => {
 // Composite a translucent tint over an opaque paper base → one opaque color.
 const blend = (tint: string, tintAlpha: number, paperRgb: Rgb): string => {
     const t = toOpaqueRgb(tint);
-    if (!t) return `rgb(${paperRgb.r}, ${paperRgb.g}, ${paperRgb.b})`;
+    if (!t) return cssRgb([paperRgb.r, paperRgb.g, paperRgb.b]);
     const mix = (n: number, p: number) => Math.round(n * tintAlpha + p * (1 - tintAlpha));
-    return `rgb(${mix(t.r, paperRgb.r)}, ${mix(t.g, paperRgb.g)}, ${mix(t.b, paperRgb.b)})`;
+    return cssRgb([mix(t.r, paperRgb.r), mix(t.g, paperRgb.g), mix(t.b, paperRgb.b)]);
 };
 
 // Helper function to render API style badge with icon and colored background
@@ -67,8 +69,8 @@ export const ApiStyleBadge = ({
     // hover opacity. Dark mode gets a higher fill so tints stay visible on dark paper.
     const providers = {
         openai:    { label: 'OpenAI',    Mark: OpenAIStyleMark, tint: theme.palette.info.main, fill: isDark ? 0.22 : 0.14, hoverFill: isDark ? 0.32 : 0.22, border: alpha(theme.palette.info.main, 0.4) },
-        anthropic: { label: 'Anthropic', Mark: AnthropicStyleMark, tint: '#E07A5F',               fill: isDark ? 0.26 : 0.16, hoverFill: isDark ? 0.36 : 0.26, border: alpha('#E07A5F', 0.5) },
-        google:    { label: 'Google',    Mark: GoogleStyleMark, tint: '#4285F4',               fill: isDark ? 0.22 : 0.14, hoverFill: isDark ? 0.32 : 0.22, border: alpha('#4285F4', 0.4) },
+        anthropic: { label: 'Anthropic', Mark: AnthropicStyleMark, tint: apiStyleTints.anthropic,               fill: isDark ? 0.26 : 0.16, hoverFill: isDark ? 0.36 : 0.26, border: alpha(apiStyleTints.anthropic, 0.5) },
+        google:    { label: 'Google',    Mark: GoogleStyleMark, tint: apiStyleTints.google,               fill: isDark ? 0.22 : 0.14, hoverFill: isDark ? 0.32 : 0.22, border: alpha(apiStyleTints.google, 0.4) },
     } as const;
     const p = isOpenAI ? providers.openai : isAnthropic ? providers.anthropic : providers.google;
 

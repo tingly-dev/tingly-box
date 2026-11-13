@@ -22,6 +22,7 @@ import {
     formatYAxis,
 } from './utils';
 import type { TimeSeriesData, SeriesVisibility, SeriesKey } from './types';
+import { chartCursorFill } from '@/theme/dataviz';
 
 interface DailyTokenHistoryChartProps {
     data: TimeSeriesData[];
@@ -132,7 +133,7 @@ export function DailyTokenHistoryChart({ data }: DailyTokenHistoryChartProps) {
                             />
                             <Tooltip
                                 content={<CustomTooltip />}
-                                cursor={{ fill: 'rgba(0, 0, 0, 0.05)' }}
+                                cursor={{ fill: chartCursorFill }}
                             />
                             <Bar
                                 dataKey="cacheTokens"

@@ -17,6 +17,7 @@ import { api } from '@/services/api';
 import { useTranslation } from 'react-i18next';
 import { useQrPollingSession, usePollingLoop } from './useQrPollingSession';
 import { radius } from '@tingly/ui/theme/radius';
+import { qrColors } from '@/theme/dataviz';
 
 interface FeishuQRAuthProps {
     botUUID?: string; // Existing bot UUID for edit mode; omit for new bot flow
@@ -138,8 +139,8 @@ export const FeishuQRAuth: React.FC<FeishuQRAuthProps> = ({ botUUID, platform, b
                                     value={qrUrl}
                                     size={200}
                                     level="M"
-                                    bgColor="#ffffff"
-                                    fgColor="#000000"
+                                    bgColor={qrColors.background}
+                                    fgColor={qrColors.foreground}
                                 />
                             </Box>
                         </Paper>

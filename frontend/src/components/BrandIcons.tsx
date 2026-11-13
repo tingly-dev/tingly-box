@@ -113,6 +113,7 @@ import OmlxSvg from '@/assets/icons/omlx.svg?url';
 import OmlxDarkSvg from '@/assets/icons/omlx-dark.svg?url';
 import RuncratePng from '@/assets/icons/runcrate.png?url';
 import CloudGPUSvg from '@/assets/icons/cloudgpu.svg?url';
+import { monoArtwork } from '@/theme/brand';
 
 interface BrandIconProps {
     size?: number;
@@ -267,8 +268,8 @@ export const IflytekCloud = createBrandIcon(IflytekCloudSvg, 'iFlytek', false, f
 export const Baichuan = createBrandIcon(BaichuanSvg, 'Baichuan', false, false, BaichuanMonoSvg);
 // Resolve Yi's currentColor strokes per theme while preserving its green accent.
 export const Yi = createBrandIcon(
-    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', '#000'))}`,
+    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', monoArtwork.onLight))}`,
     'Lingyi Wanwu', false, false, YiMonoSvg,
-    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', '#fff'))}`,
+    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', monoArtwork.onDark))}`,
 );
 export const Doubao = createBrandIcon(DoubaoSvg, 'Doubao', false, false, DoubaoMonoSvg);

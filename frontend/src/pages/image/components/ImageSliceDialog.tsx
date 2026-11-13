@@ -20,6 +20,7 @@ import {
     TextField,
     Tooltip,
     Typography,
+    alpha,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Add, Close, Download, Gif, GridView, Movie, Pause, PlayArrow, Remove, ZoomIn } from '@/components/icons';
@@ -37,6 +38,7 @@ import {
     type VideoTarget,
     DEFAULT_TOLERANCE,
     type BackgroundKind,
+    EXPORT_BACKGROUND,
     analyzeSheetBackground,
     clampFrameDelay,
     computeTileRects,
@@ -61,6 +63,7 @@ import {
 } from '@tingly/vision';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { overlay, cssRgb } from '@tingly/ui/theme/overlay';
 
 // Rows, columns, frame duration and loop count are all numbers you nudge
 // while watching the result, so each is a stepper with a typable field rather
@@ -140,10 +143,10 @@ const NumberStepper: React.FC<NumberStepperProps> = ({
 
 // The conventional "transparent here" checkerboard.
 const CHECKERBOARD_IMAGE = [
-    'linear-gradient(45deg, rgba(128,128,128,0.18) 25%, transparent 25%)',
-    'linear-gradient(-45deg, rgba(128,128,128,0.18) 25%, transparent 25%)',
-    'linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.18) 75%)',
-    'linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.18) 75%)',
+    `linear-gradient(45deg, ${overlay.checker} 25%, transparent 25%)`,
+    `linear-gradient(-45deg, ${overlay.checker} 25%, transparent 25%)`,
+    `linear-gradient(45deg, transparent 75%, ${overlay.checker} 75%)`,
+    `linear-gradient(-45deg, transparent 75%, ${overlay.checker} 75%)`,
 ].join(', ');
 const EXPORT_SIZES = [512, 256];
 
@@ -158,7 +161,7 @@ const PREVIEW_SIZE = 128;
 const GIF_MAX_SIZE = 480;
 // Video does not share that cap: H.264 keeps a 1024px loop to a few hundred KB.
 const VIDEO_MAX_SIZE = 1024;
-const DEFAULT_VIDEO_BACKGROUND = '#ffffff';
+const DEFAULT_VIDEO_BACKGROUND = EXPORT_BACKGROUND;
 
 // Below this, a pointer gesture was a click on a tile rather than a drag that
 // redraws the frame — the two share the same surface on purpose.
@@ -799,8 +802,8 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                     }}
                                     sx={{
                                         position: 'absolute',
-                                        boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.55)',
-                                        border: '1px solid rgba(255, 255, 255, 0.9)',
+                                        boxShadow: `0 0 0 9999px ${overlay.dim}`,
+                                        border: `1px solid ${overlay.onDark.lineStrong}`,
                                         boxSizing: 'border-box',
                                         pointerEvents: 'none',
                                     }}
@@ -897,11 +900,11 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                 position: 'absolute',
                                                 border: '2px solid',
                                                 borderColor: isExcluded ? 'transparent' : 'primary.main',
-                                                bgcolor: isExcluded ? 'rgba(15, 23, 42, 0.55)' : 'transparent',
+                                                bgcolor: isExcluded ? overlay.dim : 'transparent',
                                                 boxSizing: 'border-box',
                                                 cursor: 'pointer',
                                                 transition: 'background-color 0.12s ease-out',
-                                                '&:hover': { bgcolor: isExcluded ? 'rgba(15, 23, 42, 0.42)' : 'rgba(25, 118, 210, 0.16)' },
+                                                '&:hover': { bgcolor: isExcluded ? overlay.dimHover : (theme) => alpha(theme.palette.primary.main, 0.16) },
                                             }}
                                         >
                                             {matte && !isExcluded && previewByIndex.has(rect.index) && (
@@ -1119,7 +1122,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                             borderRadius: radius.mark,
                                                             border: '1px solid',
                                                             borderColor: 'divider',
-                                                            bgcolor: `rgb(${keyColor.join(',')})`,
+                                                            bgcolor: cssRgb(keyColor as [number, number, number]),
                                                         }}
                                                     />
                                                     <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: fontMono }}>
@@ -1223,7 +1226,7 @@ const ImageSliceDialog: React.FC<ImageSliceDialogProps> = ({
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     color: 'common.white',
-                                                    bgcolor: 'rgba(15, 23, 42, 0.38)',
+                                                    bgcolor: overlay.dimSoft,
                                                     opacity: 0,
                                                     transition: 'opacity 0.16s ease-out',
                                                 }}

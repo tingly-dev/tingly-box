@@ -86,7 +86,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                                 transition: 'background-color 0.18s ease-out, color 0.18s ease-out, opacity 0.18s ease-out',
                                 '.MuiPaper-root:hover &': {
                                     backgroundColor: colors.text,
-                                    color: '#fff',
+                                    color: 'common.white',
                                     opacity: 1,
                                 },
                                 '& svg': {

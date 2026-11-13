@@ -1,5 +1,5 @@
 import { CheckCircle, Delete as DeleteIcon, Edit as EditIcon } from '@/components/icons';
-import { Box, Card, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, alpha } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
@@ -204,7 +204,7 @@ export default function CustomModelCard({
                                 p: 0.3,
                                 color: 'text.secondary',
                                 '&:hover': {
-                                    backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                                    backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
                                     color: 'error.main',
                                 }
                             }}
