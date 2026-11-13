@@ -12,6 +12,7 @@ export type ProjectSummary = S['ProjectSummary'];
 export type ProjectDetail = S['ProjectDetailResponse'];
 export type ThreadCounts = S['ThreadCounts'];
 export type Thread = S['Thread'];
+export type ThreadLink = S['ThreadLink'];
 export type ThreadEvent = S['ThreadEvent'];
 export type Subagent = S['Subagent'];
 export type ThreadDetail = S['ThreadDetailResponse'];

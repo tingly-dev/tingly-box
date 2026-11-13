@@ -1,6 +1,6 @@
 # Issue and PR tools for threads
 
-> Status: **batch 1 built** (the five tools, the link record, the refresher, the project setting, the rail card). Items under [Later](#later) are proposed only.
+> Status: **batch 1 built** (the five tools, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
 > Builds on [mcp-tools.md](./mcp-tools.md) (one table of tools, scopes, golden files), [projects-harness.md](./projects-harness.md) and `.design/projects-thread-rail.md` (the rail and the coordinator's Status tab). The refresh back-off follows the idea of `.design/quota-backoff.md`.
 
 ## Problem
@@ -27,7 +27,7 @@ Five tools for the thread's own session, one persisted record per issue or PR a 
 
 **What a tool decides for itself.** The model passes content, never targets:
 
-- *Repository*: from the thread's own checkout (`git remote get-url origin`, parsed to host/owner/name; credentials in the URL are dropped, not echoed). A remote that is not GitHub is refused. There is no `repo` input, so a thread cannot write to another repository.
+- *Repository*: from the thread's own checkout (`git config --get remote.origin.url`, the value as configured, parsed to owner/name; credentials in the URL are dropped, not echoed). A remote that is not `github.com` is refused (GitHub Enterprise: later). There is no `repo` input, so a thread cannot write to another repository.
 - *Head branch*: `Thread.Branch`; a folder session uses the branch its folder is on. Refused when it is detached, equals the base, or is the repository's default branch.
 - *Base*: the thread's `BaseBranch` unless `base` is given; a folder session's default is the repository's default branch.
 - *Push*: `git push origin refs/heads/<branch>:refs/heads/<branch>`: one explicit refspec, no `+`, no `--force`, so it can only fast-forward the thread's own branch. A rejected push is an error that says to rebase; there is no retry with force.
@@ -44,15 +44,15 @@ This is the part that must not turn into a way round the rules.
 What changes is only where the user can say "yes, always":
 
 - A new project setting, **`thread_github_access`**: `ask` (default) or `allow`. It is the "allowed items of the project settings" the user asked for.
-  - `ask`: the four write tools are written to the thread's settings as `ask` rules. In auto mode the classifier would otherwise deny an unlisted MCP tool silently with no card, which is the problem in (1); an `ask` rule makes the card appear. In the other modes the tool already prompts; the rule makes it explicit.
-  - `allow`: the four write tools are written as `allow` rules, so they run without a card. This is a standing decision of the project owner, made in the project settings (web; the coordinator cannot change it: `update_instructions` is the only settings tool and it does not touch this field). It is **off** until someone turns it on.
+  - `ask`: in auto mode the four write tools are written to the thread's settings as `ask` rules, because the classifier would otherwise deny an unlisted MCP tool silently with no card, which is the problem in (1); the rule makes the card appear. The other modes already prompt for a tool nobody allowed, and `bypassPermissions` keeps meaning "run without asking" (as it does for the `gh` commands), so nothing is added there.
+  - `allow`: the four write tools are written as `allow` rules, so they run without a card. This is a standing decision of the project owner, made in the project settings (web; the coordinator cannot change it: `update_instructions` is the only settings tool and it does not touch this field). It is **off** until someone turns it on, and a fork of the project does not inherit it (the owner decides again).
   - `get_pr_status` only reads GitHub for the thread's own PRs and is always allowed.
 - `gh pr create` / `gh issue create` / `gh pr merge` stay on the `ask` list (`grantAutoGit`); the setting does not weaken them. The thread prompt says to use the tools when it has them.
 
 Boundaries the setting cannot move (enforced in code, not in the prompt):
 
 - **No merge, no close, no reopen, no delete branch, no force push, no label or assignee changes, no review actions.** None of these exists as a tool, and `update_pr` has no `state` field, so it cannot close a PR. When one of them is added later it needs the explicit-approval rule from "Later" in `mcp-tools.md` (the call carries the user's own message ids), and it is never covered by `thread_github_access`.
-- **Only the thread's own PRs can be edited.** `update_pr` and `get_pr_status` look the number up in the thread's records, role `opened`. A PR by someone else is out of reach even if the number is known. `comment_issue` may comment on any issue or PR of the thread's repository (a thread working on "issue #12" needs to), the comment is visible in the approval card, and the record it leaves has the role `commented`.
+- **Only the thread's own PRs can be edited.** `update_pr` looks the number up in the thread's records and needs role `opened`; `get_pr_status` reads any PR in them. A PR by someone else is out of reach even if the number is known. `comment_issue` may comment on any issue or PR of the thread's repository (a thread working on "issue #12" needs to), the comment is visible in the approval card, and the record it leaves has the role `commented`.
 - **Nothing the environment refused is retried here.** If the user denies a tool call, Claude Code does not call the tool. If the user denied the matching `gh` command, the thread's settings still carry that rule, and the tool is a different call that the user answers separately: there is no hidden hand-over. A denial by the host (no `gh`, not signed in) comes back as an error that says what is missing.
 - **Credentials**: only the host's existing `gh` login and git credentials are used. The tools never read, log, store or return a token: the child process gets the server's environment unchanged, output is passed through a redactor (GitHub token shapes, `Authorization` headers, credentials in URLs) before it becomes an error, a log line or a tool result, and no token is a tool input.
 - **One call, one effect.** Each tool does what its name says. `create_pr` pushes one branch and creates one PR; it does not create the issue, set auto-merge or enable anything else.
@@ -102,10 +102,12 @@ Not done: webhooks (the host is usually behind NAT), review decisions (GraphQL o
 - **Thread rail** (`ThreadInfoRail`, the expanded status area): a new "Issues & PRs" card after Changes, listing each record: icon, `#number title`, state chip, and for a PR its CI and merge state; a row opens the URL. Shown only when the thread has records. Reading age in the tooltip; "could not refresh" when `last_error` is set.
 - **Coordinator's Status tab**: a card with all records of the project's threads, newest first, each with the thread's title, so "which PRs are open and how are they doing" is one place.
 - **Narrow layouts** that have no rail keep the header chips; a link count chip is not added in batch 1.
-- Project settings dialog: one select, "Issues and PRs: ask each time / allow", under the permission mode.
+- Project settings dialog: one select, "Issues and PRs: ask each time / allowed", under the permission mode; `PATCH /projects/{id}` takes `thread_github_access` (`ask` or `allow`, anything else is a 400).
+- The coordinator sees the same records as text: a short `prs=#12(open checks=failing merge=conflicts)` on each thread line (its prompt table and `list_threads`) and the full list, with the age of each reading, in `get_thread`. A field not read yet shows as `unread`.
 
 ## Tests
 
+- Mutation-checked: a forced refspec, the missing default-branch guard, the missing "opened by this thread" check and a back-off that never doubles each fail a test.
 - Fake `GitHub` for the tools and the refresher; a fake `gh` executable (a shell script on `PATH`) for the real `ghCLI`: arguments, JSON body, `gh api -X PATCH` for updates, the redactor on a token in stderr.
 - Tools through the in-memory MCP client: scope lists (golden and `TestToolsOfEachScope`), each tool, refusals (no origin, non-GitHub origin, default branch, base equals head, no commits, someone else's PR number), idempotent `create_pr`, a failed push leaves nothing recorded.
 - Settings rules: `ask` default, `allow` when set, `get_pr_status` always allowed, `gh pr create` still on `ask`.

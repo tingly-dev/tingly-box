@@ -67,6 +67,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
+    const [github, setGithub] = useState<'ask' | 'allow'>(project.thread_github_access === 'allow' ? 'allow' : 'ask');
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
     useEffect(() => {
@@ -74,7 +75,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
     const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || github !== (project.thread_github_access === 'allow' ? 'allow' : 'ask');
 
     return (
         <Stack spacing={2.5}>
@@ -87,11 +88,16 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                     <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
                 ))}
             </TextField>
+            <TextField select label={t('projectSettings.githubAccess')} value={github} onChange={(e) => setGithub(e.target.value as 'ask' | 'allow')}
+                helperText={t(github === 'allow' ? 'projectSettings.githubAccessAllowHelp' : 'projectSettings.githubAccessAskHelp')}>
+                <MenuItem value="ask">{t('projectSettings.githubAccessAsk')}</MenuItem>
+                <MenuItem value="allow">{t('projectSettings.githubAccessAllow')}</MenuItem>
+            </TextField>
             <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
                 helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
                 slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, max_running_threads: runningValue })}>{t('common.save')}</Button>
+                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, thread_github_access: github, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
             <ActionRow

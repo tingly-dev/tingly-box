@@ -12,6 +12,7 @@ import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { timeAgo } from '../../utils/format';
 import { CopyValue, Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 import { agentIcon, agentState } from './ThreadActivityPopover';
+import { ThreadLinksCard } from './LinksCard';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -164,6 +165,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             </RailCard>
             <UsageCard thread={thread} />
             {extra}
+            <ThreadLinksCard thread={thread} />
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at

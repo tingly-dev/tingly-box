@@ -121,6 +121,10 @@ export const project = {
         threadModel: 'Default thread model', threadModelHelp: 'Used by new threads and threads without a model override (Claude Code --model). Empty uses the host default. Individual thread choices stay independent.',
         modelDefault: 'Connection default',
         permissionMode: 'Thread permissions',
+        githubAccess: 'Issues and PRs',
+        githubAccessAsk: 'ask each time', githubAccessAllow: 'allowed',
+        githubAccessAskHelp: 'A thread asks you before it opens an issue, comments, opens a PR or edits one (through its tools; merging and closing are never available to it).',
+        githubAccessAllowHelp: 'Threads open issues, comment, open PRs and edit their own PRs without asking. Merging, closing and force-pushing stay unavailable. Applies to threads from their next turn.',
         mode: {
             acceptEdits: 'edits run, other actions ask you', acceptEditsHelp: 'File edits in the working directory run without asking; commands and anything else wait for your approval in the thread.',
             default: 'everything asks you', defaultHelp: 'Every action that needs permission waits for your approval in the thread.',

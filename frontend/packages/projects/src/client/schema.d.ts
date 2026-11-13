@@ -1796,6 +1796,8 @@ export interface components {
             starred: boolean;
             /** @description Field thread_effort */
             thread_effort: string;
+            /** @description Field thread_github_access */
+            thread_github_access?: string;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
@@ -1893,6 +1895,8 @@ export interface components {
             starred: boolean;
             /** @description Field thread_effort */
             thread_effort: string;
+            /** @description Field thread_github_access */
+            thread_github_access?: string;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
@@ -2147,6 +2151,8 @@ export interface components {
              * @description Field last_turn_ms
              */
             last_turn_ms: number;
+            /** @description Field links */
+            links?: components["schemas"]["ThreadLink"][];
             /**
              * Format: date-time
              * @description Field merged_at
@@ -2290,6 +2296,52 @@ export interface components {
              */
             updated_at: string;
         };
+        ThreadLink: {
+            /** @description Field ci */
+            ci?: string;
+            /**
+             * Format: date-time
+             * @description Field created_at
+             */
+            created_at: string;
+            /** @description Field draft */
+            draft?: boolean;
+            /** @description Field kind */
+            kind: string;
+            /** @description Field last_error */
+            last_error?: string;
+            /** @description Field merge_state */
+            merge_state?: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field project_id */
+            project_id: string;
+            /**
+             * Format: date-time
+             * @description Field refreshed_at
+             */
+            refreshed_at: string;
+            /** @description Field repo */
+            repo: string;
+            /** @description Field role */
+            role: string;
+            /** @description Field state */
+            state: string;
+            /** @description Field thread_id */
+            thread_id: string;
+            /** @description Field title */
+            title: string;
+            /**
+             * Format: date-time
+             * @description Field updated_at
+             */
+            updated_at: string;
+            /** @description Field url */
+            url: string;
+        };
         ThreadRespondRequest: {
             /** @description Field allow */
             allow: boolean;
@@ -2393,6 +2445,11 @@ export interface components {
              * @enum {string}
              */
             thread_effort?: "" | "low" | "medium" | "high" | "max";
+            /**
+             * @description Field thread_github_access
+             * @enum {string}
+             */
+            thread_github_access?: "ask" | "allow";
             /** @description Field thread_model */
             thread_model?: string;
             /**

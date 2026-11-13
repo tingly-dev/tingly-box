@@ -5325,6 +5325,39 @@
         }
       }
     },
+    "/api/v1/projects/directories/inspect": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Inspect a local directory or Git repository",
+        "description": "Inspect a local directory or Git repository",
+        "operationId": "apiV1ProjectsDirectoriesInspectPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRepoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectDirectoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/events": {
       "get": {
         "tags": [
@@ -13490,6 +13523,17 @@
       "CreateProjectRequest": {
         "type": "object",
         "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -13501,6 +13545,10 @@
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -14102,6 +14150,27 @@
         },
         "required": [
           "chats"
+        ]
+      },
+      "DirectorySpec": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "",
+              "shared",
+              "worktree"
+            ]
+          }
+        },
+        "required": [
+          "path"
         ]
       },
       "DiscoverIdesResponse": {
@@ -15584,6 +15653,48 @@
         "required": [
           "success",
           "message"
+        ]
+      },
+      "InspectDirectoryResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "dirty": {
+            "type": "boolean",
+            "description": "Field dirty"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "git",
+              "directory"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Field ok"
+          },
+          "root": {
+            "type": "string",
+            "description": "Field root"
+          }
+        },
+        "required": [
+          "ok",
+          "root",
+          "kind",
+          "branch",
+          "dirty",
+          "error"
         ]
       },
       "InspectRepoRequest": {
@@ -18414,6 +18525,10 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -18428,6 +18543,10 @@
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
+          },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
           },
           "thread_model": {
             "type": "string",
@@ -18632,6 +18751,10 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -18646,6 +18769,10 @@
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
+          },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
           },
           "thread_model": {
             "type": "string",
@@ -19368,9 +19495,25 @@
             "type": "string",
             "description": "Field base_branch"
           },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "git",
+              "directory"
+            ]
+          },
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "shared",
+              "worktree"
+            ]
           }
         },
         "required": [
@@ -21442,6 +21585,13 @@
             "format": "int64",
             "description": "Field last_turn_ms"
           },
+          "links": {
+            "type": "array",
+            "description": "Field links",
+            "items": {
+              "$ref": "#/components/schemas/ThreadLink"
+            }
+          },
           "merged_at": {
             "type": "string",
             "format": "date-time",
@@ -21703,6 +21853,93 @@
           "thread_id",
           "kind",
           "content",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "ThreadLink": {
+        "type": "object",
+        "properties": {
+          "ci": {
+            "type": "string",
+            "description": "Field ci"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Field draft"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Field last_error"
+          },
+          "merge_state": {
+            "type": "string",
+            "description": "Field merge_state"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "project_id": {
+            "type": "string",
+            "description": "Field project_id"
+          },
+          "refreshed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field refreshed_at"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "Field thread_id"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "thread_id",
+          "project_id",
+          "kind",
+          "repo",
+          "number",
+          "url",
+          "title",
+          "role",
+          "state",
+          "refreshed_at",
           "created_at",
           "updated_at"
         ]
@@ -22433,6 +22670,13 @@
             "type": "string",
             "description": "Field coordinator_profile"
           },
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
           "disable_worktree": {
             "type": "boolean",
             "description": "Field disable_worktree"
@@ -22458,6 +22702,13 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_directory_mode": {
+            "$ref": "#/components/schemas/DirectorySpec"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -22478,6 +22729,14 @@
               "medium",
               "high",
               "max"
+            ]
+          },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access",
+            "enum": [
+              "ask",
+              "allow"
             ]
           },
           "thread_model": {
