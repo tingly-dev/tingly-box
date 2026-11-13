@@ -44,3 +44,9 @@ backends. These use mock providers; live OAuth/ciphertext acceptance remains
 unverified. The shared standalone compact-to-continue harness remains deferred.
 Generic summary adapters, cross-protocol conversion and default V2 configuration
 are separate future work.
+
+## Held V2 configuration rollout
+
+The separate #2164 draft defaults generated gateway/hybrid Codex configs to V2
+and preserves explicit capability overrides. Keep that rollout on hold until
+mixed-provider support exists; the native-only first wave is insufficient.
