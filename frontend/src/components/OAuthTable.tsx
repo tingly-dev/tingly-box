@@ -235,12 +235,12 @@ const OAuthTable = ({
                 scrolls horizontally below minWidth instead of columns resizing. */}
             {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
-                    <TableRow sx={{bgcolor: "action.hover"}}>
+                    <TableRow>
                         {columns.map((col) => (
                             <TableCell
                                 key={col.label}
                                 align={col.align}
-                                sx={{fontWeight: 600, width: col.width, py: 1.25, ...col.sx}}
+                                sx={{width: col.width, ...col.sx}}
                             >
                                 {col.label}
                             </TableCell>

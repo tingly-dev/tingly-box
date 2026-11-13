@@ -62,7 +62,7 @@ const capabilityChipProps = (on: boolean) => ({
 // column proportions stay stable regardless of content — auto layout let the
 // Pairing column balloon and starved the others. Widths sum to tableMinWidth
 // so the table fills the card at any width above it.
-const headCellSx = {fontWeight: 600, py: 1.25, whiteSpace: 'nowrap', overflow: 'hidden'} as const;
+const headCellSx = {overflow: 'hidden'} as const;
 const tableMinWidth = 820;
 const col = (width: number, extra = {}) => ({...headCellSx, width, ...extra});
 
@@ -102,7 +102,7 @@ const BotTable: React.FC<BotTableProps> = ({
             >
                 <Table sx={{tableLayout: 'fixed', minWidth: tableMinWidth}}>
                     <TableHead>
-                        <TableRow sx={{bgcolor: 'action.hover'}}>
+                        <TableRow>
                             <TableCell sx={col(120)}>{t('bots.table.status', {defaultValue: 'Status'})}</TableCell>
                             <TableCell sx={col(430)}>{t('bots.table.bot', {defaultValue: 'Bot'})}</TableCell>
                             <TableCell sx={col(170)}>{t('bots.table.capabilities', {defaultValue: 'Capabilities'})}</TableCell>

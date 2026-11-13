@@ -100,7 +100,7 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                         <TableContainer>
                                             <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 560, '& td, & th': { borderColor: 'divider' }, '& tbody tr:last-of-type td': { borderBottom: 0 } }}>
                                                 <TableHead>
-                                                    <TableRow sx={{ '& th': { color: 'text.secondary', fontSize: fontSizes.sm, fontWeight: 500, py: 0.75 } }}>
+                                                    <TableRow>
                                                         <TableCell sx={{ pl: 2, width: '42%' }}>{t('im.settings.chat')}</TableCell>
                                                         <TableCell sx={{ width: '28%' }}>{t('im.settings.boundTo')}</TableCell>
                                                         <TableCell sx={{ width: '16%' }}>{t('im.settings.status')}</TableCell>

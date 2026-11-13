@@ -77,7 +77,6 @@ export function UsageHeadCell({ label, numeric = false }: { label: string; numer
     return (
         <TableCell
             align={numeric ? 'right' : undefined}
-            sx={{ fontWeight: 600, fontSize: fontSizes.sm, color: 'text.secondary', whiteSpace: 'nowrap', py: 1.25 }}
         >
             {label}
         </TableCell>

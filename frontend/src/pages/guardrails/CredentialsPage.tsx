@@ -412,12 +412,12 @@ const GuardrailsCredentialsPage = () => {
                                                 onChange={(event) => setSelectedIDs(event.target.checked ? credentials.map((item) => item.id) : [])}
                                             />
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Name</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Type</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 220 }}>Alias Token</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Stored Secret</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 110 }}>Actions</TableCell>
+                                        <TableCell sx={{ minWidth: 180 }}>Name</TableCell>
+                                        <TableCell sx={{ minWidth: 120 }}>Type</TableCell>
+                                        <TableCell sx={{ minWidth: 220 }}>Alias Token</TableCell>
+                                        <TableCell sx={{ minWidth: 180 }}>Stored Secret</TableCell>
+                                        <TableCell sx={{ minWidth: 120 }}>Status</TableCell>
+                                        <TableCell sx={{ minWidth: 110 }}>Actions</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
