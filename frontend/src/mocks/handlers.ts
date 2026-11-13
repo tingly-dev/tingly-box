@@ -264,6 +264,15 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
+            uuid: 'mock-provider-kimi', name: 'Kimi',
+            api_base: 'https://api.moonshot.cn/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'sk-kimi-****mnop', enabled: true, proxy_url: '',
+            api_base_openai: 'https://api.moonshot.cn/v1', api_base_anthropic: null,
+        },
+        models: ['kimi-k2.5', 'kimi-k2-turbo'],
+    },
+    {
+        provider: {
             uuid: 'mock-provider-openrouter', name: 'OpenRouter',
             api_base: 'https://openrouter.ai/api/v1', api_style: 'openai', auth_type: 'api_key',
             token: 'sk-or-****ijkl', enabled: false, proxy_url: '',
@@ -1141,6 +1150,8 @@ const mockQuotas: Record<string, any> = {
         expires_at: inOneHour,
         last_error: 'user does not have an active coding plan',
         last_error_at: now.toISOString(),
+        // Four automatic refreshes in a row were refused: the next one waits.
+        backoff: { failures: 4, next_attempt_at: new Date(now.getTime() + 2.5 * 60 * 60 * 1000).toISOString() },
         raw_response: {
             type: 'error',
             error: {
@@ -1161,6 +1172,34 @@ const mockQuotas: Record<string, any> = {
         expires_at: inOneHour,
         last_error: 'quota API not available - see the OpenAI dashboard',
         last_error_at: now.toISOString(),
+    },
+
+    // The key was refused after a good reading: the server keeps that reading
+    // (fetched_at is the success, not the failure) with the error beside it, and
+    // says when automatic refreshes resume. The cell dims the old figure.
+    'mock-provider-kimi': {
+        provider_uuid: 'mock-provider-kimi',
+        provider_name: 'Kimi',
+        provider_type: 'kimi_k2',
+        fetched_at: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
+        expires_at: inOneHour,
+        last_error: 'unexpected status code: 403: {"error":{"type":"permission_denied","message":"api key is disabled"}}',
+        last_error_at: new Date(now.getTime() - 4 * 60 * 1000).toISOString(),
+        backoff: { failures: 3, next_attempt_at: new Date(now.getTime() + 36 * 60 * 1000).toISOString() },
+        windows: [
+            {
+                key: 'weekly', type: 'weekly', kind: 'limit',
+                used: 1450, limit: 2000, used_percent: 72.5, available: 550,
+                resets_at: inSixDays, window_minutes: 10080, unit: 'requests',
+                label: 'Weekly requests',
+            },
+            {
+                key: 'five_hour', type: 'session', kind: 'limit',
+                used: 31, limit: 100, used_percent: 31, available: 69,
+                resets_at: inOneHour, window_minutes: 300, unit: 'requests',
+                label: '5h requests',
+            },
+        ],
     },
 
     // Free key: monthly spend has no cap, so there is no percentage to report.
@@ -1851,6 +1890,16 @@ const mockQuotas: Record<string, any> = {
         },
     },
 }
+
+// A quota is stamped as read just now, except one that failed after a good
+// reading: its fetched_at stays the time of that reading (see mock-provider-kimi).
+const mockQuotaNow = (uuid: string) => {
+    const quota = mockQuotas[uuid]
+    return quota.last_error && quota.windows?.length
+        ? quota
+        : { ...quota, fetched_at: new Date().toISOString() }
+}
+
 if (isNewcomer) {
     for (const uuid of Object.keys(mockQuotas)) delete mockQuotas[uuid]
 }
@@ -2530,7 +2579,7 @@ export const handlers = [
         const result: Record<string, any> = {}
         for (const uuid of uuids) {
             if (mockQuotas[uuid]) {
-                result[uuid] = { ...mockQuotas[uuid], fetched_at: new Date().toISOString() }
+                result[uuid] = mockQuotaNow(uuid)
             }
         }
         return HttpResponse.json({ success: true, data: result })
@@ -2578,7 +2627,7 @@ export const handlers = [
     http.get('/api/v1/provider-quota/:uuid', ({ params }) => {
         const { uuid } = params as { uuid: string }
         if (mockQuotas[uuid]) {
-            return HttpResponse.json({ ...mockQuotas[uuid], fetched_at: new Date().toISOString() })
+            return HttpResponse.json(mockQuotaNow(uuid))
         }
         return HttpResponse.json({ error: 'quota not found for provider' }, { status: 404 })
     }),
@@ -2619,7 +2668,7 @@ export const handlers = [
         // Simulate a short delay
         await new Promise(r => setTimeout(r, 800))
         if (mockQuotas[uuid]) {
-            return HttpResponse.json({ ...mockQuotas[uuid], fetched_at: new Date().toISOString() })
+            return HttpResponse.json(mockQuotaNow(uuid))
         }
         return HttpResponse.json({ error: 'quota not found for provider' }, { status: 404 })
     }),

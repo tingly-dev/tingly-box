@@ -79,6 +79,15 @@ interface CellLine {
     exhausted?: boolean;
 }
 
+/** A clock time today, or date and time on another day, in the browser's locale. */
+function formatRetryTime(at: number): string {
+    const date = new Date(at);
+    const sameDay = date.toDateString() === new Date().toDateString();
+    return date.toLocaleString([], sameDay
+        ? { hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 /**
  * The Quota column of the credential tables. One line per window worth a
  * figure — the same ring the rule graph shows on a service node, the window's
@@ -179,6 +188,14 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
     const stale = Number.isFinite(fetchedAt) && now - fetchedAt > STALE_AFTER_MS;
     const lastError = quota?.last_error;
     const hasRaw = quota?.raw_response != null;
+    // The server keeps the last good reading past a failed refresh, with its
+    // own fetched_at and the error beside it: the figure is then old, which the
+    // dimming says the same way as a snapshot nobody has refreshed.
+    const dimmed = stale || !!lastError;
+    // While automatic refreshes are held back after repeated failures, say when
+    // the next one comes; clicking the cell still refreshes right now.
+    const retryAt = quota?.backoff ? new Date(quota.backoff.next_attempt_at).getTime() : NaN;
+    const retryText = Number.isFinite(retryAt) && retryAt > now ? formatRetryTime(retryAt) : undefined;
 
     // A cost that restates a money window (e.g. Kimi's booster wallet) would
     // show the same amount twice; it only earns a row when nothing else does.
@@ -270,6 +287,11 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                 {lastError && (
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', wordBreak: 'break-word' }}>
                         {lastError}
+                    </Typography>
+                )}
+                {lastError && retryText && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {t('providerTable.quota.retryAt', { time: retryText })}
                     </Typography>
                 )}
             </Box>
@@ -399,7 +421,7 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                     py: 0.25,
                     mx: -0.75,
                     borderRadius: radius.row,
-                    opacity: stale && !refreshing ? 0.5 : 1,
+                    opacity: dimmed && !refreshing ? 0.5 : 1,
                     cursor: refreshing ? 'progress' : 'pointer',
                     '&:hover': { bgcolor: 'action.hover' },
                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
