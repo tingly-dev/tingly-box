@@ -56,7 +56,7 @@ const readCredentialView = (): CredentialView => {
 const SectionTitle = ({ label, count }: { label: string; count: number }) => (
     <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{label}</Typography>
-        <Chip label={count} size="small" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.micro, color: 'text.secondary' }}/>
+        <Chip label={count} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.micro }}/>
     </Stack>
 );
 
@@ -222,13 +222,11 @@ const CredentialPage = () => {
                     )}
                 />
 
-                {/* Both credential kinds sit in one section stack under the page
-                    header, so the page reads as a single "Credentials" surface —
-                    but each keeps its own table, since OAuth and API key
-                    credentials show different columns (issuer/expiry vs. base
-                    URL/key) that don't collapse into shared columns without
-                    losing detail. The tables are the containers; there is no
-                    card around them (no card in a card).
+                {/* Both credential kinds share one card so the page reads as a
+                    single "Credentials" surface, not two unrelated panels — but
+                    each keeps its own table, since OAuth and API key credentials
+                    show different columns (issuer/expiry vs. base URL/key) that
+                    don't collapse into shared columns without losing detail.
 
                     Only kinds that exist get a section. An empty kind used to
                     render its own "No … Configured" block with its own Connect
@@ -236,31 +234,31 @@ const CredentialPage = () => {
                     identical buttons, and a user with only API keys kept an
                     empty OAuth block on top. The header's Connect AI adds either
                     kind; with nothing at all, one landing replaces both. */}
-                {credentialCounts.total === 0 ? (
-                    <Surface padding={{ xs: 2, sm: 2.5 }}>
+                <Surface padding={{ xs: 2, sm: 2.5 }}>
+                    {credentialCounts.total === 0 ? (
                         <EmptyState
                             icon={<VpnKey />}
                             title={t('credentialPage.emptyTitle')}
                             description={t('credentialPage.emptyDescription')}
                             primaryAction={{ label: t('templateActions.connectAI'), icon: <Add />, onClick: handleConnectAIClick }}
                         />
-                    </Surface>
-                ) : (
-                    <Stack spacing={3} divider={<Divider />}>
-                        {credentialCounts.oauth > 0 && (
-                            <Box>
-                                <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
-                                <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
-                            </Box>
-                        )}
-                        {credentialCounts.apiKeys > 0 && (
-                            <Box>
-                                <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
-                                <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
-                            </Box>
-                        )}
-                    </Stack>
-                )}
+                    ) : (
+                        <Stack spacing={3} divider={<Divider />}>
+                            {credentialCounts.oauth > 0 && (
+                                <Box>
+                                    <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
+                                    <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                </Box>
+                            )}
+                            {credentialCounts.apiKeys > 0 && (
+                                <Box>
+                                    <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
+                                    <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                </Box>
+                            )}
+                        </Stack>
+                    )}
+                </Surface>
             </Stack>
             {/* Unified Connect AI add flow: picker + form/OAuth/paste/import dialogs
                 (edit goes through useProviderEditDialog) */}
