@@ -28,6 +28,7 @@ import {
     Menu,
     MenuItem,
     Modal,
+    Paper,
     Stack,
     Switch,
     Table,
@@ -207,8 +208,17 @@ const ApiKeyTable = ({
     );
 
     return (
-        // No border — the section's card on the Credentials page is the frame.
-        <TableContainer sx={{overflowX: "auto"}}>
+        <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{
+                border: view === "table" ? 1 : 0,
+                borderColor: "divider",
+                borderRadius: 2,
+                boxShadow: "none",
+                overflowX: "auto",
+            }}
+        >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
             {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>

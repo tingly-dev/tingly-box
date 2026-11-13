@@ -78,7 +78,7 @@
     "radius": 1
   },
   "src/components/ApiKeyTable.tsx": {
-    "radius": 3
+    "radius": 4
   },
   "src/components/ApiStyleBadge.tsx": {
     "colour": 6
@@ -269,7 +269,7 @@
     "radius": 3
   },
   "src/components/OAuthTable.tsx": {
-    "radius": 1
+    "radius": 2
   },
   "src/components/paste-detect/PasteDetectPanel.tsx": {
     "radius": 2

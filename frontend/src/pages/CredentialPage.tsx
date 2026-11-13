@@ -9,7 +9,6 @@ import OAuthTable from '@/components/OAuthTable.tsx';
 import PageHeader from '@/components/PageHeader';
 import { PageLayout } from '@/components/PageLayout';
 import Surface from '@/components/Surface';
-import UnifiedCard from '@/components/UnifiedCard';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { useProviderDialog } from '@/hooks/useProviderDialog';
@@ -17,12 +16,14 @@ import { IconArrowsSort, IconLayoutGrid, IconList, IconTable } from '@tabler/ico
 import { Add, Check, VpnKey } from '@/components/icons';
 import {
     Alert,
+    Box,
     Button,
     Chip,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
+    Divider,
     Stack,
     IconButton,
     Menu,
@@ -52,11 +53,10 @@ const readCredentialView = (): CredentialView => {
     }
 };
 
-// A section card's title: the kind and how many of it there are.
 const SectionTitle = ({ label, count }: { label: string; count: number }) => (
-    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-        <span>{label}</span>
-        <Chip label={count} size="small" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.micro, fontWeight: 500, color: 'text.secondary' }}/>
+    <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{label}</Typography>
+        <Chip label={count} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.micro }}/>
     </Stack>
 );
 
@@ -222,12 +222,11 @@ const CredentialPage = () => {
                     )}
                 />
 
-                {/* Each credential kind is its own section card — the page is
-                    its header plus cards, like every other page — and keeps its
-                    own table, since OAuth and API key credentials show different
-                    columns (issuer/expiry vs. base URL/key) that don't collapse
-                    into shared columns without losing detail. The card is the
-                    frame; the table inside has no border of its own.
+                {/* Both credential kinds share one card so the page reads as a
+                    single "Credentials" surface, not two unrelated panels — but
+                    each keeps its own table, since OAuth and API key credentials
+                    show different columns (issuer/expiry vs. base URL/key) that
+                    don't collapse into shared columns without losing detail.
 
                     Only kinds that exist get a section. An empty kind used to
                     render its own "No … Configured" block with its own Connect
@@ -235,29 +234,31 @@ const CredentialPage = () => {
                     identical buttons, and a user with only API keys kept an
                     empty OAuth block on top. The header's Connect AI adds either
                     kind; with nothing at all, one landing replaces both. */}
-                {credentialCounts.total === 0 ? (
-                    <Surface padding={{ xs: 2, sm: 2.5 }}>
+                <Surface padding={{ xs: 2, sm: 2.5 }}>
+                    {credentialCounts.total === 0 ? (
                         <EmptyState
                             icon={<VpnKey />}
                             title={t('credentialPage.emptyTitle')}
                             description={t('credentialPage.emptyDescription')}
                             primaryAction={{ label: t('templateActions.connectAI'), icon: <Add />, onClick: handleConnectAIClick }}
                         />
-                    </Surface>
-                ) : (
-                    <Stack spacing={2}>
-                        {credentialCounts.oauth > 0 && (
-                            <UnifiedCard size="full" title={<SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>}>
-                                <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
-                            </UnifiedCard>
-                        )}
-                        {credentialCounts.apiKeys > 0 && (
-                            <UnifiedCard size="full" title={<SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>}>
-                                <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
-                            </UnifiedCard>
-                        )}
-                    </Stack>
-                )}
+                    ) : (
+                        <Stack spacing={3} divider={<Divider />}>
+                            {credentialCounts.oauth > 0 && (
+                                <Box>
+                                    <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
+                                    <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                </Box>
+                            )}
+                            {credentialCounts.apiKeys > 0 && (
+                                <Box>
+                                    <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
+                                    <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                </Box>
+                            )}
+                        </Stack>
+                    )}
+                </Surface>
             </Stack>
             {/* Unified Connect AI add flow: picker + form/OAuth/paste/import dialogs
                 (edit goes through useProviderEditDialog) */}
