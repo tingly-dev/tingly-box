@@ -41,7 +41,7 @@ export const settings: Dict<typeof settingsEn> = {
         sourceBot: '来自 Bot',
     },
     directory: { places: '位置', selectedLocation: '所选目录', home: '主目录', parent: '上一级', currentLocation: '当前位置', folders: '目录', blocked: '服务器拒绝了目录请求，请检查连接或代理配置。', unauthorized: '登录已失效，请重新登录。', retry: '重试', title: '选择目录', browse: '浏览', select: '选择此目录', help: '浏览服务器用户主目录中的非隐藏目录。也可以手动输入其他路径。', loading: '正在加载…', empty: '这里没有目录。', failed: '无法浏览此目录。' },
-    worktreeNotice: { title: '项目线程的工作目录', description: '项目关联仓库后，新线程默认使用各自独立的 Git worktree 和分支。合并之前，线程的修改不会出现在原始检出目录中。', worktree: '独立 worktree（默认）', shared: '共享仓库和当前分支', changeLater: '以后可以在项目设置中修改；已有线程保留原来的工作目录。', continue: '继续并发送' },
+    worktreeNotice: { title: '项目线程的工作目录', description: '选择新线程如何使用 Git 主目录。独立 worktree 和分支中的修改在合并之前不会出现在原始检出目录中。', worktree: '独立 worktree（默认）', shared: '共享仓库和当前分支', changeLater: '以后可以在项目设置中修改；已有线程保留原来的工作目录。', continue: '继续并发送' },
     workdir: {
         title: '工作目录', add: '添加工作目录', actions: '目录操作', remove: '从侧栏移除',
         removeTitle: '移除此目录？', removeConfirm: '移除',

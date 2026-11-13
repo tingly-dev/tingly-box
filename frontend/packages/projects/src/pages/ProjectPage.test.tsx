@@ -17,7 +17,7 @@ vi.mock('../hooks/usePlacement', () => ({ usePlacement: () => m.placement }));
 vi.mock('../components/project/ThreadPanel', () => ({ ThreadPanel: ({ composerContext, modelControl, effortControl, belowComposer, settingsSaving, canSend, onBack, liveTasks }: { liveTasks?: unknown[]; composerContext: React.ReactNode; modelControl: React.ReactNode; effortControl: React.ReactNode; belowComposer: React.ReactNode; settingsSaving: boolean; canSend: () => boolean; onBack: () => void }) => <div data-testid="thread" data-live-tasks={liveTasks?.length ?? 0} data-saving={settingsSaving} data-can-send={canSend()}><button onClick={onBack}>back</button>{modelControl}{effortControl}{composerContext}{belowComposer}</div> }));
 vi.mock('../components/ModelPicker', () => ({ ModelPicker: ({ value, defaultLabel, disabled, onChange }: { value: string; defaultLabel?: string; disabled?: boolean; onChange: (v: string) => void }) => <button disabled={disabled} onClick={() => onChange('worker-choice')}>{value || defaultLabel}</button> }));
 const host = { paths: { list: '/projects', project: (id: string) => `/projects/${id}`, folder: () => '/folders' } };
-const p = { id: 'p', type: 'project', main_thread_id: 'main', name: 'Project', thread_model: 'project-choice', thread_permission_mode: 'auto' };
+const p = { id: 'p', type: 'project', main_thread_id: 'main', name: 'Project', thread_model: 'project-choice', thread_permission_mode: 'auto', primary_repo_path: '/one', repos: [{ path: '/one', base_branch: 'main', kind: 'git', workspace_mode: 'worktree' }, { path: '/two', base_branch: 'main', kind: 'git', workspace_mode: 'shared' }] };
 const a = { id: 'a', project_id: 'p', model: 'observed-upstream', status: 'idle' };
 const b = { id: 'b', project_id: 'p', model_override: 'sibling-choice', status: 'idle' };
 function Switch() { const nav = useNavigate(); return <button onClick={() => nav('/projects/p?thread=b')}>switch</button>; }
@@ -143,8 +143,8 @@ it('changes the project workspace default from the composer settings', async () 
     m.get.mockImplementation(async (url: string) => ({ data:
         url === '/api/v1/projects/{id}' ? { project, threads: [], coordinator_busy: false }
             : url.endsWith('permission-modes') ? { modes: ['auto'] } : {}, response: new Response() }));
-    m.patch.mockImplementation(async (_url: string, options: { body: { disable_worktree: boolean } }) => {
-        project = { ...project, disable_worktree: options.body.disable_worktree };
+    m.patch.mockImplementation(async (_url: string, options: { body: { primary_directory_mode: { path: string; workspace_mode: string } } }) => {
+        project = { ...project, repos: project.repos.map((r) => r.path === options.body.primary_directory_mode.path ? { ...r, workspace_mode: options.body.primary_directory_mode.workspace_mode } : r) };
         return { data: project, response: new Response() };
     });
     render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
@@ -152,11 +152,11 @@ it('changes the project workspace default from the composer settings', async () 
     expect(picker).toHaveTextContent('threadSettings.workspace.worktree');
     fireEvent.mouseDown(picker);
     fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.shared' }));
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: true } }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { primary_directory_mode: { path: '/one', workspace_mode: 'shared' } } }));
     await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.shared'));
     fireEvent.mouseDown(picker);
     fireEvent.click(screen.getByRole('option', { name: 'threadSettings.workspace.worktree' }));
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: false } }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { primary_directory_mode: { path: '/one', workspace_mode: 'worktree' } } }));
     await waitFor(() => expect(picker).toHaveTextContent('threadSettings.workspace.worktree'));
 });
 
@@ -176,7 +176,7 @@ it('asks once before the first message, saves the chosen mode before sending, an
     fireEvent.click(await screen.findByRole('radio', { name: 'worktreeNotice.shared' }));
     fireEvent.click(screen.getByRole('button', { name: 'worktreeNotice.continue' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledTimes(1));
-    expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { disable_worktree: true } });
+    expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { primary_directory_mode: { path: '/one', workspace_mode: 'shared' } } });
     expect(m.patch.mock.invocationCallOrder[0]).toBeLessThan(m.post.mock.invocationCallOrder[0]);
     fireEvent.click(await screen.findByRole('button', { name: 'send message' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledTimes(2));
@@ -232,4 +232,22 @@ it('does not show the tasks of a thread the user already left', async () => {
     await waitFor(() => expect(m.get.mock.calls.filter(([u, o]) => u === '/api/v1/threads/{id}' && o.params.path.id === 'b').length).toBeGreaterThan(0));
     await act(async () => answerA());
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveAttribute('data-live-tasks', '0'));
+});
+
+
+it('sends scratch and ordinary-directory projects without a worktree notice', async () => {
+    for (const repos of [[], [{ path: '/docs', base_branch: '', kind: 'directory', workspace_mode: 'shared' }]]) {
+        m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
+            ? { project: { ...p, repos, primary_repo_path: repos[0]?.path ?? '' }, threads: [], coordinator_busy: false }
+            : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
+        m.post.mockResolvedValue({ data: {}, response: new Response() });
+        render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
+        await screen.findByText('threadSettings.defaults');
+        expect(screen.queryByRole('combobox', { name: 'threadSettings.worktreeMode' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'send message' }));
+        await waitFor(() => expect(m.post).toHaveBeenCalled());
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(m.patch).not.toHaveBeenCalled();
+        cleanup(); vi.clearAllMocks();
+    }
 });

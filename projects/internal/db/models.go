@@ -6,10 +6,60 @@ import (
 	"time"
 )
 
-// Repo is a local git repository a project's threads work in.
+// Repo describes a project directory. Empty Kind and WorkspaceMode are legacy
+// Git entries whose mode comes from the project's DisableWorktree setting.
 type Repo struct {
-	Path       string `json:"path"`
-	BaseBranch string `json:"base_branch"`
+	Path          string `json:"path"`
+	BaseBranch    string `json:"base_branch"`
+	Kind          string `json:"kind,omitempty" enum:"git,directory"`
+	WorkspaceMode string `json:"workspace_mode,omitempty" enum:"shared,worktree"`
+}
+
+const (
+	RepoGit           = "git"
+	RepoDirectory     = "directory"
+	WorkspaceShared   = "shared"
+	WorkspaceWorktree = "worktree"
+)
+
+// EffectiveRepo returns the meaning of a directory, including legacy defaults.
+func (p *Project) EffectiveRepo(r Repo) Repo {
+	if r.Kind == "" {
+		r.Kind = RepoGit
+	}
+	if r.Kind == RepoDirectory {
+		r.WorkspaceMode = WorkspaceShared
+	} else if r.WorkspaceMode == "" {
+		if p.DisableWorktree {
+			r.WorkspaceMode = WorkspaceShared
+		} else {
+			r.WorkspaceMode = WorkspaceWorktree
+		}
+	}
+	return r
+}
+
+// PrimaryRepo returns the configured primary directory, or the historical first.
+func (p *Project) PrimaryRepo() *Repo {
+	if len(p.Repos) == 0 {
+		return nil
+	}
+	for i := range p.Repos {
+		if p.Repos[i].Path == p.PrimaryRepoPath {
+			return &p.Repos[i]
+		}
+	}
+	return &p.Repos[0]
+}
+
+// ApplyDirectoryDefaults materializes legacy defaults in memory only.
+func (p *Project) ApplyDirectoryDefaults() {
+	for i, r := range p.Repos {
+		p.Repos[i] = p.EffectiveRepo(r)
+	}
+	if primary := p.PrimaryRepo(); primary != nil {
+		p.PrimaryRepoPath = primary.Path
+	}
 }
 
 // Project is one ongoing stream of work: a goal, standing instructions, the
@@ -27,11 +77,12 @@ type Project struct {
 	Path string `gorm:"size:1000" json:"path,omitempty"`
 	// MainThreadID is the project's conversation, the thread its coordinator
 	// talks in; empty for a folder.
-	MainThreadID string `gorm:"size:36" json:"main_thread_id,omitempty"`
-	Name         string `gorm:"size:200;not null" json:"name"`
-	Goal         string `gorm:"type:text" json:"goal"`
-	Instructions string `gorm:"type:text" json:"instructions"`
-	Repos        []Repo `gorm:"serializer:json;type:text" json:"repos"`
+	MainThreadID    string `gorm:"size:36" json:"main_thread_id,omitempty"`
+	Name            string `gorm:"size:200;not null" json:"name"`
+	Goal            string `gorm:"type:text" json:"goal"`
+	Instructions    string `gorm:"type:text" json:"instructions"`
+	Repos           []Repo `gorm:"serializer:json;type:text" json:"repos"`
+	PrimaryRepoPath string `gorm:"type:text" json:"primary_repo_path,omitempty"`
 	// CoordinatorModel / ThreadModel are empty for "connection default".
 	// CoordinatorEffort / ThreadEffort are the thinking effort beside each of
 	// them (project.Efforts); empty for the endpoint's default.

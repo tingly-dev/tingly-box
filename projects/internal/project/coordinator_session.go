@@ -453,14 +453,19 @@ func coordinatorCurrentSettings(p *db.Project) string {
 	if len(p.Repos) == 0 {
 		b.WriteString("This project has no repositories: threads work in a scratch directory and deliver files to the project Library.\n")
 	} else {
-		if p.DisableWorktree {
-			b.WriteString("Threads share the selected checkout and its current branch; coordinate concurrent work.\n")
-		} else {
-			b.WriteString("Each thread gets its own branch and worktree.\n")
-		}
-		b.WriteString("Repositories (the first is the default):\n")
+		primary := p.PrimaryRepo()
+		b.WriteString("Project directories (shared means concurrent threads use the same files; worktree creates an isolated Git branch):\n")
 		for _, repo := range p.Repos {
-			fmt.Fprintf(&b, "- %s (base branch %s)\n", repo.Path, repo.BaseBranch)
+			r := p.EffectiveRepo(repo)
+			role := ""
+			if primary != nil && primary.Path == r.Path {
+				role = ", primary/default"
+			}
+			fmt.Fprintf(&b, "- %s (%s, %s%s", r.Path, r.Kind, r.WorkspaceMode, role)
+			if r.BaseBranch != "" {
+				fmt.Fprintf(&b, ", base branch %s", r.BaseBranch)
+			}
+			b.WriteString(")\n")
 		}
 	}
 	b.WriteString("Repository and worktree settings apply to new threads; existing threads keep their working directories.")

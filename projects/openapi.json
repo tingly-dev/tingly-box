@@ -538,6 +538,39 @@
         }
       }
     },
+    "/api/v1/projects/directories/inspect": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Inspect a local directory or Git repository",
+        "description": "Inspect a local directory or Git repository",
+        "operationId": "apiV1ProjectsDirectoriesInspectPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRepoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectDirectoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/events": {
       "get": {
         "tags": [
@@ -3104,6 +3137,17 @@
       "CreateProjectRequest": {
         "type": "object",
         "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -3115,6 +3159,10 @@
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -3214,6 +3262,27 @@
           "patch",
           "uncommitted",
           "truncated"
+        ]
+      },
+      "DirectorySpec": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "",
+              "shared",
+              "worktree"
+            ]
+          }
+        },
+        "required": [
+          "path"
         ]
       },
       "EffortRequest": {
@@ -3316,6 +3385,48 @@
         "required": [
           "status",
           "version"
+        ]
+      },
+      "InspectDirectoryResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "dirty": {
+            "type": "boolean",
+            "description": "Field dirty"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "git",
+              "directory"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Field ok"
+          },
+          "root": {
+            "type": "string",
+            "description": "Field root"
+          }
+        },
+        "required": [
+          "ok",
+          "root",
+          "kind",
+          "branch",
+          "dirty",
+          "error"
         ]
       },
       "InspectRepoRequest": {
@@ -3807,6 +3918,10 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -4025,6 +4140,10 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -4124,9 +4243,25 @@
             "type": "string",
             "description": "Field base_branch"
           },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "git",
+              "directory"
+            ]
+          },
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "shared",
+              "worktree"
+            ]
           }
         },
         "required": [
@@ -4949,6 +5084,13 @@
             "type": "string",
             "description": "Field coordinator_profile"
           },
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
           "disable_worktree": {
             "type": "boolean",
             "description": "Field disable_worktree"
@@ -4973,6 +5115,13 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_directory_mode": {
+            "$ref": "#/components/schemas/DirectorySpec"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",

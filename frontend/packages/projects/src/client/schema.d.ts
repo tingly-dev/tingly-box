@@ -224,6 +224,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/directories/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect a local directory or Git repository
+         * @description Inspect a local directory or Git repository
+         */
+        post: operations["apiV1ProjectsDirectoriesInspectPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/events": {
         parameters: {
             query?: never;
@@ -1406,12 +1426,18 @@ export interface components {
             model?: string;
         };
         CreateProjectRequest: {
+            /** @description Field directories */
+            directories?: components["schemas"]["DirectorySpec"][];
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
             /** @description Field goal */
             goal?: string;
             /** @description Field name */
             name?: string;
             /** @description Field path */
             path?: string;
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos?: string[];
             /**
@@ -1453,6 +1479,15 @@ export interface components {
             /** @description Field uncommitted */
             uncommitted: string;
         };
+        DirectorySpec: {
+            /** @description Field path */
+            path: string;
+            /**
+             * @description Field workspace_mode
+             * @enum {string}
+             */
+            workspace_mode?: "" | "shared" | "worktree";
+        };
         EffortRequest: {
             /**
              * @description Field effort
@@ -1491,6 +1526,23 @@ export interface components {
             status: string;
             /** @description Field version */
             version: string;
+        };
+        InspectDirectoryResponse: {
+            /** @description Field branch */
+            branch: string;
+            /** @description Field dirty */
+            dirty: boolean;
+            /** @description Field error */
+            error: string;
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind: "" | "git" | "directory";
+            /** @description Field ok */
+            ok: boolean;
+            /** @description Field root */
+            root: string;
         };
         InspectRepoRequest: {
             /** @description Field path */
@@ -1716,6 +1768,8 @@ export interface components {
             path?: string;
             /** @description Field paused */
             paused: boolean;
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos: components["schemas"]["Repo"][];
             /** @description Field starred */
@@ -1811,6 +1865,8 @@ export interface components {
             path?: string;
             /** @description Field paused */
             paused: boolean;
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos: components["schemas"]["Repo"][];
             /** @description Field starred */
@@ -1848,8 +1904,18 @@ export interface components {
         Repo: {
             /** @description Field base_branch */
             base_branch: string;
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind?: "git" | "directory";
             /** @description Field path */
             path: string;
+            /**
+             * @description Field workspace_mode
+             * @enum {string}
+             */
+            workspace_mode?: "shared" | "worktree";
         };
         SendMessageRequest: {
             /** @description Field content */
@@ -2274,6 +2340,8 @@ export interface components {
             coordinator_model?: string;
             /** @description Field coordinator_profile */
             coordinator_profile?: string;
+            /** @description Field directories */
+            directories?: components["schemas"]["DirectorySpec"][];
             /** @description Field disable_worktree */
             disable_worktree?: boolean;
             /** @description Field goal */
@@ -2289,6 +2357,9 @@ export interface components {
             name?: string;
             /** @description Field paused */
             paused?: boolean;
+            primary_directory_mode?: components["schemas"]["DirectorySpec"];
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos?: string[];
             /** @description Field starred */
@@ -2693,6 +2764,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowseDirectoriesResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsDirectoriesInspectPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectRepoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectDirectoryResponse"];
                 };
             };
         };

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -63,7 +64,10 @@ type CreateProjectRequest struct {
 	Goal string `json:"goal,omitempty"`
 	// Repos are local repository paths; each thread branches from the
 	// repository's current branch.
-	Repos []string `json:"repos,omitempty"`
+	Repos           []string            `json:"repos,omitempty"`
+	Directories     *[]rt.DirectorySpec `json:"directories,omitempty"`
+	PrimaryRepoPath *string             `json:"primary_repo_path,omitempty"`
+	DisableWorktree *bool               `json:"disable_worktree,omitempty"`
 }
 
 // ForkProjectRequest names the fork; empty is "<source name> (fork)".
@@ -73,18 +77,21 @@ type ForkProjectRequest struct {
 
 // UpdateProjectRequest changes the fields that are set.
 type UpdateProjectRequest struct {
-	Name                 *string   `json:"name,omitempty"`
-	Goal                 *string   `json:"goal,omitempty"`
-	Instructions         *string   `json:"instructions,omitempty"`
-	Repos                *[]string `json:"repos,omitempty"`
-	CoordinatorProfile   *string   `json:"coordinator_profile,omitempty"`
-	ThreadProfile        *string   `json:"thread_profile,omitempty"`
-	CoordinatorModel     *string   `json:"coordinator_model,omitempty"`
-	ThreadModel          *string   `json:"thread_model,omitempty"`
-	CoordinatorEffort    *string   `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
-	ThreadEffort         *string   `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
-	ThreadPermissionMode *string   `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
-	DisableWorktree      *bool     `json:"disable_worktree,omitempty"`
+	Name                 *string             `json:"name,omitempty"`
+	Goal                 *string             `json:"goal,omitempty"`
+	Instructions         *string             `json:"instructions,omitempty"`
+	Repos                *[]string           `json:"repos,omitempty"`
+	Directories          *[]rt.DirectorySpec `json:"directories,omitempty"`
+	PrimaryRepoPath      *string             `json:"primary_repo_path,omitempty"`
+	PrimaryDirectoryMode *rt.DirectorySpec   `json:"primary_directory_mode,omitempty"`
+	CoordinatorProfile   *string             `json:"coordinator_profile,omitempty"`
+	ThreadProfile        *string             `json:"thread_profile,omitempty"`
+	CoordinatorModel     *string             `json:"coordinator_model,omitempty"`
+	ThreadModel          *string             `json:"thread_model,omitempty"`
+	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
+	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
+	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
+	DisableWorktree      *bool               `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads is how many threads of the project may run at once;
 	// the rest wait. 1..100; a new project starts at 4.
 	MaxRunningThreads *int  `json:"max_running_threads,omitempty"`
@@ -159,6 +166,16 @@ type InspectRepoResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// InspectDirectoryResponse describes a Git repository or a plain directory.
+type InspectDirectoryResponse struct {
+	OK     bool   `json:"ok"`
+	Root   string `json:"root"`
+	Kind   string `json:"kind" enum:",git,directory"`
+	Branch string `json:"branch"`
+	Dirty  bool   `json:"dirty"`
+	Error  string `json:"error"`
+}
+
 // ProjectModelsResponse lists the models the host offers. Error is set (and
 // Models may be empty) when the list could not be fetched; a model ID can
 // still be typed by hand.
@@ -185,7 +202,8 @@ type OKResponse struct {
 
 // Handler is the Projects HTTP module.
 type Handler struct {
-	svc *rt.Service
+	svc      *rt.Service
+	updateMu sync.Mutex
 }
 
 // NewHandler builds the module.
@@ -216,6 +234,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Browse non-hidden directories under the server user home"),
 		swagger.WithRequestModel(BrowseDirectoriesRequest{}),
 		swagger.WithResponseModel(BrowseDirectoriesResponse{}))
+	api.POST("/projects/directories/inspect", h.inspectDirectory, tag,
+		swagger.WithDescription("Inspect a local directory or Git repository"),
+		swagger.WithRequestModel(InspectRepoRequest{}),
+		swagger.WithResponseModel(InspectDirectoryResponse{}))
 	api.POST("/projects/repos/inspect", h.inspectRepo, tag,
 		swagger.WithDescription("Check a local repository path and return its root and current branch"),
 		swagger.WithRequestModel(InspectRepoRequest{}),
@@ -301,6 +323,12 @@ func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
 	return p, true
 }
 
+func projectView(p db.Project) db.Project {
+	p.Repos = append([]db.Repo(nil), p.Repos...)
+	p.ApplyDirectoryDefaults()
+	return p
+}
+
 func (h *Handler) list(c *gin.Context) {
 	projects, err := h.svc.Store.ListProjects(c.Query("q"), c.Query("archived") == "true")
 	if err != nil {
@@ -314,7 +342,7 @@ func (h *Handler) list(c *gin.Context) {
 	}
 	out := make([]ProjectSummary, 0, len(projects))
 	for _, p := range projects {
-		out = append(out, ProjectSummary{Project: p, Threads: db.CountsOf(all[p.ID])})
+		out = append(out, ProjectSummary{Project: projectView(p), Threads: db.CountsOf(all[p.ID])})
 	}
 	c.JSON(http.StatusOK, ProjectListResponse{Projects: out})
 }
@@ -324,7 +352,19 @@ func (h *Handler) create(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	p, err := h.svc.Create(c.Request.Context(), rt.NewProjectSpec{Type: req.Type, Name: req.Name, Goal: req.Goal, Repos: req.Repos, Path: req.Path})
+	if req.Repos != nil && (req.Directories != nil || req.PrimaryRepoPath != nil) {
+		apierr.BadRequest(c, "repos cannot be combined with directory settings")
+		return
+	}
+	if req.Directories != nil && req.DisableWorktree != nil {
+		apierr.BadRequest(c, "directories cannot be combined with disable_worktree")
+		return
+	}
+	if req.Type == db.ProjectFolder && (req.Directories != nil || req.PrimaryRepoPath != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "directory settings do not apply to a folder")
+		return
+	}
+	p, err := h.svc.Create(c.Request.Context(), rt.NewProjectSpec{Type: req.Type, Name: req.Name, Goal: req.Goal, Repos: req.Repos, Path: req.Path, Directories: req.Directories, PrimaryRepoPath: req.PrimaryRepoPath})
 	if err != nil {
 		apierr.BadRequest(c, err.Error())
 		return
@@ -334,7 +374,7 @@ func (h *Handler) create(c *gin.Context) {
 		// Opening a folder returns its project, new or not.
 		status = http.StatusOK
 	}
-	c.JSON(status, p)
+	c.JSON(status, projectView(*p))
 }
 
 func (h *Handler) fork(c *gin.Context) {
@@ -353,7 +393,7 @@ func (h *Handler) fork(c *gin.Context) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, fork)
+	c.JSON(http.StatusCreated, projectView(*fork))
 }
 
 func (h *Handler) models(c *gin.Context) {
@@ -377,6 +417,19 @@ func (h *Handler) runtime(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) inspectDirectory(c *gin.Context) {
+	var req InspectRepoRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	info, err := rt.InspectDirectory(c.Request.Context(), req.Path)
+	if err != nil {
+		c.JSON(http.StatusOK, InspectDirectoryResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, InspectDirectoryResponse{OK: true, Root: info.Root, Kind: info.Kind, Branch: info.Branch, Dirty: info.Dirty})
 }
 
 func (h *Handler) inspectRepo(c *gin.Context) {
@@ -467,7 +520,7 @@ func (h *Handler) get(c *gin.Context) {
 		}
 	}
 	busy := h.svc.Coordinator.Busy(p.ID)
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: projectView(*p), Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
 }
 
 // coordinatorView gives the main thread a thread's own status, so the page reads
@@ -495,11 +548,25 @@ func (h *Handler) update(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
 	p, ok := h.project(c)
 	if !ok {
 		return
 	}
-	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil || req.MaxRunningThreads != nil) {
+	if req.PrimaryDirectoryMode != nil && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "primary_directory_mode cannot be combined with directory settings")
+		return
+	}
+	if req.Repos != nil && (req.Directories != nil || req.PrimaryRepoPath != nil) {
+		apierr.BadRequest(c, "repos cannot be combined with directory settings")
+		return
+	}
+	if req.Directories != nil && req.DisableWorktree != nil {
+		apierr.BadRequest(c, "directories cannot be combined with disable_worktree")
+		return
+	}
+	if p.Type == db.ProjectFolder && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.PrimaryDirectoryMode != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil || req.MaxRunningThreads != nil) {
 		apierr.BadRequest(c, "repository and project thread settings do not apply to a folder")
 		return
 	}
@@ -517,13 +584,62 @@ func (h *Handler) update(c *gin.Context) {
 	if req.Instructions != nil {
 		p.Instructions = *req.Instructions
 	}
-	if req.Repos != nil {
-		repos, err := rt.ResolveRepos(c.Request.Context(), *req.Repos)
+	if req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil {
+		repos := p.Repos
+		var err error
+		if req.Repos != nil {
+			specs, specErr := rt.LegacyDirectorySpecs(*req.Repos)
+			if specErr != nil {
+				apierr.BadRequest(c, specErr.Error())
+				return
+			}
+			repos, err = rt.ResolveDirectories(c.Request.Context(), specs, p.Repos, p.DisableWorktree)
+		} else if req.Directories != nil {
+			repos, err = rt.ResolveDirectories(c.Request.Context(), *req.Directories, p.Repos, p.DisableWorktree)
+		}
 		if err != nil {
 			apierr.BadRequest(c, err.Error())
 			return
 		}
-		p.Repos = repos
+		primary := p.PrimaryRepoPath
+		if req.PrimaryRepoPath != nil {
+			primary = *req.PrimaryRepoPath
+		} else if req.Repos != nil || req.Directories != nil {
+			found := false
+			for _, repo := range repos {
+				if repo.Path == primary {
+					found = true
+					break
+				}
+			}
+			if !found {
+				primary = ""
+				if len(repos) > 0 {
+					primary = repos[0].Path
+				}
+			}
+		}
+		if err := rt.SetProjectDirectories(p, repos, primary); err != nil {
+			apierr.BadRequest(c, err.Error())
+			return
+		}
+	}
+	if req.PrimaryDirectoryMode != nil {
+		primary := p.PrimaryRepo()
+		change := req.PrimaryDirectoryMode
+		if primary == nil || primary.Path != change.Path {
+			apierr.Message(c, http.StatusConflict, "primary directory changed; reload and try again")
+			return
+		}
+		if change.WorkspaceMode != db.WorkspaceShared && change.WorkspaceMode != db.WorkspaceWorktree {
+			apierr.BadRequest(c, "invalid workspace mode")
+			return
+		}
+		if p.EffectiveRepo(*primary).Kind == db.RepoDirectory && change.WorkspaceMode != db.WorkspaceShared {
+			apierr.BadRequest(c, "non-Git directory must use shared mode")
+			return
+		}
+		primary.WorkspaceMode = change.WorkspaceMode
 	}
 	for _, item := range []struct {
 		in  *string
@@ -587,6 +703,13 @@ func (h *Handler) update(c *gin.Context) {
 		}
 	}
 	if req.DisableWorktree != nil {
+		for i := range p.Repos {
+			if p.EffectiveRepo(p.Repos[i]).Kind == db.RepoDirectory || *req.DisableWorktree {
+				p.Repos[i].WorkspaceMode = db.WorkspaceShared
+			} else {
+				p.Repos[i].WorkspaceMode = db.WorkspaceWorktree
+			}
+		}
 		p.DisableWorktree = *req.DisableWorktree
 	}
 	if req.MaxRunningThreads != nil {
@@ -612,10 +735,12 @@ func (h *Handler) update(c *gin.Context) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, p)
+	c.JSON(http.StatusOK, projectView(*p))
 }
 
 func (h *Handler) delete(c *gin.Context) {
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
 	p, ok := h.project(c)
 	if !ok {
 		return

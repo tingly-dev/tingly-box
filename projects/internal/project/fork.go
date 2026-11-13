@@ -41,6 +41,7 @@ func (s *Service) Fork(sourceID, name string) (*db.Project, error) {
 		Goal:                 src.Goal,
 		Instructions:         src.Instructions,
 		Repos:                src.Repos,
+		PrimaryRepoPath:      src.PrimaryRepoPath,
 		CoordinatorProfile:   src.CoordinatorProfile,
 		ThreadProfile:        src.ThreadProfile,
 		CoordinatorModel:     src.CoordinatorModel,
@@ -56,6 +57,9 @@ func (s *Service) Fork(sourceID, name string) (*db.Project, error) {
 	// at every open, and Create stamps new ones).
 	if fork.ThreadPermissionMode == "" {
 		fork.ThreadPermissionMode = DefaultPermissionMode
+	}
+	if err := s.validateDirectoryOverlap(fork); err != nil {
+		return nil, err
 	}
 	if err := s.Store.CreateProjectWithMain(fork, &db.Thread{Origin: "user"}, s.Layout.Root); err != nil {
 		return nil, err

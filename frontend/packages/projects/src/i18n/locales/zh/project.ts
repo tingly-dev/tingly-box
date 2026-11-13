@@ -17,14 +17,15 @@ export const project: Dict<typeof projectEn> = {
         resizeBand: '拖动调整线程列表高度，双击恢复默认。',
         name: '名称', namePlaceholder: '例如：支付 API 延迟', nameHelp: '限定为一条你会持续往里加任务的工作流。',
         goal: '目标（可选）', goalPlaceholder: '例如：把 API p95 延迟控制在 200 ms 以内', goalHelp: '一句话，协调者会朝它推进。',
-        repos: '仓库（可选）',
-        reposHelp: '线程工作的本地 git 仓库。默认每个线程有自己的 worktree 和分支，从下面显示的分支切出。没有仓库时，线程把产出文件放进文件库。',
+        repos: '目录（可选）',
+        reposHelp: '添加线程使用的本地目录。Git 仓库可使用独立 worktree 或共享源目录；普通目录始终共享。不添加目录时，产出文件放进文件库。',
         create: '创建项目', overview: 'Overview',
         pausedBanner: '项目已暂停：线程都已停止，不会开始新的工作。',
         archivedBanner: '项目已归档。线程仍可查看；取消归档后才能发送新工作。',
     },
     repo: {
-        placeholder: '/path/to/repository', add: '添加', invalid: '不是 git 仓库',
+        placeholder: '/path/to/directory', add: '添加', invalid: '无法检查目录',
+        mode: '工作目录模式', primary: '主目录', makePrimary: '设为主目录', primaryModeHelp: '仅影响主目录（{{path}}），其他目录保持各自设置。',
         baseHint: '线程从这个分支切出', dirtyHint: '该工作区有未提交的改动；不影响线程，但合并需要干净的工作区。',
     },
     messageDetail: {

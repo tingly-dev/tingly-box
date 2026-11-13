@@ -6,7 +6,6 @@ package project
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -155,38 +154,154 @@ func (s *Service) CloseTools(ctx context.Context) error {
 // NewProjectSpec is the New project dialog (a project), or a folder to open.
 type NewProjectSpec struct {
 	// Type is project (the default) or folder.
-	Type  string
-	Name  string
-	Goal  string
-	Repos []string
+	Type            string
+	Name            string
+	Goal            string
+	Repos           []string
+	Directories     *[]DirectorySpec
+	PrimaryRepoPath *string
 	// Path is the folder of a folder project.
 	Path string
 }
 
-// ResolveRepos validates repository paths and records their current branch
-// as the base threads branch from.
-func ResolveRepos(ctx context.Context, paths []string) ([]db.Repo, error) {
-	seen := map[string]bool{}
-	repos := []db.Repo{}
+// LegacyDirectorySpecs preserves the old path-list API's relative paths and blanks.
+func LegacyDirectorySpecs(paths []string) ([]DirectorySpec, error) {
+	specs := make([]DirectorySpec, 0, len(paths))
 	for _, raw := range paths {
 		path := strings.TrimSpace(raw)
 		if path == "" {
 			continue
 		}
-		if strings.HasPrefix(path, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				path = filepath.Join(home, path[2:])
+		if !filepath.IsAbs(path) && path != "~" && !strings.HasPrefix(path, "~/") {
+			var err error
+			path, err = filepath.Abs(path)
+			if err != nil {
+				return nil, err
 			}
 		}
-		info, err := InspectRepo(ctx, path)
+		specs = append(specs, DirectorySpec{Path: path})
+	}
+	return specs, nil
+}
+
+func ResolveRepos(ctx context.Context, paths []string) ([]db.Repo, error) {
+	specs, err := LegacyDirectorySpecs(paths)
+	if err != nil {
+		return nil, err
+	}
+	return ResolveDirectories(ctx, specs, nil, false)
+}
+
+// DirectorySpec is the user-editable part of a project directory.
+type DirectorySpec struct {
+	Path          string `json:"path"`
+	WorkspaceMode string `json:"workspace_mode,omitempty" enum:",shared,worktree"`
+}
+
+// DirectoryInfo describes an existing directory and, when applicable, its Git root.
+type DirectoryInfo struct {
+	Root   string `json:"root"`
+	Kind   string `json:"kind"`
+	Branch string `json:"branch,omitempty"`
+	Dirty  bool   `json:"dirty,omitempty"`
+}
+
+func InspectDirectory(ctx context.Context, raw string) (DirectoryInfo, error) {
+	path, err := CleanFolder(raw)
+	if err != nil {
+		return DirectoryInfo{}, err
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		return DirectoryInfo{}, err
+	}
+	root, err := git(ctx, path, "rev-parse", "--show-toplevel")
+	if err != nil {
+		if strings.Contains(err.Error(), "not a git repository") {
+			return DirectoryInfo{Root: path, Kind: db.RepoDirectory}, nil
+		}
+		return DirectoryInfo{}, err
+	}
+	info, err := InspectRepo(ctx, root)
+	if err != nil {
+		return DirectoryInfo{}, err
+	}
+	root, err = filepath.EvalSymlinks(info.Root)
+	if err != nil {
+		return DirectoryInfo{}, err
+	}
+	return DirectoryInfo{Root: root, Kind: db.RepoGit, Branch: info.Branch, Dirty: info.Dirty}, nil
+}
+
+// ResolveDirectories checks paths and applies defaults, preserving previously
+// configured modes and base branches for unchanged directories.
+func ResolveDirectories(ctx context.Context, specs []DirectorySpec, previous []db.Repo, disabled bool) ([]db.Repo, error) {
+	seen := map[string]bool{}
+	result := []db.Repo{}
+	oldProject := db.Project{DisableWorktree: disabled}
+	for _, spec := range specs {
+		info, err := InspectDirectory(ctx, spec.Path)
 		if err != nil {
 			return nil, err
 		}
-		if seen[info.Root] {
+		key := db.PathKey(info.Root)
+		if seen[key] {
+			if spec.WorkspaceMode != "" {
+				for _, existing := range result {
+					if db.PathKey(existing.Path) == key && existing.WorkspaceMode != spec.WorkspaceMode {
+						return nil, fmt.Errorf("conflicting modes for directory %q", info.Root)
+					}
+				}
+			}
 			continue
 		}
-		seen[info.Root] = true
-		repos = append(repos, db.Repo{Path: info.Root, BaseBranch: info.Branch})
+		seen[key] = true
+		r := db.Repo{Path: info.Root, BaseBranch: info.Branch, Kind: info.Kind}
+		for _, old := range previous {
+			if db.PathKey(old.Path) == key && oldProject.EffectiveRepo(old).Kind == r.Kind {
+				old = oldProject.EffectiveRepo(old)
+				r.BaseBranch, r.WorkspaceMode = old.BaseBranch, old.WorkspaceMode
+				break
+			}
+		}
+		if spec.WorkspaceMode != "" {
+			r.WorkspaceMode = spec.WorkspaceMode
+		}
+		if r.WorkspaceMode == "" {
+			if r.Kind == db.RepoDirectory || disabled {
+				r.WorkspaceMode = db.WorkspaceShared
+			} else {
+				r.WorkspaceMode = db.WorkspaceWorktree
+			}
+		}
+		if r.WorkspaceMode != db.WorkspaceShared && r.WorkspaceMode != db.WorkspaceWorktree {
+			return nil, fmt.Errorf("invalid workspace mode %q", r.WorkspaceMode)
+		}
+		if r.Kind == db.RepoDirectory && r.WorkspaceMode != db.WorkspaceShared {
+			return nil, fmt.Errorf("non-Git directory %q must use shared mode", r.Path)
+		}
+		result = append(result, r)
 	}
-	return repos, nil
+	return result, nil
+}
+
+// SetProjectDirectories atomically validates the selected primary before mutation.
+func SetProjectDirectories(p *db.Project, repos []db.Repo, primary string) error {
+	if len(repos) == 0 {
+		if primary != "" {
+			return fmt.Errorf("primary directory is not part of this project")
+		}
+		p.Repos, p.PrimaryRepoPath = repos, ""
+		return nil
+	}
+	if primary == "" {
+		primary = repos[0].Path
+	}
+	for _, r := range repos {
+		if db.PathKey(r.Path) == db.PathKey(primary) {
+			p.Repos, p.PrimaryRepoPath = repos, r.Path
+			return nil
+		}
+	}
+	return fmt.Errorf("primary directory %q is not part of this project", primary)
 }

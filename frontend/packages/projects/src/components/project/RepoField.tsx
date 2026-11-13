@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Box, Button, Chip, IconButton, TextField, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { api, unwrap } from '../../client';
+import { api, unwrap, type components, type Project } from '../../client';
 import { Branch, Close, Warning } from '../icons';
 import { DirectoryPicker } from '../common/DirectoryPicker';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -11,17 +11,28 @@ export interface RepoEntry {
     root: string;
     branch: string;
     dirty?: boolean;
+    kind: 'git' | 'directory';
+    workspace_mode: 'shared' | 'worktree';
 }
+
+export type DirectoryConfig = components['schemas']['DirectorySpec'];
+export type DirectoryProject = Pick<Project, 'primary_repo_path' | 'repos' | 'disable_worktree'>;
+export function projectDirectories(project: DirectoryProject): RepoEntry[] {
+    return project.repos.map((r) => ({ root: r.path, branch: r.base_branch, kind: r.kind ?? 'git', workspace_mode: r.kind === 'directory' ? 'shared' : r.workspace_mode ?? (project.disable_worktree ? 'shared' : 'worktree') }));
+}
+export function directoryPayload(entries: RepoEntry[], primary: string) {
+    return { directories: entries.map((r): DirectoryConfig => ({ path: r.root, workspace_mode: r.kind === 'directory' ? 'shared' : r.workspace_mode })), primary_repo_path: primary };
+}
+export function primaryPath(project: DirectoryProject) { return project.primary_repo_path ?? project.repos[0]?.path ?? ''; }
 
 const mono = { fontFamily: fontMono } as const;
 
 /**
- * Adds local repositories by path. Each path is checked right away and shown
- * as what threads will actually use: the repository root and the branch they
- * branch from. Picking a directory in the browser is the decision to add it;
- * a typed path keeps the Add button.
+ * Adds local directories by path. Each path is inspected and shown as the
+ * root the threads will use. Picking a directory adds it immediately; a typed
+ * path keeps the Add button.
  */
-export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (v: RepoEntry[]) => void }) {
+export function RepoField({ value, onChange, primary = value[0]?.root ?? '', onPrimaryChange }: { value: RepoEntry[]; onChange: (v: RepoEntry[]) => void; primary?: string; onPrimaryChange?: (p: string) => void }) {
     const { t } = useTranslation('projects');
     const [path, setPath] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -34,14 +45,15 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
         setBusy(true);
         setError(null);
         try {
-            const r = await unwrap(api.POST('/api/v1/projects/repos/inspect', { body: { path: target } }));
-            if (!r.ok || !r.root) {
+            const r = await unwrap(api.POST('/api/v1/projects/directories/inspect', { body: { path: target } }));
+            if (!r.ok || !r.root || (r.kind !== 'git' && r.kind !== 'directory')) {
                 setError(r.error ?? t('repo.invalid'));
                 setPath(target);
                 return;
             }
             if (!value.some((v) => v.root === r.root)) {
-                onChange([...value, { root: r.root, branch: r.branch ?? '', dirty: r.dirty }]);
+                onChange([...value, { root: r.root, branch: r.branch ?? '', kind: r.kind, workspace_mode: r.kind === 'directory' ? 'shared' : 'worktree', dirty: r.dirty }]);
+                if (!value.length) onPrimaryChange?.(r.root);
             }
             setPath('');
         } catch (e) {
@@ -55,19 +67,24 @@ export function RepoField({ value, onChange }: { value: RepoEntry[]; onChange: (
     return (
         <Box>
             {value.map((r, i) => (
-                <Box key={r.root} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: radius.row }}>
+                <Box key={r.root} sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, py: 0.75, px: 1.25, mb: 0.75, border: 1, borderColor: 'divider', borderRadius: radius.row }}>
                     <Typography sx={{ ...mono, fontSize: fontSizes.base, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'text.primary' }} title={r.root}>
                         {r.root}
                     </Typography>
-                    <Tooltip title={t('repo.baseHint')}>
+                    {r.kind === 'git' && <Tooltip title={t('repo.baseHint')}>
                         <Chip size="small" variant="outlined" icon={<Branch sx={{ fontSize: 14 }} />} label={r.branch} sx={{ ...mono, fontSize: fontSizes.sm }} />
-                    </Tooltip>
+                    </Tooltip>}
                     {r.dirty && (
                         <Tooltip title={t('repo.dirtyHint')}>
                             <Warning sx={{ fontSize: 16 }} color="warning" />
                         </Tooltip>
                     )}
-                    <IconButton size="small" onClick={() => onChange(value.filter((_, j) => j !== i))} aria-label={t('common.delete')}>
+                    <Select size="small" value={r.workspace_mode} disabled={r.kind !== 'git'} inputProps={{ 'aria-label': `${t('repo.mode')} ${r.root}` }} onChange={(e) => onChange(value.map((v, j) => j === i ? { ...v, workspace_mode: e.target.value as RepoEntry['workspace_mode'] } : v))}>
+                        <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
+                        {r.kind === 'git' && <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>}
+                    </Select>
+                    {onPrimaryChange && <Button size="small" onClick={() => onPrimaryChange(r.root)} disabled={primary === r.root}>{t(primary === r.root ? 'repo.primary' : 'repo.makePrimary')}</Button>}
+                    <IconButton size="small" onClick={() => { const remaining = value.filter((_, j) => j !== i); onChange(remaining); if (primary === r.root) onPrimaryChange?.(remaining[0]?.root ?? ''); }} aria-label={t('common.delete')}>
                         <Close fontSize="small" />
                     </IconButton>
                 </Box>

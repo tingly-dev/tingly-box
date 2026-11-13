@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -28,11 +30,30 @@ func (s *Service) Create(ctx context.Context, spec NewProjectSpec) (*db.Project,
 	if name == "" {
 		return nil, errors.New("name is required")
 	}
-	repos, err := ResolveRepos(ctx, spec.Repos)
+	var repos []db.Repo
+	var err error
+	if spec.Directories != nil {
+		if len(spec.Repos) != 0 {
+			return nil, errors.New("cannot specify both repos and directories")
+		}
+		repos, err = ResolveDirectories(ctx, *spec.Directories, nil, false)
+	} else {
+		repos, err = ResolveRepos(ctx, spec.Repos)
+	}
 	if err != nil {
 		return nil, err
 	}
-	p := &db.Project{Name: name, Goal: strings.TrimSpace(spec.Goal), Repos: repos, ThreadPermissionMode: DefaultPermissionMode, MaxRunningThreads: db.DefaultMaxRunningThreads}
+	p := &db.Project{Name: name, Goal: strings.TrimSpace(spec.Goal), ThreadPermissionMode: DefaultPermissionMode, MaxRunningThreads: db.DefaultMaxRunningThreads}
+	primary := ""
+	if spec.PrimaryRepoPath != nil {
+		primary = *spec.PrimaryRepoPath
+	}
+	if err := SetProjectDirectories(p, repos, primary); err != nil {
+		return nil, err
+	}
+	if err := s.validateDirectoryOverlap(p); err != nil {
+		return nil, err
+	}
 	main := &db.Thread{Origin: "user"}
 	if err := s.Store.CreateProjectWithMain(p, main, s.Layout.Root); err != nil {
 		return nil, err
@@ -41,6 +62,33 @@ func (s *Service) Create(ctx context.Context, spec NewProjectSpec) (*db.Project,
 		return nil, err
 	}
 	return p, nil
+}
+
+// validateDirectoryOverlap prevents workspace files being placed inside the
+// application-owned data tree, or making that tree part of a workspace.
+func (s *Service) validateDirectoryOverlap(p *db.Project) error {
+	if s.Layout.Root == "" {
+		return nil
+	}
+	root, err := filepath.Abs(s.Layout.Root)
+	if err != nil {
+		return err
+	}
+	if resolved, e := filepath.EvalSymlinks(root); e == nil {
+		root = resolved
+	} else if !os.IsNotExist(e) {
+		return e
+	}
+	inside := func(parent, child string) bool {
+		rel, e := filepath.Rel(parent, child)
+		return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	for _, repo := range p.Repos {
+		if inside(root, repo.Path) || inside(repo.Path, root) {
+			return fmt.Errorf("directory %q overlaps Projects data directory", repo.Path)
+		}
+	}
+	return nil
 }
 
 // Save persists a project change and tells open pages and the coordinator.
@@ -52,6 +100,13 @@ func (s *Service) Save(p *db.Project) error {
 	if err != nil {
 		return err
 	}
+	// Unrelated edits to old projects remain possible even if their historical
+	// directory overlaps the data root; newly selected directories are checked.
+	if !slices.Equal(previous.Repos, p.Repos) {
+		if err := s.validateDirectoryOverlap(p); err != nil {
+			return err
+		}
+	}
 	var notice *db.ThreadEvent
 	if fields := configurationChanges(previous, p); len(fields) > 0 && p.Type == db.ProjectProject && p.MainThreadID != "" {
 		notice = &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvSystem, Source: db.SourceSystem,
@@ -62,7 +117,10 @@ func (s *Service) Save(p *db.Project) error {
 	if err := s.Store.SaveProjectWithEvent(p, notice); err != nil {
 		return err
 	}
-	s.Hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: p})
+	view := *p
+	view.Repos = append([]db.Repo(nil), p.Repos...)
+	view.ApplyDirectoryDefaults()
+	s.Hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: &view})
 	if s.Threads != nil {
 		s.Threads.ApplyLimit(p)
 	}
@@ -99,7 +157,7 @@ func configurationChanges(a, b *db.Project) []string {
 	if a.MaxRunningThreads != b.MaxRunningThreads {
 		fields = append(fields, "thread concurrency limit")
 	}
-	if !slices.Equal(a.Repos, b.Repos) {
+	if !slices.Equal(a.Repos, b.Repos) || a.PrimaryRepoPath != b.PrimaryRepoPath {
 		fields = append(fields, "repositories")
 	}
 	return fields

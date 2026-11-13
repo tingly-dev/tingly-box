@@ -13,6 +13,7 @@ import { loadPermissionModes, PermissionModeSelect } from '../components/workdir
 import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
 import { mergeThreadSettings, useThreadSettings } from '../hooks/useThreadSettings';
 import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
+import { primaryPath, projectDirectories } from '../components/project/RepoField';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
@@ -287,7 +288,7 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
-    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'disable_worktree'>) => {
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'primary_directory_mode'>) => {
         if (projectSaving.current) return;
         projectSaving.current = true;
         setSavingDefaults(true);
@@ -304,6 +305,9 @@ export default function ProjectPage() {
             setSavingDefaults(false);
         }
     };
+
+    const primary = project && projectDirectories(project).find((r) => r.root === primaryPath(project));
+    const withPrimaryMode = (p: Project, mode: 'shared' | 'worktree') => ({ primary_directory_mode: { path: primaryPath(p), workspace_mode: mode } });
 
     // A folder is a project too, but its page is the folder page.
     if (project && isFolder(project)) {
@@ -485,13 +489,13 @@ export default function ProjectPage() {
                             // Defaults stay project-scoped; the selected worker's overrides are in its own panel.
                             <>
                                 <Typography variant="caption" color="text.secondary" title={t('threadSettings.defaultsHelp')}>{t('threadSettings.defaults')}</Typography>
-                                <ControlTooltip title={t('projectSettings.worktreeHelp')} suppressed={worktreeMenuOpen}>
+                                {primary?.kind === 'git' && <ControlTooltip title={t('repo.primaryModeHelp', { path: primary.root })} suppressed={worktreeMenuOpen}>
                                     <Select
                                         size="small" variant="standard" disableUnderline IconComponent={ExpandMore}
-                                        value={project.disable_worktree ? 'shared' : 'worktree'}
+                                        value={primary.workspace_mode}
                                         inputProps={{ 'aria-label': t('threadSettings.worktreeMode') }}
                                         disabled={blocked || savingDefaults}
-                                        onChange={(e) => void patch({ disable_worktree: e.target.value === 'shared' })}
+                                        onChange={(e) => void patch(withPrimaryMode(project, e.target.value as 'shared' | 'worktree'))}
                                         renderValue={(value) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Folder /><Typography noWrap sx={composerPickerLabelSx}>{t(`threadSettings.workspace.${value}`)}</Typography></Stack>}
                                         sx={composerPickerSx}
                                         MenuProps={composerPickerMenuProps}
@@ -502,7 +506,7 @@ export default function ProjectPage() {
                                         <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>
                                         <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
                                     </Select>
-                                </ControlTooltip>
+                                </ControlTooltip>}
                                 <PermissionModeSelect
                                     value={project.thread_permission_mode || 'acceptEdits'}
                                     modes={THREAD_MODES}
@@ -529,14 +533,15 @@ export default function ProjectPage() {
                         onSend={async (text, attachments) => {
                             if (projectSaving.current) return false;
                             try {
-                                if (!(text.trim() === '/clear' && attachments.length === 0) && readLocal('worktreeNoticeSeen') !== '1' && project) {
+                                if (!(text.trim() === '/clear' && attachments.length === 0) && readLocal('worktreeNoticeSeen') !== '1' && project && primary?.kind === 'git') {
                                     const choice = await new Promise<boolean | null>((resolve) => {
                                         worktreeReply.current = resolve;
-                                        setWorktreeChoice({ projectId: id, shared: !!project.disable_worktree });
+                                        setWorktreeChoice({ projectId: id, shared: primary.workspace_mode === 'shared' });
                                     });
                                     if (choice === null) return false;
-                                    if (choice !== !!project.disable_worktree) {
-                                        const saved = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body: { disable_worktree: choice } }));
+                                    if (choice !== (primary.workspace_mode === 'shared')) {
+                                        const body = withPrimaryMode(project, choice ? 'shared' : 'worktree');
+                                        const saved = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body }));
                                         setProject((current) => current?.id === saved.id ? saved : current);
                                         refresh();
                                     }
@@ -616,6 +621,7 @@ export default function ProjectPage() {
             <Dialog open={worktreeChoice !== null && worktreeChoice.projectId === id} onClose={() => answerWorktree(null)} aria-labelledby="worktree-notice-title" maxWidth="sm" fullWidth>
                 <DialogTitle id="worktree-notice-title">{t('worktreeNotice.title')}</DialogTitle>
                 <DialogContent>
+                    <DialogContentText>{t('repo.primaryModeHelp', { path: primary?.root })}</DialogContentText>
                     <DialogContentText>{t('worktreeNotice.description')}</DialogContentText>
                     <RadioGroup value={worktreeChoice?.shared ? 'shared' : 'worktree'} onChange={(e) => setWorktreeChoice({ projectId: id, shared: e.target.value === 'shared' })} sx={{ mt: 1 }}>
                         <FormControlLabel value="worktree" control={<Radio />} label={t('worktreeNotice.worktree')} />
