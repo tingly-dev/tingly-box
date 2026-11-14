@@ -197,6 +197,11 @@ func (s *Service) SetArchived(p *db.Project, archived bool) error {
 	if err := s.Save(p); err != nil {
 		return err
 	}
+	if archived {
+		// The project now refuses messages, so nothing can start a session
+		// behind this: close the threads' processes and end their tools.
+		s.Threads.ReleaseProject(p.ID)
+	}
 	if !archived {
 		if s.Coordinator.live() && p.MainThreadID != "" {
 			s.Coordinator.wake(p.ID)
