@@ -9,7 +9,7 @@
 // cards (the one transcript entry the stream forwards — see the Projects
 // hub). Nothing fires while the tab is visible: the page itself is the
 // notification then.
-import { isFolder, type Thread, type ThreadEvent } from '../client';
+import { isFolder, type ProjectSummary, type Thread, type ThreadEvent } from '../client';
 import { getProjectList as listRows, subscribeProjectList } from '../hooks/projectListStore';
 import type { ProjectEvent } from '../hooks/useProjectEvents';
 import { readLocal, writeLocal } from '../utils/storage';
@@ -44,10 +44,23 @@ interface Engine {
 
 const engine: Engine = { ui: null, stop: () => undefined, status: new Map(), finishedAt: new Map(), decisions: new Map() };
 
-/** The user's choice; permission granted is part of "on" — a browser that
- * revoked it silently turns the feature off again. */
+/** The user's choice. On unless they turned it off: the browser's permission
+ * is what still has to be asked for (a click does that, never the page load). */
+export function notificationsPreferred(): boolean {
+    return readLocal(NOTIFICATIONS_SETTING) !== '0';
+}
+
+/** Preferred and permitted: a browser that revoked the permission silently
+ * turns the feature off again. */
 export function notificationsEnabled(): boolean {
-    return readLocal(NOTIFICATIONS_SETTING) === '1' && notificationPermission() === 'granted';
+    return notificationsPreferred() && notificationPermission() === 'granted';
+}
+
+/** Starts or stops the engine to match the preference and the permission now
+ * (the permission may have changed in the browser's own settings). */
+export function syncNotifications(): void {
+    if (notificationsEnabled()) startEngine();
+    else stopEngine();
 }
 
 /** Remembers the user's choice and starts or stops the engine to match. */
@@ -55,7 +68,7 @@ export function setNotificationsEnabled(on: boolean): void {
     writeLocal(NOTIFICATIONS_SETTING, on ? '1' : '0');
     resetBaseline();
     stopEngine();
-    if (on) startEngine();
+    syncNotifications();
 }
 
 /** The engine does not speak without the workspace's strings and routes; the
@@ -179,10 +192,14 @@ function notify(title: string, body: string, tag: string, url: () => string | un
 export function threadUrl(thread: Thread, review = false): string | undefined {
     const ui = engine.ui;
     const project = listRows()?.find((p) => p.id === thread.project_id);
-    if (!ui || !project) return undefined;
-    if (isFolder(project)) return withParams(ui.paths.folder(project.path), { session: thread.id });
-    if (thread.id === project.main_thread_id) return ui.paths.project(project.id);
-    return withParams(ui.paths.project(project.id), review ? { review: thread.id } : { thread: thread.id });
+    return ui && project ? threadLocation(ui.paths, project, thread, review) : undefined;
+}
+
+/** The place of a thread in the host's router (see threadUrl); the home's "needs you" rows open threads the same way. */
+export function threadLocation(paths: NotificationUi['paths'], project: ProjectSummary, thread: Thread, review = false): string {
+    if (isFolder(project)) return withParams(paths.folder(project.path), { session: thread.id });
+    if (thread.id === project.main_thread_id) return paths.project(project.id);
+    return withParams(paths.project(project.id), review ? { review: thread.id } : { thread: thread.id });
 }
 
 function projectUrl(projectId: string): string | undefined {
@@ -195,8 +212,9 @@ const withParams = (base: string, params: Record<string, string>) =>
 const clip = (s: string | undefined): string => (s ?? '').trim().slice(0, 120);
 const firstLine = (s: string | undefined): string => (s ?? '').split('\n').find((l) => l.trim() !== '') ?? '';
 
-// Arming at import: when the user turned the feature on, any mounted
-// workspace surface starts watching (the store starts its stream for the
-// first subscriber). A browser without the API, or one that revoked the
+// Arming at import: unless the user turned the feature off, any mounted
+// workspace surface starts watching once the browser has granted the
+// permission (the store starts its stream for the first subscriber). A
+// browser without the API, or one that has not granted or revoked the
 // permission, simply never starts it.
 if (notificationsEnabled()) startEngine();

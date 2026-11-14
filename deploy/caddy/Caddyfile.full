@@ -1,0 +1,75 @@
+# Whole service on one host: the web UI, the management API and the model API
+# all go to the gateway. For the model API alone use Caddyfile.
+# Design notes: .design/caddy-deploy.md
+#
+# This publishes the management UI and API. The gateway's own login protects
+# them; to also keep them off the public internet, uncomment the @admin block.
+{
+	servers {
+		# h3 needs UDP 443 open as well as TCP; clients fall back to h2 if not.
+		protocols h1 h2 h3
+		timeouts {
+			read_body 30m
+			read_header 1m
+			write 0
+			idle 10m
+		}
+	}
+}
+
+# https:// (port 443) is implied by the bare host — Caddy auto-provisions TLS
+# and its automatic HTTPS redirects :80 -> :443
+you.domain {
+	# The gateway already sends the UI's scripts precompressed (br/gzip) with
+	# immutable cache headers, and Caddy leaves a response that has a
+	# Content-Encoding alone. This covers what it does not compress: JSON from
+	# the management and model APIs, and HTML. Streams (text/event-stream) are
+	# not listed on purpose, so every event is flushed as it is produced.
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type application/json*
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/javascript*
+			header Content-Type image/svg+xml*
+		}
+	}
+
+	# mirror for debug or rc version
+	handle /mirror/* {
+		uri replace /mirror /tingly
+		reverse_proxy localhost:12580 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+				keepalive 10m
+			}
+		}
+	}
+
+	handle /hi {
+		respond "Hello, privacy!"
+	}
+
+	# Optional: serve only the model API to the world, the rest to your own
+	# networks.
+	# @admin {
+	# 	not path /tingly/*
+	# 	not remote_ip 203.0.113.0/24 2001:db8::/32
+	# }
+	# handle @admin {
+	# 	respond "Forbidden" 403
+	# }
+
+	handle {
+		reverse_proxy localhost:12580 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+				keepalive 10m
+			}
+		}
+	}
+}

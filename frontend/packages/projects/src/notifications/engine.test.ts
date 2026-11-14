@@ -43,8 +43,12 @@ import {
     FINISHED_COOLDOWN_MS,
     classifyTransition,
     parseDecision,
+    notificationsEnabled,
+    notificationsPreferred,
     setNotificationUi,
     setNotificationsEnabled,
+    syncNotifications,
+    threadLocation,
 } from './engine';
 
 const project = (id: string, main: string): ProjectSummary =>
@@ -230,5 +234,50 @@ describe('the switch', () => {
         visible('hidden');
         emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'waiting', wait_reason: 'no' }) });
         expect(FakeNotification.instances).toHaveLength(0);
+    });
+});
+
+describe('the default', () => {
+    const paths = { project: (id: string) => `/p/${id}`, folder: (p?: string) => `/f?path=${p}` };
+
+    it('is on until the user turns it off, and the browser permission is still asked for', () => {
+        window.localStorage.removeItem('tingly-project.notifications');
+        FakeNotification.permission = 'default';
+        expect(notificationsPreferred()).toBe(true);
+        expect(notificationsEnabled()).toBe(false);
+        FakeNotification.permission = 'granted';
+        expect(notificationsEnabled()).toBe(true);
+        setNotificationsEnabled(false);
+        expect(notificationsPreferred()).toBe(false);
+        expect(notificationsEnabled()).toBe(false);
+    });
+
+    it('starts watching when the permission arrives from the browser settings', () => {
+        FakeNotification.permission = 'default';
+        setNotificationsEnabled(true);
+        visible('hidden');
+        expect(subscribers.size).toBe(0);
+        FakeNotification.permission = 'granted';
+        syncNotifications();
+        expect(subscribers.size).toBe(1);
+        emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'working' }) });
+        emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'waiting', wait_reason: 'Approve?' }) });
+        expect(FakeNotification.instances).toHaveLength(1);
+        FakeNotification.permission = 'denied';
+        syncNotifications();
+        expect(subscribers.size).toBe(0);
+    });
+
+    it('does not start watching while the browser has not granted', () => {
+        FakeNotification.permission = 'default';
+        setNotificationsEnabled(true);
+        expect(subscribers.size).toBe(0);
+    });
+
+    it('places a thread where its notification would open it', () => {
+        expect(threadLocation(paths, project('p1', 'm1'), thread({ id: 't9' }), true)).toBe('/p/p1?review=t9');
+        expect(threadLocation(paths, project('p1', 'm1'), thread({ id: 't9' }))).toBe('/p/p1?thread=t9');
+        expect(threadLocation(paths, project('p1', 'm1'), thread({ id: 'm1' }))).toBe('/p/p1');
+        expect(threadLocation(paths, folder('f1', '/tmp/w'), thread({ id: 's1' }))).toBe('/f?path=/tmp/w&session=s1');
     });
 });

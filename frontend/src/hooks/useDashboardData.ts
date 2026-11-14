@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getTotalTokens } from '@/components/dashboard';
-import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
+import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import api from '@/services/api';
 import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 
@@ -69,20 +69,15 @@ const MAIN_ACCOUNT_USER_ID = 'admin';
 
 /**
  * Data layer of the usage dashboard: seq-guarded stat/time-series loads,
- * one-shot filter-option metadata (providers + sharing keys), the records
- * query for the requests view, auto-refresh, and the filter-option
+ * one-shot filter-option metadata (providers + sharing keys), auto-refresh, and the filter-option
  * snapshots (providers/models currently in the data). Filter/UI state that
  * only shapes rendering (view mode) stays with the page.
  */
 export function useDashboardData({
     timeRange,
-    isHourlyRange,
-    viewMode,
     initialScenario = 'all',
 }: {
     timeRange: TimeRange;
-    isHourlyRange: boolean;
-    viewMode: 'summary' | 'requests' | 'activity';
     /** Agent to start filtered to (a deep link from an agent page). */
     initialScenario?: string;
 }) {
@@ -104,15 +99,10 @@ export function useDashboardData({
     const [scenarioOptions, setScenarioOptions] = useState<ScenarioOption[]>([]);
     // Bumped on manual refresh so the fixed-window activity heatmap refetches too.
     const [heatmapRefresh, setHeatmapRefresh] = useState(0);
-    const [records, setRecords] = useState<UsageRecord[]>([]);
-    const [recordsLoading, setRecordsLoading] = useState(false);
-    // Real total in range from the server (records itself is capped at 500).
-    const [recordsTotal, setRecordsTotal] = useState(0);
     // Full parameter set for the records query (time window + filters),
-    // written by loadData after each load. A fresh object per load means the
-    // requests-view effect refires exactly once per dashboard load — records
-    // used to be fetched twice per filter change (once from the filter deps,
-    // once from the new time params).
+    // written by loadData after each load. The requests view and the
+    // performance card page/query from it themselves; a fresh object per load
+    // makes them refetch exactly once per dashboard load.
     const [recordsParams, setRecordsParams] = useState<DashboardRecordsParams | null>(null);
 
     const buildTimeParams = useCallback((provider: string, model: string, user: string, scenario: string, range: TimeRange) => {
@@ -159,10 +149,10 @@ export function useDashboardData({
     // Providers and API tokens are filter metadata that doesn't depend on the
     // selected time range or filters — fetch them once (and on manual
     // refresh) instead of on every filter change / auto-refresh tick.
-    const loadFilterOptions = useCallback(async () => {
+    const loadFilterOptions = useCallback(async (force = false) => {
         try {
             const [providersResult, tokensResult] = await Promise.all([
-                api.getProviders(),
+                api.getProviders({ fresh: force }),
                 api.listAPITokens({ limit: 500 }),
             ]);
 
@@ -232,50 +222,6 @@ export function useDashboardData({
         }
     }, [buildTimeParams]);
 
-    // Same out-of-order protection as loadData: without it, a slow earlier
-    // response could overwrite the requests view after a newer one landed.
-    const recordsSeq = useRef(0);
-
-    const loadRecords = useCallback(async (params: DashboardRecordsParams | null) => {
-        if (!params) return;
-        const seq = ++recordsSeq.current;
-        setRecordsLoading(true);
-        try {
-            const filters: Record<string, any> = {
-                start_time: params.start_time,
-                end_time: params.end_time,
-                limit: 500,
-                offset: 0,
-            };
-            if (params.provider !== 'all') {
-                filters.provider = params.provider;
-            }
-            if (params.model !== 'all') {
-                filters.model = params.model;
-            }
-            if (params.user !== 'all') {
-                filters.user_id = params.user;
-            }
-            if (params.scenario !== 'all') {
-                filters.scenario = params.scenario;
-            }
-            const result = await api.getUsageRecords(filters);
-            if (seq !== recordsSeq.current) {
-                return;
-            }
-            if (result?.data) {
-                setRecords(result.data);
-                setRecordsTotal(result.meta?.total ?? result.data.length);
-            }
-        } catch (error) {
-            console.error('Failed to load records:', error);
-        } finally {
-            if (seq === recordsSeq.current) {
-                setRecordsLoading(false);
-            }
-        }
-    }, []);
-
     useEffect(() => {
         loadFilterOptions();
     }, [loadFilterOptions]);
@@ -319,14 +265,6 @@ export function useDashboardData({
         }
     }, [timeRange]);
 
-    // Load records when entering the requests view or when a dashboard load
-    // publishes new query params (filters are carried inside recordsParams).
-    useEffect(() => {
-        if (viewMode === 'requests') {
-            loadRecords(recordsParams);
-        }
-    }, [viewMode, recordsParams, loadRecords]);
-
     // Reset a selection only when it disappears from the configured metadata
     // (a deleted provider / sharing key). Checking against the already-filtered
     // stats used to wipe BOTH provider and model back to "all" whenever a
@@ -355,7 +293,7 @@ export function useDashboardData({
 
     const handleRefresh = () => {
         setRefreshing(true);
-        loadFilterOptions();
+        loadFilterOptions(true);
         void loadScenarioOptions();
         loadData(selectedProvider, selectedModel, selectedUser, selectedScenario, timeRange);
         setHeatmapRefresh((n) => n + 1);
@@ -465,9 +403,6 @@ export function useDashboardData({
         // data
         stats,
         timeSeries,
-        records,
-        recordsLoading,
-        recordsTotal,
         recordsParams,
         heatmapRefresh,
         // filters

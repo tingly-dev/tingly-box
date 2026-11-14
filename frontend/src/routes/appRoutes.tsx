@@ -76,6 +76,7 @@ const MCPServerToolsPage = lazy(() => import('@/pages/mcp/MCPServerToolsPage'));
 const MCPToolsPage = lazy(() => import('@/pages/mcp/MCPToolsPage'));
 const MCPProfilesPage = lazy(() => import('@/pages/mcp/MCPProfilesPage'));
 const HubPage = lazy(() => import('@/pages/HubPage'));
+const MorePage = lazy(() => import('@/shell/MorePage'));
 
 // LegacyRemoteAgentRedirect keeps old per-platform bookmarks working
 // (/remote-agent/:platform and the older /remote-control/*): Remote Control
@@ -108,6 +109,8 @@ export const appRoutes = (
                 page they were last on (OnboardingGate). */}
             <Route index element={<OnboardingGate />} />
             <Route path="/help" element={<HelpPage />} />
+            {/* The phone shell's management entry; the desktop shell sends it to /agent. */}
+            <Route path="/more" element={<MorePage />} />
             <Route path="/bench" element={<ExperimentalFeatureGate feature="bench"><BenchPage /></ExperimentalFeatureGate>} />
             {/* Back-compat: the old standalone Onboarding page was folded into
                 Help — keep old bookmarks/links working. */}

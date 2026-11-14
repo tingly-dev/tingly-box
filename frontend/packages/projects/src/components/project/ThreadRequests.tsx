@@ -104,12 +104,42 @@ export function ThreadRequestsStrip({ thread, onOpen }: { thread: Thread; onOpen
     );
 }
 
+/**
+ * The pending requests of one thread as the thread page's own cards, answered
+ * in place. `onSettled` runs when a request turned out to be answered
+ * elsewhere already.
+ */
+export function RequestCards({ thread, requests, onSettled }: { thread: Thread; requests: PendingRequest[]; onSettled?: () => void }) {
+    const { t } = useTranslation('projects');
+    const ctx = useThreadRequestsContext();
+    const notify = useNotify();
+
+    const respond: Respond = async (requestId, allow, answer, remember, answers) => {
+        try {
+            const result = await ctx!.respond(thread.id, requestId, allow, answer, remember, answers);
+            if (result === 'settled') onSettled?.();
+            return true;
+        } catch (e) {
+            notify((e as Error).message, 'error');
+            return false;
+        }
+    };
+
+    return (
+        <TranscriptHostProvider rememberLabel={(tool) => t('thread.allowThread', { tool })}>
+            <Box sx={{ display: 'grid', gap: 1 }}>
+                {requests.map((r) => (
+                    <PendingRequestCard key={r.id} block={{ type: 'request', message: r.entry }} onRespond={respond} />
+                ))}
+            </Box>
+        </TranscriptHostProvider>
+    );
+}
+
 function RequestsPopover({ thread, requests, anchor, onClose, onOpenThread }: {
     thread: Thread; requests: PendingRequest[]; anchor: HTMLElement | null; onClose: () => void; onOpenThread: (id: string) => void;
 }) {
     const { t } = useTranslation('projects');
-    const ctx = useThreadRequestsContext();
-    const notify = useNotify();
     const [settled, setSettled] = useState(false);
     const open = anchor != null;
 
@@ -121,17 +151,6 @@ function RequestsPopover({ thread, requests, anchor, onClose, onOpenThread }: {
         return () => clearTimeout(timer);
     }, [open, empty, onClose]);
 
-    const respond: Respond = async (requestId, allow, answer, remember, answers) => {
-        try {
-            const result = await ctx!.respond(thread.id, requestId, allow, answer, remember, answers);
-            if (result === 'settled') setSettled(true);
-            return true;
-        } catch (e) {
-            notify((e as Error).message, 'error');
-            return false;
-        }
-    };
-
     return (
         <Popover
             open={open}
@@ -141,33 +160,27 @@ function RequestsPopover({ thread, requests, anchor, onClose, onOpenThread }: {
             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
             slotProps={{ paper: { sx: { width: 440, maxWidth: '92vw', maxHeight: '75vh' } }, transition: { onExited: () => setSettled(false) } }}
         >
-            <TranscriptHostProvider rememberLabel={(tool) => t('thread.allowThread', { tool })}>
-                <Box role="dialog" aria-label={t('thread.requests.dialog', { title: thread.title })} sx={{ p: 1.25 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, mb: 1 }}>
-                        <ThreadStateMark status="waiting" />
-                        <Typography noWrap title={thread.title} sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
-                        <Button size="small" color="inherit" endIcon={<OpenInNew sx={{ fontSize: 14 }} />} sx={{ flexShrink: 0, color: 'text.secondary' }}
-                            onClick={() => { onClose(); onOpenThread(thread.id); }}>
-                            {t('thread.requests.openThread')}
-                        </Button>
-                    </Box>
-                    {settled && (
-                        <Box role="status" sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mb: 1, color: 'text.secondary' }}>
-                            <Info sx={{ fontSize: 14, mt: 0.25, flexShrink: 0 }} />
-                            <Typography variant="caption" sx={{ color: 'inherit' }}>{t('thread.requests.settled')}</Typography>
-                        </Box>
-                    )}
-                    {empty ? (
-                        !settled && <Typography role="status" variant="body2" sx={{ color: 'text.secondary', py: 0.5 }}>{t('thread.requests.cleared')}</Typography>
-                    ) : (
-                        <Box sx={{ display: 'grid', gap: 1 }}>
-                            {requests.map((r) => (
-                                <PendingRequestCard key={r.id} block={{ type: 'request', message: r.entry }} onRespond={respond} />
-                            ))}
-                        </Box>
-                    )}
+            <Box role="dialog" aria-label={t('thread.requests.dialog', { title: thread.title })} sx={{ p: 1.25 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, mb: 1 }}>
+                    <ThreadStateMark status="waiting" />
+                    <Typography noWrap title={thread.title} sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
+                    <Button size="small" color="inherit" endIcon={<OpenInNew sx={{ fontSize: 14 }} />} sx={{ flexShrink: 0, color: 'text.secondary' }}
+                        onClick={() => { onClose(); onOpenThread(thread.id); }}>
+                        {t('thread.requests.openThread')}
+                    </Button>
                 </Box>
-            </TranscriptHostProvider>
+                {settled && (
+                    <Box role="status" sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mb: 1, color: 'text.secondary' }}>
+                        <Info sx={{ fontSize: 14, mt: 0.25, flexShrink: 0 }} />
+                        <Typography variant="caption" sx={{ color: 'inherit' }}>{t('thread.requests.settled')}</Typography>
+                    </Box>
+                )}
+                {empty ? (
+                    !settled && <Typography role="status" variant="body2" sx={{ color: 'text.secondary', py: 0.5 }}>{t('thread.requests.cleared')}</Typography>
+                ) : (
+                    <RequestCards thread={thread} requests={requests} onSettled={() => setSettled(true)} />
+                )}
+            </Box>
         </Popover>
     );
 }

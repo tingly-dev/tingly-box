@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Tooltip } from '@mui/material';
 import { Code as CodeIcon } from '@/components/icons';
-import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
+import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
 import { fontSizes } from '@/theme/fonts';
 
 interface QuotaRawResponseButtonProps {

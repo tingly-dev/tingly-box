@@ -76,6 +76,16 @@ describe('WorkspaceHomePage', () => {
         expect(screen.queryByText('workspace.viewAllWorkdirs')).not.toBeInTheDocument();
     });
 
+    it('carries the notifications control at the top, before every section, and no settings card', () => {
+        m.projects = [];
+        m.folders = [];
+        show();
+        const control = screen.getByRole('group', { name: 'notifyControl.label' });
+        const sections = screen.getAllByRole('region');
+        expect(control.compareDocumentPosition(sections[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.queryByText('settings.notificationsTitle')).not.toBeInTheDocument();
+    });
+
     it('shows the newest items and drops the guide once there are some', () => {
         m.projects = [1, 2, 3, 4].map(project);
         m.folders = [folder(1)];
@@ -155,30 +165,19 @@ describe('WorkspaceHomePage IM section', () => {
         m.bindings = [binding(1), binding(2, { updated_at: '2026-11-05T00:00:00Z' })];
         show(hostWithIm);
         await act(async () => {});
-        const im2 = section('im.title');
-        expect(im2.queryByText('workspace.imStep1')).not.toBeInTheDocument();
-        // Newest binding first, capped at RECENT cards.
-        expect(im2.getByText('Chat 2')).toBeInTheDocument();
-        expect(im2.getByText('Chat 1')).toBeInTheDocument();
-        expect(im2.queryByText('Chat 3')).not.toBeInTheDocument();
+        const line = section('im.title');
+        expect(line.queryByText('workspace.imStep1')).not.toBeInTheDocument();
+        // One line: the count, then the newest chats first with where they are bound.
+        expect(line.getByText(/^workspace\.imBound \{"count":2\} · Chat 2 → .*· Chat 1 → /)).toBeInTheDocument();
+        expect(line.queryByRole('button', { name: /Chat/ })).not.toBeInTheDocument();
     });
 
-    it('opens a bound chat at its bound place', async () => {
-        m.bindings = [
-            binding(1),
-            binding(2, { project_id: 'f1', thread_id: 't9', updated_at: '2026-11-05T00:00:00Z' }),
-        ];
+    it('opens the IM page from the one-line summary', async () => {
+        m.bindings = [binding(1)];
         show(hostWithIm);
         await act(async () => {});
-        // The project's main thread: straight to the project.
-        fireEvent.click(section('im.title').getByRole('button', { name: /Chat 1/ }));
-        expect(screen.getByTestId('where').textContent).toBe('/projects/p1');
-        cleanup();
-        // A thread inside a working folder: the folder page on that session.
-        show(hostWithIm);
-        await act(async () => {});
-        fireEvent.click(section('im.title').getByRole('button', { name: /Chat 2/ }));
-        expect(screen.getByTestId('where').textContent).toBe('/projects/folder?path=/home/me/app1&session=t9');
+        fireEvent.click(section('im.title').getByRole('button', { name: 'workspace.imManage' }));
+        expect(screen.getByTestId('where').textContent).toBe('/projects/im');
     });
 });
 

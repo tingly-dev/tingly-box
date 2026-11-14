@@ -1,7 +1,7 @@
 import { Box, ClickAwayListener, Drawer, IconButton, Tooltip, Stack } from '@mui/material';
 import { Menu as IconMenu, Visibility as IconVisibility, Check as IconCheck, tablerMui } from '@/components/icons';
 import { IconLayoutSidebarLeftCollapse, IconPower } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Z_INDEX } from '../constants/zIndex';
@@ -10,6 +10,7 @@ import { mobileContentSx, mobileMenuButtonSx, mobileNavigationBarSx } from './st
 import { ActivityBar } from './ActivityBar.tsx';
 import { Sidebar } from './Sidebar';
 import { useActivityItems } from './useActivityItems.tsx';
+import { resolveActiveActivity } from './activeActivity';
 import { SidebarCollapsedProvider, useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem, LayoutProps } from './types';
 import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
@@ -23,6 +24,7 @@ import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { announceFeatureDisabled, FEATURE_DISABLED_EVENT } from './featureNotice';
+import { useUiShell } from '@/shell/uiShell';
 
 // The eye in the Agent sidebar header introduces itself once: a callout
 // pointing at it until the user closes it (or uses the eye).
@@ -79,23 +81,11 @@ const LayoutInner = ({ children }: LayoutProps) => {
     // clear of the mobile menu bar only.
     const isProjectsPage = location.pathname === '/workspace' || location.pathname === '/projects' || location.pathname.startsWith('/projects/');
 
-    const isActive = (path: string) => location.pathname === path;
-    const isChildActive = (children?: ActivityItem['children']) =>
-        children?.some(item => item.type !== 'divider' && (item.match ? item.match(location.pathname) : isActive(item.path))) ?? false;
-
     // Determine active activity from current path, falling back to localStorage
-    const activeActivity = useMemo(() => {
-        if (location.pathname === '/help') return 'help';
-        for (const item of activityItems) {
-            if (item.path && isActive(item.path)) return item.key;
-            if (item.children && isChildActive(item.children)) return item.key;
-        }
-        // Check if saved activity is still valid
-        const saved = sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity');
-        if (saved && activityItems.some(item => item.key === saved)) return saved;
-        // Fallback to 'scenario' (which is valid - it's the agent activity)
-        return 'scenario';
-    }, [activityItems, location.pathname]);
+    const activeActivity = useMemo(
+        () => resolveActiveActivity(activityItems, location.pathname, sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity')),
+        [activityItems, location.pathname],
+    );
 
     // Persist the active activity for cross-session boot. Each activity
     // re-opens at its defaultPath (the scenario activity opens its overview).
@@ -377,13 +367,28 @@ const LayoutInner = ({ children }: LayoutProps) => {
     );
 };
 
+// The phone shell is its own chunk: desktop never loads it.
+const MobileShell = lazy(() => import('@/shell/MobileShell'));
+
 // The collapse state is shared between ActivityBar (toggle) and the Sidebar
 // slot here, so the provider is mounted at the Layout boundary — both children
-// consume the same context.
-const Layout = ({ children }: LayoutProps) => (
-    <SidebarCollapsedProvider>
-        <LayoutInner>{children}</LayoutInner>
-    </SidebarCollapsedProvider>
-);
+// consume the same context. The tray hub is a desktop window and keeps the
+// desktop layout whatever the shell preference.
+const Layout = ({ children }: LayoutProps) => {
+    const { shell } = useUiShell();
+    const { pathname } = useLocation();
+    if (shell === 'mobile' && pathname !== '/hub') {
+        return (
+            <Suspense fallback={null}>
+                <MobileShell>{children}</MobileShell>
+            </Suspense>
+        );
+    }
+    return (
+        <SidebarCollapsedProvider>
+            <LayoutInner>{children}</LayoutInner>
+        </SidebarCollapsedProvider>
+    );
+};
 
 export default Layout;
