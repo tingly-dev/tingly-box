@@ -169,7 +169,7 @@ func TestIssueAndCommentRecordTheirRoles(t *testing.T) {
 	// Commenting on an issue the thread opened keeps it "opened".
 	_, isErr = f.call(t, cs, "comment", map[string]any{"number": 11, "body": "More."})
 	require.False(t, isErr)
-	l, err := f.store.GetThreadLink(f.worker.ID, db.LinkIssue, 11)
+	l, err := f.store.FindThreadLink(f.worker.ID, "acme/widgets", 11)
 	require.NoError(t, err)
 	assert.Equal(t, db.LinkOpened, l.Role)
 }
@@ -184,7 +184,7 @@ func TestUpdatePROnlyEditsPRsTheThreadOpened(t *testing.T) {
 	require.False(t, isErr, out)
 	assert.Contains(t, out, "title, description, base")
 	assert.Contains(t, f.gh.called(), "update-pr acme/widgets #11 title=Add a, properly body=New text base=release")
-	l, _ := f.store.GetThreadLink(f.worker.ID, db.LinkPR, 11)
+	l, _ := f.store.FindThreadLink(f.worker.ID, "acme/widgets", 11)
 	assert.Equal(t, "Add a, properly", l.Title)
 
 	out, isErr = f.call(t, cs, "update", map[string]any{})
@@ -208,7 +208,7 @@ func TestUpdatePROnlyEditsPRsTheThreadOpened(t *testing.T) {
 	// Two PRs and no number asks which.
 	f.gh.existing = nil
 	f.gh.add(db.LinkPR, "Second", nil)
-	_, err := f.links.record(f.thread(t), GitHubRepo{Host: "github.com", Owner: "acme", Name: "widgets"}, db.LinkPR, db.LinkOpened, f.gh.items[f.gh.next])
+	_, err := f.links.record(f.thread(t), GitHubRepo{Owner: "acme", Name: "widgets"}, db.LinkPR, db.LinkOpened, f.gh.items[f.gh.next])
 	require.NoError(t, err)
 	out, isErr = f.call(t, cs, "update", map[string]any{"title": "x"})
 	assert.True(t, isErr)
@@ -247,7 +247,7 @@ func TestViewReadsAndThrottles(t *testing.T) {
 	assert.Contains(t, out, "checks: failing")
 	assert.Contains(t, out, "mergeable: conflicts")
 	assert.Equal(t, 1, reads())
-	l, _ := f.store.GetThreadLink(f.worker.ID, db.LinkPR, 11)
+	l, _ := f.store.FindThreadLink(f.worker.ID, "acme/widgets", 11)
 	assert.Equal(t, "failing", l.CI, "the thread's record is brought up to date by the reading")
 
 	// A model that polls gets the last answer.
@@ -306,7 +306,7 @@ func TestUpdateEditsAnIssueTheThreadOpened(t *testing.T) {
 	out, _ = f.call(t, cs, "view", map[string]any{"number": 11})
 	assert.Contains(t, out, "Flaky export test")
 	assert.Contains(t, out, "new text")
-	l, _ := f.store.GetThreadLink(f.worker.ID, db.LinkIssue, 11)
+	l, _ := f.store.FindThreadLink(f.worker.ID, "acme/widgets", 11)
 	assert.Equal(t, "Flaky export test", l.Title)
 
 	// base is a PR's field; an issue never gets a request.

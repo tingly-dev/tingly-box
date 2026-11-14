@@ -19,7 +19,7 @@ import (
 func (f *linksFixture) openedPR(t *testing.T) *db.ThreadLink {
 	t.Helper()
 	it := f.gh.add(db.LinkPR, "Add a", func(it *GitHubItem) { it.CI, it.MergeState = "pending", "unknown" })
-	l, err := f.links.record(f.thread(t), GitHubRepo{Host: "github.com", Owner: "acme", Name: "widgets"}, db.LinkPR, db.LinkOpened, it)
+	l, err := f.links.record(f.thread(t), GitHubRepo{Owner: "acme", Name: "widgets"}, db.LinkPR, db.LinkOpened, it)
 	require.NoError(t, err)
 	f.events = nil
 	return l
@@ -37,7 +37,7 @@ func (f *linksFixture) reads() int {
 
 func (f *linksFixture) link(t *testing.T, n int) *db.ThreadLink {
 	t.Helper()
-	l, err := f.store.GetThreadLink(f.worker.ID, db.LinkPR, n)
+	l, err := f.store.FindThreadLink(f.worker.ID, "acme/widgets", n)
 	require.NoError(t, err)
 	return l
 }
@@ -276,7 +276,7 @@ func fakeGH(t *testing.T, answer string, exit int) (bin, logFile string) {
 func TestGhCLIUsesRESTWithAJSONBody(t *testing.T) {
 	bin, logFile := fakeGH(t, `{"number":7,"html_url":"https://github.com/acme/widgets/pull/7","title":"T","state":"open","head":{"ref":"tp/x","sha":"abc"},"base":{"ref":"main"},"mergeable_state":"dirty"}`, 0)
 	g := ghCLI{bin: bin}
-	repo := GitHubRepo{Host: "github.com", Owner: "acme", Name: "widgets"}
+	repo := GitHubRepo{Owner: "acme", Name: "widgets"}
 
 	title, body := "New \"title\"", "line 1\nline 2 $(rm -rf /) `x`"
 	it, err := g.UpdatePR(context.Background(), repo, 7, &title, &body, nil)
@@ -306,7 +306,7 @@ func TestGhCLIUsesRESTWithAJSONBody(t *testing.T) {
 
 func TestGhCLIErrorsAreRedactedAndGhMissingIsSaid(t *testing.T) {
 	bin, _ := fakeGH(t, "", 1)
-	_, err := ghCLI{bin: bin}.CreateIssue(context.Background(), GitHubRepo{Host: "github.com", Owner: "a", Name: "b"}, "t", "b")
+	_, err := ghCLI{bin: bin}.CreateIssue(context.Background(), GitHubRepo{Owner: "a", Name: "b"}, "t", "b")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "HTTP 422")
 	assert.NotContains(t, err.Error(), "ghp_abcdef")

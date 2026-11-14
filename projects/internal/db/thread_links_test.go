@@ -70,7 +70,7 @@ func TestSaveThreadLinkReadingChangesOnlyTheReading(t *testing.T) {
 	require.NoError(t, s.UpsertThreadLink(l))
 	l.CI, l.Failures, l.LastError, l.Role = "passing", 2, "boom", "hacked"
 	require.NoError(t, s.SaveThreadLinkReading(l))
-	got, err := s.GetThreadLink(th.ID, LinkPR, 1)
+	got, err := s.FindThreadLink(th.ID, "a/b", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "passing", got.CI)
 	assert.Equal(t, 2, got.Failures)

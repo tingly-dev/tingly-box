@@ -106,31 +106,45 @@ func parseGitHubRemote(remote string) (GitHubRepo, error) {
 	if !strings.EqualFold(host, "github.com") || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return GitHubRepo{}, errors.New("origin is not a github.com repository; the issue and PR tools only work with github.com")
 	}
-	return GitHubRepo{Host: "github.com", Owner: parts[0], Name: parts[1]}, nil
+	return GitHubRepo{Owner: parts[0], Name: parts[1]}, nil
 }
 
-func checkText(what, s string, max int) error {
-	if strings.TrimSpace(s) == "" {
-		return fmt.Errorf("%s is required", what)
-	}
+// checkLength refuses text longer than max characters.
+func checkLength(what, s string, max int) error {
 	if len([]rune(s)) > max {
 		return fmt.Errorf("%s is longer than %d characters", what, max)
 	}
 	return nil
 }
 
+// checkText is checkLength for text that must not be empty.
+func checkText(what, s string, max int) error {
+	if strings.TrimSpace(s) == "" {
+		return fmt.Errorf("%s is required", what)
+	}
+	return checkLength(what, s, max)
+}
+
 // record writes what GitHub said about an item as the thread's link to it and
 // tells open pages.
 func (l *Links) record(t *db.Thread, repo GitHubRepo, kind, role string, it GitHubItem) (*db.ThreadLink, error) {
-	now := l.now()
-	link := &db.ThreadLink{ThreadID: t.ID, ProjectID: t.ProjectID, Kind: kind, Repo: repo.Slug(), Number: it.Number,
-		URL: it.URL, Title: it.Title, Role: role, State: it.State, Draft: it.Draft, CI: it.CI, MergeState: it.MergeState,
-		RefreshedAt: now, AttemptedAt: now}
+	link := &db.ThreadLink{ThreadID: t.ID, ProjectID: t.ProjectID, Kind: kind, Repo: repo.Slug(), Number: it.Number, Role: role}
+	fillLink(link, it, l.now())
 	if err := l.store.UpsertThreadLink(link); err != nil {
 		return nil, err
 	}
 	l.publish(t.ID)
 	return link, nil
+}
+
+// fillLink sets what GitHub said about an item on its record, as read at now:
+// everything a refresh brings, and nothing about whose it is.
+func fillLink(k *db.ThreadLink, it GitHubItem, now time.Time) {
+	k.State, k.Draft, k.CI, k.MergeState, k.Title = it.State, it.Draft, it.CI, it.MergeState, it.Title
+	if it.URL != "" {
+		k.URL = it.URL
+	}
+	k.RefreshedAt, k.AttemptedAt, k.Failures, k.LastError = now, now, 0, ""
 }
 
 func (l *Links) publish(threadID string) {
@@ -154,8 +168,8 @@ func (l *Links) CreateIssue(ctx context.Context, t *db.Thread, title, body strin
 	if err := checkText("title", title, titleMax); err != nil {
 		return "", err
 	}
-	if len([]rune(body)) > bodyMax {
-		return "", fmt.Errorf("body is longer than %d characters", bodyMax)
+	if err := checkLength("body", body, bodyMax); err != nil {
+		return "", err
 	}
 	lc, err := l.resolve(ctx, t)
 	if err != nil {
@@ -202,8 +216,8 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 	if err := checkText("title", title, titleMax); err != nil {
 		return "", err
 	}
-	if len([]rune(body)) > bodyMax {
-		return "", fmt.Errorf("body is longer than %d characters", bodyMax)
+	if err := checkLength("body", body, bodyMax); err != nil {
+		return "", err
 	}
 	lc, err := l.resolve(ctx, t)
 	if err != nil {
@@ -267,8 +281,10 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		s := strings.TrimSpace(*title)
 		title = &s
 	}
-	if body != nil && len([]rune(*body)) > bodyMax {
-		return "", fmt.Errorf("body is longer than %d characters", bodyMax)
+	if body != nil {
+		if err := checkLength("body", *body, bodyMax); err != nil {
+			return "", err
+		}
 	}
 	if base != nil {
 		s := strings.TrimSpace(*base)
@@ -288,20 +304,19 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 	if base != nil && link.Kind != db.LinkPR {
 		return "", fmt.Errorf("#%d is an issue: base only applies to a PR", link.Number)
 	}
-	repo := lc.repo
 	if link.State != db.LinkStateOpen {
 		return "", fmt.Errorf("%s #%d is %s: only an open one can be edited", link.Kind, link.Number, link.State)
 	}
 	var it GitHubItem
 	if link.Kind == db.LinkIssue {
-		it, err = l.gh.UpdateIssue(ctx, repo, link.Number, title, body)
+		it, err = l.gh.UpdateIssue(ctx, lc.repo, link.Number, title, body)
 	} else {
 		if base != nil {
 			if bad := checkBranchName(ctx, t.Cwd, *base); bad != nil {
 				return "", bad
 			}
 		}
-		it, err = l.gh.UpdatePR(ctx, repo, link.Number, title, body, base)
+		it, err = l.gh.UpdatePR(ctx, lc.repo, link.Number, title, body, base)
 		// The edit's answer has no CI, and GitHub has not worked out the
 		// mergeability yet: keep the last reading of both.
 		it.CI = link.CI
@@ -313,7 +328,7 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		return "", err
 	}
 	l.forgetView(t, link.Number)
-	_, rerr := l.record(t, repo, link.Kind, db.LinkOpened, it)
+	_, rerr := l.record(t, lc.repo, link.Kind, db.LinkOpened, it)
 	var what []string
 	if title != nil {
 		what = append(what, "title")
@@ -398,34 +413,31 @@ const viewBodyMax = 2000
 // also has its record brought up to date; any other is only read, never
 // recorded. The text is third-party content and comes wrapped as such.
 func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, error) {
+	if text, ok := l.viewedRecently(t, number); ok {
+		return text, nil
+	}
 	lc, err := l.resolve(ctx, t)
 	if err != nil {
 		return "", err
 	}
 	slug := lc.repo.Slug()
+	var link *db.ThreadLink
 	if number <= 0 {
-		k, err := l.ownItem(t, slug, 0, false)
-		if err != nil {
+		if link, err = l.ownItem(t, slug, 0, false); err != nil {
 			return "", err
 		}
-		number = k.Number
-	}
-	key := viewKey(t, number)
-	l.viewMu.Lock()
-	c, ok := l.views[key]
-	l.viewMu.Unlock()
-	if ok && l.now().Sub(c.at) < linkMinGap {
-		return c.text, nil
-	}
-	link, err := l.store.FindThreadLink(t.ID, slug, number)
-	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		number = link.Number
+		if text, ok := l.viewedRecently(t, number); ok {
+			return text, nil
+		}
+	} else if link, err = l.store.FindThreadLink(t.ID, slug, number); errors.Is(err, db.ErrNotFound) {
+		link = nil // an item the thread has not touched: read, never recorded
+	} else if err != nil {
 		return "", err
 	}
 	kind := ""
-	if err == nil {
+	if link != nil {
 		kind = link.Kind
-	} else {
-		link = nil
 	}
 	kind, it, err := l.read(ctx, lc.repo, number, kind)
 	if err != nil {
@@ -441,9 +453,22 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 	if len(l.views) > 200 {
 		l.views = map[string]viewed{}
 	}
-	l.views[key] = viewed{at: l.now(), text: text}
+	l.views[viewKey(t, number)] = viewed{at: l.now(), text: text}
 	l.viewMu.Unlock()
 	return text, nil
+}
+
+// viewedRecently is View's last answer for the item when it is under linkMinGap
+// old. It is asked before anything is resolved, so a polling model costs no
+// process at all.
+func (l *Links) viewedRecently(t *db.Thread, number int) (string, bool) {
+	if number <= 0 {
+		return "", false
+	}
+	l.viewMu.Lock()
+	defer l.viewMu.Unlock()
+	c, ok := l.views[viewKey(t, number)]
+	return c.text, ok && l.now().Sub(c.at) < linkMinGap
 }
 
 // read is an issue or PR in full, and which it is. The issues API answers for
@@ -491,12 +516,7 @@ func (l *Links) refresh(ctx context.Context, k *db.ThreadLink) error {
 	if err != nil {
 		return err
 	}
-	var it GitHubItem
-	if k.Kind == db.LinkPR {
-		it, err = l.gh.PR(ctx, repo, k.Number)
-	} else {
-		it, err = l.gh.Issue(ctx, repo, k.Number)
-	}
+	_, it, err := l.read(ctx, repo, k.Number, k.Kind)
 	if err != nil {
 		k.AttemptedAt = l.now()
 		k.Failures++
@@ -516,13 +536,8 @@ func (l *Links) refresh(ctx context.Context, k *db.ThreadLink) error {
 // applyReading stores what GitHub just said about a linked item and tells open
 // pages when it changed anything they show.
 func (l *Links) applyReading(k *db.ThreadLink, it GitHubItem) error {
-	now := l.now()
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || k.LastError != ""
-	k.State, k.Draft, k.CI, k.MergeState, k.Title = it.State, it.Draft, it.CI, it.MergeState, it.Title
-	if it.URL != "" {
-		k.URL = it.URL
-	}
-	k.RefreshedAt, k.AttemptedAt, k.Failures, k.LastError = now, now, 0, ""
+	fillLink(k, it, l.now())
 	if err := l.store.SaveThreadLinkReading(k); err != nil {
 		return err
 	}
@@ -593,18 +608,7 @@ func repoOfLink(k *db.ThreadLink) (GitHubRepo, error) {
 	if len(parts) != 2 {
 		return GitHubRepo{}, fmt.Errorf("unsupported repository %q", k.Repo)
 	}
-	return GitHubRepo{Host: "github.com", Owner: parts[0], Name: parts[1]}, nil
-}
-
-// checkBranchName refuses a base that git could not take as a branch name.
-func checkBranchName(ctx context.Context, dir, name string) error {
-	if strings.HasPrefix(name, "-") {
-		return fmt.Errorf("%q is not a valid branch name", name)
-	}
-	if _, err := git(ctx, dir, "check-ref-format", "refs/heads/"+name); err != nil {
-		return fmt.Errorf("%q is not a valid branch name", name)
-	}
-	return nil
+	return GitHubRepo{Owner: parts[0], Name: parts[1]}, nil
 }
 
 // commitsAhead counts the commits head has beyond base, trying the local base

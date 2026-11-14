@@ -466,8 +466,7 @@ func (m *Threads) rowLock(threadID string) *sync.Mutex {
 
 // publish tells open pages a thread changed, with its project's fresh counts.
 func (m *Threads) publish(t *db.Thread) {
-	t.RunningTasks = m.RunningTasks(t.ID)
-	t.Links, _ = m.store.ThreadLinks(t.ID)
+	m.AnnotateOne(t)
 	ev := Event{Type: EventThread, ProjectID: t.ProjectID, Data: t}
 	if c, err := m.store.ProjectThreadCounts(t.ProjectID); err == nil {
 		ev.Threads = &c

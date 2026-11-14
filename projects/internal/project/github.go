@@ -15,19 +15,14 @@ import (
 	"time"
 )
 
-// GitHubRepo names a repository on a host: where a thread's issues and PRs go.
+// GitHubRepo names a repository on github.com: where a thread's issues and PRs
+// go. (GitHub Enterprise hosts are a later step; see .design/github-tools.md.)
 type GitHubRepo struct {
-	Host, Owner, Name string
+	Owner, Name string
 }
 
-// Slug is owner/name on github.com, host/owner/name elsewhere: what a record
-// stores and what gh's --hostname and REST paths are built from.
-func (r GitHubRepo) Slug() string {
-	if r.Host == "" || r.Host == "github.com" {
-		return r.Owner + "/" + r.Name
-	}
-	return r.Host + "/" + r.Owner + "/" + r.Name
-}
+// Slug is owner/name: what a record stores and the REST paths are built from.
+func (r GitHubRepo) Slug() string { return r.Owner + "/" + r.Name }
 
 func (r GitHubRepo) path() string { return "repos/" + r.Owner + "/" + r.Name }
 
@@ -111,9 +106,6 @@ func (g ghCLI) api(ctx context.Context, r GitHubRepo, method, path string, body 
 		bin = "gh"
 	}
 	args := []string{"api", "-X", method}
-	if r.Host != "" && r.Host != "github.com" {
-		args = append(args, "--hostname", r.Host)
-	}
 	var in bytes.Buffer
 	if body != nil {
 		args = append(args, "--input", "-")
@@ -175,13 +167,28 @@ type ghPull struct {
 	} `json:"base"`
 }
 
+func (i ghIssue) item() GitHubItem {
+	return GitHubItem{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil}
+}
+
 func (p ghPull) item() GitHubItem {
-	state := p.State
+	it := p.ghIssue.item()
 	if p.Merged {
-		state = "merged"
+		it.State = "merged"
 	}
-	return GitHubItem{Number: p.Number, URL: p.HTMLURL, Title: p.Title, Body: p.Body, State: state, Draft: p.Draft,
-		Head: p.Head.Ref, Base: p.Base.Ref, MergeState: mergeState(p)}
+	it.Draft, it.Head, it.Base, it.MergeState = p.Draft, p.Head.Ref, p.Base.Ref, mergeState(p)
+	return it
+}
+
+// patchBody is the fields of an edit that were given.
+func patchBody(fields map[string]*string) map[string]any {
+	body := map[string]any{}
+	for k, v := range fields {
+		if v != nil {
+			body[k] = *v
+		}
+	}
+	return body
 }
 
 // mergeState reduces GitHub's mergeable_state to what the card shows.
@@ -219,7 +226,7 @@ func (g ghCLI) DefaultBranch(ctx context.Context, r GitHubRepo) (string, error) 
 func (g ghCLI) CreateIssue(ctx context.Context, r GitHubRepo, title, body string) (GitHubItem, error) {
 	var out ghIssue
 	err := g.api(ctx, r, "POST", r.path()+"/issues", map[string]any{"title": title, "body": body}, &out)
-	return GitHubItem{Number: out.Number, URL: out.HTMLURL, Title: out.Title, State: out.State}, err
+	return out.item(), err
 }
 
 func (g ghCLI) Comment(ctx context.Context, r GitHubRepo, number int, body string) (string, error) {
@@ -250,26 +257,14 @@ func (g ghCLI) CreatePR(ctx context.Context, r GitHubRepo, title, body, head, ba
 }
 
 func (g ghCLI) UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error) {
-	patch := map[string]any{}
-	for k, v := range map[string]*string{"title": title, "body": body} {
-		if v != nil {
-			patch[k] = *v
-		}
-	}
 	var out ghIssue
-	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/issues/%d", r.path(), number), patch, &out)
-	return GitHubItem{Number: out.Number, URL: out.HTMLURL, Title: out.Title, Body: out.Body, State: out.State}, err
+	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/issues/%d", r.path(), number), patchBody(map[string]*string{"title": title, "body": body}), &out)
+	return out.item(), err
 }
 
 func (g ghCLI) UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error) {
-	patch := map[string]any{}
-	for k, v := range map[string]*string{"title": title, "body": body, "base": base} {
-		if v != nil {
-			patch[k] = *v
-		}
-	}
 	var out ghPull
-	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/pulls/%d", r.path(), number), patch, &out)
+	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/pulls/%d", r.path(), number), patchBody(map[string]*string{"title": title, "body": body, "base": base}), &out)
 	return out.item(), err
 }
 
@@ -340,5 +335,5 @@ func (g ghCLI) ci(ctx context.Context, r GitHubRepo, sha string) (string, error)
 func (g ghCLI) Issue(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
 	var out ghIssue
 	err := g.api(ctx, r, "GET", fmt.Sprintf("%s/issues/%d", r.path(), number), nil, &out)
-	return GitHubItem{Number: out.Number, URL: out.HTMLURL, Title: out.Title, Body: out.Body, State: out.State, IsPR: out.PullRequest != nil}, err
+	return out.item(), err
 }

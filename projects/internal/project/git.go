@@ -86,11 +86,8 @@ func BranchExists(ctx context.Context, repo, name string) bool {
 
 // checkNewBranch refuses a branch name git cannot use or that is taken.
 func checkNewBranch(ctx context.Context, repo, name string) error {
-	if strings.HasPrefix(name, "-") {
-		return fmt.Errorf("%q is not a valid branch name", name)
-	}
-	if _, err := git(ctx, repo, "check-ref-format", "refs/heads/"+name); err != nil {
-		return fmt.Errorf("%q is not a valid branch name", name)
+	if err := checkBranchName(ctx, repo, name); err != nil {
+		return err
 	}
 	if BranchExists(ctx, repo, name) {
 		return fmt.Errorf("branch %q already exists in %s; choose another name", name, repo)
@@ -225,3 +222,14 @@ type MergeBlockedError struct {
 }
 
 func (e *MergeBlockedError) Error() string { return e.Reason }
+
+// checkBranchName refuses a name git cannot use as a branch name.
+func checkBranchName(ctx context.Context, dir, name string) error {
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("%q is not a valid branch name", name)
+	}
+	if _, err := git(ctx, dir, "check-ref-format", "refs/heads/"+name); err != nil {
+		return fmt.Errorf("%q is not a valid branch name", name)
+	}
+	return nil
+}

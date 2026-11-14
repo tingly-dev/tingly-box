@@ -26,7 +26,7 @@ const (
 // the model said.
 type ThreadLink struct {
 	ID        uint   `gorm:"primaryKey" json:"-"`
-	ThreadID  string `gorm:"size:36;not null;uniqueIndex:idx_thread_link,priority:1;index" json:"thread_id"`
+	ThreadID  string `gorm:"size:36;not null;uniqueIndex:idx_thread_link,priority:1" json:"thread_id"`
 	ProjectID string `gorm:"size:36;not null;index" json:"project_id"`
 	Kind      string `gorm:"size:10;not null;uniqueIndex:idx_thread_link,priority:3" json:"kind"`
 	// Repo is owner/name on the host that served it (host/owner/name off github.com).
@@ -72,9 +72,8 @@ func (s *Store) UpsertThreadLink(l *ThreadLink) error {
 
 // ThreadLinks are one thread's links, oldest first.
 func (s *Store) ThreadLinks(threadID string) ([]ThreadLink, error) {
-	var out []ThreadLink
-	err := s.db.Where("thread_id = ?", threadID).Order("created_at, id").Find(&out).Error
-	return out, err
+	by, err := s.ThreadLinksOf([]string{threadID})
+	return by[threadID], err
 }
 
 // ThreadLinksOf are the links of the given threads, by thread id.
@@ -91,16 +90,6 @@ func (s *Store) ThreadLinksOf(threadIDs []string) (map[string][]ThreadLink, erro
 		out[r.ThreadID] = append(out[r.ThreadID], r)
 	}
 	return out, nil
-}
-
-// GetThreadLink is the link of a thread to an issue or PR.
-func (s *Store) GetThreadLink(threadID, kind string, number int) (*ThreadLink, error) {
-	var l ThreadLink
-	err := s.db.Where("thread_id = ? AND kind = ? AND number = ?", threadID, kind, number).Order("id").First(&l).Error
-	if err != nil {
-		return nil, notFound(err)
-	}
-	return &l, nil
 }
 
 // FindThreadLink is the thread's link to the issue or PR with this number in
