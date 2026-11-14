@@ -62,7 +62,7 @@ export const project: Dict<typeof projectEn> = {
         decision: '需要你来决定', recommended: '推荐', choose: '选这个', chosen: '已选',
     },
     overview: {
-        view: { label: '视图', list: '列表', vertical: '竖向看板', horizontal: '横向看板' },
+        view: { label: '视图', list: '列表', board: '看板' },
         threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库', pin: '置顶', unpin: '取消置顶', pinned: '已置顶',
         threadCount_one: '{{count}} 个线程', threadCount_other: '{{count}} 个线程',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',

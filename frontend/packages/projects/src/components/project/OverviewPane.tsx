@@ -20,7 +20,7 @@ function ThreadGroups({ threads, selectedId, onOpen, onTasks, onStatus, view, pi
         // The board takes the pane's width and grows downward: the pane scrolls vertically, never sideways.
         return threads.length === 0
             ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{t('overview.noThreads')}</Typography>
-            : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} onStatus={onStatus} orientation={view} pinnedIds={pinnedIds} onTogglePin={onTogglePin} />;
+            : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} onStatus={onStatus} pinnedIds={pinnedIds} onTogglePin={onTogglePin} />;
     }
     const groups = STATUS_ORDER.map((status) => ({
         key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved',
