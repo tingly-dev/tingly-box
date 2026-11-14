@@ -86,6 +86,19 @@ describe('ThreadInfoRail', () => {
         expect(screen.getByText('abcd1234').textContent).toBe('abcd1234');
     });
 
+    it('has no background-tasks card for a folder session that runs none either', () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder canReview={false} tasks={[]} />);
+        expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
+    });
+
+    it('draws the same cards as a menu under the Details button, without the docked column\'s edge', () => {
+        render(<ThreadInfoRail {...props} popover thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        const frame = screen.getByRole('complementary', { name: 'rail.title' });
+        expect(getComputedStyle(frame).borderLeftWidth).not.toBe('1px');
+        expect(screen.getByRole('region', { name: 'rail.status' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'rail.environment' })).toBeInTheDocument();
+    });
+
     it('shows the background tasks of a project thread too, not only a folder session', () => {
         render(<ThreadInfoRail {...props} thread={thread({ status: 'working' })} folder={false} canReview={false} tasks={[task({}), task({ taskId: 'b', callId: 'c2', status: 'completed', description: 'old build' })]} />);
         const card = screen.getByRole('region', { name: 'session.backgroundTasks' });

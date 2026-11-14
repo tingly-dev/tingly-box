@@ -125,6 +125,8 @@ interface Props {
     top?: ReactNode;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
+    /** The cards in a menu under the Details button, not docked beside the conversation. */
+    popover?: boolean;
     /** Lists the thread's subagents (its Agent calls) for the rail's own card. */
     subagents?: { list: () => Promise<Subagent[]> };
     /** Opens a subagent on its own, in place of the conversation. */
@@ -139,7 +141,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra, subagents, onOpenAgent, onShowAgent }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra, subagents, onOpenAgent, onShowAgent, popover }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -147,7 +149,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
     const hasChanges = !!thread.branch || thread.commits_ahead > 0 || thread.uncommitted || !!thread.merged_at;
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
-        <InfoRailFrame label={t('rail.title')}>
+        <InfoRailFrame label={t('rail.title')} popover={popover}>
             {top != null && (
                 <RailCard id="sessions" title={t('session.sessions')}>
                     <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>{top}</Box>
@@ -177,9 +179,8 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     {canReview && <Button size="small" variant="outlined" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
                 </RailCard>
             )}
-            {(folder || tasks.length > 0) && (
+            {tasks.length > 0 && (
                 <RailCard id="tasks" title={t('session.backgroundTasks')} aside={running.length > 0 ? t('session.tasksRunning', { count: running.length }) : undefined}>
-                    {tasks.length === 0 && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('tasks.none')}</Typography>}
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}
                     {finished.length > 0 && (
                         <>
