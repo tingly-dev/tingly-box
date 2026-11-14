@@ -72,22 +72,14 @@ func (UsageRecord) TableName() string {
 	return "usage_records"
 }
 
-// UsageDailyRecord is the GORM model for daily aggregated usage statistics.
-// One row per (UTC day, provider, model, user) that had traffic, plus a
-// zero-count marker row for a completed day with none (see emptyDayMarker). Date uses the same day
-// boundary as SQLite's date(timestamp) so daily rows can substitute raw
-// usage_records scans for completed days.
-type UsageDailyRecord struct {
-	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Date         string `gorm:"column:date;index:idx_date;uniqueIndex:uq_daily_dim,priority:1;not null"` // YYYY-MM-DD (UTC)
-	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_daily_dim,priority:2;not null"`
-	ProviderName string `gorm:"column:provider_name;not null"`
-	Model        string `gorm:"column:model;uniqueIndex:uq_daily_dim,priority:3;not null"`
-	UserID       string `gorm:"column:user_id;uniqueIndex:uq_daily_dim,priority:4;not null;default:''"`
-	RequestCount int64  `gorm:"column:request_count;not null"`
-	TotalTokens  int64  `gorm:"column:total_tokens;not null"`
-	InputTokens  int64  `gorm:"column:input_tokens;not null"`
-	OutputTokens int64  `gorm:"column:output_tokens;not null"`
+// RollupSums are the additive measures every usage rollup row carries, so
+// results from different rollup tiers and from raw scans can be merged before
+// derived rates (error rate, average latency) are computed.
+type RollupSums struct {
+	RequestCount int64 `gorm:"column:request_count;not null"`
+	TotalTokens  int64 `gorm:"column:total_tokens;not null"`
+	InputTokens  int64 `gorm:"column:input_tokens;not null"`
+	OutputTokens int64 `gorm:"column:output_tokens;not null"`
 	// Cache tokens: reads, then writes (a subset of InputTokens)
 	CacheReadTokens  int64 `gorm:"column:cache_input_tokens;default:0"`
 	CacheWriteTokens int64 `gorm:"column:cache_write_tokens;default:0"`
@@ -97,8 +89,61 @@ type UsageDailyRecord struct {
 	SystemTokens  int64 `gorm:"column:system_tokens;default:0"`
 	ErrorCount    int64 `gorm:"column:error_count;default:0"`
 	StreamedCount int64 `gorm:"column:streamed_count;default:0"`
-	// Sum of latency_ms across the day, so merged averages stay weighted
+	// Sum of latency_ms over the bucket, so merged averages stay weighted
 	LatencySumMs int64 `gorm:"column:latency_sum_ms;default:0"`
+}
+
+// UsageHourlyRecord is the finest usage rollup: one row per (UTC hour,
+// provider, model, user) that had traffic, plus a zero-count marker row for a
+// completed hour with none (see rollup.go). Hour is SQLite's
+// strftime('%Y-%m-%d %H', timestamp), so hour rows can substitute raw
+// usage_records scans for completed hours. UsageDailyRecord is derived from
+// these rows, never from raw records.
+type UsageHourlyRecord struct {
+	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Hour         string `gorm:"column:hour;index:idx_hourly_hour;uniqueIndex:uq_hourly_dim,priority:1;not null"` // YYYY-MM-DD HH (UTC)
+	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_hourly_dim,priority:2;not null"`
+	ProviderName string `gorm:"column:provider_name;not null"`
+	Model        string `gorm:"column:model;uniqueIndex:uq_hourly_dim,priority:3;not null"`
+	UserID       string `gorm:"column:user_id;uniqueIndex:uq_hourly_dim,priority:4;not null;default:''"`
+	RollupSums   `gorm:"embedded"`
+}
+
+// TableName specifies the table name for GORM
+func (UsageHourlyRecord) TableName() string {
+	return "usage_hourly"
+}
+
+// UsageHourlyScenarioRecord is the per-agent (scenario) companion of
+// UsageHourlyRecord: one row per (UTC hour, scenario). See
+// UsageDailyScenarioRecord for why scenario is not a dimension of the main
+// table.
+type UsageHourlyScenarioRecord struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Hour       string `gorm:"column:hour;index:idx_hourly_scenario_hour;uniqueIndex:uq_hourly_scenario,priority:1;not null"` // YYYY-MM-DD HH (UTC)
+	Scenario   string `gorm:"column:scenario;uniqueIndex:uq_hourly_scenario,priority:2;not null;default:''"`
+	RollupSums `gorm:"embedded"`
+}
+
+// TableName specifies the table name for GORM
+func (UsageHourlyScenarioRecord) TableName() string {
+	return "usage_hourly_scenario"
+}
+
+// UsageDailyRecord is the GORM model for daily aggregated usage statistics.
+// One row per (UTC day, provider, model, user) that had traffic, plus a
+// zero-count marker row for a completed day with none (see rollup.go). Date
+// uses the same day boundary as SQLite's date(timestamp) so daily rows can
+// substitute raw usage_records scans for completed days. Rows are the sum of
+// the day's UsageHourlyRecord rows.
+type UsageDailyRecord struct {
+	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Date         string `gorm:"column:date;index:idx_date;uniqueIndex:uq_daily_dim,priority:1;not null"` // YYYY-MM-DD (UTC)
+	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_daily_dim,priority:2;not null"`
+	ProviderName string `gorm:"column:provider_name;not null"`
+	Model        string `gorm:"column:model;uniqueIndex:uq_daily_dim,priority:3;not null"`
+	UserID       string `gorm:"column:user_id;uniqueIndex:uq_daily_dim,priority:4;not null;default:''"`
+	RollupSums   `gorm:"embedded"`
 }
 
 // TableName specifies the table name for GORM
@@ -117,20 +162,10 @@ func (UsageDailyRecord) TableName() string {
 // Always written in the same transaction as the usage_daily rows of the same
 // days, so a day is present in both or neither.
 type UsageDailyScenarioRecord struct {
-	ID               uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Date             string `gorm:"column:date;index:idx_daily_scenario_date;uniqueIndex:uq_daily_scenario,priority:1;not null"` // YYYY-MM-DD (UTC)
-	Scenario         string `gorm:"column:scenario;uniqueIndex:uq_daily_scenario,priority:2;not null;default:''"`
-	RequestCount     int64  `gorm:"column:request_count;not null"`
-	TotalTokens      int64  `gorm:"column:total_tokens;not null"`
-	InputTokens      int64  `gorm:"column:input_tokens;not null"`
-	OutputTokens     int64  `gorm:"column:output_tokens;not null"`
-	CacheReadTokens  int64  `gorm:"column:cache_input_tokens;default:0"`
-	CacheWriteTokens int64  `gorm:"column:cache_write_tokens;default:0"`
-	ReasoningTokens  int64  `gorm:"column:reasoning_tokens;default:0"`
-	SystemTokens     int64  `gorm:"column:system_tokens;default:0"`
-	ErrorCount       int64  `gorm:"column:error_count;default:0"`
-	StreamedCount    int64  `gorm:"column:streamed_count;default:0"`
-	LatencySumMs     int64  `gorm:"column:latency_sum_ms;default:0"`
+	ID         uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Date       string `gorm:"column:date;index:idx_daily_scenario_date;uniqueIndex:uq_daily_scenario,priority:1;not null"` // YYYY-MM-DD (UTC)
+	Scenario   string `gorm:"column:scenario;uniqueIndex:uq_daily_scenario,priority:2;not null;default:''"`
+	RollupSums `gorm:"embedded"`
 }
 
 // TableName specifies the table name for GORM
@@ -203,7 +238,7 @@ func migrateUsageTables(db *gorm.DB) error {
 	if err := dropUnusedUsageIndexes(db); err != nil {
 		return fmt.Errorf("failed to drop unused usage indexes: %w", err)
 	}
-	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}, &UsageDailyScenarioRecord{}); err != nil {
+	if err := db.AutoMigrate(&UsageRecord{}, &UsageHourlyRecord{}, &UsageHourlyScenarioRecord{}, &UsageDailyRecord{}, &UsageDailyScenarioRecord{}); err != nil {
 		return fmt.Errorf("failed to migrate usage database: %w", err)
 	}
 	return nil
@@ -473,7 +508,7 @@ func (q UsageStatsQuery) filterMap() map[string]string {
 // with a raw scan of only the partial edge days (see usage_daily.go), so
 // dashboard loads stay fast regardless of how many raw records accumulate.
 func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedStat, error) {
-	if stats, ok, err := us.aggregatedStatsFromDaily(query); ok {
+	if stats, ok, err := us.aggregatedStatsFromRollups(query); ok {
 		return stats, err
 	}
 
@@ -626,7 +661,7 @@ type TimeSeriesData struct {
 // spanning several completed days are served from usage_daily with raw scans
 // only for the partial edge days (see usage_daily.go).
 func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
-	if data, ok, err := us.timeSeriesFromDaily(interval, startTime, endTime, filters); ok {
+	if data, ok, err := us.timeSeriesFromRollups(interval, startTime, endTime, filters); ok {
 		return data, err
 	}
 	return us.rawTimeSeries(interval, startTime, endTime, filters)
@@ -634,6 +669,20 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 
 // rawTimeSeries aggregates time buckets directly over usage_records.
 func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
+	buckets, err := us.rawSeriesBuckets(interval, startTime, endTime, filters)
+	if err != nil {
+		return nil, err
+	}
+	merged := make(map[string]*aggBucket, len(buckets))
+	for _, b := range buckets {
+		mergeBucket(merged, b.Key, b)
+	}
+	return seriesFromBuckets(merged), nil
+}
+
+// rawSeriesBuckets groups usage_records into time buckets keyed by the Unix
+// seconds of the bucket start.
+func (us *UsageStore) rawSeriesBuckets(interval string, startTime, endTime time.Time, filters map[string]string) ([]aggBucket, error) {
 	us.mu.RLock()
 	defer us.mu.RUnlock()
 
@@ -659,24 +708,10 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 		withPinnedRangeFilters(filters),
 	)
 
-	type result struct {
-		Timestamp        string
-		RequestCount     int64
-		TotalTokens      int64
-		InputTokens      int64
-		OutputTokens     int64
-		CacheReadTokens  int64
-		CacheWriteTokens int64
-		ReasoningTokens  int64
-		SystemTokens     int64
-		ErrorCount       int64
-		AvgLatency       float64
-	}
-
-	var results []result
-	// Select the Unix timestamp of the time bucket (the grouped time), not the original timestamp
+	// The key is the Unix timestamp of the time bucket (the grouped time), not
+	// the original timestamp.
 	selectClause := fmt.Sprintf(`
-		strftime('%%s', strftime('%s', timestamp)) as timestamp,
+		strftime('%%s', strftime('%s', timestamp)) as key,
 		COUNT(*) as request_count,
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
@@ -686,36 +721,17 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
-		COALESCE(AVG(latency_ms), 0) as avg_latency
+		COALESCE(SUM(latency_ms), 0) as latency_sum
 	`, timeFormat)
 
+	var buckets []aggBucket
 	if err := db.
 		Select(selectClause).
 		Group(fmt.Sprintf("strftime('%s', timestamp)", timeFormat)).
-		Order("timestamp ASC").
-		Scan(&results).Error; err != nil {
+		Scan(&buckets).Error; err != nil {
 		return nil, err
 	}
-
-	// Convert to TimeSeriesData
-	data := make([]TimeSeriesData, len(results))
-	for i, r := range results {
-		data[i] = TimeSeriesData{
-			Timestamp:        r.Timestamp,
-			RequestCount:     r.RequestCount,
-			TotalTokens:      r.TotalTokens,
-			InputTokens:      r.InputTokens,
-			OutputTokens:     r.OutputTokens,
-			CacheReadTokens:  r.CacheReadTokens,
-			CacheWriteTokens: r.CacheWriteTokens,
-			ReasoningTokens:  r.ReasoningTokens,
-			SystemTokens:     r.SystemTokens,
-			ErrorCount:       r.ErrorCount,
-			AvgLatencyMs:     r.AvgLatency,
-		}
-	}
-
-	return data, nil
+	return buckets, nil
 }
 
 // GetRecords returns individual usage records (for debugging/audit)
@@ -885,22 +901,15 @@ func (us *UsageStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	us.perf.reset()
 
 	var deleted int64
-	// One transaction: usage_daily and usage_daily_scenario must lose the same
-	// days, or the one that kept them would never rebuild them.
+	// One transaction: every rollup table must lose the same buckets, or the
+	// one that kept them would never rebuild them.
 	err := us.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
 		if res.Error != nil {
 			return res.Error
 		}
 		deleted = res.RowsAffected
-		// Include the boundary day: its aggregate now over-counts deleted
-		// records and will be rebuilt from the remaining raw rows on the
-		// next query.
-		cutoffDay := cutoffDate.UTC().Format(dailyDateLayout)
-		if err := tx.Where("date <= ?", cutoffDay).Delete(&UsageDailyRecord{}).Error; err != nil {
-			return err
-		}
-		return tx.Where("date <= ?", cutoffDay).Delete(&UsageDailyScenarioRecord{}).Error
+		return clearRollupsThrough(tx, cutoffDate)
 	})
 	if err != nil {
 		return 0, err
@@ -908,11 +917,24 @@ func (us *UsageStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	return deleted, nil
 }
 
-// AggregateToDaily (re)builds the usage_daily rows for the UTC day containing
-// the given time. It returns the number of aggregate rows written.
+// AggregateToDaily rebuilds the usage_hourly and usage_daily rows for the UTC
+// day containing the given time from the raw records, whether or not they
+// existed. It returns the number of usage_daily rows the day now has.
 func (us *UsageStore) AggregateToDaily(date time.Time) (int64, error) {
 	day := utcDayStart(date)
-	return us.aggregateDay(day)
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	var n int64
+	err := us.db.Transaction(func(tx *gorm.DB) error {
+		if err := buildHours(tx, day, day.Add(24*time.Hour)); err != nil {
+			return err
+		}
+		if err := deriveDays(tx, day, day.Add(24*time.Hour)); err != nil {
+			return err
+		}
+		return tx.Model(&UsageDailyRecord{}).Where("date = ?", dayTier.key(day)).Count(&n).Error
+	})
+	return n, err
 }
 
 // Helper functions
