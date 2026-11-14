@@ -37,21 +37,22 @@ func (f *sessionToolsMCP) githubTools() []Tool {
 				return l.CreateIssue(ctx, t, in.Title, in.Body)
 			})},
 		{Name: toolCreatePR, ThreadOnly: true, Strict: true,
-			Description: "Push this thread's own branch (never forced) and open a pull request from it on GitHub. The branch and repository are the thread's; if the branch already has an open PR it is returned, not duplicated. Write the title and body as the repository's PR template asks; nothing is added to them.",
+			Description: "Push a local branch of this checkout (never forced) and open a pull request from it on GitHub; the repository is the thread's. head defaults to this thread's own branch: name another local branch to open a PR for it, for example the next one of a stack, with base set to the branch below it. The base must already be on GitHub; the default branch and protected branches are never pushed to. If the branch already has an open PR it is returned, not duplicated. Write the title and body as the repository's PR template asks; nothing is added to them.",
 			Properties: map[string]any{"title": strProp("PR title."), "body": strProp("PR description in Markdown."),
-				"base":  strProp("Optional. Branch to merge into; default is this thread's base branch."),
+				"head":  strProp("Optional. Local branch to push and open the PR from; default is this thread's own branch."),
+				"base":  strProp("Optional. Branch to merge into, on GitHub; default is this thread's base branch (the repository's default branch for another head)."),
 				"draft": map[string]any{"type": "boolean", "description": "Open as a draft."}},
 			Required: []string{"title"},
 			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct {
-				Title, Body, Base string
-				Draft             bool
+				Title, Body, Head, Base string
+				Draft                   bool
 			}) (string, error) {
-				return l.CreatePR(ctx, t, in.Title, in.Body, in.Base, in.Draft)
+				return l.CreatePR(ctx, t, in.Title, in.Body, in.Head, in.Base, in.Draft)
 			})},
 		{Name: toolUpdate, ThreadOnly: true, Strict: true,
 			Description: "Change the title and description of a GitHub issue, or the title, description and base branch of a PR, that this thread opened. It cannot close or merge anything.",
 			Properties: map[string]any{"number": number("Issue or PR number; optional only when this thread has one PR."),
-				"title": strProp("New title."), "body": strProp("New description (replaces the old one)."), "base": strProp("New base branch (PR only).")},
+				"title": strProp("New title."), "body": strProp("New description (replaces the old one)."), "base": strProp("New base branch (PR only), for example main once the PR below it in a stack has merged.")},
 			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct {
 				Number            int
 				Title, Body, Base *string

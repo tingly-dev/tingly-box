@@ -2302,6 +2302,8 @@ export interface components {
              * @description Field attempted_at
              */
             attempted_at: string;
+            /** @description Field base */
+            base?: string;
             /** @description Field ci */
             ci?: string;
             /**
@@ -2316,6 +2318,8 @@ export interface components {
              * @description Field failures
              */
             failures?: number;
+            /** @description Field head */
+            head?: string;
             /** @description Field kind */
             kind: string;
             /** @description Field last_error */

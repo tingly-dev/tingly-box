@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +25,8 @@ type fakeGitHub struct {
 	fail     error
 	failPR   error
 	existing *GitHubItem
+	// protected are the branches GitHub holds protected.
+	protected map[string]bool
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -45,6 +48,13 @@ func (g *fakeGitHub) called() []string {
 
 func (g *fakeGitHub) DefaultBranch(_ context.Context, r GitHubRepo) (string, error) {
 	return g.def, g.log("default %s", r.Slug())
+}
+
+func (g *fakeGitHub) Protected(_ context.Context, r GitHubRepo, branch string) (bool, error) {
+	err := g.log("protected %s %s", r.Slug(), branch)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.protected[branch], err
 }
 
 func (g *fakeGitHub) add(kind, title string, mod func(*GitHubItem)) GitHubItem {
@@ -224,4 +234,22 @@ func (f *linksFixture) remoteHas(t *testing.T, branch string) bool {
 	t.Helper()
 	cmd := run(t, f.remote, "git", "branch", "--list", branch)
 	return cmd != ""
+}
+
+// stackBranch makes a local branch off from with one commit, leaving the
+// worktree on the branch it was on: the thread's checkout does not move.
+func (f *linksFixture) stackBranch(t *testing.T, name, from string) {
+	t.Helper()
+	was := run(t, f.repo, "git", "branch", "--show-current")
+	run(t, f.repo, "git", "checkout", "-q", "-b", name, from)
+	require.NoError(t, os.WriteFile(filepath.Join(f.repo, name[strings.LastIndex(name, "/")+1:]+".txt"), []byte(name+"\n"), 0o644))
+	run(t, f.repo, "git", "add", ".")
+	run(t, f.repo, "git", "commit", "-qm", name)
+	run(t, f.repo, "git", "checkout", "-q", was)
+}
+
+// remoteBranches are the branches origin has.
+func (f *linksFixture) remoteBranches(t *testing.T) []string {
+	t.Helper()
+	return strings.Fields(strings.ReplaceAll(run(t, f.remote, "git", "branch", "--format=%(refname:short)"), "*", ""))
 }
