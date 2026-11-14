@@ -111,6 +111,7 @@ export default {
   },
   "layout": {
     "workspace": "Workspace",
+    "workspaceRail": "Workspace",
     "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
     "workspaceGate": { "title": "Enable Workspace", "text": "Enable the Workspace power-up to use projects, workdirs and IM chats.", "enable": "Enable Workspace", "error": "Could not enable Workspace. Please try again." },
     "projects": "Projects",
@@ -213,6 +214,7 @@ export default {
     "days": "Days",
     "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
@@ -255,6 +257,7 @@ export default {
     "help": "Tips & Help",
     "helpShort": "Help",
     "powerUps": "Power-ups",
+    "powerUpsRail": "Power-ups",
     "tools": "Tools",
     "servertool": "Servertool",
     "botsRunning": "{{active}} of {{total}} bots running"
