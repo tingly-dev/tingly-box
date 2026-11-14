@@ -20,6 +20,7 @@ export const session: PluralDict<typeof en> = {
         lastModel: 'Последняя заявленная модель', configuredModel: 'Настроенная модель',
     },
     session: {
+        count_one: '{{count}} сеанс', count_few: '{{count}} сеанса', count_many: '{{count}} сеансов', count_other: '{{count}} сеанса',
         sessions: 'Сеансы', new: 'Новый сеанс', none: 'Сеансов пока нет', folder: 'Рабочая папка', chooseFolder: 'Выберите рабочую папку',
         folderPlaceholder: '/путь/к/папке', attachNeedsFolder: 'Выберите рабочую папку, чтобы прикрепить файлы', folderLockedByAttachments: 'Уберите вложения, чтобы сменить рабочую папку.', heading: 'Над чем должен поработать Claude?', promptPlaceholder: 'Опишите задачу…',
         placeholder: 'Сообщение этому сеансу…', queuePlaceholder: 'Сообщение этому сеансу — он прочтёт его на следующем шаге…',
