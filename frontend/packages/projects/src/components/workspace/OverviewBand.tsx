@@ -3,6 +3,8 @@ import { Box, Button, IconButton, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { DisclosureChevron } from '../common/Disclosure';
+import { collectLinks } from '../project/LinksCard';
+import { isOpenLink } from '../project/ProjectLinks';
 import { STATUS_ORDER } from '../project/threadStatus';
 import { StatusHeading } from './StatusGroups';
 import { StatusColumns } from './StatusColumns';
@@ -42,6 +44,7 @@ interface Props {
     /** Opens a status's thread list from its heading or closed count. */
     onStatusList?: (status: string, anchor: HTMLElement) => void;
     onLibrary: () => void;
+    onLinks: () => void;
 }
 
 /**
@@ -49,9 +52,10 @@ interface Props {
  * first. Closed, it is one line of counts. Finished work stays out
  * of the way: the Overview window lists it.
  */
-export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTasks, onStatusList, onLibrary }: Props) {
+export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTasks, onStatusList, onLibrary, onLinks }: Props) {
     const { t } = useTranslation('projects');
     const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => th.status === s) })).filter((g) => g.list.length > 0);
+    const openLinks = collectLinks(threads).filter(isOpenLink).length;
     const shown = groups.filter((g) => g.key !== 'resolved');
     const { stored, setStored, commit } = useBandHeight();
     const columns = useRef<HTMLDivElement>(null);
@@ -80,6 +84,7 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTa
                         onClick={onStatusList && ((e) => { e.stopPropagation(); onStatusList(g.key, e.currentTarget); })} />)}
                 </Box>
                 <Button size="small" onClick={onLibrary}>{t('overview.library')}</Button>
+                <Button size="small" onClick={onLinks}>{openLinks > 0 ? t('links.titleCount', { count: openLinks }) : t('links.title')}</Button>
                 <Tooltip title={open ? t('band.collapse') : t('band.expand')}>
                     <IconButton size="small" onClick={onToggle} aria-expanded={open} aria-label={open ? t('band.collapse') : t('band.expand')}>
                         <DisclosureChevron open={open} fontSize={20} />

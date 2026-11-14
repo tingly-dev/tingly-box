@@ -32,8 +32,6 @@ interface Props {
     countLabel: (count: number) => string;
     /** What the list says when there is nothing in it. */
     empty: string;
-    /** Content under the list or the board, inside the same scroll. */
-    footer?: ReactNode;
 }
 
 /** What the toolbar says about the list: how many, and the tasks they run. The view switch sits at its right. */
@@ -64,7 +62,7 @@ function Toolbar({ threads, countLabel, onTasks, view, onView }: Pick<Props, 'th
  * a working directory's sessions both draw this; they differ in the groups,
  * the subtitle and the words, never in how the list behaves.
  */
-export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGroup, groups, groupOf = (th) => th.status, subtitle, countLabel, empty, footer }: Props) {
+export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGroup, groups, groupOf = (th) => th.status, subtitle, countLabel, empty }: Props) {
     const { t, i18n } = useTranslation('projects');
     const [view, setView] = useThreadsView();
     const [pinnedIds, togglePin] = usePinnedThreads(scope);
@@ -86,7 +84,6 @@ export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGro
                         ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{empty}</Typography>
                         : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} groups={lanes} groupOf={groupOf} subtitle={subtitle}
                             onStatus={onGroup && ((key, anchor) => onGroup(key, labelOf(key), anchor))} pinnedIds={pinnedIds} onTogglePin={togglePin} />}
-                {footer}
             </Box>
         </Box>
     );

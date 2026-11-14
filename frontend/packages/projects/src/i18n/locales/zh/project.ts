@@ -125,10 +125,10 @@ export const project: Dict<typeof projectEn> = {
         threadModel: '线程默认模型', threadModelHelp: '新线程及未设置模型覆盖的线程使用（Claude Code --model）。留空使用宿主默认模型。单个线程的选择保持独立。',
         modelDefault: '连接默认',
         permissionMode: '线程权限',
-        githubAccess: '议题与 PR',
+        githubAccess: 'Issue 与 PR',
         githubAccessAsk: '每次询问', githubAccessAllow: '允许',
-        githubAccessAskHelp: '线程在开议题、评论、开 PR 或修改 PR 前（通过它的工具）先问你；合并和关闭它始终做不到。Projects 的其他工具仍然直接运行。',
-        githubAccessAllowHelp: '默认。线程可直接开议题、评论、开 PR、修改自己开的 PR，和 Projects 的其他工具一样不再询问；合并、关闭和强推仍然不可用。从线程的下一轮起生效。',
+        githubAccessAskHelp: '线程在开 issue、评论、开 PR 或修改 PR 前（通过它的工具）先问你；合并和关闭它始终做不到。Projects 的其他工具仍然直接运行。',
+        githubAccessAllowHelp: '默认。线程可直接开 issue、评论、开 PR、修改自己开的 PR，和 Projects 的其他工具一样不再询问；合并、关闭和强推仍然不可用。从线程的下一轮起生效。',
         mode: {
             acceptEdits: '编辑直接执行，其他操作问你', acceptEditsHelp: '工作目录内的文件编辑不询问直接执行；命令等其他操作会在线程里等你授权。',
             default: '所有操作都问你', defaultHelp: '每个需要授权的操作都会在线程里等你批准。',
