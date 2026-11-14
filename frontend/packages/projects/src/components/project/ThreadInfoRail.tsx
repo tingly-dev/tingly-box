@@ -121,8 +121,6 @@ interface Props {
     /** The permission mode's display name (the picker sits at the message box). */
     permission?: string;
     configuredModel?: string;
-    /** A card above the rest, folded into the rail from the page (a folder's sessions). */
-    top?: ReactNode;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
     /** The cards in a menu under the Details button, not docked beside the conversation. */
@@ -141,7 +139,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra, subagents, onOpenAgent, onShowAgent, popover }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, extra, subagents, onOpenAgent, onShowAgent, popover }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -150,11 +148,6 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
         <InfoRailFrame label={t('rail.title')} popover={popover}>
-            {top != null && (
-                <RailCard id="sessions" title={t('session.sessions')}>
-                    <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>{top}</Box>
-                </RailCard>
-            )}
             <StatusCard thread={thread} />
             <RailCard id="env" title={t('rail.environment')}>
                 <Fact label={t('rail.folder')} labelWidth={64}><CopyValue value={thread.cwd} /></Fact>

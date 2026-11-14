@@ -58,10 +58,12 @@ describe('the Details button', () => {
         expect(rail()).toBeInTheDocument();
     });
 
-    it('is not offered for a folder whose session list rides in the rail, which stays on', () => {
+    it('is the same button for a folder session as for a project thread, whatever sits beside the page', () => {
         panelWidth(700);
-        render(<ThreadPanel {...props} folder railTop={<div>sessions</div>} railMinPanel={640} />);
-        expect(rail()).toBeInTheDocument();
-        for (const name of ['rail.hide', 'rail.show', 'rail.title']) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+        render(<ThreadPanel {...props} folder />);
+        // The session list lives in the page's side pane, never in the rail: this width docks the rail like a thread's.
+        expect(rail()).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'rail.title' })).toBeInTheDocument();
+        expect(screen.queryByText('session.sessions')).not.toBeInTheDocument();
     });
 });

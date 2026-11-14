@@ -82,6 +82,8 @@ interface Props {
     canSend?: () => boolean;
     /** Resolved configuration labels; not the last observed response model. */
     configuredModel?: string;
+    /** Cards the host adds to the info rail (SessionSlots.railExtra). */
+    railExtra?: React.ReactNode;
     permissionLabel?: string;
     /** Under the message box (a host's status line). */
     belowComposer?: React.ReactNode;
@@ -89,11 +91,6 @@ interface Props {
     liveTasks?: BackgroundTask[];
     /** Re-reads the session, e.g. after a task was stopped. */
     onRefresh?: () => void;
-    /** A card the rail carries above its own (a folder's session list); the rail then stays on, from `railMinPanel` wide. */
-    railTop?: React.ReactNode;
-    /** Cards the host adds to the info rail (SessionSlots.railCards). */
-    railExtra?: React.ReactNode;
-    railMinPanel?: number;
     /** A subagent a drill-in asked to open on its own (the status area's list). */
     initialFocus?: string;
     /** A background task a drill-in asked to open: its panel, with the row expanded. */
@@ -110,7 +107,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL, initialFocus, initialTask, onDrillConsumed }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -119,8 +116,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
     // The info rail sits beside the conversation when the panel is wide enough; the user can hide it.
-    const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(railMinPanel, !!thread);
-    const rail = wide && (railOn || railTop != null);
+    const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(RAIL_MIN_PANEL, !!thread);
+    const rail = wide && railOn;
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.
     const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
@@ -396,8 +393,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </Button>
                         </Tooltip>
                     )}
-                    {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards open under it. A folder's session list rides in the rail, which then stays on. */}
-                    {thread && railTop == null && (
+                    {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards open under it. */}
+                    {thread && (
                         <Tooltip title={wide ? (railOn ? t('rail.hide') : t('rail.show')) : t('rail.title')}>
                             <IconButton size="small" onClick={(e) => (wide ? toggleRail() : setDetailsAnchor(e.currentTarget))}
                                 aria-expanded={wide ? railOn : !!detailsAnchor} aria-haspopup={wide ? undefined : 'dialog'}
@@ -614,13 +611,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 subagents={subagents}
                 onOpenAgent={openAgent}
                 onShowAgent={(agent) => void openInChat({ call: agent.call }, agent.event_id)}
-                top={railTop}
                 extra={railExtra}
                 configuredModel={configuredModel}
                 permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
             />
         )}
-        {thread && !wide && railTop == null && (
+        {thread && !wide && (
             <Popover open={!!detailsAnchor} anchorEl={detailsAnchor} onClose={() => setDetailsAnchor(null)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
                 <ThreadInfoRail
