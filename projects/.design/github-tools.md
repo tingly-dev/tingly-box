@@ -42,6 +42,8 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 - *Base*: the thread's `BaseBranch` unless `base` is given; a folder session's default is the repository's default branch.
 - *Push*: `git push origin refs/heads/<branch>:refs/heads/<branch>`: one explicit refspec, no `+`, no `--force`, so it can only fast-forward the thread's own branch. A push that lost to newer commits on origin (`non-fast-forward`, `fetch first`) is an error that says to rebase; any other rejection (a hook, a protected branch) is reported as it is, without the rebase advice. There is no retry with force.
 - *PR needs commits*: refused when the branch has no commit beyond its base.
+- *Read before write*: `comment` reads the item in full (the issues API, then the PR's own read for a PR) before it posts, so a failed read posts nothing and never leaves a record built from half an answer (a merged PR must not be recorded as closed).
+- *An edit keeps what it cannot know*: the answer to a PR edit carries no checks and often a mergeability GitHub has not worked out yet (`unknown`); `update` keeps the last known value of both until the next reading.
 - *Transport*: `gh api` with a JSON body for every call (REST, no GraphQL). That avoids the `gh pr edit` failure and the shell quoting of bodies.
 - *No footer.* The tool adds nothing to the body (no requester note, thread link or marker): the repository's PR template governs the text and the model writes it.
 
