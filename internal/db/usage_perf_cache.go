@@ -35,9 +35,26 @@ type perfCacheEntry struct {
 type perfCache struct {
 	mu      sync.Mutex
 	entries map[string]perfCacheEntry
+	// gen is bumped by reset so a summary computed before a delete/rename is
+	// not stored after it (the query runs outside this mutex).
+	gen uint64
 }
 
-func perfCacheKey(start, end time.Time, filters map[string]string) string {
+func (c *perfCache) generation() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gen
+}
+
+// perfCacheKey identifies a request. The window bounds are truncated to the
+// TTL: the dashboard's "today" range ends at the current second, so an exact
+// key would differ on every refresh and never hit. A hit may therefore answer
+// for a window up to one TTL shorter, which is within the staleness already
+// accepted.
+func perfCacheKey(start, end time.Time, filters map[string]string, ttl time.Duration) string {
+	if ttl > 0 {
+		start, end = start.Truncate(ttl), end.Truncate(ttl)
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d|%d", start.UnixNano(), end.UnixNano())
 	for _, k := range slices.Sorted(maps.Keys(filters)) {
@@ -59,12 +76,15 @@ func (c *perfCache) get(key string, ttl time.Duration) (PerformanceSummary, bool
 	return e.summary, true
 }
 
-func (c *perfCache) put(key string, summary PerformanceSummary, ttl time.Duration) {
+func (c *perfCache) put(key string, summary PerformanceSummary, ttl time.Duration, gen uint64) {
 	if ttl <= 0 {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if gen != c.gen {
+		return
+	}
 	if c.entries == nil {
 		c.entries = make(map[string]perfCacheEntry)
 	}
@@ -84,5 +104,6 @@ func (c *perfCache) put(key string, summary PerformanceSummary, ttl time.Duratio
 func (c *perfCache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.gen++
 	clear(c.entries)
 }

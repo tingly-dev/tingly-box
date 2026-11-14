@@ -290,6 +290,43 @@ func TestPerformanceSummaryCache(t *testing.T) {
 	}
 }
 
+// TestPerfCacheKeyIgnoresSubTTLEnd: the "today" window ends at the current
+// second, so the key must not change within one TTL or the cache never hits.
+func TestPerfCacheKeyIgnoresSubTTLEnd(t *testing.T) {
+	start := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	end := start.Add(10*time.Hour + 2*time.Second)
+	a := perfCacheKey(start, end, nil, defaultPerfCacheTTL)
+	if b := perfCacheKey(start, end.Add(5*time.Second), nil, defaultPerfCacheTTL); a != b {
+		t.Errorf("keys differ within one TTL: %q vs %q", a, b)
+	}
+	if b := perfCacheKey(start, end.Add(defaultPerfCacheTTL), nil, defaultPerfCacheTTL); a == b {
+		t.Error("keys must differ across TTL buckets")
+	}
+	if b := perfCacheKey(start, end, map[string]string{"model": "m"}, defaultPerfCacheTTL); a == b {
+		t.Error("keys must differ by filter")
+	}
+}
+
+// TestDeleteOlderThanClearsBothDailyTables: the two rollups lose the same
+// days, so neither keeps days the other would never rebuild.
+func TestDeleteOlderThanClearsBothDailyTables(t *testing.T) {
+	store := seededUsageStore(t, 3000)
+	start, end := dayRange(90)
+	if _, err := store.GetAggregatedStats(UsageStatsQuery{GroupBy: "model", StartTime: start, EndTime: end, Limit: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DeleteOlderThan(time.Now().AddDate(0, 0, -30)); err != nil {
+		t.Fatal(err)
+	}
+	cutoff := time.Now().AddDate(0, 0, -30).UTC().Format(dailyDateLayout)
+	for _, model := range []any{&UsageDailyRecord{}, &UsageDailyScenarioRecord{}} {
+		var n int64
+		if err := store.db.Model(model).Where("date <= ?", cutoff).Count(&n).Error; err != nil || n != 0 {
+			t.Fatalf("%T rows at or before %s = %d (%v), want 0", model, cutoff, n, err)
+		}
+	}
+}
+
 // TestUsageDailyRebuiltForScenarioTable: a usage_daily that predates
 // usage_daily_scenario is dropped on migration, otherwise its already
 // aggregated days would never get scenario rows.
@@ -361,7 +398,7 @@ func TestRangeQueriesUseTimestampIndex(t *testing.T) {
 	start, end := dayRange(30)
 	q := store.db.Model(&UsageRecord{}).
 		Where("+status = ?", "success").
-		Scopes(withinTimeRange(start, end), withColumnFilters(map[string]string{"scenario": "codex", "provider_uuid": "prov-0", "user_id": "user-0"}))
+		Scopes(withinTimeRange(start, end), withPinnedRangeFilters(map[string]string{"scenario": "codex", "provider_uuid": "prov-0", "user_id": "user-0"}))
 	var plan []string
 	stmt := q.Session(&gorm.Session{DryRun: true}).Find(&[]UsageRecord{}).Statement
 	rows, err := store.db.Raw("EXPLAIN QUERY PLAN "+stmt.SQL.String(), stmt.Vars...).Rows()

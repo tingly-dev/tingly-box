@@ -83,7 +83,7 @@ func (us *UsageStore) ensureDailyAggregates(firstDay, lastDayEx time.Time) error
 		for j < len(missing) && j-i < maxAggregateRun && missing[j].Equal(missing[j-1].Add(24*time.Hour)) {
 			j++
 		}
-		if err := us.aggregateRun(missing[i], missing[j-1].Add(24*time.Hour)); err != nil {
+		if _, err := us.aggregateDays(missing[i], missing[j-1].Add(24*time.Hour)); err != nil {
 			return err
 		}
 		i = j
@@ -127,21 +127,15 @@ func (us *UsageStore) missingAggregatedDays(firstDay, lastDayEx time.Time) ([]ti
 
 // aggregateDay (re)builds the usage_daily rows for one UTC day.
 func (us *UsageStore) aggregateDay(dayStart time.Time) (int64, error) {
-	return us.aggregateDays(dayStart, dayStart.Add(24*time.Hour), false)
-}
-
-// aggregateRun builds the usage_daily rows for the UTC days [from, to).
-func (us *UsageStore) aggregateRun(from, to time.Time) error {
-	_, err := us.aggregateDays(from, to, true)
-	return err
+	return us.aggregateDays(dayStart, dayStart.Add(24*time.Hour))
 }
 
 // aggregateDays (re)builds usage_daily for the UTC days [from, to) in one
 // transaction: delete whatever is there, regroup the raw rows by
-// (day, provider, model, user) and by (day, scenario), and, when markEmpty is
-// set, leave a marker for each day that had no traffic. It returns the number
-// of usage_daily rows written, markers excluded.
-func (us *UsageStore) aggregateDays(from, to time.Time, markEmpty bool) (int64, error) {
+// (day, provider, model, user) and by (day, scenario), and leave a marker for
+// each day that had no traffic. It returns the number of usage_daily rows
+// written, markers excluded.
+func (us *UsageStore) aggregateDays(from, to time.Time) (int64, error) {
 	us.mu.Lock()
 	defer us.mu.Unlock()
 
@@ -208,9 +202,6 @@ func (us *UsageStore) aggregateDays(from, to time.Time, markEmpty bool) (int64, 
 			GROUP BY date(timestamp), scenario
 		`, scanStart, scanEnd, fromKey, toKey).Error; err != nil {
 			return err
-		}
-		if !markEmpty {
-			return nil
 		}
 
 		var have []string

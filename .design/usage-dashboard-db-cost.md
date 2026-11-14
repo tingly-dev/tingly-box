@@ -39,7 +39,9 @@ rows for days with traffic, so "which days are missing" re-listed every empty
 day and rebuilt it (delete + `INSERT … SELECT`, two statements each) per
 request — 531 statements for the 365-day heatmap. A completed day with no
 traffic now gets a zero-count marker row (`emptyDayMarker`); readers filter
-`request_count > 0`. Missing days are built per contiguous run of ≤7 days with
+`request_count > 0`. A day aggregated once — empty or not — is not revisited, so
+a row inserted later with an old timestamp (import/backfill) is not picked up
+until `DeleteOlderThan` or a schema rebuild clears the day. Missing days are built per contiguous run of ≤7 days with
 one grouped scan, so the write lock is held for a week of data at a time, not
 the window.
 
@@ -60,7 +62,11 @@ grouped passes instead of one.
 `status = 'success'` (95% of rows) or `scenario = …` walked the whole index
 across all history and filtered by timestamp row by row. Writing the column as
 `+col` removes the term from index consideration, so the range index decides
-deterministically (pinned by `TestRangeQueriesUseTimestampIndex`). `ANALYZE`
+deterministically (pinned by `TestRangeQueriesUseTimestampIndex`). This is
+`withPinnedRangeFilters`, used only where the whole range is read anyway
+(aggregates, time series, percentiles). `GetRecords` — newest-first with a
+`LIMIT` — keeps index-eligible filters (`withColumnFilters`) so a rare filter
+over a wide window can still use `idx_provider_model`/`idx_user`/… `ANALYZE`
 was rejected: it is a guess that goes stale as the table grows.
 
 **Unused `usage_records` indexes dropped**: `idx_timestamp_scenario`,
@@ -69,12 +75,13 @@ was rejected: it is a guess that goes stale as the table grows.
 on every proxied request's INSERT. They are dropped from existing databases in
 `migrateUsageTables` (AutoMigrate never removes). `idx_provider_model`,
 `idx_user`, `idx_team`, `idx_rule` (rename), `idx_trace_id` stay; the first
-three are now unused by the stats filters too and are the next candidates if
-write cost matters.
+three serve only `GetRecords` filters and are the next candidates if write
+cost matters.
 
 **Performance summary** streams four ints per row instead of materializing a
 `UsageRecord` (gorm reflection dominated) and is cached for 15 s per
-`(window, filters)` — it re-reads every successful request in the window and
+`(window, filters)`, with the window bounds truncated to the TTL so the
+"today" window (ends at the current second) still hits — it re-reads every successful request in the window and
 the dashboard re-asks it identically on reload/filter toggle/auto-refresh.
 Percentiles do not move visibly in 15 s. Deleting or re-attributing records
 resets the cache. Counts/sums are deliberately *not* cached: they are cheap

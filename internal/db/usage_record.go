@@ -14,11 +14,11 @@ import (
 
 // UsageRecord is the GORM model for persisting individual usage records.
 //
-// Indexes: every read is a timestamp range (idx_timestamp) narrowed by
-// filters that withColumnFilters keeps off the index, so scenario, status and
-// total_tokens carry none, and timestamp has no composite twin: each extra
-// index is paid on every proxied request's INSERT (see droppedUsageIndexes
-// for the ones removed from existing databases).
+// Indexes: every aggregate read is a timestamp range (idx_timestamp) narrowed
+// by filters that withPinnedRangeFilters keeps off the index, so scenario,
+// status and total_tokens carry none, and timestamp has no composite twin:
+// each extra index is paid on every proxied request's INSERT (see
+// droppedUsageIndexes for the ones removed from existing databases).
 type UsageRecord struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
 	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
@@ -219,7 +219,7 @@ func migrateUsageTables(db *gorm.DB) error {
 //     filter that follows a range scan.
 //   - idx_scenario, idx_usage_records_status: single low-cardinality columns
 //     that the planner (no sqlite_stat1) wrongly preferred over the timestamp
-//     range -- see withColumnFilters.
+//     range -- see withPinnedRangeFilters.
 //   - idx_usage_records_total_tokens: nothing filters or sorts raw rows by it.
 var droppedUsageIndexes = []string{
 	"idx_timestamp_scenario",
@@ -407,31 +407,46 @@ func validateFilterColumns(filters map[string]string) error {
 // withColumnFilters applies equality filters keyed by column name. Callers
 // must have run validateFilterColumns first; keys are sorted so the generated
 // SQL is stable (Go randomizes map iteration, which otherwise produces a
-// different statement per call).
-//
-// The column is written as "+col": SQLite's unary plus makes the term
-// ineligible for an index. Every dashboard query is a timestamp range plus
-// these filters, and the range is the selective part. Without sqlite_stat1
-// (nothing here runs ANALYZE) the planner treats any equality term as more
-// selective than a range and walks e.g. the status index (95% of rows are
-// "success") or the scenario index across ALL history, then filters by
-// timestamp row by row -- a 30-day performance query read the whole table.
-// Pinning the range index is deterministic where ANALYZE would be a guess
-// that goes stale as the table grows.
+// different statement per call). The filters stay eligible for their own
+// indexes: right for a paged, newest-first listing (GetRecords) where a rare
+// filter should find its rows through idx_provider_model/idx_user/... rather
+// than walking the time index.
 func withColumnFilters(filters map[string]string) func(*gorm.DB) *gorm.DB {
+	return columnFilters(filters, false)
+}
+
+// withPinnedRangeFilters is withColumnFilters for queries that must read
+// every row of a timestamp range anyway (aggregates, time series, percentiles).
+// The column is written "+col": SQLite's unary plus makes the term ineligible
+// for an index, so the range index decides. Without sqlite_stat1 (nothing here
+// runs ANALYZE) the planner treats any equality term as more selective than a
+// range and walks e.g. the status index (95% of rows are "success") or the
+// scenario index across ALL history, then filters by timestamp row by row -- a
+// 30-day performance query read the whole table. Pinning the range index is
+// deterministic where ANALYZE would be a guess that goes stale as the table
+// grows.
+func withPinnedRangeFilters(filters map[string]string) func(*gorm.DB) *gorm.DB {
+	return columnFilters(filters, true)
+}
+
+func columnFilters(filters map[string]string, pinned bool) func(*gorm.DB) *gorm.DB {
+	prefix := ""
+	if pinned {
+		prefix = "+"
+	}
 	return func(db *gorm.DB) *gorm.DB {
 		for _, key := range slices.Sorted(maps.Keys(filters)) {
-			db = db.Where("+"+key+" = ?", filters[key])
+			db = db.Where(prefix+key+" = ?", filters[key])
 		}
 		return db
 	}
 }
 
-// withStatsFilters is the UsageStatsQuery equivalent of withColumnFilters:
-// same columns, taken from typed fields instead of a map, so no validation is
-// needed.
+// withStatsFilters is the UsageStatsQuery equivalent of
+// withPinnedRangeFilters: same columns, taken from typed fields instead of a
+// map, so no validation is needed.
 func withStatsFilters(q UsageStatsQuery) func(*gorm.DB) *gorm.DB {
-	return withColumnFilters(q.filterMap())
+	return withPinnedRangeFilters(q.filterMap())
 }
 
 // filterMap renders the query's set dimension fields as a column filter map.
@@ -641,7 +656,7 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 	}
 	db := us.db.Model(&UsageRecord{}).Scopes(
 		withinTimeRange(startTime, endTime),
-		withColumnFilters(filters),
+		withPinnedRangeFilters(filters),
 	)
 
 	type result struct {
@@ -764,15 +779,16 @@ func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filter
 	if err := validateFilterColumns(filters); err != nil {
 		return PerformanceSummary{}, err
 	}
-	key := perfCacheKey(startTime, endTime, filters)
+	key := perfCacheKey(startTime, endTime, filters, us.perfCacheTTL)
 	if cached, ok := us.perf.get(key, us.perfCacheTTL); ok {
 		return cached, nil
 	}
+	gen := us.perf.generation()
 	summary, err := us.queryPerformanceSummary(startTime, endTime, filters)
 	if err != nil {
 		return PerformanceSummary{}, err
 	}
-	us.perf.put(key, summary, us.perfCacheTTL)
+	us.perf.put(key, summary, us.perfCacheTTL, gen)
 	return summary, nil
 }
 
@@ -788,7 +804,7 @@ func (us *UsageStore) queryPerformanceSummary(startTime, endTime time.Time, filt
 		Where("+status = ?", "success").
 		Scopes(
 			withinTimeRange(startTime, endTime),
-			withColumnFilters(filters),
+			withPinnedRangeFilters(filters),
 		).Rows()
 	if err != nil {
 		return PerformanceSummary{}, err
@@ -868,16 +884,28 @@ func (us *UsageStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	defer us.mu.Unlock()
 	us.perf.reset()
 
-	result := us.db.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
-	if result.Error == nil {
+	var deleted int64
+	// One transaction: usage_daily and usage_daily_scenario must lose the same
+	// days, or the one that kept them would never rebuild them.
+	err := us.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected
 		// Include the boundary day: its aggregate now over-counts deleted
 		// records and will be rebuilt from the remaining raw rows on the
 		// next query.
 		cutoffDay := cutoffDate.UTC().Format(dailyDateLayout)
-		us.db.Where("date <= ?", cutoffDay).Delete(&UsageDailyRecord{})
-		us.db.Where("date <= ?", cutoffDay).Delete(&UsageDailyScenarioRecord{})
+		if err := tx.Where("date <= ?", cutoffDay).Delete(&UsageDailyRecord{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("date <= ?", cutoffDay).Delete(&UsageDailyScenarioRecord{}).Error
+	})
+	if err != nil {
+		return 0, err
 	}
-	return result.RowsAffected, result.Error
+	return deleted, nil
 }
 
 // AggregateToDaily (re)builds the usage_daily rows for the UTC day containing
