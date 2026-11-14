@@ -344,7 +344,7 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
                 <Box component="span" sx={{ flex: 1 }}>{t('projectSettings.title')}</Box>
                 <IconButton onClick={onClose} aria-label={t('common.close')}><Close /></IconButton>
             </DialogTitle>
-            <Tabs value={tab} onChange={(_, v) => onTab(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs value={tab} onChange={(_, v) => onTab(v)} variant="scrollable" scrollButtons="auto" sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
                 <Tab value="general" label={t('projectSettings.tabGeneral')} />
                 <Tab value="memory" label={t('projectSettings.tabMemory')} />
                 <Tab value="environment" label={t('projectSettings.tabEnvironment')} />
