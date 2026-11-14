@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
@@ -25,11 +25,11 @@ interface Props {
 }
 
 /** One thread as an outlined card; the band's columns and the Overview's boards all draw it. */
-export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinned, onTogglePin }: { thread: Thread; selectedId?: string; onOpen: (id: string) => void; /** Opens the thread's running tasks from the count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; stacked?: boolean; pinned?: boolean; /** Given only where a card can be pinned to the top: the Overview board. */ onTogglePin?: () => void }) {
+export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinned, onTogglePin, subtitle }: { thread: Thread; /** The line under the title; what the thread's request or report says by default. */ subtitle?: ReactNode; selectedId?: string; onOpen: (id: string) => void; /** Opens the thread's running tasks from the count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; stacked?: boolean; pinned?: boolean; /** Given only where a card can be pinned to the top: the Overview board. */ onTogglePin?: () => void }) {
     const { t, i18n } = useTranslation('projects');
     return (
         <ListRow outlined stacked={stacked} selected={thread.id === selectedId} onClick={() => onOpen(thread.id)}
-            title={thread.title} subtitle={<ThreadRequestSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} onTasks={onTasks} />} meta={timeAgo(thread.updated_at, i18n.language)}
+            title={thread.title} subtitle={subtitle ?? <ThreadRequestSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} onTasks={onTasks} />} meta={timeAgo(thread.updated_at, i18n.language)}
             footer={<ThreadRequestsStrip thread={thread} onOpen={onOpen} />}
             // The star stays quiet: an unpinned card shows it on hover or keyboard focus only.
             sx={{ '&:hover .pin-star, &:focus-within .pin-star': { opacity: 1, pointerEvents: 'auto' } }}

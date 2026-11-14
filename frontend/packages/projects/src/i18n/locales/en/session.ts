@@ -17,6 +17,7 @@ export const session = {
         lastModel: 'Last reported model', configuredModel: 'Configured model',
     },
     session: {
+        count_one: '{{count}} session', count_other: '{{count}} sessions',
         sessions: 'Sessions', new: 'New session', none: 'No sessions yet', folder: 'Working folder', chooseFolder: 'Choose a working folder',
         folderPlaceholder: '/path/to/folder', attachNeedsFolder: 'Choose a working folder to attach files', folderLockedByAttachments: 'Remove attachments to change the working folder.', heading: 'What should Claude work on?', promptPlaceholder: 'Describe a task…',
         placeholder: 'Message this session…', queuePlaceholder: 'Message this session — it reads it at its next step…',

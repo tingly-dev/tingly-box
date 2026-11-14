@@ -20,6 +20,7 @@ export const session: Dict<typeof sessionEn> = {
         lastModel: '最近报告的模型', configuredModel: '配置的模型',
     },
     session: {
+        count_one: '{{count}} 个会话', count_other: '{{count}} 个会话',
         attachNeedsFolder: '先选择工作目录，再添加附件', folderLockedByAttachments: '移除附件后即可更改工作目录。',
         sessions: '会话', new: '新建会话', none: '还没有会话', folder: '工作目录', chooseFolder: '选择工作目录',
         folderPlaceholder: '/目录路径', heading: '需要 Claude 处理什么任务？', promptPlaceholder: '描述一个任务…',

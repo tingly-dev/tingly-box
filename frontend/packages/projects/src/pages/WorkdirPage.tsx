@@ -16,7 +16,8 @@ import { uploadAttachments } from '../components/attachments';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
-import { StatusGroups, type StatusGroup } from '../components/workspace/StatusGroups';
+import type { StatusGroup } from '../components/workspace/StatusGroups';
+import { ThreadsView } from '../components/workspace/ThreadsView';
 import { StatusThreadsPopover } from '../components/project/StatusThreadsPopover';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
 import { MoreVert } from '../components/icons';
@@ -26,7 +27,7 @@ import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useProjectList } from '../hooks/useProjectList';
 import { useTranscript } from '../hooks/useTranscript';
 import { useProjectsHost, type SessionLaunch } from '../host/ProjectsHost';
-import { folderName, timeAgo } from '../utils/format';
+import { folderName } from '../utils/format';
 import { needsUser } from '../components/project/threadStatus';
 
 /** Replace the session with the same id, else add it first (newest first). */
@@ -287,27 +288,19 @@ export default function WorkdirPage() {
     };
 
     const groups: StatusGroup[] = GROUPS.map((g) => ({ key: g.key, label: t(`session.group.${g.key}`), collapsed: g.collapsed }));
-    const rows = useMemo(() => (sessions ?? []).map((s) => ({
-        id: s.id,
-        group: s.archived_at ? 'archived' : s.status === 'ready' ? 'idle' : s.status,
-        title: s.title,
-        subtitle: [scope ? '' : folderName(s.cwd), !s.archived_at && needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
-        meta: timeAgo(s.updated_at, i18n.language),
-        selected: s.id === sessionId,
-    })), [sessions, scope, sessionId, i18n.language]);
     const waitingHere = (sessions ?? []).some((s) => !s.archived_at && needsUser(s.status));
     // A status count, opened into its list: the sessions standing in that state (same grouping as the rows above).
     const [statusList, setStatusList] = useState<{ label: string; sessions: Thread[]; anchor: HTMLElement } | null>(null);
     const sessionGroup = (s: Thread) => (s.archived_at ? 'archived' : s.status === 'ready' ? 'idle' : s.status);
     const sessionSubtitle = (s: Thread) =>
         [scope ? '' : folderName(s.cwd), !s.archived_at && needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined;
-    // With a session open on a wide screen the list becomes the first card of the thread's info rail, so the page has one right column.
-    const merged = !!sessionId && !pane.narrow;
+    // The same threads view a project's Overview draws; the list stays in the side pane whether or not a session is open.
     const sessionList = sessions === null
         ? <Box sx={{ p: 2 }}><Skeleton height={36} /><Skeleton height={36} /></Box>
-        : <StatusGroups groups={groups} rows={rows} onOpen={openSession}
-            onGroupClick={(key, label, anchor) => setStatusList({ label, sessions: (sessions ?? []).filter((s) => sessionGroup(s) === key), anchor })}
-            empty={t('session.none')} />;
+        : <ThreadsView scope={folder?.id ?? 'folders'} threads={sessions} selectedId={sessionId} onOpen={openSession}
+            groups={groups} groupOf={sessionGroup} subtitle={sessionSubtitle}
+            onGroup={(key, label, anchor) => setStatusList({ label, sessions: sessions.filter((x) => sessionGroup(x) === key), anchor })}
+            countLabel={(count) => t('session.count', { count })} empty={t('session.none')} />;
 
     return (
         <>
@@ -347,13 +340,12 @@ export default function WorkdirPage() {
                         )}
                     </>
                 )}
-                hidePaneToggle={merged}
-                side={merged ? undefined : (
+                side={(
                     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', px: 2, minHeight: 44, borderBottom: 1, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('session.sessions')}</Typography>
                         </Box>
-                        <Box sx={{ flex: 1, overflowY: 'auto', px: 0.5 }}>
+                        <Box sx={{ flex: 1, minHeight: 0 }}>
                             {sessionList}
                         </Box>
                     </Box>
@@ -373,9 +365,7 @@ export default function WorkdirPage() {
                         permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.defaultPermissions')} · ${t(`session.mode.${selectedFolder?.thread_permission_mode || 'acceptEdits'}`)}`}
                         onBack={() => openNew()}
                         liveTasks={liveTasks}
-                        railTop={merged ? sessionList : undefined}
                         railExtra={selected && slots?.railCards?.({ thread: selected, launch: { profile: selected.profile ?? '', model: selected.model ?? '' } })}
-                        railMinPanel={merged ? 640 : undefined}
                         more={transcript.more}
                         onLoadEarlier={transcript.loadEarlier}
                         subagents={transcript.subagents}
