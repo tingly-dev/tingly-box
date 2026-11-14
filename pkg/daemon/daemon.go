@@ -49,6 +49,9 @@ func IsDaemonProcess() bool {
 // (session leader on Unix, detached process on Windows) and exiting the
 // parent.
 //
+// Callers that want to know whether the child actually came up should use
+// Spawn instead and keep the parent alive until it has.
+//
 // overrideArgs pins flags the parent resolved (e.g. "--port", "9000") so the
 // detached child binds exactly what the parent decided instead of re-resolving
 // its own command line. See buildDaemonArgs.
@@ -57,11 +60,25 @@ func Daemonize(overrideArgs ...string) error {
 	if IsDaemonProcess() {
 		return nil
 	}
+	if _, err := Spawn(overrideArgs...); err != nil {
+		return err
+	}
 
+	// Parent process exits
+	os.Exit(0)
+	return nil
+}
+
+// Spawn re-executes the current command as a detached daemon child and
+// returns without exiting the parent. The returned channel yields the child's
+// exit status (nil for a clean exit) once it ends, so the parent can tell a
+// child that came up from one that died on startup. The child outlives the
+// parent: it is its own session leader and its stdio is detached.
+func Spawn(overrideArgs ...string) (<-chan error, error) {
 	// Get the current executable path
 	execPath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
+		return nil, fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	// Get original arguments, pinning any resolved flags for the child
@@ -81,12 +98,12 @@ func Daemonize(overrideArgs ...string) error {
 
 	// Start the daemonized process
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start daemon process: %w", err)
+		return nil, fmt.Errorf("failed to start daemon process: %w", err)
 	}
 
-	// Parent process exits
-	os.Exit(0)
-	return nil
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	return exited, nil
 }
 
 // buildDaemonArgs computes the argv for the re-exec'd daemon child. Daemonize

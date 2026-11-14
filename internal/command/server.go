@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
+	"github.com/tingly-dev/tingly-box/internal/command/readiness"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/lock"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -463,7 +464,7 @@ func startServer(appManager *app.AppManager, opts options.StartServerOptions, so
 }
 
 // startServerWithHook handles the server starting logic with optional setup hooks.
-func startServerWithHook(appManager *app.AppManager, opts options.StartServerOptions, source LaunchSource, hooks ...func(*app.ServerManager) error) error {
+func startServerWithHook(appManager *app.AppManager, opts options.StartServerOptions, source LaunchSource, hooks ...func(*app.ServerManager) error) (retErr error) {
 	appConfig := appManager.AppConfig()
 
 	// Set logrus level based on debug flag
@@ -511,6 +512,17 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 	logrus.Infof("Logging to file: %s (with rotation)", logFile)
 	logrus.Infof("JSON logging to: %s (for frontend/API)", multiLoggerCfg.JSONLogPath)
 
+	// A daemon child has no terminal (stderr is /dev/null), so the log file is
+	// the only place its startup failure can be read — and the launching
+	// parent points the user there.
+	if opts.Daemon && daemon.IsDaemonProcess() {
+		defer func() {
+			if retErr != nil {
+				logrus.Errorf("Server failed to start: %v", retErr)
+			}
+		}()
+	}
+
 	var port int = opts.Port
 	if port == 0 {
 		port = appConfig.GetServerPort()
@@ -533,20 +545,23 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 			versionNote = fmt.Sprintf(" (%s)", formatVersion(runningVersion))
 		}
 		fmt.Printf("Server is already running on port %d%s\n", runningPort, versionNote)
-		printBanner(BannerConfig{
-			Port:         runningPort,
-			Host:         opts.Host,
-			EnableUI:     opts.EnableUI,
-			GlobalConfig: appConfig.GetGlobalConfig(),
-			IsDaemon:     false,
+		// The lock is held from before the listener is up, so "running" alone
+		// does not mean the URL works: confirm it before showing it.
+		return confirmStarted(readiness.ProbeURL(opts.Host, runningPort), nil, startReadyTimeout, logFile, func() {
+			printBanner(BannerConfig{
+				Port:         runningPort,
+				Host:         opts.Host,
+				EnableUI:     opts.EnableUI,
+				GlobalConfig: appConfig.GetGlobalConfig(),
+				IsDaemon:     false,
+			})
+			if runningVersion != "" && runningVersion != BuildVersion {
+				fmt.Printf("This launcher is %s — run 'tingly-box restart' / 'tb restart' to switch the running server to it.\n", formatVersion(BuildVersion))
+			} else {
+				fmt.Println("Use 'tingly-box restart' / 'tb restart' to restart the server")
+			}
+			fmt.Println("Use 'tingly-box stop' / 'tb stop' to stop it")
 		})
-		if runningVersion != "" && runningVersion != BuildVersion {
-			fmt.Printf("This launcher is %s — run 'tingly-box restart' / 'tb restart' to switch the running server to it.\n", formatVersion(BuildVersion))
-		} else {
-			fmt.Println("Use 'tingly-box restart' / 'tb restart' to restart the server")
-		}
-		fmt.Println("Use 'tingly-box stop' / 'tb stop' to stop it")
-		return nil
 	}
 
 	// Check if port is available (AFTER checking if our server is already running).
@@ -556,6 +571,14 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 	// `restart`, which stops the old server and immediately reuses its port.
 	if err := network.WaitForPortAvailable(port, 3*time.Second); err != nil {
 		return fmt.Errorf("port %d is already in use by another process", port)
+	}
+
+	// Background launch: this process only spawns the detached server and
+	// waits for it. It deliberately holds no lock — the child takes the
+	// single-instance lock itself — and prints access info only once the
+	// child answers its health endpoint (or reports why it did not).
+	if opts.Daemon && !daemon.IsDaemonProcess() {
+		return launchDaemon(opts, port, logFile, appConfig)
 	}
 
 	// Acquire lock before starting server
@@ -606,38 +629,20 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Print startup information before daemonizing
-	fmt.Printf("Server starting on port %d...\n", port)
-
-	printBanner(BannerConfig{
-		Port:         port,
-		Host:         opts.Host,
-		EnableUI:     opts.EnableUI,
-		GlobalConfig: appConfig.GetGlobalConfig(),
-		IsDaemon:     false,
-	})
-
-	// Handle daemon mode - fork and detach after all messages are printed
 	if opts.Daemon {
-		if !daemon.IsDaemonProcess() {
-			// Fork and detach - this call exits the parent process. Pin the
-			// resolved port so the re-exec'd child binds the same port instead
-			// of re-resolving from its own args (which omit a preserved/config
-			// port and would drift to the default).
-			if err := daemon.Daemonize("--port", strconv.Itoa(port)); err != nil {
-				fileLock.Unlock()
-				return fmt.Errorf("failed to daemonize: %w", err)
-			}
-			// Daemonize() calls os.Exit(0), so we never reach here in parent
-		}
-		// Child process continues here
-		fmt.Println("Server running in background (daemon mode)")
+		// Daemon child: no terminal to print to.
+		logrus.Infof("Server running in background (daemon mode) on port %d", port)
+	} else {
+		fmt.Printf("Server starting on port %d...\n", port)
 	}
 
 	// Start server in goroutine to keep it non-blocking
 	serverErr := make(chan error, 1)
+	startFailed := make(chan error, 1) // same result, for the readiness wait
 	go func() {
-		serverErr <- serverManager.Start()
+		err := serverManager.Start()
+		startFailed <- err
+		serverErr <- err
 	}()
 
 	// stopAndUnlock stops the server — including its HTTP listener — BEFORE
@@ -652,17 +657,71 @@ func startServerWithHook(appManager *app.AppManager, opts options.StartServerOpt
 		return stopErr
 	}
 
-	// Wait for either server error, shutdown signal, or web UI stop request
-	select {
-	case err := <-serverErr:
-		// Release lock on error (also removes the runtime port file)
-		fileLock.Unlock()
-		return fmt.Errorf("server stopped unexpectedly: %w", err)
-	case <-sigChan:
-		fmt.Println("\nReceived shutdown signal, stopping server...")
-		return stopAndUnlock()
-	case <-server.GetShutdownChannel():
-		fmt.Println("\nReceived stop request from web UI, stopping server...")
-		return stopAndUnlock()
+	// Foreground: the banner (URL, token) waits until the server really
+	// answers; the background child has nobody to tell, and its parent does
+	// the confirming.
+	var ready chan error
+	if !opts.Daemon {
+		ready = make(chan error, 1)
+		go func() {
+			ready <- confirmStarted(readiness.ProbeURL(opts.Host, port), startFailed, startReadyTimeout, logFile, func() {
+				printBanner(BannerConfig{
+					Port:         port,
+					Host:         opts.Host,
+					EnableUI:     opts.EnableUI,
+					GlobalConfig: appConfig.GetGlobalConfig(),
+					IsDaemon:     false,
+				})
+			})
+		}()
 	}
+
+	// Wait for either server error, shutdown signal, or web UI stop request
+	for {
+		select {
+		case err := <-ready:
+			if err != nil {
+				_ = stopAndUnlock()
+				return fmt.Errorf("server failed to start: %w", err)
+			}
+			ready = nil
+		case err := <-serverErr:
+			// Release lock on error (also removes the runtime port file)
+			fileLock.Unlock()
+			return fmt.Errorf("server stopped unexpectedly: %w", err)
+		case <-sigChan:
+			fmt.Println("\nReceived shutdown signal, stopping server...")
+			return stopAndUnlock()
+		case <-server.GetShutdownChannel():
+			fmt.Println("\nReceived stop request from web UI, stopping server...")
+			return stopAndUnlock()
+		}
+	}
+}
+
+// launchDaemon starts the detached background server and returns only once it
+// is reachable. The access info is printed here, after the health endpoint
+// answers, so `start` never shows a URL that cannot be opened yet; if the
+// child dies or never comes up the error says so and points at the log, and
+// the command exits non-zero instead.
+func launchDaemon(opts options.StartServerOptions, port int, logFile string, appConfig *appconfig.AppConfig) error {
+	fmt.Printf("Starting server on port %d...\n", port)
+
+	// Pin the resolved port so the re-exec'd child binds the same port instead
+	// of re-resolving from its own args (which omit a preserved/config port
+	// and would drift to the default).
+	exited, err := daemon.Spawn("--port", strconv.Itoa(port))
+	if err != nil {
+		return fmt.Errorf("failed to daemonize: %w", err)
+	}
+
+	return confirmStarted(readiness.ProbeURL(opts.Host, port), exited, startReadyTimeout, logFile, func() {
+		printBanner(BannerConfig{
+			Port:         port,
+			Host:         opts.Host,
+			EnableUI:     opts.EnableUI,
+			GlobalConfig: appConfig.GetGlobalConfig(),
+			IsDaemon:     true,
+		})
+	})
 }
