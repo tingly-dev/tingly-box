@@ -156,9 +156,9 @@ describe('OverviewPane toolbar', () => {
 });
 
 describe('OverviewPane tabs', () => {
-    it('has Threads and Library, and no Status tab: the coordinator\'s status is atop its conversation', () => {
+    it('has Threads, Library and Issues & PRs, and no Status tab: the coordinator\'s status is atop its conversation', () => {
         show();
-        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threads3', 'overview.library']);
+        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threads3', 'overview.library', 'links.title']);
         expect(screen.queryByRole('tab', { name: 'overview.status' })).not.toBeInTheDocument();
     });
 
@@ -167,9 +167,14 @@ describe('OverviewPane tabs', () => {
         expect(screen.getByRole('tab', { name: 'overview.library', selected: true })).toBeInTheDocument();
     });
 
-    it('lists the issues and PRs the threads touched under the thread list', () => {
+    it('keeps the issues and PRs on a tab of their own, not under the thread list, with the open count on the tab', () => {
         const link = { repo: 'acme/pay', kind: 'pr', number: 7, title: 'Cache keys', state: 'open', url: 'https://github.com/acme/pay/pull/7', created_at: '2026-10-22T00:00:00Z', refreshed_at: '2026-10-22T00:00:00Z' };
-        render(<OverviewPane projectId="p" threads={[th('r1', 'Cache keys', 'ready', { links: [link] } as Partial<Thread>)]} onOpen={vi.fn()} libraryKey={0} />);
-        expect(screen.getByRole('region', { name: 'links.title' })).toBeInTheDocument();
+        const onOpen = vi.fn();
+        render(<OverviewPane projectId="p" threads={[th('r1', 'Cache keys', 'ready', { links: [link] } as Partial<Thread>)]} onOpen={onOpen} libraryKey={0} />);
+        expect(screen.queryByRole('region', { name: 'links.prs' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('tab', { name: 'links.tabOpen:1' }));
+        expect(screen.getByRole('region', { name: 'links.prs' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Cache keys' }));
+        expect(onOpen).toHaveBeenCalledWith('r1');
     });
 });

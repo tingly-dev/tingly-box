@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread, ThreadLink } from '../../client';
-import { ProjectLinksCard, ThreadLinksCard } from './LinksCard';
+import { ThreadLinksCard } from './LinksCard';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o?.age ? `${key} ${o.age}` : key), i18n: { language: 'en' } }),
@@ -59,27 +59,5 @@ describe('ThreadLinksCard', () => {
     it('never makes a link of an address that is not https', () => {
         render(<ThreadLinksCard thread={thread([link({ url: 'javascript:alert(1)' })])} />);
         expect(screen.getByText('#12 Add the tool').closest('a')).not.toHaveAttribute('href');
-    });
-});
-
-describe('ProjectLinksCard', () => {
-    it('gathers every thread\'s items, newest first, each under its thread', () => {
-        const old = new Date(Date.now() - 3600_000).toISOString();
-        render(<ProjectLinksCard threads={[
-            thread([link({ number: 1, title: 'Older', created_at: old })], { id: 'a', title: 'Thread A' }),
-            thread([link({ number: 2, title: 'Newer', state: 'merged' })], { id: 'b', title: 'Thread B' }),
-            thread([], { id: 'c', title: 'No links' }),
-        ]} />);
-        const card = screen.getByRole('region', { name: 'links.title' });
-        const rows = within(card).getAllByRole('link').map((a) => a.textContent);
-        expect(rows).toEqual(['#2 Newer', '#1 Older']);
-        expect(within(card).getByText('Thread A')).toBeInTheDocument();
-        expect(within(card).getByText('Thread B')).toBeInTheDocument();
-        expect(within(card).queryByText('No links')).not.toBeInTheDocument();
-    });
-
-    it('is absent when no thread has any', () => {
-        render(<ProjectLinksCard threads={[thread([])]} />);
-        expect(screen.queryByRole('region', { name: 'links.title' })).not.toBeInTheDocument();
     });
 });

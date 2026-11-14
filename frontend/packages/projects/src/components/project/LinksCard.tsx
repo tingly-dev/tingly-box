@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Box, Link, Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Theme } from '@mui/material/styles';
@@ -47,7 +46,7 @@ function LinkIcon({ link }: { link: ThreadLink }) {
 
 /** One issue or PR: its number and title as a link to GitHub, and under it
  * where it stands and how old that reading is. */
-function LinkRow({ link, owner }: { link: ThreadLink; owner?: string }) {
+export function LinkRow({ link, owner, onOpenOwner }: { link: ThreadLink; owner?: string; onOpenOwner?: () => void }) {
     const { t, i18n } = useTranslation('projects');
     const parts = linkParts(link, t);
     const age = timeAgo(link.refreshed_at, i18n.language);
@@ -60,7 +59,10 @@ function LinkRow({ link, owner }: { link: ThreadLink; owner?: string }) {
                     #{link.number} {link.title}
                 </Link>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 0.75, fontSize: fontSizes.sm, color: 'text.secondary', lineHeight: 1.4 }}>
-                    {owner && <Box component="span" sx={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner}</Box>}
+                    {owner && (onOpenOwner
+                        ? <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onOpenOwner} title={t('links.openThread', { title: owner })}
+                            sx={{ minWidth: 0, maxWidth: '100%', fontSize: 'inherit', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner}</Link>
+                        : <Box component="span" sx={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner}</Box>)}
                     {parts.map((part) => (
                         <Box key={part.text} component="span" sx={{ color: (theme) => colorOf(theme, part.tone) }}>{part.text}</Box>
                     ))}
@@ -88,21 +90,16 @@ export function ThreadLinksCard({ thread }: { thread: Thread }) {
     );
 }
 
-/** Every issue and PR the project's threads touched, newest first, with the
- * thread each belongs to, under the Overview's thread list. */
-export function ProjectLinksCard({ threads }: { threads: Thread[] }) {
-    const { t } = useTranslation('projects');
-    // Every thread event re-renders the list; the sort only moves when a thread's links do.
-    const rows = useMemo(() => threads
-        .flatMap((th) => (th.links ?? []).map((link) => ({ link, threadId: th.id, owner: th.title, at: Date.parse(link.created_at) })))
-        .sort((a, b) => b.at - a.at), [threads]);
-    if (rows.length === 0) return null;
-    const open = rows.filter((r) => r.link.state === 'open').length;
-    return (
-        <RailCard id="project-links" title={t('links.title')} aside={t('links.openCount', { open, total: rows.length })}>
-            <Box sx={{ mx: -0.25, maxHeight: 360, overflowY: 'auto' }}>
-                {rows.map(({ link, owner, threadId }) => <LinkRow key={`${threadId}/${link.repo}/${link.kind}/${link.number}`} link={link} owner={owner} />)}
-            </Box>
-        </RailCard>
-    );
+export interface ProjectLink {
+    link: ThreadLink;
+    threadId: string;
+    /** The title of the thread that opened or touched it. */
+    owner: string;
+}
+
+/** Every issue and PR the project's threads touched, newest first, each with its thread. */
+export function collectLinks(threads: Thread[]): ProjectLink[] {
+    return threads
+        .flatMap((th) => (th.links ?? []).map((link) => ({ link, threadId: th.id, owner: th.title })))
+        .sort((a, b) => Date.parse(b.link.created_at) - Date.parse(a.link.created_at));
 }
