@@ -181,17 +181,12 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 	if err != nil {
 		return "", err
 	}
-	// The issues API serves PRs too: look first, so the record has the right kind.
-	it, err := l.gh.Issue(ctx, lc.repo, number)
+	// The issues API serves PRs too: look first, so the record has the right
+	// kind. The comment goes only once this has been read in full, so a record
+	// is never written from a partial reading.
+	kind, it, err := l.read(ctx, lc.repo, number, "")
 	if err != nil {
 		return "", err
-	}
-	kind := db.LinkIssue
-	if it.IsPR {
-		kind = db.LinkPR
-		if pr, perr := l.gh.PR(ctx, lc.repo, number); perr == nil {
-			it = pr
-		}
 	}
 	commentURL, err := l.gh.Comment(ctx, lc.repo, number, body)
 	if err != nil {
@@ -237,8 +232,12 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 	if existing, err := l.gh.OpenPR(ctx, lc.repo, lc.head); err != nil {
 		return "", err
 	} else if existing != nil {
+		// Publish what the thread has done since: the PR is its branch.
+		if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
+			return "", err
+		}
 		_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, *existing)
-		return fmt.Sprintf("PR #%d is already open for branch %s: %s%s", existing.Number, lc.head, existing.URL, saved(rerr)), nil
+		return fmt.Sprintf("PR #%d is already open for branch %s (the branch was pushed again, so it has your latest commits): %s%s", existing.Number, lc.head, existing.URL, saved(rerr)), nil
 	}
 	if n, ok := commitsAhead(ctx, t.Cwd, base, lc.head); ok && n == 0 {
 		return "", fmt.Errorf("branch %s has no commit beyond %s: commit your work first", lc.head, base)
@@ -278,17 +277,18 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		}
 		base = &s
 	}
-	link, err := l.ownItem(t, number, true)
+	lc, err := l.resolve(ctx, t)
+	if err != nil {
+		return "", err
+	}
+	link, err := l.ownItem(t, lc.repo.Slug(), number, true)
 	if err != nil {
 		return "", err
 	}
 	if base != nil && link.Kind != db.LinkPR {
 		return "", fmt.Errorf("#%d is an issue: base only applies to a PR", link.Number)
 	}
-	repo, err := repoOfLink(link)
-	if err != nil {
-		return "", err
-	}
+	repo := lc.repo
 	if link.State != db.LinkStateOpen {
 		return "", fmt.Errorf("%s #%d is %s: only an open one can be edited", link.Kind, link.Number, link.State)
 	}
@@ -302,8 +302,12 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 			}
 		}
 		it, err = l.gh.UpdatePR(ctx, repo, link.Number, title, body, base)
-		// The edit's answer has no CI; keep the last reading of it.
+		// The edit's answer has no CI, and GitHub has not worked out the
+		// mergeability yet: keep the last reading of both.
 		it.CI = link.CI
+		if it.MergeState == "unknown" || it.MergeState == "" {
+			it.MergeState = link.MergeState
+		}
 	}
 	if err != nil {
 		return "", err
@@ -325,9 +329,9 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 
 // ownItem is the link a call means: the numbered one, or, with no number, the
 // thread's only PR. With mustOpen set it has to be one the thread opened.
-func (l *Links) ownItem(t *db.Thread, number int, mustOpen bool) (*db.ThreadLink, error) {
+func (l *Links) ownItem(t *db.Thread, repo string, number int, mustOpen bool) (*db.ThreadLink, error) {
 	if number > 0 {
-		link, err := l.store.FindThreadLink(t.ID, number)
+		link, err := l.store.FindThreadLink(t.ID, repo, number)
 		if errors.Is(err, db.ErrNotFound) {
 			return nil, fmt.Errorf("#%d is not one of this thread's issues or PRs", number)
 		}
@@ -345,7 +349,7 @@ func (l *Links) ownItem(t *db.Thread, number int, mustOpen bool) (*db.ThreadLink
 	}
 	var prs []db.ThreadLink
 	for _, k := range links {
-		if k.Kind == db.LinkPR && (!mustOpen || k.Role == db.LinkOpened) {
+		if k.Repo == repo && k.Kind == db.LinkPR && (!mustOpen || k.Role == db.LinkOpened) {
 			prs = append(prs, k)
 		}
 	}
@@ -394,8 +398,13 @@ const viewBodyMax = 2000
 // also has its record brought up to date; any other is only read, never
 // recorded. The text is third-party content and comes wrapped as such.
 func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, error) {
+	lc, err := l.resolve(ctx, t)
+	if err != nil {
+		return "", err
+	}
+	slug := lc.repo.Slug()
 	if number <= 0 {
-		k, err := l.ownItem(t, 0, false)
+		k, err := l.ownItem(t, slug, 0, false)
 		if err != nil {
 			return "", err
 		}
@@ -408,33 +417,19 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 	if ok && l.now().Sub(c.at) < linkMinGap {
 		return c.text, nil
 	}
-	link, err := l.store.FindThreadLink(t.ID, number)
+	link, err := l.store.FindThreadLink(t.ID, slug, number)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
 		return "", err
 	}
-	var repo GitHubRepo
+	kind := ""
 	if err == nil {
-		repo, err = repoOfLink(link)
+		kind = link.Kind
 	} else {
 		link = nil
-		var lc *linkContext
-		if lc, err = l.resolve(ctx, t); err == nil {
-			repo = lc.repo
-		}
 	}
+	kind, it, err := l.read(ctx, lc.repo, number, kind)
 	if err != nil {
 		return "", err
-	}
-	it, err := l.gh.Issue(ctx, repo, number)
-	if err != nil {
-		return "", err
-	}
-	kind := db.LinkIssue
-	if it.IsPR {
-		kind = db.LinkPR
-		if it, err = l.gh.PR(ctx, repo, number); err != nil {
-			return "", err
-		}
 	}
 	if link != nil {
 		if err := l.applyReading(link, it); err != nil {
@@ -449,6 +444,28 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 	l.views[key] = viewed{at: l.now(), text: text}
 	l.viewMu.Unlock()
 	return text, nil
+}
+
+// read is an issue or PR in full, and which it is. The issues API answers for
+// both and says which; a PR then needs its own read for checks and
+// mergeability. A kind the caller already knows (from a link) skips the first.
+func (l *Links) read(ctx context.Context, repo GitHubRepo, number int, kind string) (string, GitHubItem, error) {
+	if kind == "" {
+		it, err := l.gh.Issue(ctx, repo, number)
+		if err != nil {
+			return "", GitHubItem{}, err
+		}
+		if !it.IsPR {
+			return db.LinkIssue, it, nil
+		}
+		kind = db.LinkPR
+	}
+	if kind == db.LinkIssue {
+		it, err := l.gh.Issue(ctx, repo, number)
+		return kind, it, err
+	}
+	it, err := l.gh.PR(ctx, repo, number)
+	return kind, it, err
 }
 
 // describeItem is the answer of view.
@@ -618,7 +635,9 @@ func pushBranch(ctx context.Context, dir, branch string) error {
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Run(); err != nil {
 		msg := redact(strings.TrimSpace(out.String()))
-		if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "rejected") {
+		// Only a push that lost to newer commits earns the rebase advice; a
+		// hook or a protected branch rejects for other reasons.
+		if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") {
 			return fmt.Errorf("pushing %s was rejected because origin has commits it does not: rebase onto origin/%s and try again (a force push is not available): %s", branch, branch, clip(msg, 400))
 		}
 		return fmt.Errorf("pushing %s failed: %s", branch, clip(msg, 600))

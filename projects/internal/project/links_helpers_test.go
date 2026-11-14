@@ -22,6 +22,7 @@ type fakeGitHub struct {
 	next     int
 	def      string
 	fail     error
+	failPR   error
 	existing *GitHubItem
 }
 
@@ -140,6 +141,9 @@ func (g *fakeGitHub) UpdateIssue(_ context.Context, r GitHubRepo, n int, title, 
 
 func (g *fakeGitHub) PR(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
 	err := g.log("pr %s #%d", r.Slug(), n)
+	if err == nil {
+		err = g.failPR
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	it, ok := g.items[n]

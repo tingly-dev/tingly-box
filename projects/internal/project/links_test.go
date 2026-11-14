@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,7 +63,8 @@ func TestCreatePRIsIdempotentForABranchThatHasAPR(t *testing.T) {
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "create-pr", "no second PR")
 	}
-	assert.False(t, f.remoteHas(t, "tp/work"), "nothing is pushed when the PR exists")
+	assert.Contains(t, out, "pushed again")
+	assert.True(t, f.remoteHas(t, "tp/work"), "the PR is its branch: the latest commits are pushed even though the PR exists")
 	links, _ := f.store.ThreadLinks(f.worker.ID)
 	require.Len(t, links, 1)
 	assert.Equal(t, existing.Number, links[0].Number)
@@ -392,5 +394,83 @@ func TestParseGitHubRemote(t *testing.T) {
 		}
 		require.NoError(t, err, remote)
 		assert.Equal(t, want, r.Slug(), remote)
+	}
+}
+
+func TestAPushRejectedByAHookIsNotAdvisedAsARebase(t *testing.T) {
+	f := newLinksFixture(t)
+	hook := filepath.Join(f.remote, "hooks", "pre-receive")
+	require.NoError(t, os.MkdirAll(filepath.Dir(hook), 0o755))
+	require.NoError(t, os.WriteFile(hook, []byte("#!/bin/sh\necho 'protected branch hook declined' >&2\nexit 1\n"), 0o755))
+	cs, _ := f.client(t, f.worker.ID)
+
+	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x"})
+	require.True(t, isErr, out)
+	assert.Contains(t, out, "pushing tp/work failed")
+	assert.NotContains(t, out, "rebase", "a rebase cannot fix a hook")
+	for _, c := range f.gh.called() {
+		assert.NotContains(t, c, "create-pr")
+	}
+}
+
+func TestCommentWritesNothingWhenThePRReadingFails(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	pr := f.gh.add(db.LinkPR, "Their PR", func(it *GitHubItem) { it.State = "merged" })
+	f.gh.failPR = errors.New("HTTP 502 bad gateway")
+
+	out, isErr := f.call(t, cs, "comment", map[string]any{"number": pr.Number, "body": "Looks good."})
+	assert.True(t, isErr, out)
+	for _, c := range f.gh.called() {
+		assert.NotContains(t, c, "comment ", "nothing is posted from half a reading")
+	}
+	links, _ := f.store.ThreadLinks(f.worker.ID)
+	assert.Empty(t, links, "and no record says a merged PR is closed")
+}
+
+func TestUpdateKeepsTheLastMergeabilityWhenGitHubHasNotWorkedItOutYet(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	_, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
+	require.False(t, isErr)
+	f.gh.set(11, func(it *GitHubItem) { it.CI, it.MergeState = "passing", "ready" })
+	_, _ = f.call(t, cs, "view", map[string]any{"number": 11})
+	// An edit's answer comes back with the mergeability still being computed.
+	f.gh.set(11, func(it *GitHubItem) { it.MergeState = "unknown" })
+
+	out, isErr := f.call(t, cs, "update", map[string]any{"number": 11, "title": "Add a, properly"})
+	require.False(t, isErr, out)
+	l := f.link(t, 11)
+	assert.Equal(t, "Add a, properly", l.Title)
+	assert.Equal(t, "ready", l.MergeState, "'unknown' does not overwrite what was known")
+	assert.Equal(t, "passing", l.CI)
+}
+
+func TestNumbersAreScopedToTheThreadsRepository(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	// The same number in another repository, recorded earlier, is a different item.
+	require.NoError(t, f.store.UpsertThreadLink(&db.ThreadLink{ThreadID: f.worker.ID, ProjectID: f.p.ID, Kind: db.LinkIssue, Repo: "acme/other", Number: 11,
+		Title: "Elsewhere", Role: db.LinkOpened, State: db.LinkStateOpen}))
+	_, isErr := f.call(t, cs, "create_issue", map[string]any{"title": "Here"})
+	require.False(t, isErr)
+
+	out, isErr := f.call(t, cs, "update", map[string]any{"number": 11, "title": "Here, renamed"})
+	require.False(t, isErr, out)
+	assert.Contains(t, f.gh.called(), "update-issue acme/widgets #11 title=Here, renamed", "the edit lands in the thread's own repository")
+	other, err := f.store.FindThreadLink(f.worker.ID, "acme/other", 11)
+	require.NoError(t, err)
+	assert.Equal(t, "Elsewhere", other.Title)
+}
+
+func TestViewOfALinkedPRSkipsTheIssueRead(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	_, _ = f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
+	before := len(f.gh.called())
+	_, isErr := f.call(t, cs, "view", map[string]any{"number": 11})
+	require.False(t, isErr)
+	for _, c := range f.gh.called()[before:] {
+		assert.NotContains(t, c, "issue ", "the link already says it is a PR")
 	}
 }

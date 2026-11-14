@@ -1061,7 +1061,6 @@ func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (stri
 		return "", err
 	}
 	m.grantProjectAccess(doc, p, t)
-	grantGitHubTools(doc, p, threadPermissionMode(p, t))
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

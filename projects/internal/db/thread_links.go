@@ -103,12 +103,12 @@ func (s *Store) GetThreadLink(threadID, kind string, number int) (*ThreadLink, e
 	return &l, nil
 }
 
-// FindThreadLink is the thread's link to the issue or PR with this number
-// (an issue and a PR of one repository never share a number); ErrNotFound
+// FindThreadLink is the thread's link to the issue or PR with this number in
+// repo (an issue and a PR of one repository never share a number); ErrNotFound
 // when it has none.
-func (s *Store) FindThreadLink(threadID string, number int) (*ThreadLink, error) {
+func (s *Store) FindThreadLink(threadID, repo string, number int) (*ThreadLink, error) {
 	var l ThreadLink
-	err := s.db.Where("thread_id = ? AND number = ?", threadID, number).Order("id").First(&l).Error
+	err := s.db.Where("thread_id = ? AND repo = ? AND number = ?", threadID, repo, number).Order("id").First(&l).Error
 	if err != nil {
 		return nil, notFound(err)
 	}
