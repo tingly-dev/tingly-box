@@ -1,6 +1,6 @@
 # Mobile UI: a phone-native surface for Agent and the Projects workspace
 
-> Status: **proposal** (TEP-2558, not implemented). Nothing here exists in the product yet.
+> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, and the interface picker. Not yet: the workspace screens, the Agent pages, the viewport script (see Rollout).
 > Prototype: `.design/mobile-prototype/index.html` (static, clickable, mock data; `?theme=dark`, `?frame=0`, deep-link states via `?s=tab,screen,thread,sheet,ptab`).
 > Audit and mockups: `pr-assets/tep-mobile/` (`raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/tep-mobile/...`).
 
@@ -22,7 +22,7 @@ Shrinking them is not enough. The audit at 390×844 and 360×800 found no horizo
 
 ## Decisions
 
-1. **A phone shell, not a squeezed desktop shell.** Below `sm` on a coarse pointer the app mounts a mobile shell with its own pages. Same URL space (so IM and push deep links open on either), same API client, stores, i18n and theme; different layout components. Desktop (≥ `sm`, or fine pointer) is untouched. A "use desktop UI" switch in 我的 overrides it (`?ui=mobile|desktop` for developers).
+1. **A phone shell, not a squeezed desktop shell.** Below `sm` on a coarse pointer the app mounts a mobile shell with its own pages. Same URL space (so IM and push deep links open on either), same API client, stores, i18n and theme; different layout components. Desktop (≥ `sm`, or fine pointer) is untouched. A 界面 choice (桌面版 / 手机版) in Settings and the preferences menu, plus a one-tap "使用桌面版界面" in 更多, overrides it (`?ui=mobile|desktop` for developers).
 2. **Shared data and domain layer, separate presentation.** The mobile pages reuse the Projects data hooks and transcript model (`useProjectList`, `useProjectEvents`, `useTranscript`, `threadRequests`, `transcript/model`) and the generated API client. They do not reuse `ProjectPage`, `WorkspaceLayout`, `ThreadPanel`, `StatusBoard` or the rules graph. Anything the data hooks don't export yet is exported from `@tingly/projects` (`embed.ts`) first.
 3. **Fallback tier.** A route with no mobile page renders its desktop page inside the mobile frame (compact top bar, bottom tabs), i.e. today's responsive behaviour. Mobile pages replace this fallback one route at a time, so the shell can ship before every page exists.
 4. **Workspace-first home.** The workspace is the main phone use, so the home tab is the workspace: **需要你回答** (approvals, questions, with inline buttons) first, then folded **可以 review** and **进行中** groups (the shared Disclosure pattern), then 项目 and 工作目录. It is cross-project, built from the project list and each project's threads/events (an aggregate endpoint is an optimisation, not a prerequisite). The tab badge counts what needs an answer. There is no separate inbox tab.
