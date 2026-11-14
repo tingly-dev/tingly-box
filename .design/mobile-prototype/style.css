@@ -58,7 +58,7 @@ svg.i.s { width: 18px; height: 18px; }
 .dot.ok { background: var(--ok); } .dot.run { background: var(--primary); }
 /* segmented control */
 .seg { display: flex; background: color-mix(in srgb, var(--text3) 22%, transparent); border-radius: 12px; padding: 3px; margin: 10px 16px; flex: none; }
-.seg button { flex: 1; min-height: 38px; border-radius: 10px; text-align: center; font-weight: 500; color: var(--text2); }
+.seg button { flex: 1; min-height: 44px; border-radius: 10px; text-align: center; font-weight: 500; color: var(--text2); }
 .seg button.on { background: var(--paper); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(15,23,42,.15); }
 .seg .n { margin-left: 6px; font-size: 12px; background: var(--warn); color: #fff; border-radius: 9px; padding: 1px 7px; }
 /* chat / transcript */
@@ -123,7 +123,7 @@ svg.i.s { width: 18px; height: 18px; }
 #phone[data-short="1"] .nav button { min-height: 50px; }
 #phone[data-short="1"] .dock { padding: 8px 16px; }
 #phone[data-short="1"] .dock .q { margin: 4px 0 8px; }
-#phone[data-short="1"] .dock .more { min-height: 36px; margin-top: 2px; }
+#phone[data-short="1"] .dock .more { margin-top: 0; }
 #phone[data-short="1"] .composer { padding-bottom: 6px; }
 #phone[data-short="1"] .sec { margin-top: 12px; }
 #phone[data-mode=land], #phone[data-mode=wide] { flex-direction: row; }
