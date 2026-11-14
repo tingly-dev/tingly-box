@@ -8,6 +8,7 @@ import { folderName, timeAgo } from '../utils/format';
 import { readLocal, writeLocal } from '../utils/storage';
 import { ChevronRight, ExpandMore, Folder, Terminal } from './icons';
 import { needsUser, stateColor, ThreadStateMark } from './project/threadStatus';
+import { NAV_ROW_COMPACT_SX } from '@tingly/ui/theme/nav';
 import { radius } from '@tingly/ui/theme/radius';
 
 /** Sessions shown per open folder before "Show older"; running and waiting ones always show. */
@@ -17,7 +18,7 @@ const LABEL_SX = { fontSize: fontSizes.md, fontWeight: 600, lineHeight: 1.3 } as
 /** Sessions line up with the node's name: icon column plus its gap. */
 const SESSION_INDENT = 4.5;
 const ROW_SX = {
-    display: 'flex', alignItems: 'center', gap: 1, mx: 1, pl: 2, pr: 1.5, minHeight: 32, borderRadius: radius.row,
+    display: 'flex', alignItems: 'center', gap: 1, mx: 1, pl: 2, pr: 1.5, minHeight: NAV_ROW_COMPACT_SX.minHeight, borderRadius: radius.row,
     textDecoration: 'none', color: 'text.primary',
     '&:hover': { backgroundColor: 'action.hover' },
 } as const;
@@ -149,7 +150,7 @@ function TreeNode({ folder, active, openSession, to, sessionTo, onNavigate, revi
     const selected = isOpenFolder && !openSession;
     return (
         <Box>
-            <Box sx={{ ...ROW_SX, minHeight: 32, mt: 0.5, color: selected ? 'text.primary' : 'text.secondary', ...(selected && { backgroundColor: 'action.selected' }) }}>
+            <Box sx={{ ...ROW_SX, color: selected ? 'text.primary' : 'text.secondary', ...(selected && { backgroundColor: 'action.selected' }) }}>
                 <Box component="span" aria-hidden sx={{ width: 16, flexShrink: 0, display: 'flex', justifyContent: 'center', color: 'text.secondary', '& svg': { fontSize: 16 } }}>
                     <Folder />
                 </Box>

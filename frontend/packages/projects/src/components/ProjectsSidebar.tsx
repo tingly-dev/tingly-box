@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
-import { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
+import { NAV_ROW_COMPACT_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -130,7 +130,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                         title={row.title}
                         aria-current={row.selected ? 'page' : undefined}
                         sx={{
-                            ...NAV_ROW_SX,
+                            ...NAV_ROW_COMPACT_SX,
                             color: 'text.secondary',
                             '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
                             ...(row.selected && navRowSelectedSx),
@@ -138,7 +138,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
                             ...(paused && PAUSED_ROW_SX),
                         }}
                     >
-                        <ListItemIcon sx={{ minWidth: 32, color: 'inherit', '& svg': { fontSize: 20 } }}>
+                        <ListItemIcon sx={{ minWidth: 24, color: 'inherit', '& svg': { fontSize: 16 } }}>
                             {(() => {
                                 const icon = (
                                     <Badge color="warning" variant="dot" invisible={!attention && !running} sx={attention ? undefined : RUNNING_DOT}>
@@ -250,7 +250,7 @@ export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, sho
             key: 'im',
             label: t('im.title'),
             icon: <ChatBubble />,
-            subtitle: botCount == null ? undefined : t('im.bots', { count: botCount }),
+            end: botCount == null ? undefined : <Typography component="span" sx={{ fontSize: fontSizes.micro, color: 'text.disabled' }}>{t('im.bots', { count: botCount })}</Typography>,
             to: paths.im,
             selected: location.pathname === paths.im,
         }],
