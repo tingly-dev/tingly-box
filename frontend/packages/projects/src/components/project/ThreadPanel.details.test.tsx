@@ -67,3 +67,16 @@ describe('the Details button', () => {
         expect(screen.queryByText('session.sessions')).not.toBeInTheDocument();
     });
 });
+
+describe('the Back button', () => {
+    it('names where it goes, and is a bare arrow only when it is not told', () => {
+        const onBack = vi.fn();
+        const { rerender } = render(<ThreadPanel {...props} onBack={onBack} backLabel="Coordinator" />);
+        const named = screen.getByRole('button', { name: 'thread.backTo' });
+        expect(named).toHaveTextContent('Coordinator');
+        fireEvent.click(named);
+        expect(onBack).toHaveBeenCalledTimes(1);
+        rerender(<ThreadPanel {...props} onBack={onBack} />);
+        expect(screen.getByRole('button', { name: 'thread.back' })).not.toHaveTextContent('Coordinator');
+    });
+});

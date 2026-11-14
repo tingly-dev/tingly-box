@@ -65,8 +65,7 @@ export const workspace: Dict<typeof workspaceEn> = {
     },
     placement: {
         main: '主区域（切换）',
-        title: '布局', overview: 'Overview 放在', thread: '线程打开在', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗', overviewFloat: '浮窗（从 Overview 点开时）',
-        lockedTop: 'Overview 在顶栏时，线程在它下方打开。', remember: '记在这个浏览器里。',
+        title: '布局', overview: 'Overview 放在', thread: '线程打开在', side: '侧栏', window: '独立窗口', top: '顶栏', float: '浮窗', overviewFloat: '浮窗（从 Overview 点开时）', reasonTop: '在顶栏下方打开', reasonSide: '需要 Overview 在侧栏', remember: '记在这个浏览器里。',
     },
     window: {
         dock: '停靠到侧栏', float: '浮起为窗口', minimize: '最小化', restore: '还原', close: '关闭',

@@ -62,8 +62,7 @@ export const workspace = {
     },
     placement: {
         main: 'Main area (switch)',
-        title: 'Layout', overview: 'Overview sits in', thread: 'Threads open in', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window', overviewFloat: 'Floating, from the Overview',
-        lockedTop: 'With the Overview on top, a thread opens below it.', remember: 'Remembered in this browser.',
+        title: 'Layout', overview: 'Overview sits in', thread: 'Threads open in', side: 'Side pane', window: 'Window', top: 'Top bar', float: 'Floating window', overviewFloat: 'Floating, from the Overview', reasonTop: 'Opens below the top bar', reasonSide: 'Needs the Overview in the side pane', remember: 'Remembered in this browser.',
     },
     window: {
         dock: 'Dock to the side pane', float: 'Pop out as a window', minimize: 'Minimize', restore: 'Restore', close: 'Close',
