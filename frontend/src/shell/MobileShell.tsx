@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation } from 'react-router-dom';
 import { MoreHoriz } from '@/components/icons';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
+import { resolveActiveActivity } from '@/layout/activeActivity';
 import { useActivityItems } from '@/layout/useActivityItems';
 import type { LayoutProps } from '@/layout/types';
 import { rememberAgentPath } from '@/pages/scenario/lastAgent';
 import { syncUiPrefs } from '@/services/uiPrefs';
 import { MobileTabBar } from './MobileTabBar';
+import { hasSubPages, subPageGroups } from './mobileSubPages';
 import { activeTab, buildTabs } from './mobileTabs';
+import { SubPageSwitcher } from './SubPageSwitcher';
 
 // Workspace pages lay themselves out edge to edge; every other page is a
 // padded, scrolling column. (Same split as the desktop Layout.)
@@ -29,10 +32,15 @@ export default function MobileShell({ children }: LayoutProps) {
         () => buildTabs(items, { label: t('mobile.more.tab'), icon: <MoreHoriz sx={{ fontSize: 22 }} /> }, enableProjects),
         [items, t, enableProjects],
     );
-    const active = activeTab(tabs, items, pathname, sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity'));
+    const saved = sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity');
+    const active = activeTab(tabs, items, pathname, saved);
+    // The desktop secondary sidebar has no room on a phone: an activity with several pages gets a switcher bar instead.
+    const activity = pathname === '/more' ? undefined : items.find((item) => item.key === resolveActiveActivity(items, pathname, saved));
+    const subPages = subPageGroups(activity, pathname);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', bgcolor: 'background.default' }}>
+            {activity && hasSubPages(subPages) && <SubPageSwitcher title={activity.label} groups={subPages} />}
             <Box
                 component="main"
                 sx={isWorkspacePath(pathname)
