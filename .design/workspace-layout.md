@@ -4,7 +4,7 @@
 > 不含配色、间距、文案等细节。桌面为主，与手机壳（[mobile-ui.md](./mobile-ui.md)，TEP-2558）对齐。
 > 衔接：[projects-placement.md](./projects-placement.md)（布局矩阵的来历）、[projects-thread-rail.md](./projects-thread-rail.md)（线程信息栏）、
 > [workspace-home.md](./workspace-home.md)（工作区首页）、[visual-system.md](./visual-system.md)（卡片、Tab 的视觉规则）。
-> 图片：`pr-assets/workspace-layout/`（`raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/...`，随 PR 一起推送）。
+> 图片：`pr-assets` 分支的 `pr2580/`（`raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/...`）。
 > 设计工具：任务建议用 `npx -y tingly-design` 辅助出图；本次该命令被运行环境拒绝（自动审批策略），所以示意图是手写 HTML 渲染的，不是 tingly-design 的输出。
 >
 > **修订（2026-11-14）**：用户指出问题的根源不是“摆放方式太多”——左右分屏、原地替换、线程放右边或顶上，这些灵活性是看板的优点——
@@ -21,8 +21,8 @@
 
 工作区（Workspace）有 5 类页面：首页、项目列表、项目页、文件夹页、IM 绑定页。项目页最复杂。（截图：1440×900，`pnpm dev:mock`，默认数据。）
 
-![当前项目页](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/P1-problem-project.png)
-![顶栏放置 + 线程在主区](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/P2-problem-band.png)
+![当前项目页](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/P1-problem-project.png)
+![顶栏放置 + 线程在主区](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/P2-problem-band.png)
 
 ### 1.1 屏幕与模式清单
 
@@ -68,7 +68,7 @@
 
 **现状证据**：窗格最窄（`PANE_MIN = 360`）时，Tab 行只剩“线程”“文件库”，**“状态”Tab 被视图开关挤出去、点不到**（中英文都复现；Overview 窗口 460px 也很紧）：
 
-![现状：360px 时“状态”Tab 被挤没](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/D1-squeeze-evidence.png)
+![现状：360px 时“状态”Tab 被挤没](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/D1-squeeze-evidence.png)
 
 **1）协调者状态不该是面板里的 Tab。** 看代码（`CoordinatorStatus`）：这个 Tab 里是协调者自己的状态（运行状态、排队、上下文占用、轮数——与线程信息栏是同一张 `StatusCard`）、模型 / effort / 会话、用量；另外还有三样**不是协调者专用**的项目级汇总：按状态统计的线程数（与线程列表的分组标题重复）、跨线程的议题与 PR、运行中的后台任务总数。把它们都叫“状态”并放在“线程”“文件库”旁边，既让它成了最先被挤掉的 Tab，也让协调者的信息离协调者的对话很远。
 
@@ -76,7 +76,7 @@
 
 **处理**：
 
-![E1 协调者状态在协调者对话顶部](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/E1-status-on-coordinator.png)
+![E1 协调者状态在协调者对话顶部](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/E1-status-on-coordinator.png)
 
 - **协调者的状态放到协调者对话的顶部**（主区面包屑 `协调者 | 线程名` 之下）：折叠时一行摘要（状态 · 上下文占用 · 轮数 · 模型 · 用量），展开是三张卡 状态 / 模型 / 用量（外层一张卡、里面小卡，保留卡片嵌套）。折叠状态按浏览器记住。在 Overview 的任何容器（停靠 / 顶栏 / 窗口）里都**不再有“状态”Tab 或“状态”按钮**——顶栏模式里那个“状态”按钮和它另开的窗口一并消失。
 - **线程自己的状态保持现状**（线程旁的信息栏、头部小标签与弹层），不动。
@@ -103,7 +103,7 @@
 
 **一个面板，三个容器**（R1；这是改写前的草图，Tab 里仍画了“状态”和 Tab 行里的开关，以 3.0 节为准）：
 
-![C1 一个面板三个容器](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/C1-one-panel-three-containers.png)
+![C1 一个面板三个容器](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/C1-one-panel-three-containers.png)
 
 ### 3.3 收益与代价
 
@@ -125,8 +125,8 @@
 
 **方案 U1（推荐）：同一个列表，同一个“详情”**
 
-![F1a 列表侧栏开着：详情弹出](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/F1a-session-list-pane-open.png)
-![F1b 侧栏收起：详情停靠](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/F1b-session-list-pane-closed.png)
+![F1a 列表侧栏开着：详情弹出](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/F1a-session-list-pane-open.png)
+![F1b 侧栏收起：详情停靠](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/F1b-session-list-pane-closed.png)
 
 1. **一个线程列表组件**：项目页的 Overview“线程”视图（工具条、`列表 | 看板`、置顶、卡片内审批、徽标）抽出来，workdir 的“会话”侧栏用同一个；差别只是分组名（会话多一个“已归档 / 空闲”）、副标题（会话带目录名）和“新会话”入口。workdir 因此白得看板、置顶和卡片内审批。
 2. **列表一直在侧栏**，不再并进详情右栏；页头侧栏开关恒在、含义恒定（显示 / 隐藏列表侧栏）。线程占用侧栏位的摆放（项目页）保持现状。
@@ -143,18 +143,18 @@
 在用户澄清“灵活性是优点”之前提出，保留作为参照；只有当以后决定**减少摆法**时才相关。
 
 - **A**：页面级 Tab `对话 · 看板 · 文件库` + 一条上下文栏，去掉停靠 / 顶栏 / 窗口 / 侧栏线程的摆放，只留“浮起线程”。看板和文件库整页宽度；与手机壳一一对应；代价是删掉已有的布局能力。
-  ![A1](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/A1-conversation.png)
-  ![A2](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/A2-thread-focus.png)
-  ![A3](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/A3-board-tab.png)
-  ![A4](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/A4-library-tab.png)
+  ![A1](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/A1-conversation.png)
+  ![A2](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/A2-thread-focus.png)
+  ![A3](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/A3-board-tab.png)
+  ![A4](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/A4-library-tab.png)
 - **B**：只删“布局矩阵”，Overview 固定右栏、线程固定主区，保留一个“浮起”。改动最小，但窄栏装宽内容、两页两套结构、手机不对应的问题都还在。
-  ![B1](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/B1-prune.png)
+  ![B1](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/B1-prune.png)
 
 C 与 A 并不互斥：C 的面板在“停靠 + 看板”下仍然偏窄——可以在 C 之上再给看板加一个“整页展开”的动作（见第 7 节问题 3），那是 A 的看板 Tab 的轻量版。
 
 ## 5. 工作区首页（已批准，另一线程实施）
 
-![H1 首页](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/workspace-layout/H1-workspace-home.png)
+![H1 首页](https://raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/pr2580/H1-workspace-home.png)
 
 - **首页以“需要你处理”开头**（跨项目与文件夹的待审批 / 待回答，行内就能允许 / 不允许 / 回答，复用 #2544 的线程卡片审批）；其后是项目、工作目录两段（各最多 3 张卡，“全部 →”），绑定收成一行摘要（“管理 ›”）。与手机壳首页的顺序一致（需要你 → 可以 review / 进行中 → 项目 / 工作目录）。
 - **项目列表页**保留（全量 + 搜索 + 已归档），已归档由 Tab 改为列表底部的折叠段（Disclosure）。
