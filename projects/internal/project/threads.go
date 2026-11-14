@@ -118,6 +118,9 @@ type Threads struct {
 	OnStep func(t db.Thread, e db.ThreadEvent)
 	// SessionToolsConfig provides the MCP configuration scoped to the current thread.
 	SessionToolsConfig func(threadID string) (string, error)
+	// RevokeTools ends the thread's tool access once its session is closed
+	// (resolve, archive, pause); the next turn gets a fresh one.
+	RevokeTools func(threadID string)
 
 	// StallAfter is how long a running thread may show no activity before
 	// the coordinator is told; zero means DefaultStallAfter.
@@ -1411,6 +1414,44 @@ func (m *Threads) StopProject(projectID string) {
 	}
 }
 
+func (m *Threads) revokeTools(threadID string) {
+	if m.RevokeTools != nil {
+		m.RevokeTools(threadID)
+	}
+}
+
+// ReleaseProject ends every worker's and folder session's process and tool
+// access in a project, for a pause or an archive: the threads stay readable,
+// and a thread that runs again after a resume or an unarchive gets a fresh
+// session and fresh tools. The project's main thread is the coordinator's and
+// is left to it (ListThreads does not return it). Call it once the project
+// refuses new messages, so nothing starts a session behind this.
+func (m *Threads) ReleaseProject(projectID string) {
+	threads, err := m.store.ListThreads(projectID)
+	if err != nil {
+		return
+	}
+	var wg sync.WaitGroup
+	for _, t := range threads {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			lock := m.lifecycleLock(id)
+			lock.Lock()
+			defer lock.Unlock()
+			if done := m.stop(id, Source{Kind: db.SourceSystem}); done != nil {
+				select {
+				case <-done:
+				case <-time.After(agentboot.SessionCloseTimeout):
+				}
+			}
+			m.engine.Evict(m.sessionOf(id))
+			m.revokeTools(id)
+		}(t.ID)
+	}
+	wg.Wait()
+}
+
 // PendingRequest returns the transcript event of a request the thread is
 // still waiting on; ok is false once it is answered or given up.
 func (m *Threads) PendingRequest(threadID, requestID string) (db.ThreadEvent, bool) {
@@ -1450,6 +1491,11 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	if err == nil {
 		m.releaseChats(t)
 		m.cleanTmp(t)
+		// After the status is saved, not before: the stopped turn's own
+		// bookkeeping races the save (it writes no "Stopped." once the
+		// thread is resolved), and nothing can start a session meanwhile, as
+		// the lifecycle lock is held.
+		m.revokeTools(threadID)
 	}
 	return t, err
 }
@@ -1467,7 +1513,7 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 		}
 	}
 	m.engine.Evict(m.sessionOf(threadID))
-	return m.update(threadID, func(t *db.Thread) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		if t.ArchivedAt == nil {
 			now := time.Now()
 			t.ArchivedAt = &now
@@ -1476,6 +1522,10 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 			t.Status, t.WaitReason = db.ThreadIdle, ""
 		}
 	})
+	if err == nil {
+		m.revokeTools(threadID) // after the save, as in Resolve
+	}
+	return t, err
 }
 
 // RestoreSession returns an archived session to the list in its stored state.
