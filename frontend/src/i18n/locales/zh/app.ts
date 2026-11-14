@@ -95,6 +95,9 @@ export default {
       "auto": "自动",
       "hint": "手机版在本设备上使用手机布局，桌面版使用完整界面；按浏览器记住。"
     },
+    "subPages": {
+      "switch": "切换{{title}}的页面"
+    },
     "more": {
       "title": "更多",
       "tab": "更多",

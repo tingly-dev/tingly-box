@@ -98,6 +98,9 @@ export default {
       "auto": "Auto",
       "hint": "Phone shows the phone layout on this device; Desktop shows the full interface. Remembered per browser."
     },
+    "subPages": {
+      "switch": "Switch page in {{title}}"
+    },
     "more": {
       "title": "More",
       "tab": "More",
