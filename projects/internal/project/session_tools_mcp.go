@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -85,6 +86,25 @@ func (f *sessionToolsMCP) config(threadID string) (string, error) {
 	}
 	f.configs[threadID] = file.Name()
 	return file.Name(), nil
+}
+
+// revoke ends a thread's capability URL: its path stops answering and its
+// config file goes. The next config(threadID) issues a fresh one. Call it only
+// once the thread's session process is gone (a resident process keeps the URL
+// it started with), and not for a project's main thread, whose turn the
+// coordinator shares.
+func (f *sessionToolsMCP) revoke(threadID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if url := f.urls[threadID]; url != "" {
+		delete(f.handlers, strings.TrimPrefix(url, f.base))
+	}
+	delete(f.urls, threadID)
+	delete(f.coordinators, threadID)
+	if path := f.configs[threadID]; path != "" {
+		_ = os.Remove(path)
+	}
+	delete(f.configs, threadID)
 }
 
 // sendFileDescription is what the model reads about send_file, including where

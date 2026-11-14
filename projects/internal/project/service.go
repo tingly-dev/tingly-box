@@ -82,6 +82,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
+	threads.RevokeTools = svc.sessionToolsMCP.revoke
 	coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
 	return svc
 }
