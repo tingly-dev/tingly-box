@@ -168,25 +168,21 @@ describe('OverviewPane toolbar', () => {
     });
 });
 
-describe('OverviewPane status tab', () => {
-    it('offers Status as a third tab beside Threads and Library when the coordinator has a status', () => {
-        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} status={<div>coordinator status</div>} />);
-        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threads3', 'overview.library', 'overview.status']);
-        expect(screen.queryByText('coordinator status')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('tab', { name: 'overview.status' }));
-        expect(screen.getByText('coordinator status')).toBeInTheDocument();
-        // The thread list's view switch belongs to the Threads tab only.
-        expect(screen.queryByRole('button', { name: 'overview.view.list' })).not.toBeInTheDocument();
+describe('OverviewPane tabs', () => {
+    it('has Threads and Library, and no Status tab: the coordinator\'s status is atop its conversation', () => {
+        show();
+        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threads3', 'overview.library']);
+        expect(screen.queryByRole('tab', { name: 'overview.status' })).not.toBeInTheDocument();
     });
 
     it('opens on the tab asked for, as a window does', () => {
-        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} initialTab="status" status={<div>coordinator status</div>} />);
-        expect(screen.getByRole('tab', { name: 'overview.status', selected: true })).toBeInTheDocument();
-        expect(screen.getByText('coordinator status')).toBeInTheDocument();
+        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} initialTab="library" />);
+        expect(screen.getByRole('tab', { name: 'overview.library', selected: true })).toBeInTheDocument();
     });
 
-    it('has no Status tab without one', () => {
-        show();
-        expect(screen.queryByRole('tab', { name: 'overview.status' })).not.toBeInTheDocument();
+    it('lists the issues and PRs the threads touched under the thread list', () => {
+        const link = { repo: 'acme/pay', kind: 'pr', number: 7, title: 'Cache keys', state: 'open', url: 'https://github.com/acme/pay/pull/7', created_at: '2026-10-22T00:00:00Z', refreshed_at: '2026-10-22T00:00:00Z' };
+        render(<OverviewPane projectId="p" threads={[th('r1', 'Cache keys', 'ready', { links: [link] } as Partial<Thread>)]} onOpen={vi.fn()} libraryKey={0} />);
+        expect(screen.getByRole('region', { name: 'links.title' })).toBeInTheDocument();
     });
 });

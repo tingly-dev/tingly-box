@@ -63,7 +63,7 @@ export const project: Dict<typeof projectEn> = {
     },
     overview: {
         view: { label: '视图', list: '列表', vertical: '竖向看板', horizontal: '横向看板' },
-        threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', status: '状态', library: '文件库', pin: '置顶', unpin: '取消置顶', pinned: '已置顶',
+        threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库', pin: '置顶', unpin: '取消置顶', pinned: '已置顶',
         threadCount_one: '{{count}} 个线程', threadCount_other: '{{count}} 个线程',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',
         group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决' },

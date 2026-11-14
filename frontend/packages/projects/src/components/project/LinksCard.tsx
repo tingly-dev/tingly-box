@@ -89,10 +89,10 @@ export function ThreadLinksCard({ thread }: { thread: Thread }) {
 }
 
 /** Every issue and PR the project's threads touched, newest first, with the
- * thread each belongs to, in the coordinator's Status tab. */
+ * thread each belongs to, under the Overview's thread list. */
 export function ProjectLinksCard({ threads }: { threads: Thread[] }) {
     const { t } = useTranslation('projects');
-    // Every thread event re-renders the Status tab; the sort only moves when a thread's links do.
+    // Every thread event re-renders the list; the sort only moves when a thread's links do.
     const rows = useMemo(() => threads
         .flatMap((th) => (th.links ?? []).map((link) => ({ link, threadId: th.id, owner: th.title, at: Date.parse(link.created_at) })))
         .sort((a, b) => b.at - a.at), [threads]);

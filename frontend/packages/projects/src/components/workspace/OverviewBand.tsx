@@ -39,10 +39,9 @@ interface Props {
     onOpen: (id: string) => void;
     /** Opens a thread's running tasks from its card's count pill. */
     onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
-    /** Opens a status's thread list from its heading or closed count (the band's own Status button stays `onStatus`). */
+    /** Opens a status's thread list from its heading or closed count. */
     onStatusList?: (status: string, anchor: HTMLElement) => void;
     onLibrary: () => void;
-    onStatus: () => void;
 }
 
 /**
@@ -50,7 +49,7 @@ interface Props {
  * first. Closed, it is one line of counts. Finished work stays out
  * of the way: the Overview window lists it.
  */
-export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTasks, onStatusList, onLibrary, onStatus }: Props) {
+export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTasks, onStatusList, onLibrary }: Props) {
     const { t } = useTranslation('projects');
     const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => th.status === s) })).filter((g) => g.list.length > 0);
     const shown = groups.filter((g) => g.key !== 'resolved');
@@ -81,7 +80,6 @@ export function OverviewBand({ threads, selectedId, open, onToggle, onOpen, onTa
                         onClick={onStatusList && ((e) => { e.stopPropagation(); onStatusList(g.key, e.currentTarget); })} />)}
                 </Box>
                 <Button size="small" onClick={onLibrary}>{t('overview.library')}</Button>
-                <Button size="small" onClick={onStatus}>{t('overview.status')}</Button>
                 <Tooltip title={open ? t('band.collapse') : t('band.expand')}>
                     <IconButton size="small" onClick={onToggle} aria-expanded={open} aria-label={open ? t('band.collapse') : t('band.expand')}>
                         <DisclosureChevron open={open} fontSize={20} />

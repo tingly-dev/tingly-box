@@ -60,7 +60,7 @@ export const project = {
     },
     overview: {
         view: { label: 'View', list: 'List', vertical: 'Vertical kanban', horizontal: 'Horizontal kanban' },
-        threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', status: 'Status', library: 'Library', pin: 'Pin to top', unpin: 'Unpin', pinned: 'Pinned',
+        threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library', pin: 'Pin to top', unpin: 'Unpin', pinned: 'Pinned',
         threadCount_one: '{{count}} thread', threadCount_other: '{{count}} threads',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved' },
