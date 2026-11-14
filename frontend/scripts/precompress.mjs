@@ -1,21 +1,27 @@
 #!/usr/bin/env node
-// Copy a Vite build to a deploy directory and add .gz / .br / .zst siblings for
-// every compressible file, so Caddy's `file_server { precompressed }` can serve
-// them without compressing per request (and at the slowest, smallest level).
+// Add precompressed siblings (index-AbCd.js -> .js.gz / .js.br) for every
+// compressible file of a Vite build, so nothing has to be compressed per
+// request, and at the slowest, smallest level.
+//
+//   node scripts/precompress.mjs dist
+//       In place: .gz + .br. `pnpm build` runs this; the Go server
+//       (internal/server/webui_static.go) embeds dist and serves them.
 //
 //   node scripts/precompress.mjs dist /srv/tingly-web
-//
-// The source dist is left untouched on purpose: `task web:dist` embeds it into
-// the Go binary, and the compressed copies would only bloat the binary.
+//       Copy to a deploy directory with .gz + .br + .zst, for Caddy's
+//       `file_server { precompressed }` (deploy/caddy/Caddyfile). The copy
+//       leaves dist alone: the Go binary embeds it and would only grow.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const [src, dest] = process.argv.slice(2);
-if (!src || !dest) {
-    console.error('usage: precompress.mjs <dist-dir> <deploy-dir>');
+const [src, destArg] = process.argv.slice(2);
+if (!src) {
+    console.error('usage: precompress.mjs <dist-dir> [<deploy-dir>]');
     process.exit(2);
 }
+const inPlace = !destArg;
+const dest = destArg || src;
 
 const TEXT = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map', '.xml']);
 const MIN_BYTES = 512; // matches Caddy's encode default; smaller isn't worth a variant
@@ -29,8 +35,9 @@ const encoders = [
         },
     })],
 ];
-// zstd landed in Node 22.15 / 23.8; skip quietly on older runtimes.
-if (typeof zlib.zstdCompressSync === 'function') {
+// zstd landed in Node 22.15 / 23.8; skip quietly on older runtimes. Only the
+// deploy copy gets it: the Go server serves br and gzip.
+if (!inPlace && typeof zlib.zstdCompressSync === 'function') {
     encoders.push(['.zst', (b) => zlib.zstdCompressSync(b, {
         params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
     })]);
@@ -45,12 +52,14 @@ function walk(dir, rel = '') {
         const r = path.join(rel, e.name);
         const to = path.join(dest, r);
         if (e.isDirectory()) {
-            fs.mkdirSync(to, { recursive: true });
+            if (!inPlace) fs.mkdirSync(to, { recursive: true });
             walk(from, r);
             continue;
         }
-        fs.mkdirSync(path.dirname(to), { recursive: true });
-        fs.copyFileSync(from, to);
+        if (!inPlace) {
+            fs.mkdirSync(path.dirname(to), { recursive: true });
+            fs.copyFileSync(from, to);
+        }
         if (!TEXT.has(path.extname(e.name))) continue;
         const buf = fs.readFileSync(from);
         if (buf.length < MIN_BYTES) continue;

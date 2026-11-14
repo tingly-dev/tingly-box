@@ -5,7 +5,7 @@ host. This note records why it looks the way it does. Smoke test:
 `deploy/caddy/test.sh` (docker + node + python3; stub gateway, isolated, never
 touches `~/.tingly-box`).
 
-## What the gateway does by itself
+## What the gateway did by itself (before `.design/webui-static-serving.md`)
 
 `internal/server/webui_static.go` serves the embedded UI:
 
@@ -46,6 +46,9 @@ Keep the previous release's `assets/` in `/srv/tingly-web` for a while (copy,
 don't wipe) so tabs opened before a release can still load their lazy chunks;
 the gateway only has the newest set.
 
+`pnpm build` already writes `.br`/`.gz` into `frontend/dist` for the gateway's
+embed; the two-argument form above copies those and adds `.zst`.
+
 ## Measurements
 
 Local Caddy 2.11 (docker `caddy:2`), stub gateway reproducing
@@ -71,7 +74,9 @@ delivered per event, uncompressed.
 
 ## Not done / follow-ups
 
-- The gateway itself could add `Cache-Control: immutable` and compression for
-  `/assets` (and a 404 for unknown `/assets/*`), which would also help
-  deployments that are not behind Caddy. Out of scope here (Caddy config only).
+- The gateway now does the same itself (precompressed br/gzip, immutable hashed
+  assets, ETag/304, 404 for unknown `/assets/*`): `.design/webui-static-serving.md`.
+  Caddy still adds h2/h3, zstd and edge caching of the TLS hop; its `/assets`
+  rules and the HTML→404 guard are redundant but harmless in front of a
+  current gateway, and still needed in front of an older one.
 - `Content-Security-Policy` etc. are not touched.
