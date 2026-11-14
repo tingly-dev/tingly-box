@@ -83,8 +83,8 @@ export default function ProjectPage() {
     // The Overview as a window or a band opens and closes with the header button; remembered per browser.
     const [windowOpen, setWindowOpen] = useState(() => readLocal('overviewWindowOpen') !== '0');
     const [bandOpen, setBandOpen] = useState(() => readLocal('overviewBandOpen') !== '0');
-    // With the Overview as a band, Library and Status each open in a window of their own.
-    const [bandWindow, setBandWindow] = useState<'library' | 'status' | null>(null);
+    // With the Overview as a band, the Library opens in a window of its own.
+    const [libraryWindow, setLibraryWindow] = useState(false);
     // A narrow screen has one surface: the drawer. With the Overview on top the thread sits below it.
     const overviewAt = pane.narrow ? 'side' : placement.overview;
     // The thread picked in the side-pane Overview while "float from the Overview" is on. It floats over the
@@ -420,8 +420,7 @@ export default function ProjectPage() {
         />
     ) : null;
     const overviewEl = (initialTab?: OverviewTab) => (
-        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} onStatus={openStatusThreads} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab}
-            status={project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} threads={threads} onTasks={openTasksList} onStatus={openStatusList} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />} />
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} onStatus={openStatusThreads} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the
@@ -479,10 +478,11 @@ export default function ProjectPage() {
                 sideAlwaysOpen={overviewAt !== 'side'}
                 paneToggle={paneToggle}
                 top={overviewAt === 'top' ? (
-                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onTasks={openTasksList} onStatusList={openStatusThreads} onLibrary={() => setBandWindow('library')} onStatus={() => setBandWindow('status')} />
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onTasks={openTasksList} onStatusList={openStatusThreads} onLibrary={() => setLibraryWindow(true)} />
                 ) : undefined}
                 main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
+                    {project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />}
                     {messages === null ? (
                     <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
                 ) : (
@@ -622,13 +622,13 @@ export default function ProjectPage() {
                 {overviewEl()}
             </FloatingWindow>
             <FloatingWindow
-                open={overviewAt !== 'side' && bandWindow !== null}
-                title={t(bandWindow === 'status' ? 'overview.status' : 'overview.library')}
-                storageKey={bandWindow === 'status' ? 'status' : 'library'}
+                open={overviewAt !== 'side' && libraryWindow}
+                title={t('overview.library')}
+                storageKey="library"
                 defaultSize={{ w: 460, h: 480 }}
-                onClose={() => setBandWindow(null)}
+                onClose={() => setLibraryWindow(false)}
             >
-                {overviewEl(bandWindow ?? 'library')}
+                {overviewEl('library')}
             </FloatingWindow>
             <FloatingWindow
                 open={threadAt === 'float' && !!threadEl}

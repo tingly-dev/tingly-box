@@ -25,67 +25,57 @@ const lane = (status: string) => screen.getByRole('group', { name: `overview.gro
 const cards = (status: string) => within(lane(status)).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null);
 
 describe('OverviewPane view', () => {
-    it('starts as the status list and switches to vertical kanban columns that follow the statuses', () => {
+    it('starts as the status list and switches to a board with a lane per status', () => {
         show();
         expect(screen.getByRole('button', { name: 'overview.view.list' })).toHaveAttribute('aria-pressed', 'true');
         expect(screen.getByRole('region', { name: 'overview.group.waiting' })).toBeInTheDocument();
         expect(screen.queryByRole('group', { name: 'overview.group.waiting' })).not.toBeInTheDocument();
+        // One board, not two orientations: the switch is List | Board.
+        expect(screen.getAllByRole('button').filter((b) => (b.getAttribute('aria-label') ?? '').startsWith('overview.view.')).map((b) => b.getAttribute('aria-label'))).toEqual(['overview.view.list', 'overview.view.board']);
 
-        fireEvent.click(screen.getByRole('button', { name: 'overview.view.vertical' }));
-        expect(localStorage.getItem('tingly-project.overview.view')).toBe('vertical');
+        fireEvent.click(screen.getByRole('button', { name: 'overview.view.board' }));
+        expect(localStorage.getItem('tingly-project.overview.view')).toBe('board');
+        expect(screen.getByRole('button', { name: 'overview.view.board' })).toHaveAttribute('aria-pressed', 'true');
         for (const [status, titles] of Object.entries({ waiting: ['Pick a backoff', 'Approve the plan'], failed: ['Broken build'], ready: ['Cache keys'], working: ['SDK retries'], resolved: ['Old tracing'] })) {
             expect(cards(status).map((b) => b.textContent)).toEqual(titles.map((x) => expect.stringContaining(x)));
         }
-        // A status with no threads has no column.
+        // A status with no threads has no lane.
         expect(screen.queryByRole('group', { name: 'overview.group.idle' })).not.toBeInTheDocument();
         // The wait reason shows on the card, as in the list.
         expect(within(lane('waiting')).getByText('Which one?')).toBeInTheDocument();
-    });
-
-    it('horizontal kanban has the same lanes and cards, in rows', () => {
-        show();
-        fireEvent.click(screen.getByRole('button', { name: 'overview.view.horizontal' }));
-        expect(localStorage.getItem('tingly-project.overview.view')).toBe('horizontal');
-        expect(screen.getByRole('button', { name: 'overview.view.horizontal' })).toHaveAttribute('aria-pressed', 'true');
-        expect(document.querySelector('[data-orientation="horizontal"]')).not.toBeNull();
-        expect(cards('waiting').map((b) => b.textContent)).toEqual([expect.stringContaining('Pick a backoff'), expect.stringContaining('Approve the plan')]);
-        expect(within(lane('resolved')).getByText('Old tracing')).toBeInTheDocument();
-        expect(screen.queryByRole('group', { name: 'overview.group.idle' })).not.toBeInTheDocument();
         // Lanes follow the statuses: what runs first, then what needs the user, then what waits for review.
         expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['overview.view.label', 'overview.group.working', 'overview.group.waiting', 'overview.group.ready', 'overview.group.failed', 'overview.group.resolved']);
     });
 
     it('never scrolls sideways: the pane clips x and the board is one width-bound grid', () => {
-        for (const view of ['vertical', 'horizontal']) {
-            localStorage.setItem('tingly-project.overview.view', view);
-            const { container, unmount } = show();
-            const board = container.querySelector(`[data-orientation="${view}"]`) as HTMLElement;
-            expect(getComputedStyle(board).overflowX).toBe('hidden');
-            expect(getComputedStyle(board.parentElement as HTMLElement).overflowX).toBe('hidden');
-            expect(getComputedStyle(board.parentElement as HTMLElement).overflowY).toBe('auto');
-            // Columns wrap to the width (auto-fill), they do not sit in a row that overflows.
-            expect(board.style.gridTemplateColumns || getComputedStyle(board).gridTemplateColumns).not.toBe('');
-            unmount();
-        }
+        localStorage.setItem('tingly-project.overview.view', 'board');
+        const { container } = show();
+        const board = container.querySelector('[data-board]') as HTMLElement;
+        expect(getComputedStyle(board).overflowX).toBe('hidden');
+        expect(getComputedStyle(board.parentElement as HTMLElement).overflowX).toBe('hidden');
+        expect(getComputedStyle(board.parentElement as HTMLElement).overflowY).toBe('auto');
     });
 
-    it('reads the old "kanban" choice as the vertical board', () => {
-        localStorage.setItem('tingly-project.overview.view', 'kanban');
+    it.each(['kanban', 'vertical', 'horizontal'])('reads the old %s choice as the board', (old) => {
+        localStorage.setItem('tingly-project.overview.view', old);
         show();
-        expect(screen.getByRole('button', { name: 'overview.view.vertical' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'overview.view.board' })).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('remembers the choice and offers it only on the Threads tab', () => {
-        localStorage.setItem('tingly-project.overview.view', 'horizontal');
+    it('remembers the choice and offers it only in the Threads view, outside the Tab row', () => {
+        localStorage.setItem('tingly-project.overview.view', 'board');
         show();
-        expect(screen.getByRole('button', { name: 'overview.view.horizontal' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'overview.view.board' })).toHaveAttribute('aria-pressed', 'true');
         expect(lane('failed')).toBeInTheDocument();
+        // The tabs row holds tabs and nothing else: a narrow pane cannot squeeze one out for a control.
+        const tabs = screen.getByRole('tablist');
+        expect(within(tabs.parentElement!.parentElement!).queryByRole('group', { name: 'overview.view.label' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('tab', { name: 'overview.library' }));
         expect(screen.queryByRole('group', { name: 'overview.view.label' })).not.toBeInTheDocument();
     });
 
     it('opens a thread from a card as from a row, and marks the open one', () => {
-        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        localStorage.setItem('tingly-project.overview.view', 'board');
         const onOpen = vi.fn();
         show(onOpen, 'k1');
         fireEvent.click(within(lane('working')).getByText('SDK retries'));
@@ -98,7 +88,7 @@ describe('OverviewPane view', () => {
     });
 
     it('pins cards to the section above every status, newest first, without opening them', () => {
-        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        localStorage.setItem('tingly-project.overview.view', 'board');
         const onOpen = vi.fn();
         show(onOpen);
         // The second waiting card's star: pin it.
@@ -124,7 +114,7 @@ describe('OverviewPane view', () => {
     });
 
     it('unpins and the cards return to their statuses and order', () => {
-        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        localStorage.setItem('tingly-project.overview.view', 'board');
         localStorage.setItem('tingly-project.overview.pinned.p', JSON.stringify(['w2']));
         show();
         const pinnedLane = screen.getByRole('group', { name: 'overview.pinned' });
@@ -137,7 +127,7 @@ describe('OverviewPane view', () => {
     });
 
     it('keeps the star quiet: an unpinned card hides it until hover, a pinned one always shows it', () => {
-        localStorage.setItem('tingly-project.overview.view', 'vertical');
+        localStorage.setItem('tingly-project.overview.view', 'board');
         show();
         const star = within(lane('working')).getByRole('button', { name: 'overview.pin' });
         expect(getComputedStyle(star).opacity).toBe('0');
@@ -148,25 +138,38 @@ describe('OverviewPane view', () => {
     });
 });
 
-describe('OverviewPane status tab', () => {
-    it('offers Status as a third tab beside Threads and Library when the coordinator has a status', () => {
-        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} status={<div>coordinator status</div>} />);
-        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threadsWaiting:3', 'overview.library', 'overview.status']);
-        expect(screen.queryByText('coordinator status')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('tab', { name: 'overview.status' }));
-        expect(screen.getByText('coordinator status')).toBeInTheDocument();
-        // The thread list's view switch belongs to the Threads tab only.
-        expect(screen.queryByRole('button', { name: 'overview.view.list' })).not.toBeInTheDocument();
+describe('OverviewPane toolbar', () => {
+    it('counts the threads and, when some run tasks, offers all of them in one chip', () => {
+        const onTasks = vi.fn();
+        const withTasks = [...threads.slice(0, 4), th('k2', 'SDK retries', 'working', { running_tasks: 2 }), th('k3', 'Other', 'working', { running_tasks: 1 })];
+        render(<OverviewPane projectId="p" threads={withTasks} onOpen={vi.fn()} onTasks={onTasks} libraryKey={0} />);
+        expect(screen.getByText('overview.threadCount:6')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'thread.tasksBadge:3' }));
+        expect(onTasks).toHaveBeenCalledTimes(1);
+        expect(onTasks.mock.calls[0][0].map((x: Thread) => x.id)).toEqual(['k2', 'k3']);
+    });
+
+    it('stays quiet about tasks when none run', () => {
+        show();
+        expect(screen.queryByRole('button', { name: /thread\.tasksBadge/ })).not.toBeInTheDocument();
+    });
+});
+
+describe('OverviewPane tabs', () => {
+    it('has Threads and Library, and no Status tab: the coordinator\'s status is atop its conversation', () => {
+        show();
+        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threads3', 'overview.library']);
+        expect(screen.queryByRole('tab', { name: 'overview.status' })).not.toBeInTheDocument();
     });
 
     it('opens on the tab asked for, as a window does', () => {
-        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} initialTab="status" status={<div>coordinator status</div>} />);
-        expect(screen.getByRole('tab', { name: 'overview.status', selected: true })).toBeInTheDocument();
-        expect(screen.getByText('coordinator status')).toBeInTheDocument();
+        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} initialTab="library" />);
+        expect(screen.getByRole('tab', { name: 'overview.library', selected: true })).toBeInTheDocument();
     });
 
-    it('has no Status tab without one', () => {
-        show();
-        expect(screen.queryByRole('tab', { name: 'overview.status' })).not.toBeInTheDocument();
+    it('lists the issues and PRs the threads touched under the thread list', () => {
+        const link = { repo: 'acme/pay', kind: 'pr', number: 7, title: 'Cache keys', state: 'open', url: 'https://github.com/acme/pay/pull/7', created_at: '2026-10-22T00:00:00Z', refreshed_at: '2026-10-22T00:00:00Z' };
+        render(<OverviewPane projectId="p" threads={[th('r1', 'Cache keys', 'ready', { links: [link] } as Partial<Thread>)]} onOpen={vi.fn()} libraryKey={0} />);
+        expect(screen.getByRole('region', { name: 'links.title' })).toBeInTheDocument();
     });
 });
