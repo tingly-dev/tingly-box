@@ -1,14 +1,21 @@
 package stream
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/openai/openai-go/v3"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
@@ -78,23 +85,28 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 		c.pending = c.pending[1:]
 		return evt, false, nil
 	}
+	if c.completedSent {
+		return nil, true, nil
+	}
 
 	// Read upstream chunks until we have at least one event to yield
 	for {
 		if !c.stream.Next() {
 			if err := c.stream.Err(); err != nil {
-				return nil, false, err
-			}
-			if !c.completedSent {
-				if c.finishReason == "" {
-					return nil, false, fmt.Errorf("chat stream ended without a finish reason")
+				if c.finishReason == "" || !isChatStreamTeardownError(err) {
+					return nil, false, err
 				}
-				// include_usage is a trailing chunk after finish_reason. Only finalize
-				// after draining it; Codex uses the completed usage to trigger compaction.
-				c.emitCompletionEvents()
-				return c.Next()
+				// Output is complete even if the connection breaks before [DONE].
+				// Keep all usage read so far; explicit failures still propagate.
+				logrus.WithError(err).Warn("chat to responses stream errored after finish_reason; preserving completed output")
 			}
-			return nil, true, nil
+			if c.finishReason == "" {
+				return nil, false, fmt.Errorf("chat stream ended without a finish reason")
+			}
+			// include_usage is a trailing chunk after finish_reason. Only finalize
+			// after draining it; Codex uses the completed usage to trigger compaction.
+			c.emitCompletionEvents()
+			return c.Next()
 		}
 
 		chunk := c.stream.Current()
@@ -106,6 +118,22 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 			return evt, false, nil
 		}
 	}
+}
+
+// Only recognized transport teardown errors can be recovered after output has
+// finished. Do not infer this from an error message or suppress arbitrary SDK
+// errors (including malformed JSON), cancellation, deadlines or provider errors.
+func isChatStreamTeardownError(err error) bool {
+	var apiErr *openai.Error
+	var sseErr *openaistream.StreamError
+	var netErr net.Error
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.As(err, &apiErr) || errors.As(err, &sseErr) ||
+		(errors.As(err, &netErr) && netErr.Timeout()) {
+		return false
+	}
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED)
 }
 
 func (c *chatToResponsesConverter) Usage() *protocol.TokenUsage {
