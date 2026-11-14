@@ -91,10 +91,11 @@ describe('ThreadInfoRail', () => {
         expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
     });
 
-    it('draws the same cards as a menu under the Details button, without the docked column\'s edge', () => {
-        render(<ThreadInfoRail {...props} popover thread={thread()} folder={false} tasks={[]} canReview={false} />);
+    it('draws the same cards at the pane\'s width as a sheet, without the docked column\'s edge or fixed width', () => {
+        render(<ThreadInfoRail {...props} sheet thread={thread()} folder={false} tasks={[]} canReview={false} />);
         const frame = screen.getByRole('complementary', { name: 'rail.title' });
         expect(getComputedStyle(frame).borderLeftWidth).not.toBe('1px');
+        expect(getComputedStyle(frame).width).not.toBe('288px');
         expect(screen.getByRole('region', { name: 'rail.status' })).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'rail.environment' })).toBeInTheDocument();
     });

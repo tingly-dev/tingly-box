@@ -113,13 +113,14 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
-    // Where the rail does not fit beside the conversation, its cards open under the Details button.
-    const [detailsAnchor, setDetailsAnchor] = useState<HTMLElement | null>(null);
+    // Where the rail does not fit beside the conversation (a thread in a narrow pane), the Details button swaps the conversation for the same cards in place.
+    const [detailsOpen, setDetailsOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
     // The info rail sits beside the conversation when the panel is wide enough; the user can hide it.
     const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(RAIL_MIN_PANEL, !!thread);
     const rail = wide && railOn;
+    const sheet = detailsOpen && !wide;
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.
     const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
@@ -400,12 +401,13 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </Button>
                         </Tooltip>
                     )}
-                    {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards open under it. */}
+                    {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards take the conversation's place until it is pressed again. */}
                     {thread && (
-                        <Tooltip title={wide ? (railOn ? t('rail.hide') : t('rail.show')) : t('rail.title')}>
-                            <IconButton size="small" onClick={(e) => (wide ? toggleRail() : setDetailsAnchor(e.currentTarget))}
-                                aria-expanded={wide ? railOn : !!detailsAnchor} aria-haspopup={wide ? undefined : 'dialog'}
-                                aria-label={wide ? (railOn ? t('rail.hide') : t('rail.show')) : t('rail.title')} sx={{ flexShrink: 0 }}>
+                        <Tooltip title={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}>
+                            <IconButton size="small" onClick={() => (wide ? toggleRail() : setDetailsOpen((open) => !open))}
+                                aria-expanded={wide ? railOn : sheet}
+                                aria-label={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}
+                                sx={{ flexShrink: 0, ...(sheet && { bgcolor: 'action.selected' }) }}>
                                 {wide && !railOn ? <RailShow fontSize="small" /> : <RailHide fontSize="small" />}
                             </IconButton>
                         </Tooltip>
@@ -480,6 +482,28 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 )}
             </Box>
 
+            {sheet && thread && (
+                <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', bgcolor: 'background.default' }}>
+                    <ThreadInfoRail
+                        sheet
+                        thread={thread}
+                        folder={session}
+                        tasks={tasks}
+                        canReview={canReview}
+                        onReview={() => { setDetailsOpen(false); setDiffOpen(true); }}
+                        onChanged={() => onRefresh?.()}
+                        onReveal={(call) => { setDetailsOpen(false); void openInChat({ call }); }}
+                        subagents={subagents}
+                        onOpenAgent={(agent) => { setDetailsOpen(false); openAgent(agent); }}
+                        onShowAgent={(agent) => { setDetailsOpen(false); void openInChat({ call: agent.call }, agent.event_id); }}
+                        extra={railExtra}
+                        configuredModel={configuredModel}
+                        permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
+                    />
+                </Box>
+            )}
+            {/* The conversation stays mounted under the cards, so its scroll and draft survive. */}
+            <Box sx={{ display: sheet ? 'none' : 'contents' }}>
             {focused && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={() => setFocus(null)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
@@ -605,6 +629,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onClose={() => setConfirm(null)}
                 onConfirm={() => confirm && void runConfirmed(confirm)}
             />
+            </Box>
         </Box>
         {rail && (
             <ThreadInfoRail
@@ -622,27 +647,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 configuredModel={configuredModel}
                 permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
             />
-        )}
-        {thread && !wide && (
-            <Popover open={!!detailsAnchor} anchorEl={detailsAnchor} onClose={() => setDetailsAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                <ThreadInfoRail
-                    popover
-                    thread={thread}
-                    folder={session}
-                    tasks={tasks}
-                    canReview={canReview}
-                    onReview={() => { setDetailsAnchor(null); setDiffOpen(true); }}
-                    onChanged={() => onRefresh?.()}
-                    onReveal={(call) => { setDetailsAnchor(null); void openInChat({ call }); }}
-                    subagents={subagents}
-                    onOpenAgent={(agent) => { setDetailsAnchor(null); openAgent(agent); }}
-                    onShowAgent={(agent) => { setDetailsAnchor(null); void openInChat({ call: agent.call }, agent.event_id); }}
-                    extra={railExtra}
-                    configuredModel={configuredModel}
-                    permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
-                />
-            </Popover>
         )}
         </Box>
     );

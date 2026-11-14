@@ -123,8 +123,8 @@ interface Props {
     configuredModel?: string;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
-    /** The cards in a menu under the Details button, not docked beside the conversation. */
-    popover?: boolean;
+    /** The cards at the width of the pane, in place of the conversation, not docked beside it. */
+    sheet?: boolean;
     /** Lists the thread's subagents (its Agent calls) for the rail's own card. */
     subagents?: { list: () => Promise<Subagent[]> };
     /** Opens a subagent on its own, in place of the conversation. */
@@ -139,7 +139,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, extra, subagents, onOpenAgent, onShowAgent, popover }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, extra, subagents, onOpenAgent, onShowAgent, sheet }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -147,7 +147,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
     const hasChanges = !!thread.branch || thread.commits_ahead > 0 || thread.uncommitted || !!thread.merged_at;
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
-        <InfoRailFrame label={t('rail.title')} popover={popover}>
+        <InfoRailFrame label={t('rail.title')} sheet={sheet}>
             <StatusCard thread={thread} />
             <RailCard id="env" title={t('rail.environment')}>
                 <Fact label={t('rail.folder')} labelWidth={64}><CopyValue value={thread.cwd} /></Fact>

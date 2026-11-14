@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, IconButton, Menu, MenuItem, Popover, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +56,7 @@ const GROUPS: { key: string; collapsed?: boolean }[] = [
  * them all. A folder has no goal, memory, library or review: only threads.
  */
 export default function WorkdirPage() {
-    const { t, i18n } = useTranslation('projects');
+    const { t } = useTranslation('projects');
     const notify = useNotify();
     const { onProjectsChanged: refresh, embedded, session: slots } = useProjectsHost();
     const [params, setParams] = useSearchParams();

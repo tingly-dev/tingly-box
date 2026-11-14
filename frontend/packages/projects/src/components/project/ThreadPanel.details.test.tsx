@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render as renderWithHost, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Thread } from '../../client';
+import type { Thread, ThreadEvent } from '../../client';
 import { ThreadPanel } from './ThreadPanel';
 import { ProjectsHostProvider } from '../../host/ProjectsHost';
 
@@ -36,15 +36,22 @@ const props = { projectId: 'p', threadId: 't', thread, events: [], running: fals
 const rail = () => screen.queryByRole('complementary', { name: 'rail.title' });
 
 describe('the Details button', () => {
-    it.each([false, true])('opens the same cards under it where the rail does not fit (folder=%s)', (folder) => {
-        render(<ThreadPanel {...props} folder={folder} />);
+    it.each([false, true])('shows the same cards in place of the conversation where the rail does not fit, and gives the conversation back (folder=%s)', () => {
+        render(<ThreadPanel {...props} folder={false} events={[{ id: 'e', kind: 'user', content: 'Hello there', thread_id: 't', created_at: '2026-10-25T00:00:00Z', updated_at: '' } as ThreadEvent]} />);
         expect(rail()).not.toBeInTheDocument();
         const button = screen.getByRole('button', { name: 'rail.title' });
-        expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+        expect(button).toHaveAttribute('aria-expanded', 'false');
         fireEvent.click(button);
         expect(rail()).toBeInTheDocument();
         expect(screen.getByText('/work/app')).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'rail.status' })).toBeInTheDocument();
+        // The conversation is out of the way, not gone: its draft and scroll live on.
+        expect(screen.getByText('Hello there')).not.toBeVisible();
+        const close = screen.getByRole('button', { name: 'rail.close' });
+        expect(close).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.click(close);
+        expect(rail()).not.toBeInTheDocument();
+        expect(screen.getByText('Hello there')).toBeVisible();
     });
 
     it.each([false, true])('docks and folds the column where it fits, and remembers the choice (folder=%s)', (folder) => {
