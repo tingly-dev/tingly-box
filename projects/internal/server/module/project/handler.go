@@ -92,8 +92,8 @@ type UpdateProjectRequest struct {
 	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
 	// ThreadGitHubAccess is how threads' tools that write to GitHub (issues,
-	// PRs) are approved: ask each time, or allow without a card. Only the
-	// owner sets it, here.
+	// PRs) are approved: allow (the default, also when empty) runs them
+	// without a card, ask asks each time. Only the owner sets it, here.
 	ThreadGitHubAccess *string `json:"thread_github_access,omitempty" enum:"ask,allow"`
 	DisableWorktree    *bool   `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads is how many threads of the project may run at once;

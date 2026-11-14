@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -777,7 +778,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	addDirectories(doc, dirs...)
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
 	grantAutoGit(doc, p, t)
-	grantGitHubTools(doc, p, threadPermissionMode(p, t))
+	grantBuiltinTools(doc, p)
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -1104,9 +1105,9 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 	if legacy := m.layout.LibraryDir(SessionOwner(t.ID)); dirExists(legacy) {
 		addDirectories(doc, legacy)
 	}
-	// A folder session has the GitHub tools too, and no project settings to say
-	// how they are approved: the permission rules are the same as a project thread's.
-	grantGitHubTools(doc, p, threadPermissionMode(p, t))
+	// A folder session has the Projects tools too: the permission rules are the
+	// same as a project thread's.
+	grantBuiltinTools(doc, p)
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -2026,6 +2027,9 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	if p.m.builtinToolAllowed(p.threadID, req.ToolName) {
+		return agentboot.ApprovalResponse{Approved: true}, nil
+	}
 	key, scopable := allowKey(req.ToolName, req.Input)
 	if scopable && p.m.isAllowed(p.threadID, key) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
@@ -2051,6 +2055,25 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 		}
 	}
 	return agentboot.ApprovalResponse{Approved: ans.Allow, Reason: reason}, nil
+}
+
+// builtinToolAllowed is the answer for a Projects tool that reached the
+// approval prompt anyway (a permission mode or a profile rule the settings
+// file does not outrank): the tools are allowed as grantBuiltinTools says,
+// except the ones the thread's project asked to approve itself.
+func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
+	if !strings.HasPrefix(tool, builtinToolsRule+"__") {
+		return false
+	}
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return false
+	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return false
+	}
+	return p.ThreadGitHubAccess != GitHubAsk || !slices.Contains(githubWriteTools, strings.TrimPrefix(tool, builtinToolsRule+"__"))
 }
 
 func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {

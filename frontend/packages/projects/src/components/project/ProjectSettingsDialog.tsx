@@ -67,7 +67,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
-    const savedGithub = project.thread_github_access === 'allow' ? 'allow' : 'ask';
+    const savedGithub = project.thread_github_access === 'ask' ? 'ask' : 'allow';
     const [github, setGithub] = useState<'ask' | 'allow'>(savedGithub);
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
@@ -91,8 +91,8 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
             </TextField>
             <TextField select label={t('projectSettings.githubAccess')} value={github} onChange={(e) => setGithub(e.target.value as 'ask' | 'allow')}
                 helperText={t(github === 'allow' ? 'projectSettings.githubAccessAllowHelp' : 'projectSettings.githubAccessAskHelp')}>
-                <MenuItem value="ask">{t('projectSettings.githubAccessAsk')}</MenuItem>
                 <MenuItem value="allow">{t('projectSettings.githubAccessAllow')}</MenuItem>
+                <MenuItem value="ask">{t('projectSettings.githubAccessAsk')}</MenuItem>
             </TextField>
             <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
                 helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
