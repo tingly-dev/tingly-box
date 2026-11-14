@@ -56,11 +56,16 @@ describe('ProjectLinks', () => {
         expect(onOpen).toHaveBeenCalledWith('b');
     });
 
-    it('says what it is for when no thread touched anything, and when nothing is open', () => {
-        const { unmount } = render(<ProjectLinks threads={[thread([])]} onOpen={vi.fn()} />);
+    it('says what it is for when no thread touched anything', () => {
+        render(<ProjectLinks threads={[thread([])]} onOpen={vi.fn()} />);
         expect(screen.getByText('links.empty')).toBeInTheDocument();
-        unmount();
+    });
+
+    it('opens on the finished items when nothing is open, and says so when the user then asks for the open ones', () => {
         render(<ProjectLinks threads={[thread([link({ state: 'merged' })])]} onOpen={vi.fn()} />);
+        expect(screen.getByRole('button', { name: 'links.filterClosed:1' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('link', { name: '#12 Add the tool' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'links.filterOpen:0' }));
         expect(screen.getByText('links.noneOpen')).toBeInTheDocument();
     });
 });

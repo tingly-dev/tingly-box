@@ -19,11 +19,13 @@ export const isOpenLink = ({ link }: ProjectLink) => link.state === 'open';
  */
 export function ProjectLinks({ threads, onOpen }: { threads: Thread[]; onOpen: (threadId: string) => void }) {
     const { t } = useTranslation('projects');
-    const [filter, setFilter] = useState<Filter>('open');
+    const [choice, setChoice] = useState<Filter | null>(null);
     // Every thread event re-renders the list; the sort only moves when a thread's links do.
     const rows = useMemo(() => collectLinks(threads), [threads]);
     const open = rows.filter(isOpenLink);
     const closed = rows.filter((r) => !isOpenLink(r));
+    // Until the user picks, the page opens on what is open, or on what finished when nothing is: not on an empty list.
+    const filter: Filter = choice ?? (open.length > 0 ? 'open' : 'closed');
     const shown = filter === 'open' ? open : closed;
     const prs = shown.filter((r) => r.link.kind === 'pr');
     const issues = shown.filter((r) => r.link.kind === 'issue');
@@ -40,7 +42,7 @@ export function ProjectLinks({ threads, onOpen }: { threads: Thread[]; onOpen: (
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, minHeight: 40, borderBottom: 1, borderColor: 'divider' }}>
-                <ToggleButtonGroup exclusive size="small" value={filter} aria-label={t('links.filter')} onChange={(_, v: Filter | null) => v && setFilter(v)} sx={{ gap: 0.25 }}>
+                <ToggleButtonGroup exclusive size="small" value={filter} aria-label={t('links.filter')} onChange={(_, v: Filter | null) => v && setChoice(v)} sx={{ gap: 0.25 }}>
                     {button('open', t('links.filterOpen', { count: open.length }))}
                     {button('closed', t('links.filterClosed', { count: closed.length }))}
                 </ToggleButtonGroup>
