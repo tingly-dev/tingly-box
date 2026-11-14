@@ -12,6 +12,7 @@ import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
 import type { ThemeMode } from '@/theme';
 import { getThemeOptions } from '@/theme/options';
 import { useThemeMode } from '../contexts/ThemeContext';
+import { setShellPref, shellChoices, shownChoice, useUiShell, type ShellPref } from '@/shell/uiShell';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { Z_INDEX } from '../constants/zIndex';
 import { PowerUpsMenu } from './PowerUpsMenu';
@@ -33,6 +34,7 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
     const { t, i18n } = useTranslation();
     const { currentVersion } = useAppVersion();
     const { mode: themeMode, setTheme } = useThemeMode();
+    const { pref: shellPref } = useUiShell();
     const themeOptions = useMemo(() => getThemeOptions(t), [t]);
     const currentLanguage = resolveLanguage(i18n.language);
     const [powerUpsAnchorEl, setPowerUpsAnchorEl] = useState<HTMLElement | null>(null);
@@ -105,6 +107,22 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
                                     {renderIcon({ size: 18 })}
                                 </ToggleButton>
                             </Tooltip>
+                        ))}
+                    </ToggleButtonGroup>
+                </Box>
+                <Box>
+                    <SectionLabel>{t('mobile.shell.title')}</SectionLabel>
+                    <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={shownChoice(shellPref)}
+                        onChange={(_, choice: ShellPref | null) => choice && setShellPref(choice)}
+                        sx={{ flexWrap: 'wrap' }}
+                    >
+                        {shellChoices().map((choice) => (
+                            <ToggleButton key={choice} value={choice} sx={{ px: 1.25, py: 0.25, textTransform: 'none' }}>
+                                {t(`mobile.shell.${choice}`)}
+                            </ToggleButton>
                         ))}
                     </ToggleButtonGroup>
                 </Box>

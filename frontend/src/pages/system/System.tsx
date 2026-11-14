@@ -2,7 +2,7 @@ import CardGrid from '@/components/CardGrid.tsx';
 import { displayVersion } from '@/utils/version';
 import { PageLayout } from '@/components/PageLayout.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
-import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Check as IconCheck, AccessTime as IconClock, Router as IconRouter, tablerMui } from '@/components/icons';
+import { Logout, Refresh as RefreshIcon, CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Computer as IconInterface, Check as IconCheck, AccessTime as IconClock, Router as IconRouter, tablerMui } from '@/components/icons';
 import { IconPalette } from '@tabler/icons-react';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 import { CopyIconButton } from '@/components/CopyIconButton';
@@ -20,6 +20,7 @@ import { api } from '@/services/api.ts';
 import { getThemeOptions } from '@/theme/options.ts';
 import { softSelectedSx } from '@tingly/ui/theme/selection';
 import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
+import { setShellPref, shellChoices, shownChoice, useUiShell } from '@/shell/uiShell';
 import { radius } from '@tingly/ui/theme/radius';
 
 const IconPaletteMui = tablerMui(IconPalette);
@@ -131,6 +132,7 @@ const System = () => {
     const { isHealthy, checking, checkHealth } = useHealth();
     const { logout: authLogout } = useAuth();
     const { mode: themeMode, setTheme } = useThemeMode();
+    const { pref: shellPref } = useUiShell();
     const themeOptions = useMemo(() => getThemeOptions(t), [t]);
     const notify = useNotify();
     const [serverStatus, setServerStatus] = useState<any>(null);
@@ -373,6 +375,22 @@ const System = () => {
                                         sx={chipSx(themeMode === value)}
                                     />
                                 ))}
+                            </Box>
+                        </SettingsRow>
+                        <SettingsRow icon={<IconInterface sx={{ fontSize: 16 }} />} label={t('mobile.shell.title')}>
+                            <Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                    {shellChoices().map((choice) => (
+                                        <Chip
+                                            key={choice}
+                                            label={t(`mobile.shell.${choice}`)}
+                                            onClick={() => setShellPref(choice)}
+                                            size="small"
+                                            sx={chipSx(shownChoice(shellPref) === choice)}
+                                        />
+                                    ))}
+                                </Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>{t('mobile.shell.hint')}</Typography>
                             </Box>
                         </SettingsRow>
                         <SettingsRow icon={<IconPaletteMui sx={{ fontSize: 16 }} />} label={t('system.preferences.themePalette')}>

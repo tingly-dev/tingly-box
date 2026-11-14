@@ -10,6 +10,16 @@ const STORAGE_KEY = 'ui.shell';
 // (`?ui=mobile`, or the switch in 更多) selects it and `auto` stays desktop.
 export const MOBILE_AUTO = false;
 
+/** What the interface picker offers: `auto` only once it means something other than desktop. */
+export function shellChoices(): ShellPref[] {
+    return MOBILE_AUTO ? ['auto', 'mobile', 'desktop'] : ['desktop', 'mobile'];
+}
+
+/** The choice to show as selected: an `auto` the picker does not offer reads as desktop, which is what it does. */
+export function shownChoice(pref: ShellPref): ShellPref {
+    return shellChoices().includes(pref) ? pref : 'desktop';
+}
+
 export function parseShellPref(value: string | null | undefined): ShellPref | null {
     return value === 'auto' || value === 'mobile' || value === 'desktop' ? value : null;
 }

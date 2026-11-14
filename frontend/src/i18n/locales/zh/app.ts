@@ -88,6 +88,13 @@ export default {
   },
   "mobile": {
     "tabBar": "主导航",
+    "shell": {
+      "title": "界面",
+      "desktop": "桌面版",
+      "mobile": "手机版",
+      "auto": "自动",
+      "hint": "手机版在本设备上使用手机布局，桌面版使用完整界面；按浏览器记住。"
+    },
     "more": {
       "title": "更多",
       "tab": "更多",
