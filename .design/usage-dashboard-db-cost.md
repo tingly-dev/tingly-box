@@ -102,3 +102,81 @@ after the rollup, and the live "today" view should follow traffic.
   proxy hot path) or an hourly rollup (removes the remaining raw edge scans).
 - A covering index for the raw edge scans.
 - Batched/debounced usage writes (tracked in `db.md`).
+
+
+## Hourly rollup (finest fold)
+
+Providers that price by time of day (peak/valley) need usage per hour, so the
+finest rollup is now **one hour**, not one day. Same 300k-record benchmark,
+median of 7 runs (`usage_dashboard_bench_test.go`; rows with `hour` or
+`today` are new cases):
+
+| case | day-only rollup | + hourly rollup |
+|---|---|---|
+| `timeseries hour` 30d (peak/valley view, 720 buckets) | 191 ms | 39–44 ms |
+| `timeseries hour` 7d | 56 ms | 9–10 ms |
+| `timeseries hour` 30d, one provider | 93 ms | 26 ms |
+| `stats group_by=hourly` 7d | 70 ms | 10 ms |
+| `stats group_by=model` today | 23 ms | 4 ms |
+| `stats group_by=provider` last 24 h (unaligned) | 22 ms | 4.6 ms |
+| `stats group_by=model` 30d | 31 ms | 12 ms |
+| `timeseries day` 30d / 90d / 365d | 22 / 29 / 31 ms | 6 / 14 / 16 ms |
+| `stats group_by=scenario` 30d | 18 ms | 2.3 ms |
+| Summary tab load, 30d | 335 ms | 253–265 ms (rest is the percentile scan) |
+| cold first query, 90d window | 1.36 s | 2.77 s (153 statements) |
+
+Unchanged: minute series, `group_by=model` + agent filter (needs
+provider/model *and* scenario, so raw), records, percentiles.
+
+Layout (all keyed by SQLite's UTC bucketing of the stored timestamp):
+
+```
+usage_hourly            (hour, provider, model, user)   finest
+usage_hourly_scenario   (hour, scenario)
+usage_daily             (date, provider, model, user)   = sum of the day's hours
+usage_daily_scenario    (date, scenario)
+```
+
+A query window is covered by up to five segments (`planRollupSegments`):
+raw partial leading hour → hours up to the first day boundary → whole days
+(only when ≥ 2 of them) → hours after the last day boundary → raw trailing
+partial hour. The raw edge scans that used to be up to a day long each are now
+under an hour, which is where the "today"/"30d" gains come from.
+
+Decisions:
+
+- **Days are summed from hours, never from raw.** Totals are then identical
+  whichever tiers serve a window, and a late row cannot make a day disagree
+  with its hours. A day is built in one transaction that first builds its
+  missing hours (`buildBuckets`), so a concurrent retention delete cannot
+  interleave.
+- **An hour is built once it has ended plus `hourAggGrace` (10 min).** Records
+  are stamped when written (`RecordUsage`), so only a stalled write can land
+  in an already-built hour; like days before it, a bucket is not revisited
+  (`AggregateToDaily` rebuilds a day on demand). Day eligibility follows its
+  last hour, so the old 1 h day grace is gone.
+- **Empty hours get a marker row** (`request_count = 0`), as empty days
+  already did; readers filter `request_count > 0`.
+- **Hour keys are UTC.** Whole-hour offsets align exactly; for half-hour zones
+  (India, Nepal, Lord Howe) the two partial hours at the window ends are read
+  raw, which stays correct but is not rollup-served. A peak/valley partition
+  defined in a zone is therefore a sum of `interval=hour` buckets by the
+  caller; there is no new endpoint, so API shapes are unchanged.
+- **`interval=hour` and `group_by=hourly` are served from the hour tier** and
+  never from days (`planRollupSegments(..., hourOnly=true)`).
+
+Costs to know:
+
+- **Size.** At this synthetic density (~125 requests per hour across ~70
+  provider×model×user groups) `usage_hourly` holds 151k rows for 300k records
+  (day tier: 17k). Hour rows fold only when several requests share a
+  (hour, provider, model, user); at low traffic the table is about as big as
+  `usage_records` but then raw scans are cheap anyway. Retention deletes
+  rollup rows together with records.
+- **Cold start doubles** (the hour build precedes the day derivation) and is
+  paid once per window, in runs of ≤ 7 days.
+- **Mixed-offset timestamps.** `usage_records.timestamp` is text with the
+  writer's UTC offset and ranges compare lexicographically; the build pads the
+  scan by `dstScanPad` (2 h) for DST. A row written with a timestamp in
+  another zone than the server's (an import) can be missed by the build and by
+  raw scans alike; production writes use `time.Now()`.
