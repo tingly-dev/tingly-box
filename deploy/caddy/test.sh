@@ -2,14 +2,13 @@
 # Smoke test for deploy/caddy/Caddyfile: runs it in the official caddy image
 # against a stub gateway and checks the transfer-cost headers.
 #
-#   deploy/caddy/test.sh            # needs docker, python3, node, curl
+#   deploy/caddy/test.sh            # needs docker, python3, curl
 #
 # Never touches ~/.tingly-box: the stub is a ~30 line python server and Caddy
 # gets its own HOME inside the container.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/../.." && pwd)
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/caddy-test.XXXXXX")
 NAME=tingly-caddy-test-$$
 STUB_PORT=12580   # fixed: the Caddyfile proxies to localhost:12580
@@ -39,7 +38,19 @@ d = pathlib.Path(sys.argv[1])
 (d / "assets/index-AbCd1234.js").write_text("export const a = 'tingly box';\n" * 5000)
 (d / "assets/icon.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'>" + "<g/>" * 300 + "</svg>")
 PY
-node "$ROOT/frontend/scripts/precompress.mjs" "$WORK/dist" "$WORK/deploy-web" >/dev/null
+# the precompressed copy Caddy serves from TINGLY_WEB_ROOT. ".br" and ".zst"
+# hold gzip bytes: Caddy only labels and serves them, it never decodes.
+python3 - "$WORK/dist" "$WORK/deploy-web" <<'PY'
+import gzip, pathlib, shutil, sys
+src, dst = map(pathlib.Path, sys.argv[1:])
+shutil.copytree(src, dst)
+for f in list(dst.rglob("*")):
+    if f.suffix in (".js", ".svg", ".html") and f.stat().st_size >= 512:
+        z = gzip.compress(f.read_bytes(), 9)
+        (f.parent / (f.name + ".gz")).write_bytes(z)
+        (f.parent / (f.name + ".br")).write_bytes(z)
+        (f.parent / (f.name + ".zst")).write_bytes(z)
+PY
 
 # --- stub gateway: /assets from dist, JSON API, SSE, SPA fallback = index.html 200
 cat >"$WORK/stub.py" <<'PY'

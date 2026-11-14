@@ -2,10 +2,10 @@
 
 `deploy/caddy/Caddyfile` is the reference reverse-proxy config for a public
 host. This note records why it looks the way it does. Smoke test:
-`deploy/caddy/test.sh` (docker + node + python3; stub gateway, isolated, never
+`deploy/caddy/test.sh` (docker + python3; stub gateway, isolated, never
 touches `~/.tingly-box`).
 
-## What the gateway did by itself (before `.design/webui-static-serving.md`)
+## What the gateway does by itself
 
 `internal/server/webui_static.go` serves the embedded UI:
 
@@ -31,7 +31,7 @@ UI was not reachable through it at all.
 | Cache headers only on 2xx | `header … { match status 2xx }` | A cached error would stick for a year. |
 | Missing chunk | `handle_response` turns a `text/html` answer on `/assets/*` into 404 | The gateway's SPA fallback answers an unknown `/assets/old-XXXX.js` with `index.html` and 200. A stale tab, or a rollback, would otherwise cache HTML under a script URL as immutable. |
 | Precompressed assets | `file_server { precompressed br zstd gzip; pass_thru }` from `TINGLY_WEB_ROOT` (default `/srv/tingly-web`), then fall through to the gateway | Max-level brotli/zstd beats on-the-fly gzip by ~25% on the largest chunk and costs no CPU per request; `file_server` also adds `ETag`/`Last-Modified`, so revalidation is a 304. `pass_thru` makes the directory optional: with no build deployed, the gateway's embedded copy is proxied and compressed on the fly, so the config works either way. Brotli is listed first because it was smaller than zstd-19 on this bundle and is supported by every browser. |
-| Producing the variants | `frontend/scripts/precompress.mjs <dist> <deploy-dir>` | No dependency (node `zlib`: gzip-9, brotli-11, zstd-19 when the runtime has it). It copies to a separate directory on purpose: `task web:dist` embeds `dist/` into the Go binary and `.br`/`.gz` siblings would only bloat it. |
+| Producing the variants | `pnpm build` (once the gateway change in `.design/webui-static-serving.md` is in) writes `.br` + `.gz` into `frontend/dist`; for older builds or for `.zst`, compress with any tool (loop below) | Caddy only serves what is on disk. |
 | Exposure | UI is a **separate host block** (`ui.you.domain`) | The old config deliberately 403'd everything but the model API. Publishing the admin UI/API is an operator decision, so it is its own block: delete it (or leave its DNS unset) to keep the UI local-only. |
 | ETag | not added in proxy mode | The gateway sends none, and with `immutable` the browser never revalidates hashed files. Validators come for free from `file_server` in precompressed mode. |
 
@@ -39,15 +39,15 @@ UI was not reachable through it at all.
 
 ```bash
 task web:dist                                       # builds frontend/dist and embeds it
-node frontend/scripts/precompress.mjs frontend/dist /srv/tingly-web
+cp -R frontend/dist/. /srv/tingly-web/        # already holds .br/.gz when built with the gateway change
+# otherwise, or to add zstd:
+find /srv/tingly-web -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \) -size +512c \
+  -exec sh -c 'gzip -9 -k -f "$1"; brotli -q 11 -k -f "$1"; zstd -19 -q -f "$1"' _ {} \;
 ```
 
 Keep the previous release's `assets/` in `/srv/tingly-web` for a while (copy,
 don't wipe) so tabs opened before a release can still load their lazy chunks;
 the gateway only has the newest set.
-
-`pnpm build` already writes `.br`/`.gz` into `frontend/dist` for the gateway's
-embed; the two-argument form above copies those and adds `.zst`.
 
 ## Measurements
 
@@ -74,9 +74,9 @@ delivered per event, uncompressed.
 
 ## Not done / follow-ups
 
-- The gateway now does the same itself (precompressed br/gzip, immutable hashed
-  assets, ETag/304, 404 for unknown `/assets/*`): `.design/webui-static-serving.md`.
-  Caddy still adds h2/h3, zstd and edge caching of the TLS hop; its `/assets`
-  rules and the HTML→404 guard are redundant but harmless in front of a
-  current gateway, and still needed in front of an older one.
+- The gateway itself should do the same for `/assets` (precompressed files,
+  immutable hashed names, ETag/304, 404 for unknown `/assets/*`) so that
+  deployments without Caddy benefit too: `.design/webui-static-serving.md`
+  (separate change). With it, the `/assets` rules here are redundant but
+  harmless; until then they are what fixes a Caddy deployment.
 - `Content-Security-Policy` etc. are not touched.

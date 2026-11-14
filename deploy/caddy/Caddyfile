@@ -63,7 +63,7 @@ you.domain {
 # delete this block (or leave its DNS unset) to keep the UI local-only.
 #
 # Assets are served from TINGLY_WEB_ROOT when it holds the build (optionally
-# pre-compressed, see frontend/scripts/precompress.mjs); anything not found
+# pre-compressed .br/.gz/.zst siblings, see .design/caddy-deploy.md); anything not found
 # there falls through to the gateway, which serves the embedded copy.
 ui.you.domain {
 	# on-the-fly fallback for everything not already precompressed
