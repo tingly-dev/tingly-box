@@ -50,6 +50,8 @@ export interface ThreadRequests {
     observe: (event: ThreadEvent) => void;
     /** Reads again what every waiting thread asks (after the stream reconnects). */
     refresh: () => void;
+    /** Reads again what one waiting thread asks (a page whose stream does not carry the requests). */
+    reread: (threadId: string) => void;
     /** The thread whose card should open its requests (a notification's deep link). */
     reviewId: string | null;
     review: (threadId: string) => void;
@@ -173,7 +175,7 @@ export function useThreadRequestsStore(threads: Thread[]): ThreadRequests {
     useEffect(() => () => clearTimeout(reviewTimer.current), []);
 
     const hydrated = useCallback((threadId: string) => hydratedIds.has(threadId), [hydratedIds]);
-    return useMemo(() => ({ byThread, hydrated, respond, observe, refresh, reviewId, review, reviewed }), [byThread, hydrated, respond, observe, refresh, reviewId, review, reviewed]);
+    return useMemo(() => ({ byThread, hydrated, respond, observe, refresh, reread: read, reviewId, review, reviewed }), [byThread, hydrated, respond, observe, refresh, read, reviewId, review, reviewed]);
 }
 
 function without(map: Record<string, PendingRequest[]>, key: string): Record<string, PendingRequest[]> {

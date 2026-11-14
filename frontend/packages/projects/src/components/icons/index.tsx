@@ -7,6 +7,7 @@
 import {
     IconArchiveOff,
     IconArrowUp,
+    IconBellOff,
     IconCircleDashed,
     IconCircleDot,
     IconFileDiff,
@@ -52,6 +53,7 @@ export * from '@tingly/ui/icons';
 export const Star = tablerMuiFilled(IconStarFilled);
 
 export const Stack = tablerMui(IconStack2);
+export const BellOff = tablerMui(IconBellOff);
 export const Unarchive = tablerMui(IconArchiveOff);
 export const Folder = tablerMui(IconFolder);
 export const DriveFileMove = tablerMui(IconFolderShare);
