@@ -105,6 +105,7 @@ Tingly Box 的接入用途是用户获准的常规使用及能力扩展。请勿
 | `hyperbolic-xyz` | Hyperbolic | API Key / 兼容接口 |
 | `runcrate-ai` | Runcrate | API Key / 兼容接口 |
 | `cloudgpu-app` | CloudGPU | API Key / 兼容接口 |
+| `uberllm-dev` | UberLLM | API Key / 兼容接口 |
 | `vercel-ai-gateway` | Vercel AI Gateway | API Key / 兼容接口 |
 | `cloudflare-ai-gateway` | Cloudflare AI Gateway | API Key / 兼容接口 |
 | `typesafe-ai` | TypeSafe AI (Jev) | API Key / 兼容接口 |
