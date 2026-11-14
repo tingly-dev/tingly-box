@@ -86,6 +86,19 @@ export default {
     "moveUp": "上移",
     "saved": "已保存"
   },
+  "mobile": {
+    "tabBar": "主导航",
+    "more": {
+      "title": "更多",
+      "tab": "更多",
+      "manage": "管理",
+      "system": "系统",
+      "preferences": "主题、语言与反馈",
+      "interface": "界面",
+      "useDesktop": "使用桌面版界面",
+      "useDesktopHint": "切回完整界面"
+    }
+  },
   "layout": {
     "workspace": "工作区",
     "workspaceTip": { "title": "认识工作区", "text": "在一处管理项目、工作目录和 IM 聊天。" },
