@@ -2,7 +2,7 @@
 // pages in ProjectsHostProvider, which tells them where they are routed and
 // which fetch carries its authentication. Their strings are in the i18next
 // namespace `projects`: the host adds the bundles from
-// `@tingly/projects/locales/{en,zh}` under that namespace before rendering.
+// `@tingly/projects/locales/{en,zh,ru}` under that namespace before rendering.
 export { ProjectsHostProvider, type ImBot, type ImChat, type ImChatInfo, type ImHost, type ProjectsHost, type SessionLaunch, type SessionSlots } from './host/ProjectsHost';
 export type { Thread, ThreadEvent } from './client';
 export { default as ProjectsPage } from './pages/ProjectsPage';

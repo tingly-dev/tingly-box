@@ -59,7 +59,7 @@ The two sections are independent: a user with projects but no folders sees cards
 - **No new route in the standalone Projects app.** `WorkspaceHomePage` is exported for hosts (`embed.ts`); only Tingly Box
   routes it (`/workspace`, behind the same Workspace power-up gate as the other Workspace routes).
 - **Reuse.** `ProjectCard` moved out of `ProjectsPage` into `components/project/` so both pages share it. Strings are in
-  the `projects` namespace (`workspace.*`, en and zh; Russian falls back to English like the rest of the package).
+  the `projects` namespace (`workspace.*`, en, zh and ru; other languages fall back to English).
 
 ### Where the data comes from
 
