@@ -24,6 +24,7 @@ import { scenarioLabel } from '@/pages/scenario/scenarioRegistry';
 import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
+import { usageAccountLabel } from '@/utils/usageAccountLabel';
 import { useMemo } from 'react';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -268,7 +269,7 @@ export default function DashboardFilterBar({
                                     <MenuItem key={identity.userId} value={identity.userId}>
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                             <Typography variant="body2" noWrap>
-                                                {identityLabel(t, identity)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
+                                                {identity.type === 'owner' ? identityLabel(t, identity) : usageAccountLabel(identity.label, identity.teamId, teams)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
                                             </Typography>
                                             <Tooltip title={identity.userId} placement="right">
                                                 <Typography
