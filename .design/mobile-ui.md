@@ -65,7 +65,7 @@ Rules that hold at every size: nothing overflows horizontally (long values wrap;
 
 ## Rollout
 
-0. Foundations: mobile tokens, `useIsPhone`, the shell switch (behind `?ui=mobile` and an experimental flag), the viewport screenshot script. No change by default.
+0. Foundations: mobile tokens, `useIsPhone`, the shell switch (an explicit `?ui=mobile`; `auto` stays desktop until `MOBILE_AUTO` is turned on in `src/shell/uiShell.ts`), the viewport screenshot script. No change by default. *Tokens (`@tingly/ui/theme/mobile`), `useIsPhone` and the switch (`src/shell/uiShell.ts`) are in; the script is next.*
 1. Shell: bottom tabs (工作区 · 智能应用 · 更多), the 更多 entry with the UI switch, the fallback tier.
 2. Workspace home: needs-you with inline approve/answer, folded groups, projects and folders, new-task sheet.
 3. Workspace screens: project (对话 / 线程 / 文件库), folder session, thread page with docked actions, sheets, keyboard handling, master-detail at ≥ 600.
