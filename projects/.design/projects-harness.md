@@ -15,6 +15,7 @@
 - 阶段 2 的第一批画像演练：偷懒（说完成但没提交）、注入（汇报里夹带指令）、模型失败（报错后队列继续）、竞态（回答中途设置变化）、沉默（线程不报，记录为已知缺口）、一条消息多任务。新增不变量 `status.ready-has-commits`。`Quiet()` 要求空闲持续 150ms，因为线程变空闲到汇报送达协调者之间有一个空隙。
 - 事件信封与回复预算：场景检查信封的来源和信任标记、伪造信封被转义、`replies_since_user` 与 `minutes_since_user` 的数值；新增不变量 `trust.envelope-intact`。模型是否真的遵守这些规则，要等阶段 4 的真模型评测才能验证。
 - MCP 工具表（`.design/mcp-tools.md`）的守护（`mcp_tools_test.go`）：线程从选定的 base 和分支名起步（worktree 里有 base 的工作，合并目标是 base，项目自己的 base 分支不变）；被拒的 base、分支名或提议不留线程、分支和建议卡，协调者能收到原因并改正；Stop 记录是谁停的，Reopen 对运行中的线程不动、对已解决的线程恢复并记录；协调者的 session 拿到整张工具表（16 个，加工具要有意改这里）。新增不变量 `status.resolved-consistent`：线程是 resolved 当且仅当有解决时间。每个场景都做过变异检查：去掉 `propose_threads` 的校验、去掉 Reopen 的状态判断、让 `base` 不生效，对应场景都会失败。
+- 线程的 issue/PR 工具（`github_tools_test.go`，设计见 `github-tools.md`）：线程通过 `create_pr` 工具开 PR（GitHub 是替身，origin 经 `insteadOf` 指向本地裸仓库），只有它自己的分支被推送、main 不动，记录落库，协调者的 `get_thread` 看得到 PR；没有 GitHub origin 时工具拒绝且不留记录。`ActorCtx` 的线程回合可经 `coordtest.ToolSession` 调用自己的 MCP 工具。
 - 下文 §1 起是完整设计，未标注"已实施"的都是后续阶段。
 
 ## 1. 要验证的对象

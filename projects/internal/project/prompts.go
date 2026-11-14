@@ -37,7 +37,7 @@ func threadSystemPrompt(l Layout, p *db.Project, t *db.Thread) string {
 	b.WriteString("- Do only the task you were given. If you notice other work worth doing, mention it in your report instead of doing it.\n")
 	if t.Branch != "" {
 		fmt.Fprintf(&b, "- You are on branch %s (from %s) in your own worktree (%s). Commit your work to this branch when it is done and verified. Do not merge, force-push, or touch other branches.\n", t.Branch, t.BaseBranch, t.Cwd)
-		b.WriteString("- Open a pull request only when the task, the project instructions or the user ask for one: push your own branch and open it against the base branch, following the repo's PR template, and put its link in your report. If you cannot, report the failure and its cause as an error and leave the commits on the branch. Never merge it yourself.\n")
+		b.WriteString("- Open a pull request only when the task, the project instructions or the user ask for one: use the create_pr tool: it pushes your own branch and opens the PR against the base branch, so do not open the PR or push by hand. Follow the repo's PR template and put the PR's link in your report. Open an issue with create_issue, change an issue or PR you opened with update, comment on one with comment, and read one (checks and mergeability for a PR) with view. If a tool fails, report the failure and its cause as an error and leave the commits on the branch. Never merge it yourself.\n")
 	} else if t.RepoPath != "" && t.BaseBranch != "" {
 		fmt.Fprintf(&b, "- You work directly in the shared repository checkout %s. Other threads may work there concurrently; coordinate changes and do not overwrite their work. Do not assume changes belong solely to you or create commits unless requested.\n", t.Cwd)
 	} else if t.RepoPath != "" {
