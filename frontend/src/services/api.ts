@@ -13,6 +13,7 @@ import {
     getControlApiClient as getClient,
     resetControlApiClient as resetClient,
 } from './openapi';
+import {coalescedFetch} from './coalescedFetch';
 import {systemApi} from './systemApi';
 import {rulesApi} from './rulesApi';
 import {scenarioApi} from './scenarioApi';
@@ -46,7 +47,7 @@ export async function fetchUIAPI(url: string, options: RequestInit = {}): Promis
 
     const token = getUserAuthToken();
 
-    const response = await fetch(fullUrl, {
+    const response = await coalescedFetch(fullUrl, {
         ...options,
         headers: {
             'Content-Type': 'application/json',

@@ -86,8 +86,8 @@ export default function UserUsagePage() {
 
     // Each axis owns its own search/sort/pagination/selection/detail-load
     // lifecycle via the shared hook — see components/dashboard/RosterAxis.tsx.
-    // All three run unconditionally (fixed hook-call count), so all three
-    // rosters' detail queries are ready before the user ever toggles to them.
+    // All three run unconditionally (fixed hook-call count), but only the axis
+    // on screen loads its detail; the others load it when first shown.
     const accountAxis = useRosterAxis<UserUsageRow, AggregatedStat, TimeRange>({
         roster: rows,
         getKey: accountKey,
@@ -96,6 +96,7 @@ export default function UserUsagePage() {
         rowsPerPage,
         range,
         loadDetail: fetchModelsForAccount,
+        enabled: viewMode === 'account',
     });
     const modelAxis = useRosterAxis<AggregatedStat, AggregatedStat, TimeRange>({
         roster: modelRoster,
@@ -105,6 +106,7 @@ export default function UserUsagePage() {
         rowsPerPage,
         range,
         loadDetail: fetchAccountsForModel,
+        enabled: viewMode === 'model',
     });
     const providerAxis = useRosterAxis<AggregatedStat, AggregatedStat, TimeRange>({
         roster: providerRoster,
@@ -114,6 +116,7 @@ export default function UserUsagePage() {
         rowsPerPage,
         range,
         loadDetail: fetchAccountsForProvider,
+        enabled: viewMode === 'provider',
     });
     // Fields common to every axis (search/sort/page/handleSort/detailLoading)
     // are safe to read off this union without a three-way ternary at every

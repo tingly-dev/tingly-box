@@ -68,9 +68,21 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
         // Check on mount
         checkHealth();
 
-        // Check every 30 seconds
-        const interval = setInterval(checkHealth, 30 * 1000);
-        return () => clearInterval(interval);
+        // Check every 30 seconds — but only while the tab is on screen: a
+        // background tab has nobody to show the disconnect dialog to. Coming
+        // back re-checks at once, so a server that died meanwhile is noticed
+        // on return rather than up to 30s later.
+        const interval = setInterval(() => {
+            if (document.visibilityState !== 'hidden') void checkHealth();
+        }, 30 * 1000);
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') void checkHealth();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, [checkHealth]);
 
     // Memoized so the 30s health poll (which toggles `checking`) does not
