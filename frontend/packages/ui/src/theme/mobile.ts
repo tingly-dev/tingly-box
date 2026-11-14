@@ -8,6 +8,8 @@ export const mobile = {
   tapPrimary: 48,
   /** The bottom tab bar, px, above the safe area. */
   bottomNavHeight: 58,
+  /** A one- or two-line list row, px. */
+  rowMin: 56,
   /** Top corners of a bottom sheet, as a MUI `borderRadius` multiplier (24px). */
   sheetRadius: 3,
 } as const;

@@ -89,6 +89,19 @@ export default {
     "moveUp": "Move up",
     "saved": "Saved"
   },
+  "mobile": {
+    "tabBar": "Main navigation",
+    "more": {
+      "title": "More",
+      "tab": "More",
+      "manage": "Manage",
+      "system": "System",
+      "preferences": "Theme, language and feedback",
+      "interface": "Interface",
+      "useDesktop": "Use the desktop UI",
+      "useDesktopHint": "Switch back to the full interface"
+    }
+  },
   "layout": {
     "workspace": "Workspace",
     "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
