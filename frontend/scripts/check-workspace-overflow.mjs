@@ -23,7 +23,7 @@ const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
 
 const project = '/projects/p-latency';
-const tab = (name) => async (page) => { await page.getByRole('tab', { name }).first().click({ timeout: 5000 }); await page.waitForTimeout(500); };
+const tab = (index) => async (page) => { await page.getByRole('tab').nth(index).click({ timeout: 5000 }); await page.waitForTimeout(500); };
 const button = (name) => async (page) => { await page.getByRole('button', { name }).first().click({ timeout: 5000 }); await page.waitForTimeout(700); };
 const SCREENS = [
     ['home', '/workspace'],
@@ -32,10 +32,10 @@ const SCREENS = [
     ['im', '/projects/im'],
     ['project', project],
     ['thread', `${project}?thread=t-backoff`],
-    ['library-tab', project, tab('Library')],
-    ['status-tab', project, tab('Status')],
-    ['new-project', '/projects', button('New project')],
-    ['project-settings', project, button('Project settings')],
+    ['library-tab', project, tab(1)],
+    ['status-tab', project, tab(2)],
+    ['new-project', '/projects', button(/New project|Новый проект/)],
+    ['project-settings', project, button(/Project settings|Настройки проекта/)],
 ];
 
 // Runs in the page; returns the cut-off text it finds.
