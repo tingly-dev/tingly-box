@@ -170,9 +170,9 @@ const threadEvents = (th: (typeof threads)[number]) => {
 const counts = (pid: string) => {
     const list: { status: string }[] = pid === 'p-latency' ? threads : pid.startsWith('f-') ? sessions.filter((x) => x.project_id === pid) : []
     const n = (s: string) => list.filter((t) => t.status === s).length
-    if (pid === 'p-docs') return { waiting: 0, ready: 1, working: 1, idle: 0, resolved: 4 }
-    if (pid === 'p-migrate') return { waiting: 0, ready: 0, working: 0, idle: 2, resolved: 1 }
-    return { waiting: n('waiting'), ready: n('ready'), working: n('working'), idle: n('idle'), resolved: n('resolved') }
+    if (pid === 'p-docs') return { waiting: 0, failed: 0, ready: 1, working: 1, idle: 0, resolved: 4 }
+    if (pid === 'p-migrate') return { waiting: 0, failed: 0, ready: 0, working: 0, idle: 2, resolved: 1 }
+    return { waiting: n('waiting'), failed: n('failed'), ready: n('ready'), working: n('working'), idle: n('idle'), resolved: n('resolved') }
 }
 
 // The project conversation is its main thread's events: kinds user,
