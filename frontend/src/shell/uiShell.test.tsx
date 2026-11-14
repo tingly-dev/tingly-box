@@ -64,3 +64,13 @@ describe('useUiShell', () => {
         expect(localStorage.getItem('ui.shell')).toBe('mobile');
     });
 });
+
+describe('interface choices', () => {
+    it('offers auto only when it can mean something other than desktop', async () => {
+        const { shellChoices, shownChoice, MOBILE_AUTO } = await load();
+        expect(shellChoices()).toEqual(MOBILE_AUTO ? ['auto', 'mobile', 'desktop'] : ['desktop', 'mobile']);
+        expect(shownChoice('mobile')).toBe('mobile');
+        expect(shownChoice('desktop')).toBe('desktop');
+        expect(shownChoice('auto')).toBe(MOBILE_AUTO ? 'auto' : 'desktop');
+    });
+});

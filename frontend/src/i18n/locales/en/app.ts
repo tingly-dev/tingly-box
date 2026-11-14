@@ -91,6 +91,13 @@ export default {
   },
   "mobile": {
     "tabBar": "Main navigation",
+    "shell": {
+      "title": "Interface",
+      "desktop": "Desktop",
+      "mobile": "Phone",
+      "auto": "Auto",
+      "hint": "Phone shows the phone layout on this device; Desktop shows the full interface. Remembered per browser."
+    },
     "more": {
       "title": "More",
       "tab": "More",
