@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { getTotalTokens } from '@/components/dashboard';
 import type { AggregatedStat } from '@/components/dashboard';
 import api from '@/services/api';
+import { useTeamContext } from '@/contexts/TeamContext';
+import { usageAccountLabel } from '@/utils/usageAccountLabel';
 import { buildTimeParams } from './userUsageModel';
 import type { APITokenInfo, TimeRange, UserUsageRow } from './userUsageModel';
 
@@ -14,6 +16,7 @@ import type { APITokenInfo, TimeRange, UserUsageRow } from './userUsageModel';
  */
 export function useUserUsageData(range: TimeRange) {
     const { t } = useTranslation();
+    const { teams } = useTeamContext();
     const [tokens, setTokens] = useState<APITokenInfo[]>([]);
     const [userStats, setUserStats] = useState<AggregatedStat[]>([]);
     const [modelRoster, setModelRoster] = useState<AggregatedStat[]>([]);
@@ -100,7 +103,7 @@ export function useUserUsageData(range: TimeRange) {
                 ...token,
                 display_name: token.account_type === 'primary'
                     ? t('dashboard.userUsage.primaryAccount', { defaultValue: 'Primary account' })
-                    : token.display_name,
+                    : usageAccountLabel(token.display_name, token.team_id, teams),
                 request_count: stat?.request_count || 0,
                 // total_tokens is derived via the shared helper, not read from
                 // the API's total_tokens field (input+output only, excludes
@@ -114,7 +117,7 @@ export function useUserUsageData(range: TimeRange) {
                 error_rate: stat?.error_rate || 0,
             };
         });
-    }, [t, tokens, userStats]);
+    }, [t, teams, tokens, userStats]);
 
     const tokenByUserID = useMemo(
         () => new Map(tokens.map((token) => [token.user_id, token])),
@@ -125,8 +128,8 @@ export function useUserUsageData(range: TimeRange) {
         if (token?.account_type === 'primary') {
             return t('dashboard.userUsage.primaryAccount', { defaultValue: 'Primary account' });
         }
-        return token?.display_name || userID;
-    }, [t, tokenByUserID]);
+        return token ? usageAccountLabel(token.display_name || userID, token.team_id, teams) : userID;
+    }, [t, teams, tokenByUserID]);
 
     return {
         loadRosters,

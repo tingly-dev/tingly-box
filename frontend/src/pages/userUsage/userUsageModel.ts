@@ -9,6 +9,7 @@ export interface APITokenInfo {
     token_id: string;
     user_id: string;
     display_name: string;
+    team_id?: string;
     enabled: boolean;
     last_used_at?: string;
     created_at?: string;
@@ -79,7 +80,7 @@ export const getProviderKey = (stat: Pick<AggregatedStat, 'provider_uuid' | 'pro
 
 export const accountKey = (row: UserUsageRow) => row.user_id;
 export const accountName = (row: UserUsageRow) => row.display_name;
-export const accountSearchText = (row: UserUsageRow) => [row.display_name, row.user_id];
+export const accountSearchText = (row: UserUsageRow) => [row.display_name, row.user_id, row.team_id || ''];
 export const modelName = (row: AggregatedStat) => row.model || row.key;
 export const modelSearchText = (row: AggregatedStat) => [row.model || row.key, row.provider_name || ''];
 export const providerName = (row: AggregatedStat) => row.provider_name || row.key;
