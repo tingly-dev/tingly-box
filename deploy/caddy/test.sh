@@ -66,6 +66,14 @@ class H(http.server.BaseHTTPRequestHandler):
                 c = ("data: tick %d\n\n" % i).encode()
                 self.wfile.write(b"%x\r\n%s\r\n" % (len(c), c)); self.wfile.flush(); time.sleep(0.6)
             self.wfile.write(b"0\r\n\r\n"); return
+        if p.startswith("/tingly/jsonstream"):
+            # a JSON body written in small flushed pieces (not SSE)
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            self.send_header("Transfer-Encoding", "chunked"); self.end_headers()
+            for i in range(2):
+                c = ('{"part": %d}\n' % i).encode()
+                self.wfile.write(b"%x\r\n%s\r\n" % (len(c), c)); self.wfile.flush(); time.sleep(0.6)
+            self.wfile.write(b"0\r\n\r\n"); return
         # SPA fallback
         self.send(200, "text/html; charset=utf-8", HTML, [("Cache-Control", "no-cache")])
 http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
@@ -136,11 +144,12 @@ check "unencoded script compressed" "$(hdr content-encoding "${GZ[@]}" $F/raw.js
 check "sse not compressed" "$(hdr content-encoding "${GZ[@]}" --max-time 3 $F/tingly/sse)" ""
 check "health check" "$(code $F/hi)" "200"
 
-# an SSE event must reach the client while the stream is still open
-for url in $M/tingly/sse $F/tingly/sse; do
+# an SSE event, or a flushed piece of a streamed JSON body, must reach the
+# client while the response is still open
+for url in $M/tingly/sse $F/tingly/sse $M/tingly/jsonstream $F/tingly/jsonstream; do
     first=$(curl -sk -N "${GZ[@]}" --max-time 3 "$url" | while IFS= read -r l; do [ -n "$l" ] && { date +%s%N; break; }; done || true)
     now=$(date +%s%N)
-    [ $(((now - first) / 1000000)) -gt 400 ] && echo "ok   sse event delivered before the stream ends ($url)" || { echo "FAIL sse buffered ($url)"; fails=$((fails + 1)); }
+    [ $(((now - first) / 1000000)) -gt 400 ] && echo "ok   first piece delivered before the response ends ($url)" || { echo "FAIL buffered ($url)"; fails=$((fails + 1)); }
 done
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
