@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Box, Tab, Tabs, Typography } from '@mui/material';
+import { Box, ButtonBase, Tab, Tabs, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { timeAgo } from '../../utils/format';
@@ -10,6 +10,8 @@ import { StatusBoard } from '../workspace/StatusBoard';
 import { useThreadsView, ViewSwitch, type ThreadsView } from '../workspace/ViewSwitch';
 import { usePinnedThreads } from '../../hooks/usePinnedThreads';
 import { Library } from './Library';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 function ThreadGroups({ threads, selectedId, onOpen, onTasks, onStatus, view, pinnedIds, onTogglePin }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void; /** Opens the thread's running tasks from its count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; /** Opens a status group's thread list from its heading. */ onStatus?: (status: string, anchor: HTMLElement) => void; view: ThreadsView; pinnedIds: string[]; onTogglePin: (id: string) => void }) {
     const { t, i18n } = useTranslation('projects');
@@ -31,7 +33,28 @@ function ThreadGroups({ threads, selectedId, onOpen, onTasks, onStatus, view, pi
 
 export type OverviewTab = 'threads' | 'library' | 'status';
 
-export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, libraryKey, selectedId, initialTab = 'threads', status }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; /** Opens a thread's running tasks from its count pill (band, board and list alike). */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; /** Opens a status's thread list from its heading or closed count. */ onStatus?: (status: string, anchor: HTMLElement) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab; /** The coordinator's status; without it the tab is not offered. */ status?: ReactNode }) {
+/** What the Threads view's toolbar says about the list: how many, and the tasks they run. The view switch sits at its right. */
+function ThreadsToolbar({ threads, onTasks, view, onView }: { threads: Thread[]; onTasks?: (threads: Thread[], anchor: HTMLElement) => void; view: ThreadsView; onView: (v: ThreadsView) => void }) {
+    const { t } = useTranslation('projects');
+    const busy = threads.filter((th) => th.running_tasks > 0);
+    const running = busy.reduce((n, th) => n + th.running_tasks, 0);
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, minHeight: 40, borderBottom: 1, borderColor: 'divider' }}>
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden' }}>
+                <Typography noWrap sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('overview.threadCount', { count: threads.length })}</Typography>
+                {running > 0 && (
+                    <ButtonBase disabled={!onTasks} onClick={(e) => onTasks?.(busy, e.currentTarget)} title={t('rail.tasksInThreads', { tasks: running, count: busy.length })}
+                        sx={{ minWidth: 0, px: 0.75, py: 0.25, borderRadius: radius.chip, fontSize: fontSizes.sm, color: 'text.secondary', border: 1, borderColor: 'divider', '&:hover': { bgcolor: 'action.hover' } }}>
+                        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('thread.tasksBadge', { count: running })}</Box>
+                    </ButtonBase>
+                )}
+            </Box>
+            <Box sx={{ flexShrink: 0 }}><ViewSwitch view={view} onChange={onView} /></Box>
+        </Box>
+    );
+}
+
+export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, libraryKey, selectedId, initialTab = 'threads', status }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; /** Opens a thread's running tasks from its card's count pill, or all of them from the toolbar's chip. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; /** Opens a status's thread list from its group heading or column. */ onStatus?: (status: string, anchor: HTMLElement) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab; /** The coordinator's status, as a third tab; no tab without it. */ status?: ReactNode }) {
     const { t } = useTranslation('projects');
     const [tab, setTab] = useState<OverviewTab>(initialTab);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
@@ -45,8 +68,8 @@ export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, li
                     <Tab value="library" label={t('overview.library')} />
                     {status != null && <Tab value="status" label={t('overview.status')} />}
                 </Tabs>
-                {tab === 'threads' && <ViewSwitch view={view} onChange={setView} />}
             </Box>
+            {tab === 'threads' && <ThreadsToolbar threads={threads} onTasks={onTasks} view={view} onView={setView} />}
             <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
                 {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} onStatus={onStatus} view={view} pinnedIds={pinnedIds} onTogglePin={togglePin} /> : tab === 'status' && status != null ? status : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
             </Box>

@@ -75,11 +75,14 @@ describe('OverviewPane view', () => {
         expect(screen.getByRole('button', { name: 'overview.view.vertical' })).toHaveAttribute('aria-pressed', 'true');
     });
 
-    it('remembers the choice and offers it only on the Threads tab', () => {
+    it('remembers the choice and offers it only in the Threads view, outside the Tab row', () => {
         localStorage.setItem('tingly-project.overview.view', 'horizontal');
         show();
         expect(screen.getByRole('button', { name: 'overview.view.horizontal' })).toHaveAttribute('aria-pressed', 'true');
         expect(lane('failed')).toBeInTheDocument();
+        // The tabs row holds tabs and nothing else: a narrow pane cannot squeeze one out for a control.
+        const tabs = screen.getByRole('tablist');
+        expect(within(tabs.parentElement!.parentElement!).queryByRole('group', { name: 'overview.view.label' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('tab', { name: 'overview.library' }));
         expect(screen.queryByRole('group', { name: 'overview.view.label' })).not.toBeInTheDocument();
     });
@@ -148,10 +151,27 @@ describe('OverviewPane view', () => {
     });
 });
 
+describe('OverviewPane toolbar', () => {
+    it('counts the threads and, when some run tasks, offers all of them in one chip', () => {
+        const onTasks = vi.fn();
+        const withTasks = [...threads.slice(0, 4), th('k2', 'SDK retries', 'working', { running_tasks: 2 }), th('k3', 'Other', 'working', { running_tasks: 1 })];
+        render(<OverviewPane projectId="p" threads={withTasks} onOpen={vi.fn()} onTasks={onTasks} libraryKey={0} />);
+        expect(screen.getByText('overview.threadCount:6')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'thread.tasksBadge:3' }));
+        expect(onTasks).toHaveBeenCalledTimes(1);
+        expect(onTasks.mock.calls[0][0].map((x: Thread) => x.id)).toEqual(['k2', 'k3']);
+    });
+
+    it('stays quiet about tasks when none run', () => {
+        show();
+        expect(screen.queryByRole('button', { name: /thread\.tasksBadge/ })).not.toBeInTheDocument();
+    });
+});
+
 describe('OverviewPane status tab', () => {
     it('offers Status as a third tab beside Threads and Library when the coordinator has a status', () => {
         render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} status={<div>coordinator status</div>} />);
-        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threadsWaiting:3', 'overview.library', 'overview.status']);
+        expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['overview.threads3', 'overview.library', 'overview.status']);
         expect(screen.queryByText('coordinator status')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('tab', { name: 'overview.status' }));
         expect(screen.getByText('coordinator status')).toBeInTheDocument();
