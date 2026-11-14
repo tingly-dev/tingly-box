@@ -94,14 +94,14 @@ export function ProjectLinksCard({ threads }: { threads: Thread[] }) {
     const { t } = useTranslation('projects');
     // Every thread event re-renders the Status tab; the sort only moves when a thread's links do.
     const rows = useMemo(() => threads
-        .flatMap((th) => (th.links ?? []).map((link) => ({ link, owner: th.title, at: Date.parse(link.created_at) })))
+        .flatMap((th) => (th.links ?? []).map((link) => ({ link, threadId: th.id, owner: th.title, at: Date.parse(link.created_at) })))
         .sort((a, b) => b.at - a.at), [threads]);
     if (rows.length === 0) return null;
     const open = rows.filter((r) => r.link.state === 'open').length;
     return (
         <RailCard id="project-links" title={t('links.title')} aside={t('links.openCount', { open, total: rows.length })}>
             <Box sx={{ mx: -0.25, maxHeight: 360, overflowY: 'auto' }}>
-                {rows.map(({ link, owner }) => <LinkRow key={`${link.thread_id}/${link.repo}/${link.kind}/${link.number}`} link={link} owner={owner} />)}
+                {rows.map(({ link, owner, threadId }) => <LinkRow key={`${threadId}/${link.repo}/${link.kind}/${link.number}`} link={link} owner={owner} />)}
             </Box>
         </RailCard>
     );

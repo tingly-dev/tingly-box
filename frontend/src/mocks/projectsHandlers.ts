@@ -74,22 +74,22 @@ const thread = (o: Partial<Record<string, unknown>> & { id: string; title: strin
 const threadWithUsage = (o: Parameters<typeof thread>[0]) => { const t = thread(o); return { ...t, ...usageOf(t), ...o } }
 
 // Issues and PRs a thread opened through its tools, as the server last read them.
-const link = (threadId: string, o: Partial<Record<string, unknown>> & { number: number; title: string }) => ({
-    thread_id: threadId, project_id: 'p-latency', kind: 'pr', repo: 'acme/payments-api', url: `https://github.com/acme/payments-api/pull/${o.number}`,
-    role: 'opened', state: 'open', refreshed_at: ago(3), created_at: ago(40), updated_at: ago(3), ...o,
+const link = (o: Partial<Record<string, unknown>> & { number: number; title: string }) => ({
+    kind: 'pr', repo: 'acme/payments-api', url: `https://github.com/acme/payments-api/pull/${o.number}`,
+    role: 'opened', state: 'open', refreshed_at: ago(3), attempted_at: ago(3), created_at: ago(40), ...o,
 })
 
 const threads = [
     threadWithUsage({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     threadWithUsage({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18),
-        links: [link('t-cache', { number: 214, title: 'Cache idempotency keys in Redis', ci: 'failing', merge_state: 'ready' }), link('t-cache', { number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
+        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', ci: 'failing', merge_state: 'ready' }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
     threadWithUsage({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1),
-        links: [link('t-sdk', { number: 37, repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
+        links: [link({ number: 37, repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
     // Over the project's limit: its turn waits for a free slot.
     threadWithUsage({ id: 't-queued', title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
     threadWithUsage({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
     threadWithUsage({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20),
-        links: [link('t-trace', { number: 201, title: 'Add tracing spans to /charge', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
+        links: [link({ number: 201, title: 'Add tracing spans to /charge', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.

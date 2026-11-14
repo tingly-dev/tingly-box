@@ -30,7 +30,7 @@ describe('ThreadInfoRail', () => {
     it('shows the issues and PRs the thread opened, and nothing when it opened none', () => {
         const { rerender } = render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
         expect(screen.queryByRole('region', { name: 'links.title' })).not.toBeInTheDocument();
-        const link = { thread_id: 't', project_id: 'p', kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Fix login', role: 'opened', state: 'open', ci: 'passing', refreshed_at: new Date().toISOString(), created_at: '', updated_at: '' };
+        const link = { kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Fix login', role: 'opened', state: 'open', ci: 'passing', refreshed_at: new Date().toISOString(), attempted_at: '', created_at: '' };
         rerender(<ThreadInfoRail {...props} thread={thread({ links: [link] as Thread['links'] })} folder={false} tasks={[]} canReview={false} />);
         expect(within(screen.getByRole('region', { name: 'links.title' })).getByRole('link', { name: '#12 Fix login' })).toBeInTheDocument();
     });

@@ -14,8 +14,8 @@ afterEach(() => {
 
 const now = new Date().toISOString();
 const link = (o: Partial<ThreadLink>): ThreadLink => ({
-    thread_id: 't1', project_id: 'p', kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Add the tool',
-    role: 'opened', state: 'open', refreshed_at: now, created_at: now, updated_at: now, ...o,
+    kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Add the tool',
+    role: 'opened', state: 'open', refreshed_at: now, attempted_at: now, created_at: now, ...o,
 } as ThreadLink);
 const thread = (links: ThreadLink[], o: Partial<Thread> = {}): Thread => ({ id: 't1', title: 'Fix export', links, ...o } as Thread);
 

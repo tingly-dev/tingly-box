@@ -2297,6 +2297,11 @@ export interface components {
             updated_at: string;
         };
         ThreadLink: {
+            /**
+             * Format: date-time
+             * @description Field attempted_at
+             */
+            attempted_at: string;
             /** @description Field ci */
             ci?: string;
             /**
@@ -2306,6 +2311,11 @@ export interface components {
             created_at: string;
             /** @description Field draft */
             draft?: boolean;
+            /**
+             * Format: int64
+             * @description Field failures
+             */
+            failures?: number;
             /** @description Field kind */
             kind: string;
             /** @description Field last_error */
@@ -2317,8 +2327,6 @@ export interface components {
              * @description Field number
              */
             number: number;
-            /** @description Field project_id */
-            project_id: string;
             /**
              * Format: date-time
              * @description Field refreshed_at
@@ -2330,15 +2338,8 @@ export interface components {
             role: string;
             /** @description Field state */
             state: string;
-            /** @description Field thread_id */
-            thread_id: string;
             /** @description Field title */
             title: string;
-            /**
-             * Format: date-time
-             * @description Field updated_at
-             */
-            updated_at: string;
             /** @description Field url */
             url: string;
         };

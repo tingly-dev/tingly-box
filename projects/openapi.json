@@ -4987,6 +4987,11 @@
       "ThreadLink": {
         "type": "object",
         "properties": {
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field attempted_at"
+          },
           "ci": {
             "type": "string",
             "description": "Field ci"
@@ -4999,6 +5004,11 @@
           "draft": {
             "type": "boolean",
             "description": "Field draft"
+          },
+          "failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failures"
           },
           "kind": {
             "type": "string",
@@ -5017,10 +5027,6 @@
             "format": "int64",
             "description": "Field number"
           },
-          "project_id": {
-            "type": "string",
-            "description": "Field project_id"
-          },
           "refreshed_at": {
             "type": "string",
             "format": "date-time",
@@ -5038,18 +5044,9 @@
             "type": "string",
             "description": "Field state"
           },
-          "thread_id": {
-            "type": "string",
-            "description": "Field thread_id"
-          },
           "title": {
             "type": "string",
             "description": "Field title"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field updated_at"
           },
           "url": {
             "type": "string",
@@ -5057,8 +5054,6 @@
           }
         },
         "required": [
-          "thread_id",
-          "project_id",
           "kind",
           "repo",
           "number",
@@ -5067,8 +5062,8 @@
           "role",
           "state",
           "refreshed_at",
-          "created_at",
-          "updated_at"
+          "attempted_at",
+          "created_at"
         ]
       },
       "ThreadRespondRequest": {

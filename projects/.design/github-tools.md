@@ -73,20 +73,23 @@ Boundaries the setting cannot move (enforced in code, not in the prompt):
 
 ## The record
 
-Table `thread_links` (one row per thread and issue or PR):
+**Where it lives: a JSON column of the thread's own row** (`threads.links`, `Thread.Links`), not a table of its own. It is a short list that belongs to one thread, is read together with the thread everywhere (list, detail, events, the coordinator's view) and goes when the thread goes, so a table would add a migration, a cascade, a batch query for every thread list and a second place that must stay in step with the thread, to buy a constraint the code can keep. (`Project.Repos` is stored the same way.) This is the default for anything of this shape; a table is for records that are queried across threads on their own terms.
 
-| Column | Meaning |
+The one hazard of a column is that `SaveThread` writes a whole row from whatever copy its caller holds, which could undo a refresh made meanwhile. So `SaveThread` leaves the column out, and only `UpdateThreadLinks` writes it: a transaction that reads the links, changes them and writes just that column (as `SaveThreadUsage` does for its columns). A test saves a stale copy of a thread after a refresh and checks the links survive; leaving `Omit("Links")` out of `SaveThread` fails it.
+
+Each entry of the list:
+
+| Field | Meaning |
 | --- | --- |
-| `thread_id`, `project_id` | owner |
 | `kind` | `issue` or `pr` |
 | `repo`, `number`, `url`, `title` | identity and what the card shows |
 | `role` | `opened` (the thread created it) or `commented` |
 | `state` | `open`, `closed`, `merged` |
 | `draft`, `ci`, `merge_state` | PR only. `ci`: `none`, `pending`, `passing`, `failing`. `merge_state`: `ready`, `conflicts`, `blocked`, `behind`, `unknown` |
-| `refreshed_at`, `failures`, `last_error` | refresh bookkeeping |
+| `refreshed_at`, `attempted_at`, `failures`, `last_error` | refresh bookkeeping |
 | `created_at` | when the thread first touched it |
 
-Unique on (thread, repo, kind, number); a number always means the item of the thread's current origin, so `update` and `view` look it up by repo and number, and the same number in another repository is another row. A call that succeeds writes the row from GitHub's answer (not from the model's input) before the tool returns, and publishes a `thread` event. A tool reads an item in full before it writes about it: `comment` posts only after the issue or PR was read, so a failed read never leaves a record that says a merged PR is closed. An edit's own answer carries no checks and often no mergeability yet, so `update` keeps the last reading of both. `Thread.Links` (not stored on the thread row) carries the rows to the API and the events through `Threads.Annotate`, so the thread list, the thread, the project detail and the coordinator's view all show the same data without a new endpoint.
+An item is (repo, kind, number) within its thread; a number always means the item of the thread's current origin, so `update` and `view` look it up by repo and number, and the same number in another repository is another entry. A call that succeeds writes the entry from GitHub's answer (not from the model's input) before the tool returns, and publishes a `thread` event, which already carries the links because they are part of the thread. A tool reads an item in full before it writes about it: `comment` posts only after the issue or PR was read, so a failed read never leaves a record that says a merged PR is closed. An edit's own answer carries no checks and often no mergeability yet, so `update` keeps the last reading of both. The refresh sweep reads the threads that have links (`LinkedThreads`: projects that are not archived) and walks their open entries, least recently read first.
 
 **If the write to the database fails** after GitHub accepted the call, the tool still reports success with the URL and says the record could not be saved; it never retries the create (that would make a duplicate).
 
@@ -94,7 +97,7 @@ Unique on (thread, repo, kind, number); a number always means the item of the th
 
 Not imported in batch 1. Options weighed:
 
-- *Parse PR links out of old reports.* Cheap, but it cannot tell "I opened this" from "this is related", and it would put guesses into a table that otherwise only holds facts.
+- *Parse PR links out of old reports.* Cheap, but it cannot tell "I opened this" from "this is related", and it would put guesses into a list that otherwise only holds facts.
 - *`gh pr list --head <branch>` per thread with a branch.* Precise (the PR whose head is the thread's branch), but one request per thread, and the user may not have a login at all.
 - Proposed for a later change: the second one, run once per thread the first time its branch is seen with no PR record and only on the refresher's schedule, recorded with role `found`. Until then an old thread shows no links and a new PR it opens with the tool is recorded as usual.
 
