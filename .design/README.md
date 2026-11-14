@@ -169,7 +169,7 @@
 | [ui-redesign.md](./ui-redesign.md) | UI 重设计 — 决策、实施状态与后续 | 部分落地；有撤回及后续项 |
 | [agent-page-redesign.md](./agent-page-redesign.md) | Agent 页重设计 — 模板、配置状态与实施边界 | A–D 落地；E 部分撤回；Profile 暂缓 |
 | [ux-review.md](./ux-review.md) | UX 梳理 — 前端"杂乱"的审计、讨论与决定 | 讨论中；Star 入口、Dashboard 头部、Agent 页 v4 已确定并有 PR |
-| [workspace-layout.md](./workspace-layout.md) | Workspace 布局 — 区域、卡片归属与统一的模式切换（方案 A / B）；与 [projects-placement.md](./projects-placement.md) 的布局矩阵相关 | 提案，等待决定；未实施 |
+| [workspace-layout.md](./workspace-layout.md) | Workspace 布局 — 保留全部摆放、统一内容与交互的一致性契约（方案 C）；备选 A / B；首页部分已批准；与 [projects-placement.md](./projects-placement.md) 相关 | 提案，等待决定；未实施 |
 | [mobile-ui.md](./mobile-ui.md) | Mobile UI — a phone-native shell for Agent and the Projects workspace (TEP-2558); clickable prototype in `mobile-prototype/` | 提案；未实施 |
 | [ui-flow-analysis.md](./ui-flow-analysis.md) | UI 动线分析 — 发现、人工打标反馈与实现结论 | 第 1 轮已落地；其余项见正文 |
 | [refactor-frontend-2026-09.md](./refactor-frontend-2026-09.md) | Frontend Refactor 2026-09 — Plan & Survey Reports (merged) | 已完成的历史审计与交付记录 |
