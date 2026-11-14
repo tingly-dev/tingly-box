@@ -67,7 +67,8 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
-    const [github, setGithub] = useState<'ask' | 'allow'>(project.thread_github_access === 'allow' ? 'allow' : 'ask');
+    const savedGithub = project.thread_github_access === 'allow' ? 'allow' : 'ask';
+    const [github, setGithub] = useState<'ask' | 'allow'>(savedGithub);
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
     useEffect(() => {
@@ -75,7 +76,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
     const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || github !== (project.thread_github_access === 'allow' ? 'allow' : 'ask');
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || github !== savedGithub;
 
     return (
         <Stack spacing={2.5}>

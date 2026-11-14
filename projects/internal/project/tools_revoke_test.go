@@ -31,11 +31,8 @@ func answers(t *testing.T, tools *sessionToolsMCP, threadID string) (status int,
 
 func TestRevokeEndsAThreadsToolURLAndTheNextConfigIssuesANewOne(t *testing.T) {
 	f := newToolsFixture(t)
-	tools := f.svc.sessionToolsMCP
-	if tools == nil {
-		tools = &sessionToolsMCP{service: f.svc}
-		f.svc.sessionToolsMCP = tools
-	}
+	tools := f.tools
+	f.svc.sessionToolsMCP = tools
 	t.Cleanup(func() { _ = tools.close(context.Background()) })
 
 	first, err := tools.config(f.worker.ID)

@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
@@ -84,17 +83,11 @@ func callTool(a *ActorCtx, name string, args map[string]any) (string, bool) {
 		return err.Error(), true
 	}
 	defer session.Close()
-	res, err := session.CallTool(a.Turn.Ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	out, isErr, err := coordtest.CallText(a.Turn.Ctx, session, name, args)
 	if err != nil {
 		return err.Error(), true
 	}
-	var text []string
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			text = append(text, tc.Text)
-		}
-	}
-	return strings.Join(text, "\n"), res.IsError
+	return out, isErr
 }
 
 // G1: a thread opens its PR through the tool; the record and the coordinator's

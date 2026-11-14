@@ -1,14 +1,15 @@
+import { useMemo } from 'react';
 import { Box, Link, Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Theme } from '@mui/material/styles';
-import { getReadableAccent } from '@tingly/ui/theme/status';
+import { getReadableAccent, type StatusTone } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Thread, ThreadLink } from '../../client';
 import { IssueOpened, Merge, PullRequest } from '../icons';
 import { timeAgo } from '../../utils/format';
 import { RailCard } from './infoRail';
 
-type Tone = 'success' | 'info' | 'warning' | 'error' | 'muted';
+type Tone = Extract<StatusTone, 'success' | 'info' | 'warning' | 'error' | 'muted'>;
 
 interface Part {
     text: string;
@@ -20,7 +21,7 @@ const colorOf = (theme: Theme, tone: Tone) => (tone === 'muted' ? theme.palette.
 /** Where an item stands: open, merged or closed, and for an open PR its draft
  * mark, checks and mergeability. Only what GitHub last said; a field it was
  * not asked about yet (a PR just opened) is left out, not shown as unknown. */
-export function linkParts(link: ThreadLink, t: (key: string) => string): Part[] {
+function linkParts(link: ThreadLink, t: (key: string) => string): Part[] {
     const parts: Part[] = [];
     if (link.state === 'merged') return [{ text: t('links.merged'), tone: 'info' }];
     if (link.state === 'closed') return [{ text: t('links.closed'), tone: 'muted' }];
@@ -46,7 +47,7 @@ function LinkIcon({ link }: { link: ThreadLink }) {
 
 /** One issue or PR: its number and title as a link to GitHub, and under it
  * where it stands and how old that reading is. */
-export function LinkRow({ link, owner }: { link: ThreadLink; owner?: string }) {
+function LinkRow({ link, owner }: { link: ThreadLink; owner?: string }) {
     const { t, i18n } = useTranslation('projects');
     const parts = linkParts(link, t);
     const age = timeAgo(link.refreshed_at, i18n.language);
@@ -91,9 +92,10 @@ export function ThreadLinksCard({ thread }: { thread: Thread }) {
  * thread each belongs to, in the coordinator's Status tab. */
 export function ProjectLinksCard({ threads }: { threads: Thread[] }) {
     const { t } = useTranslation('projects');
-    const rows = threads
-        .flatMap((th) => (th.links ?? []).map((link) => ({ link, owner: th.title })))
-        .sort((a, b) => Date.parse(b.link.created_at) - Date.parse(a.link.created_at));
+    // Every thread event re-renders the Status tab; the sort only moves when a thread's links do.
+    const rows = useMemo(() => threads
+        .flatMap((th) => (th.links ?? []).map((link) => ({ link, owner: th.title, at: Date.parse(link.created_at) })))
+        .sort((a, b) => b.at - a.at), [threads]);
     if (rows.length === 0) return null;
     const open = rows.filter((r) => r.link.state === 'open').length;
     return (

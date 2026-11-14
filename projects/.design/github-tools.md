@@ -18,7 +18,7 @@ Five tools for the thread's own session (in the table below), one persisted reco
 | Tool | What it does |
 | --- | --- |
 | `create_issue` | Open an issue in the thread's repository (`title`, `body`). |
-| `create_pr` | Push the thread's own branch (never forced), open a PR from it (`title`, `body`, optional `base`, `draft`). If the branch already has an open PR it returns that one instead of failing. |
+| `create_pr` | Push the thread's own branch (never forced), open a PR from it (`title`, `body`, optional `base`, `draft`). If the branch already has an open PR it pushes the branch again (so the PR carries the latest commits) and returns that PR instead of opening a second one. |
 | `update` | Change `title` and `body` of an issue, or `title`, `body` and `base` of a PR, **that this thread opened**; addressed by `number` (optional only when the thread has one PR). |
 | `comment` | Comment on an issue or PR of the thread's repository (`number`, `body`). |
 | `view` | Read an issue or PR of the thread's repository by `number`: state and description, and for an open PR its checks and mergeability. The one read tool. |
@@ -40,7 +40,7 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 - *Repository*: from the thread's own checkout (`git config --get remote.origin.url`, the value as configured, parsed to owner/name; credentials in the URL are dropped, not echoed). A remote that is not `github.com` is refused (GitHub Enterprise: later). There is no `repo` input, so a thread cannot write to another repository.
 - *Head branch*: `Thread.Branch`; a folder session uses the branch its folder is on. Refused when it is detached, equals the base, or is the repository's default branch.
 - *Base*: the thread's `BaseBranch` unless `base` is given; a folder session's default is the repository's default branch.
-- *Push*: `git push origin refs/heads/<branch>:refs/heads/<branch>`: one explicit refspec, no `+`, no `--force`, so it can only fast-forward the thread's own branch. A rejected push is an error that says to rebase; there is no retry with force.
+- *Push*: `git push origin refs/heads/<branch>:refs/heads/<branch>`: one explicit refspec, no `+`, no `--force`, so it can only fast-forward the thread's own branch. A push that lost to newer commits on origin (`non-fast-forward`, `fetch first`) is an error that says to rebase; any other rejection (a hook, a protected branch) is reported as it is, without the rebase advice. There is no retry with force.
 - *PR needs commits*: refused when the branch has no commit beyond its base.
 - *Transport*: `gh api` with a JSON body for every call (REST, no GraphQL). That avoids the `gh pr edit` failure and the shell quoting of bodies.
 - *No footer.* The tool adds nothing to the body (no requester note, thread link or marker): the repository's PR template governs the text and the model writes it.
@@ -84,7 +84,7 @@ Table `thread_links` (one row per thread and issue or PR):
 | `refreshed_at`, `failures`, `last_error` | refresh bookkeeping |
 | `created_at` | when the thread first touched it |
 
-Unique on (thread, repo, kind, number). A call that succeeds writes the row from GitHub's answer (not from the model's input) before the tool returns, and publishes a `thread` event. `Thread.Links` (not stored on the thread row) carries the rows to the API and the events through `Threads.Annotate`, so the thread list, the thread, the project detail and the coordinator's view all show the same data without a new endpoint.
+Unique on (thread, repo, kind, number); a number always means the item of the thread's current origin, so `update` and `view` look it up by repo and number, and the same number in another repository is another row. A call that succeeds writes the row from GitHub's answer (not from the model's input) before the tool returns, and publishes a `thread` event. A tool reads an item in full before it writes about it: `comment` posts only after the issue or PR was read, so a failed read never leaves a record that says a merged PR is closed. An edit's own answer carries no checks and often no mergeability yet, so `update` keeps the last reading of both. `Thread.Links` (not stored on the thread row) carries the rows to the API and the events through `Threads.Annotate`, so the thread list, the thread, the project detail and the coordinator's view all show the same data without a new endpoint.
 
 **If the write to the database fails** after GitHub accepted the call, the tool still reports success with the URL and says the record could not be saved; it never retries the create (that would make a duplicate).
 

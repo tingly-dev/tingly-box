@@ -1,11 +1,11 @@
 package project
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,13 +19,7 @@ import (
 // call runs a tool as the worker's session would and returns its text.
 func (f *linksFixture) call(t *testing.T, cs *mcp.ClientSession, name string, args map[string]any) (string, bool) {
 	t.Helper()
-	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
-	require.NoError(t, err)
-	var text []string
-	for _, c := range res.Content {
-		text = append(text, c.(*mcp.TextContent).Text)
-	}
-	return strings.Join(text, "\n"), res.IsError
+	return callTool(t, cs, name, args)
 }
 
 func TestCreatePRPushesOwnBranchOpensPRAndRecordsIt(t *testing.T) {
@@ -338,7 +332,6 @@ func TestUpdateRefusesAnIssueTheThreadOnlyCommentedOn(t *testing.T) {
 
 func TestToolsNeverShowACredential(t *testing.T) {
 	f := newLinksFixture(t)
-	f.gh.fail = assert.AnError
 	f.gh.fail = errString("HTTP 500 with ghp_abcdefghijklmnopqrstuvwxyz0123456789 and https://user:s3cret@github.com/x Authorization: Bearer abc.def")
 	cs, _ := f.client(t, f.worker.ID)
 	out, isErr := f.call(t, cs, "create_issue", map[string]any{"title": "x"})
@@ -361,18 +354,9 @@ func TestGitHubToolsBelongToThreadsNotTheCoordinator(t *testing.T) {
 		cs, _ := f.client(t, c.id)
 		names := toolNames(listTools(t, cs))
 		for _, tool := range append(githubWriteTools, toolView) {
-			assert.Equal(t, c.want, contains(names, tool), "%s for %s", tool, c.id)
+			assert.Equal(t, c.want, slices.Contains(names, tool), "%s for %s", tool, c.id)
 		}
 	}
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 func TestParseGitHubRemote(t *testing.T) {
