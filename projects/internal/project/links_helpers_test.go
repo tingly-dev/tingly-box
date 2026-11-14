@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -113,18 +114,50 @@ func (g *fakeGitHub) UpdatePR(_ context.Context, r GitHubRepo, n int, title, bod
 	return it, nil
 }
 
+func (g *fakeGitHub) UpdateIssue(_ context.Context, r GitHubRepo, n int, title, body *string) (GitHubItem, error) {
+	what := ""
+	if title != nil {
+		what += " title=" + *title
+	}
+	if body != nil {
+		what += " body=" + *body
+	}
+	if err := g.log("update-issue %s #%d%s", r.Slug(), n, what); err != nil {
+		return GitHubItem{}, err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	it := g.items[n]
+	if title != nil {
+		it.Title = *title
+	}
+	if body != nil {
+		it.Body = *body
+	}
+	g.items[n] = it
+	return it, nil
+}
+
 func (g *fakeGitHub) PR(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
 	err := g.log("pr %s #%d", r.Slug(), n)
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.items[n], err
+	it, ok := g.items[n]
+	if !ok && err == nil {
+		err = errors.New("GitHub GET pulls: HTTP 404 Not Found")
+	}
+	return it, err
 }
 
 func (g *fakeGitHub) Issue(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
 	err := g.log("issue %s #%d", r.Slug(), n)
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.items[n], err
+	it, ok := g.items[n]
+	if !ok && err == nil {
+		err = errors.New("GitHub GET issues: HTTP 404 Not Found")
+	}
+	return it, err
 }
 
 func (g *fakeGitHub) set(n int, mod func(*GitHubItem)) {

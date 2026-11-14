@@ -53,6 +53,9 @@ func (g *stubGitHub) CreatePR(_ context.Context, _ project.GitHubRepo, title, _,
 func (g *stubGitHub) UpdatePR(context.Context, project.GitHubRepo, int, *string, *string, *string) (project.GitHubItem, error) {
 	return project.GitHubItem{}, nil
 }
+func (g *stubGitHub) UpdateIssue(context.Context, project.GitHubRepo, int, *string, *string) (project.GitHubItem, error) {
+	return project.GitHubItem{}, nil
+}
 func (g *stubGitHub) PR(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

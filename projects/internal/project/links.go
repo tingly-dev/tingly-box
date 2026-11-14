@@ -27,6 +27,9 @@ type Links struct {
 	now     func() time.Time
 	// sweeping keeps two sweeps from overlapping.
 	sweeping sync.Mutex
+	// views are the last answers of View, for linkMinGap.
+	viewMu sync.Mutex
+	views  map[string]viewed
 }
 
 // Refresh timing (see the design doc): an open item is read again after
@@ -48,7 +51,7 @@ func NewLinks(store *db.Store, gh GitHub, changed func(threadID string)) *Links 
 	if gh == nil {
 		gh = ghCLI{}
 	}
-	return &Links{store: store, gh: gh, changed: changed, now: time.Now}
+	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}}
 }
 
 // linkContext is where a thread's call lands: decided from the thread, never
@@ -194,6 +197,7 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 	if err != nil {
 		return "", err
 	}
+	l.forgetView(t, number)
 	_, rerr := l.record(t, lc.repo, kind, db.LinkCommented, it)
 	return fmt.Sprintf("commented on %s #%d %s%s", kind, number, commentURL, saved(rerr)), nil
 }
@@ -250,8 +254,10 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 	return fmt.Sprintf("opened PR #%d %s (%s → %s)%s", it.Number, it.URL, lc.head, base, saved(rerr)), nil
 }
 
-// UpdatePR changes the title, body or base of a PR this thread opened.
-func (l *Links) UpdatePR(ctx context.Context, t *db.Thread, number int, title, body, base *string) (string, error) {
+// Update changes the title and description of an issue, or the title,
+// description and base of a PR, that this thread opened. It cannot close or
+// merge anything.
+func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, body, base *string) (string, error) {
 	if title == nil && body == nil && base == nil {
 		return "", errors.New("nothing to change: pass title, body or base")
 	}
@@ -272,29 +278,38 @@ func (l *Links) UpdatePR(ctx context.Context, t *db.Thread, number int, title, b
 		}
 		base = &s
 	}
-	link, err := l.ownPR(t, number, true)
+	link, err := l.ownItem(t, number, true)
 	if err != nil {
 		return "", err
+	}
+	if base != nil && link.Kind != db.LinkPR {
+		return "", fmt.Errorf("#%d is an issue: base only applies to a PR", link.Number)
 	}
 	repo, err := repoOfLink(link)
 	if err != nil {
 		return "", err
 	}
 	if link.State != db.LinkStateOpen {
-		return "", fmt.Errorf("PR #%d is %s: only an open PR can be edited", link.Number, link.State)
+		return "", fmt.Errorf("%s #%d is %s: only an open one can be edited", link.Kind, link.Number, link.State)
 	}
-	if base != nil {
-		if bad := checkBranchName(ctx, t.Cwd, *base); bad != nil {
-			return "", bad
+	var it GitHubItem
+	if link.Kind == db.LinkIssue {
+		it, err = l.gh.UpdateIssue(ctx, repo, link.Number, title, body)
+	} else {
+		if base != nil {
+			if bad := checkBranchName(ctx, t.Cwd, *base); bad != nil {
+				return "", bad
+			}
 		}
+		it, err = l.gh.UpdatePR(ctx, repo, link.Number, title, body, base)
+		// The edit's answer has no CI; keep the last reading of it.
+		it.CI = link.CI
 	}
-	it, err := l.gh.UpdatePR(ctx, repo, link.Number, title, body, base)
 	if err != nil {
 		return "", err
 	}
-	// The edit's answer has no CI; keep the last reading of it.
-	it.CI = link.CI
-	_, rerr := l.record(t, repo, db.LinkPR, db.LinkOpened, it)
+	l.forgetView(t, link.Number)
+	_, rerr := l.record(t, repo, link.Kind, db.LinkOpened, it)
 	var what []string
 	if title != nil {
 		what = append(what, "title")
@@ -305,22 +320,22 @@ func (l *Links) UpdatePR(ctx context.Context, t *db.Thread, number int, title, b
 	if base != nil {
 		what = append(what, "base")
 	}
-	return fmt.Sprintf("updated PR #%d %s (%s)%s", it.Number, it.URL, strings.Join(what, ", "), saved(rerr)), nil
+	return fmt.Sprintf("updated %s #%d %s (%s)%s", link.Kind, it.Number, it.URL, strings.Join(what, ", "), saved(rerr)), nil
 }
 
-// ownPR is the PR link a call means: the numbered one, or the thread's only
-// one. With mustOpen set it has to be one the thread opened.
-func (l *Links) ownPR(t *db.Thread, number int, mustOpen bool) (*db.ThreadLink, error) {
+// ownItem is the link a call means: the numbered one, or, with no number, the
+// thread's only PR. With mustOpen set it has to be one the thread opened.
+func (l *Links) ownItem(t *db.Thread, number int, mustOpen bool) (*db.ThreadLink, error) {
 	if number > 0 {
-		link, err := l.store.GetThreadLink(t.ID, db.LinkPR, number)
+		link, err := l.store.FindThreadLink(t.ID, number)
 		if errors.Is(err, db.ErrNotFound) {
-			return nil, fmt.Errorf("PR #%d is not one of this thread's PRs", number)
+			return nil, fmt.Errorf("#%d is not one of this thread's issues or PRs", number)
 		}
 		if err != nil {
 			return nil, err
 		}
 		if mustOpen && link.Role != db.LinkOpened {
-			return nil, fmt.Errorf("PR #%d was not opened by this thread, so it cannot be edited here (you may comment on it)", number)
+			return nil, fmt.Errorf("#%d was not opened by this thread, so it cannot be edited here (you may comment on it)", number)
 		}
 		return link, nil
 	}
@@ -336,7 +351,7 @@ func (l *Links) ownPR(t *db.Thread, number int, mustOpen bool) (*db.ThreadLink, 
 	}
 	switch len(prs) {
 	case 0:
-		return nil, errors.New("this thread has no PR: open one with create_pr")
+		return nil, errors.New("this thread has no PR: open one with create_pr, or pass number")
 	case 1:
 		return &prs[0], nil
 	}
@@ -356,31 +371,100 @@ func (l *Links) ownPR(t *db.Thread, number int, mustOpen bool) (*db.ThreadLink, 
 	return nil, fmt.Errorf("this thread has several PRs (%s): pass number", strings.Join(nums, ", "))
 }
 
-// Status reads a PR of the thread. It asks GitHub unless the record is fresh.
-func (l *Links) Status(ctx context.Context, t *db.Thread, number int) (string, error) {
-	link, err := l.ownPR(t, number, false)
+// viewed is a reading View answered with, kept for linkMinGap so a model that
+// polls does not become a request to GitHub each time.
+type viewed struct {
+	at   time.Time
+	text string
+}
+
+func viewKey(t *db.Thread, number int) string { return t.ID + "#" + strconv.Itoa(number) }
+
+func (l *Links) forgetView(t *db.Thread, number int) {
+	l.viewMu.Lock()
+	defer l.viewMu.Unlock()
+	delete(l.views, viewKey(t, number))
+}
+
+// viewBodyMax is how much of an item's description View hands back.
+const viewBodyMax = 2000
+
+// View reads an issue or PR of the thread's repository: where it stands, and
+// for an open PR its checks and mergeability. An item the thread has a link to
+// also has its record brought up to date; any other is only read, never
+// recorded. The text is third-party content and comes wrapped as such.
+func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, error) {
+	if number <= 0 {
+		k, err := l.ownItem(t, 0, false)
+		if err != nil {
+			return "", err
+		}
+		number = k.Number
+	}
+	key := viewKey(t, number)
+	l.viewMu.Lock()
+	c, ok := l.views[key]
+	l.viewMu.Unlock()
+	if ok && l.now().Sub(c.at) < linkMinGap {
+		return c.text, nil
+	}
+	link, err := l.store.FindThreadLink(t.ID, number)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return "", err
+	}
+	var repo GitHubRepo
+	if err == nil {
+		repo, err = repoOfLink(link)
+	} else {
+		link = nil
+		var lc *linkContext
+		if lc, err = l.resolve(ctx, t); err == nil {
+			repo = lc.repo
+		}
+	}
 	if err != nil {
 		return "", err
 	}
-	if age := l.now().Sub(link.RefreshedAt); age >= linkMinGap || (link.State == db.LinkStateOpen && link.CI == "") {
-		if rerr := l.refresh(ctx, link); rerr != nil {
-			return "", rerr
+	it, err := l.gh.Issue(ctx, repo, number)
+	if err != nil {
+		return "", err
+	}
+	kind := db.LinkIssue
+	if it.IsPR {
+		kind = db.LinkPR
+		if it, err = l.gh.PR(ctx, repo, number); err != nil {
+			return "", err
 		}
 	}
-	return describePR(link), nil
+	if link != nil {
+		if err := l.applyReading(link, it); err != nil {
+			logrus.WithError(err).Warn("projects: cannot save a link's reading")
+		}
+	}
+	text := describeItem(kind, it)
+	l.viewMu.Lock()
+	if len(l.views) > 200 {
+		l.views = map[string]viewed{}
+	}
+	l.views[key] = viewed{at: l.now(), text: text}
+	l.viewMu.Unlock()
+	return text, nil
 }
 
-// describePR is the answer of get_pr_status.
-func describePR(k *db.ThreadLink) string {
+// describeItem is the answer of view.
+func describeItem(kind string, it GitHubItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "PR #%d %q %s\nstate: %s", k.Number, k.Title, k.URL, k.State)
-	if k.Draft {
+	fmt.Fprintf(&b, "%s #%d %q %s\nstate: %s", kind, it.Number, it.Title, it.URL, it.State)
+	if it.Draft {
 		b.WriteString(" (draft)")
 	}
-	if k.State == db.LinkStateOpen {
-		fmt.Fprintf(&b, "\nchecks: %s\nmergeable: %s", orUnread(k.CI), orUnread(k.MergeState))
+	if kind == db.LinkPR && it.State == db.LinkStateOpen {
+		fmt.Fprintf(&b, "\nchecks: %s\nmergeable: %s", orUnread(it.CI), orUnread(it.MergeState))
 	}
-	return b.String()
+	if body := strings.TrimSpace(it.Body); body != "" {
+		b.WriteString("\n\n" + clip(body, viewBodyMax))
+	}
+	return envelope(trustRelay, b.String(), "source", "github", "kind", "view")
 }
 
 // refresh reads one record from GitHub. A failure keeps the last good reading,
@@ -396,9 +480,8 @@ func (l *Links) refresh(ctx context.Context, k *db.ThreadLink) error {
 	} else {
 		it, err = l.gh.Issue(ctx, repo, k.Number)
 	}
-	now := l.now()
-	k.AttemptedAt = now
 	if err != nil {
+		k.AttemptedAt = l.now()
 		k.Failures++
 		k.LastError = redact(err.Error())
 		if serr := l.store.SaveThreadLinkReading(k); serr != nil {
@@ -410,12 +493,19 @@ func (l *Links) refresh(ctx context.Context, k *db.ThreadLink) error {
 		}
 		return err
 	}
+	return l.applyReading(k, it)
+}
+
+// applyReading stores what GitHub just said about a linked item and tells open
+// pages when it changed anything they show.
+func (l *Links) applyReading(k *db.ThreadLink, it GitHubItem) error {
+	now := l.now()
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || k.LastError != ""
 	k.State, k.Draft, k.CI, k.MergeState, k.Title = it.State, it.Draft, it.CI, it.MergeState, it.Title
 	if it.URL != "" {
 		k.URL = it.URL
 	}
-	k.RefreshedAt, k.Failures, k.LastError = now, 0, ""
+	k.RefreshedAt, k.AttemptedAt, k.Failures, k.LastError = now, now, 0, ""
 	if err := l.store.SaveThreadLinkReading(k); err != nil {
 		return err
 	}

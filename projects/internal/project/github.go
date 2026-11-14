@@ -36,6 +36,8 @@ type GitHubItem struct {
 	Number int
 	URL    string
 	Title  string
+	// Body is the description, as the item's author wrote it.
+	Body string
 	// State is open, closed or merged.
 	State string
 	// IsPR is set by Issue when the number is a PR.
@@ -60,7 +62,10 @@ type GitHub interface {
 	CreatePR(ctx context.Context, r GitHubRepo, title, body, head, base string, draft bool) (GitHubItem, error)
 	// UpdatePR changes only the fields that are not nil.
 	UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error)
-	// PR reads a PR with its CI and mergeability; Issue reads an issue.
+	// UpdateIssue changes only the fields that are not nil.
+	UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error)
+	// PR reads a PR with its CI and mergeability; Issue reads an issue (the
+	// issues API serves PRs too, and says so in IsPR).
 	PR(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
 	Issue(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
 }
@@ -149,6 +154,7 @@ type ghIssue struct {
 	Number  int    `json:"number"`
 	HTMLURL string `json:"html_url"`
 	Title   string `json:"title"`
+	Body    string `json:"body"`
 	State   string `json:"state"`
 	// PullRequest is set when the "issue" is a PR (the issues API serves both).
 	PullRequest *struct{} `json:"pull_request"`
@@ -174,7 +180,7 @@ func (p ghPull) item() GitHubItem {
 	if p.Merged {
 		state = "merged"
 	}
-	return GitHubItem{Number: p.Number, URL: p.HTMLURL, Title: p.Title, State: state, Draft: p.Draft,
+	return GitHubItem{Number: p.Number, URL: p.HTMLURL, Title: p.Title, Body: p.Body, State: state, Draft: p.Draft,
 		Head: p.Head.Ref, Base: p.Base.Ref, MergeState: mergeState(p)}
 }
 
@@ -241,6 +247,18 @@ func (g ghCLI) CreatePR(ctx context.Context, r GitHubRepo, title, body, head, ba
 	var out ghPull
 	err := g.api(ctx, r, "POST", r.path()+"/pulls", map[string]any{"title": title, "body": body, "head": head, "base": base, "draft": draft}, &out)
 	return out.item(), err
+}
+
+func (g ghCLI) UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error) {
+	patch := map[string]any{}
+	for k, v := range map[string]*string{"title": title, "body": body} {
+		if v != nil {
+			patch[k] = *v
+		}
+	}
+	var out ghIssue
+	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/issues/%d", r.path(), number), patch, &out)
+	return GitHubItem{Number: out.Number, URL: out.HTMLURL, Title: out.Title, Body: out.Body, State: out.State}, err
 }
 
 func (g ghCLI) UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error) {
@@ -322,5 +340,5 @@ func (g ghCLI) ci(ctx context.Context, r GitHubRepo, sha string) (string, error)
 func (g ghCLI) Issue(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
 	var out ghIssue
 	err := g.api(ctx, r, "GET", fmt.Sprintf("%s/issues/%d", r.path(), number), nil, &out)
-	return GitHubItem{Number: out.Number, URL: out.HTMLURL, Title: out.Title, State: out.State, IsPR: out.PullRequest != nil}, err
+	return GitHubItem{Number: out.Number, URL: out.HTMLURL, Title: out.Title, Body: out.Body, State: out.State, IsPR: out.PullRequest != nil}, err
 }

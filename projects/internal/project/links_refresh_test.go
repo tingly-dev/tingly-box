@@ -203,7 +203,7 @@ func TestGitHubToolPermissionRules(t *testing.T) {
 		}
 		return
 	}
-	status := githubToolRule(toolPRStatus)
+	status := githubToolRule(toolView)
 	var writes []string
 	for _, tool := range githubWriteTools {
 		writes = append(writes, githubToolRule(tool))
@@ -240,7 +240,7 @@ func TestThreadSettingsFileCarriesTheGitHubRules(t *testing.T) {
 	b, err := os.ReadFile(f.threads.layout.SettingsFile(p.ID, th.ID))
 	require.NoError(t, err)
 	assert.Contains(t, string(b), "mcp__tingly-projects__create_pr")
-	assert.Contains(t, string(b), "mcp__tingly-projects__get_pr_status")
+	assert.Contains(t, string(b), "mcp__tingly-projects__view")
 }
 
 func TestRedact(t *testing.T) {
@@ -290,6 +290,12 @@ func TestGhCLIUsesRESTWithAJSONBody(t *testing.T) {
 	assert.Contains(t, got, `"title":"New \"title\""`)
 	assert.Contains(t, got, `$(rm -rf /)`, "the body travels as data, never through a shell")
 	assert.NotContains(t, got, `"base"`, "an unset field is not sent")
+
+	// An issue is edited through the issues endpoint, with only the fields given.
+	_, err = g.UpdateIssue(context.Background(), repo, 9, &title, nil)
+	require.NoError(t, err)
+	b, _ = os.ReadFile(logFile)
+	assert.Contains(t, string(b), "api -X PATCH --input - repos/acme/widgets/issues/9")
 
 	_, err = g.CreatePR(context.Background(), repo, "T", "B", "tp/x", "main", true)
 	require.NoError(t, err)

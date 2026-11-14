@@ -95,7 +95,7 @@ func TestToolsOfEachScope(t *testing.T) {
 		"start_thread", "update_instructions"}
 	// The GitHub tools are the thread's own: they act on its checkout, which the
 	// coordinator does not have.
-	thread := []string{"comment_issue", "create_issue", "create_pr", "get_pr_status", "send_file", "update_pr"}
+	thread := []string{"comment", "create_issue", "create_pr", "send_file", "update", "view"}
 	for _, c := range []struct {
 		name     string
 		threadID string

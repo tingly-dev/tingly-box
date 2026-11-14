@@ -69,7 +69,8 @@ func githubToolRule(tool string) string { return "mcp__tingly-projects__" + tool
 // each replaces; the project setting only decides whether the answer is
 // remembered:
 //
-//   - get_pr_status only reads the thread's own PRs and is always allowed;
+//   - view only reads an issue or PR of the thread's own repository and is
+//     always allowed;
 //   - the tools that write to GitHub are allowed without a card when the
 //     project's access is "allow", in every permission mode;
 //   - otherwise they ask in auto mode, whose classifier would deny an unlisted
@@ -81,7 +82,7 @@ func githubToolRule(tool string) string { return "mcp__tingly-projects__" + tool
 // `gh issue create` stay on the ask list of grantAutoGit.
 func grantGitHubTools(doc map[string]any, p *db.Project, mode string) {
 	perms := permissionsOf(doc)
-	addRules(perms, "allow", githubToolRule(toolPRStatus))
+	addRules(perms, "allow", githubToolRule(toolView))
 	var rules []string
 	for _, tool := range githubWriteTools {
 		rules = append(rules, githubToolRule(tool))

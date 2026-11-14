@@ -103,6 +103,18 @@ func (s *Store) GetThreadLink(threadID, kind string, number int) (*ThreadLink, e
 	return &l, nil
 }
 
+// FindThreadLink is the thread's link to the issue or PR with this number
+// (an issue and a PR of one repository never share a number); ErrNotFound
+// when it has none.
+func (s *Store) FindThreadLink(threadID string, number int) (*ThreadLink, error) {
+	var l ThreadLink
+	err := s.db.Where("thread_id = ? AND number = ?", threadID, number).Order("id").First(&l).Error
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return &l, nil
+}
+
 // OpenThreadLinks are the links still open in projects that are not archived,
 // least recently refreshed first: the ones a refresh sweep may need.
 func (s *Store) OpenThreadLinks() ([]ThreadLink, error) {
