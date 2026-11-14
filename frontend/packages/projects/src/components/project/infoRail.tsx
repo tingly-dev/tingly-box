@@ -42,10 +42,15 @@ export function useInfoRail(minPanel: number, watch: unknown): { ref: RefObject<
     return { ref, wide, on, toggle };
 }
 
-/** The rail's frame beside a thread's conversation. */
-export function InfoRailFrame({ label, children }: { label: string; children: ReactNode }) {
+/** The rail's frame: a docked column beside a thread's conversation, or (`popover`) the same cards in a menu under the Details button. */
+export function InfoRailFrame({ label, children, popover = false }: { label: string; children: ReactNode; popover?: boolean }) {
     return (
-        <Box component="aside" aria-label={label} sx={{ width: RAIL_WIDTH, flexShrink: 0, borderLeft: 1, borderColor: 'divider', bgcolor: 'background.default', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, overflowY: 'auto', minHeight: 0 }}>
+        <Box component="aside" aria-label={label} sx={{
+            width: RAIL_WIDTH, flexShrink: 0, bgcolor: 'background.default', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25, overflowY: 'auto', minHeight: 0,
+            // The cards keep their height and the frame scrolls; left to shrink they clip their own rows.
+            '& > *': { flexShrink: 0 },
+            ...(popover ? { maxHeight: 'min(70vh, 640px)' } : { borderLeft: 1, borderColor: 'divider' }),
+        }}>
             {children}
         </Box>
     );
