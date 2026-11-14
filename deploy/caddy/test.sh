@@ -119,6 +119,15 @@ echo "# model API only (Caddyfile)"
 M=http://localhost:$PORT_MODEL
 check "json compressed" "$(hdr content-encoding "${GZ[@]}" $M/tingly/json)" "gzip"
 check "mirror json compressed" "$(hdr content-encoding "${GZ[@]}" $M/mirror/json)" "gzip"
+# compression is negotiated: the client decides, and anything it cannot take is sent as is
+check "no Accept-Encoding -> plain" "$(hdr content-encoding $M/tingly/json)" ""
+check "identity only -> plain" "$(hdr content-encoding -H 'Accept-Encoding: identity' $M/tingly/json)" ""
+check "only br (not offered by Caddy) -> plain" "$(hdr content-encoding -H 'Accept-Encoding: br' $M/tingly/json)" ""
+check "gzip;q=0 -> plain" "$(hdr content-encoding -H 'Accept-Encoding: gzip;q=0' $M/tingly/json)" ""
+check "zstd client gets zstd" "$(hdr content-encoding -H 'Accept-Encoding: zstd' $M/tingly/json)" "zstd"
+check "gzip, br falls back to gzip" "$(hdr content-encoding -H 'Accept-Encoding: gzip, br' $M/tingly/json)" "gzip"
+check "plain response is the full body" "$(curl -s $M/tingly/json | wc -c | tr -d ' ')" "$(curl -s --compressed $M/tingly/json | wc -c | tr -d ' ')"
+check "Vary says it depends on the request" "$(hdr vary "${GZ[@]}" $M/tingly/json)" "Accept-Encoding"
 check "sse not compressed" "$(hdr content-encoding "${GZ[@]}" --max-time 3 $M/tingly/sse)" ""
 check "health check" "$(code $M/hi)" "200"
 for p in / /api/v1/info /assets/index-AbCd1234.js /some/route; do
