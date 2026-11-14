@@ -401,6 +401,7 @@ export default function ProjectPage() {
                     onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
             )}
             onBack={closeThread}
+            backLabel={threadAt === 'side' ? t('project.overview') : t('thread.backCoordinator')}
             hideTitle={threadAt === 'float'}
             initialFocus={params.get('focus') ?? undefined}
             initialTask={params.get('task') ?? undefined}

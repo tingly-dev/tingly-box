@@ -364,6 +364,7 @@ export default function WorkdirPage() {
                         canSend={settings.canSend}
                         permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.defaultPermissions')} · ${t(`session.mode.${selectedFolder?.thread_permission_mode || 'acceptEdits'}`)}`}
                         onBack={() => openNew()}
+                        backLabel={t('session.new')}
                         liveTasks={liveTasks}
                         railExtra={selected && slots?.railCards?.({ thread: selected, launch: { profile: selected.profile ?? '', model: selected.model ?? '' } })}
                         more={transcript.more}

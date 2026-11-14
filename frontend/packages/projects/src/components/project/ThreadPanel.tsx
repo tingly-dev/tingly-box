@@ -69,6 +69,8 @@ interface Props {
     running: boolean;
     disabled: boolean;
     onBack: () => void;
+    /** Where Back goes ("Coordinator", "New session"), written on the button; the arrow alone says nothing about the place. */
+    backLabel?: string;
     /** In a window the window's title bar names the thread: leave the title and the back arrow out. */
     hideTitle?: boolean;
     /** Buttons before the thread's menu: pop out, dock. */
@@ -107,7 +109,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
@@ -373,7 +375,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    {!hideTitle && <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>}
+                    {!hideTitle && (backLabel
+                        ? <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={onBack} aria-label={t('thread.backTo', { place: backLabel })}
+                            sx={{ color: 'text.secondary', flexShrink: 0, minWidth: 0, maxWidth: 140, px: 0.75, '& .MuiButton-icon': { mr: 0.5 } }}>
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{backLabel}</Box>
+                        </Button>
+                        : <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>)}
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
                         : <ThreadTitle title={thread.title} onSave={saveTitle} />}

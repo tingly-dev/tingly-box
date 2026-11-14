@@ -73,7 +73,7 @@ export const project = {
         tasksSubtitle_one: '{{count}} background task running', tasksSubtitle_other: '{{count}} background tasks running',
         tasksBadge_one: '{{count}} task', tasksBadge_other: '{{count}} tasks',
         noRepo: 'No repository — files go to the Library', fromBase: 'from {{base}}', uncommitted: 'uncommitted changes',
-        copyCd: 'Copy cd command to the worktree', back: 'Back to Overview',
+        copyCd: 'Copy cd command to the worktree', back: 'Back to Overview', backTo: 'Back to {{place}}', backCoordinator: 'Coordinator',
         editTitle: 'Rename thread',
         requests: {
             approval: 'Needs your approval', question: 'Has a question for you', many: '{{count}} requests need you', review: 'Review',
