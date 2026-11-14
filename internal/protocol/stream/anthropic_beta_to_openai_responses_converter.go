@@ -55,11 +55,12 @@ type pendingResponseTextBlock struct {
 
 // pendingResponseToolCall tracks a tool call being assembled from Anthropic stream chunks
 type pendingResponseToolCall struct {
-	itemID      string
-	callID      string
-	name        string
-	outputIndex int
-	arguments   strings.Builder
+	itemID           string
+	callID           string
+	name             string
+	outputIndex      int
+	arguments        strings.Builder
+	initialArguments string
 }
 
 // newAnthropicBetaToResponsesConverter creates a converter that reads from an
@@ -207,10 +208,24 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStart(event *anthrop
 			Part:           wire.ResponsesContentPartWire{Type: "output_text", Text: ""},
 		})
 		c.outputIndex++
+		if text := event.ContentBlock.Text; text != "" {
+			c.pendingTextBlocks[index].text.WriteString(text)
+			c.pending = append(c.pending, wire.ResponsesOutputTextDeltaEvent{
+				Type:           "response.output_text.delta",
+				Delta:          text,
+				ItemID:         itemID,
+				OutputIndex:    currentOutputIndex,
+				ContentIndex:   0,
+				SequenceNumber: int64(c.nextSeq()),
+			})
+		}
 	} else if blockType == "tool_use" {
 		toolID := event.ContentBlock.ID
 		toolName := event.ContentBlock.Name
-		c.pendingToolCalls[index] = &pendingResponseToolCall{itemID: ids.FunctionCall(), callID: toolID, name: toolName, outputIndex: currentOutputIndex}
+		// Prefer original JSON so large integer tool arguments never round
+		// through the SDK's any/float64 representation.
+		initialArguments := protocol.AnthropicToolInputJSON(event.ContentBlock.RawJSON(), event.ContentBlock.Input)
+		c.pendingToolCalls[index] = &pendingResponseToolCall{itemID: ids.FunctionCall(), callID: toolID, name: toolName, outputIndex: currentOutputIndex, initialArguments: initialArguments}
 
 		arguments := ""
 		namespace, name := c.namespaces.Restore(toolName)
@@ -305,6 +320,16 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStop(event *anthropi
 		)
 	} else if pending, exists := c.pendingToolCalls[index]; exists {
 		argumentsStr := pending.arguments.String()
+		// Some compatible providers send complete input on block_start instead
+		// of input_json_delta. Keep it as a fallback; streamed deltas take priority.
+		if argumentsStr == "" && pending.initialArguments != "" {
+			argumentsStr = pending.initialArguments
+			pending.arguments.WriteString(argumentsStr)
+			c.pending = append(c.pending, wire.ResponsesFunctionCallArgumentsDeltaEvent{
+				Type: "response.function_call_arguments.delta", Delta: argumentsStr,
+				ItemID: pending.itemID, OutputIndex: pending.outputIndex, SequenceNumber: int64(c.nextSeq()),
+			})
+		}
 		namespace, name := c.namespaces.Restore(pending.name)
 		c.pending = append(c.pending,
 			wire.ResponsesFunctionCallArgumentsDoneEvent{
