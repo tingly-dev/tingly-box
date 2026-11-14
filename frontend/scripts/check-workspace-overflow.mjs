@@ -7,7 +7,8 @@
 // Deliberate truncation (text-overflow: ellipsis with a title) is allowed.
 //
 //   pnpm dev:mock --port 4417 --strictPort &
-//   BASE_URL=http://localhost:4417 node scripts/check-workspace-overflow.mjs [en,zh,ru] [1440x900,1280x800,1024x768]
+//   BASE_URL=http://localhost:4417 node scripts/check-workspace-overflow.mjs [en,ru] [1440x900,1280x800,1024x768]
+//   (ru has the longest strings: treat it as the stress test; the default is en,ru)
 //   CHROME_PATH=/path/to/chrome  # optional; defaults to Playwright's own browser
 //   SHOTS=/some/dir              # optional; saves a screenshot per screen
 
@@ -16,14 +17,14 @@ import { mkdirSync } from 'node:fs';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const base = process.env.BASE_URL || 'http://localhost:4417';
-const langs = (process.argv[2] || 'en').split(',');
+const langs = (process.argv[2] || 'en,ru').split(',');
 const sizes = (process.argv[3] || '1440x900,1280x800,1024x768').split(',').map((s) => s.split('x').map(Number));
 const shots = process.env.SHOTS;
 if (shots) mkdirSync(shots, { recursive: true });
 
 const project = '/projects/p-latency';
-const tab = (name) => async (page) => { await page.getByRole('tab', { name }).first().click(); await page.waitForTimeout(500); };
-const button = (name) => async (page) => { await page.getByRole('button', { name }).first().click(); await page.waitForTimeout(700); };
+const tab = (name) => async (page) => { await page.getByRole('tab', { name }).first().click({ timeout: 5000 }); await page.waitForTimeout(500); };
+const button = (name) => async (page) => { await page.getByRole('button', { name }).first().click({ timeout: 5000 }); await page.waitForTimeout(700); };
 const SCREENS = [
     ['home', '/workspace'],
     ['list', '/projects'],
@@ -47,7 +48,12 @@ const detect = () => {
         const rect = el.getBoundingClientRect();
         if (cs.display === 'none' || cs.visibility === 'hidden' || rect.width <= 1 || rect.height <= 1) continue;
         if (el.closest('svg, legend')) continue;
-        const clipped = cs.overflowX !== 'visible' && cs.overflowX !== 'auto' && cs.overflowX !== 'scroll' && el.scrollWidth > el.clientWidth + 1;
+        let clipped = cs.overflowX !== 'visible' && cs.overflowX !== 'auto' && cs.overflowX !== 'scroll' && el.scrollWidth > el.clientWidth + 1;
+        // Screen-reader-only text (1px, clipped) inflates scrollWidth without showing anything.
+        if (clipped && cs.textOverflow !== 'ellipsis') {
+            const edge = rect.left + el.clientWidth;
+            clipped = [...el.querySelectorAll('*')].some((d) => { const r = d.getBoundingClientRect(); return r.width > 1 && r.height > 1 && r.right > edge + 1 && getComputedStyle(d).clip !== 'rect(0px, 0px, 0px, 0px)'; });
+        }
         if (clipped && cs.textOverflow !== 'ellipsis') found.push(`clipped without ellipsis: ${label(el)} (${el.scrollWidth} > ${el.clientWidth})`);
         if (clipped && cs.textOverflow === 'ellipsis' && el.matches('.MuiTypography-caption') && el.closest('.MuiListItemButton-root')) found.push(`nav label truncated: ${label(el)} (${el.scrollWidth} > ${el.clientWidth})`);
         if (el.matches('[role=tab]')) {
@@ -74,7 +80,10 @@ for (const lang of langs) {
             const key = `${lang} ${width}px ${name}`;
             try {
                 await page.goto(`${base}${path}${path.includes('?') ? '&' : '?'}mockOnboarding=off`, { waitUntil: 'load' });
-                await page.waitForTimeout(3000);
+                await page.waitForTimeout(1500);
+                // A cold lazy locale or chunk shows a spinner first; measure the real page.
+                for (let i = 0; i < 30 && (await page.locator('[role=progressbar]').count()) > 0; i++) await page.waitForTimeout(300);
+                await page.waitForTimeout(1000);
                 // The narrow layout moves the overview into a drawer, where there is no tab to click.
                 if (act) await act(page);
             } catch (e) {

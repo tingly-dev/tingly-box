@@ -155,7 +155,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                                     whiteSpace: 'nowrap',
                                 }}
                             >
-                                {item.label}
+                                {item.railLabel ?? item.label}
                             </Typography>
                         </ListItemButton>
                     );
