@@ -31,7 +31,7 @@ UI was not reachable through it at all.
 | Cache headers only on 2xx | `header … { match status 2xx }` | A cached error would stick for a year. |
 | Missing chunk | `handle_response` turns a `text/html` answer on `/assets/*` into 404 | The gateway's SPA fallback answers an unknown `/assets/old-XXXX.js` with `index.html` and 200. A stale tab, or a rollback, would otherwise cache HTML under a script URL as immutable. |
 | Precompressed assets | `file_server { precompressed br zstd gzip; pass_thru }` from `TINGLY_WEB_ROOT` (default `/srv/tingly-web`), then fall through to the gateway | Max-level brotli/zstd beats on-the-fly gzip by ~25% on the largest chunk and costs no CPU per request; `file_server` also adds `ETag`/`Last-Modified`, so revalidation is a 304. `pass_thru` makes the directory optional: with no build deployed, the gateway's embedded copy is proxied and compressed on the fly, so the config works either way. Brotli is listed first because it was smaller than zstd-19 on this bundle and is supported by every browser. |
-| Producing the variants | `pnpm build` (once the gateway change in `.design/webui-static-serving.md` is in) writes `.br` + `.gz` into `frontend/dist`; for older builds or for `.zst`, compress with any tool (loop below) | Caddy only serves what is on disk. |
+| Producing the variants | `pnpm build` writes `.br` + `.gz` into `frontend/dist` (gateway change #2571, `.design/webui-static-serving.md`); for older builds or for `.zst`, compress with any tool (loop below) | Caddy only serves what is on disk. |
 | Exposure | UI is a **separate host block** (`ui.you.domain`) | The old config deliberately 403'd everything but the model API. Publishing the admin UI/API is an operator decision, so it is its own block: delete it (or leave its DNS unset) to keep the UI local-only. |
 | ETag | not added in proxy mode | The gateway sends none, and with `immutable` the browser never revalidates hashed files. Validators come for free from `file_server` in precompressed mode. |
 
@@ -39,7 +39,7 @@ UI was not reachable through it at all.
 
 ```bash
 task web:dist                                       # builds frontend/dist and embeds it
-cp -R frontend/dist/. /srv/tingly-web/        # already holds .br/.gz when built with the gateway change
+cp -R frontend/dist/. /srv/tingly-web/        # already holds .br/.gz
 # otherwise, or to add zstd:
 find /srv/tingly-web -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \) -size +512c \
   -exec sh -c 'gzip -9 -k -f "$1"; brotli -q 11 -k -f "$1"; zstd -19 -q -f "$1"' _ {} \;
@@ -74,9 +74,9 @@ delivered per event, uncompressed.
 
 ## Not done / follow-ups
 
-- The gateway itself should do the same for `/assets` (precompressed files,
-  immutable hashed names, ETag/304, 404 for unknown `/assets/*`) so that
-  deployments without Caddy benefit too: `.design/webui-static-serving.md`
-  (separate change). With it, the `/assets` rules here are redundant but
-  harmless; until then they are what fixes a Caddy deployment.
+- The gateway now does the same for `/assets` itself (precompressed files,
+  immutable hashed names, ETag/304, 404 for unknown `/assets/*`): #2571,
+  `.design/webui-static-serving.md`. The `/assets` rules here are therefore
+  redundant but harmless in front of a current gateway, and still what fixes a
+  deployment running an older one. Caddy adds h2/h3 and zstd on top.
 - `Content-Security-Policy` etc. are not touched.
