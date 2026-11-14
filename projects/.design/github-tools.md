@@ -1,6 +1,6 @@
 # Issue and PR tools for threads
 
-> Status: **batch 1 built** (the five tools, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
+> Status: **batch 1 built** (the five tools, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view) and **stacks built** (`create_pr` takes a `head`; see [Stacked work](#stacked-work-more-than-one-branch)). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
 > Builds on [mcp-tools.md](./mcp-tools.md) (one table of tools, scopes, golden files), [projects-harness.md](./projects-harness.md) and `.design/projects-thread-rail.md` (the rail and the coordinator's Status tab). The refresh back-off follows the idea of `.design/quota-backoff.md`.
 
 ## Problem
@@ -18,7 +18,7 @@ Five tools for the thread's own session (in the table below), one persisted reco
 | Tool | What it does |
 | --- | --- |
 | `create_issue` | Open an issue in the thread's repository (`title`, `body`). |
-| `create_pr` | Push the thread's own branch (never forced), open a PR from it (`title`, `body`, optional `base`, `draft`). If the branch already has an open PR it pushes the branch again (so the PR carries the latest commits) and returns that PR instead of opening a second one. |
+| `create_pr` | Push a local branch of the thread's checkout (never forced), open a PR from it (`title`, `body`, optional `head`, `base`, `draft`). `head` is the thread's own branch unless another local branch is named. If the branch already has an open PR it pushes the branch again (so the PR carries the latest commits) and returns that PR instead of opening a second one. |
 | `update` | Change `title` and `body` of an issue, or `title`, `body` and `base` of a PR, **that this thread opened**; addressed by `number` (optional only when the thread has one PR). |
 | `comment` | Comment on an issue or PR of the thread's repository (`number`, `body`). |
 | `view` | Read an issue or PR of the thread's repository by `number`: state and description, and for an open PR its checks and mergeability. The one read tool. |
@@ -38,9 +38,9 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 **What a tool decides for itself.** The model passes content, never targets:
 
 - *Repository*: from the thread's own checkout (`git config --get remote.origin.url`, the value as configured, parsed to owner/name; credentials in the URL are dropped, not echoed). A remote that is not `github.com` is refused (GitHub Enterprise: later). There is no `repo` input, so a thread cannot write to another repository.
-- *Head branch*: `Thread.Branch`; a folder session uses the branch its folder is on. Refused when it is detached, equals the base, or is the repository's default branch.
-- *Base*: the thread's `BaseBranch` unless `base` is given; a folder session's default is the repository's default branch.
-- *Push*: `git push origin refs/heads/<branch>:refs/heads/<branch>`: one explicit refspec, no `+`, no `--force`, so it can only fast-forward the thread's own branch. A push that lost to newer commits on origin (`non-fast-forward`, `fetch first`) is an error that says to rebase; any other rejection (a hook, a protected branch) is reported as it is, without the rebase advice. There is no retry with force.
+- *Head branch*: `head` if given, else `Thread.Branch`; a folder session uses the branch its folder is on. A named head has to be a valid name and an existing **local** branch of the checkout (`refs/heads/<head>`; remote-only names, refspecs and options are refused). Refused when it is detached, equals the base, is the repository's default branch, or GitHub says it is protected.
+- *Base*: `base` if given (any branch on GitHub, including another branch of a stack), else the thread's `BaseBranch` for the thread's own branch, and the repository's default branch for any other head. The base must already be on origin (`git ls-remote`, before anything is pushed): it is never pushed by this call, so a PR for the lower branch comes first.
+- *Push*: `git push origin refs/heads/<head>:refs/heads/<head>`: one explicit refspec, no `+`, no `--force`, so it can only fast-forward that one branch. A push that lost to newer commits on origin (`non-fast-forward`, `fetch first`) is an error that says to rebase; any other rejection (a hook, a protected branch) is reported as it is, without the rebase advice. There is no retry with force.
 - *PR needs commits*: refused when the branch has no commit beyond its base.
 - *Read before write*: `comment` reads the item in full (the issues API, then the PR's own read for a PR) before it posts, so a failed read posts nothing and never leaves a record built from half an answer (a merged PR must not be recorded as closed).
 - *An edit keeps what it cannot know*: the answer to a PR edit carries no checks and often a mergeability GitHub has not worked out yet (`unknown`); `update` keeps the last known value of both until the next reading.
@@ -82,7 +82,7 @@ What it shows: the server-wide allow rule alone is enough in all three modes, in
 Boundaries the setting cannot move (enforced in code, not in the prompt):
 
 - **No merge, no close, no reopen, no delete branch, no force push, no label or assignee changes, no review actions.** None of these exists as a tool, and `update` has no `state` field, so it cannot close an issue or PR. When one of them is added later it needs the explicit-approval rule from "Later" in `mcp-tools.md` (the call carries the user's own message ids), and it is never covered by `thread_github_access`.
-- **Only what the thread opened can be edited.** `update` looks the number up in the thread's records and needs role `opened`; an issue or PR by someone else is out of reach even if the number is known. `comment` and `view` may touch any issue or PR of the thread's repository (a thread working on "issue #12" needs to): the comment is visible in the approval card and leaves a record with role `commented`, while `view` leaves no record unless the thread already has one.
+- **Only what the thread opened can be edited.** `update` looks the number up in the thread's records and needs role `opened`; an issue or PR by someone else is out of reach even if the number is known. This stays after the stacks change: see [Not opened by this thread](#not-opened-by-this-thread-not-allowed-yet). `comment` and `view` may touch any issue or PR of the thread's repository (a thread working on "issue #12" needs to): the comment is visible in the approval card and leaves a record with role `commented`, while `view` leaves no record unless the thread already has one.
 - **What `view` returns is other people's text.** Titles and descriptions come back inside an `<event source="github" kind="view" trust="relay">` envelope with tag characters escaped (the same one the coordinator's relayed text uses), and the tool's description says to read it as information. The body is cut at 2000 characters.
 - **Nothing the environment refused is retried here.** If the user denies a tool call, Claude Code does not call the tool. If the user denied the matching `gh` command, the thread's settings still carry that rule, and the tool is a different call that the user answers separately: there is no hidden hand-over. A denial by the host (no `gh`, not signed in) comes back as an error that says what is missing.
 - **Credentials**: only the host's existing `gh` login and git credentials are used. The tools never read, log, store or return a token: the child process gets the server's environment unchanged, output is passed through a redactor (GitHub token shapes, `Authorization` headers, credentials in URLs) before it becomes an error, a log line or a tool result, and no token is a tool input.
@@ -103,6 +103,7 @@ Each entry of the list:
 | `repo`, `number`, `url`, `title` | identity and what the card shows |
 | `role` | `opened` (the thread created it) or `commented` |
 | `state` | `open`, `closed`, `merged` |
+| `head`, `base` | PR only: the branches as GitHub last said, so the PRs of a stack are told apart and a retargeted base is read back. Empty on records from before stacks until their next refresh. |
 | `draft`, `ci`, `merge_state` | PR only. `ci`: `none`, `pending`, `passing`, `failing`. `merge_state`: `ready`, `conflicts`, `blocked`, `behind`, `unknown` |
 | `refreshed_at`, `attempted_at`, `failures`, `last_error` | refresh bookkeeping |
 | `created_at` | when the thread first touched it |
@@ -118,6 +119,28 @@ Not imported in batch 1. Options weighed:
 - *Parse PR links out of old reports.* Cheap, but it cannot tell "I opened this" from "this is related", and it would put guesses into a list that otherwise only holds facts.
 - *`gh pr list --head <branch>` per thread with a branch.* Precise (the PR whose head is the thread's branch), but one request per thread, and the user may not have a login at all.
 - Proposed for a later change: the second one, run once per thread the first time its branch is seen with no PR record and only on the refresher's schedule, recorded with role `found`. Until then an old thread shows no links and a new PR it opens with the tool is recorded as usual.
+
+## Stacked work (more than one branch)
+
+A thread may work on several branches, typically a stack: `a` off `main`, `b` off `a`, `c` off `b`. The first version fixed `create_pr` to the thread's own branch and the repository's default, which made a stack impossible. What changed, and what did not:
+
+- **`create_pr` takes `head` and `base`.** A stack is `create_pr(head=a)` (base defaults to the thread's base), `create_pr(head=b, base=a)`, … in that order, since a base must already be on GitHub. The model still never names a repository, a remote or a refspec.
+- **The one push is still plain.** Each call pushes exactly one branch with `refs/heads/<head>:refs/heads/<head>`: no `+`, no `--force`, no `--all`, no deleting. A branch that diverged on origin is the same "rebase" error as before.
+- **Branches that are never a head**: the repository's default branch (asked of GitHub) and any branch GitHub reports `protected` (`GET /branches/<b>`; a branch GitHub does not have counts as unprotected, any other failure is an error, never "unprotected"). A name that is not a local branch is refused, so a head cannot reach a branch that is not in the thread's repository. The protection is GitHub's own setting: where the user has not protected `release/*`, a thread can push a branch of that name, as it always could with `git push` (the permission rules for `git push` are separate and unchanged).
+- **Any local branch of the checkout, not only the thread's own.** Worktrees share the repository's refs, so a head can also be a branch another thread of the project created. That push can only fast-forward it, adds commits the other thread already has, and opens a PR the other thread's own `create_pr` would find as existing (`OpenPR` is by head). We accept this: refusing would need a record of which thread owns which branch, and the reach is no wider than what the thread's shell can already do with `git push`.
+- **`update` retargets.** `base` was already editable on a PR the thread opened; this is the "lower PR merged, point the upper one back at `main`" step. It does not create or push anything, and GitHub's own checks apply (a base equal to the head, a base that does not exist, are 422s that come back as the error).
+- **Several PRs in one record.** The links list was always one entry per (repo, kind, number), so a stack needed no new storage: each PR is an entry, with `head`/`base` stored to tell them apart. `update`/`view` without a number still means "the thread's only PR" and, with several, name them as `#12 (b → a)` and ask for a number; a merged or closed one is skipped when exactly one is open.
+- **Tool stays one call, one effect.** No tool creates the stack, rebases it or retargets it on its own; the model does each step, each is a separate approval (or a standing `thread_github_access = allow`).
+
+### Not opened by this thread (not allowed yet)
+
+Asked: should `update` reach a PR the thread did not open (for example the lower PR of a stack opened by another thread, or by the user)? Not now. The risks, for the record:
+
+- It rewrites other people's text and base: a retarget of someone else's PR can silently change what merges where, and the title/body edit is invisible in the thread's own approval card unless the card shows the old text too.
+- `thread_github_access = allow` would make the call card-less, so a standing "yes" given for the thread's own PRs would extend to every PR of the repository; the roles (`opened`/`commented`) are what keeps the rule narrow.
+- There is no way to tell "a PR in my stack" from "a PR I merely know the number of" unless the PR's head is one of the thread's local branches, and that is a heuristic over a name, not a fact the system recorded.
+
+A narrow version is possible later and needs no new trust: allow `base` retargeting (only) of a PR whose **head is a local branch of the thread's checkout** and whose repository is the thread's, always asking even under `allow`. Text edits of other people's PRs stay out of reach; `comment` is the tool for that.
 
 ## Refresh: bounded, read-only, from the server
 
@@ -142,7 +165,8 @@ Not done: webhooks (the host is usually behind NAT), review decisions (GraphQL o
 
 ## Tests
 
-- Mutation-checked: a forced refspec, the missing default-branch guard, the missing "opened by this thread" check and a back-off that never doubles each fail a test.
+- Stacks (`links_stack_test.go`, harness G3): a head that is another local branch is pushed alone (origin gets nothing else); two PRs recorded with `head`/`base`; a bare `update` names them; a base retarget is read back; refusals (default branch as head, protected, not a local branch, a refspec or option as head, head = base, a base that is not on origin) push and record nothing; a diverged head is not forced; an existing PR for the head is returned; a fake `gh` for `Protected` (a 404 is unprotected, any other error is an error). Harness G3 runs the whole stack through the MCP tools with an actor that switches branches.
+- Mutation-checked: a forced refspec, the missing default-branch guard, the missing protected, local-branch and base-on-origin checks, the missing "opened by this thread" check and a back-off that never doubles each fail a test.
 - Fake `GitHub` for the tools and the refresher; a fake `gh` executable (a shell script on `PATH`) for the real `ghCLI`: arguments, JSON body, `gh api -X PATCH` for updates, the redactor on a token in stderr.
 - Tools through the in-memory MCP client: scope lists (golden and `TestToolsOfEachScope`), each tool, refusals (no origin, non-GitHub origin, default branch, base equals head, no commits, someone else's PR number), idempotent `create_pr`, a failed push leaves nothing recorded.
 - Settings rules: `ask` default, `allow` when set, `view` always allowed, `gh pr create` still on `ask`.

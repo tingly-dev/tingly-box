@@ -4992,6 +4992,10 @@
             "format": "date-time",
             "description": "Field attempted_at"
           },
+          "base": {
+            "type": "string",
+            "description": "Field base"
+          },
           "ci": {
             "type": "string",
             "description": "Field ci"
@@ -5009,6 +5013,10 @@
             "type": "integer",
             "format": "int64",
             "description": "Field failures"
+          },
+          "head": {
+            "type": "string",
+            "description": "Field head"
           },
           "kind": {
             "type": "string",

@@ -143,6 +143,9 @@ func (l *Links) record(t *db.Thread, repo GitHubRepo, kind, role string, it GitH
 // everything a refresh brings, and nothing about whose it is.
 func fillLink(k *db.ThreadLink, it GitHubItem, now time.Time) {
 	k.State, k.Draft, k.CI, k.MergeState, k.Title = it.State, it.Draft, it.CI, it.MergeState, it.Title
+	if it.Head != "" {
+		k.Head, k.Base = it.Head, it.Base
+	}
 	if it.URL != "" {
 		k.URL = it.URL
 	}
@@ -213,8 +216,11 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 	return fmt.Sprintf("commented on %s #%d %s%s", kind, number, commentURL, saved(rerr)), nil
 }
 
-// CreatePR pushes the thread's own branch and opens a PR from it.
-func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base string, draft bool) (string, error) {
+// CreatePR pushes a branch of the thread's checkout and opens a PR from it. The
+// head is the thread's own branch unless one is named: a thread may work on
+// several branches (a stack), and base may be any branch on GitHub, including
+// another stack branch. The push is the same plain one either way.
+func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, base string, draft bool) (string, error) {
 	if err := checkText("title", title, titleMax); err != nil {
 		return "", err
 	}
@@ -225,6 +231,16 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 	if err != nil {
 		return "", err
 	}
+	own := lc.head
+	if head = strings.TrimSpace(head); head != "" {
+		if err := checkBranchName(ctx, t.Cwd, head); err != nil {
+			return "", err
+		}
+		if !BranchExists(ctx, t.Cwd, head) {
+			return "", fmt.Errorf("there is no local branch %s in this checkout: create_pr pushes a local branch (commit your work to one first)", head)
+		}
+		lc.head = head
+	}
 	if lc.head == "" {
 		return "", errors.New("this thread is not on a branch (detached HEAD or no repository): commit your work to a branch first")
 	}
@@ -233,14 +249,19 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 		return "", err
 	}
 	base = strings.TrimSpace(base)
-	if base == "" {
+	if base == "" && (head == "" || head == own) {
 		base = t.BaseBranch
 	}
 	if base == "" {
 		base = def
 	}
 	if lc.head == base || lc.head == def {
-		return "", fmt.Errorf("branch %s is the base or the repository's default branch: a PR comes from the thread's own branch, and it is never pushed to", lc.head)
+		return "", fmt.Errorf("branch %s is the base or the repository's default branch: a PR comes from a work branch, and the default branch is never pushed to", lc.head)
+	}
+	if protected, err := l.gh.Protected(ctx, lc.repo, lc.head); err != nil {
+		return "", err
+	} else if protected {
+		return "", fmt.Errorf("branch %s is protected on GitHub: it is never pushed to", lc.head)
 	}
 	if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
 		return "", bad
@@ -255,6 +276,11 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 		_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, *existing)
 		return fmt.Sprintf("PR #%d is already open for branch %s (the branch was pushed again, so it has your latest commits): %s%s", existing.Number, lc.head, existing.URL, saved(rerr)), nil
 	}
+	// Before anything is pushed: a base that GitHub does not have fails the PR
+	// after its head is already published, and this call never pushes the base.
+	if !onOrigin(ctx, t.Cwd, base) {
+		return "", fmt.Errorf("base branch %s is not on GitHub: open its PR with create_pr first (that pushes it), or choose a base that is", base)
+	}
 	if n, ok := commitsAhead(ctx, t.Cwd, base, lc.head); ok && n == 0 {
 		return "", fmt.Errorf("branch %s has no commit beyond %s: commit your work first", lc.head, base)
 	}
@@ -267,6 +293,14 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, base st
 	}
 	_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, it)
 	return fmt.Sprintf("opened PR #%d %s (%s → %s)%s", it.Number, it.URL, lc.head, base, saved(rerr)), nil
+}
+
+// onOrigin is whether origin has the branch (asked of the remote itself, as the
+// push would be). A remote that cannot be reached counts as having it: the
+// push or GitHub then says what is wrong.
+func onOrigin(ctx context.Context, dir, branch string) bool {
+	out, err := git(ctx, dir, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	return err != nil || strings.TrimSpace(out) != ""
 }
 
 // Update changes the title and description of an issue, or the title,
@@ -387,7 +421,11 @@ func (l *Links) ownItem(t *db.Thread, repo string, number int, mustOpen bool) (*
 	}
 	var nums []string
 	for _, k := range prs {
-		nums = append(nums, "#"+strconv.Itoa(k.Number))
+		n := "#" + strconv.Itoa(k.Number)
+		if k.Head != "" {
+			n += " (" + k.Head + " → " + k.Base + ")"
+		}
+		nums = append(nums, n)
 	}
 	return nil, fmt.Errorf("this thread has several PRs (%s): pass number", strings.Join(nums, ", "))
 }
@@ -538,7 +576,7 @@ func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) 
 // applyReading stores what GitHub just said about a linked item and tells open
 // pages when it changed anything they show.
 func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) error {
-	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || k.LastError != ""
+	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || (it.Head != "" && (k.Head != it.Head || k.Base != it.Base)) || k.LastError != ""
 	fillLink(k, it, l.now())
 	if err := l.store.SaveThreadLinkReading(threadID, *k); err != nil {
 		return err
@@ -713,6 +751,9 @@ func linksDetail(links []db.ThreadLink, now time.Time) string {
 	var b strings.Builder
 	for _, k := range links {
 		fmt.Fprintf(&b, "- %s #%d %q %s state=%s role=%s", k.Kind, k.Number, clip(k.Title, 120), k.URL, k.State, k.Role)
+		if k.Head != "" {
+			fmt.Fprintf(&b, " branch=%s→%s", k.Head, k.Base)
+		}
 		if k.Kind == db.LinkPR && k.State == db.LinkStateOpen {
 			fmt.Fprintf(&b, " draft=%t checks=%s merge=%s", k.Draft, orUnread(k.CI), orUnread(k.MergeState))
 		}

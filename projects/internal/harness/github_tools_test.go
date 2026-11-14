@@ -35,6 +35,9 @@ func (g *stubGitHub) log(s string) {
 func (g *stubGitHub) DefaultBranch(context.Context, project.GitHubRepo) (string, error) {
 	return "main", nil
 }
+func (g *stubGitHub) Protected(context.Context, project.GitHubRepo, string) (bool, error) {
+	return false, nil
+}
 func (g *stubGitHub) CreateIssue(_ context.Context, _ project.GitHubRepo, title, _ string) (project.GitHubItem, error) {
 	g.log("create-issue " + title)
 	return project.GitHubItem{Number: 5, URL: "https://github.com/acme/demo/issues/5", Title: title, State: "open"}, nil
@@ -180,4 +183,112 @@ func TestJourneyPRToolWithoutAGitHubOriginRefuses(t *testing.T) {
 	assert.Contains(t, out, "no origin remote")
 	links, _ := w.Store.ThreadLinks(th.ID)
 	assert.Empty(t, links)
+}
+
+// stackGitHub numbers the PRs it is asked to open and keeps their branches, so
+// a base moved by update is read back.
+type stackGitHub struct {
+	stubGitHub
+	prs map[int]project.GitHubItem
+}
+
+func (g *stackGitHub) CreatePR(_ context.Context, _ project.GitHubRepo, title, _, head, base string, _ bool) (project.GitHubItem, error) {
+	g.log(fmt.Sprintf("create-pr %s %s->%s", title, head, base))
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.prs == nil {
+		g.prs = map[int]project.GitHubItem{}
+	}
+	n := 7 + len(g.prs)
+	it := project.GitHubItem{Number: n, URL: fmt.Sprintf("https://github.com/acme/demo/pull/%d", n), Title: title, State: "open", Head: head, Base: base}
+	g.prs[n] = it
+	return it, nil
+}
+
+func (g *stackGitHub) UpdatePR(_ context.Context, _ project.GitHubRepo, n int, _, _, base *string) (project.GitHubItem, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	it := g.prs[n]
+	if base != nil {
+		g.calls = append(g.calls, fmt.Sprintf("update-pr #%d base=%s", n, *base))
+		it.Base = *base
+	}
+	g.prs[n] = it
+	return it, nil
+}
+
+// G3: a thread works on a stack: it opens a PR for each of its branches, the
+// upper one against the lower, then points the upper one back at main once the
+// lower one has merged. Both records are kept and the coordinator sees both.
+func TestJourneyThreadOpensAStackOfPRs(t *testing.T) {
+	gh := &stackGitHub{}
+	var outs []string
+	var w *World
+	var bare string
+	w = New(t, Options{
+		Files: projectsRepo,
+		Actor: func(a *ActorCtx) error {
+			bottom := git(t, a.Dir, "branch", "--show-current")
+			a.Commit("bottom.txt", "bottom\n")
+			out, isErr := callTool(a, "create_pr", map[string]any{"title": "Bottom"})
+			require.False(t, isErr, out)
+			outs = append(outs, out)
+
+			git(t, a.Dir, "switch", "-q", "-c", "stack/top")
+			a.Commit("top.txt", "top\n")
+			out, isErr = callTool(a, "create_pr", map[string]any{"title": "Top", "head": "stack/top", "base": bottom})
+			require.False(t, isErr, out)
+			outs = append(outs, out)
+
+			// The default branch and an unknown branch are not heads.
+			out, isErr = callTool(a, "create_pr", map[string]any{"title": "No", "head": "main"})
+			assert.True(t, isErr, out)
+			out, isErr = callTool(a, "create_pr", map[string]any{"title": "No", "head": "stack/ghost"})
+			assert.True(t, isErr, out)
+
+			// The bottom PR has merged: retarget the top one.
+			out, isErr = callTool(a, "update", map[string]any{"number": 8, "base": "main"})
+			require.False(t, isErr, out)
+			outs = append(outs, out)
+			a.Say("Opened two PRs: " + strings.Join(outs, "; "))
+			return nil
+		},
+		Brain: func(c *coordtest.Turn) error {
+			if c.FromUser() && !c.CheckIn() {
+				c.Call("start_thread", map[string]string{"title": endTool, "task": "Add the tool as a stack of two PRs."})
+				c.Reply("Started.")
+				return nil
+			}
+			out, isErr := c.Call("get_thread", map[string]string{"thread_id": c.ThreadRef(endTool)})
+			assert.False(t, isErr, out)
+			assert.Contains(t, out, "/pull/7")
+			assert.Contains(t, out, "/pull/8")
+			assert.Contains(t, out, "branch=stack/top→main", "the top PR was retargeted at main")
+			c.Reply(NoUpdate)
+			return nil
+		},
+	})
+	bare = pointOriginAtGitHub(t, w.Repo)
+	w.Service.SetGitHub(gh)
+
+	w.Say("Add the tool as a stack of two PRs.")
+	th := w.ThreadIs(endTool, db.ThreadReady)
+	w.Quiet()
+
+	links, err := w.Store.ThreadLinks(th.ID)
+	require.NoError(t, err)
+	require.Len(t, links, 2)
+	assert.Equal(t, [3]string{th.Branch, "main", "open"}, [3]string{links[0].Head, links[0].Base, links[0].State})
+	assert.Equal(t, [3]string{"stack/top", "main", "open"}, [3]string{links[1].Head, links[1].Base, links[1].State})
+	assert.Equal(t, []string{
+		"create-pr Bottom " + th.Branch + "->main",
+		"create-pr Top stack/top->" + th.Branch,
+		"update-pr #8 base=main",
+	}, gh.calls)
+
+	// Both branches reached origin, plain; main did not move.
+	for _, b := range []string{th.Branch, "stack/top"} {
+		assert.Equal(t, git(t, w.Repo, "rev-parse", b), git(t, bare, "rev-parse", b))
+	}
+	assert.Equal(t, git(t, w.Repo, "rev-parse", "main"), git(t, bare, "rev-parse", "main"), "main is untouched")
 }

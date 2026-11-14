@@ -49,6 +49,9 @@ type GitHubItem struct {
 type GitHub interface {
 	// DefaultBranch is the repository's default branch.
 	DefaultBranch(ctx context.Context, r GitHubRepo) (string, error)
+	// Protected is whether GitHub holds the branch protected; a branch that is
+	// not on GitHub is not.
+	Protected(ctx context.Context, r GitHubRepo, branch string) (bool, error)
 	CreateIssue(ctx context.Context, r GitHubRepo, title, body string) (GitHubItem, error)
 	// Comment adds a comment to an issue or PR and returns its URL.
 	Comment(ctx context.Context, r GitHubRepo, number int, body string) (string, error)
@@ -221,6 +224,21 @@ func (g ghCLI) DefaultBranch(ctx context.Context, r GitHubRepo) (string, error) 
 		return "", errors.New("GitHub did not name the repository's default branch")
 	}
 	return out.DefaultBranch, nil
+}
+
+func (g ghCLI) Protected(ctx context.Context, r GitHubRepo, branch string) (bool, error) {
+	var out struct {
+		Protected bool `json:"protected"`
+	}
+	segs := strings.Split(branch, "/")
+	for i, s := range segs {
+		segs[i] = url.PathEscape(s)
+	}
+	err := g.api(ctx, r, "GET", r.path()+"/branches/"+strings.Join(segs, "/"), nil, &out)
+	if err != nil && strings.Contains(err.Error(), "HTTP 404") {
+		return false, nil
+	}
+	return out.Protected, err
 }
 
 func (g ghCLI) CreateIssue(ctx context.Context, r GitHubRepo, title, body string) (GitHubItem, error) {

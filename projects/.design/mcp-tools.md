@@ -128,7 +128,7 @@ To verify while implementing, not assumed here: what happens to a pending approv
 
 ## Step 5: issue and PR tools for threads (built)
 
-The first tools a thread calls on itself, and the first `ThreadOnly` tools (the counterpart of `CoordinatorOnly`: `buildFor` keeps them from a project's main thread, and `TestToolsOfEachScope` pins who gets what). `create_issue`, `create_pr`, `update`, `comment`, `view` (issues and PRs addressed by their shared number, one read tool and four write tools so permissions stay per tool); design, authorization rules and the refresh policy are in [github-tools.md](./github-tools.md). The tool list golden has them for the worker and the folder session; the coordinator's list and golden outputs are unchanged, and the coordinator reads the records through `get_thread` and `list_threads`.
+The first tools a thread calls on itself, and the first `ThreadOnly` tools (the counterpart of `CoordinatorOnly`: `buildFor` keeps them from a project's main thread, and `TestToolsOfEachScope` pins who gets what). `create_issue`, `create_pr`, `update`, `comment`, `view` (issues and PRs addressed by their shared number, one read tool and four write tools so permissions stay per tool; `create_pr` takes an optional local `head` and a `base`, so a thread can open a stack of PRs); design, authorization rules and the refresh policy are in [github-tools.md](./github-tools.md). The tool list golden has them for the worker and the folder session; the coordinator's list and golden outputs are unchanged, and the coordinator reads the records through `get_thread` and `list_threads`.
 
 ## Later (only when asked for, each its own change)
 

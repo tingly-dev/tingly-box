@@ -36,7 +36,11 @@ type ThreadLink struct {
 	State  string `json:"state"`
 	// Draft, CI and MergeState describe a PR. CI is none, pending, passing or
 	// failing. MergeState is ready, conflicts, blocked, behind or unknown.
-	Draft      bool   `json:"draft,omitempty"`
+	Draft bool `json:"draft,omitempty"`
+	// Head and Base are the branches of a PR as GitHub last said (the base
+	// moves when an `update` retargets it). They tell the PRs of a stack apart.
+	Head       string `json:"head,omitempty"`
+	Base       string `json:"base,omitempty"`
 	CI         string `json:"ci,omitempty"`
 	MergeState string `json:"merge_state,omitempty"`
 	// RefreshedAt is when GitHub last answered about it. AttemptedAt is the
