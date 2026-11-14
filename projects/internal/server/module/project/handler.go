@@ -91,7 +91,11 @@ type UpdateProjectRequest struct {
 	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
-	DisableWorktree      *bool               `json:"disable_worktree,omitempty"`
+	// ThreadGitHubAccess is how threads' tools that write to GitHub (issues,
+	// PRs) are approved: ask each time, or allow without a card. Only the
+	// owner sets it, here.
+	ThreadGitHubAccess *string `json:"thread_github_access,omitempty" enum:"ask,allow"`
+	DisableWorktree    *bool   `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads is how many threads of the project may run at once;
 	// the rest wait. 1..100; a new project starts at 4.
 	MaxRunningThreads *int  `json:"max_running_threads,omitempty"`
@@ -699,6 +703,15 @@ func (h *Handler) update(c *gin.Context) {
 			p.ThreadPermissionMode = *req.ThreadPermissionMode
 		default:
 			apierr.BadRequest(c, "unknown permission mode")
+			return
+		}
+	}
+	if req.ThreadGitHubAccess != nil {
+		switch *req.ThreadGitHubAccess {
+		case rt.GitHubAsk, rt.GitHubAllow:
+			p.ThreadGitHubAccess = *req.ThreadGitHubAccess
+		default:
+			apierr.BadRequest(c, "unknown GitHub access")
 			return
 		}
 	}

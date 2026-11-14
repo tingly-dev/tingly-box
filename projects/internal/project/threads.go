@@ -777,6 +777,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	addDirectories(doc, dirs...)
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
 	grantAutoGit(doc, p, t)
+	grantGitHubTools(doc, p, threadPermissionMode(p, t))
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -1103,6 +1104,9 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 	if legacy := m.layout.LibraryDir(SessionOwner(t.ID)); dirExists(legacy) {
 		addDirectories(doc, legacy)
 	}
+	// A folder session has the GitHub tools too, and no project settings to say
+	// how they are approved: the permission rules are the same as a project thread's.
+	grantGitHubTools(doc, p, threadPermissionMode(p, t))
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

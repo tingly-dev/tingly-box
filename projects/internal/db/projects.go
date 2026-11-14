@@ -255,9 +255,9 @@ func (s *Store) GetThread(id string) (*Thread, error) {
 	return &t, nil
 }
 
-// SaveThread writes all fields of t.
+// SaveThread writes all fields of t except its links (see UpdateThreadLinks).
 func (s *Store) SaveThread(t *Thread) error {
-	return s.db.Save(t).Error
+	return s.db.Omit("Links").Save(t).Error
 }
 
 // SaveThreadUsage writes only what a turn's usage changed. A caller holding an
