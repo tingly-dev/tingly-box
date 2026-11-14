@@ -318,7 +318,7 @@ func (h *Handler) thread(c *gin.Context) (*db.Thread, bool) {
 		fail(c, err)
 		return nil, false
 	}
-	h.svc.Threads.AnnotateOne(t)
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	return t, true
 }
 
@@ -482,7 +482,7 @@ func (h *Handler) send(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.svc.Threads.AnnotateOne(t)
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	c.JSON(http.StatusOK, t)
 }
 
@@ -573,7 +573,7 @@ func (h *Handler) reply(c *gin.Context, id string) {
 		fail(c, err)
 		return
 	}
-	h.svc.Threads.AnnotateOne(t)
+	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
 	c.JSON(http.StatusOK, t)
 }
 

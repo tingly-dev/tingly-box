@@ -88,9 +88,6 @@ func (s *Store) DeleteProjectCascade(projectID string) error {
 		if err := tx.Exec("DELETE FROM thread_events WHERE thread_id IN (SELECT id FROM threads WHERE project_id = ?)", projectID).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("project_id = ?", projectID).Delete(&ThreadLink{}).Error; err != nil {
-			return err
-		}
 		if err := tx.Where("project_id = ?", projectID).Delete(&Thread{}).Error; err != nil {
 			return err
 		}
@@ -258,9 +255,9 @@ func (s *Store) GetThread(id string) (*Thread, error) {
 	return &t, nil
 }
 
-// SaveThread writes all fields of t.
+// SaveThread writes all fields of t except its links (see UpdateThreadLinks).
 func (s *Store) SaveThread(t *Thread) error {
-	return s.db.Save(t).Error
+	return s.db.Omit("Links").Save(t).Error
 }
 
 // SaveThreadUsage writes only what a turn's usage changed. A caller holding an

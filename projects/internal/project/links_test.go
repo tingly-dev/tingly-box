@@ -434,8 +434,9 @@ func TestNumbersAreScopedToTheThreadsRepository(t *testing.T) {
 	f := newLinksFixture(t)
 	cs, _ := f.client(t, f.worker.ID)
 	// The same number in another repository, recorded earlier, is a different item.
-	require.NoError(t, f.store.UpsertThreadLink(&db.ThreadLink{ThreadID: f.worker.ID, ProjectID: f.p.ID, Kind: db.LinkIssue, Repo: "acme/other", Number: 11,
-		Title: "Elsewhere", Role: db.LinkOpened, State: db.LinkStateOpen}))
+	_, err := f.store.UpsertThreadLink(f.worker.ID, db.ThreadLink{Kind: db.LinkIssue, Repo: "acme/other", Number: 11,
+		Title: "Elsewhere", Role: db.LinkOpened, State: db.LinkStateOpen})
+	require.NoError(t, err)
 	_, isErr := f.call(t, cs, "create_issue", map[string]any{"title": "Here"})
 	require.False(t, isErr)
 

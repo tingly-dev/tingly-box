@@ -169,8 +169,9 @@ type Thread struct {
 	// thread is sent out, never stored: the set dies with the process.
 	RunningTasks int `gorm:"-" json:"running_tasks"`
 	// Links are the issues and PRs the thread touched through its tools. They
-	// live in thread_links and are filled in when a thread is sent out.
-	Links []ThreadLink `gorm:"-" json:"links,omitempty"`
+	// are a JSON column of this row that SaveThread leaves alone: only
+	// UpdateThreadLinks and what is built on it write it.
+	Links []ThreadLink `gorm:"serializer:json;type:text" json:"links,omitempty"`
 	// WaitReason says why a waiting thread needs the user.
 	WaitReason string `gorm:"type:text" json:"wait_reason,omitempty"`
 	// Queued is true while a working thread's turn waits for a free slot under

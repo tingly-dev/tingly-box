@@ -156,15 +156,18 @@ func TestThreadsCarryTheirLinks(t *testing.T) {
 	f := newFixture(t, func(*enginetest.Turn) error { return nil })
 	th := &db.Thread{ProjectID: f.project.ID, Agent: db.AgentClaudeCode, Title: "W"}
 	require.NoError(t, f.store.CreateThread(th))
-	require.NoError(t, f.store.UpsertThreadLink(&db.ThreadLink{ThreadID: th.ID, ProjectID: f.project.ID, Kind: db.LinkPR, Repo: "acme/widgets", Number: 5, State: db.LinkStateOpen, CI: "failing"}))
-	threads := []db.Thread{*th}
-	f.threads.Annotate(threads)
-	require.Len(t, threads[0].Links, 1)
-	assert.Equal(t, 5, threads[0].Links[0].Number)
-	assert.Equal(t, " prs=#5(open checks=failing)", linksNote(threads[0].Links))
-	one := *th
-	f.threads.AnnotateOne(&one)
-	assert.Len(t, one.Links, 1)
+	_, err := f.store.UpsertThreadLink(th.ID, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: 5, State: db.LinkStateOpen, CI: "failing"})
+	require.NoError(t, err)
+	// The links ride on the thread row: every way a thread is read has them.
+	got, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	require.Len(t, got.Links, 1)
+	assert.Equal(t, 5, got.Links[0].Number)
+	assert.Equal(t, " prs=#5(open checks=failing)", linksNote(got.Links))
+	listed, err := f.store.ListThreads(f.project.ID)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.Len(t, listed[0].Links, 1)
 }
 
 func TestGetThreadShowsLinksToTheCoordinator(t *testing.T) {

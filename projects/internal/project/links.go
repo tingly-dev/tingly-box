@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -128,13 +129,14 @@ func checkText(what, s string, max int) error {
 // record writes what GitHub said about an item as the thread's link to it and
 // tells open pages.
 func (l *Links) record(t *db.Thread, repo GitHubRepo, kind, role string, it GitHubItem) (*db.ThreadLink, error) {
-	link := &db.ThreadLink{ThreadID: t.ID, ProjectID: t.ProjectID, Kind: kind, Repo: repo.Slug(), Number: it.Number, Role: role}
-	fillLink(link, it, l.now())
-	if err := l.store.UpsertThreadLink(link); err != nil {
+	link := db.ThreadLink{Kind: kind, Repo: repo.Slug(), Number: it.Number, Role: role}
+	fillLink(&link, it, l.now())
+	stored, err := l.store.UpsertThreadLink(t.ID, link)
+	if err != nil {
 		return nil, err
 	}
 	l.publish(t.ID)
-	return link, nil
+	return &stored, nil
 }
 
 // fillLink sets what GitHub said about an item on its record, as read at now:
@@ -444,7 +446,7 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 		return "", err
 	}
 	if link != nil {
-		if err := l.applyReading(link, it); err != nil {
+		if err := l.applyReading(t.ID, link, it); err != nil {
 			logrus.WithError(err).Warn("projects: cannot save a link's reading")
 		}
 	}
@@ -511,7 +513,7 @@ func describeItem(kind string, it GitHubItem) string {
 
 // refresh reads one record from GitHub. A failure keeps the last good reading,
 // and counts toward its back-off.
-func (l *Links) refresh(ctx context.Context, k *db.ThreadLink) error {
+func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) error {
 	repo, err := repoOfLink(k)
 	if err != nil {
 		return err
@@ -521,28 +523,28 @@ func (l *Links) refresh(ctx context.Context, k *db.ThreadLink) error {
 		k.AttemptedAt = l.now()
 		k.Failures++
 		k.LastError = redact(err.Error())
-		if serr := l.store.SaveThreadLinkReading(k); serr != nil {
+		if serr := l.store.SaveThreadLinkReading(threadID, *k); serr != nil {
 			logrus.WithError(serr).Warn("projects: cannot save a link's refresh failure")
 		}
 		if k.Failures == 1 {
 			// The card shows "could not refresh" from now on.
-			l.publish(k.ThreadID)
+			l.publish(threadID)
 		}
 		return err
 	}
-	return l.applyReading(k, it)
+	return l.applyReading(threadID, k, it)
 }
 
 // applyReading stores what GitHub just said about a linked item and tells open
 // pages when it changed anything they show.
-func (l *Links) applyReading(k *db.ThreadLink, it GitHubItem) error {
+func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) error {
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || k.LastError != ""
 	fillLink(k, it, l.now())
-	if err := l.store.SaveThreadLinkReading(k); err != nil {
+	if err := l.store.SaveThreadLinkReading(threadID, *k); err != nil {
 		return err
 	}
 	if changed {
-		l.publish(k.ThreadID)
+		l.publish(threadID)
 	}
 	return nil
 }
@@ -568,23 +570,37 @@ func (l *Links) Sweep(ctx context.Context) {
 		return
 	}
 	defer l.sweeping.Unlock()
-	open, err := l.store.OpenThreadLinks()
+	threads, err := l.store.LinkedThreads()
 	if err != nil {
-		logrus.WithError(err).Warn("projects: cannot list open links")
+		logrus.WithError(err).Warn("projects: cannot list linked threads")
 		return
 	}
+	type pending struct {
+		threadID string
+		link     db.ThreadLink
+	}
+	var open []pending
+	for _, th := range threads {
+		for _, k := range th.Links {
+			if k.State == db.LinkStateOpen {
+				open = append(open, pending{th.ID, k})
+			}
+		}
+	}
+	// The ones read longest ago go first when the cap leaves some for later.
+	sort.SliceStable(open, func(i, j int) bool { return open[i].link.RefreshedAt.Before(open[j].link.RefreshedAt) })
 	now := l.now()
 	done := 0
 	for i := range open {
 		if ctx.Err() != nil || done >= linkSweepMax {
 			return
 		}
-		if now.Before(due(&open[i])) {
+		if now.Before(due(&open[i].link)) {
 			continue
 		}
 		done++
-		if err := l.refresh(ctx, &open[i]); err != nil {
-			logrus.WithField("link", fmt.Sprintf("%s#%d", open[i].Repo, open[i].Number)).Debug("projects: link refresh failed: ", redact(err.Error()))
+		if err := l.refresh(ctx, open[i].threadID, &open[i].link); err != nil {
+			logrus.WithField("link", fmt.Sprintf("%s#%d", open[i].link.Repo, open[i].link.Number)).Debug("projects: link refresh failed: ", redact(err.Error()))
 		}
 	}
 }

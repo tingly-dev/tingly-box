@@ -205,7 +205,7 @@ func (c *Coordinator) getThread(_ context.Context, p *db.Project, in struct {
 	}
 	lines, oldest, hidden := fit(entries, in.Full, func(id string) string { return "get_thread full for the whole" })
 	lines += footer(hidden, more, oldest, "get_thread")
-	c.threads.AnnotateOne(t)
+	t.RunningTasks = c.threads.RunningTasks(t.ID)
 	links := ""
 	if len(t.Links) > 0 {
 		links = "issues and PRs (read from GitHub by the thread's tools):\n" + linksDetail(t.Links, time.Now())

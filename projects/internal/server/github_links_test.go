@@ -33,8 +33,9 @@ func TestThreadsCarryTheirIssueAndPRLinksOverTheAPI(t *testing.T) {
 	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "P"}, &p))
 	th := &db.Thread{ProjectID: p.ID, ParentID: p.MainThreadID, Agent: db.AgentClaudeCode, Status: db.ThreadIdle}
 	require.NoError(t, store.CreateThread(th))
-	require.NoError(t, store.UpsertThreadLink(&db.ThreadLink{ThreadID: th.ID, ProjectID: p.ID, Kind: db.LinkPR, Repo: "acme/widgets", Number: 12,
-		URL: "https://github.com/acme/widgets/pull/12", Title: "Add a", Role: db.LinkOpened, State: db.LinkStateOpen, CI: "passing", MergeState: "ready"}))
+	_, err := store.UpsertThreadLink(th.ID, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: 12,
+		URL: "https://github.com/acme/widgets/pull/12", Title: "Add a", Role: db.LinkOpened, State: db.LinkStateOpen, CI: "passing", MergeState: "ready"})
+	require.NoError(t, err)
 
 	var one struct {
 		Thread db.Thread `json:"thread"`
