@@ -119,7 +119,7 @@ type Threads struct {
 	// SessionToolsConfig provides the MCP configuration scoped to the current thread.
 	SessionToolsConfig func(threadID string) (string, error)
 	// RevokeTools ends the thread's tool access once its session is closed
-	// (resolve, archive); the next turn gets a fresh one.
+	// (resolve, archive, pause); the next turn gets a fresh one.
 	RevokeTools func(threadID string)
 
 	// StallAfter is how long a running thread may show no activity before
@@ -1414,8 +1414,9 @@ func (m *Threads) revokeTools(threadID string) {
 }
 
 // ReleaseProject ends every worker's and folder session's process and tool
-// access in a project, for an archive: the threads stay readable, and a thread
-// that runs again after an unarchive gets a fresh session and fresh tools. The
+// access in a project, for a pause or an archive: the threads stay readable,
+// and a thread that runs again after a resume or an unarchive gets a fresh
+// session and fresh tools. The
 // project's main thread is the coordinator's and is left to it. Call it once
 // the project refuses new messages, so nothing starts a session behind it.
 func (m *Threads) ReleaseProject(projectID string) {
@@ -1474,9 +1475,8 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 		case <-time.After(agentboot.SessionCloseTimeout):
 		}
 	}
-	// A resolved thread's process has nothing left to do, and nor do its tools.
+	// A resolved thread's process has nothing left to do.
 	m.engine.Evict(m.sessionOf(threadID))
-	m.revokeTools(threadID)
 	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
 		t.Status, t.WaitReason, t.ResolvedAt = db.ThreadResolved, "", &now
@@ -1484,6 +1484,11 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	if err == nil {
 		m.releaseChats(t)
 		m.cleanTmp(t)
+		// After the status is saved, not before: the stopped turn's own
+		// bookkeeping races the save (it writes no "Stopped." once the
+		// thread is resolved), and nothing can start a session meanwhile, as
+		// the lifecycle lock is held.
+		m.revokeTools(threadID)
 	}
 	return t, err
 }
@@ -1501,8 +1506,7 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 		}
 	}
 	m.engine.Evict(m.sessionOf(threadID))
-	m.revokeTools(threadID)
-	return m.update(threadID, func(t *db.Thread) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		if t.ArchivedAt == nil {
 			now := time.Now()
 			t.ArchivedAt = &now
@@ -1511,6 +1515,10 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 			t.Status, t.WaitReason = db.ThreadIdle, ""
 		}
 	})
+	if err == nil {
+		m.revokeTools(threadID) // after the save, as in Resolve
+	}
+	return t, err
 }
 
 // RestoreSession returns an archived session to the list in its stored state.

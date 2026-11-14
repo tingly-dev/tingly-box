@@ -121,44 +121,57 @@ func TestResolveAndArchiveRevokeAThreadsTools(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, status)
 }
 
-func TestArchivingAProjectEndsItsThreadsToolsButNotTheCoordinators(t *testing.T) {
-	started := make(chan struct{}, 4)
-	f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
-		started <- struct{}{}
-		turn.Say("ok", 1, 1)
-		return nil
-	}, nil)
-	tools := svc.sessionToolsMCP
-	worker, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "W", Task: "work", Repo: "none"})
-	require.NoError(t, err)
-	<-started
-	waitStatus(t, f.store, worker.ID, db.ThreadIdle)
-	_, err = tools.config(f.project.MainThreadID)
-	require.NoError(t, err)
-	status, _ := answers(t, tools, worker.ID)
-	require.NotEqual(t, http.StatusNotFound, status)
+// A paused or archived project answers nothing: its threads' processes close
+// and their tool URLs end, the coordinator's is left alone, and after the
+// project is resumed or unarchived a thread starts over with fresh tools.
+func TestPausingOrArchivingAProjectEndsItsThreadsToolsButNotTheCoordinators(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		stop func(*Service, *db.Project) error
+		back func(*Service, *db.Project) error
+	}{
+		{"pause", func(s *Service, p *db.Project) error { return s.SetPaused(p, true) }, func(s *Service, p *db.Project) error { return s.SetPaused(p, false) }},
+		{"archive", func(s *Service, p *db.Project) error { return s.SetArchived(p, true) }, func(s *Service, p *db.Project) error { return s.SetArchived(p, false) }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			started := make(chan struct{}, 4)
+			f, svc := newServiceFixture(t, testHost{}, func(turn *enginetest.Turn) error {
+				started <- struct{}{}
+				turn.Say("ok", 1, 1)
+				return nil
+			}, nil)
+			tools := svc.sessionToolsMCP
+			worker, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "W", Task: "work", Repo: "none"})
+			require.NoError(t, err)
+			<-started
+			waitStatus(t, f.store, worker.ID, db.ThreadIdle)
+			_, err = tools.config(f.project.MainThreadID)
+			require.NoError(t, err)
+			status, _ := answers(t, tools, worker.ID)
+			require.NotEqual(t, http.StatusNotFound, status)
 
-	p, err := f.store.GetProject(f.project.ID)
-	require.NoError(t, err)
-	require.NoError(t, svc.SetArchived(p, true))
-	tools.mu.Lock()
-	_, workerURL := tools.urls[worker.ID]
-	_, mainURL := tools.urls[f.project.MainThreadID]
-	tools.mu.Unlock()
-	assert.False(t, workerURL, "an archived project's thread has no tool URL")
-	assert.True(t, mainURL, "the coordinator's is left alone: its tools already refuse an archived project")
+			p, err := f.store.GetProject(f.project.ID)
+			require.NoError(t, err)
+			require.NoError(t, c.stop(svc, p))
+			tools.mu.Lock()
+			_, workerURL := tools.urls[worker.ID]
+			_, mainURL := tools.urls[f.project.MainThreadID]
+			tools.mu.Unlock()
+			assert.False(t, workerURL, "the project's thread has no tool URL")
+			assert.True(t, mainURL, "the coordinator's is left alone: its tools already refuse the project")
 
-	// Unarchived, the thread starts over with a fresh session and fresh tools.
-	require.NoError(t, svc.SetArchived(p, false))
-	_, err = svc.Threads.Send(context.Background(), worker.ID, "again", Source{}, nil)
-	require.NoError(t, err)
-	<-started
-	waitStatus(t, f.store, worker.ID, db.ThreadIdle)
-	require.Eventually(t, func() bool {
-		tools.mu.Lock()
-		defer tools.mu.Unlock()
-		return tools.urls[worker.ID] != ""
-	}, 2*time.Second, 10*time.Millisecond)
-	status, _ = answers(t, tools, worker.ID)
-	assert.NotEqual(t, http.StatusNotFound, status)
+			require.NoError(t, c.back(svc, p))
+			_, err = svc.Threads.Send(context.Background(), worker.ID, "again", Source{}, nil)
+			require.NoError(t, err)
+			<-started
+			waitStatus(t, f.store, worker.ID, db.ThreadIdle)
+			require.Eventually(t, func() bool {
+				tools.mu.Lock()
+				defer tools.mu.Unlock()
+				return tools.urls[worker.ID] != ""
+			}, 2*time.Second, 10*time.Millisecond)
+			status, _ = answers(t, tools, worker.ID)
+			assert.NotEqual(t, http.StatusNotFound, status)
+		})
+	}
 }

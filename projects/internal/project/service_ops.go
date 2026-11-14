@@ -174,6 +174,12 @@ func (s *Service) SetPaused(p *db.Project, paused bool) error {
 	if err := s.Save(p); err != nil {
 		return err
 	}
+	if paused {
+		// A paused project answers nothing: close the threads' processes and
+		// end their tools, as an archive does. Saved first, so the project
+		// already refuses messages and nothing starts a session behind this.
+		s.Threads.ReleaseProject(p.ID)
+	}
 	if !paused && s.Coordinator.live() && p.MainThreadID != "" {
 		s.Coordinator.wake(p.ID)
 	}
