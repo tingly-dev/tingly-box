@@ -106,3 +106,52 @@ svg.i.s { width: 18px; height: 18px; }
 .kbd { background: var(--kbd); flex: none; padding: 8px 4px 28px; display: grid; gap: 8px; }
 .kbd div { display: flex; gap: 5px; justify-content: center; } .kbd i { width: 31px; height: 42px; border-radius: 6px; background: var(--key); display: block; box-shadow: 0 1px 0 rgba(0,0,0,.25); }
 .note { font-size: 13px; color: var(--text2); margin: 10px 4px; }
+/* ---- size modes (set by fit() in app3.js): compact <360w, large 428-599w, short <700h, land = landscape phone, wide >=600w ---- */
+.nav button span:first-of-type { }
+#phone[data-size=compact] { font-size: 15px; }
+#phone[data-size=compact] .scroll { padding-left: 12px; padding-right: 12px; }
+#phone[data-size=compact] .large h1 { font-size: 26px; }
+#phone[data-size=compact] .btn { padding: 0 12px; font-size: 15px; }
+#phone[data-size=compact] .row { padding: 10px 12px; gap: 10px; }
+#phone[data-size=compact] .composer .field { padding: 12px 12px; }
+#phone[data-size=large] .scroll { padding-left: 20px; padding-right: 20px; }
+#phone[data-size=large] .large h1 { font-size: 32px; }
+#phone[data-short="1"] .large { padding-top: 6px; padding-bottom: 2px; }
+#phone[data-short="1"] .large h1 { font-size: 24px; }
+#phone[data-short="1"] .large .sub { display: none; }
+#phone[data-short="1"] .nav { padding-bottom: 8px; }
+#phone[data-short="1"] .nav button { min-height: 50px; }
+#phone[data-short="1"] .dock { padding: 8px 16px; }
+#phone[data-short="1"] .dock .q { margin: 4px 0 8px; }
+#phone[data-short="1"] .dock .more { min-height: 36px; margin-top: 2px; }
+#phone[data-short="1"] .composer { padding-bottom: 6px; }
+#phone[data-short="1"] .sec { margin-top: 12px; }
+#phone[data-mode=land], #phone[data-mode=wide] { flex-direction: row; }
+#phone[data-mode=land] .nav, #phone[data-mode=wide] .nav { flex-direction: column; justify-content: center; border-top: 0; border-right: 1px solid var(--divider); padding: 0 0 0 0; width: 76px; flex: none; }
+#phone[data-mode=land] .nav button, #phone[data-mode=wide] .nav button { flex: none; min-height: 64px; }
+#phone[data-mode=land] .badge, #phone[data-mode=wide] .badge { left: calc(50% + 4px); }
+#phone[data-mode=land] .screen { min-width: 0; }
+#phone[data-mode=land] .large { padding-top: 4px; padding-bottom: 0; } #phone[data-mode=land] .large .sub { display: none; } #phone[data-mode=land] .large h1 { font-size: 22px; }
+#phone[data-mode=land] .bar { min-height: 48px; } #phone[data-mode=land] .dock { padding: 6px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+#phone[data-mode=land] .dock .h, #phone[data-mode=land] .dock .q { margin: 0; } #phone[data-mode=land] .dock .row2 { flex: 1; min-width: 240px; } #phone[data-mode=land] .dock .more { display: none; }
+#phone[data-mode=land] .composer { padding: 4px 8px 6px; }
+#phone[data-mode=land] .scroll { padding-left: max(16px, env(safe-area-inset-left)); }
+#phone[data-mode=land] .sheet, #phone[data-mode=wide] .sheet { left: 50%; right: auto; width: min(480px, 100%); transform: translate(-50%, 105%); }
+#phone[data-mode=land] .sheet.on, #phone[data-mode=wide] .sheet.on { transform: translate(-50%, 0); }
+.split { flex: 1; min-width: 0; display: flex; }
+.split .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.split .list { width: 340px; flex: none; border-right: 1px solid var(--divider); }
+.split .detail { flex: 1; background: var(--bg); }
+.empty { margin: auto; color: var(--text3); }
+.fallback { margin: 12px 0; padding: 14px; border: 1px dashed var(--divider); border-radius: 14px; color: var(--text2); font-size: 14px; }
+.fallback .mock { height: 120px; margin-top: 10px; border-radius: 10px; background: repeating-linear-gradient(45deg, var(--hover), var(--hover) 8px, transparent 8px, transparent 16px); }
+#phone[data-mode=portrait] .nav { order: 2; }
+#phone[data-mode=portrait] { flex-direction: column; }
+#phone[data-flat="1"] .bar { min-height: 48px; }
+#phone[data-flat="1"] .dock { padding: 6px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+#phone[data-flat="1"] .dock .h, #phone[data-flat="1"] .dock .q { margin: 0; }
+#phone[data-flat="1"] .dock .q { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#phone[data-flat="1"] .dock .row2 { flex: 1; min-width: 220px; } #phone[data-flat="1"] .dock .more { display: none; }
+#phone[data-flat="1"] .composer { padding: 4px 8px 6px; }
+#phone[data-flat="1"] .large { padding-top: 4px; padding-bottom: 0; } #phone[data-flat="1"] .large .sub { display: none; } #phone[data-flat="1"] .large h1 { font-size: 22px; }
+.dock .more { min-height: 44px; }

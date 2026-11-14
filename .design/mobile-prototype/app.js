@@ -16,7 +16,7 @@ const q = new URLSearchParams(location.search);
 if (q.get('theme') === 'dark') document.body.dataset.theme = 'dark';
 if (q.get('frame') !== '0') document.body.classList.add('framed');
 
-const S = { tab: 'inbox', screen: 'root', ptab: 'chat', thread: 't-pool', pending: { 't-pool': true, 't-backoff': true }, sheet: null, toast: '', kb: false, resolved: false, agent: 'claude' };
+const S = { tab: 'work', open: {}, screen: 'root', ptab: 'chat', thread: 't-pool', pending: { 't-pool': true, 't-backoff': true }, sheet: null, toast: '', kb: false, resolved: false, agent: 'claude' };
 const waiting = () => Object.values(S.pending).filter(Boolean).length;
 const T = {
   't-pool': { t: 'Tune the DB connection pool', p: 'Payments API latency', g: 'wait', d: 'Allow Bash: go test ./... -run Bench -staging', ago: '4m', kind: 'approval', ap: ['Allow Bash?', 'go test ./... -run Bench -staging'] },
@@ -27,27 +27,13 @@ const T = {
   't-docs': { t: 'Document the /refund endpoint', p: 'Docs refresh', g: 'rev', d: 'Example added · 1 file', ago: '3h' },
 };
 const nav = () => {
-  const t = (k, ic, l, b) => `<button class="${S.tab === k ? 'on' : ''}" data-tab="${k}">${I(ic)}${l}${b ? `<span class="badge">${b}</span>` : ''}</button>`;
-  return `<nav class="nav">${t('inbox', 'inbox', '收件箱', waiting())}${t('work', 'folder', '工作区')}${t('agent', 'apps', '智能应用')}${t('me', 'user', '我的')}</nav>`;
+  const t = (k, ic, l, bd) => `<button class="${S.tab === k ? 'on' : ''}" data-tab="${k}">${I(ic)}<span>${l}</span>${bd ? `<span class="badge">${bd}</span>` : ''}</button>`;
+  return `<nav class="nav">${t('work', 'folder', '工作区', waiting())}${t('agent', 'apps', '智能应用')}${t('me', 'more', '更多')}</nav>`;
 };
 const chev = I('right', 's chev');
 const glyph = (g) => g === 'wait' ? `<span class="glyph warn">${I('bolt', 's')}</span>` : g === 'rev' ? `<span class="glyph ok">${I('check', 's')}</span>` : `<span class="glyph run">${I('more', 's')}</span>`;
 const tRow = (id, proj = true) => { const x = T[id]; return `<button class="row" data-thread="${id}">${glyph(x.g)}<span class="main">${proj ? `<span class="cap">${x.p}</span>` : ''}<span class="t">${x.t}</span><span class="d">${x.d}</span></span><span class="r">${x.ago}</span></button>`; };
 
-function inbox() {
-  const wait = ['t-pool', 't-backoff'].filter(id => S.pending[id]);
-  const act = (id) => `<div class="acts"><button class="btn p grow" data-resolve="${id}">${id === 't-pool' ? '允许' : '用推荐回答'}</button><button class="btn grow" data-thread="${id}">查看</button></div>`;
-  return `<div class="large"><div><h1>收件箱</h1><div class="sub">${waiting()} 件需要回答${S.resolved ? '' : ' · 2 个可以 review'}</div></div><button class="tap pri" data-sheet="filter">${I('sliders')}</button></div>
-  <div class="scroll">${wait.length ? `<div class="sec"><span class="dot"></span>需要你回答 · ${wait.length}</div><div class="group">${wait.map(id => tRow(id) + act(id)).join('')}</div>` : ''}
-  ${S.resolved ? '' : `<div class="sec">可以 review · 2</div><div class="group">${tRow('t-cache')}${tRow('t-docs')}</div>`}
-  <div class="sec">进行中 · 2</div><div class="group">${tRow('t-sdk')}${tRow('t-queued')}</div>
-  <div class="note">已解决的线程不在这里；在项目的「线程」里查看。</div></div>`;
-}
-function workList() {
-  const r = (n, g, m, bad) => `<button class="row" data-act="proj"><span class="main"><span class="t">${n}</span><br><span class="d">${g}</span></span>${bad ? `<span class="badge" style="position:static">${bad}</span>` : ''}<span class="r">${m}</span>${chev}</button>`;
-  return `<div class="large"><div><h1>工作区</h1></div><button class="tap pri">${I('plus')}</button></div><div class="scroll"><div class="sec">项目</div><div class="group">${r('Payments API latency', 'p99 of /charge under 300 ms', '4m', waiting())}${r('Docs refresh', 'Documented endpoints with examples', '3h', 0)}${r('Postgres 17 migration', '已暂停', '2d', 0)}</div>
-  <div class="sec">工作目录</div><div class="group">${r('notes-app', '/Users/me/code/notes-app', '2m', 0)}${r('website', '/Users/me/code/website', '1m', 0)}</div></div>`;
-}
 function chatBody() {
   return `<div class="msg" style="color:var(--text2);font-size:13px">来自 Telegram · Maya (phone)</div>
   <div class="msg them">I will add a retry budget in the SDK so an outage cannot amplify traffic. The pool benchmark still needs your approval.</div>
