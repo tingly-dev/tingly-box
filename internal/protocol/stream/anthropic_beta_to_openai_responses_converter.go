@@ -208,6 +208,17 @@ func (c *anthropicBetaToResponsesConverter) emitContentBlockStart(event *anthrop
 			Part:           wire.ResponsesContentPartWire{Type: "output_text", Text: ""},
 		})
 		c.outputIndex++
+		if text := event.ContentBlock.Text; text != "" {
+			c.pendingTextBlocks[index].text.WriteString(text)
+			c.pending = append(c.pending, wire.ResponsesOutputTextDeltaEvent{
+				Type:           "response.output_text.delta",
+				Delta:          text,
+				ItemID:         itemID,
+				OutputIndex:    currentOutputIndex,
+				ContentIndex:   0,
+				SequenceNumber: int64(c.nextSeq()),
+			})
+		}
 	} else if blockType == "tool_use" {
 		toolID := event.ContentBlock.ID
 		toolName := event.ContentBlock.Name

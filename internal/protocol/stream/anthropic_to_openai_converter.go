@@ -223,12 +223,15 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 			c.toolCallID = ""
 			c.toolCallName = ""
 			c.toolCallArgs.Reset()
-			c.initialToolInput = protocol.AnthropicToolInputJSON(event.ContentBlock.RawJSON(), event.ContentBlock.Input)
+			c.initialToolInput = ""
 			c.suppressToolCall = false
 		}
 
 	case "message_delta":
-		c.stopReason = string(event.Delta.StopReason)
+		// A later usage-only delta must not clear an already reported stop.
+		if event.Delta.StopReason != "" {
+			c.stopReason = string(event.Delta.StopReason)
+		}
 		c.acc.ConsumeBeta(event)
 
 	case "message_stop":
