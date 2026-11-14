@@ -8,23 +8,23 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
-func TestProjectGitHubAccessIsValidatedAndDefaultsToAsk(t *testing.T) {
+func TestProjectGitHubAccessIsValidatedAndDefaultsToAllow(t *testing.T) {
 	store, c := newServer(t, quietAgents())
 	var p db.Project
 	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "P"}, &p))
-	assert.Empty(t, p.ThreadGitHubAccess, "a new project asks: nothing is allowed until the owner says so")
+	assert.Empty(t, p.ThreadGitHubAccess, "a new project says nothing, which is allow")
 
 	var out db.Project
-	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "allow"}, &out))
-	assert.Equal(t, "allow", out.ThreadGitHubAccess)
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "ask"}, &out))
+	assert.Equal(t, "ask", out.ThreadGitHubAccess)
 	for _, bad := range []any{"yes", "", "always", 1} {
 		assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": bad}, nil), bad)
 	}
 	saved, err := store.GetProject(p.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "allow", saved.ThreadGitHubAccess, "a rejected value changes nothing")
-	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "ask"}, &out))
-	assert.Equal(t, "ask", out.ThreadGitHubAccess)
+	assert.Equal(t, "ask", saved.ThreadGitHubAccess, "a rejected value changes nothing")
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "allow"}, &out))
+	assert.Equal(t, "allow", out.ThreadGitHubAccess)
 }
 
 func TestThreadsCarryTheirIssueAndPRLinksOverTheAPI(t *testing.T) {

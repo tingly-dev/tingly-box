@@ -145,6 +145,8 @@ Never for a model: create, delete, pause or archive a project; `repos`; the coor
 
 Push and PR creation, issues and the record of them are in [github-tools.md](./github-tools.md): five thread-only tools that act on the thread's own repository and branch with the host's `gh` login. Merge, close and force-push are still out of scope (they need the approval rule above).
 
+Every tool of this server runs in a thread without an approval card: the thread's settings file allows the whole `mcp__tingly-projects` server and the thread's approval prompt answers any call that still reaches it (the coordinator's prompter does the same). Only the four tools that publish on GitHub can be opted out, per project; the reasoning and the probe are under Authorization in `github-tools.md`. A future tool that is irreversible must not rely on this blanket allow: it needs the approval rule above, and its own `ask` rule so that it wins over the allow.
+
 ## Decisions taken here and why
 
 - **Service methods, not "MCP calls the local HTTP API".** An extra hop, an auth path and a second error mapping, and the standalone and embedded hosts mount routes differently. The `Threads` methods are already the implementation.

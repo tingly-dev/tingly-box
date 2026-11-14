@@ -95,8 +95,8 @@ type Project struct {
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
 	// ThreadGitHubAccess is how a thread's issue and PR tools that write to
-	// GitHub are approved: ask (the default, also when empty) or allow, which
-	// lets them run without a card. Reads are always allowed.
+	// GitHub are approved: allow (the default, also when empty), which lets
+	// them run without a card, or ask. Reads are always allowed.
 	ThreadGitHubAccess string `gorm:"size:10" json:"thread_github_access,omitempty"`
 	// DisableWorktree makes new threads share the selected repository checkout.
 	DisableWorktree bool `json:"disable_worktree,omitempty"`

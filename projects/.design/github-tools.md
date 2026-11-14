@@ -51,15 +51,33 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 
 This is the part that must not turn into a way round the rules.
 
-**Rule: a tool call is the same request as the `gh` command it replaces, and is answered the same way.** The thread's Claude Code session decides whether a call goes ahead, exactly as for `send_file` or a Bash command: through the permission mode, the settings file Projects writes for the thread, and the approval card. The tools add no approval path of their own and no tool is auto-approved by the server.
+**Rule: the Projects tools are Tingly Box's own, so they run without a card by default. This is a decision of the product, not a per-tool exception.** A person who hands a thread work expects it to open the issue and the PR; asking each time turned every thread into a wait for a tap, and the thread's launch profile (which the user owns and Projects cannot edit) is where such rules would otherwise have to live. So Projects writes the rule into the settings file it passes with `--settings`, next to the rules it already writes, and answers the prompt itself for what still reaches it:
 
-What changes is only where the user can say "yes, always":
+- **The settings file** (`grantBuiltinTools`, for project threads and folder sessions alike) allows `mcp__tingly-projects`: the whole server, so tools added later are covered without touching this code. It is written in every permission mode.
+- **The approval prompt** (`threadPrompter.OnApproval`) approves any `mcp__tingly-projects__*` call that still arrives, the way the coordinator's prompter does. This is what makes it hold against a rule the settings file cannot outrank (see Probe below).
+- **Scope is this server only.** Claude's own tools (Bash, Edit, Write, ...) keep following the permission mode and the profile. `gh pr create` / `gh issue create` / `gh pr merge` stay on the `ask` list of `grantAutoGit`; the tools are the way to publish, the Bash commands are not loosened.
+- **Existing projects are included**: the setting below is empty on them, and empty means allow. No migration.
 
-- A new project setting, **`thread_github_access`**: `ask` (default) or `allow`. It is the "allowed items of the project settings" the user asked for.
-  - `ask`: in auto mode the four write tools are written to the thread's settings as `ask` rules, because the classifier would otherwise deny an unlisted MCP tool silently with no card, which is the problem in (1); the rule makes the card appear. The other modes already prompt for a tool nobody allowed, and `bypassPermissions` keeps meaning "run without asking" (as it does for the `gh` commands), so nothing is added there.
-  - `allow`: the four write tools are written as `allow` rules, so they run without a card. This is a standing decision of the project owner, made in the project settings (web; the coordinator cannot change it: `update_instructions` is the only settings tool and it does not touch this field). It is **off** until someone turns it on, and a fork of the project does not inherit it (the owner decides again).
-  - `view` only reads an issue or PR of the thread's own repository and is always allowed.
-- `gh pr create` / `gh issue create` / `gh pr merge` stay on the `ask` list (`grantAutoGit`); the setting does not weaken them. The thread prompt says to use the tools when it has them.
+The one remaining control is the project setting **`thread_github_access`**: `allow` (the default, also when empty) or `ask`. `ask` is an opt-out for the four tools that publish on GitHub (`create_issue`, `create_pr`, `update`, `comment`): they are written as `ask` rules, which win over the allow rule (deny, ask, then allow), and the prompt fallback leaves those four to the card. The other tools of the server (`view`, `send_file`, ...) stay allowed. There is no global settings table or page for this; if a user needs per-tool control across projects, that is a later design.
+
+### Probe
+
+Checked with the real Claude Code CLI (2.1.259) against a scripted model and a real `tingly-project` on an isolated data directory (the thread calls `view`, then `create_issue`; an approval card means the call asked): 
+
+| Setup | auto | acceptEdits | default | bypassPermissions |
+|---|---|---|---|---|
+| Before: `view` allowed, writes unlisted/`ask` | `view` runs, `create_issue` asks | same | same | not run |
+| Allow rule `mcp__tingly-projects`, prompt fallback off | no card | no card | no card | not run |
+| Allow rule + prompt fallback | no card | no card | no card | no card |
+| Rule only, `ask` rule for `create_issue` in the user's Claude settings (what a profile can add) | card | not run | card | not run |
+| Rule + fallback, same profile `ask` rule | no card | not run | no card | not run |
+| Project opt-out (`ask`), rule + fallback | card for `create_issue` | card | card | not run |
+
+What it shows: the server-wide allow rule alone is enough in all three modes, including auto, whose classifier would otherwise deny an unlisted MCP tool; a profile's `ask` rule beats an allow rule (ask is checked first), so the rule alone is not proof against a profile; the prompt fallback closes that, and it is also what applies the opt-out (the same prompt carries the request, the project decides). The probe is `showcase/e2e-demo/mcp_approval_probe.py`.
+
+### The Bash commands
+
+- `gh pr create` / `gh issue create` / `gh pr merge` stay on the `ask` list (`grantAutoGit`); nothing here weakens them. The thread prompt says to use the tools when it has them.
 
 Boundaries the setting cannot move (enforced in code, not in the prompt):
 
@@ -119,7 +137,7 @@ Not done: webhooks (the host is usually behind NAT), review decisions (GraphQL o
 - **Thread rail** (`ThreadInfoRail`, the expanded status area): a new "Issues & PRs" card after Changes, listing each record: icon, `#number title`, state chip, and for a PR its CI and merge state; a row opens the URL. Shown only when the thread has records. Reading age in the tooltip; "could not refresh" when `last_error` is set.
 - **Coordinator's Status tab**: a card with all records of the project's threads, newest first, each with the thread's title, so "which PRs are open and how are they doing" is one place.
 - **Narrow layouts** that have no rail keep the header chips; a link count chip is not added in batch 1.
-- Project settings dialog: one select, "Issues and PRs: ask each time / allowed", under the permission mode; `PATCH /projects/{id}` takes `thread_github_access` (`ask` or `allow`, anything else is a 400).
+- Project settings dialog: one select, "Issues and PRs: allowed (default) / ask each time"; its help text says the default and that the other Projects tools are not affected. `PATCH /projects/{id}` takes `thread_github_access` (`ask` or `allow`, anything else is a 400).
 - The coordinator sees the same records as text: a short `prs=#12(open checks=failing merge=conflicts)` on each thread line (its prompt table and `list_threads`) and the full list, with the age of each reading, in `get_thread`. A field not read yet shows as `unread`.
 
 ## Tests
