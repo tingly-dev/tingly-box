@@ -62,8 +62,9 @@ export const project: PluralDict<typeof en> = {
         decision: 'Нужно ваше решение', recommended: 'Рекомендуется', choose: 'Выбрать', chosen: 'Выбрано',
     },
     overview: {
-        view: { label: 'Вид', list: 'Список', vertical: 'Вертикальный канбан', horizontal: 'Горизонтальный канбан' },
-        threads: 'Потоки', threadsWaiting: 'Потоки · ждут: {{count}}', status: 'Статус', library: 'Библиотека', pin: 'Закрепить сверху', unpin: 'Открепить', pinned: 'Закреплено',
+        view: { label: 'Вид', list: 'Список', board: 'Доска' },
+        threads: 'Потоки', threadsWaiting: 'Потоки · ждут: {{count}}', library: 'Библиотека', pin: 'Закрепить сверху', unpin: 'Открепить', pinned: 'Закреплено',
+        threadCount_one: '{{count}} поток', threadCount_few: '{{count}} потока', threadCount_many: '{{count}} потоков', threadCount_other: '{{count}} потока',
         noThreads: 'Потоков пока нет. Отправьте работу в разговоре, и они появятся здесь.',
         group: { waiting: 'Ждут вас', failed: 'С ошибкой', ready: 'Готовы к проверке', working: 'В работе', idle: 'Простаивают', resolved: 'Решены' },
     },

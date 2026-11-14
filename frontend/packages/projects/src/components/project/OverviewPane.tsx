@@ -63,9 +63,14 @@ export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, li
     const [pinnedIds, togglePin] = usePinnedThreads(projectId);
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', pr: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ flex: 1, minWidth: 0, px: 1, minHeight: 44, '& .MuiTab-root': { minHeight: 44, minWidth: 0 } }}>
-                    <Tab value="threads" label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : t('overview.threads')} />
+            {/* Tabs only: a control of one view does not live in this row, where a narrow pane would squeeze it or a tab out. */}
+            <Box sx={{ borderBottom: tab === 'threads' ? 0 : 1, borderColor: 'divider' }}>
+                <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, minHeight: 44, '& .MuiTab-root': { minHeight: 44, minWidth: 0 } }}>
+                    <Tab value="threads" aria-label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : undefined}
+                        label={<Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                            {t('overview.threads')}
+                            {waiting > 0 && <Box component="span" aria-hidden sx={{ px: 0.75, minWidth: 18, borderRadius: radius.pill, bgcolor: 'warning.main', color: 'warning.contrastText', fontSize: fontSizes.micro, fontWeight: 600, lineHeight: '18px', textAlign: 'center' }}>{waiting}</Box>}
+                        </Box>} />
                     <Tab value="library" label={t('overview.library')} />
                 </Tabs>
             </Box>
