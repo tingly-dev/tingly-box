@@ -92,30 +92,12 @@ func (s *Server) Start(port int) error {
 
 	scheme := "http"
 
-	// CASE 1: Non-UI Mode ---
-	if !s.enableUI {
-		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
-		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
-		fmt.Printf("Embeddings API endpoint: %s://%s:%d/tingly/embed/v1/embeddings\n", scheme, resolvedHost, port)
-		fmt.Printf("Decisions API endpoint: %s://%s:%d/tingly/decisions/v1/decisions\n", scheme, resolvedHost, port)
-		fmt.Printf("Image Generation API endpoint: %s://%s:%d/tingly/imagegen/v1/images/generations\n", scheme, resolvedHost, port)
-		fmt.Printf("Image Edit API endpoint: %s://%s:%d/tingly/imagegen/v1/images/edits\n", scheme, resolvedHost, port)
-		fmt.Printf("Image Generation (Responses API): %s://%s:%d/tingly/imagegen/v1/responses\n", scheme, resolvedHost, port)
-		fmt.Printf("Virtual Model API (OpenAI): %s://%s:%d/virtual/openai/v1/chat/completions\n", scheme, resolvedHost, port)
-		fmt.Printf("Virtual Model API (Anthropic): %s://%s:%d/virtual/anthropic/v1/messages\n", scheme, resolvedHost, port)
-		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
-		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
-		return s.httpServer.ListenAndServe()
-	}
-
-	// CASE 2: Web UI Mode ---
 	webUIURL := fmt.Sprintf("%s://%s:%d", scheme, resolvedHost, port)
 	if s.config.HasUserToken() {
 		webUIURL = fmt.Sprintf("%s/login/%s", webUIURL, s.config.GetUserToken())
 	}
 
-	fmt.Printf("Web UI: %s\n", webUIURL)
-	if s.openBrowser {
+	if s.openBrowser && s.enableUI {
 		fmt.Printf("Starting server and opening browser...\n")
 	} else {
 		fmt.Printf("Starting server...\n")
@@ -138,9 +120,26 @@ func (s *Server) Start(port int) error {
 		}
 	}
 
-	// Server is up, now open browser if enabled
-	if s.openBrowser {
-		browser.OpenURL(webUIURL)
+	// Server is up: only now tell the user where it is. Printing the URL (or
+	// the endpoints and key) before the listener exists handed out links that
+	// could not be opened yet.
+	if !s.enableUI {
+		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
+		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
+		fmt.Printf("Embeddings API endpoint: %s://%s:%d/tingly/embed/v1/embeddings\n", scheme, resolvedHost, port)
+		fmt.Printf("Decisions API endpoint: %s://%s:%d/tingly/decisions/v1/decisions\n", scheme, resolvedHost, port)
+		fmt.Printf("Image Generation API endpoint: %s://%s:%d/tingly/imagegen/v1/images/generations\n", scheme, resolvedHost, port)
+		fmt.Printf("Image Edit API endpoint: %s://%s:%d/tingly/imagegen/v1/images/edits\n", scheme, resolvedHost, port)
+		fmt.Printf("Image Generation (Responses API): %s://%s:%d/tingly/imagegen/v1/responses\n", scheme, resolvedHost, port)
+		fmt.Printf("Virtual Model API (OpenAI): %s://%s:%d/virtual/openai/v1/chat/completions\n", scheme, resolvedHost, port)
+		fmt.Printf("Virtual Model API (Anthropic): %s://%s:%d/virtual/anthropic/v1/messages\n", scheme, resolvedHost, port)
+		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
+		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
+	} else {
+		fmt.Printf("Web UI: %s\n", webUIURL)
+		if s.openBrowser {
+			browser.OpenURL(webUIURL)
+		}
 	}
 
 	// Block until server shuts down or errors out
