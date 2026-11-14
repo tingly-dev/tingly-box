@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Project, Thread } from '../../client';
+import { ProjectLinksCard } from './LinksCard';
 import { Fact, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 
 interface Props {
@@ -55,6 +56,7 @@ export function CoordinatorStatus({ project, coordinator, queued, threads, onTas
                         </>
                     )}
             </RailCard>
+            <ProjectLinksCard threads={threads} />
             <RailCard id="coordinator" title={t('rail.model')}>
                 {project.coordinator_model && <Fact label={t('threadSettings.configuredModel')}>{project.coordinator_model}</Fact>}
                 {coordinator?.reported_model && <Fact label={t('threadSettings.lastModel')}>{coordinator.reported_model}</Fact>}

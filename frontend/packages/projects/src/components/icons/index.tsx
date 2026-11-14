@@ -8,6 +8,7 @@ import {
     IconArchiveOff,
     IconArrowUp,
     IconCircleDashed,
+    IconCircleDot,
     IconFileDiff,
     IconFileUpload,
     IconFolder,
@@ -18,6 +19,7 @@ import {
     IconGitBranch,
     IconGitCommit,
     IconGitMerge,
+    IconGitPullRequest,
     IconHandStop,
     IconHistoryToggle,
     IconLayoutKanban,
@@ -69,6 +71,8 @@ export const MemoryOff = tablerMui(IconHistoryToggle);
 export const Branch = tablerMui(IconGitBranch);
 export const Merge = tablerMui(IconGitMerge);
 export const GitCommit = tablerMui(IconGitCommit);
+export const PullRequest = tablerMui(IconGitPullRequest);
+export const IssueOpened = tablerMui(IconCircleDot);
 export const OverviewPane = tablerMui(IconLayoutSidebarRight);
 export const RailHide = tablerMui(IconLayoutSidebarRightCollapse);
 export const RailShow = tablerMui(IconLayoutSidebarRightExpand);
