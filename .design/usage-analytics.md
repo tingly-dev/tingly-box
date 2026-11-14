@@ -201,7 +201,14 @@ The runtime handlers and Swagger contract accept `user_id` consistently for `/ti
 - pages with `LIMIT/OFFSET`;
 - skips `COUNT(*)` when a returned page is short, deriving total as `offset + len(records)`.
 
-### Daily pre-aggregation
+### Hourly and daily pre-aggregation
+
+Two rollup tiers sit under the dashboard queries: `usage_hourly` (finest; one
+row per UTC hour × provider × model × user) and `usage_daily`, which is the sum
+of a day's hour rows. Each has a `*_scenario` companion. Segment planning,
+hour-only queries (`interval=hour`, `group_by=hourly`), markers and measurements
+are in `usage-dashboard-db-cost.md`; the paragraphs below describe the
+day tier.
 
 `usage_daily` stores one row per:
 
@@ -209,7 +216,7 @@ The runtime handlers and Swagger contract accept `user_id` consistently for `/ti
 (UTC day, provider_uuid, model, user_id)
 ```
 
-It contains additive sums needed to reconstruct request counts, token totals, errors, streaming rate, and average latency. Completed days are lazily backfilled on the first eligible query, at least one hour after UTC midnight.
+It contains additive sums needed to reconstruct request counts, token totals, errors, streaming rate, and average latency. Completed days are lazily backfilled on the first eligible query, once their last hour is eligible (`hourAggGrace` after it ends).
 
 `GetAggregatedStats` can use the merged daily path for:
 
@@ -217,11 +224,12 @@ It contains additive sums needed to reconstruct request counts, token totals, er
 - `group_by=provider`
 - `group_by=user`
 - `group_by=daily`
+- `group_by=hourly` (hour tier only)
 - `group_by=scenario`, and a `scenario` filter with `group_by=daily` — from the companion `usage_daily_scenario` table (one row per `(UTC day, scenario)`), only when no provider/model/user filter is set
 
-provided there is a bounded multi-day window and no rule/team/status filter (and no scenario filter on a model/provider/user grouping). Complete middle days come from `usage_daily`; partial edge days come from `usage_records`. The additive buckets are merged before error, streaming, and latency rates are derived.
+provided there is a bounded window holding at least one complete, eligible hour and no rule/team/status filter (and no scenario filter on a model/provider/user grouping). Complete middle days come from `usage_daily`; the days' edges come from `usage_hourly` for whole hours and `usage_records` only for the partial hour. The additive buckets are merged before error, streaming, and latency rates are derived.
 
-`GetTimeSeries(interval=day)` uses the same completed-day/edge-day strategy when its filters are limited to provider/model/user, or to a lone `scenario` (served from `usage_daily_scenario`). Unsupported shapes or an aggregation failure fall back to a raw scan.
+`GetTimeSeries(interval=day|hour)` uses the same segment strategy (`hour` never touches the day tier) when its filters are limited to provider/model/user, or to a lone `scenario` (served from `usage_daily_scenario`). Unsupported shapes or an aggregation failure fall back to a raw scan.
 
 The steady-state query cost of the daily path is effectively flat in raw record count; the original benchmark measured roughly 25× faster reads around 200k records over 90 days.
 

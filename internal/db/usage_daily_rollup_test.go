@@ -169,8 +169,8 @@ func TestQuietDaysAreAggregatedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := counter.count(); n > 4 {
-		t.Fatalf("repeat 365-day timeseries issued %d statements, want <= 4", n)
+	if n := counter.count(); n > 8 {
+		t.Fatalf("repeat 365-day timeseries issued %d statements, want <= 8", n)
 	}
 	if len(first) != len(second) {
 		t.Fatalf("repeat result differs: %d vs %d buckets", len(first), len(second))

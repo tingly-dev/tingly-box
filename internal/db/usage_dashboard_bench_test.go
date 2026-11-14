@@ -145,6 +145,18 @@ func dashboardCases() []dashCase {
 			_, err := s.GetAggregatedStats(UsageStatsQuery{GroupBy: "model", StartTime: localMidnight(now), EndTime: now, Limit: 1000})
 			return err
 		}},
+		{"stats/provider/last24h", func(s *UsageStore) error {
+			now := time.Now()
+			_, err := s.GetAggregatedStats(UsageStatsQuery{GroupBy: "provider", StartTime: now.Add(-24 * time.Hour), EndTime: now, Limit: 1000})
+			return err
+		}},
+		// A peak/valley window: one whole-hour 8h block yesterday (UTC 00-08).
+		{"stats/provider/valley8h-yesterday", func(s *UsageStore) error {
+			from := utcDayStart(time.Now().AddDate(0, 0, -1))
+			_, err := s.GetAggregatedStats(UsageStatsQuery{GroupBy: "provider", StartTime: from, EndTime: from.Add(8 * time.Hour), Limit: 1000})
+			return err
+		}},
+		{"stats/hourly/7d", stats("hourly", 7, nil)},
 		{"stats/model/30d", stats("model", 30, nil)},
 		{"stats/model/90d", stats("model", 90, nil)},
 		{"stats/user/30d", stats("user", 30, nil)},
@@ -156,6 +168,14 @@ func dashboardCases() []dashCase {
 			_, err := s.GetTimeSeries("minute", localMidnight(now), now, nil)
 			return err
 		}},
+		{"timeseries/hour/today", func(s *UsageStore) error {
+			now := time.Now()
+			_, err := s.GetTimeSeries("hour", localMidnight(now), now, nil)
+			return err
+		}},
+		{"timeseries/hour/7d", series("hour", 7, nil)},
+		{"timeseries/hour/30d", series("hour", 30, nil)},
+		{"timeseries/hour/30d+provider", series("hour", 30, map[string]string{"provider_uuid": "prov-0"})},
 		{"timeseries/day/30d", series("day", 30, nil)},
 		{"timeseries/day/90d", series("day", 90, nil)},
 		{"timeseries/day/heatmap365", series("day", 365, nil)},
