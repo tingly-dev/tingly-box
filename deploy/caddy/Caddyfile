@@ -1,4 +1,6 @@
-# Design notes: .design/caddy-deploy.md
+# Model API only: the gateway's /tingly/* endpoints are proxied, everything
+# else (web UI, management API) answers 403. For the whole service on one host
+# use Caddyfile.full. Design notes: .design/caddy-deploy.md
 {
 	servers {
 		# h3 needs UDP 443 open as well as TCP; clients fall back to h2 if not.
@@ -12,7 +14,7 @@
 	}
 }
 
-# Compress JSON only on the model API. Streaming (text/event-stream) must stay
+# Compress JSON responses only. Streaming (text/event-stream) must stay
 # uncompressed so each event is flushed to the client as it is produced.
 (compress_json) {
 	encode {
@@ -31,7 +33,6 @@
 			read_timeout 0
 			keepalive 10m
 		}
-		{block}
 	}
 }
 
@@ -56,57 +57,5 @@ you.domain {
 
 	handle {
 		respond "Forbidden" 403
-	}
-}
-
-# Web UI + management API. Separate host so exposing it is an explicit choice:
-# delete this block (or leave its DNS unset) to keep the UI local-only.
-#
-# Assets are served from TINGLY_WEB_ROOT when it holds the build (optionally
-# pre-compressed .br/.gz/.zst siblings, see .design/caddy-deploy.md); anything not found
-# there falls through to the gateway, which serves the embedded copy.
-ui.you.domain {
-	# on-the-fly fallback for everything not already precompressed
-	encode zstd gzip
-
-	# Vite names chunks <name>-<8 char content hash>.<ext>: the URL changes
-	# whenever the bytes do, so they can be cached forever.
-	@hashed path_regexp ^/assets/.+-[A-Za-z0-9_-]{8}\.\w+$
-	@unhashed {
-		path /assets/*
-		not path_regexp ^/assets/.+-[A-Za-z0-9_-]{8}\.\w+$
-	}
-
-	handle /assets/* {
-		# 2xx only, so a 404 for a rotated-out chunk is never cached
-		header @hashed Cache-Control "public, max-age=31536000, immutable" {
-			match status 2xx
-		}
-		# icons etc. keep their name across releases
-		header @unhashed Cache-Control "public, max-age=3600" {
-			match status 2xx
-		}
-		route {
-			root * {$TINGLY_WEB_ROOT:/srv/tingly-web}
-			file_server {
-				precompressed br zstd gzip
-				pass_thru
-			}
-			import tingly_upstream {
-				# The gateway answers an unknown path with index.html (SPA
-				# fallback), status 200. For a chunk that was rotated out by a
-				# release that would be cached as if it were the script.
-				@spa header Content-Type text/html*
-				handle_response @spa {
-					respond "Not Found" 404
-				}
-			}
-		}
-	}
-
-	# index.html (never cached by the gateway: it names the current chunks),
-	# SPA routes and /api/*
-	handle {
-		import tingly_upstream
 	}
 }
