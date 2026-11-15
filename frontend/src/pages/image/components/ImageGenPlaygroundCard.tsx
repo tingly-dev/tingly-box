@@ -61,6 +61,10 @@ import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
 
 const TextPlus = tablerMui(IconTextPlus);
 const Writing = tablerMui(IconWriting);
+const IMAGE_SIZE_PRESETS = [
+    '256x256', '512x512', '1024x1024', '1024x1792',
+    '1792x1024', '1024x1536', '1536x1024', 'auto',
+];
 import type {
     GenerationRun,
     ImportedImage,
@@ -160,7 +164,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // The prompt in a dialog-sized editor: the panel's field is one column of a
     // fixed-height panel, which is the wrong place to read or rework a long one.
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
-    const [size, setSize] = useState(profile?.size ?? '1024x1024');
+    const [size, setSize] = useState(profile?.size ?? 'auto');
+    const [customSizeOpen, setCustomSizeOpen] = useState(false);
+    const [customWidth, setCustomWidth] = useState('');
+    const [customHeight, setCustomHeight] = useState('');
+    const [customSizeError, setCustomSizeError] = useState(false);
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
     const [count, setCount] = useState(profile?.count ?? 1);
     // Where generated images land on disk — read-only, shown so the user can
@@ -960,13 +968,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     labelId="image-size-label"
                                     label={t('playground.size', { defaultValue: 'Size' })}
                                     value={size}
-                                    onChange={(event) => setSize(event.target.value)}
+                                    onChange={(event) => {
+                                        if (event.target.value === '__custom__') {
+                                            const [width = '', height = ''] = size === 'auto' ? [] : size.split('x');
+                                            setCustomWidth(width);
+                                            setCustomHeight(height);
+                                            setCustomSizeError(false);
+                                            setCustomSizeOpen(true);
+                                        } else {
+                                            setSize(event.target.value);
+                                        }
+                                    }}
                                 >
-                                    <MenuItem value="256x256">256x256</MenuItem>
-                                    <MenuItem value="512x512">512x512</MenuItem>
-                                    <MenuItem value="1024x1024">1024x1024</MenuItem>
-                                    <MenuItem value="1024x1792">1024x1792</MenuItem>
-                                    <MenuItem value="1792x1024">1792x1024</MenuItem>
+                                    {IMAGE_SIZE_PRESETS.map((preset) => (
+                                        <MenuItem key={preset} value={preset}>{preset}</MenuItem>
+                                    ))}
+                                    {!IMAGE_SIZE_PRESETS.includes(size) && (
+                                        <MenuItem value={size}>{size}</MenuItem>
+                                    )}
+                                    <MenuItem value="__custom__">
+                                        {t('playground.customSize', { defaultValue: 'Custom…' })}
+                                    </MenuItem>
                                 </Select>
                             </FormControl>
                             <FormControl size="small">
@@ -1176,6 +1198,51 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onClose={() => setSliceTarget(null)}
                 showNotification={showNotification}
             />
+            <Dialog open={customSizeOpen} onClose={() => setCustomSizeOpen(false)} maxWidth="xs" fullWidth>
+                <Box component="form" noValidate onSubmit={(event) => {
+                    event.preventDefault();
+                    if (![customWidth, customHeight].every((part) => /^\d+$/.test(part) && Number.isSafeInteger(Number(part)) && Number(part) > 0)) {
+                        setCustomSizeError(true);
+                        return;
+                    }
+                    setSize(`${Number(customWidth)}x${Number(customHeight)}`);
+                    setCustomSizeOpen(false);
+                }}>
+                    <DialogTitle>{t('playground.customSizeTitle', { defaultValue: 'Custom size' })}</DialogTitle>
+                    <DialogContent>
+                        <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                type="number"
+                                label={t('playground.customWidth', { defaultValue: 'Width (px)' })}
+                                value={customWidth}
+                                onChange={(event) => { setCustomWidth(event.target.value); setCustomSizeError(false); }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                                error={customSizeError}
+                            />
+                            <TextField
+                                fullWidth
+                                type="number"
+                                label={t('playground.customHeight', { defaultValue: 'Height (px)' })}
+                                value={customHeight}
+                                onChange={(event) => { setCustomHeight(event.target.value); setCustomSizeError(false); }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                                error={customSizeError}
+                            />
+                        </Stack>
+                        {customSizeError && (
+                            <Typography color="error" variant="caption" role="alert" sx={{ display: 'block', mt: 1 }}>
+                                {t('playground.customSizeError', { defaultValue: 'Enter a positive whole number for width and height.' })}
+                            </Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setCustomSizeOpen(false)}>{t('common.cancel', { defaultValue: 'Cancel' })}</Button>
+                        <Button type="submit" variant="contained">{t('common.confirm', { defaultValue: 'Confirm' })}</Button>
+                    </DialogActions>
+                </Box>
+            </Dialog>
             <Dialog
                 open={promptEditorOpen}
                 onClose={() => setPromptEditorOpen(false)}
