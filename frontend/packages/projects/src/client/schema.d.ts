@@ -836,6 +836,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/diff/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file of the thread's changes: its patch, left out when it is too large unless force is set
+         * @description One file of the thread's changes: its patch, left out when it is too large unless force is set
+         */
+        get: operations["apiV1ThreadsIdDiffFileGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/effort": {
         parameters: {
             query?: never;
@@ -1486,18 +1506,46 @@ export interface components {
             title?: string;
         };
         Diff: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
             /** @description Field base */
             base: string;
             /** @description Field branch */
             branch: string;
-            /** @description Field patch */
-            patch: string;
-            /** @description Field stat */
-            stat: string;
-            /** @description Field truncated */
-            truncated: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field files */
+            files: components["schemas"]["DiffFile"][];
             /** @description Field uncommitted */
             uncommitted: string;
+        };
+        DiffFile: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field generated */
+            generated?: boolean;
+            /** @description Field old_path */
+            old_path?: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field status */
+            status: string;
         };
         DirectorySpec: {
             /** @description Field path */
@@ -1529,6 +1577,18 @@ export interface components {
             events: components["schemas"]["ThreadEvent"][];
             /** @description Field more */
             more: boolean;
+        };
+        FileDiff: {
+            /** @description Field binary */
+            binary?: boolean;
+            /** @description Field patch */
+            patch: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field too_large */
+            too_large?: boolean;
+            /** @description Field truncated */
+            truncated?: boolean;
         };
         ForkProjectRequest: {
             /** @description Field name */
@@ -3747,6 +3807,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Diff"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdDiffFileGet: {
+        parameters: {
+            query?: {
+                /** @description File path as listed by the diff */
+                path?: string;
+                /** @description Where a renamed file came from */
+                old_path?: string;
+                /** @description Read a patch bigger than the default limit */
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
                 };
             };
         };

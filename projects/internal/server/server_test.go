@@ -508,9 +508,20 @@ func TestProjectEndToEnd(t *testing.T) {
 	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/threads", nil, &listed))
 	require.Len(t, listed.Threads, 1, "the main thread is the conversation, not one of the project's threads")
 
-	var diff map[string]any
+	var diff struct {
+		Files []struct {
+			Path      string `json:"path"`
+			Status    string `json:"status"`
+			Additions int    `json:"additions"`
+		} `json:"files"`
+	}
 	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/diff", nil, &diff))
-	assert.Contains(t, diff["patch"], "fix.txt")
+	require.Len(t, diff.Files, 1)
+	assert.Equal(t, "fix.txt", diff.Files[0].Path)
+	var fileDiff map[string]any
+	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/diff/file?path=fix.txt", nil, &fileDiff))
+	assert.Contains(t, fileDiff["patch"], "+")
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/diff/file?path=", nil, nil))
 
 	var merged db.Thread
 	require.Equal(t, 200, c.do("POST", "/threads/"+th.ID+"/merge", nil, &merged))
