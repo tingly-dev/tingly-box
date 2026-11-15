@@ -15,12 +15,13 @@ inside the first big lock file and the rest was silently dropped.
   `old_path`, `status`, `additions`, `deletions`, `binary`, `generated`) plus the
   totals and the uncommitted notice. One `git diff --raw --numstat -z -M`, no
   content: ~85 bytes a file.
-- `GET /threads/:id/diff/file?path=&old_path=&force=` is one file's patch,
-  read when that file is opened. A patch over 512 KB is not sent (`too_large`)
-  unless `force=true`, which reads up to 8 MB (`truncated` past that, ending on a
-  whole line). Git is stopped at the cap, not read to the end. Binary files have no patch. Paths are
-  taken literally (`--literal-pathspecs`), so a name is never read as an option
-  or pathspec magic.
+- `GET /threads/:id/diff/file?path=&old_path=` is one file's patch, read when
+  that file is opened. **A file that is too large or not text is simply not
+  shown, and there is no "load anyway"**: a patch over 512 KB comes back as
+  `too_large` with no content (git is stopped at the cap, not read to the end),
+  and a binary file as `binary`. The viewer says so and leaves it to git. Paths
+  are taken literally (`--literal-pathspecs`), so a name is never read as an
+  option or pathspec magic.
 - Masking for the extreme cases, so no change can be too big to open:
   - a line longer than 2000 bytes is shortened to its start plus `… [+N chars]`
     (`lines_cut` says how many): one minified or embedded-blob line can outweigh
@@ -43,9 +44,10 @@ screen).
   prefetched. The list and the patch are both windowed (`useVirtualWindow`,
   equal-height rows), so cost follows the screen, not the change size.
 - The dialog opens on the first file that opens by itself (not generated, binary or
-over 4000 lines). A generated file shows a folded notice with **Show diff**; a file over 4000
-  changed lines shows **Large diff · Load anyway**; a binary shows a note.
-  The backend's own cap gets the same button.
+over 20,000 changed lines). A generated file shows a folded notice with **Show
+diff** (small ones only: a big lock file is over the size cap anyway). A file
+over 20,000 changed lines, a patch the server refuses for its size, and a binary
+show a plain note with no button, and the first and last are not requested at all.
 - Filter by path, **Hide generated**, **Unviewed only**. **Viewed** checkboxes
   are kept per thread in localStorage and tied to the file's change
   (`status:+:-:old_path`), so a file that changed again is unviewed again.

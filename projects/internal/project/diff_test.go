@@ -87,27 +87,21 @@ func TestBranchDiffHonoursLinguistGenerated(t *testing.T) {
 	}
 }
 
-func TestBranchFileDiffCapsAndForces(t *testing.T) {
+func TestBranchFileDiffSkipsWhatIsTooLargeOrBinary(t *testing.T) {
 	dir := diffRepo(t)
 	ctx := context.Background()
 
-	small, err := BranchFileDiff(ctx, dir, "main", "keep.txt", "", false)
+	small, err := BranchFileDiff(ctx, dir, "main", "keep.txt", "")
 	require.NoError(t, err)
 	assert.Contains(t, small.Patch, "+added")
 	assert.False(t, small.TooLarge)
 
-	big, err := BranchFileDiff(ctx, dir, "main", "big.txt", "", false)
+	big, err := BranchFileDiff(ctx, dir, "main", "big.txt", "")
 	require.NoError(t, err)
 	assert.True(t, big.TooLarge)
-	assert.Empty(t, big.Patch, "an over-size patch is not sent")
+	assert.Empty(t, big.Patch, "an over-size patch is not sent, and cannot be asked for")
 
-	forced, err := BranchFileDiff(ctx, dir, "main", "big.txt", "", true)
-	require.NoError(t, err)
-	assert.False(t, forced.TooLarge)
-	assert.False(t, forced.Truncated)
-	assert.Contains(t, forced.Patch, "+big LINE 29999")
-
-	bin, err := BranchFileDiff(ctx, dir, "main", "pic.bin", "", false)
+	bin, err := BranchFileDiff(ctx, dir, "main", "pic.bin", "")
 	require.NoError(t, err)
 	assert.True(t, bin.Binary)
 	assert.Empty(t, bin.Patch)
@@ -116,20 +110,20 @@ func TestBranchFileDiffCapsAndForces(t *testing.T) {
 func TestBranchFileDiffRenameAndPathspecs(t *testing.T) {
 	dir := diffRepo(t)
 	ctx := context.Background()
-	ren, err := BranchFileDiff(ctx, dir, "main", "new/moved.txt", "old/moved.txt", false)
+	ren, err := BranchFileDiff(ctx, dir, "main", "new/moved.txt", "old/moved.txt")
 	require.NoError(t, err)
 	assert.Contains(t, ren.Patch, "rename from old/moved.txt")
 	assert.Contains(t, ren.Patch, "+tail")
 
 	// A name that starts with a dash, or looks like pathspec magic, is a file name.
-	dash, err := BranchFileDiff(ctx, dir, "main", "-weird.txt", "", false)
+	dash, err := BranchFileDiff(ctx, dir, "main", "-weird.txt", "")
 	require.NoError(t, err)
 	assert.Contains(t, dash.Patch, "+y")
-	none, err := BranchFileDiff(ctx, dir, "main", ":(top)*", "", false)
+	none, err := BranchFileDiff(ctx, dir, "main", ":(top)*", "")
 	require.NoError(t, err)
 	assert.Empty(t, none.Patch)
 
-	_, err = BranchFileDiff(ctx, dir, "main", "", "", false)
+	_, err = BranchFileDiff(ctx, dir, "main", "", "")
 	assert.Error(t, err)
 }
 
@@ -154,16 +148,14 @@ func TestCutLongLines(t *testing.T) {
 
 func TestBranchFileDiffShortensLongLines(t *testing.T) {
 	dir := diffRepo(t)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "min.js"), []byte("var a=["+strings.Repeat("1,", 350000)+"];\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "min.js"), []byte("var a=["+strings.Repeat("1,", 50000)+"];\n"), 0o644))
 	run(t, dir, "git", "add", ".")
 	run(t, dir, "git", "commit", "-qm", "bundle")
-	d, err := BranchFileDiff(context.Background(), dir, "main", "min.js", "", false)
+	d, err := BranchFileDiff(context.Background(), dir, "main", "min.js", "")
 	require.NoError(t, err)
-	assert.True(t, d.TooLarge, "a 700 KB line is more than the default read")
-	forced, err := BranchFileDiff(context.Background(), dir, "main", "min.js", "", true)
-	require.NoError(t, err)
-	assert.Equal(t, 1, forced.LinesCut)
-	assert.Less(t, len(forced.Patch), 4000)
+	assert.False(t, d.TooLarge)
+	assert.Equal(t, 1, d.LinesCut)
+	assert.Less(t, len(d.Patch), 4000)
 }
 
 func TestBranchDiffListsAtMostMaxFiles(t *testing.T) {
@@ -176,16 +168,4 @@ func TestBranchDiffListsAtMostMaxFiles(t *testing.T) {
 	assert.Len(t, d.Files, 3)
 	assert.Equal(t, 5, d.FilesOmitted)
 	assert.Equal(t, 30000+1+1+10+1+1, d.Additions, "the totals still cover every file")
-}
-
-func TestBranchFileDiffTruncatesOnAWholeLine(t *testing.T) {
-	dir := diffRepo(t)
-	old := maxForcedPatch
-	maxForcedPatch = 1000
-	t.Cleanup(func() { maxForcedPatch = old })
-	d, err := BranchFileDiff(context.Background(), dir, "main", "big.txt", "", true)
-	require.NoError(t, err)
-	assert.True(t, d.Truncated)
-	assert.True(t, strings.HasSuffix(d.Patch, "\n"))
-	assert.LessOrEqual(t, len(d.Patch), 1000)
 }

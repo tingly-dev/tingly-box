@@ -50,11 +50,9 @@ type FileDiff struct {
 	Path   string `json:"path"`
 	Patch  string `json:"patch"`
 	Binary bool   `json:"binary,omitempty"`
-	// TooLarge is true when the patch was left out because it is bigger than
-	// maxFilePatch; asking again with force reads it, up to maxForcedPatch.
+	// TooLarge is true when the patch is bigger than maxFilePatch: it is not
+	// sent, and there is no way to ask for it. Such a file is reviewed with git.
 	TooLarge bool `json:"too_large,omitempty"`
-	// Truncated is true when even a forced read hit maxForcedPatch.
-	Truncated bool `json:"truncated,omitempty"`
 	// LinesCut counts lines longer than maxLineBytes that were shortened (a
 	// minified bundle, an embedded blob): one such line can outweigh the file.
 	LinesCut int `json:"lines_cut,omitempty"`
@@ -69,9 +67,6 @@ const (
 // maxListedFiles bounds the summary of a change that touches far more files
 // than anyone reviews one by one.
 var maxListedFiles = 10000
-
-// maxForcedPatch is what "load anyway" reads of one file.
-var maxForcedPatch = 8 << 20
 
 // BranchDiff summarizes base...HEAD of a worktree, plus the uncommitted
 // changes the merge will not include.
@@ -229,34 +224,24 @@ func markGenerated(ctx context.Context, worktree string, files []DiffFile) {
 }
 
 // BranchFileDiff returns one file's patch of base...HEAD. A patch bigger than
-// maxFilePatch is not read unless force is set; a binary file has no patch.
-func BranchFileDiff(ctx context.Context, worktree, base, filePath, oldPath string, force bool) (FileDiff, error) {
+// maxFilePatch is not read (git is stopped at the cap) and a binary file has no
+// patch: the result says so and carries no content.
+func BranchFileDiff(ctx context.Context, worktree, base, filePath, oldPath string) (FileDiff, error) {
 	d := FileDiff{Path: filePath}
 	if filePath == "" || strings.ContainsRune(filePath, 0) || strings.ContainsRune(oldPath, 0) {
 		return d, errors.New("path is required")
-	}
-	limit := maxFilePatch
-	if force {
-		limit = maxForcedPatch
 	}
 	args := []string{"--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", base + "...HEAD", "--", filePath}
 	if oldPath != "" && oldPath != filePath {
 		args = append(args, oldPath)
 	}
-	out, over, err := gitCapped(ctx, worktree, limit, args...)
+	out, over, err := gitCapped(ctx, worktree, maxFilePatch, args...)
 	if err != nil {
 		return d, err
 	}
 	if over {
-		if force {
-			d.Truncated = true
-			if i := bytes.LastIndexByte(out, '\n'); i >= 0 {
-				out = out[:i+1] // end on a whole line
-			}
-		} else {
-			d.TooLarge = true
-			return d, nil
-		}
+		d.TooLarge = true
+		return d, nil
 	}
 	if bytes.Contains(out, []byte("\nBinary files ")) || bytes.HasPrefix(out, []byte("Binary files ")) || bytes.Contains(out, []byte("\nGIT binary patch")) {
 		d.Binary = true

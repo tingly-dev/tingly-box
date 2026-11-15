@@ -114,10 +114,13 @@ export function saveViewed(threadId: string, viewed: ViewedMap): void {
     }
 }
 
-/** Changed lines above which a file's patch is not fetched until asked for. */
-export const LARGE_FILE_LINES = 4000;
+/** Changed lines above which a file is not shown at all (the server also
+ * refuses a patch over 512 KB, whatever its line count). */
+export const MAX_SHOWN_LINES = 20000;
+
+export const tooLargeToShow = (f: DiffFile): boolean => f.additions + f.deletions > MAX_SHOWN_LINES;
 
 /** The first file worth opening: one that opens by itself, not generated, binary or huge. */
 export function firstReviewable(files: DiffFile[], indexes: number[]): number {
-    return indexes.find((i) => !files[i].generated && !files[i].binary && files[i].additions + files[i].deletions <= LARGE_FILE_LINES) ?? indexes[0] ?? -1;
+    return indexes.find((i) => !files[i].generated && !files[i].binary && !tooLargeToShow(files[i])) ?? indexes[0] ?? -1;
 }

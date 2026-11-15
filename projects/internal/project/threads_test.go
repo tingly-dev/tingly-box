@@ -171,7 +171,7 @@ func TestThreadCommitsBecomeReadyAndMerge(t *testing.T) {
 	require.Len(t, d.Files, 1)
 	assert.Equal(t, "feature.txt", d.Files[0].Path)
 	assert.Equal(t, "added", d.Files[0].Status)
-	fd, err := f.threads.DiffFile(context.Background(), th.ID, "feature.txt", "", false)
+	fd, err := f.threads.DiffFile(context.Background(), th.ID, "feature.txt", "")
 	require.NoError(t, err)
 	assert.Contains(t, fd.Patch, "+x")
 

@@ -13,7 +13,7 @@ const diffOf = (files: DiffFile[]): Diff => ({ base: 'main', branch: 'tp/x', fil
 const patchOf = (n: number) => ['@@ -1,2 +1,2 @@', ...Array.from({ length: n }, (_, i) => `+line ${i}`)].join('\n');
 
 const reply = (patch: string, extra: Record<string, unknown> = {}) => Promise.resolve({ data: { path: 'x', patch, ...extra }, response: { ok: true } });
-const queryOf = (call: unknown[]) => (call[1] as { params: { query: { path: string; force?: boolean } } }).params.query;
+const queryOf = (call: unknown[]) => (call[1] as { params: { query: { path: string } } }).params.query;
 
 beforeEach(() => {
     get.mockReset();
@@ -37,32 +37,37 @@ describe('DiffView', () => {
         expect(paths.length).toBeLessThanOrEqual(2);
     });
 
-    it('folds a generated file until asked, and asks for a huge one only when told to load it anyway', async () => {
-        const files = [file('a.ts'), file('pnpm-lock.yaml', { generated: true }), file('big.ts', { additions: 9000, deletions: 100 })];
+    it('folds a generated file until asked for it', async () => {
+        const files = [file('a.ts'), file('pnpm-lock.yaml', { generated: true })];
         render(<DiffView threadId="t1" diff={diffOf(files)} />);
         await waitFor(() => expect(screen.getByTestId('diff-patch')).toBeInTheDocument());
-
         fireEvent.click(screen.getByTitle('pnpm-lock.yaml'));
         expect(screen.getByText('thread.diff.generatedTitle')).toBeInTheDocument();
         expect(get.mock.calls.some((c) => queryOf(c).path === 'pnpm-lock.yaml')).toBe(false);
         fireEvent.click(screen.getByText('thread.diff.showDiff'));
         await waitFor(() => expect(screen.getByTestId('diff-patch')).toBeInTheDocument());
-
-        fireEvent.click(screen.getByTitle('big.ts'));
-        expect(screen.getByText('thread.diff.largeTitle')).toBeInTheDocument();
-        expect(get.mock.calls.some((c) => queryOf(c).path === 'big.ts')).toBe(false);
-        fireEvent.click(screen.getByText('thread.diff.loadAnyway'));
-        await waitFor(() => expect(get.mock.calls.some((c) => queryOf(c).path === 'big.ts' && queryOf(c).force === true)).toBe(true));
     });
 
-    it('offers to load a patch the server held back', async () => {
+    it('does not show, fetch or offer to load a huge or a binary file', async () => {
+        const files = [file('a.ts'), file('huge.log', { additions: 30000, deletions: 1 }), file('pic.png', { binary: true })];
+        render(<DiffView threadId="t1" diff={diffOf(files)} />);
+        await waitFor(() => expect(screen.getByTestId('diff-patch')).toBeInTheDocument());
+        get.mockClear();
+
+        fireEvent.click(screen.getByTitle('huge.log'));
+        expect(screen.getByText('thread.diff.tooLargeTitle')).toBeInTheDocument();
+        fireEvent.click(screen.getByTitle('pic.png'));
+        expect(screen.getByText('thread.diff.binaryTitle')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /load|show/i })).not.toBeInTheDocument();
+        expect(get).not.toHaveBeenCalled();
+    });
+
+    it('says so when the server refuses a patch for its size, and gives no way around it', async () => {
         get.mockImplementation(() => reply('', { too_large: true }));
         render(<DiffView threadId="t1" diff={diffOf([file('a.ts')])} />);
-        await waitFor(() => expect(screen.getByText('thread.diff.tooLargeBody')).toBeInTheDocument());
-        get.mockImplementation(() => reply(patchOf(3)));
-        fireEvent.click(screen.getByText('thread.diff.loadAnyway'));
-        await waitFor(() => expect(screen.getByTestId('diff-patch')).toBeInTheDocument());
-        expect(queryOf(get.mock.calls.at(-1)!).force).toBe(true);
+        await waitFor(() => expect(screen.getByText('thread.diff.tooLargeTitle')).toBeInTheDocument());
+        expect(screen.queryByText('thread.diff.showDiff')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /load/i })).not.toBeInTheDocument();
     });
 
     it('renders only the visible rows of a 100k-line patch', async () => {

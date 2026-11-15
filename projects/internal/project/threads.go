@@ -1660,7 +1660,7 @@ func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
 }
 
 // DiffFile returns one file of a thread's changes; see BranchFileDiff.
-func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string, force bool) (FileDiff, error) {
+func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string) (FileDiff, error) {
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return FileDiff{}, err
@@ -1668,7 +1668,7 @@ func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string, 
 	if t.Branch == "" {
 		return FileDiff{}, errors.New("this thread has no worktree branch to review")
 	}
-	return BranchFileDiff(ctx, t.Cwd, t.BaseBranch, path, oldPath, force)
+	return BranchFileDiff(ctx, t.Cwd, t.BaseBranch, path, oldPath)
 }
 
 // Recover runs at startup: turns that were running when the process stopped

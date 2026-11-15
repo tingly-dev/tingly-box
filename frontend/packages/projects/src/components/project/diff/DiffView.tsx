@@ -7,7 +7,7 @@ import { api, unwrap, type Diff, type DiffFile, type FileDiff } from '../../../c
 import { ArrowForward, KeyboardArrowDown, KeyboardArrowUp, Search } from '../../icons';
 import { DiffFileList, splitPath } from './DiffFileList';
 import { DiffPatchView } from './DiffPatchView';
-import { filterFiles, firstReviewable, LARGE_FILE_LINES, loadViewed, parsePatch, saveViewed, viewedSignature, type ParsedPatch, type ViewedMap } from './diffModel';
+import { filterFiles, firstReviewable, loadViewed, parsePatch, saveViewed, tooLargeToShow, viewedSignature, type ParsedPatch, type ViewedMap } from './diffModel';
 
 type Loaded =
     | { state: 'loading' }
@@ -15,9 +15,8 @@ type Loaded =
     | { state: 'ok'; file: FileDiff; parsed: ParsedPatch };
 
 const changedLines = (f: DiffFile) => f.additions + f.deletions;
-const isLarge = (f: DiffFile) => changedLines(f) > LARGE_FILE_LINES;
 const fmt = (n: number) => n.toLocaleString();
-// Parsed patches kept in memory; a forced one can be megabytes.
+// Parsed patches kept in memory while files are paged through.
 const KEEP_PATCHES = 6;
 
 /** A thread's changes: the file list on one side, one file's patch on the
@@ -31,6 +30,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
     const [hideGenerated, setHideGenerated] = useState(false);
     const [unviewedOnly, setUnviewedOnly] = useState(false);
     const [viewed, setViewed] = useState<ViewedMap>(() => loadViewed(threadId));
+    // Files whose generated/lock content was asked for.
     const [opened, setOpened] = useState<Set<string>>(() => new Set());
     const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
     const requested = useRef(new Set<string>());
@@ -48,12 +48,11 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
     });
     const selected = useMemo(() => files.find((f) => f.path === selectedPath) ?? null, [files, selectedPath]);
 
-    const load = useCallback((file: DiffFile, force: boolean) => {
-        const key = `${file.path}${force ? '#force' : ''}`;
-        if (requested.current.has(key)) return;
-        requested.current.add(key);
+    const load = useCallback((file: DiffFile) => {
+        if (requested.current.has(file.path)) return;
+        requested.current.add(file.path);
         setLoaded((m) => ({ ...m, [file.path]: { state: 'loading' } }));
-        unwrap(api.GET('/api/v1/threads/{id}/diff/file', { params: { path: { id: threadId }, query: { path: file.path, old_path: file.old_path || undefined, force: force || undefined } } }))
+        unwrap(api.GET('/api/v1/threads/{id}/diff/file', { params: { path: { id: threadId }, query: { path: file.path, old_path: file.old_path || undefined } } }))
             .then((data) => {
                 const parsed = parsePatch(data.patch);
                 loadOrder.current = [...loadOrder.current.filter((p) => p !== file.path), file.path];
@@ -64,23 +63,23 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
                         const old = loadOrder.current.shift() as string;
                         delete next[old];
                         requested.current.delete(old);
-                        requested.current.delete(`${old}#force`);
                     }
                     return next;
                 });
             })
             .catch((e: Error) => {
-                requested.current.delete(key);
+                requested.current.delete(file.path);
                 setLoaded((m) => ({ ...m, [file.path]: { state: 'error', message: e.message } }));
             });
     }, [threadId]);
 
-    // Whether a file's patch is fetched without being asked for.
-    const autoLoad = useCallback((f: DiffFile) => !f.binary && !(f.generated && !opened.has(f.path)) && !(isLarge(f) && !opened.has(f.path)), [opened]);
+    // Whether a file's patch is fetched without being asked for. Binary and
+    // huge files are never fetched: the viewer says so and leaves it to git.
+    const autoLoad = useCallback((f: DiffFile) => !f.binary && !tooLargeToShow(f) && !(f.generated && !opened.has(f.path)), [opened]);
 
     useEffect(() => {
-        if (selected && autoLoad(selected) && !loaded[selected.path]) load(selected, opened.has(selected.path) && isLarge(selected));
-    }, [selected, autoLoad, loaded, load, opened]);
+        if (selected && autoLoad(selected) && !loaded[selected.path]) load(selected);
+    }, [selected, autoLoad, loaded, load]);
 
     // The next file is fetched while the current one is read.
     useEffect(() => {
@@ -93,7 +92,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
     }, [indexes, files, selectedPath]);
     useEffect(() => {
         const next = files.find((f) => f.path === nextPath);
-        if (next && autoLoad(next) && !loaded[next.path]) load(next, false);
+        if (next && autoLoad(next) && !loaded[next.path]) load(next);
     }, [nextPath, files, autoLoad, loaded, load]);
 
     const toggleViewed = useCallback((f: DiffFile) => {
@@ -137,7 +136,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
 
     const open = (f: DiffFile) => {
         setOpened((s) => new Set(s).add(f.path));
-        load(f, isLarge(f));
+        load(f);
     };
 
     if (files.length === 0) return <Typography color="text.secondary">{t('thread.noChanges')}</Typography>;
@@ -188,7 +187,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
                             <Tooltip title={t('thread.diff.nextFile')}><span><IconButton size="small" aria-label={t('thread.diff.nextFile')} disabled={selPos < 0 || selPos >= indexes.length - 1} onClick={() => step(1)}><KeyboardArrowDown fontSize="small" /></IconButton></span></Tooltip>
                         </Box>
                         <Box key={selected.path} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                            <FileBody file={selected} entry={entry} autoLoad={autoLoad(selected)} onOpen={() => open(selected)} onForce={() => load(selected, true)} onRetry={() => load(selected, opened.has(selected.path) && isLarge(selected))} />
+                            <FileBody file={selected} entry={entry} autoLoad={autoLoad(selected)} onOpen={() => open(selected)} onRetry={() => load(selected)} />
                         </Box>
                     </>
                 )}
@@ -209,29 +208,29 @@ function Notice({ title, body, action, onAction }: { title: string; body: string
     );
 }
 
-function FileBody({ file, entry, autoLoad, onOpen, onForce, onRetry }: {
-    file: DiffFile; entry: Loaded | undefined; autoLoad: boolean; onOpen: () => void; onForce: () => void; onRetry: () => void;
+function FileBody({ file, entry, autoLoad, onOpen, onRetry }: {
+    file: DiffFile; entry: Loaded | undefined; autoLoad: boolean; onOpen: () => void; onRetry: () => void;
 }) {
     const { t } = useTranslation('projects');
     const lines = fmt(changedLines(file));
-    if (file.binary) return <Notice title={t('thread.diff.binary')} body="" />;
+    if (file.binary) return <Notice title={t('thread.diff.binaryTitle')} body={t('thread.diff.binaryBody')} />;
+    if (tooLargeToShow(file)) return <Notice title={t('thread.diff.tooLargeTitle')} body={t('thread.diff.tooLargeBody', { lines })} />;
     if (!autoLoad && !entry) {
-        return file.generated
-            ? <Notice title={t('thread.diff.generatedTitle')} body={t('thread.diff.generatedBody', { lines })} action={t('thread.diff.showDiff')} onAction={onOpen} />
-            : <Notice title={t('thread.diff.largeTitle')} body={t('thread.diff.largeBody', { lines })} action={t('thread.diff.loadAnyway')} onAction={onOpen} />;
+        return <Notice title={t('thread.diff.generatedTitle')} body={t('thread.diff.generatedBody', { lines })} action={t('thread.diff.showDiff')} onAction={onOpen} />;
     }
     if (!entry || entry.state === 'loading') return <Box sx={{ p: 2 }}><Skeleton variant="rounded" height={160} /></Box>;
     if (entry.state === 'error') {
         return <Box sx={{ p: 2 }}><Alert severity="error" action={<Button color="inherit" size="small" onClick={onRetry}>{t('thread.diff.retry')}</Button>}>{t('thread.diff.loadFailed')} {entry.message}</Alert></Box>;
     }
-    if (entry.file.too_large) return <Notice title={t('thread.diff.largeTitle')} body={t('thread.diff.tooLargeBody')} action={t('thread.diff.loadAnyway')} onAction={onForce} />;
+    if (entry.file.binary) return <Notice title={t('thread.diff.binaryTitle')} body={t('thread.diff.binaryBody')} />;
+    if (entry.file.too_large) return <Notice title={t('thread.diff.tooLargeTitle')} body={t('thread.diff.tooLargeBody', { lines })} />;
     if (entry.parsed.text.length === 0) return <Notice title={t('thread.diff.noContent')} body="" />;
     return (
         <>
             <DiffPatchView parsed={entry.parsed} />
-            {(entry.file.truncated || !!entry.file.lines_cut) && (
+            {!!entry.file.lines_cut && (
                 <Typography sx={{ px: 1.5, py: 0.5, fontSize: fontSizes.sm, color: 'text.secondary', borderTop: 1, borderColor: 'divider' }}>
-                    {[entry.file.truncated && t('thread.diff.cutOff'), !!entry.file.lines_cut && t('thread.diff.linesCut', { count: entry.file.lines_cut })].filter(Boolean).join(' ')}
+                    {t('thread.diff.linesCut', { count: entry.file.lines_cut })}
                 </Typography>
             )}
         </>

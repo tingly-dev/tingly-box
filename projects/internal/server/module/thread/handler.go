@@ -291,10 +291,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("The thread's changes against its base branch"),
 		swagger.WithResponseModel(rt.Diff{}))
 	api.GET("/threads/:id/diff/file", h.diffFile, tag,
-		swagger.WithDescription("One file of the thread's changes: its patch, left out when it is too large unless force is set"),
+		swagger.WithDescription("One file of the thread's changes: its patch, left out when it is binary or too large"),
 		swagger.WithQuery("path", "string", "File path as listed by the diff"),
 		swagger.WithQuery("old_path", "string", "Where a renamed file came from"),
-		swagger.WithQuery("force", "boolean", "Read a patch bigger than the default limit"),
 		swagger.WithResponseModel(rt.FileDiff{}))
 	api.POST("/threads/:id/merge", h.merge, tag,
 		swagger.WithDescription("Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready."),
@@ -671,7 +670,7 @@ func (h *Handler) diffFile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	d, err := h.svc.Threads.DiffFile(c.Request.Context(), cur.ID, c.Query("path"), c.Query("old_path"), c.Query("force") == "true")
+	d, err := h.svc.Threads.DiffFile(c.Request.Context(), cur.ID, c.Query("path"), c.Query("old_path"))
 	if err != nil {
 		fail(c, err)
 		return

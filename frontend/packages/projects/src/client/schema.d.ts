@@ -844,8 +844,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One file of the thread's changes: its patch, left out when it is too large unless force is set
-         * @description One file of the thread's changes: its patch, left out when it is too large unless force is set
+         * One file of the thread's changes: its patch, left out when it is binary or too large
+         * @description One file of the thread's changes: its patch, left out when it is binary or too large
          */
         get: operations["apiV1ThreadsIdDiffFileGet"];
         put?: never;
@@ -1597,8 +1597,6 @@ export interface components {
             path: string;
             /** @description Field too_large */
             too_large?: boolean;
-            /** @description Field truncated */
-            truncated?: boolean;
         };
         ForkProjectRequest: {
             /** @description Field name */
@@ -3828,8 +3826,6 @@ export interface operations {
                 path?: string;
                 /** @description Where a renamed file came from */
                 old_path?: string;
-                /** @description Read a patch bigger than the default limit */
-                force?: boolean;
             };
             header?: never;
             path: {

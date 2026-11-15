@@ -1831,8 +1831,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "One file of the thread's changes: its patch, left out when it is too large unless force is set",
-        "description": "One file of the thread's changes: its patch, left out when it is too large unless force is set",
+        "summary": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "description": "One file of the thread's changes: its patch, left out when it is binary or too large",
         "operationId": "apiV1ThreadsIdDiffFileGet",
         "parameters": [
           {
@@ -1860,15 +1860,6 @@
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "force",
-            "in": "query",
-            "description": "Read a patch bigger than the default limit",
-            "required": false,
-            "schema": {
-              "type": "boolean"
             }
           }
         ],
@@ -3515,10 +3506,6 @@
           "too_large": {
             "type": "boolean",
             "description": "Field too_large"
-          },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
           }
         },
         "required": [
