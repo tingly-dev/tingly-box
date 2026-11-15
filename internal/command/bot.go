@@ -2,6 +2,7 @@ package command
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	builtinserver "github.com/tingly-dev/tingly-box/internal/mcp/builtin_server"
+	"github.com/tingly-dev/tingly-box/mcphub/github"
 	"github.com/tingly-dev/tingly-box/remote/chat"
 )
 
@@ -122,6 +124,17 @@ type MCPBuiltinCmdKong struct{}
 
 func (m *MCPBuiltinCmdKong) Run() error {
 	return builtinserver.Serve()
+}
+
+// MCPGithubCmdKong starts the built-in GitHub MCP server (mcphub's gh-backed
+// toolset). Registered at the top level as "mcp-github", consumed by
+// internal/mcp/runtime/builtin_registry.go as the github-builtin source.
+// Like mcp-builtin it takes no *app.AppManager: it is a stdio child of the
+// running server.
+type MCPGithubCmdKong struct{}
+
+func (m *MCPGithubCmdKong) Run() error {
+	return github.Serve(context.Background())
 }
 
 // runBotAdd is a wrapper for runBotAddInteractive

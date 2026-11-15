@@ -8,6 +8,23 @@ import "strings"
 // upstream server exposes and however the source is configured.
 const GitHubPreset = "github"
 
+// The built-in GitHub source: mcphub's gh-backed server (the host binary's
+// `mcp-github` subcommand) instead of the remote one. Same preset, same
+// subset — the tool names are the official server's.
+const (
+	BuiltinGithubSourceID   = "github-builtin"
+	BuiltinGithubSourceName = "GitHub (gh)"
+)
+
+// BuiltinGithubToolNames is every tool the built-in GitHub server offers.
+func BuiltinGithubToolNames() []string {
+	return []string{
+		"get_me", "list_issues", "issue_read", "issue_write", "add_issue_comment",
+		"list_pull_requests", "pull_request_read", "create_pull_request", "update_pull_request",
+		"list_branches", "get_file_contents",
+	}
+}
+
 // GitHubRemoteEndpoint is the hosted github-mcp-server.
 const GitHubRemoteEndpoint = "https://api.githubcopilot.com/mcp/"
 

@@ -74,6 +74,9 @@ type CLI struct {
 	// MCP builtin (hidden)
 	MCPBuiltin command.MCPBuiltinCmdKong `kong:"cmd,name='mcp-builtin',hidden,help='Start the builtin MCP server (internal use)'"`
 
+	// MCP GitHub builtin (hidden): the gh-backed GitHub MCP server
+	MCPGithub command.MCPGithubCmdKong `kong:"cmd,name='mcp-github',hidden,help='Start the built-in GitHub MCP server (internal use)'"`
+
 	// Version
 	Version command.VersionCmdKong `kong:"cmd,help='Show version'"`
 }
