@@ -41,8 +41,8 @@ request — 531 statements for the 365-day heatmap. A completed day with no
 traffic now gets a zero-count marker row (`emptyDayMarker`); readers filter
 `request_count > 0`. A day aggregated once — empty or not — is not revisited, so
 a row inserted later with an old timestamp (import/backfill) is not picked up
-until `DeleteOlderThan` or a schema rebuild clears the day. Missing days are built per contiguous run of ≤7 days with
-one grouped scan, so the write lock is held for a week of data at a time, not
+until `DeleteOlderThan` or a schema rebuild clears the day. Missing days are built per contiguous run of ≤1 day with
+one grouped scan, so the write lock is held for a day of data at a time, not
 the window.
 
 **Scenario is a companion table, not a `usage_daily` dimension.** Crossing
@@ -174,7 +174,11 @@ Costs to know:
   `usage_records` but then raw scans are cheap anyway. Retention deletes
   rollup rows together with records.
 - **Cold start doubles** (the hour build precedes the day derivation) and is
-  paid once per window, in runs of ≤ 7 days.
+  paid once per window, in runs of ≤ 1 day. The build holds the write lock that
+  the proxy's per-request usage write waits on; measured with a write every
+  5 ms during a cold 365-day build on 300k records, the worst write wait was
+  ~450 ms with 7-day runs and ~110 ms (mean 30 ms) with 1-day runs, for ~10%
+  more build time.
 - **Mixed-offset timestamps.** `usage_records.timestamp` is text with the
   writer's UTC offset and ranges compare lexicographically; the build pads the
   scan by `dstScanPad` (2 h) for DST. A row written with a timestamp in
