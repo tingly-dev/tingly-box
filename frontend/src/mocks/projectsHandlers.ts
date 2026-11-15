@@ -433,9 +433,18 @@ export const projectsHandlers = [
         const th = findThread(params.tid as string)
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         return HttpResponse.json({
-            base: th.base_branch, branch: th.branch, truncated: false, uncommitted: '',
-            stat: ' internal/idempotency/redis.go | 48 ++++++++++++++++++++++++++++++++++++++++++++++++\n internal/idempotency/store.go | 12 ++----\n 2 files changed, 56 insertions(+), 4 deletions(-)',
-            patch: 'diff --git a/internal/idempotency/store.go b/internal/idempotency/store.go\n@@ -10,7 +10,7 @@ type Store interface {\n-\tLookup(ctx context.Context, key string) (*Result, error)\n+\tLookup(ctx context.Context, key string) (*Result, error) // 24h TTL\n \tSave(ctx context.Context, key string, r *Result) error\n }',
+            base: th.base_branch, branch: th.branch, uncommitted: '', additions: 56, deletions: 4,
+            files: [
+                { path: 'internal/idempotency/redis.go', status: 'added', additions: 48, deletions: 0 },
+                { path: 'internal/idempotency/store.go', status: 'modified', additions: 8, deletions: 4 },
+            ],
+        })
+    }),
+    http.get('/api/v1/threads/:tid/diff/file', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        return HttpResponse.json({
+            path,
+            patch: `diff --git a/${path} b/${path}\n@@ -10,7 +10,7 @@ type Store interface {\n-\tLookup(ctx context.Context, key string) (*Result, error)\n+\tLookup(ctx context.Context, key string) (*Result, error) // 24h TTL\n \tSave(ctx context.Context, key string, r *Result) error\n }`,
         })
     }),
     http.post('/api/v1/threads/:tid/merge', async ({ params, request }) => {

@@ -47,7 +47,7 @@ export function MergeDialog({ thread, open, onClose, onMerged }: { thread: Threa
         setTitle(thread.title);
         setBody(thread.last_report ?? '');
         setError(null);
-    }, [open, thread.id, thread.project_id, thread.title, thread.last_report]);
+    }, [open, thread.project_id, thread.title, thread.last_report]);
 
     const choices: Choice[] = [
         { key: 'squash', lead: <Merge sx={{ fontSize: 22, color: 'text.secondary' }} />, title: t('thread.merge.squash'), subtitle: t('thread.merge.squashHint', { base: thread.base_branch }) },

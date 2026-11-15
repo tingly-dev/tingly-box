@@ -5,7 +5,6 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type Diff, type Thread } from '../../client';
 import { DiffIcon, Merge } from '../icons';
 import { MergeDialog } from './MergeDialog';
-import { radius } from '@tingly/ui/theme/radius';
 import { DiffView } from './diff/DiffView';
 
 const mono = { fontFamily: fontMono } as const;
