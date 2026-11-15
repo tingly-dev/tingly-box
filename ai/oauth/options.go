@@ -35,6 +35,7 @@ type Options struct {
 
 	// WorkBuddyOrigin / WorkBuddyPollInterval override the WorkBuddy site
 	// origin and login poll interval. Test-only, like the ZCode hosts.
+	QoderMachineID        string
 	WorkBuddyOrigin       string
 	WorkBuddyPollInterval time.Duration
 }

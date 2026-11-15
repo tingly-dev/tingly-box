@@ -32,6 +32,7 @@ import {
     Baidu,
     Tencent,
     WorkBuddy,
+    Qoder,
     ZCode,
     IflytekCloud,
     Baichuan,
@@ -93,6 +94,7 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'tinglybox': TinglyBox,
     'zcode': ZCode,
     'workbuddy': WorkBuddy,
+    'qoder': Qoder,
 
     // Local inference servers
     'ollama': Ollama,

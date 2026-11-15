@@ -649,6 +649,13 @@ func (m *Manager) GetToken(ctx context.Context, userID string, issuer ai.Issuer,
 
 // refreshToken refreshes an access token using a refresh token
 func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
+	if ai.IsQoderIssuer(issuer) {
+		credential, err := m.qoderClient(opts, issuer).Refresh(ctx, refreshToken, opts.QoderMachineID)
+		if err != nil {
+			return nil, err
+		}
+		return credential.asToken(issuer), nil
+	}
 	// WorkBuddy has no OAuth refresh grant; its refresh is a plugin API call.
 	// Dispatching here covers the background refresher and POST /oauth/refresh.
 	if ai.IsWorkBuddyIssuer(issuer) {
