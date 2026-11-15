@@ -336,7 +336,7 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 		return out, fmt.Errorf("PR #%d (%s) is open but was not merged, and stays open: %w", r.item.Number, r.item.URL, err)
 	}
 	// The record says what GitHub says now; if that read fails the merge still happened.
-	it, err := l.gh.PR(ctx, r.repo, r.item.Number)
+	it, err := l.gh.Read(ctx, r.repo, r.item.Number)
 	if err != nil || it.State != db.LinkStateMerged {
 		it = r.item
 		it.State, it.MergeState, it.CI = db.LinkStateMerged, "", ""
