@@ -31,6 +31,13 @@ describe('provider icon coverage', () => {
         expect(within(screen.getByTestId('chatgpt')).getByRole('img')).toHaveAttribute('alt', 'Codex');
     });
 
+    it.each(['qoder', 'qoder_cn'])('uses the Qoder brand for %s', issuer => {
+        const identifier = providerIconId({ oauth_detail: { issuer } });
+        expect(identifier).toBe('qoder');
+        render(<ProviderIcon identifier={identifier!} />);
+        expect(screen.getByRole('img')).toHaveAttribute('alt', 'Qoder');
+    });
+
     it.each(['light', 'dark'] as const)('keeps monochrome local brands legible in %s mode', mode => {
         render(<ThemeProvider theme={createTheme({ palette: { mode } })}>
             {['ollama', 'lm-studio', 'amd', 'vercel'].map(identifier => (

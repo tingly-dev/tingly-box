@@ -7,6 +7,9 @@ export default {
     "useProxy": "使用代理并继续",
     "skip": "不用代理，继续"
   },
+  "qoderConnection": {
+    "scope": "此第三方接入使用 Qoder 客户端接口。可用模型、额度及允许使用的客户端由 Qoder 决定，登录成功不代表所有客户端均可调用。请在账号授权范围及 Qoder 服务条款允许的范围内使用。"
+  },
   "workbuddyConnection": {
     "cardSummary": "日常使用 · 路由与工具扩展",
     "proxyHint": "可选：为此连接设置网络代理。",
