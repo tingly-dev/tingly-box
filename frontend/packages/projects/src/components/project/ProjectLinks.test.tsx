@@ -1,13 +1,17 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread, ThreadLink } from '../../client';
 import { ProjectLinks } from './ProjectLinks';
+
+const { post } = vi.hoisted(() => ({ post: vi.fn() }));
+vi.mock('../../client', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../client')>()), api: { POST: post } }));
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o?.count != null ? `${key}:${o.count}` : o?.title ? `${key}:${o.title}` : key), i18n: { language: 'en' } }),
 }));
 
 afterEach(() => {
+    post.mockReset();
     cleanup();
     localStorage.clear();
 });
@@ -30,7 +34,7 @@ const mixed = () => {
 
 describe('ProjectLinks', () => {
     it('shows the open items, PRs and issues in cards of their own, newest first, each under its thread', () => {
-        render(<ProjectLinks threads={mixed()} onOpen={vi.fn()} />);
+        render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
         const prs = screen.getByRole('region', { name: 'links.prs' });
         expect(within(prs).getAllByRole('link').map((a) => a.textContent)).toEqual(['#2 Newer', '#1 Older']);
         expect(within(prs).getByText('Thread A')).toBeInTheDocument();
@@ -41,7 +45,7 @@ describe('ProjectLinks', () => {
     });
 
     it('counts open and closed on the switch, and the closed ones hold merged and closed items', () => {
-        render(<ProjectLinks threads={mixed()} onOpen={vi.fn()} />);
+        render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
         expect(screen.getByRole('button', { name: 'links.filterOpen:3' })).toHaveAttribute('aria-pressed', 'true');
         fireEvent.click(screen.getByRole('button', { name: 'links.filterClosed:1' }));
         expect(within(screen.getByRole('region', { name: 'links.prs' })).getByRole('link', { name: '#3 Shipped' })).toBeInTheDocument();
@@ -51,21 +55,43 @@ describe('ProjectLinks', () => {
 
     it('opens the thread an item came from', () => {
         const onOpen = vi.fn();
-        render(<ProjectLinks threads={mixed()} onOpen={onOpen} />);
+        render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={onOpen} />);
         fireEvent.click(screen.getByRole('button', { name: 'Thread B' }));
         expect(onOpen).toHaveBeenCalledWith('b');
     });
 
     it('says what it is for when no thread touched anything', () => {
-        render(<ProjectLinks threads={[thread([])]} onOpen={vi.fn()} />);
+        render(<ProjectLinks projectId="p1" threads={[thread([])]} onOpen={vi.fn()} />);
         expect(screen.getByText('links.empty')).toBeInTheDocument();
     });
 
     it('opens on the finished items when nothing is open, and says so when the user then asks for the open ones', () => {
-        render(<ProjectLinks threads={[thread([link({ state: 'merged' })])]} onOpen={vi.fn()} />);
+        render(<ProjectLinks projectId="p1" threads={[thread([link({ state: 'merged' })])]} onOpen={vi.fn()} />);
         expect(screen.getByRole('button', { name: 'links.filterClosed:1' })).toHaveAttribute('aria-pressed', 'true');
         expect(screen.getByRole('link', { name: '#12 Add the tool' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'links.filterOpen:0' }));
         expect(screen.getByText('links.noneOpen')).toBeInTheDocument();
+    });
+
+    it('refreshes every open item from GitHub in one request, and says what it did', async () => {
+        post.mockResolvedValue({ data: { results: [{ repo: 'acme/w', kind: 'pr', number: 1, status: 'refreshed' }, { repo: 'acme/w', kind: 'pr', number: 2, status: 'failed', error: 'boom' }] }, response: { ok: true } });
+        render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'links.refreshAll' }));
+        expect(post).toHaveBeenCalledWith('/api/v1/projects/{id}/links/refresh', { params: { path: { id: 'p1' } } });
+        await waitFor(() => expect(screen.getByText('links.refreshedSome')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: 'links.refreshAll' })).toBeEnabled();
+    });
+
+    it('has nothing to refresh all of when nothing is open, and a row refreshes through the thread it belongs to', () => {
+        render(<ProjectLinks projectId="p1" threads={[thread([link({ state: 'merged' })])]} onOpen={vi.fn()} />);
+        expect(screen.queryByRole('button', { name: 'links.refreshAll' })).not.toBeInTheDocument();
+    });
+
+    it('sends a row\'s refresh to the thread that owns the item', async () => {
+        post.mockResolvedValue({ data: { results: [{ repo: 'acme/w', kind: 'pr', number: 2, status: 'refreshed' }] }, response: { ok: true } });
+        render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
+        const row = screen.getByRole('link', { name: '#2 Newer' }).parentElement!.parentElement as HTMLElement;
+        fireEvent.click(within(row).getByRole('button', { name: 'links.refresh' }));
+        expect(post).toHaveBeenCalledWith('/api/v1/threads/{id}/links/refresh', { params: { path: { id: 'b' } }, body: { repo: 'acme/w', kind: 'pr', number: 2 } });
     });
 });

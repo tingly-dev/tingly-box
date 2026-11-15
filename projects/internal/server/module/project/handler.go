@@ -249,6 +249,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/projects/:id", h.get, tag,
 		swagger.WithDescription("Get a project with its threads"),
 		swagger.WithResponseModel(ProjectDetailResponse{}))
+	api.POST("/projects/:id/links/refresh", h.refreshLinks, tag,
+		swagger.WithDescription("Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 10 seconds ago answers recent without asking GitHub. The readings arrive on the threads' events; the answer only says what happened to each item."),
+		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
 	api.POST("/projects/:id/coordinator/recover", h.recoverCoordinator, tag,
 		swagger.WithDescription("Resolve an interrupted coordinator input; retry may repeat side effects"),
 		swagger.WithRequestModel(RecoverCoordinatorRequest{}),
@@ -379,6 +382,19 @@ func (h *Handler) create(c *gin.Context) {
 		status = http.StatusOK
 	}
 	c.JSON(status, projectView(*p))
+}
+
+func (h *Handler) refreshLinks(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	results, err := h.svc.Links.RefreshProject(c.Request.Context(), p.ID)
+	if err != nil {
+		apierr.Store(c, err, "project")
+		return
+	}
+	c.JSON(http.StatusOK, rt.RefreshLinksResponse{Results: results})
 }
 
 func (h *Handler) fork(c *gin.Context) {

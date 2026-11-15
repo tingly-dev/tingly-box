@@ -31,6 +31,10 @@ type Links struct {
 	// views are the last answers of View, for linkMinGap.
 	viewMu sync.Mutex
 	views  map[string]viewed
+	// reading holds the items a manual refresh is reading right now, so a second
+	// request for one joins it instead of asking GitHub again.
+	readingMu sync.Mutex
+	reading   map[string]bool
 }
 
 // Refresh timing (see the design doc): an open item is read again after
@@ -40,6 +44,8 @@ const (
 	linkInterval   = 5 * time.Minute
 	linkBackoffMax = time.Hour
 	linkMinGap     = 30 * time.Second
+	// linkManualGap is how soon after a read a person's refresh asks GitHub again.
+	linkManualGap  = 10 * time.Second
 	linkSweepMax   = 20
 	linkSweepEvery = time.Minute
 
@@ -52,7 +58,7 @@ func NewLinks(store *db.Store, gh GitHub, changed func(threadID string)) *Links 
 	if gh == nil {
 		gh = ghCLI{}
 	}
-	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}}
+	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}, reading: map[string]bool{}}
 }
 
 // linkContext is where a thread's call lands: decided from the thread, never
@@ -145,6 +151,14 @@ func fillLink(k *db.ThreadLink, it GitHubItem, now time.Time) {
 	k.State, k.Draft, k.CI, k.MergeState, k.Title = it.State, it.Draft, it.CI, it.MergeState, it.Title
 	if it.Head != "" {
 		k.Head, k.Base = it.Head, it.Base
+	}
+	k.Checks = it.Checks
+	if it.Author != "" {
+		k.Author = it.Author
+	}
+	if !it.UpdatedAt.IsZero() {
+		at := it.UpdatedAt
+		k.UpdatedAt = &at
 	}
 	if it.URL != "" {
 		k.URL = it.URL
@@ -355,7 +369,7 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		it, err = l.gh.UpdatePR(ctx, lc.repo, link.Number, title, body, base)
 		// The edit's answer has no CI, and GitHub has not worked out the
 		// mergeability yet: keep the last reading of both.
-		it.CI = link.CI
+		it.CI, it.Checks = link.CI, link.Checks
 		if it.MergeState == "unknown" || it.MergeState == "" {
 			it.MergeState = link.MergeState
 		}
@@ -655,6 +669,147 @@ func (l *Links) Run(ctx context.Context) {
 			l.Sweep(ctx)
 		}
 	}
+}
+
+// Outcomes of a manual refresh of one item.
+const (
+	RefreshDone   = "refreshed"
+	RefreshRecent = "recent"
+	RefreshFailed = "failed"
+)
+
+// LinkRef names one of a thread's links.
+type LinkRef struct {
+	Repo   string `json:"repo"`
+	Kind   string `json:"kind,omitempty"`
+	Number int    `json:"number"`
+}
+
+// RefreshResult is what a manual refresh did for one item. The reading itself
+// reaches clients on the thread event, not here.
+type RefreshResult struct {
+	Repo   string `json:"repo"`
+	Kind   string `json:"kind"`
+	Number int    `json:"number"`
+	// Status is refreshed, recent (read under linkManualGap ago or being read
+	// now: nothing was asked of GitHub) or failed.
+	Status string `json:"status" enum:"refreshed,recent,failed"`
+	Error  string `json:"error,omitempty"`
+}
+
+// RefreshLinksResponse is the answer of a manual refresh.
+type RefreshLinksResponse struct {
+	Results []RefreshResult `json:"results"`
+}
+
+// RefreshThread reads a thread's links from GitHub now: the one named, or all
+// of them. Unlike the sweep it reads finished items too. An item the thread
+// does not have is db.ErrNotFound.
+func (l *Links) RefreshThread(ctx context.Context, threadID string, only *LinkRef) ([]RefreshResult, error) {
+	links, err := l.store.ThreadLinks(threadID)
+	if err != nil {
+		return nil, err
+	}
+	var out []RefreshResult
+	found := only == nil
+	for _, k := range links {
+		if only != nil && !(k.Repo == only.Repo && k.Number == only.Number && (only.Kind == "" || k.Kind == only.Kind)) {
+			continue
+		}
+		found = true
+		out = append(out, l.refreshNow(ctx, threadID, k))
+	}
+	if !found {
+		return nil, db.ErrNotFound
+	}
+	return out, nil
+}
+
+// RefreshProject reads the open links of a project's threads from GitHub now,
+// least recently read first and at most linkSweepMax of them, as the sweep
+// does.
+func (l *Links) RefreshProject(ctx context.Context, projectID string) ([]RefreshResult, error) {
+	threads, err := l.store.ListThreads(projectID)
+	if err != nil {
+		return nil, err
+	}
+	type pending struct {
+		threadID string
+		link     db.ThreadLink
+	}
+	var open []pending
+	for _, th := range threads {
+		for _, k := range th.Links {
+			if k.State == db.LinkStateOpen {
+				open = append(open, pending{th.ID, k})
+			}
+		}
+	}
+	sort.SliceStable(open, func(i, j int) bool { return open[i].link.RefreshedAt.Before(open[j].link.RefreshedAt) })
+	if len(open) > linkSweepMax {
+		open = open[:linkSweepMax]
+	}
+	out := make([]RefreshResult, 0, len(open))
+	for _, p := range open {
+		if ctx.Err() != nil {
+			break
+		}
+		out = append(out, l.refreshNow(ctx, p.threadID, p.link))
+	}
+	return out, nil
+}
+
+// refreshNow is one item's manual read. A failure keeps the last good reading
+// and says why, but does not count toward the sweep's back-off: a person
+// pressing refresh while gh is signed out must not push the sweep's wait to an
+// hour. A reading always publishes, even an unchanged one, since "read just
+// now" is what was asked for.
+func (l *Links) refreshNow(ctx context.Context, threadID string, k db.ThreadLink) RefreshResult {
+	res := RefreshResult{Repo: k.Repo, Kind: k.Kind, Number: k.Number}
+	// The stored record, not the caller's copy: it may have been read since.
+	if cur, err := l.store.FindThreadLink(threadID, k.Repo, k.Number); err == nil {
+		k = *cur
+	}
+	key := threadID + "|" + k.Repo + "#" + strconv.Itoa(k.Number)
+	l.readingMu.Lock()
+	if l.reading[key] || l.now().Sub(k.AttemptedAt) < linkManualGap {
+		l.readingMu.Unlock()
+		res.Status = RefreshRecent
+		return res
+	}
+	l.reading[key] = true
+	l.readingMu.Unlock()
+	defer func() {
+		l.readingMu.Lock()
+		delete(l.reading, key)
+		l.readingMu.Unlock()
+	}()
+
+	fail := func(err error) RefreshResult {
+		k.AttemptedAt = l.now()
+		k.LastError = redact(err.Error())
+		if serr := l.store.SaveThreadLinkReading(threadID, k); serr != nil {
+			logrus.WithError(serr).Warn("projects: cannot save a link's refresh failure")
+		}
+		l.publish(threadID)
+		res.Status, res.Error = RefreshFailed, k.LastError
+		return res
+	}
+	repo, err := repoOfLink(&k)
+	if err != nil {
+		return fail(err)
+	}
+	_, it, err := l.read(ctx, repo, k.Number, k.Kind)
+	if err != nil {
+		return fail(err)
+	}
+	fillLink(&k, it, l.now())
+	if err := l.store.SaveThreadLinkReading(threadID, k); err != nil {
+		return fail(err)
+	}
+	l.publish(threadID)
+	res.Status = RefreshDone
+	return res
 }
 
 func repoOfLink(k *db.ThreadLink) (GitHubRepo, error) {

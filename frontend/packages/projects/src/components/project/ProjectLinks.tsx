@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Box, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { useCallback, useMemo, useState } from 'react';
+import { Box, IconButton, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Thread } from '../../client';
+import { api, unwrap, type Thread } from '../../client';
+import { describeOutcome, useLinkRefresh } from '../../hooks/useLinkRefresh';
+import { Refresh, Spinner } from '../icons';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { collectLinks, LinkRow, type ProjectLink } from './LinksCard';
 import { RailCard } from './infoRail';
+import { spin } from './linkView';
 
 type Filter = 'open' | 'closed';
 
@@ -17,8 +20,11 @@ export const isOpenLink = ({ link }: ProjectLink) => link.state === 'open';
  * threads opened or touched, each with the thread it came from. PRs and issues
  * sit in cards of their own; Open | Closed is the page's one control.
  */
-export function ProjectLinks({ threads, onOpen }: { threads: Thread[]; onOpen: (threadId: string) => void }) {
+export function ProjectLinks({ projectId, threads, onOpen }: { projectId: string; threads: Thread[]; onOpen: (threadId: string) => void }) {
     const { t } = useTranslation('projects');
+    const call = useCallback(() => unwrap(api.POST('/api/v1/projects/{id}/links/refresh', { params: { path: { id: projectId } } })), [projectId]);
+    const { busy, outcome, run } = useLinkRefresh(call);
+    const said = describeOutcome(outcome, t);
     const [choice, setChoice] = useState<Filter | null>(null);
     // Every thread event re-renders the list; the sort only moves when a thread's links do.
     const rows = useMemo(() => collectLinks(threads), [threads]);
@@ -32,7 +38,7 @@ export function ProjectLinks({ threads, onOpen }: { threads: Thread[]; onOpen: (
     const section = (id: string, title: string, list: ProjectLink[]) => list.length > 0 && (
         <RailCard id={id} title={title} aside={String(list.length)}>
             <Box sx={{ mx: -0.25 }}>
-                {list.map(({ link, owner, threadId }) => <LinkRow key={`${threadId}/${link.repo}/${link.kind}/${link.number}`} link={link} owner={owner} onOpenOwner={() => onOpen(threadId)} />)}
+                {list.map(({ link, owner, threadId }) => <LinkRow key={`${threadId}/${link.repo}/${link.kind}/${link.number}`} link={link} threadId={threadId} owner={owner} onOpenOwner={() => onOpen(threadId)} />)}
             </Box>
         </RailCard>
     );
@@ -46,6 +52,13 @@ export function ProjectLinks({ threads, onOpen }: { threads: Thread[]; onOpen: (
                     {button('open', t('links.filterOpen', { count: open.length }))}
                     {button('closed', t('links.filterClosed', { count: closed.length }))}
                 </ToggleButtonGroup>
+                <Box sx={{ flex: 1 }} />
+                {said && <Typography role="status" sx={{ fontSize: fontSizes.sm, color: 'text.secondary', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{said}</Typography>}
+                {open.length > 0 && (
+                    <IconButton size="small" aria-label={busy ? t('links.refreshing') : t('links.refreshAll')} title={t('links.refreshAll')} aria-busy={busy} disabled={busy} onClick={() => void run()} sx={{ color: 'text.secondary' }}>
+                        {busy ? <Spinner sx={{ fontSize: 18, animation: `${spin} 1s linear infinite` }} /> : <Refresh sx={{ fontSize: 18 }} />}
+                    </IconButton>
+                )}
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {rows.length === 0 && <Typography variant="body2" color="text.secondary">{t('links.empty')}</Typography>}

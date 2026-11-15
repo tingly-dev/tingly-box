@@ -40,7 +40,7 @@ export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, li
                     <ThreadsView scope={projectId} threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks}
                         onGroup={onStatus && ((key, _label, anchor) => onStatus(key, anchor))}
                         countLabel={(count) => t('overview.threadCount', { count })} empty={t('overview.noThreads')} />
-                ) : tab === 'links' ? <ProjectLinks threads={threads} onOpen={onOpen} />
+                ) : tab === 'links' ? <ProjectLinks projectId={projectId} threads={threads} onOpen={onOpen} />
                     : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
             </Box>
         </Box>

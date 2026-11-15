@@ -6,6 +6,7 @@ package thread
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,6 +71,16 @@ type RequestsResponse struct {
 // SubagentsResponse lists a thread's subagents.
 type SubagentsResponse struct {
 	Subagents []db.Subagent `json:"subagents"`
+}
+
+// RefreshLinksRequest picks one of the thread's issues or PRs to read from
+// GitHub again; with no field set, all of them are read.
+type RefreshLinksRequest struct {
+	// Repo is owner/name, as the link says; it goes with Number.
+	Repo string `json:"repo,omitempty"`
+	// Kind is issue or pr; empty matches either.
+	Kind   string `json:"kind,omitempty" enum:",issue,pr"`
+	Number int    `json:"number,omitempty"`
 }
 
 // SendRequest is a message to the thread.
@@ -290,10 +301,45 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/threads/:id/diff", h.diff, tag,
 		swagger.WithDescription("The thread's changes against its base branch"),
 		swagger.WithResponseModel(rt.Diff{}))
+	api.POST("/threads/:id/links/refresh", h.refreshLinks, tag,
+		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 10 seconds ago, or being read, answers recent without asking GitHub. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
+		swagger.WithRequestModel(RefreshLinksRequest{}),
+		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
 	api.POST("/threads/:id/merge", h.merge, tag,
 		swagger.WithDescription("Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready."),
 		swagger.WithResponseModel(db.Thread{}),
 		swagger.WithErrorResponses(swagger.ErrorResponseConfig{Code: http.StatusConflict, Message: "merge blocked", Model: MergeBlockedResponse{}}))
+}
+
+// refreshLinks reads a thread's issues and PRs from GitHub on request.
+func (h *Handler) refreshLinks(c *gin.Context) {
+	t, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	var req RefreshLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.BadRequest(c, err.Error())
+		return
+	}
+	var only *rt.LinkRef
+	if req.Repo != "" || req.Number != 0 {
+		if req.Repo == "" || req.Number <= 0 {
+			apierr.BadRequest(c, "repo and number go together")
+			return
+		}
+		only = &rt.LinkRef{Repo: req.Repo, Kind: req.Kind, Number: req.Number}
+	}
+	results, err := h.svc.Links.RefreshThread(c.Request.Context(), t.ID, only)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			apierr.Message(c, http.StatusNotFound, "this thread has no such issue or PR")
+			return
+		}
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, rt.RefreshLinksResponse{Results: results})
 }
 
 func fail(c *gin.Context, err error) {

@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
 // GitHubRepo names a repository on github.com: where a thread's issues and PRs
@@ -42,6 +44,11 @@ type GitHubItem struct {
 	Head, Base string
 	CI         string
 	MergeState string
+	// Author is the login that opened it; UpdatedAt is GitHub's own last
+	// change (zero when not reported). Checks break an open PR's CI down.
+	Author    string
+	UpdatedAt time.Time
+	Checks    *db.LinkChecks
 }
 
 // GitHub is what the issue and PR tools need from GitHub. The real one runs
@@ -151,6 +158,10 @@ type ghIssue struct {
 	Title   string `json:"title"`
 	Body    string `json:"body"`
 	State   string `json:"state"`
+	User    struct {
+		Login string `json:"login"`
+	} `json:"user"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// PullRequest is set when the "issue" is a PR (the issues API serves both).
 	PullRequest *struct{} `json:"pull_request"`
 }
@@ -171,7 +182,7 @@ type ghPull struct {
 }
 
 func (i ghIssue) item() GitHubItem {
-	return GitHubItem{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil}
+	return GitHubItem{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil, Author: i.User.Login, UpdatedAt: i.UpdatedAt}
 }
 
 func (p ghPull) item() GitHubItem {
@@ -295,40 +306,74 @@ func (g ghCLI) PR(ctx context.Context, r GitHubRepo, number int) (GitHubItem, er
 	if it.State != "open" {
 		return it, nil
 	}
-	ci, err := g.ci(ctx, r, pr.Head.SHA)
+	ci, checks, err := g.ci(ctx, r, pr.Head.SHA)
 	if err != nil {
 		return GitHubItem{}, err
 	}
-	it.CI = ci
+	it.CI, it.Checks = ci, checks
 	return it, nil
 }
 
-// ci folds the commit's check runs and legacy statuses into one word.
-func (g ghCLI) ci(ctx context.Context, r GitHubRepo, sha string) (string, error) {
+// ci folds the commit's check runs and legacy statuses into one word, and
+// breaks them down for the details view.
+func (g ghCLI) ci(ctx context.Context, r GitHubRepo, sha string) (string, *db.LinkChecks, error) {
 	var runs struct {
 		CheckRuns []struct {
+			Name       string `json:"name"`
 			Status     string `json:"status"`
 			Conclusion string `json:"conclusion"`
+			HTMLURL    string `json:"html_url"`
 		} `json:"check_runs"`
 	}
 	if err := g.api(ctx, r, "GET", fmt.Sprintf("%s/commits/%s/check-runs?per_page=100", r.path(), sha), nil, &runs); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var status struct {
-		State      string            `json:"state"`
-		Statuses   []json.RawMessage `json:"statuses"`
-		TotalCount int               `json:"total_count"`
+		State    string `json:"state"`
+		Statuses []struct {
+			Context   string `json:"context"`
+			State     string `json:"state"`
+			TargetURL string `json:"target_url"`
+		} `json:"statuses"`
 	}
 	if err := g.api(ctx, r, "GET", fmt.Sprintf("%s/commits/%s/status", r.path(), sha), nil, &status); err != nil {
-		return "", err
+		return "", nil, err
+	}
+	var sum db.LinkChecks
+	note := func(name, state, url string) {
+		if len(sum.Attention) < db.LinkChecksListed {
+			sum.Attention = append(sum.Attention, db.LinkCheck{Name: name, State: state, URL: url})
+		} else {
+			sum.More++
+		}
 	}
 	pending, failing := 0, 0
 	for _, c := range runs.CheckRuns {
 		switch {
 		case c.Status != "completed":
 			pending++
+			sum.Pending++
+			note(c.Name, "pending", c.HTMLURL)
 		case c.Conclusion == "failure" || c.Conclusion == "timed_out" || c.Conclusion == "cancelled" || c.Conclusion == "action_required":
 			failing++
+			sum.Failing++
+			note(c.Name, "failing", c.HTMLURL)
+		case c.Conclusion == "skipped" || c.Conclusion == "neutral":
+			sum.Skipped++
+		default:
+			sum.Passing++
+		}
+	}
+	for _, c := range status.Statuses {
+		switch c.State {
+		case "failure", "error":
+			sum.Failing++
+			note(c.Context, "failing", c.TargetURL)
+		case "pending":
+			sum.Pending++
+			note(c.Context, "pending", c.TargetURL)
+		default:
+			sum.Passing++
 		}
 	}
 	if len(status.Statuses) > 0 {
@@ -341,13 +386,13 @@ func (g ghCLI) ci(ctx context.Context, r GitHubRepo, sha string) (string, error)
 	}
 	switch {
 	case len(runs.CheckRuns) == 0 && len(status.Statuses) == 0:
-		return "none", nil
+		return "none", nil, nil
 	case failing > 0:
-		return "failing", nil
+		return "failing", &sum, nil
 	case pending > 0:
-		return "pending", nil
+		return "pending", &sum, nil
 	}
-	return "passing", nil
+	return "passing", &sum, nil
 }
 
 func (g ghCLI) Issue(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {

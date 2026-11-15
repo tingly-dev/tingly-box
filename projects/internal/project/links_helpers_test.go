@@ -27,6 +27,8 @@ type fakeGitHub struct {
 	existing *GitHubItem
 	// protected are the branches GitHub holds protected.
 	protected map[string]bool
+	// block, when set, holds every PR read until it is closed.
+	block chan struct{}
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -151,6 +153,9 @@ func (g *fakeGitHub) UpdateIssue(_ context.Context, r GitHubRepo, n int, title, 
 
 func (g *fakeGitHub) PR(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
 	err := g.log("pr %s #%d", r.Slug(), n)
+	if g.block != nil {
+		<-g.block
+	}
 	if err == nil {
 		err = g.failPR
 	}

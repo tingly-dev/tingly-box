@@ -1,4 +1,4 @@
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { resolveMockDataProfile } from './mockConfig'
 
 // Mock-mode data for Projects (/api/v1/projects and /api/v1/threads,
@@ -79,10 +79,13 @@ const link = (o: Partial<Record<string, unknown>> & { number: number; title: str
     role: 'opened', state: 'open', refreshed_at: ago(3), attempted_at: ago(3), created_at: ago(40), ...o,
 })
 
+type MockLink = ReturnType<typeof link>
+
 const threads = [
     threadWithUsage({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     threadWithUsage({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18),
-        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', ci: 'failing', merge_state: 'ready' }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
+        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', ci: 'failing', merge_state: 'blocked', author: 'mira-k', head: 'projects/t-cache', base: 'main', updated_at: ago(9),
+            checks: { passing: 11, failing: 2, pending: 1, skipped: 1, attention: [{ name: 'go test ./... (race)', state: 'failing', url: 'https://github.com/acme/payments-api/actions/runs/1' }, { name: 'lint / golangci', state: 'failing', url: 'https://github.com/acme/payments-api/actions/runs/2' }, { name: 'e2e / charge flow', state: 'pending', url: 'https://github.com/acme/payments-api/actions/runs/3' }] } }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
     threadWithUsage({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1),
         links: [link({ number: 37, repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
     // Over the project's limit: its turn waits for a free slot.
@@ -356,6 +359,17 @@ export const projectsHandlers = [
     }),
     // Every project's events (the sidebar's stream): an empty one that ends at once.
     http.get('/api/v1/projects/events', () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
+    // A refresh reads GitHub again: the mock answers after a moment, as if it had.
+    http.post('/api/v1/threads/:tid/links/refresh', async ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        await delay(700)
+        return HttpResponse.json({ results: ((th as { links?: MockLink[] }).links ?? []).map((l) => ({ repo: l.repo, kind: l.kind, number: l.number, status: 'refreshed' })) })
+    }),
+    http.post('/api/v1/projects/:id/links/refresh', async () => {
+        await delay(700)
+        return HttpResponse.json({ results: threads.flatMap((th) => ((th as { links?: MockLink[] }).links ?? []).filter((l) => l.state === 'open').map((l) => ({ repo: l.repo, kind: l.kind, number: l.number, status: 'refreshed' }))) })
+    }),
     http.get('/api/v1/threads/permission-modes', () => HttpResponse.json({ modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.get('/api/v1/threads/:tid', ({ params }) => {
         const th = findThread(params.tid as string)

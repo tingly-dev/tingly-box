@@ -155,6 +155,17 @@ The UI never asks GitHub; it reads the record. A background sweep keeps open ite
 
 Not done: webhooks (the host is usually behind NAT), review decisions (GraphQL only), notifying the coordinator when a PR is merged (an event line in the thread transcript is the obvious next step).
 
+### Manual refresh and detail (UI: `.design/workspace-layout.md` §3.6)
+
+The sweep keeps open items fresh; a person looking at a row can also ask. This adds no write to GitHub and no new trust: it is the sweep's own read, on demand.
+
+- **Endpoints.** `POST /threads/{id}/links/refresh` with an optional `{repo, kind, number}` (one item; none = all of the thread's links) and `POST /projects/{id}/links/refresh` (all open links of the project's threads, at most `linkSweepMax` per call, least recently read first). Both answer `{results: [{repo, kind, number, status, error?}]}`, `status` one of `refreshed`, `recent`, `failed`; an item the thread does not have is a 404, not a silent skip. The answer is only a status: the data travels on the thread event.
+- **Any state.** Unlike the sweep, a manual refresh also reads `closed` and `merged` items (a PR can be reopened).
+- **Cooldown.** An item read or attempted less than `linkManualGap` (10 s) ago answers `recent` with no request, and two refreshes of one item in flight are one read (`refreshing` set under a mutex). The gap is the server's, so several pages and people cannot multiply requests. A call is bounded: the all-items forms read one at a time like the sweep.
+- **Failure does not feed the back-off.** A failed manual read stores `last_error` and `attempted_at` but leaves `failures` as it was, so a person pressing refresh while `gh` is signed out cannot push the sweep's wait to an hour. A success clears both, as in the sweep.
+- **Always publish.** The sweep stays silent for an unchanged reading; a manual refresh publishes the `thread` event even when only `refreshed_at` moved, because "read just now" is what the person asked to see. Clients never merge: the event replaces the thread, and the server is the only writer of the records.
+- **More on the record** (all optional, filled by the next read; old records simply lack them): `author` (login), `updated_at` (GitHub's own), and for a PR `checks`: counts `passing`/`failing`/`pending`/`skipped` and the names, conclusion and URL of the failing and pending ones, capped at 5 of each. Folded from the check runs and legacy statuses `ci()` already reads, so the sweep's cost does not change. Reviews are not read (GraphQL only).
+
 ## Display
 
 - **Thread rail** (`ThreadInfoRail`, the expanded status area): a new "Issues & PRs" card after Changes, listing each record: icon, `#number title`, state chip, and for a PR its CI and merge state; a row opens the URL. Shown only when the thread has records. Reading age in the tooltip; "could not refresh" when `last_error` is set.
@@ -182,4 +193,4 @@ Each its own change; any that closes, merges or deletes needs the explicit appro
 - `merge_pr`, `close_pr`, labels and assignees, `request_review`; PR review comments and CI log reading (a thread fixing a red check).
 - Continue work on an existing PR's branch (`start_thread` with a PR number), the intent `mcp-tools.md` kept for the PR-awareness design.
 - Other hosts (GitLab) behind the same `GitHub` interface.
-- A manual "refresh" button on the card; a transcript line when a linked PR merges or its CI turns red.
+- A transcript line when a linked PR merges or its CI turns red.
