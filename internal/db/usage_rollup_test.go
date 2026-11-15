@@ -363,3 +363,28 @@ func TestUpgradeKeepsDailyRowsAndFillsHours(t *testing.T) {
 		t.Fatalf("hour rows after the first post-upgrade query = %d, want only the edge hours", hours)
 	}
 }
+
+// TestContiguousRunsBoundTheWriteLock: a run never spans more than the cap,
+// and a gap always starts a new run.
+func TestContiguousRunsBoundTheWriteLock(t *testing.T) {
+	base := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	var hours []time.Time
+	for i := 0; i < 60; i++ { // 60 contiguous hours
+		hours = append(hours, base.Add(time.Duration(i)*time.Hour))
+	}
+	hours = append(hours, base.Add(100*time.Hour), base.Add(101*time.Hour)) // after a gap
+	runs := contiguousRuns(hours, time.Hour, maxAggregateRun)
+	var total int
+	for _, run := range runs {
+		if span := run[len(run)-1].Add(time.Hour).Sub(run[0]); span > maxAggregateRun {
+			t.Errorf("run of %d hours spans %v, over the %v cap", len(run), span, maxAggregateRun)
+		}
+		total += len(run)
+	}
+	if total != len(hours) {
+		t.Errorf("runs cover %d hours, want %d", total, len(hours))
+	}
+	if last := runs[len(runs)-1]; len(last) != 2 || !last[0].Equal(base.Add(100*time.Hour)) {
+		t.Errorf("the hours after the gap must form their own run, got %v", last)
+	}
+}
