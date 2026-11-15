@@ -191,3 +191,28 @@ func TestGhCLIProtectedReadsTheBranchAndTreatsAMissingOneAsUnprotected(t *testin
 	_, err = ghCLI{bin: bin}.Protected(context.Background(), repo, "feat/x")
 	assert.Error(t, err)
 }
+
+func TestGhCLISquashPRPutsAPinnedSquashMerge(t *testing.T) {
+	repo := GitHubRepo{Owner: "acme", Name: "widgets"}
+	bin, logFile := fakeGH(t, `{"merged":true,"message":"Pull Request successfully merged","sha":"def"}`, 0)
+	require.NoError(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "Add a", "Body."))
+	b, _ := os.ReadFile(logFile)
+	got := string(b)
+	assert.Contains(t, got, "api -X PUT --input - repos/acme/widgets/pulls/7/merge")
+	assert.Contains(t, got, `"merge_method":"squash"`)
+	assert.Contains(t, got, `"sha":"abc123"`, "only the commit that was pushed is merged")
+	assert.Contains(t, got, `"commit_title":"Add a"`)
+
+	bin, logFile = fakeGH(t, `{"merged":true}`, 0)
+	require.NoError(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", ""))
+	b, _ = os.ReadFile(logFile)
+	assert.NotContains(t, string(b), "commit_title", "no message: GitHub's default")
+
+	// GitHub answering "not merged" is an error, whatever the status.
+	bin, _ = fakeGH(t, `{"merged":false,"message":"Pull Request is not mergeable"}`, 0)
+	err := ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", "")
+	assert.ErrorContains(t, err, "not mergeable")
+
+	bin, _ = fakeGH(t, "", 1)
+	assert.Error(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", ""))
+}

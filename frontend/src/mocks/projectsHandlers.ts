@@ -429,6 +429,31 @@ export const projectsHandlers = [
         th.title = ((await request.json()) as { title: string }).title
         return HttpResponse.json(th)
     }),
+    http.get('/api/v1/threads/:tid/diff', ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        return HttpResponse.json({
+            base: th.base_branch, branch: th.branch, uncommitted: '', additions: 56, deletions: 4,
+            files: [
+                { path: 'internal/idempotency/redis.go', status: 'added', additions: 48, deletions: 0 },
+                { path: 'internal/idempotency/store.go', status: 'modified', additions: 8, deletions: 4 },
+            ],
+        })
+    }),
+    http.get('/api/v1/threads/:tid/diff/file', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        return HttpResponse.json({
+            path,
+            patch: `diff --git a/${path} b/${path}\n@@ -10,7 +10,7 @@ type Store interface {\n-\tLookup(ctx context.Context, key string) (*Result, error)\n+\tLookup(ctx context.Context, key string) (*Result, error) // 24h TTL\n \tSave(ctx context.Context, key string, r *Result) error\n }`,
+        })
+    }),
+    http.post('/api/v1/threads/:tid/merge', async ({ params, request }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const { method } = (await request.json()) as { method: string }
+        if (method !== 'squash' && method !== 'merge_request') return HttpResponse.json({ error: 'method must be "squash" or "merge_request"' }, { status: 400 })
+        return HttpResponse.json(th)
+    }),
     http.post('/api/v1/threads/:tid/handoff', ({ params }) => {
         const s = sessions.find((x) => x.id === params.tid)
         if (!s) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })

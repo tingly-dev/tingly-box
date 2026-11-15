@@ -58,6 +58,10 @@ type GitHub interface {
 	// OpenPR is the open PR whose head is branch of this repository, if any.
 	OpenPR(ctx context.Context, r GitHubRepo, branch string) (*GitHubItem, error)
 	CreatePR(ctx context.Context, r GitHubRepo, title, body, head, base string, draft bool) (GitHubItem, error)
+	// SquashPR squash-merges an open PR on GitHub. sha is the head commit the
+	// caller means to merge: GitHub refuses when the PR's head has moved. Nothing
+	// else is touched (the branch is not deleted).
+	SquashPR(ctx context.Context, r GitHubRepo, number int, sha, title, message string) error
 	// UpdatePR changes only the fields that are not nil.
 	UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error)
 	// UpdateIssue changes only the fields that are not nil.
@@ -272,6 +276,25 @@ func (g ghCLI) CreatePR(ctx context.Context, r GitHubRepo, title, body, head, ba
 	var out ghPull
 	err := g.api(ctx, r, "POST", r.path()+"/pulls", map[string]any{"title": title, "body": body, "head": head, "base": base, "draft": draft}, &out)
 	return out.item(), err
+}
+
+func (g ghCLI) SquashPR(ctx context.Context, r GitHubRepo, number int, sha, title, message string) error {
+	body := map[string]any{"merge_method": "squash", "sha": sha}
+	if title != "" {
+		body["commit_title"] = title
+		body["commit_message"] = message
+	}
+	var out struct {
+		Merged  bool   `json:"merged"`
+		Message string `json:"message"`
+	}
+	if err := g.api(ctx, r, "PUT", fmt.Sprintf("%s/pulls/%d/merge", r.path(), number), body, &out); err != nil {
+		return err
+	}
+	if !out.Merged {
+		return fmt.Errorf("GitHub did not merge PR #%d: %s", number, clip(out.Message, 300))
+	}
+	return nil
 }
 
 func (g ghCLI) UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error) {

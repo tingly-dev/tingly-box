@@ -91,8 +91,16 @@ export const project: PluralDict<typeof en> = {
         fromCoordinator: 'Координатор', allowThread: 'Всегда разрешать {{tool}} здесь', loadEarlier: 'Показать более ранние сообщения',
         placeholder: 'Написать этому потоку напрямую…', queuePlaceholder: 'Сообщение потоку — он прочтёт его на следующем шаге…',
         resolvedPlaceholder: 'Откройте поток заново, чтобы дать ему ещё работы',
-        mergeIt: 'Влить', mergedInto: 'Влит в {{base}}', merged: '{{branch}} влита в {{base}}', mergeBlocked: 'Не влит', mergedBadge: 'Влит',
-        mergeHint: 'Вливает в {{base}} в {{repo}}. Копия должна быть на {{base}} без локальных изменений.',
+        mergeIt: 'Влить…', mergedInto: 'Влит в {{base}}', merged: '{{branch}} влита в {{base}} на GitHub (squash)', mergedBadge: 'Влит',
+        merge: {
+            title: 'Влить этот поток', squash: 'Squash', squashHint: 'Влить PR в {{base}} на GitHub через squash', mr: 'Merge request (PR)', mrHint: 'Открыть PR на GitHub, влить позже',
+            message: 'Сообщение коммита', prTitle: 'Заголовок PR', prBody: 'Описание PR',
+            squashNote: 'Отправляет {{branch}} в origin, открывает PR в {{base}}, если его нет, и вливает его на GitHub через squash с помощью gh. Отсюда это не отменить. Ваша локальная копия не меняется: чтобы получить слияние, обновите {{base}}.',
+            mrNote: 'Отправляет {{branch}} в origin и открывает PR через gh; пока ничего не вливается. Ваша копия не меняется, а поток остаётся открытым, пока PR не влит.',
+            mrExisting: 'Для этой ветки уже открыт PR #{{number}}. В него отправятся последние коммиты, второй PR не создаётся. Squash вливает этот PR.',
+            doSquash: 'Squash и влить', doOpen: 'Открыть PR', doPush: 'Отправить в PR',
+            mrOpened: 'Открыт PR для {{branch}} в {{base}}', mrKept: '{{branch}} отправлена в уже открытый PR',
+        },
         noChanges: 'Нет зафиксированных изменений.',
         uncommittedWarn: 'Поток оставил в своём worktree незафиксированные изменения; в слияние они не входят:',
         diff: {

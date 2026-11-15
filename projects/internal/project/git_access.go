@@ -72,8 +72,8 @@ func githubToolRule(tool string) string { return builtinToolsRule + "__" + tool 
 // is offered (see .design/github-tools.md). They are Tingly Box's own: a person
 // who gave the thread work expects them to run, so they are allowed without a
 // card in every permission mode. The scope stops at this server: Claude's own
-// tools keep following the permission mode, and the tools cannot merge, close
-// or force-push.
+// tools keep following the permission mode, and the tools cannot close or
+// force-push. The one that merges (alwaysAskTools) always asks.
 //
 // A project can opt out of the tools that publish on GitHub with access "ask";
 // ask rules win over the allow rule (rules are checked deny, ask, then allow).
@@ -84,6 +84,9 @@ func githubToolRule(tool string) string { return builtinToolsRule + "__" + tool 
 func grantBuiltinTools(doc map[string]any, p *db.Project) {
 	perms := permissionsOf(doc)
 	addRules(perms, "allow", builtinToolsRule)
+	for _, tool := range alwaysAskTools {
+		addRules(perms, "ask", githubToolRule(tool))
+	}
 	if p.ThreadGitHubAccess == GitHubAsk {
 		var rules []string
 		for _, tool := range githubWriteTools {

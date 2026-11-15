@@ -96,6 +96,59 @@ func TestCreatePRRefusals(t *testing.T) {
 	}
 }
 
+func TestMergeToolSquashesThePROnGitHub(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	sha := run(t, f.repo, "git", "rev-parse", "tp/work")
+	status := f.thread(t).Status
+
+	out, isErr := f.call(t, cs, "merge", map[string]any{"method": "squash", "message": "Add a\n\nAdds a.", "title": "Add a PR", "body": "Adds a."})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "squash-merged PR #11 into main on GitHub")
+	assert.True(t, f.remoteHas(t, "tp/work"), "the branch was pushed first")
+	calls := strings.Join(f.gh.called(), "\n")
+	assert.Contains(t, calls, `create-pr acme/widgets "Add a PR" head=tp/work base=main draft=false`)
+	assert.Contains(t, calls, `squash-pr acme/widgets #11 sha=`+sha+` title="Add a" message="Adds a."`)
+	links, err := f.store.ThreadLinks(f.worker.ID)
+	require.NoError(t, err)
+	require.Len(t, links, 1)
+	assert.Equal(t, db.LinkStateMerged, links[0].State)
+	assert.Equal(t, status, f.thread(t).Status, "the tool does not touch the thread's own state: it is mid-turn")
+}
+
+func TestMergeToolMergeRequestOnlyOpensThePR(t *testing.T) {
+	f := newLinksFixture(t)
+	cs, _ := f.client(t, f.worker.ID)
+	out, isErr := f.call(t, cs, "merge", map[string]any{"method": "merge_request"})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "opened PR #11, not merged")
+	for _, c := range f.gh.called() {
+		assert.NotContains(t, c, "squash-pr")
+	}
+}
+
+func TestMergeToolRefusals(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		args map[string]any
+		fail error
+		want string
+	}{
+		{"no method", map[string]any{}, nil, "method"},
+		{"other method", map[string]any{"method": "rebase"}, nil, "squash"},
+		{"GitHub refuses", map[string]any{"method": "squash"}, errString("GitHub PUT pulls/11/merge: Pull Request is not mergeable (HTTP 405)"), "stays open"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newLinksFixture(t)
+			f.gh.mergeFail = c.fail
+			cs, _ := f.client(t, f.worker.ID)
+			out, isErr := f.call(t, cs, "merge", c.args)
+			assert.True(t, isErr, out)
+			assert.Contains(t, out, c.want)
+		})
+	}
+}
+
 func TestCreatePRNeverForcesAPush(t *testing.T) {
 	f := newLinksFixture(t)
 	// origin already has a different tp/work: a plain push is rejected, and the
@@ -353,7 +406,7 @@ func TestGitHubToolsBelongToThreadsNotTheCoordinator(t *testing.T) {
 	}{{f.worker.ID, true}, {f.folder.ID, true}, {f.p.MainThreadID, false}} {
 		cs, _ := f.client(t, c.id)
 		names := toolNames(listTools(t, cs))
-		for _, tool := range append(githubWriteTools, toolView) {
+		for _, tool := range append(githubWriteTools, toolView, toolMerge) {
 			assert.Equal(t, c.want, slices.Contains(names, tool), "%s for %s", tool, c.id)
 		}
 	}

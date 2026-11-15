@@ -54,6 +54,7 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.Contains(t, s, "create_pr tool")
 	assert.Contains(t, s, "report the failure")
 	assert.NotContains(t, s, "gh")
-	assert.Contains(t, s, "Never merge it yourself")
+	assert.Contains(t, s, "with the merge tool")
+	assert.Contains(t, s, "Never merge it yourself by hand")
 	assert.NotContains(t, s, "Do not push", "a PR may be asked for, so pushing is not banned outright")
 }

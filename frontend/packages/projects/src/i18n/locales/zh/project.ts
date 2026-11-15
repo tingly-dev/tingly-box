@@ -91,8 +91,16 @@ export const project: Dict<typeof projectEn> = {
         fromCoordinator: '协调者', allowThread: '本线程都允许 {{tool}}', loadEarlier: '显示更早的消息',
         placeholder: '直接给这个线程发消息…', queuePlaceholder: '给这个线程发消息——它会在下一步读到…',
         resolvedPlaceholder: '重新打开线程才能继续发送工作',
-        mergeIt: '合并', mergedInto: '已合并进 {{base}}', merged: '已把 {{branch}} 合并进 {{base}}', mergeBlocked: '未合并', mergedBadge: '已合并',
-        mergeHint: '合并进 {{repo}} 的 {{base}}。该工作区必须处于 {{base}} 且没有本地改动。',
+        mergeIt: '合并…', mergedInto: '已合并进 {{base}}', merged: '已在 GitHub 上把 {{branch}} squash 合并进 {{base}}', mergedBadge: '已合并',
+        merge: {
+            title: '合并这个线程', squash: 'Squash', squashHint: '在 GitHub 上把 PR squash 合并进 {{base}}', mr: 'Merge request（PR）', mrHint: '在 GitHub 上开 PR，合并留到之后',
+            message: '提交信息', prTitle: 'PR 标题', prBody: 'PR 描述',
+            squashNote: '把 {{branch}} 推送到 origin；若没有打开的 PR，就向 {{base}} 开一个，并用 gh 在 GitHub 上 squash 合并。这里无法撤销。你本地的工作区不会变：要拿到合并结果，请自行拉取 {{base}}。',
+            mrNote: '把 {{branch}} 推送到 origin，并用 gh 开 PR；此时不合并。不会动你的工作区；在 PR 合并之前，线程保持打开。',
+            mrExisting: '这个分支已有打开的 PR #{{number}}。会把最新提交推送上去，不会再开第二个 PR。squash 会合并这个 PR。',
+            doSquash: 'Squash 并合并', doOpen: '开 PR', doPush: '推送到 PR',
+            mrOpened: '已为 {{branch}} 向 {{base}} 开了 PR', mrKept: '已把 {{branch}} 推送到它已打开的 PR',
+        },
         noChanges: '没有已提交的改动。',
         uncommittedWarn: '线程在 worktree 里留下了未提交的改动，它们不在本次合并中：',
         diff: {

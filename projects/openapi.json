@@ -2152,8 +2152,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
-        "description": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
+        "summary": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
+        "description": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
         "operationId": "apiV1ThreadsIdMergePost",
         "parameters": [
           {
@@ -2166,6 +2166,17 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2173,16 +2184,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "merge blocked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MergeBlockedResponse"
                 }
               }
             }
@@ -3808,21 +3809,32 @@
           "files"
         ]
       },
-      "MergeBlockedResponse": {
+      "MergeRequest": {
         "type": "object",
         "properties": {
-          "command": {
+          "body": {
             "type": "string",
-            "description": "Field command"
+            "description": "Field body"
           },
-          "error": {
+          "message": {
             "type": "string",
-            "description": "Field error"
+            "description": "Field message"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method",
+            "enum": [
+              "squash",
+              "merge_request"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
           }
         },
         "required": [
-          "error",
-          "command"
+          "method"
         ]
       },
       "Message": {
