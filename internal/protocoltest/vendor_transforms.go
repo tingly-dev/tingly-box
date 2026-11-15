@@ -33,7 +33,9 @@ import (
 // ApplyProviderTransforms, not a hand-built request struct.
 //
 // Today this only covers the explicit-prompt-cache allowlist (the case that
-// motivated the section). Extending it to other vendor-specific transforms
+// motivated the section), on both OpenAI wire shapes: Chat
+// (ApplyProviderTransforms) and Responses (ApplyResponsesProviderTransforms,
+// #1561). Extending it to other vendor-specific transforms
 // (DeepSeek's reasoning_content flip, Gemini's thinking_config mapping, tool
 // schema filtering, ...) means adding fields to vendorFixture and assertions
 // in runVendorTransformCase — the routing/relay plumbing is already generic.
@@ -71,6 +73,17 @@ var vendorFixtures = []vendorFixture{
 	{name: "nvidia_nim", apiBase: "http://integrate.api.nvidia.com", wantsExplicitPromptCache: false},
 }
 
+// vendorTargets are the outbound wire shapes the vendor dispatch is checked
+// on. Chat keeps its original case names; other shapes add their name.
+var vendorTargets = []protocol.APIType{protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses}
+
+func vendorCaseName(fx vendorFixture, target protocol.APIType, streaming bool) string {
+	if target == protocol.TypeOpenAIChat {
+		return fmt.Sprintf("vendor/%s/%s", fx.name, streamMode(streaming))
+	}
+	return fmt.Sprintf("vendor/%s/%s/%s", fx.name, target, streamMode(streaming))
+}
+
 func vendorTransformScenario() Scenario {
 	s := TextScenario()
 	s.Name = "vendor_transforms"
@@ -102,13 +115,12 @@ func newVendorHostProxy(t flagTB, target string) string {
 	return relay.URL
 }
 
-// setupVendorRoute wires an Anthropic v1 -> OpenAI Chat route whose
-// destination provider carries fx's real APIBase (dialed, via the relay in
+// setupVendorRoute wires an Anthropic v1 -> target route whose destination
+// provider carries fx's real APIBase (dialed, via the relay in
 // newVendorHostProxy, to the VirtualServer), and returns the request model to
 // send to.
-func setupVendorRoute(t flagTB, env *TestEnv, s Scenario, fx vendorFixture, streaming bool) string {
+func setupVendorRoute(t flagTB, env *TestEnv, s Scenario, fx vendorFixture, target protocol.APIType, streaming bool) string {
 	source := protocol.TypeAnthropicV1
-	target := protocol.TypeOpenAIChat
 	proxyURL := newVendorHostProxy(t, env.virtual.URL())
 	// UUID must be unique per (fixture, streaming): GetGlobalTransportPool is
 	// a process-global cache keyed on provider UUID + model, not APIBase/
@@ -118,7 +130,7 @@ func setupVendorRoute(t flagTB, env *TestEnv, s Scenario, fx vendorFixture, stre
 	// invalidation and end up dialing through each other's (possibly
 	// already-closed) relay — exactly the "final provider received no chat
 	// request" flake this caused before the streaming suffix was added.
-	uuid := fmt.Sprintf("vendor-%s-%s-%s", fx.name, s.Name, streamMode(streaming))
+	uuid := fmt.Sprintf("vendor-%s-%s-%s-%s", fx.name, target, s.Name, streamMode(streaming))
 	env.setupRouteCore(source, target, s, nil, func(p *typ.Provider) {
 		p.UUID = uuid
 		p.Name = uuid
@@ -129,24 +141,25 @@ func setupVendorRoute(t flagTB, env *TestEnv, s Scenario, fx vendorFixture, stre
 }
 
 // runVendorTransformCase sends a cached and a no-cache request through fx's
-// route and asserts the explicit-prompt-cache allowlist behaved as fx
-// declares.
-func runVendorTransformCase(t flagTB, env *TestEnv, fx vendorFixture, streaming bool) {
+// route to target and asserts the explicit-prompt-cache allowlist behaved as
+// fx declares.
+func runVendorTransformCase(t flagTB, env *TestEnv, fx vendorFixture, target protocol.APIType, streaming bool) {
 	t.Helper()
 	s := vendorTransformScenario()
 	source := protocol.TypeAnthropicV1
-	target := protocol.TypeOpenAIChat
-	model := setupVendorRoute(t, env, s, fx, streaming)
+	model := setupVendorRoute(t, env, s, fx, target, streaming)
 	if model == "" {
 		t.Fatalf("vendor/%s: route model not configured", fx.name)
 	}
 
 	for _, cached := range []bool{true, false} {
-		label := fmt.Sprintf("vendor/%s/%s/%s", fx.name, cacheStateName(cached), streamMode(streaming))
+		label := fmt.Sprintf("%s/%s", vendorCaseName(fx, target, streaming), cacheStateName(cached))
 		sendCacheControlBody(t, env, source, target, s.Name, model, streaming, cached)
 		wantCached := cached && fx.wantsExplicitPromptCache
 		assertCapturedCacheState(t, env, target, wantCached, label)
-		assertCapturedChatTextShape(t, env, !fx.wantsArrayTextContent, label)
+		if target == protocol.TypeOpenAIChat {
+			assertCapturedChatTextShape(t, env, !fx.wantsArrayTextContent, label)
+		}
 	}
 }
 
@@ -184,22 +197,24 @@ func assertCapturedChatTextShape(t flagTB, env *TestEnv, wantCompact bool, label
 }
 
 // ExecuteAllVendorTransforms runs the vendor-dispatch fixture table across
-// both streaming modes. Name format: vendor/<fixture>/{stream|nonstream}.
+// every vendor target and both streaming modes. Name format: see
+// vendorCaseName.
 func (m *Matrix) ExecuteAllVendorTransforms() []TestResult {
 	var cases []recorderCase
 	for _, fx := range vendorFixtures {
-		for _, streaming := range m.Streaming {
-			name := fmt.Sprintf("vendor/%s/%s", fx.name, streamMode(streaming))
-			cases = append(cases, recorderCase{
-				name:      name,
-				scenario:  "vendor",
-				source:    protocol.TypeAnthropicV1,
-				target:    protocol.TypeOpenAIChat,
-				streaming: streaming,
-				run: func(t flagTB, env *TestEnv) {
-					runVendorTransformCase(t, env, fx, streaming)
-				},
-			})
+		for _, target := range vendorTargets {
+			for _, streaming := range m.Streaming {
+				cases = append(cases, recorderCase{
+					name:      vendorCaseName(fx, target, streaming),
+					scenario:  "vendor",
+					source:    protocol.TypeAnthropicV1,
+					target:    target,
+					streaming: streaming,
+					run: func(t flagTB, env *TestEnv) {
+						runVendorTransformCase(t, env, fx, target, streaming)
+					},
+				})
+			}
 		}
 	}
 	return m.runRecorderCases(cases)
