@@ -7,6 +7,7 @@ import { DiffIcon, Merge } from '../icons';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { useNotify } from '../../hooks/useNotify';
 import { radius } from '@tingly/ui/theme/radius';
+import { DiffView } from './diff/DiffView';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -46,7 +47,7 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <DiffIcon />
                 <Box component="span" sx={{ flex: 1 }}>{thread.title}</Box>
@@ -58,16 +59,7 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
                 {diff && (
                     <>
                         {diff.uncommitted && <Alert severity="warning" sx={{ mb: 1.5 }}>{t('thread.uncommittedWarn')}<Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, mt: 0.5 }}>{diff.uncommitted}</Box></Alert>}
-                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, mb: 1.5, color: 'text.secondary', whiteSpace: 'pre-wrap' }}>{diff.stat || t('thread.noChanges')}</Box>
-                        <Box component="pre" sx={{ ...mono, fontSize: fontSizes.sm, m: 0, p: 1.5, bgcolor: 'action.hover', borderRadius: radius.row, overflow: 'auto', maxHeight: '55vh' }}>
-                            {diff.patch.split('\n').map((line, i) => (
-                                <Box key={i} component="div" sx={{
-                                    color: line.startsWith('+') && !line.startsWith('+++') ? 'success.main' : line.startsWith('-') && !line.startsWith('---') ? 'error.main' : line.startsWith('@@') ? 'text.secondary' : 'text.primary',
-                                    fontWeight: line.startsWith('diff --git') ? 700 : 400,
-                                }}>{line || ' '}</Box>
-                            ))}
-                        </Box>
-                        {diff.truncated && <Typography variant="caption" color="text.secondary">{t('thread.truncated')}</Typography>}
+                        <DiffView threadId={thread.id} diff={diff} />
                     </>
                 )}
                 {blocked && (
@@ -83,7 +75,7 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
             <DialogActions sx={{ px: 3, py: 1.5 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{t('thread.mergeHint', { base: thread.base_branch, repo: thread.repo_path })}</Typography>
                 <Button onClick={onClose} color="inherit">{t('common.close')}</Button>
-                <Button variant="contained" startIcon={<Merge />} disabled={busy || !diff || !diff.patch} onClick={() => void merge()}>{t('thread.mergeIt')}</Button>
+                <Button variant="contained" startIcon={<Merge />} disabled={busy || !diff || !diff.files.length} onClick={() => void merge()}>{t('thread.mergeIt')}</Button>
             </DialogActions>
         </Dialog>
     );

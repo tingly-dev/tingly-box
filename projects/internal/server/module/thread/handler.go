@@ -305,6 +305,11 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
 		swagger.WithRequestModel(RefreshLinksRequest{}),
 		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
+	api.GET("/threads/:id/diff/file", h.diffFile, tag,
+		swagger.WithDescription("One file of the thread's changes: its patch, left out when it is binary or too large"),
+		swagger.WithQuery("path", "string", "File path as listed by the diff"),
+		swagger.WithQuery("old_path", "string", "Where a renamed file came from"),
+		swagger.WithResponseModel(rt.FileDiff{}))
 	api.POST("/threads/:id/merge", h.merge, tag,
 		swagger.WithDescription("Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready."),
 		swagger.WithResponseModel(db.Thread{}),
@@ -699,6 +704,19 @@ func (h *Handler) diff(c *gin.Context) {
 		return
 	}
 	d, err := h.svc.Threads.Diff(c.Request.Context(), cur.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
+func (h *Handler) diffFile(c *gin.Context) {
+	cur, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.DiffFile(c.Request.Context(), cur.ID, c.Query("path"), c.Query("old_path"))
 	if err != nil {
 		fail(c, err)
 		return
