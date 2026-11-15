@@ -96,6 +96,9 @@ const (
 // what makes it a thread: its queue, the per-project limit, approvals in the
 // thread view, and the report to the coordinator after each turn.
 type Threads struct {
+	// links opens a thread's merge request; it is read when needed because the
+	// service may swap its GitHub.
+	links  func() *Links
 	store  *db.Store
 	layout Layout
 	hub    *Hub
@@ -1616,9 +1619,36 @@ func (m *Threads) SetTitle(threadID, title string) (*db.Thread, error) {
 	return t, nil
 }
 
-// Merge merges a thread's branch into its base in the main checkout and
-// resolves the thread.
-func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error) {
+// How a thread's branch is merged, on GitHub: its PR is squash-merged there, or
+// only opened (a merge request) and left for review. There is no third way, and
+// nothing is merged in the local checkout.
+const (
+	MergeSquash       = "squash"
+	MergeMergeRequest = "merge_request"
+)
+
+// MergeSpec says how and with which words a thread's branch is merged.
+type MergeSpec struct {
+	// Method is MergeSquash or MergeMergeRequest.
+	Method string
+	// Message is the squash commit's message; empty leaves it to GitHub.
+	Message string
+	// Title and Body describe the PR when one is opened; empty means the thread's
+	// title and its last report.
+	Title, Body string
+}
+
+// ErrBadMergeMethod is a merge asked for with a method that is neither of the two.
+var ErrBadMergeMethod = errors.New(`method must be "squash" or "merge_request"`)
+
+// Merge merges a thread's branch on GitHub the way spec says (Links.Merge does
+// the GitHub side; the thread's merge tool calls the same). A squash resolves
+// the thread; a merge request leaves it as it is: the branch is not merged
+// until the PR is.
+func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*db.Thread, error) {
+	if spec.Method != MergeSquash && spec.Method != MergeMergeRequest {
+		return nil, ErrBadMergeMethod
+	}
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -1632,19 +1662,58 @@ func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error
 	if m.Running(threadID) {
 		return nil, errors.New("the thread is still working; wait for it to finish or stop it")
 	}
-	if err := MergeBranch(ctx, t.RepoPath, t.BaseBranch, t.Branch, fmt.Sprintf("Merge %s: %s", t.Branch, t.Title)); err != nil {
+	// A merge tool call may have merged it already: only the thread is left to close.
+	for _, k := range t.Links {
+		if k.Kind == db.LinkPR && k.State == db.LinkStateMerged && k.Head == t.Branch {
+			if spec.Method == MergeMergeRequest {
+				return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
+			}
+			return m.resolveMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
+		}
+	}
+	var links *Links
+	if m.links != nil {
+		links = m.links()
+	}
+	if links == nil {
+		return nil, errors.New("merging is not available here")
+	}
+	out, err := links.Merge(ctx, t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
+	if err != nil {
 		return nil, err
 	}
-	t, err = m.update(threadID, func(t *db.Thread) {
+	switch {
+	case out.Merged:
+		return m.resolveMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
+	case out.Existed:
+		return m.noteLinks(threadID, fmt.Sprintf("PR #%d is already open for %s; the branch was pushed again: %s", out.Item.Number, t.Branch, out.Item.URL))
+	}
+	return m.noteLinks(threadID, fmt.Sprintf("Opened PR #%d for %s into %s: %s", out.Item.Number, t.Branch, t.BaseBranch, out.Item.URL))
+}
+
+// resolveMerged marks the thread's branch merged and the thread resolved.
+func (m *Threads) resolveMerged(threadID, note string) (*db.Thread, error) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
 		t.MergedAt, t.ResolvedAt, t.Status, t.WaitReason = &now, &now, db.ThreadResolved, ""
 	})
 	if err == nil {
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Merged %s into %s.", t.Branch, t.BaseBranch)})
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
 		m.releaseChats(t)
 		m.cleanTmp(t)
 	}
 	return t, err
+}
+
+// noteLinks records a note in the thread and returns it as stored now (its
+// links were written by the merge itself).
+func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
+	return t, nil
 }
 
 // Diff returns a thread's changes for review.
@@ -2072,7 +2141,8 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 // builtinToolAllowed is the answer for a Projects tool that reached the
 // approval prompt anyway (a permission mode or a profile rule the settings
 // file does not outrank): the tools are allowed as grantBuiltinTools says,
-// except the ones the thread's project asked to approve itself.
+// except the ones that always ask and the ones the thread's project asked to
+// approve itself.
 func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
 	if !strings.HasPrefix(tool, builtinToolsRule+"__") {
 		return false
@@ -2085,7 +2155,11 @@ func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
 	if err != nil {
 		return false
 	}
-	return p.ThreadGitHubAccess != GitHubAsk || !slices.Contains(githubWriteTools, strings.TrimPrefix(tool, builtinToolsRule+"__"))
+	name := strings.TrimPrefix(tool, builtinToolsRule+"__")
+	if slices.Contains(alwaysAskTools, name) {
+		return false
+	}
+	return p.ThreadGitHubAccess != GitHubAsk || !slices.Contains(githubWriteTools, name)
 }
 
 func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {

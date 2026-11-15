@@ -135,7 +135,7 @@ The first tools a thread calls on itself, and the first `ThreadOnly` tools (the 
 Listed so the direction is visible, not as a commitment. Each needs its own small decision first.
 
 - **More thread actions:** `retry_thread`, `get_thread_diff`, `set_thread_settings` (permission mode, model, effort, auto-answer). Widening a session's permissions should not be silent; that is the first case where an approval rule is needed.
-- **Merge** (`merge_thread`): irreversible. This is when to add an approval rule: the call carries the ids of the user's own messages, checked with `quoteUser` like `cite`, and an audit event quotes them (an earlier version of the table had this gate; it was cut as unused). A stronger form binds approval to an answered decision card. Decide then, not now.
+- **Merge** (`merge_thread`, the coordinator's): irreversible. (A thread's own `merge` tool exists since the GitHub merge: see `github-tools.md`, where it always asks through an `ask` rule rather than this gate.) This is when to add an approval rule: the call carries the ids of the user's own messages, checked with `quoteUser` like `cite`, and an audit event quotes them (an earlier version of the table had this gate; it was cut as unused). A stronger form binds approval to an answered decision card. Decide then, not now.
 - **Project settings** (`set_project_settings` for the concurrency limit and similar): needs `Service.UpdateProject` extracted from the handler, and the tool sets `EditsProject` so the turn adopts its own change.
 - **Worker and folder-session tools** (`set_branch`, `link`, `set_progress`, from the awareness and message-channel designs): `set_branch`, `link` are still ahead (the GitHub tools above were the first ones a thread calls on itself, with the `ThreadOnly` field this line asked for and the test that no worker tool takes a thread id).
 - **Resources:** library delete, channel bindings (read-only first), usage.
@@ -143,7 +143,7 @@ Listed so the direction is visible, not as a commitment. Each needs its own smal
 
 Never for a model: create, delete, pause or archive a project; `repos`; the coordinator's own profile, model or effort; answering a worker's permission request; choosing a decision card; uploads and downloads.
 
-Push and PR creation, issues and the record of them are in [github-tools.md](./github-tools.md): five thread-only tools that act on the thread's own repository and branch with the host's `gh` login. Merge, close and force-push are still out of scope (they need the approval rule above).
+Push and PR creation, issues and the record of them are in [github-tools.md](./github-tools.md): five thread-only tools that act on the thread's own repository and branch with the host's `gh` login. Close and force-push are still out of scope; merge exists only as the thread's `merge` tool, which always asks.
 
 Every tool of this server runs in a thread without an approval card: the thread's settings file allows the whole `mcp__tingly-projects` server and the thread's approval prompt answers any call that still reaches it (the coordinator's prompter does the same). Only the four tools that publish on GitHub can be opted out, per project; the reasoning and the probe are under Authorization in `github-tools.md`. A future tool that is irreversible must not rely on this blanket allow: it needs the approval rule above, and its own `ask` rule so that it wins over the allow.
 

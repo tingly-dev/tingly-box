@@ -221,32 +221,133 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 // several branches (a stack), and base may be any branch on GitHub, including
 // another stack branch. The push is the same plain one either way.
 func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, base string, draft bool) (string, error) {
-	if err := checkText("title", title, titleMax); err != nil {
+	r, err := l.createPR(ctx, t, title, body, head, base, draft)
+	if err != nil {
 		return "", err
 	}
+	if r.existed {
+		return fmt.Sprintf("PR #%d is already open for branch %s (the branch was pushed again, so it has your latest commits): %s%s", r.item.Number, r.head, r.item.URL, saved(r.recordErr)), nil
+	}
+	return fmt.Sprintf("opened PR #%d %s (%s → %s)%s", r.item.Number, r.item.URL, r.head, r.base, saved(r.recordErr)), nil
+}
+
+// MergeInput says how a thread's branch is merged on GitHub.
+type MergeInput struct {
+	// Method is MergeSquash or MergeMergeRequest.
+	Method string
+	// Message is the squash commit's message (its first line is the title);
+	// empty leaves it to GitHub's default.
+	Message string
+	// Title and Body describe the PR when one has to be opened; empty means
+	// the first line of Message, else the thread's title, and the thread's last
+	// report (or its task).
+	Title, Body string
+}
+
+// MergeOutcome is what Merge did to the thread's PR.
+type MergeOutcome struct {
+	Item GitHubItem
+	// Existed is set when the PR was already open (its branch was pushed again).
+	Existed bool
+	// Merged is set when the PR was squash-merged.
+	Merged bool
+}
+
+// Merge publishes the thread's branch the way in.Method says, on GitHub: it
+// pushes the branch and opens the PR (or finds the one that is open), and for
+// MergeSquash it then squash-merges that PR. Nothing local changes. The merge
+// is irreversible and is only ever made at a user's request: the thread's tool
+// asks for approval on every call, and the Review dialog is the user's click.
+func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOutcome, error) {
+	if in.Method != MergeSquash && in.Method != MergeMergeRequest {
+		return MergeOutcome{}, ErrBadMergeMethod
+	}
+	if err := checkLength("message", in.Message, bodyMax); err != nil {
+		return MergeOutcome{}, err
+	}
+	title, body := strings.TrimSpace(in.Title), in.Body
+	if title == "" {
+		title, _, _ = strings.Cut(strings.TrimSpace(in.Message), "\n")
+		title = strings.TrimSpace(title)
+	}
+	if title == "" {
+		title = t.Title
+	}
+	if strings.TrimSpace(body) == "" {
+		if body = strings.TrimSpace(t.LastReport); body == "" {
+			body = strings.TrimSpace(t.Task)
+		}
+	}
+	r, err := l.createPR(ctx, t, title, body, "", "", false)
+	if err != nil {
+		return MergeOutcome{}, err
+	}
+	out := MergeOutcome{Item: r.item, Existed: r.existed}
+	if in.Method == MergeMergeRequest {
+		return out, nil
+	}
+	sha, err := git(ctx, t.Cwd, "rev-parse", "refs/heads/"+r.head)
+	if err != nil {
+		return out, err
+	}
+	msgTitle, msgBody, _ := strings.Cut(strings.TrimSpace(in.Message), "\n")
+	msgTitle, msgBody = strings.TrimSpace(msgTitle), strings.TrimSpace(msgBody)
+	if err := l.gh.SquashPR(ctx, r.repo, r.item.Number, sha, msgTitle, msgBody); err != nil {
+		return out, fmt.Errorf("PR #%d (%s) is open but was not merged, and stays open: %w", r.item.Number, r.item.URL, err)
+	}
+	// The record says what GitHub says now; if that read fails the merge still happened.
+	it, err := l.gh.PR(ctx, r.repo, r.item.Number)
+	if err != nil || it.State != db.LinkStateMerged {
+		it = r.item
+		it.State, it.MergeState, it.CI = db.LinkStateMerged, "", ""
+	}
+	l.forgetView(t, it.Number)
+	_, rerr := l.record(t, r.repo, db.LinkPR, db.LinkOpened, it)
+	if rerr != nil {
+		logrus.WithError(rerr).Warn("projects: cannot record a merged PR")
+	}
+	out.Item, out.Merged = it, true
+	return out, nil
+}
+
+// prResult is what createPR did: the PR, whether it was already open, and the
+// branches it joins.
+type prResult struct {
+	item       GitHubItem
+	existed    bool
+	repo       GitHubRepo
+	head, base string
+	// recordErr is why the thread's link to the PR could not be written.
+	recordErr error
+}
+
+func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, base string, draft bool) (prResult, error) {
+	if err := checkText("title", title, titleMax); err != nil {
+		return prResult{}, err
+	}
 	if err := checkLength("body", body, bodyMax); err != nil {
-		return "", err
+		return prResult{}, err
 	}
 	lc, err := l.resolve(ctx, t)
 	if err != nil {
-		return "", err
+		return prResult{}, err
 	}
 	own := lc.head
 	if head = strings.TrimSpace(head); head != "" {
 		if err := checkBranchName(ctx, t.Cwd, head); err != nil {
-			return "", err
+			return prResult{}, err
 		}
 		if !BranchExists(ctx, t.Cwd, head) {
-			return "", fmt.Errorf("there is no local branch %s in this checkout: create_pr pushes a local branch (commit your work to one first)", head)
+			return prResult{}, fmt.Errorf("there is no local branch %s in this checkout: create_pr pushes a local branch (commit your work to one first)", head)
 		}
 		lc.head = head
 	}
 	if lc.head == "" {
-		return "", errors.New("this thread is not on a branch (detached HEAD or no repository): commit your work to a branch first")
+		return prResult{}, errors.New("this thread is not on a branch (detached HEAD or no repository): commit your work to a branch first")
 	}
 	def, err := l.gh.DefaultBranch(ctx, lc.repo)
 	if err != nil {
-		return "", err
+		return prResult{}, err
 	}
 	base = strings.TrimSpace(base)
 	if base == "" && (head == "" || head == own) {
@@ -256,43 +357,43 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, b
 		base = def
 	}
 	if lc.head == base || lc.head == def {
-		return "", fmt.Errorf("branch %s is the base or the repository's default branch: a PR comes from a work branch, and the default branch is never pushed to", lc.head)
+		return prResult{}, fmt.Errorf("branch %s is the base or the repository's default branch: a PR comes from a work branch, and the default branch is never pushed to", lc.head)
 	}
 	if protected, err := l.gh.Protected(ctx, lc.repo, lc.head); err != nil {
-		return "", err
+		return prResult{}, err
 	} else if protected {
-		return "", fmt.Errorf("branch %s is protected on GitHub: it is never pushed to", lc.head)
+		return prResult{}, fmt.Errorf("branch %s is protected on GitHub: it is never pushed to", lc.head)
 	}
 	if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
-		return "", bad
+		return prResult{}, bad
 	}
 	if existing, err := l.gh.OpenPR(ctx, lc.repo, lc.head); err != nil {
-		return "", err
+		return prResult{}, err
 	} else if existing != nil {
 		// Publish what the thread has done since: the PR is its branch.
 		if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
-			return "", err
+			return prResult{}, err
 		}
 		_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, *existing)
-		return fmt.Sprintf("PR #%d is already open for branch %s (the branch was pushed again, so it has your latest commits): %s%s", existing.Number, lc.head, existing.URL, saved(rerr)), nil
+		return prResult{item: *existing, existed: true, repo: lc.repo, head: lc.head, base: base, recordErr: rerr}, nil
 	}
 	// Before anything is pushed: a base that GitHub does not have fails the PR
 	// after its head is already published, and this call never pushes the base.
 	if !onOrigin(ctx, t.Cwd, base) {
-		return "", fmt.Errorf("base branch %s is not on GitHub: open its PR with create_pr first (that pushes it), or choose a base that is", base)
+		return prResult{}, fmt.Errorf("base branch %s is not on GitHub: open its PR with create_pr first (that pushes it), or choose a base that is", base)
 	}
 	if n, ok := commitsAhead(ctx, t.Cwd, base, lc.head); ok && n == 0 {
-		return "", fmt.Errorf("branch %s has no commit beyond %s: commit your work first", lc.head, base)
+		return prResult{}, fmt.Errorf("branch %s has no commit beyond %s: commit your work first", lc.head, base)
 	}
 	if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
-		return "", err
+		return prResult{}, err
 	}
 	it, err := l.gh.CreatePR(ctx, lc.repo, strings.TrimSpace(title), body, lc.head, base, draft)
 	if err != nil {
-		return "", fmt.Errorf("the branch %s was pushed but the PR was not created: %w", lc.head, err)
+		return prResult{}, fmt.Errorf("the branch %s was pushed but the PR was not created: %w", lc.head, err)
 	}
 	_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, it)
-	return fmt.Sprintf("opened PR #%d %s (%s → %s)%s", it.Number, it.URL, lc.head, base, saved(rerr)), nil
+	return prResult{item: it, repo: lc.repo, head: lc.head, base: base, recordErr: rerr}, nil
 }
 
 // onOrigin is whether origin has the branch (asked of the remote itself, as the

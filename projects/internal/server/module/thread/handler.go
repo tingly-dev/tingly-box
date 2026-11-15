@@ -158,11 +158,17 @@ type TaskOutputResponse struct {
 	Size      int64  `json:"size"`
 }
 
-// MergeBlockedResponse explains why a merge was not done.
-type MergeBlockedResponse struct {
-	Error string `json:"error"`
-	// Command does the merge by hand.
-	Command string `json:"command"`
+// MergeRequest says how a thread's branch is merged.
+type MergeRequest struct {
+	// Method is "squash" (squash-merge the thread's PR on GitHub, opening it
+	// first if needed) or "merge_request" (push the branch and open the PR only).
+	Method string `json:"method" binding:"required,oneof=squash merge_request" enums:"squash,merge_request"`
+	// Message is the squash commit's message; empty leaves it to GitHub.
+	Message string `json:"message,omitempty"`
+	// Title and Body describe the PR when one is opened; empty means the
+	// thread's title and its last report.
+	Title string `json:"title,omitempty"`
+	Body  string `json:"body,omitempty"`
 }
 
 // maxUpload caps one uploaded file.
@@ -296,9 +302,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithQuery("old_path", "string", "Where a renamed file came from"),
 		swagger.WithResponseModel(rt.FileDiff{}))
 	api.POST("/threads/:id/merge", h.merge, tag,
-		swagger.WithDescription("Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready."),
-		swagger.WithResponseModel(db.Thread{}),
-		swagger.WithErrorResponses(swagger.ErrorResponseConfig{Code: http.StatusConflict, Message: "merge blocked", Model: MergeBlockedResponse{}}))
+		swagger.WithDescription("Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout."),
+		swagger.WithRequestModel(MergeRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
 }
 
 func fail(c *gin.Context, err error) {
@@ -683,12 +689,11 @@ func (h *Handler) merge(c *gin.Context) {
 	if !ok {
 		return
 	}
-	t, err := h.svc.Threads.Merge(c.Request.Context(), cur.ID)
-	var blocked *rt.MergeBlockedError
-	if errors.As(err, &blocked) {
-		c.AbortWithStatusJSON(http.StatusConflict, MergeBlockedResponse{Error: blocked.Reason, Command: blocked.Command})
+	var req MergeRequest
+	if !apierr.Bind(c, &req) {
 		return
 	}
+	t, err := h.svc.Threads.Merge(c.Request.Context(), cur.ID, rt.MergeSpec{Method: req.Method, Message: req.Message, Title: req.Title, Body: req.Body})
 	if err != nil {
 		fail(c, err)
 		return

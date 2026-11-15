@@ -83,6 +83,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 		Host: host,
 	}
 	svc.Links = NewLinks(store, nil, threads.republish)
+	threads.links = func() *Links { return svc.Links }
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
 	threads.RevokeTools = svc.sessionToolsMCP.revoke

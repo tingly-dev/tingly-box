@@ -88,8 +88,16 @@ export const project = {
         fromCoordinator: 'Coordinator', allowThread: 'Always allow {{tool}} here', loadEarlier: 'Show earlier messages',
         placeholder: 'Message this thread directly…', queuePlaceholder: 'Message this thread — it reads it at its next step…',
         resolvedPlaceholder: 'Reopen the thread to send it more work',
-        mergeIt: 'Merge it', mergedInto: 'Merged into {{base}}', merged: 'Merged {{branch}} into {{base}}', mergeBlocked: 'Not merged', mergedBadge: 'Merged',
-        mergeHint: 'Merges into {{base}} in {{repo}}. The checkout must be on {{base}} with no local changes.',
+        mergeIt: 'Merge…', mergedInto: 'Merged into {{base}}', merged: 'Squash-merged {{branch}} into {{base}} on GitHub', mergedBadge: 'Merged',
+        merge: {
+            title: 'Merge this thread', squash: 'Squash', squashHint: 'Squash-merge the PR on GitHub into {{base}}', mr: 'Merge request (PR)', mrHint: 'Open a PR on GitHub and leave the merge for later',
+            message: 'Commit message', prTitle: 'PR title', prBody: 'PR description',
+            squashNote: 'Pushes {{branch}} to origin, opens a PR into {{base}} if none is open, and squash-merges it on GitHub with gh. This cannot be undone from here. Your local checkout is not changed: pull {{base}} to get the merge.',
+            mrNote: 'Pushes {{branch}} to origin and opens the PR with gh; nothing is merged yet. Your checkout is not touched, and the thread stays open until the PR is merged.',
+            mrExisting: 'PR #{{number}} is already open for this branch. Its latest commits are pushed to it and no second PR is made. A squash merges this PR.',
+            doSquash: 'Squash and merge', doOpen: 'Open PR', doPush: 'Push to PR',
+            mrOpened: 'Opened a PR for {{branch}} into {{base}}', mrKept: 'Pushed {{branch}} to its open PR',
+        },
         noChanges: 'No committed changes.',
         uncommittedWarn: 'The thread left uncommitted changes in its worktree; they are not part of the merge:',
         diff: {

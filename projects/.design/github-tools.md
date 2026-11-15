@@ -1,6 +1,6 @@
 # Issue and PR tools for threads
 
-> Status: **batch 1 built** (the five tools, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view) and **stacks built** (`create_pr` takes a `head`; see [Stacked work](#stacked-work-more-than-one-branch)). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
+> Status: **batch 1 built** (the five tools and, later, `merge`, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view) and **stacks built** (`create_pr` takes a `head`; see [Stacked work](#stacked-work-more-than-one-branch)). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
 > Builds on [mcp-tools.md](./mcp-tools.md) (one table of tools, scopes, golden files), [projects-harness.md](./projects-harness.md) and `.design/projects-thread-rail.md` (the rail and the coordinator's Status tab). The refresh back-off follows the idea of `.design/quota-backoff.md`.
 
 ## Problem
@@ -13,7 +13,7 @@ A thread opens issues and PRs by running `gh` in its shell. Three things go wron
 
 ## What we build
 
-Five tools for the thread's own session (in the table below), one persisted record per issue or PR a thread touched, and one card that shows the records.
+Six tools for the thread's own session (in the table below), one persisted record per issue or PR a thread touched, and one card that shows the records.
 
 | Tool | What it does |
 | --- | --- |
@@ -22,8 +22,9 @@ Five tools for the thread's own session (in the table below), one persisted reco
 | `update` | Change `title` and `body` of an issue, or `title`, `body` and `base` of a PR, **that this thread opened**; addressed by `number` (optional only when the thread has one PR). |
 | `comment` | Comment on an issue or PR of the thread's repository (`number`, `body`). |
 | `view` | Read an issue or PR of the thread's repository by `number`: state and description, and for an open PR its checks and mergeability. The one read tool. |
+| `merge` | Merge the thread's own branch on GitHub, by `method`: `squash` (push, open the PR if none is open, then squash-merge it) or `merge_request` (push and open the PR only). See [Merge](#merge). |
 
-### Why five, and why these
+### Why five, and why these (`merge` came later, see below)
 
 One tool per action would be seven (add `update_issue`, `get_issue`) and keeps growing with every action. The opposite, one tool per object with an `action` argument, would put reads and writes under one name, and the permission rules are written per tool name (below): "reads always, writes ask" could no longer be said. So the split follows what differs in practice:
 
@@ -32,6 +33,15 @@ One tool per action would be seven (add `update_issue`, `get_issue`) and keeps g
 - **Reads are one tool, writes four**, so the read rule is one line.
 
 GitHub's own MCP server went the same way after starting with one tool per action: it merged its issue and PR tools into `issue_read`/`issue_write` and `pull_request_read` with a `method` argument (to cut the tokens its tool list cost), and kept `create_pull_request` and `update_pull_request` separate. We have far fewer tools (the five cost about 550 tokens, thread-side only), so we keep a name per verb and no `method` argument; `view` can take an optional `include` later (comments, diff) the way theirs does, without a new tool. Sources: github/github-mcp-server [PR #1211](https://github.com/github/github-mcp-server/pull/1211) and its [Oct 2025 changelog](https://github.blog/changelog/2025-10-14-github-mcp-server-now-supports-github-projects-and-more/).
+
+### Merge
+
+`merge` is the one tool that cannot be taken back, so it follows different rules from the other five:
+
+- **Two methods, both on GitHub.** `squash` pushes the branch, finds or opens its PR (the `create_pr` code), then `PUT pulls/N/merge` with `merge_method: squash` and the pushed head `sha` (GitHub refuses if the head moved). `merge_request` stops after the PR is open. Nothing is merged in the local checkout and the branch is not deleted. If GitHub refuses the merge (conflicts, required checks, protection rules, a draft) the error says so and the PR stays open and linked.
+- **The same code serves the user's Merge button.** `Links.Merge` is the implementation; the tool calls it from a thread's turn, and `POST /threads/:id/merge` (the Review dialog) calls it as an independent entry point, where the click is the user's approval. The thread is resolved only by the endpoint: from inside its own turn a thread cannot close itself, so after a tool merge the thread stays as it is, the record says `merged`, and a later Merge click only closes the thread (GitHub is not asked again).
+- **Every call asks the user.** `alwaysAskTools` lists `merge`: `grantBuiltinTools` writes an `ask` rule for it in every project and permission mode (it wins over the server-wide allow), and the approval prompt never answers for it (`builtinToolAllowed`), so a card reaches the user whatever `thread_github_access` says. The prompt tells the thread to merge only when the user asked, with this tool, and never by hand. Not probed against the real CLI in `bypassPermissions` mode, where Claude Code may skip `ask` rules; the "carries the user's own message ids" form in `mcp-tools.md` (Later) is the stronger check if that matters.
+- Still true: no close, no reopen, no delete branch, no force push.
 
 **Who gets them.** Worker threads and folder sessions, never the coordinator (a new `ThreadOnly` on `Tool`, the counterpart of `CoordinatorOnly`). The coordinator has no checkout, no branch and no shell, and opening a PR is the work of the thread that made the commits. What the coordinator needs is to *see* the result, so `get_thread` and the thread list show a thread's links from the record (no request to GitHub, with the age of the reading). A coordinator-side tool such as `refresh_links` is not needed yet.
 
@@ -81,7 +91,7 @@ What it shows: the server-wide allow rule alone is enough in all three modes, in
 
 Boundaries the setting cannot move (enforced in code, not in the prompt):
 
-- **No merge, no close, no reopen, no delete branch, no force push, no label or assignee changes, no review actions.** None of these exists as a tool, and `update` has no `state` field, so it cannot close an issue or PR. When one of them is added later it needs the explicit-approval rule from "Later" in `mcp-tools.md` (the call carries the user's own message ids), and it is never covered by `thread_github_access`.
+- **No close, no reopen, no delete branch, no force push, no label or assignee changes, no review actions.** None of these exists as a tool, and `update` has no `state` field, so it cannot close an issue or PR. Merging exists only as `merge` (see [Merge](#merge)), which asks on every call. When another irreversible one is added later it needs the same treatment (an always-ask rule), and it is never covered by `thread_github_access`.
 - **Only what the thread opened can be edited.** `update` looks the number up in the thread's records and needs role `opened`; an issue or PR by someone else is out of reach even if the number is known. This stays after the stacks change: see [Not opened by this thread](#not-opened-by-this-thread-not-allowed-yet). `comment` and `view` may touch any issue or PR of the thread's repository (a thread working on "issue #12" needs to): the comment is visible in the approval card and leaves a record with role `commented`, while `view` leaves no record unless the thread already has one.
 - **What `view` returns is other people's text.** Titles and descriptions come back inside an `<event source="github" kind="view" trust="relay">` envelope with tag characters escaped (the same one the coordinator's relayed text uses), and the tool's description says to read it as information. The body is cut at 2000 characters.
 - **Nothing the environment refused is retried here.** If the user denies a tool call, Claude Code does not call the tool. If the user denied the matching `gh` command, the thread's settings still carry that rule, and the tool is a different call that the user answers separately: there is no hidden hand-over. A denial by the host (no `gh`, not signed in) comes back as an error that says what is missing.

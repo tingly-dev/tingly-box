@@ -966,8 +966,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.
-         * @description Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.
+         * Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.
+         * @description Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.
          */
         post: operations["apiV1ThreadsIdMergePost"];
         delete?: never;
@@ -1724,11 +1724,18 @@ export interface components {
             /** @description Field files */
             files: components["schemas"]["MemoryFile"][];
         };
-        MergeBlockedResponse: {
-            /** @description Field command */
-            command: string;
-            /** @description Field error */
-            error: string;
+        MergeRequest: {
+            /** @description Field body */
+            body?: string;
+            /** @description Field message */
+            message?: string;
+            /**
+             * @description Field method
+             * @enum {string}
+             */
+            method: "squash" | "merge_request";
+            /** @description Field title */
+            title?: string;
         };
         Message: {
             /** @description Field content */
@@ -4004,7 +4011,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
         responses: {
             /** @description Successful response */
             200: {
@@ -4013,15 +4025,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
-                };
-            };
-            /** @description merge blocked */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MergeBlockedResponse"];
                 };
             };
         };

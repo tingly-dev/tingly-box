@@ -160,39 +160,6 @@ func Stats(ctx context.Context, worktree, base string) BranchStats {
 	return s
 }
 
-// MergeBranch merges branch into base in the main checkout of repo. It
-// refuses unless that checkout is on base with no local changes, so the
-// user's working copy is never touched in a surprising state.
-func MergeBranch(ctx context.Context, repo, base, branch, message string) error {
-	info, err := InspectRepo(ctx, repo)
-	if err != nil {
-		return err
-	}
-	if info.Branch != base {
-		return &MergeBlockedError{Reason: fmt.Sprintf("%s is checked out on %s, not %s", info.Root, info.Branch, base),
-			Command: fmt.Sprintf("git -C %q checkout %s && git -C %q merge --no-ff %s", info.Root, base, info.Root, branch)}
-	}
-	if info.Dirty {
-		return &MergeBlockedError{Reason: fmt.Sprintf("%s has uncommitted changes", info.Root),
-			Command: fmt.Sprintf("git -C %q merge --no-ff %s", info.Root, branch)}
-	}
-	if _, err := git(ctx, repo, "merge", "--no-ff", "-m", message, branch); err != nil {
-		_, _ = git(ctx, repo, "merge", "--abort")
-		return &MergeBlockedError{Reason: "the merge has conflicts: " + err.Error(),
-			Command: fmt.Sprintf("git -C %q merge --no-ff %s", info.Root, branch)}
-	}
-	return nil
-}
-
-// MergeBlockedError explains why a merge was not done and hands over the
-// command to do it by hand.
-type MergeBlockedError struct {
-	Reason  string
-	Command string
-}
-
-func (e *MergeBlockedError) Error() string { return e.Reason }
-
 // checkBranchName refuses a name git cannot use as a branch name.
 func checkBranchName(ctx context.Context, dir, name string) error {
 	if strings.HasPrefix(name, "-") {

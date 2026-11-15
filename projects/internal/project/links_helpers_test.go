@@ -25,6 +25,8 @@ type fakeGitHub struct {
 	fail     error
 	failPR   error
 	existing *GitHubItem
+	// mergeFail is why GitHub refuses to squash-merge a PR.
+	mergeFail error
 	// protected are the branches GitHub holds protected.
 	protected map[string]bool
 }
@@ -96,6 +98,21 @@ func (g *fakeGitHub) CreatePR(_ context.Context, r GitHubRepo, title, body, head
 		return GitHubItem{}, err
 	}
 	return g.add(db.LinkPR, title, func(it *GitHubItem) { it.Head, it.Base, it.Draft = head, base, draft }), nil
+}
+
+func (g *fakeGitHub) SquashPR(_ context.Context, r GitHubRepo, n int, sha, title, message string) error {
+	if err := g.log("squash-pr %s #%d sha=%s title=%q message=%q", r.Slug(), n, sha, title, message); err != nil {
+		return err
+	}
+	if g.mergeFail != nil {
+		return g.mergeFail
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	it := g.items[n]
+	it.State = "merged"
+	g.items[n] = it
+	return nil
 }
 
 func (g *fakeGitHub) UpdatePR(_ context.Context, r GitHubRepo, n int, title, body, base *string) (GitHubItem, error) {

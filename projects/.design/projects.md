@@ -38,7 +38,7 @@
 | 协调者模型 / 线程模型分别设置 | ✅ | |
 | Pause / Archive / Delete | ✅ | 暂停和归档都会停止全部线程、关闭其会话进程并撤销其工具入口（MCP capability URL，见 `mcp-tools.md`）；恢复或取消归档后，线程的下一轮用新进程和新入口；归档另外解绑 IM 聊天 |
 | 用量按线程 / 按模型 | ✅ 基础版 | 记录 token |
-| Review：diff + 本地合并（"Merge it"） | ✅ | 本地版的 PR |
+| Review：diff + 合并（"Merge…"：squash 或 merge request，仅此二种） | ✅ | 见 4.7 |
 | 线程推送自己的分支并开 PR（任务、项目指令或用户要求时；不自行合并） | ✅ 仅靠 prompt | 由模型自己选工具；失败如实报错 |
 | PR 自动修 CI / 回复 review | P2 | |
 | Routines（定时） | P2 | |
@@ -154,7 +154,12 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 ### 4.7 Review 与合并（本地版 PR）
 - `GET /projects/:id/threads/:tid/diff`：`git diff <base>...<branch>`（+ 未提交改动提示）。
-- "Merge it"：仅当主仓库工作区干净且当前在 base 分支时执行 `git merge --no-ff <branch>`；否则给出原因和可复制的命令（UX 原则 11）。成功后线程 → `resolved`。
+- "Merge…"：`POST /threads/:id/merge`，必填 `method`，只有两种（其他值 400）。**两种都在 GitHub 上完成，本地工作区一律不动**；实现是线程的 `merge` MCP 工具（见 `github-tools.md`）背后的同一个 `Links.Merge`，HTTP 只是它的独立调用入口（用户点击即授权）：
+  - 都先推送线程分支（不强推）、找到或开出它的 PR（与 `create_pr` 同一套，已有打开的 PR 就重推并关联，不重复开），并记入线程的 Issue/PR 链接。
+  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省交给 GitHub。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。
+  - `merge_request`：只开 PR，不合并；**线程不会 resolved**（分支要等 PR 合并才算合并）。
+  - 没有 origin、origin 不是 github.com、gh 缺失或未登录都如实报错；没有 GitHub 远端的仓库因此无法从这里合并。
+  - 前端：Review 对话框里的 "Merge…" 打开 `MergeDialog`：两个选项各一行说明，随后是对应字段（squash：提交信息；PR：标题、描述）；最近一次的选择按项目记在本机 localStorage（`merge-method.<project id>`，失败的方法不记）。
 - 删除项目：移除 worktree，保留分支（与官方"不影响分支和 PR"一致）。
 
 ## 5. UI

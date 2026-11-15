@@ -210,16 +210,18 @@ func TestBuiltinToolPermissionRules(t *testing.T) {
 	for _, tool := range githubWriteTools {
 		writes = append(writes, githubToolRule(tool))
 	}
+	// The merge asks whatever the project says: it cannot be taken back.
+	merge := []string{githubToolRule(toolMerge)}
 
 	for _, access := range []string{"", GitHubAllow} {
 		allow, ask := rules(access)
 		assert.Equal(t, []string{"mcp__tingly-projects"}, allow, "the whole server, tools added later included: %q", access)
-		assert.Empty(t, ask)
+		assert.Equal(t, merge, ask, "only the merge asks: %q", access)
 	}
 
 	allow, ask := rules(GitHubAsk)
 	assert.Equal(t, []string{"mcp__tingly-projects"}, allow, "the other tools stay allowed")
-	assert.ElementsMatch(t, writes, ask, "the opt-out asks for the tools that publish")
+	assert.ElementsMatch(t, append(writes, merge...), ask, "the opt-out asks for the tools that publish, and the merge still asks")
 
 	// The Bash commands keep asking whatever the project says.
 	doc := map[string]any{}
@@ -247,18 +249,18 @@ func TestProjectsToolsAreApprovedAtThePromptUnlessTheProjectAsks(t *testing.T) {
 	require.NoError(t, f.store.CreateThread(th))
 	allowed := func() map[string]bool {
 		got := map[string]bool{}
-		for _, tool := range []string{"mcp__tingly-projects__create_pr", "mcp__tingly-projects__send_file", "mcp__other__create_pr", "Bash"} {
+		for _, tool := range []string{"mcp__tingly-projects__create_pr", "mcp__tingly-projects__merge", "mcp__tingly-projects__send_file", "mcp__other__create_pr", "Bash"} {
 			got[tool] = f.threads.builtinToolAllowed(th.ID, tool)
 		}
 		return got
 	}
-	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": true, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
+	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": true, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
 
 	p, err := f.store.GetProject(f.project.ID)
 	require.NoError(t, err)
 	p.ThreadGitHubAccess = GitHubAsk
 	require.NoError(t, f.store.SaveProject(p))
-	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": false, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
+	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": false, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
 }
 
 func TestRedact(t *testing.T) {
