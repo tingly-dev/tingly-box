@@ -302,7 +302,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("The thread's changes against its base branch"),
 		swagger.WithResponseModel(rt.Diff{}))
 	api.POST("/threads/:id/links/refresh", h.refreshLinks, tag,
-		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 10 seconds ago, or being read, answers recent without asking GitHub. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
+		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
 		swagger.WithRequestModel(RefreshLinksRequest{}),
 		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
 	api.POST("/threads/:id/merge", h.merge, tag,

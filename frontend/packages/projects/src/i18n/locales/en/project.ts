@@ -95,6 +95,7 @@ export const project = {
     },
     attachments: { removed: '{{name}} (removed)', fromThread: 'From {{name}}' },
     strip: {
+        pr: 'PR', issue: 'Issue', moreLinks: '+{{count}} more in Issues & PRs',
         title: 'This thread', sessionTitle: 'This session', autoAt: 'Goes with the suggestion at {{time}}', expand: 'Show details', collapse: 'Hide details',
         folder: 'Folder', copyCd: 'Copy the cd command', branch: 'Branch', copyBranch: 'Copy the branch name',
         autoAnswer: {

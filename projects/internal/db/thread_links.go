@@ -43,13 +43,9 @@ type ThreadLink struct {
 	Base       string `json:"base,omitempty"`
 	CI         string `json:"ci,omitempty"`
 	MergeState string `json:"merge_state,omitempty"`
-	// Author is the login that opened the item. UpdatedAt is when GitHub says
-	// it last changed (not when we read it). Checks break an open PR's CI
-	// down. All three are empty on records read before they existed, until
-	// the next reading.
-	Author    string      `json:"author,omitempty"`
-	UpdatedAt *time.Time  `json:"updated_at,omitempty"`
-	Checks    *LinkChecks `json:"checks,omitempty"`
+	// Checks break an open PR's CI down; empty on records read before it
+	// existed, until the next reading.
+	Checks *LinkChecks `json:"checks,omitempty"`
 	// RefreshedAt is when GitHub last answered about it. AttemptedAt is the
 	// last try, answered or not. Failures counts the refreshes that failed
 	// since then; LastError says why the last one did.
@@ -61,26 +57,23 @@ type ThreadLink struct {
 }
 
 // LinkChecks is an open PR's checks as GitHub last said: how many of each, and
-// the ones that are not passing by name (at most LinkChecksListed, the rest
-// counted in More).
+// the failing ones by name (at most LinkChecksListed, the rest counted in
+// More). Pending ones are only counted: what a person acts on is what failed.
 type LinkChecks struct {
-	Passing   int         `json:"passing"`
-	Failing   int         `json:"failing"`
-	Pending   int         `json:"pending"`
-	Skipped   int         `json:"skipped"`
-	Attention []LinkCheck `json:"attention,omitempty"`
-	More      int         `json:"more,omitempty"`
+	Passing int         `json:"passing"`
+	Failing int         `json:"failing"`
+	Pending int         `json:"pending"`
+	Failed  []LinkCheck `json:"failed,omitempty"`
+	More    int         `json:"more,omitempty"`
 }
 
-// LinkChecksListed is how many failing or pending checks a record names.
+// LinkChecksListed is how many failing checks a record names.
 const LinkChecksListed = 5
 
-// LinkCheck is one check that is failing or still running.
+// LinkCheck is one failing check.
 type LinkCheck struct {
 	Name string `json:"name"`
-	// State is failing or pending.
-	State string `json:"state"`
-	URL   string `json:"url,omitempty"`
+	URL  string `json:"url,omitempty"`
 }
 
 // Is reports whether l is the item with this repository, kind and number.
@@ -134,7 +127,7 @@ func (s *Store) SaveThreadLinkReading(threadID string, k ThreadLink) error {
 			if links[i].Is(k.Repo, k.Kind, k.Number) {
 				o := &links[i]
 				o.Title, o.URL, o.State, o.Draft, o.CI, o.MergeState = k.Title, k.URL, k.State, k.Draft, k.CI, k.MergeState
-				o.Author, o.UpdatedAt, o.Checks = k.Author, k.UpdatedAt, k.Checks
+				o.Checks = k.Checks
 				o.RefreshedAt, o.AttemptedAt, o.Failures, o.LastError = k.RefreshedAt, k.AttemptedAt, k.Failures, k.LastError
 			}
 		}

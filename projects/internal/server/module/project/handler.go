@@ -250,7 +250,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Get a project with its threads"),
 		swagger.WithResponseModel(ProjectDetailResponse{}))
 	api.POST("/projects/:id/links/refresh", h.refreshLinks, tag,
-		swagger.WithDescription("Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 10 seconds ago answers recent without asking GitHub. The readings arrive on the threads' events; the answer only says what happened to each item."),
+		swagger.WithDescription("Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item."),
 		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
 	api.POST("/projects/:id/coordinator/recover", h.recoverCoordinator, tag,
 		swagger.WithDescription("Resolve an interrupted coordinator input; retry may repeat side effects"),

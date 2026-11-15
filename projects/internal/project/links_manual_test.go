@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -165,82 +164,171 @@ func TestProjectRefreshReadsOnlyOpenItemsOldestFirstAndIsBounded(t *testing.T) {
 	}
 }
 
-func TestReadingsCarryAuthorUpdateTimeAndChecks(t *testing.T) {
+func TestReadingsCarryTheChecksBreakdown(t *testing.T) {
 	f := newLinksFixture(t)
 	l := f.openedPR(t)
-	updated := time.Date(2026, 11, 13, 9, 30, 0, 0, time.UTC)
-	checks := &db.LinkChecks{Passing: 3, Failing: 1, Pending: 1, Attention: []db.LinkCheck{{Name: "lint", State: "failing", URL: "https://github.com/acme/widgets/runs/1"}, {Name: "e2e", State: "pending"}}}
-	f.gh.set(l.Number, func(it *GitHubItem) { it.Author, it.UpdatedAt, it.Checks, it.CI = "octo", updated, checks, "failing" })
+	checks := &db.LinkChecks{Passing: 3, Failing: 1, Pending: 1, Failed: []db.LinkCheck{{Name: "lint", URL: "https://github.com/acme/widgets/runs/1"}}}
+	f.gh.set(l.Number, func(it *GitHubItem) { it.Checks, it.CI = checks, "failing" })
 	f.advance(linkManualGap + time.Second)
 	_, err := f.links.RefreshThread(context.Background(), f.worker.ID, f.ref(l))
 	require.NoError(t, err)
+	assert.Equal(t, checks, f.link(t, l.Number).Checks)
+}
 
-	k := f.link(t, l.Number)
-	assert.Equal(t, "octo", k.Author)
-	require.NotNil(t, k.UpdatedAt)
-	assert.True(t, k.UpdatedAt.Equal(updated))
-	assert.Equal(t, checks, k.Checks)
-
-	// A reading that does not know the author keeps it.
-	f.gh.set(l.Number, func(it *GitHubItem) { it.Author = "" })
+func TestProjectRefreshOfTheSameProjectWaitsAMinute(t *testing.T) {
+	f := newLinksFixture(t)
+	f.openedPR(t)
+	f.openedPR(t)
+	ctx := context.Background()
 	f.advance(linkManualGap + time.Second)
-	_, err = f.links.RefreshThread(context.Background(), f.worker.ID, f.ref(l))
+
+	got, err := f.links.RefreshProject(ctx, f.p.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "octo", f.link(t, l.Number).Author)
+	require.Len(t, got, 2)
+	assert.Equal(t, 2, f.reads())
+
+	// Past each item's own gap but inside the project's: nothing is asked.
+	f.advance(linkManualGap + time.Second)
+	got, err = f.links.RefreshProject(ctx, f.p.ID)
+	require.NoError(t, err)
+	for _, r := range got {
+		assert.Equal(t, RefreshRecent, r.Status)
+	}
+	assert.Equal(t, 2, f.reads(), "a button pressed over and over is one round of requests a minute")
+
+	f.advance(linkProjectGap)
+	got, _ = f.links.RefreshProject(ctx, f.p.ID)
+	assert.Equal(t, RefreshDone, got[0].Status)
+	assert.Equal(t, 4, f.reads())
 }
 
-// ghByPath writes a gh executable that answers a check-runs, a status or a
-// pull request read with the given JSON.
-func ghByPath(t *testing.T, pull, runs, status string) string {
+func TestReadsStopWhileGitHubsRequestBudgetIsNearlyUsedUp(t *testing.T) {
+	f := newLinksFixture(t)
+	l := f.openedPR(t)
+	ctx := context.Background()
+	f.advance(linkInterval)
+	f.gh.rate = GitHubRate{Remaining: rateFloor - 1, ResetAt: f.clock.Add(20 * time.Minute)}
+	f.links.Sweep(ctx)
+	require.Equal(t, 1, f.reads(), "the answer that says the budget is low is still an answer")
+
+	// Neither the sweep nor a person's refresh asks again until the window resets.
+	f.advance(linkInterval)
+	f.links.Sweep(ctx)
+	got, err := f.links.RefreshThread(ctx, f.worker.ID, f.ref(l))
+	require.NoError(t, err)
+	assert.Equal(t, RefreshLimited, got[0].Status)
+	assert.Contains(t, got[0].Error, "reads resume at")
+	assert.Equal(t, 1, f.reads())
+	assert.Empty(t, f.link(t, l.Number).LastError, "it is not this item's failure")
+
+	f.advance(20 * time.Minute)
+	f.gh.rate = GitHubRate{Remaining: 4000, ResetAt: f.clock.Add(time.Hour)}
+	got, _ = f.links.RefreshThread(ctx, f.worker.ID, f.ref(l))
+	assert.Equal(t, RefreshDone, got[0].Status)
+	f.links.Sweep(ctx)
+	assert.GreaterOrEqual(t, f.reads(), 2)
+}
+
+func TestAnErrorThatNamesTheRateLimitPausesReads(t *testing.T) {
+	f := newLinksFixture(t)
+	l := f.openedPR(t)
+	ctx := context.Background()
+	f.gh.fail = errors.New("GitHub POST graphql: API rate limit exceeded")
+	f.advance(linkManualGap + time.Second)
+	got, _ := f.links.RefreshThread(ctx, f.worker.ID, f.ref(l))
+	assert.Equal(t, RefreshFailed, got[0].Status)
+	reads := f.reads()
+
+	f.gh.fail = nil
+	f.advance(linkManualGap + time.Second)
+	got, _ = f.links.RefreshThread(ctx, f.worker.ID, f.ref(l))
+	assert.Equal(t, RefreshLimited, got[0].Status, "GitHub gave no reset time: wait a while rather than ask again")
+	f.links.Sweep(ctx)
+	assert.Equal(t, reads, f.reads())
+
+	f.advance(rateLimitedFor + time.Second)
+	got, _ = f.links.RefreshThread(ctx, f.worker.ID, f.ref(l))
+	assert.Equal(t, RefreshDone, got[0].Status)
+}
+
+// ghGraphQL writes a gh executable that answers a read with the given JSON.
+func ghGraphQL(t *testing.T, answer string) (bin, logFile string) {
 	t.Helper()
-	script := "#!/bin/sh\ncase \"$*\" in\n" +
-		"*check-runs*) cat <<'JSON'\n" + runs + "\nJSON\n;;\n" +
-		"*/status) cat <<'JSON'\n" + status + "\nJSON\n;;\n" +
-		"*) cat <<'JSON'\n" + pull + "\nJSON\n;;\nesac\n"
-	bin := filepath.Join(t.TempDir(), "gh")
-	require.NoError(t, os.WriteFile(bin, []byte(script), 0o755))
-	return bin
+	return fakeGH(t, answer, 0)
 }
 
-func TestGhCLIBreaksChecksDown(t *testing.T) {
-	bin := ghByPath(t,
-		`{"number":7,"html_url":"https://github.com/acme/widgets/pull/7","title":"T","state":"open","user":{"login":"octo"},"updated_at":"2026-11-13T09:30:00Z","head":{"ref":"tp/x","sha":"abc"},"base":{"ref":"main"},"mergeable_state":"clean"}`,
-		`{"check_runs":[
- {"name":"build","status":"completed","conclusion":"success","html_url":"https://x/1"},
- {"name":"docs","status":"completed","conclusion":"skipped","html_url":"https://x/2"},
- {"name":"lint","status":"completed","conclusion":"failure","html_url":"https://x/3"},
- {"name":"e2e","status":"in_progress","conclusion":null,"html_url":"https://x/4"}]}`,
-		`{"state":"failure","statuses":[{"context":"ci/legacy","state":"failure","target_url":"https://x/5"},{"context":"ci/ok","state":"success","target_url":"https://x/6"}]}`)
-	it, err := ghCLI{bin: bin}.PR(context.Background(), GitHubRepo{Owner: "acme", Name: "widgets"}, 7)
+func TestGhCLIReadsAPRInOneRequestAndFoldsItsChecks(t *testing.T) {
+	bin, logFile := ghGraphQL(t, `{"data":{"rateLimit":{"remaining":4321,"resetAt":"2026-11-15T09:00:00Z"},"repository":{"issueOrPullRequest":{
+ "__typename":"PullRequest","number":7,"url":"https://github.com/acme/widgets/pull/7","title":"T","body":"B","state":"OPEN","isDraft":false,
+ "headRefName":"tp/x","baseRefName":"main","mergeable":"MERGEABLE","mergeStateStatus":"BLOCKED",
+ "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE","contexts":{"totalCount":5,"nodes":[
+  {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://x/1"},
+  {"__typename":"CheckRun","name":"docs","status":"COMPLETED","conclusion":"SKIPPED","detailsUrl":"https://x/2"},
+  {"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://x/3"},
+  {"__typename":"CheckRun","name":"e2e","status":"IN_PROGRESS","conclusion":null,"detailsUrl":"https://x/4"},
+  {"__typename":"StatusContext","context":"ci/legacy","state":"ERROR","targetUrl":"https://x/5"}]}}}}]}}}}}`)
+	it, err := ghCLI{bin: bin}.Read(context.Background(), GitHubRepo{Owner: "acme", Name: "widgets"}, 7)
 	require.NoError(t, err)
+
+	assert.True(t, it.IsPR)
+	assert.Equal(t, "open", it.State)
+	assert.Equal(t, "blocked", it.MergeState)
+	assert.Equal(t, "tp/x", it.Head)
 	assert.Equal(t, "failing", it.CI)
-	assert.Equal(t, "octo", it.Author)
-	assert.Equal(t, time.Date(2026, 11, 13, 9, 30, 0, 0, time.UTC), it.UpdatedAt)
+	assert.Equal(t, 4321, it.Rate.Remaining)
+	assert.Equal(t, time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC), it.Rate.ResetAt)
 	require.NotNil(t, it.Checks)
-	assert.Equal(t, 2, it.Checks.Passing)
-	assert.Equal(t, 1, it.Checks.Skipped)
+	assert.Equal(t, 2, it.Checks.Passing, "a skipped check is not a failure")
 	assert.Equal(t, 2, it.Checks.Failing)
 	assert.Equal(t, 1, it.Checks.Pending)
-	assert.Equal(t, []db.LinkCheck{
-		{Name: "lint", State: "failing", URL: "https://x/3"},
-		{Name: "e2e", State: "pending", URL: "https://x/4"},
-		{Name: "ci/legacy", State: "failing", URL: "https://x/5"},
-	}, it.Checks.Attention)
-	assert.Zero(t, it.Checks.More)
+	assert.Equal(t, []db.LinkCheck{{Name: "lint", URL: "https://x/3"}, {Name: "ci/legacy", URL: "https://x/5"}}, it.Checks.Failed, "only what failed is named")
+
+	b, err := os.ReadFile(logFile)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(b), "api -X POST --input - graphql"), "one request for the whole reading")
+	assert.Contains(t, string(b), `"number":7`)
+	assert.Contains(t, string(b), `"owner":"acme"`)
 }
 
-func TestChecksListAtMostFiveAndCountTheRest(t *testing.T) {
-	var runs []string
-	for i := 0; i < 8; i++ {
-		runs = append(runs, `{"name":"job`+string(rune('a'+i))+`","status":"completed","conclusion":"failure","html_url":""}`)
-	}
-	bin := ghByPath(t,
-		`{"number":7,"state":"open","head":{"sha":"abc"}}`,
-		`{"check_runs":[`+strings.Join(runs, ",")+`]}`,
-		`{"state":"pending","statuses":[]}`)
-	it, err := ghCLI{bin: bin}.PR(context.Background(), GitHubRepo{Owner: "a", Name: "b"}, 7)
+func TestGhCLIReadsAnIssueAndAMergedPRWithoutChecks(t *testing.T) {
+	bin, _ := ghGraphQL(t, `{"data":{"rateLimit":{"remaining":10,"resetAt":"2026-11-15T09:00:00Z"},"repository":{"issueOrPullRequest":{"__typename":"Issue","number":3,"url":"https://github.com/acme/widgets/issues/3","title":"I","body":"","state":"CLOSED"}}}}`)
+	it, err := ghCLI{bin: bin}.Read(context.Background(), GitHubRepo{Owner: "acme", Name: "widgets"}, 3)
 	require.NoError(t, err)
-	assert.Len(t, it.Checks.Attention, db.LinkChecksListed)
+	assert.False(t, it.IsPR)
+	assert.Equal(t, "closed", it.State)
+	assert.Empty(t, it.CI)
+
+	bin, _ = ghGraphQL(t, `{"data":{"rateLimit":{"remaining":10,"resetAt":"2026-11-15T09:00:00Z"},"repository":{"issueOrPullRequest":{"__typename":"PullRequest","number":4,"url":"u","title":"P","body":"","state":"MERGED","isDraft":false,"headRefName":"a","baseRefName":"main","mergeable":"UNKNOWN","mergeStateStatus":"UNKNOWN","commits":{"nodes":[]}}}}}`)
+	it, err = ghCLI{bin: bin}.Read(context.Background(), GitHubRepo{Owner: "acme", Name: "widgets"}, 4)
+	require.NoError(t, err)
+	assert.Equal(t, "merged", it.State)
+	assert.Empty(t, it.MergeState, "a merged PR has no merge state")
+	assert.Empty(t, it.CI)
+}
+
+func TestGhCLIReadOfAMissingNumberSaysSo(t *testing.T) {
+	bin, _ := ghGraphQL(t, `{"data":{"rateLimit":{"remaining":10,"resetAt":"2026-11-15T09:00:00Z"},"repository":{"issueOrPullRequest":null}}}`)
+	_, err := ghCLI{bin: bin}.Read(context.Background(), GitHubRepo{Owner: "acme", Name: "widgets"}, 99)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no issue or PR #99")
+}
+
+func TestChecksNameAtMostFiveFailuresAndCountTheRest(t *testing.T) {
+	var nodes []string
+	for i := 0; i < 8; i++ {
+		nodes = append(nodes, `{"__typename":"CheckRun","name":"job`+string(rune('a'+i))+`","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":""}`)
+	}
+	bin, _ := ghGraphQL(t, `{"data":{"rateLimit":{"remaining":10,"resetAt":"2026-11-15T09:00:00Z"},"repository":{"issueOrPullRequest":{"__typename":"PullRequest","number":7,"url":"u","title":"P","body":"","state":"OPEN","headRefName":"a","baseRefName":"main","mergeStateStatus":"CLEAN","commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE","contexts":{"totalCount":8,"nodes":[`+strings.Join(nodes, ",")+`]}}}}]}}}}}`)
+	it, err := ghCLI{bin: bin}.Read(context.Background(), GitHubRepo{Owner: "a", Name: "b"}, 7)
+	require.NoError(t, err)
+	assert.Len(t, it.Checks.Failed, db.LinkChecksListed)
 	assert.Equal(t, 3, it.Checks.More)
 	assert.Equal(t, 8, it.Checks.Failing)
+}
+
+func TestAFailureBeyondTheHundredChecksReadStillShows(t *testing.T) {
+	bin, _ := ghGraphQL(t, `{"data":{"rateLimit":{"remaining":10,"resetAt":"2026-11-15T09:00:00Z"},"repository":{"issueOrPullRequest":{"__typename":"PullRequest","number":7,"url":"u","title":"P","body":"","state":"OPEN","headRefName":"a","baseRefName":"main","mergeStateStatus":"CLEAN","commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE","contexts":{"totalCount":130,"nodes":[{"__typename":"CheckRun","name":"ok","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":""}]}}}}]}}}}}`)
+	it, err := ghCLI{bin: bin}.Read(context.Background(), GitHubRepo{Owner: "a", Name: "b"}, 7)
+	require.NoError(t, err)
+	assert.Equal(t, "failing", it.CI, "the rollup has the last word when not every check was read")
 }

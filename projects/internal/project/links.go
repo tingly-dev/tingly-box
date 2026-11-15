@@ -35,6 +35,11 @@ type Links struct {
 	// request for one joins it instead of asking GitHub again.
 	readingMu sync.Mutex
 	reading   map[string]bool
+	// rate is the last request budget GitHub reported; projectAsked is when
+	// each project last had all its open items refreshed on request.
+	rateMu       sync.Mutex
+	rate         GitHubRate
+	projectAsked map[string]time.Time
 }
 
 // Refresh timing (see the design doc): an open item is read again after
@@ -44,8 +49,16 @@ const (
 	linkInterval   = 5 * time.Minute
 	linkBackoffMax = time.Hour
 	linkMinGap     = 30 * time.Second
-	// linkManualGap is how soon after a read a person's refresh asks GitHub again.
-	linkManualGap  = 10 * time.Second
+	// linkManualGap is how soon after a read a person's refresh asks GitHub
+	// again; linkProjectGap is the same for refreshing a whole project.
+	linkManualGap  = 30 * time.Second
+	linkProjectGap = time.Minute
+	// rateFloor is the request budget (of GitHub's 5000 an hour) under which
+	// no read is made until the window resets, the sweep's or a person's:
+	// what is left is for the tools that write. rateLimitedFor is how long
+	// an error that names the rate limit pauses reads when GitHub gave no reset.
+	rateFloor      = 300
+	rateLimitedFor = 10 * time.Minute
 	linkSweepMax   = 20
 	linkSweepEvery = time.Minute
 
@@ -53,12 +66,32 @@ const (
 	bodyMax  = 60000
 )
 
+// noteRate keeps the request budget of GitHub's latest answer.
+func (l *Links) noteRate(r GitHubRate) {
+	if r.ResetAt.IsZero() {
+		return
+	}
+	l.rateMu.Lock()
+	l.rate = r
+	l.rateMu.Unlock()
+}
+
+// pausedUntil is when reads may resume, or zero when GitHub's budget is fine.
+func (l *Links) pausedUntil() time.Time {
+	l.rateMu.Lock()
+	defer l.rateMu.Unlock()
+	if l.rate.ResetAt.IsZero() || l.rate.Remaining >= rateFloor || !l.now().Before(l.rate.ResetAt) {
+		return time.Time{}
+	}
+	return l.rate.ResetAt
+}
+
 // NewLinks makes the tools' backend over gh.
 func NewLinks(store *db.Store, gh GitHub, changed func(threadID string)) *Links {
 	if gh == nil {
 		gh = ghCLI{}
 	}
-	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}, reading: map[string]bool{}}
+	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}, reading: map[string]bool{}, projectAsked: map[string]time.Time{}}
 }
 
 // linkContext is where a thread's call lands: decided from the thread, never
@@ -153,13 +186,6 @@ func fillLink(k *db.ThreadLink, it GitHubItem, now time.Time) {
 		k.Head, k.Base = it.Head, it.Base
 	}
 	k.Checks = it.Checks
-	if it.Author != "" {
-		k.Author = it.Author
-	}
-	if !it.UpdatedAt.IsZero() {
-		at := it.UpdatedAt
-		k.UpdatedAt = &at
-	}
 	if it.URL != "" {
 		k.URL = it.URL
 	}
@@ -217,7 +243,7 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 	// The issues API serves PRs too: look first, so the record has the right
 	// kind. The comment goes only once this has been read in full, so a record
 	// is never written from a partial reading.
-	kind, it, err := l.read(ctx, lc.repo, number, "")
+	kind, it, err := l.read(ctx, lc.repo, number)
 	if err != nil {
 		return "", err
 	}
@@ -489,11 +515,7 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 	} else if err != nil {
 		return "", err
 	}
-	kind := ""
-	if link != nil {
-		kind = link.Kind
-	}
-	kind, it, err := l.read(ctx, lc.repo, number, kind)
+	kind, it, err := l.read(ctx, lc.repo, number)
 	if err != nil {
 		return "", err
 	}
@@ -525,26 +547,22 @@ func (l *Links) viewedRecently(t *db.Thread, number int) (string, bool) {
 	return c.text, ok && l.now().Sub(c.at) < linkMinGap
 }
 
-// read is an issue or PR in full, and which it is. The issues API answers for
-// both and says which; a PR then needs its own read for checks and
-// mergeability. A kind the caller already knows (from a link) skips the first.
-func (l *Links) read(ctx context.Context, repo GitHubRepo, number int, kind string) (string, GitHubItem, error) {
-	if kind == "" {
-		it, err := l.gh.Issue(ctx, repo, number)
-		if err != nil {
-			return "", GitHubItem{}, err
+// read is an issue or PR in full, and which it is: one request to GitHub
+// whatever the kind. Every answer also says how much of the request budget is
+// left; a failure that names the rate limit counts as having none.
+func (l *Links) read(ctx context.Context, repo GitHubRepo, number int) (string, GitHubItem, error) {
+	it, err := l.gh.Read(ctx, repo, number)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "rate limit") {
+			l.noteRate(GitHubRate{Remaining: 0, ResetAt: l.now().Add(rateLimitedFor)})
 		}
-		if !it.IsPR {
-			return db.LinkIssue, it, nil
-		}
-		kind = db.LinkPR
+		return "", GitHubItem{}, err
 	}
-	if kind == db.LinkIssue {
-		it, err := l.gh.Issue(ctx, repo, number)
-		return kind, it, err
+	l.noteRate(it.Rate)
+	if it.IsPR {
+		return db.LinkPR, it, nil
 	}
-	it, err := l.gh.PR(ctx, repo, number)
-	return kind, it, err
+	return db.LinkIssue, it, nil
 }
 
 // describeItem is the answer of view.
@@ -570,7 +588,7 @@ func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) 
 	if err != nil {
 		return err
 	}
-	_, it, err := l.read(ctx, repo, k.Number, k.Kind)
+	_, it, err := l.read(ctx, repo, k.Number)
 	if err != nil {
 		k.AttemptedAt = l.now()
 		k.Failures++
@@ -622,6 +640,10 @@ func (l *Links) Sweep(ctx context.Context) {
 		return
 	}
 	defer l.sweeping.Unlock()
+	if until := l.pausedUntil(); !until.IsZero() {
+		logrus.Debug("projects: GitHub's request budget is low; link refresh waits until ", until)
+		return
+	}
 	threads, err := l.store.LinkedThreads()
 	if err != nil {
 		logrus.WithError(err).Warn("projects: cannot list linked threads")
@@ -676,6 +698,9 @@ const (
 	RefreshDone   = "refreshed"
 	RefreshRecent = "recent"
 	RefreshFailed = "failed"
+	// RefreshLimited: GitHub's request budget is nearly used up, so nothing
+	// was asked; the record is untouched.
+	RefreshLimited = "limited"
 )
 
 // LinkRef names one of a thread's links.
@@ -692,8 +717,8 @@ type RefreshResult struct {
 	Kind   string `json:"kind"`
 	Number int    `json:"number"`
 	// Status is refreshed, recent (read under linkManualGap ago or being read
-	// now: nothing was asked of GitHub) or failed.
-	Status string `json:"status" enum:"refreshed,recent,failed"`
+	// now: nothing was asked of GitHub), failed or limited.
+	Status string `json:"status" enum:"refreshed,recent,failed,limited"`
 	Error  string `json:"error,omitempty"`
 }
 
@@ -733,6 +758,12 @@ func (l *Links) RefreshProject(ctx context.Context, projectID string) ([]Refresh
 	if err != nil {
 		return nil, err
 	}
+	l.readingMu.Lock()
+	again := l.now().Sub(l.projectAsked[projectID]) < linkProjectGap
+	if !again {
+		l.projectAsked[projectID] = l.now()
+	}
+	l.readingMu.Unlock()
 	type pending struct {
 		threadID string
 		link     db.ThreadLink
@@ -753,6 +784,10 @@ func (l *Links) RefreshProject(ctx context.Context, projectID string) ([]Refresh
 	for _, p := range open {
 		if ctx.Err() != nil {
 			break
+		}
+		if again {
+			out = append(out, RefreshResult{Repo: p.link.Repo, Kind: p.link.Kind, Number: p.link.Number, Status: RefreshRecent})
+			continue
 		}
 		out = append(out, l.refreshNow(ctx, p.threadID, p.link))
 	}
@@ -777,6 +812,12 @@ func (l *Links) refreshNow(ctx context.Context, threadID string, k db.ThreadLink
 		res.Status = RefreshRecent
 		return res
 	}
+	if until := l.pausedUntil(); !until.IsZero() {
+		l.readingMu.Unlock()
+		res.Status = RefreshLimited
+		res.Error = fmt.Sprintf("GitHub's request budget is nearly used up; reads resume at %s", until.Local().Format("15:04"))
+		return res
+	}
 	l.reading[key] = true
 	l.readingMu.Unlock()
 	defer func() {
@@ -799,7 +840,7 @@ func (l *Links) refreshNow(ctx context.Context, threadID string, k db.ThreadLink
 	if err != nil {
 		return fail(err)
 	}
-	_, it, err := l.read(ctx, repo, k.Number, k.Kind)
+	_, it, err := l.read(ctx, repo, k.Number)
 	if err != nil {
 		return fail(err)
 	}

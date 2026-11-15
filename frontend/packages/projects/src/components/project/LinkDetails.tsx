@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { Box, Button, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { ThreadLink } from '../../client';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { timeAgo } from '../../utils/format';
-import { Check, CircleDashed, Close, ContentCopy, OpenInNew, Refresh } from '../icons';
+import { Check, Close, ContentCopy, OpenInNew, Refresh } from '../icons';
 import { colorOf, LinkIcon, type Tone } from './linkView';
 
 const isHttps = (url: string | undefined): url is string => !!url && url.startsWith('https://');
@@ -27,13 +27,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * What a row cannot hold: the full title, who and which branches, the checks
- * by name, the merge state, and when GitHub and we last looked. A field the
- * record does not have yet (one read before it existed) is left out, never
- * shown as unknown. The same three actions as the row, plus the two a row
- * has no room for: open on GitHub and copy the link.
+ * What a row cannot hold, and only what a person acts on: the full title, the
+ * checks (the failing ones by name), the merge state and when GitHub was last
+ * read. A field the record does not have yet is left out, never shown as
+ * unknown. The row's refresh, plus the two a row has no room for: open on
+ * GitHub and copy the link.
  */
-export function LinkDetails({ link, owner, busy, outcome, onRefresh, fill = false }: { link: ThreadLink; owner?: string; busy: boolean; outcome: string; onRefresh?: () => void; /** Take the width of the sheet it is in, instead of a popover's. */ fill?: boolean }) {
+export function LinkDetails({ link, busy, outcome, onRefresh, fill = false }: { link: ThreadLink; busy: boolean; outcome: string; onRefresh?: () => void; /** Take the width of the sheet it is in, instead of a popover's. */ fill?: boolean }) {
     const { t, i18n } = useTranslation('projects');
     const { copied, copy } = useCopyFeedback();
     const state = stateWord(link, t);
@@ -45,7 +45,6 @@ export function LinkDetails({ link, owner, busy, outcome, onRefresh, fill = fals
     ].filter((c): c is { text: string; tone: Tone } => !!c);
     const mergeText = link.merge_state && t(`links.merge.${link.merge_state}`);
     const open = link.state === 'open' && link.kind === 'pr';
-    const updated = link.updated_at ? timeAgo(link.updated_at, i18n.language) : '';
     const read = timeAgo(link.refreshed_at, i18n.language);
 
     return (
@@ -58,21 +57,16 @@ export function LinkDetails({ link, owner, busy, outcome, onRefresh, fill = fals
             </Box>
             <Typography sx={{ fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary', overflowWrap: 'anywhere' }}>{link.title}</Typography>
             <Box component="dl" sx={{ m: 0, display: 'grid', gridTemplateColumns: 'max-content 1fr', columnGap: 1.5, rowGap: 0.5 }}>
-                {link.author && <Field label={t('links.author')}>{link.author}</Field>}
-                {link.head && <Field label={t('links.branch')}><Box component="span" sx={{ fontFamily: fontMono }}>{link.head} → {link.base}</Box></Field>}
-                {owner && <Field label={t('links.thread')}>{owner}</Field>}
                 {open && counts && counts.length > 0 && (
                     <Field label={t('links.checks')}>
                         <Box component="span" sx={{ display: 'inline-flex', flexWrap: 'wrap', columnGap: 1 }}>
                             {counts.map((c) => <Box key={c.text} component="span" sx={{ color: (theme) => colorOf(theme, c.tone) }}>{c.text}</Box>)}
                         </Box>
-                        {checks && checks.attention && checks.attention.length > 0 && (
-                            <Box component="ul" aria-label={t('links.checks')} sx={{ m: 0, mt: 0.25, p: 0, listStyle: 'none' }}>
-                                {checks.attention.map((c) => (
-                                    <Box component="li" key={`${c.state}/${c.name}`} sx={{ display: 'flex', gap: 0.75, minWidth: 0 }}>
-                                        {c.state === 'failing'
-                                            ? <Close role="img" aria-label={t('links.checkFailingOne')} sx={{ fontSize: 14, flexShrink: 0, mt: '2px', color: (theme) => colorOf(theme, 'error') }} />
-                                            : <CircleDashed role="img" aria-label={t('links.checkPendingOne')} sx={{ fontSize: 14, flexShrink: 0, mt: '2px', color: (theme) => colorOf(theme, 'warning') }} />}
+                        {checks && checks.failed && checks.failed.length > 0 && (
+                            <Box component="ul" aria-label={t('links.checkFailingList')} sx={{ m: 0, mt: 0.25, p: 0, listStyle: 'none' }}>
+                                {checks.failed.map((c) => (
+                                    <Box component="li" key={c.name} sx={{ display: 'flex', gap: 0.75, minWidth: 0 }}>
+                                        <Close role="img" aria-label={t('links.checkFailingOne')} sx={{ fontSize: 14, flexShrink: 0, mt: '2px', color: (theme) => colorOf(theme, 'error') }} />
                                         {isHttps(c.url)
                                             ? <Link href={c.url} target="_blank" rel="noopener noreferrer" underline="hover" color="text.primary" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{c.name}</Link>
                                             : <Box component="span" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{c.name}</Box>}
@@ -84,7 +78,6 @@ export function LinkDetails({ link, owner, busy, outcome, onRefresh, fill = fals
                     </Field>
                 )}
                 {open && mergeText && <Field label={t('links.merge.label')}>{mergeText}</Field>}
-                {updated && <Field label={t('links.updated')}>{updated}</Field>}
                 <Field label={t('links.read')}>{read}</Field>
             </Box>
             {link.last_error && (

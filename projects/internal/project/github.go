@@ -44,11 +44,18 @@ type GitHubItem struct {
 	Head, Base string
 	CI         string
 	MergeState string
-	// Author is the login that opened it; UpdatedAt is GitHub's own last
-	// change (zero when not reported). Checks break an open PR's CI down.
-	Author    string
-	UpdatedAt time.Time
-	Checks    *db.LinkChecks
+	// Checks break an open PR's CI down.
+	Checks *db.LinkChecks
+	// Rate is what GitHub said about the caller's request budget in the same
+	// answer; zero when the answer did not carry it.
+	Rate GitHubRate
+}
+
+// GitHubRate is the request budget GitHub reports: how many points are left
+// and when the window resets.
+type GitHubRate struct {
+	Remaining int
+	ResetAt   time.Time
 }
 
 // GitHub is what the issue and PR tools need from GitHub. The real one runs
@@ -69,10 +76,9 @@ type GitHub interface {
 	UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error)
 	// UpdateIssue changes only the fields that are not nil.
 	UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error)
-	// PR reads a PR with its CI and mergeability; Issue reads an issue (the
-	// issues API serves PRs too, and says so in IsPR).
-	PR(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
-	Issue(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
+	// Read is an issue or PR in one request: for a PR its CI and mergeability
+	// too (IsPR says which it is), and the request budget in Rate.
+	Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
 }
 
 // ghCLI is GitHub over the host's own `gh`, signed in as the user. Every call
@@ -158,10 +164,6 @@ type ghIssue struct {
 	Title   string `json:"title"`
 	Body    string `json:"body"`
 	State   string `json:"state"`
-	User    struct {
-		Login string `json:"login"`
-	} `json:"user"`
-	UpdatedAt time.Time `json:"updated_at"`
 	// PullRequest is set when the "issue" is a PR (the issues API serves both).
 	PullRequest *struct{} `json:"pull_request"`
 }
@@ -182,7 +184,7 @@ type ghPull struct {
 }
 
 func (i ghIssue) item() GitHubItem {
-	return GitHubItem{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil, Author: i.User.Login, UpdatedAt: i.UpdatedAt}
+	return GitHubItem{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil}
 }
 
 func (p ghPull) item() GitHubItem {
@@ -297,106 +299,165 @@ func (g ghCLI) UpdatePR(ctx context.Context, r GitHubRepo, number int, title, bo
 	return out.item(), err
 }
 
-func (g ghCLI) PR(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
-	var pr ghPull
-	if err := g.api(ctx, r, "GET", fmt.Sprintf("%s/pulls/%d", r.path(), number), nil, &pr); err != nil {
+// readQuery is the whole of a read: the item, for a PR its head commit's
+// checks, and the request budget, in one request that costs one point. (Three
+// REST requests used to do this for a PR, and two for an item of unknown kind.)
+const readQuery = `query($owner:String!,$name:String!,$number:Int!){
+  rateLimit{remaining resetAt}
+  repository(owner:$owner,name:$name){
+    issueOrPullRequest(number:$number){
+      __typename
+      ... on Issue{number url title body state}
+      ... on PullRequest{number url title body state isDraft headRefName baseRefName mergeable mergeStateStatus
+        commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){totalCount nodes{
+          __typename
+          ... on CheckRun{name status conclusion detailsUrl}
+          ... on StatusContext{context state targetUrl}
+        }}}}}}
+      }
+    }
+  }
+}`
+
+type gqlContext struct {
+	Typename   string `json:"__typename"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	DetailsURL string `json:"detailsUrl"`
+	Context    string `json:"context"`
+	State      string `json:"state"`
+	TargetURL  string `json:"targetUrl"`
+}
+
+type gqlRead struct {
+	Data struct {
+		RateLimit struct {
+			Remaining int       `json:"remaining"`
+			ResetAt   time.Time `json:"resetAt"`
+		} `json:"rateLimit"`
+		Repository struct {
+			Item *struct {
+				Typename         string `json:"__typename"`
+				Number           int    `json:"number"`
+				URL              string `json:"url"`
+				Title            string `json:"title"`
+				Body             string `json:"body"`
+				State            string `json:"state"`
+				IsDraft          bool   `json:"isDraft"`
+				HeadRefName      string `json:"headRefName"`
+				BaseRefName      string `json:"baseRefName"`
+				Mergeable        string `json:"mergeable"`
+				MergeStateStatus string `json:"mergeStateStatus"`
+				Commits          struct {
+					Nodes []struct {
+						Commit struct {
+							Rollup *struct {
+								State    string `json:"state"`
+								Contexts struct {
+									TotalCount int          `json:"totalCount"`
+									Nodes      []gqlContext `json:"nodes"`
+								} `json:"contexts"`
+							} `json:"statusCheckRollup"`
+						} `json:"commit"`
+					} `json:"nodes"`
+				} `json:"commits"`
+			} `json:"issueOrPullRequest"`
+		} `json:"repository"`
+	} `json:"data"`
+}
+
+func (g ghCLI) Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
+	var out gqlRead
+	body := map[string]any{"query": readQuery, "variables": map[string]any{"owner": r.Owner, "name": r.Name, "number": number}}
+	if err := g.api(ctx, r, "POST", "graphql", body, &out); err != nil {
 		return GitHubItem{}, err
 	}
-	it := pr.item()
+	n := out.Data.Repository.Item
+	if n == nil {
+		return GitHubItem{}, fmt.Errorf("GitHub has no issue or PR #%d in %s", number, r.Slug())
+	}
+	it := GitHubItem{Number: n.Number, URL: n.URL, Title: n.Title, Body: n.Body, State: strings.ToLower(n.State), IsPR: n.Typename == "PullRequest",
+		Rate: GitHubRate{Remaining: out.Data.RateLimit.Remaining, ResetAt: out.Data.RateLimit.ResetAt}}
+	if !it.IsPR {
+		return it, nil
+	}
+	it.Draft, it.Head, it.Base = n.IsDraft, n.HeadRefName, n.BaseRefName
 	if it.State != "open" {
 		return it, nil
 	}
-	ci, checks, err := g.ci(ctx, r, pr.Head.SHA)
-	if err != nil {
-		return GitHubItem{}, err
+	it.MergeState = graphqlMergeState(n.MergeStateStatus, n.Mergeable)
+	if len(n.Commits.Nodes) > 0 {
+		if roll := n.Commits.Nodes[0].Commit.Rollup; roll != nil {
+			it.CI, it.Checks = foldChecks(roll.State, roll.Contexts.Nodes, roll.Contexts.TotalCount)
+		}
 	}
-	it.CI, it.Checks = ci, checks
+	if it.CI == "" {
+		it.CI = "none"
+	}
 	return it, nil
 }
 
-// ci folds the commit's check runs and legacy statuses into one word, and
-// breaks them down for the details view.
-func (g ghCLI) ci(ctx context.Context, r GitHubRepo, sha string) (string, *db.LinkChecks, error) {
-	var runs struct {
-		CheckRuns []struct {
-			Name       string `json:"name"`
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-			HTMLURL    string `json:"html_url"`
-		} `json:"check_runs"`
+// graphqlMergeState reduces GitHub's merge status to what the card shows (the
+// same words mergeState gives for the REST answer).
+func graphqlMergeState(status, mergeable string) string {
+	switch status {
+	case "DIRTY":
+		return "conflicts"
+	case "CLEAN", "UNSTABLE", "HAS_HOOKS":
+		return "ready"
+	case "BLOCKED":
+		return "blocked"
+	case "BEHIND":
+		return "behind"
 	}
-	if err := g.api(ctx, r, "GET", fmt.Sprintf("%s/commits/%s/check-runs?per_page=100", r.path(), sha), nil, &runs); err != nil {
-		return "", nil, err
+	if mergeable == "CONFLICTING" {
+		return "conflicts"
 	}
-	var status struct {
-		State    string `json:"state"`
-		Statuses []struct {
-			Context   string `json:"context"`
-			State     string `json:"state"`
-			TargetURL string `json:"target_url"`
-		} `json:"statuses"`
-	}
-	if err := g.api(ctx, r, "GET", fmt.Sprintf("%s/commits/%s/status", r.path(), sha), nil, &status); err != nil {
-		return "", nil, err
-	}
+	return "unknown"
+}
+
+// foldChecks folds a head commit's check runs and statuses into one word and
+// the breakdown the details show. More contexts than were read (over 100) leave
+// the rollup's own word the last say, so a failure past the cut still shows.
+func foldChecks(rollup string, nodes []gqlContext, total int) (string, *db.LinkChecks) {
 	var sum db.LinkChecks
-	note := func(name, state, url string) {
-		if len(sum.Attention) < db.LinkChecksListed {
-			sum.Attention = append(sum.Attention, db.LinkCheck{Name: name, State: state, URL: url})
+	fail := func(name, url string) {
+		sum.Failing++
+		if len(sum.Failed) < db.LinkChecksListed {
+			sum.Failed = append(sum.Failed, db.LinkCheck{Name: name, URL: url})
 		} else {
 			sum.More++
 		}
 	}
-	pending, failing := 0, 0
-	for _, c := range runs.CheckRuns {
+	for _, c := range nodes {
+		if c.Typename == "StatusContext" {
+			switch c.State {
+			case "FAILURE", "ERROR":
+				fail(c.Context, c.TargetURL)
+			case "PENDING", "EXPECTED":
+				sum.Pending++
+			default:
+				sum.Passing++
+			}
+			continue
+		}
 		switch {
-		case c.Status != "completed":
-			pending++
+		case c.Status != "COMPLETED":
 			sum.Pending++
-			note(c.Name, "pending", c.HTMLURL)
-		case c.Conclusion == "failure" || c.Conclusion == "timed_out" || c.Conclusion == "cancelled" || c.Conclusion == "action_required":
-			failing++
-			sum.Failing++
-			note(c.Name, "failing", c.HTMLURL)
-		case c.Conclusion == "skipped" || c.Conclusion == "neutral":
-			sum.Skipped++
+		case c.Conclusion == "FAILURE" || c.Conclusion == "TIMED_OUT" || c.Conclusion == "CANCELLED" || c.Conclusion == "ACTION_REQUIRED" || c.Conclusion == "STARTUP_FAILURE":
+			fail(c.Name, c.DetailsURL)
 		default:
 			sum.Passing++
-		}
-	}
-	for _, c := range status.Statuses {
-		switch c.State {
-		case "failure", "error":
-			sum.Failing++
-			note(c.Context, "failing", c.TargetURL)
-		case "pending":
-			sum.Pending++
-			note(c.Context, "pending", c.TargetURL)
-		default:
-			sum.Passing++
-		}
-	}
-	if len(status.Statuses) > 0 {
-		switch status.State {
-		case "failure", "error":
-			failing++
-		case "pending":
-			pending++
 		}
 	}
 	switch {
-	case len(runs.CheckRuns) == 0 && len(status.Statuses) == 0:
-		return "none", nil, nil
-	case failing > 0:
-		return "failing", &sum, nil
-	case pending > 0:
-		return "pending", &sum, nil
+	case total == 0 && len(nodes) == 0:
+		return "none", nil
+	case sum.Failing > 0 || (total > len(nodes) && (rollup == "FAILURE" || rollup == "ERROR")):
+		return "failing", &sum
+	case sum.Pending > 0 || (total > len(nodes) && rollup == "PENDING"):
+		return "pending", &sum
 	}
-	return "passing", &sum, nil
-}
-
-func (g ghCLI) Issue(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
-	var out ghIssue
-	err := g.api(ctx, r, "GET", fmt.Sprintf("%s/issues/%d", r.path(), number), nil, &out)
-	return out.item(), err
+	return "passing", &sum
 }

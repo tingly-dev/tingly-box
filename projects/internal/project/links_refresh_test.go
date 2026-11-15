@@ -28,7 +28,7 @@ func (f *linksFixture) openedPR(t *testing.T) *db.ThreadLink {
 func (f *linksFixture) reads() int {
 	n := 0
 	for _, c := range f.gh.called() {
-		if strings.HasPrefix(c, "pr ") || strings.HasPrefix(c, "issue ") {
+		if strings.HasPrefix(c, "read ") {
 			n++
 		}
 	}
@@ -92,7 +92,7 @@ func TestSweepBacksOffAfterFailuresAndKeepsTheLastReading(t *testing.T) {
 	l := f.openedPR(t)
 	ctx := context.Background()
 	f.gh.set(l.Number, func(it *GitHubItem) { it.CI = "failing" })
-	f.gh.fail = errors.New("HTTP 403 rate limited")
+	f.gh.fail = errors.New("HTTP 502 bad gateway")
 
 	// The waits double: 5, 10, 20, 40, 60 (the cap), 60 minutes.
 	for i, want := range []time.Duration{5, 10, 20, 40, 60, 60} {
@@ -106,7 +106,7 @@ func TestSweepBacksOffAfterFailuresAndKeepsTheLastReading(t *testing.T) {
 		require.Equal(t, before+1, f.reads(), "step %d: read once when due", i)
 		got := f.link(t, l.Number)
 		assert.Equal(t, i+1, got.Failures)
-		assert.Contains(t, got.LastError, "rate limited")
+		assert.Contains(t, got.LastError, "bad gateway")
 		assert.Equal(t, "pending", got.CI, "the last good reading stays")
 	}
 }

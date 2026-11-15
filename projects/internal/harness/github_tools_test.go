@@ -58,13 +58,10 @@ func (g *stubGitHub) UpdatePR(context.Context, project.GitHubRepo, int, *string,
 func (g *stubGitHub) UpdateIssue(context.Context, project.GitHubRepo, int, *string, *string) (project.GitHubItem, error) {
 	return project.GitHubItem{}, nil
 }
-func (g *stubGitHub) PR(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
+func (g *stubGitHub) Read(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return project.GitHubItem{Number: n, URL: "https://github.com/acme/demo/pull/7", Title: "Add the tool", State: "open", CI: g.ci, MergeState: "ready"}, nil
-}
-func (g *stubGitHub) Issue(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
-	return project.GitHubItem{Number: n, State: "open"}, nil
+	return project.GitHubItem{Number: n, URL: "https://github.com/acme/demo/pull/7", Title: "Add the tool", State: "open", IsPR: true, CI: g.ci, MergeState: "ready"}, nil
 }
 
 // pointOriginAtGitHub gives the repository a github.com origin whose pushes

@@ -44,7 +44,7 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 - *PR needs commits*: refused when the branch has no commit beyond its base.
 - *Read before write*: `comment` reads the item in full (the issues API, then the PR's own read for a PR) before it posts, so a failed read posts nothing and never leaves a record built from half an answer (a merged PR must not be recorded as closed).
 - *An edit keeps what it cannot know*: the answer to a PR edit carries no checks and often a mergeability GitHub has not worked out yet (`unknown`); `update` keeps the last known value of both until the next reading.
-- *Transport*: `gh api` with a JSON body for every call (REST, no GraphQL). That avoids the `gh pr edit` failure and the shell quoting of bodies.
+- *Transport*: `gh api` with a JSON body for every call. Writes are REST; every read is one GraphQL query we write ourselves (see [Cost of a read](#cost-of-a-read)). Neither touches `gh pr edit`'s failing query, and the bodies never pass a shell.
 - *No footer.* The tool adds nothing to the body (no requester note, thread link or marker): the repository's PR template governs the text and the model writes it.
 
 ## Authorization
@@ -148,23 +148,31 @@ The UI never asks GitHub; it reads the record. A background sweep keeps open ite
 
 - Runs once a minute; looks at records with `state = open` whose project is not archived; **terminal states (`closed`, `merged`) are never refreshed again**.
 - An item is due `5 min` after its last refresh. After a failure the wait doubles (10, 20, 40 … capped at 1 hour), and the last good state is kept with `last_error` set; one success clears the count. Same shape as the quota back-off, kept in the row so a restart does not forget a failing item.
-- At most 20 items per sweep, one at a time. A PR refresh is three REST calls (pull, check runs, combined status), so 20 open PRs at 5 minutes cost about 720 calls an hour against a 5000 limit, and fewer in practice.
+- At most 20 items per sweep, one at a time. A read is one request ([Cost of a read](#cost-of-a-read)), so 20 open PRs at 5 minutes cost 240 points an hour against GitHub's 5000.
 - `view` asks GitHub on demand (an issue read, and for a PR the PR, its check runs and its status) and brings a linked item's record up to date, but answers from its last answer when that is under 30 seconds old, so a model that polls cannot hammer GitHub; an `update` or `comment` clears it.
 - A change (state, CI, merge state) publishes a `thread` event so open pages update; an unchanged reading only moves `refreshed_at` and publishes nothing.
 - When `gh` is missing or not signed in, every refresh fails the same way and backs off; the card says "could not refresh" with the age of the last reading.
 
-Not done: webhooks (the host is usually behind NAT), review decisions (GraphQL only), notifying the coordinator when a PR is merged (an event line in the thread transcript is the obvious next step).
+Not done: webhooks (the host is usually behind NAT), review decisions (one more field in the query; left out because nothing here acts on it), notifying the coordinator when a PR is merged (an event line in the thread transcript is the obvious next step).
+
+### Cost of a read
+
+GitHub's rate limit is the one shared resource a refresh spends, so a read is built to cost as little as GitHub allows:
+
+- **One request per item, whatever it is.** A read is a single GraphQL query on `repository.issueOrPullRequest(number)` (one point). It returns the item, for a PR its draft flag, branches, merge status and the head commit's check rollup (names of the failing checks included), and `rateLimit{remaining resetAt}`. Before this a PR cost three REST requests (pull, check runs, combined status) and an item of unknown kind a fourth (the issues API first, to find out whether it was a PR). Writes stay REST.
+- **The budget rides on every answer.** `Links` keeps the last `rateLimit`. Under `rateFloor` (300 of 5000) no read is made, neither the sweep's nor a person's, until the window resets; the rest is for the tools that write. A manual refresh then answers `limited` and leaves the record alone; an error that names the rate limit (GitHub gave no reset time) pauses reads for ten minutes.
+- **Manual reads are throttled in the server.** An item read or attempted under `linkManualGap` (30 s) ago answers `recent` without a request; refreshing a whole project is allowed once per `linkProjectGap` (a minute), at most 20 items, and a second press inside it answers `recent` for every item. Two refreshes of one item in flight are one read.
+- **Not read at all**: author, reviews, labels, the check runs that pass (they are counted, not named), the head commit's other statuses beyond the first 100 (a failure past the cut still shows, through the rollup's own state).
 
 ### Manual refresh and detail (UI: `.design/workspace-layout.md` §3.6)
 
 The sweep keeps open items fresh; a person looking at a row can also ask. This adds no write to GitHub and no new trust: it is the sweep's own read, on demand.
 
-- **Endpoints.** `POST /threads/{id}/links/refresh` with an optional `{repo, kind, number}` (one item; none = all of the thread's links) and `POST /projects/{id}/links/refresh` (all open links of the project's threads, at most `linkSweepMax` per call, least recently read first). Both answer `{results: [{repo, kind, number, status, error?}]}`, `status` one of `refreshed`, `recent`, `failed`; an item the thread does not have is a 404, not a silent skip. The answer is only a status: the data travels on the thread event.
+- **Endpoints.** `POST /threads/{id}/links/refresh` with an optional `{repo, kind, number}` (one item; none = all of the thread's links) and `POST /projects/{id}/links/refresh` (open links of the project's threads, at most `linkSweepMax` per call, least recently read first). Both answer `{results: [{repo, kind, number, status, error?}]}`, `status` one of `refreshed`, `recent`, `failed`, `limited`; an item the thread does not have is a 404, not a silent skip. The answer is only a status: the data travels on the thread event.
 - **Any state.** Unlike the sweep, a manual refresh also reads `closed` and `merged` items (a PR can be reopened).
-- **Cooldown.** An item read or attempted less than `linkManualGap` (10 s) ago answers `recent` with no request, and two refreshes of one item in flight are one read (`refreshing` set under a mutex). The gap is the server's, so several pages and people cannot multiply requests. A call is bounded: the all-items forms read one at a time like the sweep.
 - **Failure does not feed the back-off.** A failed manual read stores `last_error` and `attempted_at` but leaves `failures` as it was, so a person pressing refresh while `gh` is signed out cannot push the sweep's wait to an hour. A success clears both, as in the sweep.
 - **Always publish.** The sweep stays silent for an unchanged reading; a manual refresh publishes the `thread` event even when only `refreshed_at` moved, because "read just now" is what the person asked to see. Clients never merge: the event replaces the thread, and the server is the only writer of the records.
-- **More on the record** (all optional, filled by the next read; old records simply lack them): `author` (login), `updated_at` (GitHub's own), and for a PR `checks`: counts `passing`/`failing`/`pending`/`skipped` and the names, conclusion and URL of the failing and pending ones, capped at 5 of each. Folded from the check runs and legacy statuses `ci()` already reads, so the sweep's cost does not change. Reviews are not read (GraphQL only).
+- **What the record gains** (optional, filled by the next read; old records simply lack it): for an open PR `checks`: counts `passing`/`failing`/`pending` and the failing ones by name and URL, at most 5 (`more` counts the rest). Nothing else was added: a person deciding whether to act needs what failed, whether it can merge and how old the reading is.
 
 ## Display
 

@@ -78,6 +78,13 @@ describe('LinkRow actions', () => {
         await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('links.refreshFailed'));
     });
 
+    it('says when GitHub\'s request budget is nearly used up, without calling it a failure of the item', async () => {
+        post.mockResolvedValue(answer({ status: 'limited', error: 'GitHub\'s request budget is nearly used up; reads resume at 15:04' }));
+        render(<LinkRow link={link()} threadId="t1" />);
+        fireEvent.click(screen.getByRole('button', { name: 'links.refresh' }));
+        await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('links.refreshLimited'));
+    });
+
     it('says so when the request itself fails', async () => {
         post.mockResolvedValue({ error: { error: 'this thread has no such issue or PR' }, response: { ok: false, status: 404, statusText: 'Not Found' } });
         render(<LinkRow link={link()} threadId="t1" />);
@@ -88,20 +95,17 @@ describe('LinkRow actions', () => {
 
 describe('LinkRow details', () => {
     const detailed = link({
-        author: 'octo', head: 'tp/work', base: 'main', merge_state: 'conflicts', ci: 'failing', updated_at: now,
-        checks: { passing: 3, failing: 1, pending: 1, skipped: 0, more: 2, attention: [{ name: 'lint', state: 'failing', url: 'https://github.com/acme/w/runs/1' }, { name: 'e2e', state: 'pending', url: 'javascript:alert(1)' }] },
+        merge_state: 'conflicts', ci: 'failing',
+        checks: { passing: 3, failing: 2, pending: 1, more: 1, failed: [{ name: 'lint', url: 'https://github.com/acme/w/runs/1' }, { name: 'e2e', url: 'javascript:alert(1)' }] },
     });
 
-    it('pins the details on the button: title, who, branches, checks by name, merge state, times and the actions', async () => {
-        render(<LinkRow link={detailed} threadId="t1" owner="Fix export" />);
+    it('pins the details on the button: title, checks with the failing ones by name, merge state, read time and the actions', async () => {
+        render(<LinkRow link={detailed} threadId="t1" />);
         const button = screen.getByRole('button', { name: /links\.detailsOf/ });
         fireEvent.click(button);
 
         const dialog = await screen.findByRole('dialog', { name: 'Add the tool' });
         expect(button).toHaveAttribute('aria-expanded', 'true');
-        expect(within(dialog).getByText('octo')).toBeInTheDocument();
-        expect(within(dialog).getByText(/tp\/work → main/)).toBeInTheDocument();
-        expect(within(dialog).getByText('Fix export')).toBeInTheDocument();
         expect(within(dialog).getByText(/links\.checkFailing/)).toBeInTheDocument();
         expect(within(dialog).getByRole('link', { name: 'lint' })).toHaveAttribute('href', 'https://github.com/acme/w/runs/1');
         // A check address that is not https is text, never a link.
@@ -109,21 +113,26 @@ describe('LinkRow details', () => {
         expect(within(dialog).getByText('e2e')).toBeInTheDocument();
         expect(within(dialog).getByText(/links\.checksMore/)).toBeInTheDocument();
         expect(within(dialog).getByText('links.merge.conflicts')).toBeInTheDocument();
-        expect(within(dialog).getByText('links.updated')).toBeInTheDocument();
         expect(within(dialog).getByText('links.read')).toBeInTheDocument();
         const open = within(dialog).getByRole('link', { name: 'links.openOnGitHub' });
         expect(open).toHaveAttribute('href', 'https://github.com/acme/w/pull/12');
         expect(open).toHaveAttribute('rel', expect.stringContaining('noopener'));
     });
 
+    it('names only the failing checks and says nothing of the rest beyond their counts', async () => {
+        render(<LinkRow link={link({ checks: { passing: 9, failing: 1, pending: 2, failed: [{ name: 'lint' }] } })} threadId="t1" />);
+        fireEvent.click(screen.getByRole('button', { name: /links\.detailsOf/ }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByRole('list', { name: 'links.checkFailingList' })).toHaveTextContent('lint');
+        expect(within(dialog).getAllByRole('listitem')).toHaveLength(1);
+        expect(within(dialog).getByText(/links\.checkPending/)).toBeInTheDocument();
+    });
+
     it('leaves out what an older record does not have instead of showing it as unknown', async () => {
         render(<LinkRow link={link()} threadId="t1" />);
         fireEvent.click(screen.getByRole('button', { name: /links\.detailsOf/ }));
         const dialog = await screen.findByRole('dialog');
-        expect(within(dialog).queryByText('links.author')).not.toBeInTheDocument();
-        expect(within(dialog).queryByText('links.branch')).not.toBeInTheDocument();
         expect(within(dialog).queryByText('links.checks')).not.toBeInTheDocument();
-        expect(within(dialog).queryByText('links.updated')).not.toBeInTheDocument();
         expect(within(dialog).getByText('links.read')).toBeInTheDocument();
     });
 
@@ -173,7 +182,7 @@ describe('LinkRow details', () => {
 describe('LinkRow hover preview', () => {
     it('floats the details up after the mouse rests on the row, and takes them away when it leaves', () => {
         vi.useFakeTimers();
-        const { container } = render(<LinkRow link={link({ author: 'octo' })} threadId="t1" />);
+        const { container } = render(<LinkRow link={link()} threadId="t1" />);
         const row = container.firstElementChild as HTMLElement;
         fireEvent.pointerEnter(row, { pointerType: 'mouse' });
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

@@ -46,3 +46,15 @@ export const visuallyHidden = {
 
 /** The turn of a busy refresh icon. */
 export const spin = keyframes`from { transform: rotate(0deg); } to { transform: rotate(360deg); }`;
+
+/** A thread's links as the composer strip lists them: an open PR first, then an open issue, then what finished, each group newest first. */
+export function stripLinks(links: ThreadLink[] | undefined): ThreadLink[] {
+    const rank = (l: ThreadLink) => (l.state !== 'open' ? 2 : l.kind === 'pr' ? 0 : 1);
+    return [...(links ?? [])].sort((a, b) => rank(a) - rank(b) || Date.parse(b.created_at) - Date.parse(a.created_at));
+}
+
+/** What to say of an item beside its number where space is short: where it stands without the plain "open" (an open item with nothing to flag says that). */
+export function keyParts(link: ThreadLink, t: (key: string) => string): Part[] {
+    const parts = linkParts(link, t);
+    return link.state === 'open' && !link.draft && parts.length > 1 ? parts.slice(1) : parts;
+}

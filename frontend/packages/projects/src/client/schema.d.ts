@@ -550,8 +550,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 10 seconds ago answers recent without asking GitHub. The readings arrive on the threads' events; the answer only says what happened to each item.
-         * @description Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 10 seconds ago answers recent without asking GitHub. The readings arrive on the threads' events; the answer only says what happened to each item.
+         * Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         * @description Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
          */
         post: operations["apiV1ProjectsIdLinksRefreshPost"];
         delete?: never;
@@ -966,8 +966,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 10 seconds ago, or being read, answers recent without asking GitHub. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
-         * @description Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 10 seconds ago, or being read, answers recent without asking GitHub. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         * Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         * @description Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
          */
         post: operations["apiV1ThreadsIdLinksRefreshPost"];
         delete?: never;
@@ -1673,14 +1673,12 @@ export interface components {
         LinkCheck: {
             /** @description Field name */
             name: string;
-            /** @description Field state */
-            state: string;
             /** @description Field url */
             url?: string;
         };
         LinkChecks: {
-            /** @description Field attention */
-            attention?: components["schemas"]["LinkCheck"][];
+            /** @description Field failed */
+            failed?: components["schemas"]["LinkCheck"][];
             /**
              * Format: int64
              * @description Field failing
@@ -1701,11 +1699,6 @@ export interface components {
              * @description Field pending
              */
             pending: number;
-            /**
-             * Format: int64
-             * @description Field skipped
-             */
-            skipped: number;
         };
         MemoryFile: {
             /** @description Field name */
@@ -2032,7 +2025,7 @@ export interface components {
              * @description Field status
              * @enum {string}
              */
-            status: "refreshed" | "recent" | "failed";
+            status: "refreshed" | "recent" | "failed" | "limited";
         };
         RegenerateRequest: {
             /** @description Field model */
@@ -2415,8 +2408,6 @@ export interface components {
              * @description Field attempted_at
              */
             attempted_at: string;
-            /** @description Field author */
-            author?: string;
             /** @description Field base */
             base?: string;
             checks?: components["schemas"]["LinkChecks"];
@@ -2460,11 +2451,6 @@ export interface components {
             state: string;
             /** @description Field title */
             title: string;
-            /**
-             * Format: date-time
-             * @description Field updated_at
-             */
-            updated_at?: string;
             /** @description Field url */
             url: string;
         };
