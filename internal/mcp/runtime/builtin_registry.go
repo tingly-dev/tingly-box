@@ -153,9 +153,9 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 	}
 
 	// The built-in GitHub source: mcphub's gh-backed server, no PAT to
-	// configure — the host's own gh signs in. Default on; the remote preset
-	// stays available alongside for those who prefer it.
-	githubEnabled := typ.BoolPtr(true)
+	// configure — the host's own gh signs in. Off by default: opt in, like
+	// webtools.
+	githubEnabled := typ.BoolPtr(false)
 	githubVisibility := typ.ToolVisibilityClient
 	githubTools := mcptools.BuiltinGithubToolNames()
 	if existingGithub != nil {

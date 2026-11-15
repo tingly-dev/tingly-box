@@ -115,7 +115,7 @@ func TestRegisterBuiltinTools_RegistersWebtoolsAndAdvisor(t *testing.T) {
 	require.NotNil(t, webtools)
 	require.NotNil(t, github)
 	require.NotNil(t, advisor)
-	require.True(t, *github.Enabled, "the built-in GitHub source is on by default")
+	require.False(t, *github.Enabled, "the built-in GitHub source is off by default")
 	require.Equal(t, "stdio", github.Transport)
 	require.Equal(t, []string{"mcp-github"}, github.Args)
 	require.Equal(t, mcptools.GitHubPreset, github.Preset)
