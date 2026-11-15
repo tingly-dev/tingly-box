@@ -14,6 +14,7 @@ name: Verify Compile
 #   - test-remote      : go vet, go test and the boundary check of remote/
 #                        (Projects, its own go.work module; enabled: it was
 #                        tested on every change before it moved here)
+#   - test-mcphub      : go vet, go test and the boundary check of mcphub/
 # Unit tests are commented out for now (all passed when added); uncomment to enable.
 # The jobs are independent: the Go builds embed the committed PLACEHOLDER
 # dist, so they never wait on the frontend build. Full release
@@ -71,6 +72,7 @@ jobs:
       frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.frontend == 'true' || steps.filter.outputs.openapi == 'true' }}
       projects: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.projects == 'true' }}
       remote: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.remote == 'true' }}
+      mcphub: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.mcphub == 'true' }}
       # gotest: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.self == 'true' || steps.filter.outputs.cli == 'true' || steps.filter.outputs.gotest == 'true' }}
     steps:
       - name: Filter paths
@@ -144,6 +146,9 @@ jobs:
             remote:
               - 'remote/**'
               - '!remote/**/*.md'
+            mcphub:
+              - 'mcphub/**'
+              - '!mcphub/**/*.md'
             # gotest:
             #   - '**/*_test.go'
 
@@ -335,6 +340,59 @@ jobs:
           deps=$(go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | sort -u)
           if echo "$deps" | grep -qxE 'github.com/tingly-dev/tingly-box|github.com/tingly-dev/tingly-box/projects'; then
             echo "::error::remote imports the root module or projects"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  test-mcphub:
+    name: Test mcphub
+    needs: changes
+    if: needs.changes.outputs.mcphub == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mcphub
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - name: Locate Go caches
+        id: gocache
+        shell: bash
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.gocache.outputs.build }}
+            ${{ steps.gocache.outputs.mod }}
+          key: go-test-mcphub-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-test-mcphub-
+
+      # Mcphub is a library: the root module and Projects import it, never the
+      # other way round. It imports no local module at all.
+      - name: Boundary
+        run: |
+          deps=$(go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | sort -u)
+          if echo "$deps" | grep -qxE 'github.com/tingly-dev/tingly-box|github.com/tingly-dev/tingly-box/(projects|remote|imbot|agentboot)'; then
+            echo "::error::mcphub imports a Tingly Box local module"
             exit 1
           fi
 

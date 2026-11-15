@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	toolhub "github.com/tingly-dev/tingly-box/mcphub/tool"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
@@ -76,67 +75,25 @@ func (f *sessionToolsMCP) buildFor(threadID string) (*mcp.Server, *coordinatorTo
 	return srv, turn, nil
 }
 
-// inputSchema is the schema the model sees for tool, and its resolved form for
-// validating a call.
-func inputSchema(tool Tool) (map[string]any, *jsonschema.Resolved, error) {
-	schema := map[string]any{"type": "object", "properties": tool.Properties}
-	if len(tool.Required) != 0 {
-		schema["required"] = tool.Required
-	}
-	if tool.Strict {
-		schema["additionalProperties"] = false
-	}
-	data, err := json.Marshal(schema)
-	if err != nil {
-		return nil, nil, err
-	}
-	var parsed jsonschema.Schema
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return nil, nil, err
-	}
-	resolved, err := parsed.Resolve(nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s schema: %w", tool.Name, err)
-	}
-	return schema, resolved, nil
-}
-
-// register adds tool to srv. A call is validated against the schema, then run
-// through the turn's gate when there is one (the coordinator).
+// register adds tool to srv. A call is validated against its schema (the
+// generic core in mcphub/tool), then run through the turn's gate when there is
+// one (the coordinator).
 func (f *sessionToolsMCP) register(srv *mcp.Server, tool Tool, threadID string, turn *coordinatorToolTurn) error {
-	if tool.Handle == nil {
-		return fmt.Errorf("tool %s has no handler", tool.Name)
-	}
-	schema, resolved, err := inputSchema(tool)
-	if err != nil {
-		return err
-	}
-	mt := &mcp.Tool{Name: tool.Name, Description: tool.Description, InputSchema: schema}
-	if tool.Output != nil {
-		mt.OutputSchema = tool.Output
-	}
-	srv.AddTool(mt, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args := req.Params.Arguments
-		if len(args) == 0 {
-			args = json.RawMessage(`{}`)
-		}
-		var input any
-		if err := json.Unmarshal(args, &input); err != nil {
-			return textResult("invalid input: "+err.Error(), true), nil
-		}
-		if err := resolved.Validate(input); err != nil {
-			return textResult("invalid input: "+err.Error(), true), nil
-		}
-		call := ToolCall{ThreadID: threadID, Input: args}
-		if turn == nil {
-			return finish(tool.Handle(ctx, call))
-		}
-		return turn.run(f.service.Store, tool.Name, tool.EditsProject, func(current *db.Project) (*mcp.CallToolResult, error) {
-			call.Project = current
-			return finish(tool.Handle(ctx, call))
-		})
+	_, err := toolhub.Register(srv, toolhub.Definition{
+		Name: tool.Name, Description: tool.Description,
+		Properties: tool.Properties, Required: tool.Required, Strict: tool.Strict, Output: tool.Output,
+		Handle: func(ctx context.Context, c toolhub.Call) (*mcp.CallToolResult, error) {
+			call := ToolCall{ThreadID: threadID, Input: c.Input}
+			if turn == nil {
+				return tool.Handle(ctx, call)
+			}
+			return turn.run(f.service.Store, tool.Name, tool.EditsProject, func(current *db.Project) (*mcp.CallToolResult, error) {
+				call.Project = current
+				return finish(tool.Handle(ctx, call))
+			})
+		},
 	})
-	return nil
+	return err
 }
 
 // finish turns a handler's error into a failed tool result the model reads.

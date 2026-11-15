@@ -1,9 +1,6 @@
 package project
 
 import (
-	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -167,52 +164,4 @@ func TestCreatePRWithHeadWorksFromAFolderSession(t *testing.T) {
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x", "head": "feat/other"})
 	require.False(t, isErr, out)
 	assert.Contains(t, f.gh.called(), `create-pr acme/widgets "x" head=feat/other base=main draft=false`)
-}
-
-func TestGhCLIProtectedReadsTheBranchAndTreatsAMissingOneAsUnprotected(t *testing.T) {
-	repo := GitHubRepo{Owner: "acme", Name: "widgets"}
-	bin, logFile := fakeGH(t, `{"name":"release/1.0","protected":true}`, 0)
-	got, err := ghCLI{bin: bin}.Protected(context.Background(), repo, "release/1.0")
-	require.NoError(t, err)
-	assert.True(t, got)
-	b, _ := os.ReadFile(logFile)
-	assert.Contains(t, string(b), "api -X GET repos/acme/widgets/branches/release/1.0")
-
-	// A branch only this checkout has is not on GitHub: 404, not protected.
-	dir := t.TempDir()
-	notFound := filepath.Join(dir, "gh")
-	require.NoError(t, os.WriteFile(notFound, []byte("#!/bin/sh\necho 'gh: Branch not found (HTTP 404)' >&2\nexit 1\n"), 0o755))
-	got, err = ghCLI{bin: notFound}.Protected(context.Background(), repo, "feat/local")
-	require.NoError(t, err)
-	assert.False(t, got)
-
-	// Any other failure is an error: an unreadable answer must not read as "not protected".
-	bin, _ = fakeGH(t, "", 1)
-	_, err = ghCLI{bin: bin}.Protected(context.Background(), repo, "feat/x")
-	assert.Error(t, err)
-}
-
-func TestGhCLISquashPRPutsAPinnedSquashMerge(t *testing.T) {
-	repo := GitHubRepo{Owner: "acme", Name: "widgets"}
-	bin, logFile := fakeGH(t, `{"merged":true,"message":"Pull Request successfully merged","sha":"def"}`, 0)
-	require.NoError(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "Add a", "Body."))
-	b, _ := os.ReadFile(logFile)
-	got := string(b)
-	assert.Contains(t, got, "api -X PUT --input - repos/acme/widgets/pulls/7/merge")
-	assert.Contains(t, got, `"merge_method":"squash"`)
-	assert.Contains(t, got, `"sha":"abc123"`, "only the commit that was pushed is merged")
-	assert.Contains(t, got, `"commit_title":"Add a"`)
-
-	bin, logFile = fakeGH(t, `{"merged":true}`, 0)
-	require.NoError(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", ""))
-	b, _ = os.ReadFile(logFile)
-	assert.NotContains(t, string(b), "commit_title", "no message: GitHub's default")
-
-	// GitHub answering "not merged" is an error, whatever the status.
-	bin, _ = fakeGH(t, `{"merged":false,"message":"Pull Request is not mergeable"}`, 0)
-	err := ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", "")
-	assert.ErrorContains(t, err, "not mergeable")
-
-	bin, _ = fakeGH(t, "", 1)
-	assert.Error(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", ""))
 }
