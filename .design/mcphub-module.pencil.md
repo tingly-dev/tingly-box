@@ -102,7 +102,26 @@ loopback.Server ── path→handler ──► mcp.Server("tingly-projects")
 | 0 | mcphub 骨架(go.mod/CLAUDE.md/Taskfile/go.work/CI) | ✅ |
 | 1 | mcphub/github 客户端迁入,projects 切换 | ✅ |
 | 2 | mcphub/tool + mcphub/loopback,projects 委托 | ✅ |
-| 3 | root 内置 `mcp-github` stdio 源(默认),保留远程 PAT 预设 | ⬜ 待做 |
+| 3 | root 内置 `mcp-github` stdio 源(默认),保留远程 PAT 预设 | ✅ |
+
+## Phase 3 接线(root 内置 GitHub 源)
+
+```
+builtin_registry.RegisterBuiltinTools
+   └─► source github-builtin "GitHub (gh)"
+        · stdio: <自身绝对路径> mcp-github   · Preset="github"(子集+scope 复用)
+        · 默认启用;已存在则保留 enabled/visibility/tools/env
+        · 远程 PAT 预设(github-mcp-server)原样保留,并存可选
+
+cli/tingly-box main.go ── "mcp-github" (hidden) ──► command.MCPGithubCmdKong
+                                                          │ 无 AppManager(stdio 子进程)
+                                                          ▼
+                                              mcphub/github.Serve(ctx)
+                                                  · mcp.Server("tingly-github")
+                                                  · 11 个官方命名工具(gh api)
+                                                  · GitHubRepos scope 由 root runtime
+                                                    的 CheckToolScope 按 owner/repo 强制
+```
 
 ## 设计要点
 
