@@ -121,6 +121,7 @@ export const project: Dict<typeof projectEn> = {
     },
     attachments: { removed: '{{name}}（已移除）', fromThread: '来自 {{name}}' },
     strip: {
+        pr: 'PR', issue: 'Issue', moreLinks: '另有 {{count}} 项，见 Issue 与 PR',
         title: '本线程', sessionTitle: '本会话', autoAt: '{{time}} 自动按推荐回答', expand: '展开详情', collapse: '收起详情',
         folder: '文件夹', copyCd: '复制 cd 命令', branch: '分支', copyBranch: '复制分支名',
         autoAnswer: {

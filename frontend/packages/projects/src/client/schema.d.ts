@@ -540,6 +540,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/links/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         * @description Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         */
+        post: operations["apiV1ProjectsIdLinksRefreshPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/memory": {
         parameters: {
             query?: never;
@@ -950,6 +970,26 @@ export interface paths {
          * @description Release the thread to a terminal: closes its process and returns the command that resumes it
          */
         post: operations["apiV1ThreadsIdHandoffPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/links/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         * @description Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         */
+        post: operations["apiV1ThreadsIdLinksRefreshPost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1698,6 +1738,36 @@ export interface components {
             /** @description Field path */
             path: string;
         };
+        LinkCheck: {
+            /** @description Field name */
+            name: string;
+            /** @description Field url */
+            url?: string;
+        };
+        LinkChecks: {
+            /** @description Field failed */
+            failed?: components["schemas"]["LinkCheck"][];
+            /**
+             * Format: int64
+             * @description Field failing
+             */
+            failing: number;
+            /**
+             * Format: int64
+             * @description Field more
+             */
+            more?: number;
+            /**
+             * Format: int64
+             * @description Field passing
+             */
+            passing: number;
+            /**
+             * Format: int64
+             * @description Field pending
+             */
+            pending: number;
+        };
         MemoryFile: {
             /** @description Field name */
             name: string;
@@ -1995,6 +2065,42 @@ export interface components {
             action: "retry" | "skip";
             /** @description Field input_id */
             input_id: string;
+        };
+        RefreshLinksRequest: {
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind?: "" | "issue" | "pr";
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number?: number;
+            /** @description Field repo */
+            repo?: string;
+        };
+        RefreshLinksResponse: {
+            /** @description Field results */
+            results: components["schemas"]["RefreshResult"][];
+        };
+        RefreshResult: {
+            /** @description Field error */
+            error?: string;
+            /** @description Field kind */
+            kind: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field repo */
+            repo: string;
+            /**
+             * @description Field status
+             * @enum {string}
+             */
+            status: "refreshed" | "recent" | "failed" | "limited";
         };
         RegenerateRequest: {
             /** @description Field model */
@@ -2379,6 +2485,7 @@ export interface components {
             attempted_at: string;
             /** @description Field base */
             base?: string;
+            checks?: components["schemas"]["LinkChecks"];
             /** @description Field ci */
             ci?: string;
             /**
@@ -3388,6 +3495,29 @@ export interface operations {
             };
         };
     };
+    apiV1ProjectsIdLinksRefreshPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshLinksResponse"];
+                };
+            };
+        };
+    };
     apiV1ProjectsIdMemoryGet: {
         parameters: {
             query?: never;
@@ -3997,6 +4127,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HandoffResponse"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdLinksRefreshPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshLinksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshLinksResponse"];
                 };
             };
         };

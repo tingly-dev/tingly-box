@@ -281,7 +281,7 @@ func TestViewReadsAndThrottles(t *testing.T) {
 	reads := func() int {
 		n := 0
 		for _, c := range f.gh.called() {
-			if strings.HasPrefix(c, "pr ") {
+			if strings.HasPrefix(c, "read ") {
 				n++
 			}
 		}
@@ -307,7 +307,7 @@ func TestViewReadsAndThrottles(t *testing.T) {
 
 	out, isErr = f.call(t, cs, "view", map[string]any{"number": 99})
 	assert.True(t, isErr)
-	assert.Contains(t, out, "404")
+	assert.Contains(t, out, "no issue or PR #99")
 }
 
 func TestViewReadsAnyIssueOrPROfTheRepositoryWithoutRecordingIt(t *testing.T) {
@@ -501,14 +501,12 @@ func TestNumbersAreScopedToTheThreadsRepository(t *testing.T) {
 	assert.Equal(t, "Elsewhere", other.Title)
 }
 
-func TestViewOfALinkedPRSkipsTheIssueRead(t *testing.T) {
+func TestViewOfALinkedPRIsOneRequest(t *testing.T) {
 	f := newLinksFixture(t)
 	cs, _ := f.client(t, f.worker.ID)
 	_, _ = f.call(t, cs, "create_pr", map[string]any{"title": "Add a"})
 	before := len(f.gh.called())
 	_, isErr := f.call(t, cs, "view", map[string]any{"number": 11})
 	require.False(t, isErr)
-	for _, c := range f.gh.called()[before:] {
-		assert.NotContains(t, c, "issue ", "the link already says it is a PR")
-	}
+	assert.Equal(t, []string{"read acme/widgets #11"}, f.gh.called()[before:], "an item of any kind is one request")
 }

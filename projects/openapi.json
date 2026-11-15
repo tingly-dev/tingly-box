@@ -1193,6 +1193,39 @@
         }
       }
     },
+    "/api/v1/projects/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "description": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "operationId": "apiV1ProjectsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/memory": {
       "get": {
         "tags": [
@@ -2140,6 +2173,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HandoffResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "description": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "operationId": "apiV1ThreadsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshLinksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
                 }
               }
             }
@@ -3748,6 +3825,59 @@
           "entries"
         ]
       },
+      "LinkCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "LinkChecks": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "array",
+            "description": "Field failed",
+            "items": {
+              "$ref": "#/components/schemas/LinkCheck"
+            }
+          },
+          "failing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failing"
+          },
+          "more": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field more"
+          },
+          "passing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field passing"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field pending"
+          }
+        },
+        "required": [
+          "passing",
+          "failing",
+          "pending"
+        ]
+      },
       "MemoryFile": {
         "type": "object",
         "properties": {
@@ -4410,6 +4540,82 @@
         "required": [
           "input_id",
           "action"
+        ]
+      },
+      "RefreshLinksRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "issue",
+              "pr"
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          }
+        }
+      },
+      "RefreshLinksResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "description": "Field results",
+            "items": {
+              "$ref": "#/components/schemas/RefreshResult"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "RefreshResult": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status",
+            "enum": [
+              "refreshed",
+              "recent",
+              "failed",
+              "limited"
+            ]
+          }
+        },
+        "required": [
+          "repo",
+          "kind",
+          "number",
+          "status"
         ]
       },
       "RegenerateRequest": {
@@ -5139,6 +5345,9 @@
           "base": {
             "type": "string",
             "description": "Field base"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/LinkChecks"
           },
           "ci": {
             "type": "string",

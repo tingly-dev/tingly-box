@@ -2,7 +2,6 @@ package project
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +28,10 @@ type fakeGitHub struct {
 	mergeFail error
 	// protected are the branches GitHub holds protected.
 	protected map[string]bool
+	// block, when set, holds every read until it is closed. rate is the budget
+	// every read reports.
+	block chan struct{}
+	rate  GitHubRate
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -166,28 +169,22 @@ func (g *fakeGitHub) UpdateIssue(_ context.Context, r GitHubRepo, n int, title, 
 	return it, nil
 }
 
-func (g *fakeGitHub) PR(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
-	err := g.log("pr %s #%d", r.Slug(), n)
-	if err == nil {
+func (g *fakeGitHub) Read(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
+	err := g.log("read %s #%d", r.Slug(), n)
+	if g.block != nil {
+		<-g.block
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	it, ok := g.items[n]
+	switch {
+	case err != nil:
+	case !ok:
+		err = fmt.Errorf("GitHub has no issue or PR #%d in %s", n, r.Slug())
+	case it.IsPR:
 		err = g.failPR
 	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	it, ok := g.items[n]
-	if !ok && err == nil {
-		err = errors.New("GitHub GET pulls: HTTP 404 Not Found")
-	}
-	return it, err
-}
-
-func (g *fakeGitHub) Issue(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
-	err := g.log("issue %s #%d", r.Slug(), n)
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	it, ok := g.items[n]
-	if !ok && err == nil {
-		err = errors.New("GitHub GET issues: HTTP 404 Not Found")
-	}
+	it.Rate = g.rate
 	return it, err
 }
 

@@ -1,57 +1,22 @@
 import { Box, Link, Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Theme } from '@mui/material/styles';
-import { getReadableAccent, type StatusTone } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Thread, ThreadLink } from '../../client';
-import { IssueOpened, Merge, PullRequest } from '../icons';
 import { timeAgo } from '../../utils/format';
 import { RailCard } from './infoRail';
-
-type Tone = Extract<StatusTone, 'success' | 'info' | 'warning' | 'error' | 'muted'>;
-
-interface Part {
-    text: string;
-    tone: Tone;
-}
-
-const colorOf = (theme: Theme, tone: Tone) => (tone === 'muted' ? theme.palette.text.secondary : getReadableAccent(theme, tone));
-
-/** Where an item stands: open, merged or closed, and for an open PR its draft
- * mark, checks and mergeability. Only what GitHub last said; a field it was
- * not asked about yet (a PR just opened) is left out, not shown as unknown. */
-function linkParts(link: ThreadLink, t: (key: string) => string): Part[] {
-    const parts: Part[] = [];
-    if (link.state === 'merged') return [{ text: t('links.merged'), tone: 'info' }];
-    if (link.state === 'closed') return [{ text: t('links.closed'), tone: 'muted' }];
-    parts.push({ text: link.draft ? t('links.draft') : t('links.open'), tone: link.draft ? 'muted' : 'success' });
-    if (link.kind !== 'pr') return parts;
-    if (link.ci === 'failing') parts.push({ text: t('links.checksFailing'), tone: 'error' });
-    else if (link.ci === 'pending') parts.push({ text: t('links.checksPending'), tone: 'warning' });
-    else if (link.ci === 'passing') parts.push({ text: t('links.checksPassing'), tone: 'success' });
-    if (link.merge_state === 'conflicts') parts.push({ text: t('links.conflicts'), tone: 'error' });
-    else if (link.merge_state === 'behind') parts.push({ text: t('links.behind'), tone: 'warning' });
-    else if (link.merge_state === 'blocked') parts.push({ text: t('links.blocked'), tone: 'warning' });
-    else if (link.merge_state === 'ready') parts.push({ text: t('links.ready'), tone: 'success' });
-    return parts;
-}
-
-function LinkIcon({ link }: { link: ThreadLink }) {
-    const sx = { fontSize: 16, flexShrink: 0, mt: '2px' } as const;
-    if (link.kind === 'issue') return <IssueOpened sx={{ ...sx, color: (theme) => colorOf(theme, link.state === 'open' ? 'success' : 'muted') }} />;
-    if (link.state === 'merged') return <Merge sx={{ ...sx, color: (theme) => colorOf(theme, 'info') }} />;
-    const tone: Tone = link.state === 'closed' ? 'error' : link.draft ? 'muted' : 'success';
-    return <PullRequest sx={{ ...sx, color: (theme) => colorOf(theme, tone) }} />;
-}
+import { colorOf, linkParts, LinkIcon } from './linkView';
+import { peekRowSx, useLinkPeek } from './useLinkPeek';
 
 /** One issue or PR: its number and title as a link to GitHub, and under it
- * where it stands and how old that reading is. */
-export function LinkRow({ link, owner, onOpenOwner }: { link: ThreadLink; owner?: string; onOpenOwner?: () => void }) {
+ * where it stands and how old that reading is. At the row's end, a refresh and
+ * a details button (`useLinkPeek`). */
+export function LinkRow({ link, threadId, owner, onOpenOwner }: { link: ThreadLink; threadId?: string; owner?: string; onOpenOwner?: () => void }) {
     const { t, i18n } = useTranslation('projects');
     const parts = linkParts(link, t);
     const age = timeAgo(link.refreshed_at, i18n.language);
+    const peek = useLinkPeek(link, threadId);
     return (
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', minWidth: 0, py: 0.625, borderTop: 1, borderColor: 'divider' }}>
+        <Stack {...peek.row} direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', minWidth: 0, py: 0.625, borderTop: 1, borderColor: 'divider', ...peekRowSx }}>
             <LinkIcon link={link} />
             <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Link href={link.url.startsWith('https://') ? link.url : undefined} target="_blank" rel="noopener noreferrer" underline="hover" color="text.primary" title={`${link.repo}#${link.number}`}
@@ -71,6 +36,8 @@ export function LinkRow({ link, owner, onOpenOwner }: { link: ThreadLink; owner?
                         : link.state === 'open' && age && <Box component="span" title={t('links.readTitle')}>{age}</Box>}
                 </Box>
             </Box>
+            <Box sx={{ mt: '-2px', display: 'flex' }}>{peek.actions}</Box>
+            {peek.overlay}
         </Stack>
     );
 }
@@ -84,7 +51,7 @@ export function ThreadLinksCard({ thread }: { thread: Thread }) {
     return (
         <RailCard id="links" title={t('links.title')} aside={String(links.length)}>
             <Box sx={{ mx: -0.25 }}>
-                {links.map((link) => <LinkRow key={`${link.repo}/${link.kind}/${link.number}`} link={link} />)}
+                {links.map((link) => <LinkRow key={`${link.repo}/${link.kind}/${link.number}`} link={link} threadId={thread.id} />)}
             </Box>
         </RailCard>
     );
