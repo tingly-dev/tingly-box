@@ -836,6 +836,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/diff/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file of the thread's changes: its patch, left out when it is binary or too large
+         * @description One file of the thread's changes: its patch, left out when it is binary or too large
+         */
+        get: operations["apiV1ThreadsIdDiffFileGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/effort": {
         parameters: {
             query?: never;
@@ -1486,18 +1506,51 @@ export interface components {
             title?: string;
         };
         Diff: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
             /** @description Field base */
             base: string;
             /** @description Field branch */
             branch: string;
-            /** @description Field patch */
-            patch: string;
-            /** @description Field stat */
-            stat: string;
-            /** @description Field truncated */
-            truncated: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field files */
+            files: components["schemas"]["DiffFile"][];
+            /**
+             * Format: int64
+             * @description Field files_omitted
+             */
+            files_omitted?: number;
             /** @description Field uncommitted */
             uncommitted: string;
+        };
+        DiffFile: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field generated */
+            generated?: boolean;
+            /** @description Field old_path */
+            old_path?: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field status */
+            status: string;
         };
         DirectorySpec: {
             /** @description Field path */
@@ -1529,6 +1582,21 @@ export interface components {
             events: components["schemas"]["ThreadEvent"][];
             /** @description Field more */
             more: boolean;
+        };
+        FileDiff: {
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field lines_cut
+             */
+            lines_cut?: number;
+            /** @description Field patch */
+            patch: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field too_large */
+            too_large?: boolean;
         };
         ForkProjectRequest: {
             /** @description Field name */
@@ -3747,6 +3815,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Diff"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdDiffFileGet: {
+        parameters: {
+            query?: {
+                /** @description File path as listed by the diff */
+                path?: string;
+                /** @description Where a renamed file came from */
+                old_path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
                 };
             };
         };

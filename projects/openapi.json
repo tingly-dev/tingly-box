@@ -1826,6 +1826,57 @@
         }
       }
     },
+    "/api/v1/threads/{id}/diff/file": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "description": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "operationId": "apiV1ThreadsIdDiffFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path as listed by the diff",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "old_path",
+            "in": "query",
+            "description": "Where a renamed file came from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/effort": {
       "put": {
         "tags": [
@@ -3263,6 +3314,11 @@
       "Diff": {
         "type": "object",
         "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
           "base": {
             "type": "string",
             "description": "Field base"
@@ -3271,17 +3327,22 @@
             "type": "string",
             "description": "Field branch"
           },
-          "patch": {
-            "type": "string",
-            "description": "Field patch"
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
           },
-          "stat": {
-            "type": "string",
-            "description": "Field stat"
+          "files": {
+            "type": "array",
+            "description": "Field files",
+            "items": {
+              "$ref": "#/components/schemas/DiffFile"
+            }
           },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
+          "files_omitted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field files_omitted"
           },
           "uncommitted": {
             "type": "string",
@@ -3291,10 +3352,51 @@
         "required": [
           "base",
           "branch",
-          "stat",
-          "patch",
-          "uncommitted",
-          "truncated"
+          "files",
+          "additions",
+          "deletions",
+          "uncommitted"
+        ]
+      },
+      "DiffFile": {
+        "type": "object",
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "Field generated"
+          },
+          "old_path": {
+            "type": "string",
+            "description": "Field old_path"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          }
+        },
+        "required": [
+          "path",
+          "status",
+          "additions",
+          "deletions"
         ]
       },
       "DirectorySpec": {
@@ -3379,6 +3481,36 @@
         "required": [
           "events",
           "more"
+        ]
+      },
+      "FileDiff": {
+        "type": "object",
+        "properties": {
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "lines_cut": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field lines_cut"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "too_large": {
+            "type": "boolean",
+            "description": "Field too_large"
+          }
+        },
+        "required": [
+          "path",
+          "patch"
         ]
       },
       "ForkProjectRequest": {

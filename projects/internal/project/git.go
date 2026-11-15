@@ -160,36 +160,6 @@ func Stats(ctx context.Context, worktree, base string) BranchStats {
 	return s
 }
 
-// Diff is a thread's changes for review.
-type Diff struct {
-	Base        string `json:"base"`
-	Branch      string `json:"branch"`
-	Stat        string `json:"stat"`
-	Patch       string `json:"patch"`
-	Uncommitted string `json:"uncommitted"`
-	Truncated   bool   `json:"truncated"`
-}
-
-const maxPatch = 400 << 10
-
-// BranchDiff returns base...HEAD of a worktree plus any uncommitted changes.
-func BranchDiff(ctx context.Context, worktree, base, branch string) (Diff, error) {
-	d := Diff{Base: base, Branch: branch}
-	var err error
-	if d.Stat, err = git(ctx, worktree, "diff", "--stat", base+"...HEAD"); err != nil {
-		return d, err
-	}
-	if d.Patch, err = git(ctx, worktree, "diff", base+"...HEAD"); err != nil {
-		return d, err
-	}
-	d.Uncommitted, _ = git(ctx, worktree, "status", "--short")
-	if len(d.Patch) > maxPatch {
-		d.Patch = d.Patch[:maxPatch]
-		d.Truncated = true
-	}
-	return d, nil
-}
-
 // MergeBranch merges branch into base in the main checkout of repo. It
 // refuses unless that checkout is on base with no local changes, so the
 // user's working copy is never touched in a surprising state.
