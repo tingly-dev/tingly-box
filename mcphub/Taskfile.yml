@@ -1,0 +1,23 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  boundary:
+    desc: Fail if this module imports any local module (root, Projects and siblings import Mcphub, never the other way)
+    cmds:
+      - |
+        deps=$(go list -deps -f '{{"{{"}}with .Module{{"}}"}}{{"{{"}}.Path{{"}}"}}{{"{{"}}end{{"}}"}}' ./... | sort -u)
+        if echo "$deps" | grep -qxE 'github.com/tingly-dev/tingly-box|github.com/tingly-dev/tingly-box/projects|github.com/tingly-dev/tingly-box/remote|github.com/tingly-dev/tingly-box/imbot|github.com/tingly-dev/tingly-box/agentboot'; then
+          echo "mcphub must not import any Tingly Box local module; keep host concerns with the embedder" >&2
+          exit 1
+        fi
+
+  test:
+    desc: Vet, test and the boundary check of Mcphub
+    cmds:
+      - task: boundary
+      - go vet ./...
+      - go test ./...

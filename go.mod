@@ -22,6 +22,8 @@ replace github.com/tingly-dev/tingly-box/projects => ./projects
 
 replace github.com/tingly-dev/tingly-box/remote => ./remote
 
+replace github.com/tingly-dev/tingly-box/mcphub => ./mcphub
+
 require (
 	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000
