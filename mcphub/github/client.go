@@ -123,6 +123,11 @@ func ParseRemote(remote string) (Repo, error) {
 	return Repo{Owner: parts[0], Name: parts[1]}, nil
 }
 
+// RemoteEndpoint is the hosted github-mcp-server. Nothing here uses it today
+// — hosts serve the built-in toolset over the local gh — but if a hosted
+// GitHub source is ever revived, this is where it belongs, not in a host.
+const RemoteEndpoint = "https://api.githubcopilot.com/mcp/"
+
 // Client is GitHub over the host's own `gh`, signed in as the user. Every call
 // is a REST request through `gh api` with a JSON body: no GraphQL (`gh pr edit`
 // fails on this repository's retired Projects classic), and no shell quoting.

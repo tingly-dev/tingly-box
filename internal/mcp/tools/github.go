@@ -2,10 +2,10 @@ package tools
 
 import "strings"
 
-// GitHubPreset marks a source as the GitHub integration (the official
-// github-mcp-server, remote or local). The integration is a fixed, curated
-// subset: only the tools below are ever offered or callable, whatever the
-// upstream server exposes and however the source is configured.
+// GitHubPreset marks a source as the GitHub integration. Today that is the
+// built-in gh-backed server (the github-builtin source); the integration is a
+// fixed, curated subset: only the tools below are ever offered or callable,
+// whatever the upstream server exposes and however the source is configured.
 const GitHubPreset = "github"
 
 // The built-in GitHub source: mcphub's gh-backed server (the host binary's
@@ -24,9 +24,6 @@ func BuiltinGithubToolNames() []string {
 		"list_branches", "get_file_contents",
 	}
 }
-
-// GitHubRemoteEndpoint is the hosted github-mcp-server.
-const GitHubRemoteEndpoint = "https://api.githubcopilot.com/mcp/"
 
 // githubSubset is every upstream tool the integration allows. Anything not
 // listed is dropped from catalogs and refused at call time. Nothing here

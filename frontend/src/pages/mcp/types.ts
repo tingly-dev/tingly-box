@@ -46,21 +46,6 @@ export interface MCPSourceFormValue {
     original?: MCPSourceConfig;
 }
 
-export const MCP_GITHUB_PRESET = 'github' as const;
-export const MCP_GITHUB_ENDPOINT = 'https://api.githubcopilot.com/mcp/';
-
-// The GitHub integration is a fixed subset of the official GitHub MCP server:
-// the tools it offers are decided by Tingly Box, not by this form.
-export const githubSourceFormValue = (id: string, token: string): MCPSourceFormValue => ({
-    ...defaultMCPSourceFormValue(),
-    id,
-    name: 'GitHub',
-    transport: 'http',
-    endpoint: MCP_GITHUB_ENDPOINT,
-    headers: [{ key: 'Authorization', value: `Bearer ${token.trim()}` }],
-    preset: MCP_GITHUB_PRESET,
-});
-
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
 
 export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({

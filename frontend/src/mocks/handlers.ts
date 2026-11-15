@@ -3121,9 +3121,9 @@ export const handlers = [
                         tools: ['read_file', 'write_file', 'list_directory'],
                     },
                     {
-                        id: 'github', enabled: true, transport: 'http', visibility: 'client',
-                        endpoint: 'https://api.githubcopilot.com/mcp',
-                        tools: ['search_repositories', 'create_issue', 'get_pull_request'],
+                        id: 'github-builtin', enabled: true, transport: 'stdio', visibility: 'client',
+                        command: 'tingly-box', args: ['mcp-github'], preset: 'github',
+                        tools: ['get_me', 'list_issues', 'issue_read', 'create_pull_request'],
                     },
                     {
                         id: 'postgres', enabled: false, transport: 'stdio', visibility: 'server',
