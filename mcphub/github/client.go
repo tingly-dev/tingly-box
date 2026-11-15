@@ -343,6 +343,90 @@ func (g Client) SquashPR(ctx context.Context, r Repo, number int, sha, title, me
 	return nil
 }
 
+// Me is the signed-in user's login.
+func (g Client) Me(ctx context.Context) (string, error) {
+	var out struct {
+		Login string `json:"login"`
+	}
+	if err := g.api(ctx, Repo{}, "GET", "user", nil, &out); err != nil {
+		return "", err
+	}
+	return out.Login, nil
+}
+
+// ListIssues is a repository's issues (and only issues: PRs are skipped) in
+// the given state ("open", "closed" or "all").
+func (g Client) ListIssues(ctx context.Context, r Repo, state string) ([]Item, error) {
+	var out []ghIssue
+	q := url.Values{"state": {state}}
+	if err := g.api(ctx, r, "GET", r.path()+"/issues?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	var items []Item
+	for _, i := range out {
+		if i.PullRequest == nil {
+			items = append(items, i.item())
+		}
+	}
+	return items, nil
+}
+
+// ListPulls is a repository's PRs in the given state.
+func (g Client) ListPulls(ctx context.Context, r Repo, state string) ([]Item, error) {
+	var out []ghPull
+	q := url.Values{"state": {state}}
+	if err := g.api(ctx, r, "GET", r.path()+"/pulls?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	var items []Item
+	for _, p := range out {
+		items = append(items, p.item())
+	}
+	return items, nil
+}
+
+// ListBranches is a repository's branch names, newest first.
+func (g Client) ListBranches(ctx context.Context, r Repo) ([]string, error) {
+	var out []struct {
+		Name string `json:"name"`
+	}
+	if err := g.api(ctx, r, "GET", r.path()+"/branches", nil, &out); err != nil {
+		return nil, err
+	}
+	names := make([]string, len(out))
+	for i, b := range out {
+		names[i] = b.Name
+	}
+	return names, nil
+}
+
+// File is one file as GitHub serves it.
+type File struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+// FileContents is one file of a repository at a ref (empty ref: the default
+// branch). Content is base64, as GitHub answers.
+func (g Client) FileContents(ctx context.Context, r Repo, path, ref string) (File, error) {
+	q := url.Values{}
+	if ref != "" {
+		q.Set("ref", ref)
+	}
+	var out struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	p := r.path() + "/contents/" + path
+	if len(q) != 0 {
+		p += "?" + q.Encode()
+	}
+	if err := g.api(ctx, r, "GET", p, nil, &out); err != nil {
+		return File{}, err
+	}
+	return File{Path: out.Path, Content: out.Content}, nil
+}
+
 func (g Client) UpdateIssue(ctx context.Context, r Repo, number int, title, body *string) (Item, error) {
 	var out ghIssue
 	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/issues/%d", r.path(), number), patchBody(map[string]*string{"title": title, "body": body}), &out)
