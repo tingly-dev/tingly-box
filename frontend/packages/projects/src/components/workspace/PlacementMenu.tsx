@@ -18,9 +18,13 @@ interface Props {
 export function PlacementMenu({ overview, thread, onOverview, onThread, overviewFloat, onOverviewFloat }: Props) {
     const { t } = useTranslation('projects');
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-    const item = (selected: boolean, label: string, onClick: () => void, disabled = false) => (
-        <MenuItem key={label} selected={selected} disabled={disabled} onClick={() => { onClick(); setAnchor(null); }} sx={{ minWidth: 200 }}>
-            <Box sx={{ flex: 1 }}>{label}</Box>
+    // An option that is off says why, under its own name, rather than in a note at the foot of the menu.
+    const item = (selected: boolean, label: string, onClick: () => void, disabled = false, reason?: string) => (
+        <MenuItem key={label} selected={selected} disabled={disabled} onClick={() => { onClick(); setAnchor(null); }} sx={{ minWidth: 220 }}>
+            <Box sx={{ flex: 1 }}>
+                {label}
+                {disabled && reason && <Typography component="div" sx={{ fontSize: fontSizes.sm, color: 'text.disabled', whiteSpace: 'normal' }}>{reason}</Typography>}
+            </Box>
             {selected && <Check fontSize="small" color="primary" />}
         </MenuItem>
     );
@@ -38,12 +42,10 @@ export function PlacementMenu({ overview, thread, onOverview, onThread, overview
                 <Divider />
                 <ListSubheader sx={{ lineHeight: '32px', bgcolor: 'transparent', fontWeight: 600, color: 'text.primary', fontSize: fontSizes.sm }}>{t('placement.thread')}</ListSubheader>
                 {item(!overviewFloat && thread === 'main', t('placement.main'), () => { onOverviewFloat(false); onThread('main'); })}
-                {item(!locked && !overviewFloat && thread === 'side', t('placement.side'), () => { onOverviewFloat(false); onThread('side'); }, locked)}
-                {item(!locked && !overviewFloat && thread === 'float', t('placement.float'), () => { onOverviewFloat(false); onThread('float'); }, locked)}
-                {item(!locked && overviewFloat, t('placement.overviewFloat'), () => { onThread('side'); onOverviewFloat(true); }, locked || overview !== 'side')}
-                <Typography sx={{ px: 2, pt: 0.5, pb: 1, fontSize: fontSizes.sm, color: 'text.disabled', maxWidth: 240 }}>
-                    {locked ? t('placement.lockedTop') : t('placement.remember')}
-                </Typography>
+                {item(!locked && !overviewFloat && thread === 'side', t('placement.side'), () => { onOverviewFloat(false); onThread('side'); }, locked, t('placement.reasonTop'))}
+                {item(!locked && !overviewFloat && thread === 'float', t('placement.float'), () => { onOverviewFloat(false); onThread('float'); }, locked, t('placement.reasonTop'))}
+                {item(!locked && overviewFloat, t('placement.overviewFloat'), () => { onThread('side'); onOverviewFloat(true); }, locked || overview !== 'side', locked ? t('placement.reasonTop') : t('placement.reasonSide'))}
+                <Typography sx={{ px: 2, pt: 0.5, pb: 1, fontSize: fontSizes.sm, color: 'text.disabled', maxWidth: 240 }}>{t('placement.remember')}</Typography>
             </Menu>
         </>
     );

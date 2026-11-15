@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Box, ButtonBase, Collapse, ListItemText, Menu, MenuItem } from '@mui/material';
+import { Box, ButtonBase, Collapse, Link, ListItemText, Menu, MenuItem } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Thread } from '../../client';
+import type { Thread, ThreadLink } from '../../client';
 import { CopyIconButton } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { AutoFixHigh, Branch, Check, ExpandMore, FolderOpen } from '../icons';
@@ -9,6 +9,8 @@ import { DisclosureRow } from '../common/Disclosure';
 import { ControlTooltip } from '../ControlTooltip';
 import { folderName } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
+import { colorOf, keyParts, LinkIcon, stripLinks } from './linkView';
+import { peekRowSx, useLinkPeek } from './useLinkPeek';
 import { radius } from '@tingly/ui/theme/radius';
 
 export type AutoAnswer = 'off' | 'delay' | 'now';
@@ -30,14 +32,38 @@ const clip = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap
 const ROW_H = 30;
 
 /** One fact on its own line: icon, name, value, and its action at the end. */
-function Row({ icon, name, children, action }: { icon: React.ReactNode; name: string; children: React.ReactNode; action?: React.ReactNode }) {
+function Row({ icon, name, children, action, boxProps }: { icon: React.ReactNode; name: string; children: React.ReactNode; action?: React.ReactNode; boxProps?: object }) {
     return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: ROW_H, px: 1.25, minWidth: 0, '& > svg': { fontSize: 15, flexShrink: 0, color: 'text.secondary' } }}>
+        <Box {...boxProps} sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: ROW_H, px: 1.25, minWidth: 0, '& > svg': { fontSize: 15, flexShrink: 0, color: 'text.secondary' }, ...(boxProps ? peekRowSx : {}) }}>
             {icon}
             <Box component="span" sx={{ width: 84, flexShrink: 0, color: 'text.secondary', whiteSpace: 'nowrap' }}>{name}</Box>
             <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75, color: 'text.primary' }}>{children}</Box>
             {action}
         </Box>
+    );
+}
+
+/** The most items the open strip lists; the rest are in the Issues & PRs tab. */
+const LINKS_SHOWN = 3;
+const linkKey = (l: ThreadLink) => `${l.repo}/${l.kind}/${l.number}`;
+
+/** One of the thread's issues or PRs as a line of the open strip: number and title as a link to GitHub, where it stands, and the refresh and details buttons. */
+function LinkLine({ link, threadId }: { link: ThreadLink; threadId: string }) {
+    const { t } = useTranslation('projects');
+    // The strip sits above the message box, at the bottom of the screen: the details open upward.
+    const peek = useLinkPeek(link, threadId, true);
+    return (
+        <Row icon={<Box component="span" sx={{ display: 'inline-flex', '& svg': { mt: 0 } }}><LinkIcon link={link} /></Box>} name={t(link.kind === 'pr' ? 'strip.pr' : 'strip.issue')} action={peek.actions} boxProps={peek.row}>
+            {/* The title keeps a readable width and the state wraps under it where the strip is narrow (a phone, with its big touch buttons). */}
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0.75 }}>
+                <Link href={link.url.startsWith('https://') ? link.url : undefined} target="_blank" rel="noopener noreferrer" underline="hover" color="text.primary" title={`${link.repo}#${link.number} ${link.title}`}
+                    sx={{ ...clip, flex: '1 1 7rem' }}>
+                    #{link.number} {link.title}
+                </Link>
+                {keyParts(link, t).map((part) => <Box key={part.text} component="span" sx={{ flexShrink: 0, color: (theme) => colorOf(theme, part.tone) }}>{part.text}</Box>)}
+            </Box>
+            {peek.overlay}
+        </Row>
     );
 }
 
@@ -72,9 +98,11 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
     const mode = autoAnswerOf(thread, folder);
     const own = (thread.auto_answer ?? '') !== '';
     const showAuto = !!onAutoAnswer && thread.status !== 'resolved';
-    if (!thread.cwd && !branch && !showAuto) return null;
+    const links = stripLinks(thread.links);
+    const shownLinks = links.slice(0, LINKS_SHOWN);
+    if (!thread.cwd && !branch && !showAuto && links.length === 0) return null;
 
-    const rows = [!!thread.cwd, !!branch, showAuto].filter(Boolean).length;
+    const rows = [!!thread.cwd, !!branch, showAuto].filter(Boolean).length + shownLinks.length;
     const item = (icon: React.ReactNode, text: React.ReactNode, mono = false, color?: string) => (
         <Box component="span" sx={{ ...clip, display: 'inline-flex', alignItems: 'center', gap: 0.5, color, '& svg': { fontSize: 14, flexShrink: 0 } }}>
             {icon}<Box component="span" sx={{ ...clip, fontFamily: mono ? fontMono : undefined }}>{text}</Box>
@@ -83,6 +111,14 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
     const time = autoAt ? new Date(autoAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const lead = autoAt && showAuto && mode !== 'off'
         ? item(<AutoFixHigh />, t('strip.autoAt', { time }), false, 'primary.main')
+        : links.length > 0
+            ? (
+                <Box component="span" sx={{ ...clip, display: 'inline-flex', alignItems: 'center', gap: 0.75, '& svg': { fontSize: 14, mt: 0 } }}>
+                    <LinkIcon link={links[0]} />
+                    <Box component="span" sx={{ flexShrink: 0, color: 'text.primary' }}>#{links[0].number}</Box>
+                    {keyParts(links[0], t).map((part) => <Box key={part.text} component="span" sx={{ ...clip, color: (theme) => colorOf(theme, part.tone) }}>{part.text}</Box>)}
+                </Box>
+            )
         : branch
             ? item(<Branch />, branch, true)
             : thread.cwd ? item(<FolderOpen />, folderName(thread.cwd), true) : null;
@@ -122,6 +158,8 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
                             {thread.branch && thread.base_branch && <Box component="span" sx={{ ...clip, flexShrink: 0, color: 'text.secondary' }}>{t('thread.fromBase', { base: thread.base_branch })}</Box>}
                         </Row>
                     )}
+                    {shownLinks.map((l) => <LinkLine key={linkKey(l)} link={l} threadId={thread.id} />)}
+                    {links.length > shownLinks.length && <Box sx={{ px: 1.25, minHeight: ROW_H, display: 'flex', alignItems: 'center' }}>{t('strip.moreLinks', { count: links.length - shownLinks.length })}</Box>}
                     {showAuto && (
                         <Row icon={<AutoFixHigh sx={{ color: mode === 'off' ? undefined : 'primary.main' }} />} name={t('strip.autoAnswer.title')}>
                             <ControlTooltip title={t(`strip.autoAnswer.${mode}Help`)} suppressed={!!menu}>

@@ -98,3 +98,14 @@ it('saves a newly selected primary without changing other modes', async () => {
     fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/git', workspace_mode: 'worktree' }, { path: '/docs', workspace_mode: 'shared' }], primary_repo_path: '/docs' } }));
 });
+
+it('allows issues and PRs by default, and saves the choice to ask', async () => {
+    open();
+    expect(screen.getByText('projectSettings.githubAccessAllowHelp')).toBeTruthy();
+    expect(save()).toBeDisabled();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'projectSettings.githubAccess' }));
+    fireEvent.click(screen.getByRole('option', { name: 'projectSettings.githubAccessAsk' }));
+    expect(screen.getByText('projectSettings.githubAccessAskHelp')).toBeTruthy();
+    fireEvent.click(save());
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: expect.objectContaining({ thread_github_access: 'ask' }) }));
+});

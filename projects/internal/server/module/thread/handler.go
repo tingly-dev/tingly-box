@@ -6,6 +6,7 @@ package thread
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,6 +71,16 @@ type RequestsResponse struct {
 // SubagentsResponse lists a thread's subagents.
 type SubagentsResponse struct {
 	Subagents []db.Subagent `json:"subagents"`
+}
+
+// RefreshLinksRequest picks one of the thread's issues or PRs to read from
+// GitHub again; with no field set, all of them are read.
+type RefreshLinksRequest struct {
+	// Repo is owner/name, as the link says; it goes with Number.
+	Repo string `json:"repo,omitempty"`
+	// Kind is issue or pr; empty matches either.
+	Kind   string `json:"kind,omitempty" enum:",issue,pr"`
+	Number int    `json:"number,omitempty"`
 }
 
 // SendRequest is a message to the thread.
@@ -158,11 +169,17 @@ type TaskOutputResponse struct {
 	Size      int64  `json:"size"`
 }
 
-// MergeBlockedResponse explains why a merge was not done.
-type MergeBlockedResponse struct {
-	Error string `json:"error"`
-	// Command does the merge by hand.
-	Command string `json:"command"`
+// MergeRequest says how a thread's branch is merged.
+type MergeRequest struct {
+	// Method is "squash" (squash-merge the thread's PR on GitHub, opening it
+	// first if needed) or "merge_request" (push the branch and open the PR only).
+	Method string `json:"method" binding:"required,oneof=squash merge_request" enums:"squash,merge_request"`
+	// Message is the squash commit's message; empty leaves it to GitHub.
+	Message string `json:"message,omitempty"`
+	// Title and Body describe the PR when one is opened; empty means the
+	// thread's title and its last report.
+	Title string `json:"title,omitempty"`
+	Body  string `json:"body,omitempty"`
 }
 
 // maxUpload caps one uploaded file.
@@ -290,10 +307,50 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/threads/:id/diff", h.diff, tag,
 		swagger.WithDescription("The thread's changes against its base branch"),
 		swagger.WithResponseModel(rt.Diff{}))
+	api.POST("/threads/:id/links/refresh", h.refreshLinks, tag,
+		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
+		swagger.WithRequestModel(RefreshLinksRequest{}),
+		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
+	api.GET("/threads/:id/diff/file", h.diffFile, tag,
+		swagger.WithDescription("One file of the thread's changes: its patch, left out when it is binary or too large"),
+		swagger.WithQuery("path", "string", "File path as listed by the diff"),
+		swagger.WithQuery("old_path", "string", "Where a renamed file came from"),
+		swagger.WithResponseModel(rt.FileDiff{}))
 	api.POST("/threads/:id/merge", h.merge, tag,
-		swagger.WithDescription("Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready."),
-		swagger.WithResponseModel(db.Thread{}),
-		swagger.WithErrorResponses(swagger.ErrorResponseConfig{Code: http.StatusConflict, Message: "merge blocked", Model: MergeBlockedResponse{}}))
+		swagger.WithDescription("Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout."),
+		swagger.WithRequestModel(MergeRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+}
+
+// refreshLinks reads a thread's issues and PRs from GitHub on request.
+func (h *Handler) refreshLinks(c *gin.Context) {
+	t, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	var req RefreshLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.BadRequest(c, err.Error())
+		return
+	}
+	var only *rt.LinkRef
+	if req.Repo != "" || req.Number != 0 {
+		if req.Repo == "" || req.Number <= 0 {
+			apierr.BadRequest(c, "repo and number go together")
+			return
+		}
+		only = &rt.LinkRef{Repo: req.Repo, Kind: req.Kind, Number: req.Number}
+	}
+	results, err := h.svc.Links.RefreshThread(c.Request.Context(), t.ID, only)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			apierr.Message(c, http.StatusNotFound, "this thread has no such issue or PR")
+			return
+		}
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, rt.RefreshLinksResponse{Results: results})
 }
 
 func fail(c *gin.Context, err error) {
@@ -660,17 +717,29 @@ func (h *Handler) diff(c *gin.Context) {
 	c.JSON(http.StatusOK, d)
 }
 
+func (h *Handler) diffFile(c *gin.Context) {
+	cur, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.DiffFile(c.Request.Context(), cur.ID, c.Query("path"), c.Query("old_path"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
 func (h *Handler) merge(c *gin.Context) {
 	cur, ok := h.worker(c)
 	if !ok {
 		return
 	}
-	t, err := h.svc.Threads.Merge(c.Request.Context(), cur.ID)
-	var blocked *rt.MergeBlockedError
-	if errors.As(err, &blocked) {
-		c.AbortWithStatusJSON(http.StatusConflict, MergeBlockedResponse{Error: blocked.Reason, Command: blocked.Command})
+	var req MergeRequest
+	if !apierr.Bind(c, &req) {
 		return
 	}
+	t, err := h.svc.Threads.Merge(c.Request.Context(), cur.ID, rt.MergeSpec{Method: req.Method, Message: req.Message, Title: req.Title, Body: req.Body})
 	if err != nil {
 		fail(c, err)
 		return

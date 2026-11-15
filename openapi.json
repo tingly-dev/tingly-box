@@ -5325,6 +5325,39 @@
         }
       }
     },
+    "/api/v1/projects/directories/inspect": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Inspect a local directory or Git repository",
+        "description": "Inspect a local directory or Git repository",
+        "operationId": "apiV1ProjectsDirectoriesInspectPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRepoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectDirectoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/events": {
       "get": {
         "tags": [
@@ -5940,6 +5973,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LibraryTreeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "description": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "operationId": "apiV1ProjectsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
                 }
               }
             }
@@ -8535,6 +8601,57 @@
         }
       }
     },
+    "/api/v1/threads/{id}/diff/file": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "description": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "operationId": "apiV1ThreadsIdDiffFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path as listed by the diff",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "old_path",
+            "in": "query",
+            "description": "Where a renamed file came from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/effort": {
       "put": {
         "tags": [
@@ -8805,13 +8922,57 @@
         }
       }
     },
+    "/api/v1/threads/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "description": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "operationId": "apiV1ThreadsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshLinksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/merge": {
       "post": {
         "tags": [
           "threads"
         ],
-        "summary": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
-        "description": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
+        "summary": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
+        "description": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
         "operationId": "apiV1ThreadsIdMergePost",
         "parameters": [
           {
@@ -8824,6 +8985,17 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -8831,16 +9003,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "merge blocked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MergeBlockedResponse"
                 }
               }
             }
@@ -13490,6 +13652,17 @@
       "CreateProjectRequest": {
         "type": "object",
         "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -13501,6 +13674,10 @@
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -13971,6 +14148,11 @@
       "Diff": {
         "type": "object",
         "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
           "base": {
             "type": "string",
             "description": "Field base"
@@ -13979,17 +14161,22 @@
             "type": "string",
             "description": "Field branch"
           },
-          "patch": {
-            "type": "string",
-            "description": "Field patch"
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
           },
-          "stat": {
-            "type": "string",
-            "description": "Field stat"
+          "files": {
+            "type": "array",
+            "description": "Field files",
+            "items": {
+              "$ref": "#/components/schemas/DiffFile"
+            }
           },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
+          "files_omitted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field files_omitted"
           },
           "uncommitted": {
             "type": "string",
@@ -13999,10 +14186,51 @@
         "required": [
           "base",
           "branch",
-          "stat",
-          "patch",
-          "uncommitted",
-          "truncated"
+          "files",
+          "additions",
+          "deletions",
+          "uncommitted"
+        ]
+      },
+      "DiffFile": {
+        "type": "object",
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "Field generated"
+          },
+          "old_path": {
+            "type": "string",
+            "description": "Field old_path"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          }
+        },
+        "required": [
+          "path",
+          "status",
+          "additions",
+          "deletions"
         ]
       },
       "DirectChat": {
@@ -14102,6 +14330,27 @@
         },
         "required": [
           "chats"
+        ]
+      },
+      "DirectorySpec": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "",
+              "shared",
+              "worktree"
+            ]
+          }
+        },
+        "required": [
+          "path"
         ]
       },
       "DiscoverIdesResponse": {
@@ -14780,6 +15029,36 @@
           "required",
           "secret",
           "helperText"
+        ]
+      },
+      "FileDiff": {
+        "type": "object",
+        "properties": {
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "lines_cut": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field lines_cut"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "too_large": {
+            "type": "boolean",
+            "description": "Field too_large"
+          }
+        },
+        "required": [
+          "path",
+          "patch"
         ]
       },
       "FlagOption": {
@@ -15586,6 +15865,48 @@
           "message"
         ]
       },
+      "InspectDirectoryResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "dirty": {
+            "type": "boolean",
+            "description": "Field dirty"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "git",
+              "directory"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Field ok"
+          },
+          "root": {
+            "type": "string",
+            "description": "Field root"
+          }
+        },
+        "required": [
+          "ok",
+          "root",
+          "kind",
+          "branch",
+          "dirty",
+          "error"
+        ]
+      },
       "InspectRepoRequest": {
         "type": "object",
         "properties": {
@@ -15992,6 +16313,59 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "LinkCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "LinkChecks": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "array",
+            "description": "Field failed",
+            "items": {
+              "$ref": "#/components/schemas/LinkCheck"
+            }
+          },
+          "failing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failing"
+          },
+          "more": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field more"
+          },
+          "passing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field passing"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field pending"
+          }
+        },
+        "required": [
+          "passing",
+          "failing",
+          "pending"
         ]
       },
       "ListQuotaResponse": {
@@ -16801,21 +17175,32 @@
           "files"
         ]
       },
-      "MergeBlockedResponse": {
+      "MergeRequest": {
         "type": "object",
         "properties": {
-          "command": {
+          "body": {
             "type": "string",
-            "description": "Field command"
+            "description": "Field body"
           },
-          "error": {
+          "message": {
             "type": "string",
-            "description": "Field error"
+            "description": "Field message"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method",
+            "enum": [
+              "squash",
+              "merge_request"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
           }
         },
         "required": [
-          "error",
-          "command"
+          "method"
         ]
       },
       "MetaData": {
@@ -18414,6 +18799,10 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -18428,6 +18817,10 @@
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
+          },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
           },
           "thread_model": {
             "type": "string",
@@ -18632,6 +19025,10 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -18646,6 +19043,10 @@
           "thread_effort": {
             "type": "string",
             "description": "Field thread_effort"
+          },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
           },
           "thread_model": {
             "type": "string",
@@ -19299,6 +19700,82 @@
           "status"
         ]
       },
+      "RefreshLinksRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "issue",
+              "pr"
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          }
+        }
+      },
+      "RefreshLinksResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "description": "Field results",
+            "items": {
+              "$ref": "#/components/schemas/RefreshResult"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "RefreshResult": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status",
+            "enum": [
+              "refreshed",
+              "recent",
+              "failed",
+              "limited"
+            ]
+          }
+        },
+        "required": [
+          "repo",
+          "kind",
+          "number",
+          "status"
+        ]
+      },
       "RefreshSkillLocationResponse": {
         "type": "object",
         "properties": {
@@ -19368,9 +19845,25 @@
             "type": "string",
             "description": "Field base_branch"
           },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "git",
+              "directory"
+            ]
+          },
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "shared",
+              "worktree"
+            ]
           }
         },
         "required": [
@@ -21442,6 +21935,13 @@
             "format": "int64",
             "description": "Field last_turn_ms"
           },
+          "links": {
+            "type": "array",
+            "description": "Field links",
+            "items": {
+              "$ref": "#/components/schemas/ThreadLink"
+            }
+          },
           "merged_at": {
             "type": "string",
             "format": "date-time",
@@ -21705,6 +22205,99 @@
           "content",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ThreadLink": {
+        "type": "object",
+        "properties": {
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field attempted_at"
+          },
+          "base": {
+            "type": "string",
+            "description": "Field base"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/LinkChecks"
+          },
+          "ci": {
+            "type": "string",
+            "description": "Field ci"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Field draft"
+          },
+          "failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failures"
+          },
+          "head": {
+            "type": "string",
+            "description": "Field head"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Field last_error"
+          },
+          "merge_state": {
+            "type": "string",
+            "description": "Field merge_state"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "refreshed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field refreshed_at"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "kind",
+          "repo",
+          "number",
+          "url",
+          "title",
+          "role",
+          "state",
+          "refreshed_at",
+          "attempted_at",
+          "created_at"
         ]
       },
       "ThreadRespondRequest": {
@@ -22433,6 +23026,13 @@
             "type": "string",
             "description": "Field coordinator_profile"
           },
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
           "disable_worktree": {
             "type": "boolean",
             "description": "Field disable_worktree"
@@ -22458,6 +23058,13 @@
             "type": "boolean",
             "description": "Field paused"
           },
+          "primary_directory_mode": {
+            "$ref": "#/components/schemas/DirectorySpec"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
+          },
           "repos": {
             "type": "array",
             "description": "Field repos",
@@ -22478,6 +23085,14 @@
               "medium",
               "high",
               "max"
+            ]
+          },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access",
+            "enum": [
+              "ask",
+              "allow"
             ]
           },
           "thread_model": {

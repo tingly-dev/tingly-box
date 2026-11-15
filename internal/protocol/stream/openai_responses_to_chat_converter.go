@@ -37,10 +37,12 @@ type responsesToChatConverter struct {
 }
 
 type responsesToChatToolCall struct {
-	id        string
-	callID    string
-	name      string
-	arguments strings.Builder
+	id               string
+	callID           string
+	name             string
+	chatIndex        int
+	initialArguments string
+	arguments        strings.Builder
 }
 
 // newResponsesToChatConverter creates a converter that reads from a Responses
@@ -122,20 +124,21 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 		}
 		c.emitTextPart(int(evt.OutputIndex), responsePartIndex(*evt), responseTextKind(evt.Type), text, true)
 
+	case "response.content_part.added", "response.content_part.done":
+		kind, text := "text", evt.Part.Text
+		if evt.Part.Type == "refusal" {
+			kind, text = "refusal", evt.Part.Refusal
+		}
+		c.emitTextPart(int(evt.OutputIndex), int(evt.ContentIndex), kind, text, true)
+	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
+		c.emitTextPart(int(evt.OutputIndex), int(evt.SummaryIndex), "summary", evt.Part.Text, true)
 	case "response.output_item.added":
 		if evt.Item.Type == "function_call" {
-			if !c.hasSentCreated {
-				c.pending = append(c.pending, c.roleChunk())
-			}
-			index := int(evt.OutputIndex)
-			callID := evt.Item.CallID
-			if callID == "" {
-				callID = evt.Item.ID
-			}
-			c.toolCallIndexes[evt.Item.ID] = index
-			c.toolCalls[index] = &responsesToChatToolCall{id: evt.Item.ID, callID: callID, name: evt.Item.Name}
-			c.hasToolCalls = true
-			c.pending = append(c.pending, c.toolCallStartChunk(index, callID, evt.Item.Name))
+			item := evt.Item
+			initial := item.Arguments.OfString
+			item.Arguments.OfString = ""
+			c.emitOutputItem(int(evt.OutputIndex), item)
+			c.toolCalls[int(evt.OutputIndex)].initialArguments = initial
 		}
 
 	case "response.function_call_arguments.delta":
@@ -150,7 +153,9 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			toolCall.arguments.WriteString(evt.Delta)
 		}
 		c.hasToolCalls = true
-		c.pending = append(c.pending, c.toolCallDeltaChunk(index, evt.Delta))
+		if tc := c.toolCalls[index]; tc != nil {
+			c.pending = append(c.pending, c.toolCallDeltaChunk(tc.chatIndex, evt.Delta))
+		}
 
 	case "response.function_call_arguments.done":
 		index, ok := c.toolCallIndexes[evt.ItemID]
@@ -182,6 +187,11 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			c.totalTokens = int64(c.usage.InputTokens + c.usage.CacheReadTokens + c.usage.OutputTokens)
 		}
 		c.emitCompletedOutput(evt.Response.Output)
+		for index, tc := range c.toolCalls {
+			if tc.arguments.Len() == 0 {
+				c.emitToolArguments(index, tc, tc.initialArguments)
+			}
+		}
 		// The terminal response carries the tier actually used (created may
 		// only say "auto") and any moderation verdict.
 		if tier := protocol.ChatServiceTierFromResponses(evt.Response.ServiceTier); tier != nil {
@@ -237,14 +247,14 @@ func (c *responsesToChatConverter) emitOutputItem(index int, item responses.Resp
 			if callID == "" {
 				callID = item.ID
 			}
-			tc = &responsesToChatToolCall{id: item.ID, callID: callID, name: item.Name}
+			tc = &responsesToChatToolCall{id: item.ID, callID: callID, name: item.Name, chatIndex: len(c.toolCalls)}
 			c.toolCalls[index] = tc
 			c.toolCallIndexes[item.ID] = index
 			c.hasToolCalls = true
 			if !c.hasSentCreated {
 				c.pending = append(c.pending, c.roleChunk())
 			}
-			c.pending = append(c.pending, c.toolCallStartChunk(index, callID, item.Name))
+			c.pending = append(c.pending, c.toolCallStartChunk(tc.chatIndex, callID, item.Name))
 		}
 		c.emitToolArguments(index, tc, item.Arguments.OfString)
 	}
@@ -253,7 +263,7 @@ func (c *responsesToChatConverter) emitOutputItem(index int, item responses.Resp
 func (c *responsesToChatConverter) emitToolArguments(index int, tc *responsesToChatToolCall, snapshot string) {
 	if suffix := snapshotSuffix(tc.arguments.String(), snapshot); suffix != "" {
 		tc.arguments.WriteString(suffix)
-		c.pending = append(c.pending, c.toolCallDeltaChunk(index, suffix))
+		c.pending = append(c.pending, c.toolCallDeltaChunk(tc.chatIndex, suffix))
 	}
 }
 

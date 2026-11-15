@@ -540,6 +540,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/links/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         * @description Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         */
+        post: operations["apiV1ProjectsIdLinksRefreshPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/memory": {
         parameters: {
             query?: never;
@@ -836,6 +856,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/diff/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file of the thread's changes: its patch, left out when it is binary or too large
+         * @description One file of the thread's changes: its patch, left out when it is binary or too large
+         */
+        get: operations["apiV1ThreadsIdDiffFileGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/effort": {
         parameters: {
             query?: never;
@@ -936,6 +976,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/links/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         * @description Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         */
+        post: operations["apiV1ThreadsIdLinksRefreshPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/merge": {
         parameters: {
             query?: never;
@@ -946,8 +1006,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.
-         * @description Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.
+         * Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.
+         * @description Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.
          */
         post: operations["apiV1ThreadsIdMergePost"];
         delete?: never;
@@ -1486,18 +1546,51 @@ export interface components {
             title?: string;
         };
         Diff: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
             /** @description Field base */
             base: string;
             /** @description Field branch */
             branch: string;
-            /** @description Field patch */
-            patch: string;
-            /** @description Field stat */
-            stat: string;
-            /** @description Field truncated */
-            truncated: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field files */
+            files: components["schemas"]["DiffFile"][];
+            /**
+             * Format: int64
+             * @description Field files_omitted
+             */
+            files_omitted?: number;
             /** @description Field uncommitted */
             uncommitted: string;
+        };
+        DiffFile: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field generated */
+            generated?: boolean;
+            /** @description Field old_path */
+            old_path?: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field status */
+            status: string;
         };
         DirectorySpec: {
             /** @description Field path */
@@ -1529,6 +1622,21 @@ export interface components {
             events: components["schemas"]["ThreadEvent"][];
             /** @description Field more */
             more: boolean;
+        };
+        FileDiff: {
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field lines_cut
+             */
+            lines_cut?: number;
+            /** @description Field patch */
+            patch: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field too_large */
+            too_large?: boolean;
         };
         ForkProjectRequest: {
             /** @description Field name */
@@ -1630,6 +1738,36 @@ export interface components {
             /** @description Field path */
             path: string;
         };
+        LinkCheck: {
+            /** @description Field name */
+            name: string;
+            /** @description Field url */
+            url?: string;
+        };
+        LinkChecks: {
+            /** @description Field failed */
+            failed?: components["schemas"]["LinkCheck"][];
+            /**
+             * Format: int64
+             * @description Field failing
+             */
+            failing: number;
+            /**
+             * Format: int64
+             * @description Field more
+             */
+            more?: number;
+            /**
+             * Format: int64
+             * @description Field passing
+             */
+            passing: number;
+            /**
+             * Format: int64
+             * @description Field pending
+             */
+            pending: number;
+        };
         MemoryFile: {
             /** @description Field name */
             name: string;
@@ -1656,11 +1794,18 @@ export interface components {
             /** @description Field files */
             files: components["schemas"]["MemoryFile"][];
         };
-        MergeBlockedResponse: {
-            /** @description Field command */
-            command: string;
-            /** @description Field error */
-            error: string;
+        MergeRequest: {
+            /** @description Field body */
+            body?: string;
+            /** @description Field message */
+            message?: string;
+            /**
+             * @description Field method
+             * @enum {string}
+             */
+            method: "squash" | "merge_request";
+            /** @description Field title */
+            title?: string;
         };
         Message: {
             /** @description Field content */
@@ -1796,6 +1941,8 @@ export interface components {
             starred: boolean;
             /** @description Field thread_effort */
             thread_effort: string;
+            /** @description Field thread_github_access */
+            thread_github_access?: string;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
@@ -1893,6 +2040,8 @@ export interface components {
             starred: boolean;
             /** @description Field thread_effort */
             thread_effort: string;
+            /** @description Field thread_github_access */
+            thread_github_access?: string;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
@@ -1916,6 +2065,42 @@ export interface components {
             action: "retry" | "skip";
             /** @description Field input_id */
             input_id: string;
+        };
+        RefreshLinksRequest: {
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind?: "" | "issue" | "pr";
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number?: number;
+            /** @description Field repo */
+            repo?: string;
+        };
+        RefreshLinksResponse: {
+            /** @description Field results */
+            results: components["schemas"]["RefreshResult"][];
+        };
+        RefreshResult: {
+            /** @description Field error */
+            error?: string;
+            /** @description Field kind */
+            kind: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field repo */
+            repo: string;
+            /**
+             * @description Field status
+             * @enum {string}
+             */
+            status: "refreshed" | "recent" | "failed" | "limited";
         };
         RegenerateRequest: {
             /** @description Field model */
@@ -2147,6 +2332,8 @@ export interface components {
              * @description Field last_turn_ms
              */
             last_turn_ms: number;
+            /** @description Field links */
+            links?: components["schemas"]["ThreadLink"][];
             /**
              * Format: date-time
              * @description Field merged_at
@@ -2290,6 +2477,58 @@ export interface components {
              */
             updated_at: string;
         };
+        ThreadLink: {
+            /**
+             * Format: date-time
+             * @description Field attempted_at
+             */
+            attempted_at: string;
+            /** @description Field base */
+            base?: string;
+            checks?: components["schemas"]["LinkChecks"];
+            /** @description Field ci */
+            ci?: string;
+            /**
+             * Format: date-time
+             * @description Field created_at
+             */
+            created_at: string;
+            /** @description Field draft */
+            draft?: boolean;
+            /**
+             * Format: int64
+             * @description Field failures
+             */
+            failures?: number;
+            /** @description Field head */
+            head?: string;
+            /** @description Field kind */
+            kind: string;
+            /** @description Field last_error */
+            last_error?: string;
+            /** @description Field merge_state */
+            merge_state?: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /**
+             * Format: date-time
+             * @description Field refreshed_at
+             */
+            refreshed_at: string;
+            /** @description Field repo */
+            repo: string;
+            /** @description Field role */
+            role: string;
+            /** @description Field state */
+            state: string;
+            /** @description Field title */
+            title: string;
+            /** @description Field url */
+            url: string;
+        };
         ThreadRespondRequest: {
             /** @description Field allow */
             allow: boolean;
@@ -2393,6 +2632,11 @@ export interface components {
              * @enum {string}
              */
             thread_effort?: "" | "low" | "medium" | "high" | "max";
+            /**
+             * @description Field thread_github_access
+             * @enum {string}
+             */
+            thread_github_access?: "ask" | "allow";
             /** @description Field thread_model */
             thread_model?: string;
             /**
@@ -3251,6 +3495,29 @@ export interface operations {
             };
         };
     };
+    apiV1ProjectsIdLinksRefreshPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshLinksResponse"];
+                };
+            };
+        };
+    };
     apiV1ProjectsIdMemoryGet: {
         parameters: {
             query?: never;
@@ -3689,6 +3956,34 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdDiffFileGet: {
+        parameters: {
+            query?: {
+                /** @description File path as listed by the diff */
+                path?: string;
+                /** @description Where a renamed file came from */
+                old_path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdEffortPut: {
         parameters: {
             query?: never;
@@ -3836,6 +4131,34 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdLinksRefreshPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshLinksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshLinksResponse"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdMergePost: {
         parameters: {
             query?: never;
@@ -3846,7 +4169,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
         responses: {
             /** @description Successful response */
             200: {
@@ -3855,15 +4183,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
-                };
-            };
-            /** @description merge blocked */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MergeBlockedResponse"];
                 };
             };
         };

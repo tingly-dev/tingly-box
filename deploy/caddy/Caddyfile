@@ -1,5 +1,10 @@
+# Model API only: the gateway's /tingly/* endpoints are proxied, everything
+# else (web UI, management API) answers 403. For the whole service on one host
+# use Caddyfile.full. Design notes: .design/caddy-deploy.md
 {
 	servers {
+		# h3 needs UDP 443 open as well as TCP; clients fall back to h2 if not.
+		protocols h1 h2 h3
 		timeouts {
 			read_body 30m
 			read_header 1m
@@ -9,29 +14,41 @@
 	}
 }
 
+# Compress JSON responses only. Streaming (text/event-stream) must stay
+# uncompressed so each event is flushed to the client as it is produced.
+(compress_json) {
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type application/json*
+		}
+	}
+}
+
+(tingly_upstream) {
+	reverse_proxy localhost:12580 {
+		flush_interval -1
+		transport http {
+			read_timeout 0
+			keepalive 10m
+		}
+	}
+}
+
 # https:// (port 443) is implied by the bare host — Caddy auto-provisions TLS
 # and its automatic HTTPS redirects :80 -> :443
 you.domain {
 	handle /tingly/* {
-		reverse_proxy localhost:12580 {
-			flush_interval -1
-			transport http {
-				read_timeout 0
-				keepalive 10m
-			}
-		}
+		import compress_json
+		import tingly_upstream
 	}
 
 	# mirror for debug or rc version
 	handle /mirror/* {
 		uri replace /mirror /tingly
-		reverse_proxy localhost:12580 {
-			flush_interval -1
-			transport http {
-				read_timeout 0
-				keepalive 10m
-			}
-		}
+		import compress_json
+		import tingly_upstream
 	}
 
 	handle /hi {

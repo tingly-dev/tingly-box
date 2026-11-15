@@ -7,7 +7,9 @@
 import {
     IconArchiveOff,
     IconArrowUp,
+    IconBellOff,
     IconCircleDashed,
+    IconCircleDot,
     IconFileDiff,
     IconFileUpload,
     IconFolder,
@@ -18,10 +20,10 @@ import {
     IconGitBranch,
     IconGitCommit,
     IconGitMerge,
+    IconGitPullRequest,
     IconHandStop,
     IconHistoryToggle,
     IconLayoutKanban,
-    IconLayoutRows,
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
     IconLayoutSidebarRight,
@@ -50,6 +52,7 @@ export * from '@tingly/ui/icons';
 export const Star = tablerMuiFilled(IconStarFilled);
 
 export const Stack = tablerMui(IconStack2);
+export const BellOff = tablerMui(IconBellOff);
 export const Unarchive = tablerMui(IconArchiveOff);
 export const Folder = tablerMui(IconFolder);
 export const DriveFileMove = tablerMui(IconFolderShare);
@@ -69,6 +72,8 @@ export const MemoryOff = tablerMui(IconHistoryToggle);
 export const Branch = tablerMui(IconGitBranch);
 export const Merge = tablerMui(IconGitMerge);
 export const GitCommit = tablerMui(IconGitCommit);
+export const PullRequest = tablerMui(IconGitPullRequest);
+export const IssueOpened = tablerMui(IconCircleDot);
 export const OverviewPane = tablerMui(IconLayoutSidebarRight);
 export const RailHide = tablerMui(IconLayoutSidebarRightCollapse);
 export const RailShow = tablerMui(IconLayoutSidebarRightExpand);
@@ -83,4 +88,3 @@ export const FloatWindow = tablerMui(IconPictureInPictureOn);
 export const Minimize = tablerMui(IconMinus);
 export const LayoutIcon = tablerMui(IconLayout2);
 export const Kanban = tablerMui(IconLayoutKanban);
-export const KanbanRows = tablerMui(IconLayoutRows);

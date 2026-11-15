@@ -91,7 +91,11 @@ type UpdateProjectRequest struct {
 	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
-	DisableWorktree      *bool               `json:"disable_worktree,omitempty"`
+	// ThreadGitHubAccess is how threads' tools that write to GitHub (issues,
+	// PRs) are approved: allow (the default, also when empty) runs them
+	// without a card, ask asks each time. Only the owner sets it, here.
+	ThreadGitHubAccess *string `json:"thread_github_access,omitempty" enum:"ask,allow"`
+	DisableWorktree    *bool   `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads is how many threads of the project may run at once;
 	// the rest wait. 1..100; a new project starts at 4.
 	MaxRunningThreads *int  `json:"max_running_threads,omitempty"`
@@ -245,6 +249,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/projects/:id", h.get, tag,
 		swagger.WithDescription("Get a project with its threads"),
 		swagger.WithResponseModel(ProjectDetailResponse{}))
+	api.POST("/projects/:id/links/refresh", h.refreshLinks, tag,
+		swagger.WithDescription("Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item."),
+		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
 	api.POST("/projects/:id/coordinator/recover", h.recoverCoordinator, tag,
 		swagger.WithDescription("Resolve an interrupted coordinator input; retry may repeat side effects"),
 		swagger.WithRequestModel(RecoverCoordinatorRequest{}),
@@ -375,6 +382,19 @@ func (h *Handler) create(c *gin.Context) {
 		status = http.StatusOK
 	}
 	c.JSON(status, projectView(*p))
+}
+
+func (h *Handler) refreshLinks(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	results, err := h.svc.Links.RefreshProject(c.Request.Context(), p.ID)
+	if err != nil {
+		apierr.Store(c, err, "project")
+		return
+	}
+	c.JSON(http.StatusOK, rt.RefreshLinksResponse{Results: results})
 }
 
 func (h *Handler) fork(c *gin.Context) {
@@ -699,6 +719,15 @@ func (h *Handler) update(c *gin.Context) {
 			p.ThreadPermissionMode = *req.ThreadPermissionMode
 		default:
 			apierr.BadRequest(c, "unknown permission mode")
+			return
+		}
+	}
+	if req.ThreadGitHubAccess != nil {
+		switch *req.ThreadGitHubAccess {
+		case rt.GitHubAsk, rt.GitHubAllow:
+			p.ThreadGitHubAccess = *req.ThreadGitHubAccess
+		default:
+			apierr.BadRequest(c, "unknown GitHub access")
 			return
 		}
 	}

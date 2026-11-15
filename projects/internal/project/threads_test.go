@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -129,7 +130,7 @@ func TestThreadReadsSharedProjectUpload(t *testing.T) {
 	}
 }
 
-func TestThreadCommitsBecomeReadyAndMerge(t *testing.T) {
+func TestThreadCommitsBecomeReady(t *testing.T) {
 	var f *testFixture
 	f = newFixture(t, func(turn *enginetest.Turn) error {
 		dir := turn.Opts.ProjectPath
@@ -168,32 +169,184 @@ func TestThreadCommitsBecomeReadyAndMerge(t *testing.T) {
 
 	d, err := f.threads.Diff(context.Background(), th.ID)
 	require.NoError(t, err)
-	assert.Contains(t, d.Patch, "feature.txt")
-
-	merged, err := f.threads.Merge(context.Background(), th.ID)
+	require.Len(t, d.Files, 1)
+	assert.Equal(t, "feature.txt", d.Files[0].Path)
+	assert.Equal(t, "added", d.Files[0].Status)
+	fd, err := f.threads.DiffFile(context.Background(), th.ID, "feature.txt", "")
 	require.NoError(t, err)
-	assert.Equal(t, db.ThreadResolved, merged.Status)
-	assert.FileExists(t, filepath.Join(f.repo, "feature.txt"))
+	assert.Contains(t, fd.Patch, "+x")
 }
 
-func TestMergeRefusesDirtyCheckout(t *testing.T) {
+func TestMergeNeedsOneOfTwoMethods(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "x"})
+	require.NoError(t, err)
+	for _, method := range []string{"", "merge", "rebase", "SQUASH"} {
+		_, err = f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: method})
+		assert.ErrorIs(t, err, ErrBadMergeMethod, method)
+	}
+}
+
+// mergeFixture is a ready thread with a commit, whose repository has a GitHub
+// origin that git pushes to a local bare repository, and a fake GitHub.
+func mergeFixture(t *testing.T) (*testFixture, *db.Thread, *fakeGitHub, string) {
+	t.Helper()
 	f := newFixture(t, func(turn *enginetest.Turn) error {
 		dir := turn.Opts.ProjectPath
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("x\n"), 0o644))
 		run(t, dir, "git", "add", ".")
-		run(t, dir, "git", "commit", "-qm", "a")
-		turn.Say("done", 1, 1)
+		run(t, dir, "git", "commit", "-qm", "feature")
+		turn.Say("Added feature.txt.", 1, 1)
 		return nil
 	})
-	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "a"})
+	remote := t.TempDir()
+	run(t, remote, "git", "init", "-q", "--bare", "-b", "main")
+	run(t, f.repo, "git", "remote", "add", "origin", "https://github.com/acme/widgets.git")
+	run(t, f.repo, "git", "config", "url."+remote+".insteadOf", "https://github.com/acme/widgets.git")
+	run(t, f.repo, "git", "push", "-q", "origin", "main")
+	gh := newFakeGitHub()
+	links := NewLinks(f.store, gh, f.threads.republish)
+	f.threads.links = func() *Links { return links }
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Add feature", Task: "add feature.txt"})
 	require.NoError(t, err)
 	f.report(t)
-	waitStatus(t, f.store, th.ID, db.ThreadReady)
-	require.NoError(t, os.WriteFile(filepath.Join(f.repo, "README.md"), []byte("local edit\n"), 0o644))
-	_, err = f.threads.Merge(context.Background(), th.ID)
-	var blocked *MergeBlockedError
-	require.ErrorAs(t, err, &blocked)
-	assert.Contains(t, blocked.Command, "merge --no-ff")
+	th = waitStatus(t, f.store, th.ID, db.ThreadReady)
+	return f, th, gh, remote
+}
+
+func TestSquashMergesThePROnGitHubAndResolvesTheThread(t *testing.T) {
+	f, th, gh, remote := mergeFixture(t)
+	head := run(t, f.repo, "git", "rev-parse", "HEAD")
+	sha := run(t, f.repo, "git", "rev-parse", th.Branch)
+
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash, Message: "Add the feature\n\nBody."})
+	require.NoError(t, err)
+	assert.Contains(t, run(t, remote, "git", "branch", "--list", th.Branch), th.Branch, "the branch was pushed")
+	calls := strings.Join(gh.called(), "\n")
+	assert.Contains(t, calls, fmt.Sprintf(`create-pr acme/widgets "Add the feature" head=%s base=main draft=false`, th.Branch), "a PR is opened first, titled by the message")
+	assert.Contains(t, calls, fmt.Sprintf(`squash-pr acme/widgets #11 sha=%s title="Add the feature" message="Body."`, sha), "then squash-merged at the pushed commit")
+	assert.Equal(t, db.ThreadResolved, got.Status)
+	assert.NotNil(t, got.MergedAt)
+	require.Len(t, got.Links, 1)
+	assert.Equal(t, db.LinkStateMerged, got.Links[0].State)
+	assert.Equal(t, th.Branch, got.Links[0].Head)
+	assert.Equal(t, head, run(t, f.repo, "git", "rev-parse", "HEAD"), "the local checkout is untouched")
+	assert.NoFileExists(t, filepath.Join(f.repo, "feature.txt"))
+	assert.NotEmpty(t, run(t, f.repo, "git", "branch", "--list", th.Branch), "the branch is kept")
+}
+
+func TestSquashMergesAnAlreadyOpenPR(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	existing := gh.add(db.LinkPR, "Already open", func(it *GitHubItem) { it.Head, it.Base = th.Branch, "main" })
+	gh.existing = &existing
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.NoError(t, err)
+	calls := strings.Join(gh.called(), "\n")
+	assert.NotContains(t, calls, "create-pr", "no second PR")
+	assert.Contains(t, calls, fmt.Sprintf("squash-pr acme/widgets #%d", existing.Number))
+	assert.Contains(t, calls, `title="" message=""`, "an empty message leaves GitHub's default")
+	assert.Equal(t, db.ThreadResolved, got.Status)
+}
+
+func TestSquashRefusedByGitHubLeavesThePROpenAndTheThreadAlone(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	gh.mergeFail = errors.New("GitHub PUT pulls/11/merge: Pull Request is not mergeable (HTTP 405)")
+	_, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not mergeable")
+	assert.Contains(t, err.Error(), "stays open")
+	got, err := f.store.GetThread(th.ID)
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadReady, got.Status)
+	assert.Nil(t, got.MergedAt)
+	require.Len(t, got.Links, 1, "the PR it opened is still linked")
+	assert.Equal(t, db.LinkStateOpen, got.Links[0].State)
+}
+
+func TestSquashAfterTheMergeToolOnlyClosesTheThread(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	_, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
+	require.NoError(t, err)
+	gh.set(11, func(it *GitHubItem) { it.State = "merged" })
+	require.NoError(t, f.store.UpdateThreadLinks(th.ID, func(l []db.ThreadLink) []db.ThreadLink { l[0].State = db.LinkStateMerged; return l }))
+	before := len(gh.called())
+
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadResolved, got.Status)
+	assert.Len(t, gh.called(), before, "GitHub is not asked again")
+	_, err = f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
+	assert.ErrorContains(t, err, "already merged")
+}
+
+func TestMergeRequestPushesTheBranchOpensAPRAndLinksIt(t *testing.T) {
+	f, th, gh, remote := mergeFixture(t)
+	head := run(t, f.repo, "git", "rev-parse", "HEAD")
+
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest, Title: "Add the feature", Body: "Adds feature.txt."})
+	require.NoError(t, err)
+	assert.Contains(t, run(t, remote, "git", "branch", "--list", th.Branch), th.Branch, "the branch was pushed")
+	assert.Contains(t, gh.called(), fmt.Sprintf(`create-pr acme/widgets "Add the feature" head=%s base=main draft=false`, th.Branch))
+	for _, c := range gh.called() {
+		assert.NotContains(t, c, "squash-pr", "a merge request is not merged")
+	}
+	require.Len(t, got.Links, 1)
+	assert.Equal(t, db.LinkPR, got.Links[0].Kind)
+	assert.Equal(t, th.Branch, got.Links[0].Head)
+	assert.Equal(t, "main", got.Links[0].Base)
+	assert.NotEmpty(t, got.Links[0].URL)
+	assert.Equal(t, db.ThreadReady, got.Status, "the branch is not merged until the PR is")
+	assert.Nil(t, got.MergedAt)
+	assert.Equal(t, head, run(t, f.repo, "git", "rev-parse", "HEAD"), "the main checkout is untouched")
+}
+
+func TestMergeRequestDefaultsTitleAndBodyFromTheThread(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	_, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
+	require.NoError(t, err)
+	assert.Contains(t, gh.called(), fmt.Sprintf(`create-pr acme/widgets "Add feature" head=%s base=main draft=false`, th.Branch))
+}
+
+func TestMergeRequestLinksAnExistingPRInsteadOfOpeningAnother(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	existing := gh.add(db.LinkPR, "Already open", func(it *GitHubItem) { it.Head, it.Base = th.Branch, "main" })
+	gh.existing = &existing
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
+	require.NoError(t, err)
+	for _, c := range gh.called() {
+		assert.NotContains(t, c, "create-pr")
+	}
+	require.Len(t, got.Links, 1)
+	assert.Equal(t, existing.Number, got.Links[0].Number)
+}
+
+func TestMergeSaysWhyItCannotReachGitHub(t *testing.T) {
+	for _, method := range []string{MergeSquash, MergeMergeRequest} {
+		for _, c := range []struct {
+			name  string
+			setup func(f *testFixture, gh *fakeGitHub)
+			want  string
+		}{
+			{"no remote", func(f *testFixture, _ *fakeGitHub) { run(t, f.repo, "git", "remote", "remove", "origin") }, "no origin remote"},
+			{"not GitHub", func(f *testFixture, _ *fakeGitHub) {
+				run(t, f.repo, "git", "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git")
+			}, "github.com"},
+			{"gh not signed in", func(_ *testFixture, gh *fakeGitHub) { gh.fail = ErrGitHubUnavailable }, "gh is missing or not signed in"},
+		} {
+			t.Run(method+"/"+c.name, func(t *testing.T) {
+				f, th, gh, _ := mergeFixture(t)
+				c.setup(f, gh)
+				_, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: method})
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), c.want)
+				got, err := f.store.GetThread(th.ID)
+				require.NoError(t, err)
+				assert.Empty(t, got.Links)
+				assert.Equal(t, db.ThreadReady, got.Status)
+				assert.Nil(t, got.MergedAt)
+			})
+		}
+	}
 }
 
 func TestApprovalWaitsOnUser(t *testing.T) {
@@ -614,7 +767,7 @@ func TestThreadsShareRepositoryWhenWorktreesDisabled(t *testing.T) {
 	assert.Empty(t, first.Branch)
 	assert.Empty(t, second.Branch)
 	assert.Contains(t, threadSystemPrompt(f.threads.layout, f.project, first), "shared repository checkout")
-	_, err = f.threads.Merge(context.Background(), first.ID)
+	_, err = f.threads.Merge(context.Background(), first.ID, MergeSpec{Method: MergeSquash})
 	require.Error(t, err)
 	_, err = f.threads.Diff(context.Background(), first.ID)
 	require.Error(t, err)

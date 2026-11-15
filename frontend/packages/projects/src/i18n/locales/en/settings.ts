@@ -70,6 +70,7 @@ export const settings = {
         notificationsEnable: 'Desktop notifications',
         notificationsOn: 'On — only while this tab is hidden or minimised',
         notificationsOff: 'Off',
+        notificationsAsk: 'On, waiting for your OK — enable it and the browser asks once',
         notificationsScope: 'A question, an approval, a failed turn, a finished turn, a decision the coordinator wants.',
         notificationsBlocked: 'The browser has notifications blocked for this site. Allow them in the browser’s site settings, then turn this on again.',
         notificationsUnsupported: 'This browser cannot show desktop notifications.',

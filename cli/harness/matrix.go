@@ -26,7 +26,7 @@ type MatrixCmd struct {
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
 	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
 	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,content_shapes,cache_controls,cache_prefix,vendor,servertool,thinking_limits,flag_paths',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (every section), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only), content_shapes (request content-shape regression only), cache_controls (single-hop + ABA cache/no-cache requests), cache_prefix (cross-request prompt-cache prefix stability, per client shape), vendor (ApplyProviderTransforms dispatch against real vendor APIBase discriminators), servertool (server-tool loop and Guardrails x MCP through the real gateway; known gaps reported as KNOWN_GAP), thinking_limits (client thinking level x rule thinking_effort x max_tokens x source/target combinations), flag_paths (every rule flag x applicable source/target pair x streaming)'"`
+	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,content_shapes,cache_controls,cache_prefix,vendor,servertool,thinking_limits,flag_paths,response_retention',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (every section), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only), content_shapes (request content-shape regression only), cache_controls (single-hop + ABA cache/no-cache requests), cache_prefix (cross-request prompt-cache prefix stability, per client shape), vendor (ApplyProviderTransforms dispatch against real vendor APIBase discriminators), servertool (server-tool loop and Guardrails x MCP through the real gateway; known gaps reported as KNOWN_GAP), thinking_limits (client thinking level x rule thinking_effort x max_tokens x source/target combinations), flag_paths (every rule flag x applicable source/target pair x streaming), response_retention (Anthropic output fidelity through the gateway)'"`
 	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
@@ -49,6 +49,7 @@ type matrixSection struct {
 // matrixSections is the section registry: the single source of truth for what
 // each --mode runs. Section order here is output order.
 var matrixSections = []matrixSection{
+	{name: "response_retention", modes: []string{"all", "response_retention"}, httpOnly: true, exec: (*protocoltest.Matrix).ExecuteAllResponseRetention},
 	{name: "single", modes: []string{"default", "all", "single"}, exec: (*protocoltest.Matrix).ExecuteAll},
 	{name: "transitive", modes: []string{"all", "transitive"}, exec: (*protocoltest.Matrix).ExecuteAllTransitive},
 	{name: "idempotent", modes: []string{"default", "all", "idempotent"}, exec: (*protocoltest.Matrix).ExecuteAllIdempotent},
@@ -96,6 +97,9 @@ func (*MatrixCmd) Help() string {
   # Run server-tool (MCP) loop and Guardrails x MCP cases through the real
   # gateway; registered known gaps show as KNOWN_GAP and do not fail the run
   harness matrix --mode=servertool
+
+  # Verify Anthropic tool argument precision, initial text and truncation
+  harness matrix --mode=response_retention
 
   # Run only single-hop (A→B) tests
   harness matrix --mode=single

@@ -89,8 +89,32 @@ export default {
     "moveUp": "Move up",
     "saved": "Saved"
   },
+  "mobile": {
+    "tabBar": "Main navigation",
+    "shell": {
+      "title": "Interface",
+      "desktop": "Desktop",
+      "mobile": "Phone",
+      "auto": "Auto",
+      "hint": "Phone shows the phone layout on this device; Desktop shows the full interface. Remembered per browser."
+    },
+    "subPages": {
+      "switch": "Switch page in {{title}}"
+    },
+    "more": {
+      "title": "More",
+      "tab": "More",
+      "manage": "Manage",
+      "system": "System",
+      "preferences": "Theme, language and feedback",
+      "interface": "Interface",
+      "useDesktop": "Use the desktop UI",
+      "useDesktopHint": "Switch back to the full interface"
+    }
+  },
   "layout": {
     "workspace": "Workspace",
+    "workspaceRail": "Workspace",
     "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
     "workspaceGate": { "title": "Enable Workspace", "text": "Enable the Workspace power-up to use projects, workdirs and IM chats.", "enable": "Enable Workspace", "error": "Could not enable Workspace. Please try again." },
     "projects": "Projects",
@@ -193,6 +217,7 @@ export default {
     "days": "Days",
     "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
@@ -235,6 +260,7 @@ export default {
     "help": "Tips & Help",
     "helpShort": "Help",
     "powerUps": "Power-ups",
+    "powerUpsRail": "Power-ups",
     "tools": "Tools",
     "servertool": "Servertool",
     "botsRunning": "{{active}} of {{total}} bots running"

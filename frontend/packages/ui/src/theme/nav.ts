@@ -13,6 +13,18 @@ export const NAV_ROW_SX = {
     px: 2,
 } as const;
 
+/** The compact row of the Projects sidebar: one line, as tall as its working-folder
+ *  rows (32px), so projects, folders and IM entries share one rhythm. A row with a
+ *  subtitle still grows to fit it. */
+export const NAV_ROW_COMPACT_SX = {
+    mx: 1,
+    minHeight: 32,
+    borderRadius: 1,
+    py: 0.5,
+    pl: 2,
+    pr: 1.5,
+} as const;
+
 /** The selected nav item — a sidebar row or an activity-rail button: filled
  *  with the primary colour, its text and icon on it. The one selected look
  *  for navigation; selections inside a page use the soft look (selection.ts).

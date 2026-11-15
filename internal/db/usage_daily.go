@@ -68,21 +68,37 @@ func dailyWindow(start, end, now time.Time) (time.Time, time.Time) {
 // table itself is the source of truth, so concurrent stats/timeseries
 // requests never contend on a lock just to check it, and the answer can't go
 // stale across a restart.
+//
+// Missing days are built per contiguous run of at most maxAggregateRun days
+// with one grouped scan each, not one scan (plus delete) per day: a cold
+// 90-day window is a dozen statements instead of ~180, and the write lock is
+// held for a week of data at a time rather than the whole window.
 func (us *UsageStore) ensureDailyAggregates(firstDay, lastDayEx time.Time) error {
 	missing, err := us.missingAggregatedDays(firstDay, lastDayEx)
 	if err != nil {
 		return err
 	}
-	for _, day := range missing {
-		if _, err := us.aggregateDay(day.Format(dailyDateLayout), day); err != nil {
+	for i := 0; i < len(missing); {
+		j := i + 1
+		for j < len(missing) && j-i < maxAggregateRun && missing[j].Equal(missing[j-1].Add(24*time.Hour)) {
+			j++
+		}
+		if _, err := us.aggregateDays(missing[i], missing[j-1].Add(24*time.Hour)); err != nil {
 			return err
 		}
+		i = j
 	}
 	return nil
 }
 
+// maxAggregateRun bounds how many days one aggregation transaction covers.
+const maxAggregateRun = 7
+
 // missingAggregatedDays returns the UTC days in [firstDay, lastDayEx) that
-// have no usage_daily rows yet.
+// have no usage_daily rows yet. A completed day with no traffic is recorded
+// by an emptyDayMarker row, so it counts as aggregated: without that, every
+// quiet day in a long window (the 365-day heatmap) was re-"aggregated" on
+// every request.
 func (us *UsageStore) missingAggregatedDays(firstDay, lastDayEx time.Time) ([]time.Time, error) {
 	us.mu.RLock()
 	var have []string
@@ -110,26 +126,42 @@ func (us *UsageStore) missingAggregatedDays(firstDay, lastDayEx time.Time) ([]ti
 }
 
 // aggregateDay (re)builds the usage_daily rows for one UTC day.
-func (us *UsageStore) aggregateDay(key string, dayStart time.Time) (int64, error) {
+func (us *UsageStore) aggregateDay(dayStart time.Time) (int64, error) {
+	return us.aggregateDays(dayStart, dayStart.Add(24*time.Hour))
+}
+
+// aggregateDays (re)builds usage_daily for the UTC days [from, to) in one
+// transaction: delete whatever is there, regroup the raw rows by
+// (day, provider, model, user) and by (day, scenario), and leave a marker for
+// each day that had no traffic. It returns the number of usage_daily rows
+// written, markers excluded.
+func (us *UsageStore) aggregateDays(from, to time.Time) (int64, error) {
 	us.mu.Lock()
 	defer us.mu.Unlock()
 
+	fromKey, toKey := from.Format(dailyDateLayout), to.Format(dailyDateLayout)
 	// The timestamp range prunes via the index; the date() guard is exact.
 	// Bind times converted to server-local so the driver formats them with
 	// the same offset the records were stored with.
-	scanStart := dayStart.Add(-dstScanPad).In(time.Local)
-	scanEnd := dayStart.Add(24*time.Hour + dstScanPad).In(time.Local)
+	scanStart := from.Add(-dstScanPad).In(time.Local)
+	scanEnd := to.Add(dstScanPad).In(time.Local)
 
 	var rows int64
 	err := us.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("date = ?", key).Delete(&UsageDailyRecord{}).Error; err != nil {
+		if err := tx.Where("date >= ? AND date < ?", fromKey, toKey).Delete(&UsageDailyRecord{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("date >= ? AND date < ?", fromKey, toKey).Delete(&UsageDailyScenarioRecord{}).Error; err != nil {
+			return err
+		}
+		// provider_name is not part of the unique key (a provider renamed
+		// mid-day must not split the group into two conflicting rows), so
+		// MAX() picks one.
 		res := tx.Exec(`
 			INSERT INTO usage_daily (date, provider_uuid, provider_name, model, user_id,
 				request_count, total_tokens, input_tokens, output_tokens,
 				cache_input_tokens, cache_write_tokens, reasoning_tokens, system_tokens, error_count, streamed_count, latency_sum_ms)
-			SELECT ?, COALESCE(provider_uuid, ''), COALESCE(provider_name, ''), COALESCE(model, ''), COALESCE(user_id, ''),
+			SELECT date(timestamp), COALESCE(provider_uuid, ''), COALESCE(MAX(provider_name), ''), COALESCE(model, ''), COALESCE(user_id, ''),
 				COUNT(*),
 				COALESCE(SUM(total_tokens), 0),
 				COALESCE(SUM(input_tokens), 0),
@@ -142,28 +174,86 @@ func (us *UsageStore) aggregateDay(key string, dayStart time.Time) (int64, error
 				COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0),
 				COALESCE(SUM(latency_ms), 0)
 			FROM usage_records
-			WHERE timestamp >= ? AND timestamp < ? AND date(timestamp) = ?
-			GROUP BY provider_uuid, provider_name, model, user_id
-		`, key, scanStart, scanEnd, key)
+			WHERE timestamp >= ? AND timestamp < ? AND date(timestamp) >= ? AND date(timestamp) < ?
+			GROUP BY date(timestamp), provider_uuid, model, user_id
+		`, scanStart, scanEnd, fromKey, toKey)
 		if res.Error != nil {
 			return res.Error
 		}
 		rows = res.RowsAffected
-		return nil
+		if err := tx.Exec(`
+			INSERT INTO usage_daily_scenario (date, scenario,
+				request_count, total_tokens, input_tokens, output_tokens,
+				cache_input_tokens, cache_write_tokens, reasoning_tokens, system_tokens, error_count, streamed_count, latency_sum_ms)
+			SELECT date(timestamp), COALESCE(scenario, ''),
+				COUNT(*),
+				COALESCE(SUM(total_tokens), 0),
+				COALESCE(SUM(input_tokens), 0),
+				COALESCE(SUM(output_tokens), 0),
+				COALESCE(SUM(cache_input_tokens), 0),
+				COALESCE(SUM(cache_write_tokens), 0),
+				COALESCE(SUM(reasoning_tokens), 0),
+				COALESCE(SUM(system_tokens), 0),
+				COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0),
+				COALESCE(SUM(CASE WHEN streamed = true THEN 1 ELSE 0 END), 0),
+				COALESCE(SUM(latency_ms), 0)
+			FROM usage_records
+			WHERE timestamp >= ? AND timestamp < ? AND date(timestamp) >= ? AND date(timestamp) < ?
+			GROUP BY date(timestamp), scenario
+		`, scanStart, scanEnd, fromKey, toKey).Error; err != nil {
+			return err
+		}
+
+		var have []string
+		if err := tx.Model(&UsageDailyRecord{}).
+			Where("date >= ? AND date < ?", fromKey, toKey).
+			Distinct("date").Pluck("date", &have).Error; err != nil {
+			return err
+		}
+		haveSet := make(map[string]bool, len(have))
+		for _, d := range have {
+			haveSet[d] = true
+		}
+		var markers []UsageDailyRecord
+		for day := from; day.Before(to); day = day.Add(24 * time.Hour) {
+			if k := day.Format(dailyDateLayout); !haveSet[k] {
+				markers = append(markers, emptyDayMarker(k))
+			}
+		}
+		if len(markers) == 0 {
+			return nil
+		}
+		return tx.Create(&markers).Error
 	})
 	return rows, err
+}
+
+// emptyDayMarker is the usage_daily row that records "this completed day was
+// aggregated and had no traffic". All dimensions are empty and every count is
+// zero; readers skip rows with request_count = 0 so it never surfaces as a
+// bucket. (A real group can't collide with it: the marker is only written for
+// a day that has no other row.)
+func emptyDayMarker(date string) UsageDailyRecord {
+	return UsageDailyRecord{Date: date}
 }
 
 // aggregatedStatsFromDaily serves GetAggregatedStats from usage_daily when the
 // query shape allows it. Returns handled=false to fall back to the raw scan.
 func (us *UsageStore) aggregatedStatsFromDaily(q UsageStatsQuery) ([]AggregatedStat, bool, error) {
 	switch q.GroupBy {
-	case "model", "provider", "user", "daily":
+	case "model", "provider", "user", "daily", "scenario":
 	default:
 		return nil, false, nil
 	}
 	// Dimensions/filters not present in usage_daily require the raw table.
-	if q.Scenario != "" || q.RuleUUID != "" || q.TeamID != "" || q.Status != "" {
+	if q.RuleUUID != "" || q.TeamID != "" || q.Status != "" {
+		return nil, false, nil
+	}
+	// Scenario lives only in usage_daily_scenario, which carries no
+	// provider/model/user, so a query that needs scenario together with one
+	// of those goes to the raw table.
+	scenarioTable := q.GroupBy == "scenario" || q.Scenario != ""
+	if scenarioTable && (q.Provider != "" || q.Model != "" || q.UserID != "" || (q.GroupBy != "scenario" && q.GroupBy != "daily")) {
 		return nil, false, nil
 	}
 	if q.StartTime.IsZero() || q.EndTime.IsZero() {
@@ -255,8 +345,8 @@ func (us *UsageStore) dailyStatBuckets(q UsageStatsQuery, firstDay, lastDayEx ti
 	var keyExpr, groupBy string
 	switch q.GroupBy {
 	case "provider":
-		keyExpr = "provider_uuid as key, provider_uuid, provider_name, '' as model, '' as user_id"
-		groupBy = "provider_uuid, provider_name"
+		keyExpr = "provider_uuid as key, provider_uuid, MAX(provider_name) as provider_name, '' as model, '' as user_id"
+		groupBy = "provider_uuid"
 	case "user":
 		keyExpr = "user_id as key, '' as provider_uuid, '' as provider_name, '' as model, user_id"
 		groupBy = "user_id"
@@ -264,13 +354,28 @@ func (us *UsageStore) dailyStatBuckets(q UsageStatsQuery, firstDay, lastDayEx ti
 		keyExpr = "date as key, '' as provider_uuid, '' as provider_name, '' as model, '' as user_id"
 		groupBy = "date"
 	default: // model
-		keyExpr = "model as key, provider_uuid, provider_name, model, '' as user_id"
-		groupBy = "provider_uuid, provider_name, model"
+		keyExpr = "model as key, provider_uuid, MAX(provider_name) as provider_name, model, '' as user_id"
+		groupBy = "provider_uuid, model"
 	}
 
-	db := us.db.Model(&UsageDailyRecord{}).
-		Where("date >= ? AND date < ?", firstDay.Format(dailyDateLayout), lastDayEx.Format(dailyDateLayout)).
-		Scopes(withColumnFilters(q.dailyFilterMap()))
+	var model any = &UsageDailyRecord{}
+	filters := q.dailyFilterMap()
+	if q.GroupBy == "scenario" || q.Scenario != "" {
+		// aggregatedStatsFromDaily only lets these through without
+		// provider/model/user dimensions.
+		model = &UsageDailyScenarioRecord{}
+		filters = map[string]string{}
+		if q.Scenario != "" {
+			filters["scenario"] = q.Scenario
+		}
+		if q.GroupBy == "scenario" {
+			keyExpr = "scenario as key, '' as provider_uuid, '' as provider_name, '' as model, '' as user_id, scenario"
+			groupBy = "scenario"
+		}
+	}
+	db := us.db.Model(model).
+		Where("date >= ? AND date < ? AND request_count > 0", firstDay.Format(dailyDateLayout), lastDayEx.Format(dailyDateLayout)).
+		Scopes(withColumnFilters(filters))
 
 	var buckets []aggBucket
 	if err := db.Select(keyExpr + `,
@@ -300,6 +405,8 @@ func statsMergeKey(groupBy string, b aggBucket) string {
 		return b.ProviderUUID
 	case "user":
 		return b.UserID
+	case "scenario":
+		return b.Scenario
 	case "daily":
 		return b.Key // YYYY-MM-DD
 	default: // model
@@ -318,6 +425,8 @@ func normalizeStatBucket(groupBy string, b *aggBucket) {
 		b.Model, b.Scenario, b.UserID = "", "", ""
 	case "user":
 		b.ProviderUUID, b.ProviderName, b.Model, b.Scenario = "", "", "", ""
+	case "scenario":
+		b.ProviderUUID, b.ProviderName, b.Model, b.UserID = "", "", "", ""
 	case "daily":
 		b.ProviderUUID, b.ProviderName, b.Model, b.Scenario, b.UserID = "", "", "", "", ""
 	default: // model
@@ -354,6 +463,11 @@ func (us *UsageStore) timeSeriesFromDaily(interval string, start, end time.Time,
 	for k := range filters {
 		switch k {
 		case "provider_uuid", "model", "user_id":
+		case "scenario":
+			// usage_daily_scenario has no other dimension to filter on.
+			if len(filters) > 1 {
+				return nil, false, nil
+			}
 		default:
 			return nil, false, nil
 		}
@@ -404,7 +518,7 @@ func (us *UsageStore) timeSeriesFromDaily(interval string, start, end time.Time,
 }
 
 // dailyFilterColumns is the usage_daily subset of usageFilterColumns. The
-// pre-aggregation table only carries these dimensions -- scenario, rule_uuid
+// pre-aggregation table only carries these dimensions -- rule_uuid, team_id
 // and status are not columns here, which is exactly why
 // aggregatedStatsFromDaily and timeSeriesFromDaily refuse a query that sets
 // them and fall back to the raw table.
@@ -449,11 +563,16 @@ func (us *UsageStore) dailyTimeSeries(firstDay, lastDayEx time.Time, filters map
 	us.mu.RLock()
 	defer us.mu.RUnlock()
 
-	if err := validateDailyFilterColumns(filters); err != nil {
+	var model any = &UsageDailyRecord{}
+	if scenario, ok := filters["scenario"]; ok {
+		// timeSeriesFromDaily only lets scenario through on its own.
+		model = &UsageDailyScenarioRecord{}
+		filters = map[string]string{"scenario": scenario}
+	} else if err := validateDailyFilterColumns(filters); err != nil {
 		return nil, err
 	}
-	db := us.db.Model(&UsageDailyRecord{}).
-		Where("date >= ? AND date < ?", firstDay.Format(dailyDateLayout), lastDayEx.Format(dailyDateLayout)).
+	db := us.db.Model(model).
+		Where("date >= ? AND date < ? AND request_count > 0", firstDay.Format(dailyDateLayout), lastDayEx.Format(dailyDateLayout)).
 		Scopes(withColumnFilters(filters))
 
 	type row struct {

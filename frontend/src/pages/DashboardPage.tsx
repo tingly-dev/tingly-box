@@ -77,9 +77,6 @@ export default function DashboardPage() {
         handleRefresh,
         stats,
         timeSeries,
-        records,
-        recordsLoading,
-        recordsTotal,
         recordsParams,
         heatmapRefresh,
         selectedProvider,
@@ -99,8 +96,6 @@ export default function DashboardPage() {
         selectedIdentityLabel,
     } = useDashboardData({
         timeRange,
-        isHourlyRange,
-        viewMode: requestsUnavailable ? 'summary' : viewMode,
         initialScenario,
     });
 
@@ -309,12 +304,7 @@ export default function DashboardPage() {
                                 </Stack>
                             </Stack>
                         ) : (
-                            <RequestsView
-                                records={records}
-                                loading={recordsLoading}
-                                totalCount={recordsTotal}
-                                queryParams={recordsParams}
-                            />
+                            <RequestsView queryParams={recordsParams} />
                         )}
                     </Box>
                 </Box>

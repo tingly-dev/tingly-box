@@ -8,6 +8,7 @@
     ".": "./src/embed.ts",
     "./locales/en": "./src/i18n/en.ts",
     "./locales/zh": "./src/i18n/zh.ts",
+    "./locales/ru": "./src/i18n/ru.ts",
     "./workspace-im-hint": "./src/utils/imHint.ts",
     "./transcript": "./src/transcript/index.ts",
     "./transcript/locales/*": "./src/transcript/locales/*.ts"

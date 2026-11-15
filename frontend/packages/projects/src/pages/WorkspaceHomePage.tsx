@@ -4,15 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CoachMark, PageHeader, Surface } from '@tingly/ui';
 import { IM_SIDEBAR_ANCHOR_ID } from '../components/ProjectsSidebar';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 import type { ProjectSummary } from '../client';
+import type { ChannelBinding } from '../client/channelBindings';
 import { Add, ArrowForward, ChatBubble, FolderOpen, Stack } from '../components/icons';
-import { ImChatCard } from '../components/im/ImChatCard';
 import { useChannelBindings, useProjectDirectory } from '../components/im/useImBindings';
 import { ProjectCard } from '../components/project/ProjectCard';
 import { WorkdirCard } from '../components/workdir/WorkdirCard';
 import { useProjectList } from '../hooks/useProjectList';
 import { useProjectsHost } from '../host/ProjectsHost';
-import { NotificationSettingsCard } from '../notifications/NotificationSettings';
+import { NotificationControl } from '../notifications/NotificationControl';
+import { NeedsYou } from '../components/workspace/NeedsYou';
 import { readSession, writeSession } from '../utils/storage';
 import { disarmWorkspaceImHint, dismissWorkspaceImHint, imHintArmed, imHintDismissed } from '../utils/imHint';
 
@@ -81,6 +84,36 @@ function Section({ icon, title, body, action, onAction, viewAll, onViewAll, head
     );
 }
 
+/** IM bindings once there are some: one line (how many, which chats), with the page that manages them one click away. */
+function ImLine({ bindings, directory, headerRef, onManage }: {
+    bindings: ChannelBinding[] | null;
+    directory: Map<string, ProjectSummary>;
+    headerRef: RefObject<HTMLDivElement | null>;
+    onManage: () => void;
+}) {
+    const { t } = useTranslation('projects');
+    const newest = [...(bindings ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);
+    const places = newest.map((b) => `${b.chat_title} → ${directory.get(b.project_id)?.name ?? t('im.place.elsewhere')}`).join(' · ');
+    return (
+        <Box component="section" aria-label={t('im.title')} sx={{ mb: 5, display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25, border: 1, borderColor: 'divider', borderRadius: radius.card, bgcolor: 'background.paper' }}>
+            <Box ref={headerRef} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, color: 'text.primary' }}>
+                <ChatBubble sx={{ fontSize: 18 }} />
+                <Typography component="h2" sx={{ fontSize: fontSizes.base, fontWeight: 600 }}>{t('im.title')}</Typography>
+            </Box>
+            {bindings === null ? (
+                <Skeleton variant="text" sx={{ flex: 1, fontSize: fontSizes.sm }} />
+            ) : (
+                <>
+                    <Typography noWrap title={places} sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
+                        {t('workspace.imBound', { count: bindings.length })} · {places}
+                    </Typography>
+                    <Button size="small" color="inherit" endIcon={<ArrowForward sx={{ fontSize: 14 }} />} sx={{ flexShrink: 0, color: 'text.secondary' }} onClick={onManage}>{t('workspace.imManage')}</Button>
+                </>
+            )}
+        </Box>
+    );
+}
+
 /**
  * Where Workspace opens: Projects and Workdir side by side as entry points,
  * with IM binding underneath when the host has it. Each shows its most recent
@@ -141,12 +174,14 @@ export default function WorkspaceHomePage() {
         dismissWorkspaceImHint();
     };
 
-    const recentBindings = [...(bindings ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, RECENT);
-
     return (
         <Box sx={{ flex: 1, overflowY: 'auto' }}>
             <Box sx={{ maxWidth: 1040, mx: 'auto', px: { xs: 2, md: embedded ? 3 : 4 }, pt: embedded ? { xs: 2, md: 3 } : { xs: 7, md: 5 }, pb: 6 }}>
-                <PageHeader title={t('workspace.title')} subtitle={t('workspace.intro')} sx={{ mb: 4 }} />
+                {/* The one preference the workspace owns everywhere (the standalone
+                    app keeps it in its Settings page instead). */}
+                <PageHeader title={t('workspace.title')} subtitle={t('workspace.intro')} actions={<NotificationControl />} sx={{ mb: 4 }} />
+
+                <NeedsYou />
 
                 <Section
                     icon={<Stack sx={{ fontSize: 22 }} />}
@@ -176,7 +211,7 @@ export default function WorkspaceHomePage() {
                     {recent(folders ?? []).map((f) => <WorkdirCard key={f.id} f={f} />)}
                 </Section>
 
-                {hasIm && (
+                {hasIm && (bindings !== null && bindings.length === 0 ? (
                     <Section
                         icon={<ChatBubble sx={{ fontSize: 22 }} />}
                         title={t('im.title')}
@@ -184,16 +219,12 @@ export default function WorkspaceHomePage() {
                         action={t('workspace.imAction')}
                         onAction={() => navigate(routes.im!)}
                         headerRef={imHeader}
-                        steps={bindings !== null && bindings.length === 0 ? steps('im') : null}
-                        loading={bindings === null}
-                    >
-                        {recentBindings.map((b) => <ImChatCard key={b.id} b={b} place={directory.get(b.project_id)} />)}
-                    </Section>
-                )}
-
-                {/* The one preference the workspace owns everywhere (the standalone
-                    app keeps it in its Settings page instead). */}
-                <NotificationSettingsCard />
+                        steps={steps('im')}
+                        loading={false}
+                    />
+                ) : (
+                    <ImLine bindings={bindings} directory={directory} headerRef={imHeader} onManage={() => navigate(routes.im!)} />
+                ))}
             </Box>
 
             {hasIm && (

@@ -69,6 +69,8 @@ interface Props {
     running: boolean;
     disabled: boolean;
     onBack: () => void;
+    /** Where Back goes ("Coordinator", "New session"), written on the button; the arrow alone says nothing about the place. */
+    backLabel?: string;
     /** In a window the window's title bar names the thread: leave the title and the back arrow out. */
     hideTitle?: boolean;
     /** Buttons before the thread's menu: pop out, dock. */
@@ -82,6 +84,8 @@ interface Props {
     canSend?: () => boolean;
     /** Resolved configuration labels; not the last observed response model. */
     configuredModel?: string;
+    /** Cards the host adds to the info rail (SessionSlots.railExtra). */
+    railExtra?: React.ReactNode;
     permissionLabel?: string;
     /** Under the message box (a host's status line). */
     belowComposer?: React.ReactNode;
@@ -89,11 +93,6 @@ interface Props {
     liveTasks?: BackgroundTask[];
     /** Re-reads the session, e.g. after a task was stopped. */
     onRefresh?: () => void;
-    /** A card the rail carries above its own (a folder's session list); the rail then stays on, from `railMinPanel` wide. */
-    railTop?: React.ReactNode;
-    /** Cards the host adds to the info rail (SessionSlots.railCards). */
-    railExtra?: React.ReactNode;
-    railMinPanel?: number;
     /** A subagent a drill-in asked to open on its own (the status area's list). */
     initialFocus?: string;
     /** A background task a drill-in asked to open: its panel, with the row expanded. */
@@ -110,15 +109,18 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railTop, railExtra, railMinPanel = RAIL_MIN_PANEL, initialFocus, initialTask, onDrillConsumed }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [diffOpen, setDiffOpen] = useState(false);
+    // Where the rail does not fit beside the conversation (a thread in a narrow pane), the Details button swaps the conversation for the same cards in place.
+    const [detailsOpen, setDetailsOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
     // The info rail sits beside the conversation when the panel is wide enough; the user can hide it.
-    const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(railMinPanel, !!thread);
-    const rail = wide && (railOn || railTop != null);
+    const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(RAIL_MIN_PANEL, !!thread);
+    const rail = wide && railOn;
+    const sheet = detailsOpen && !wide;
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.
     const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
@@ -374,7 +376,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    {!hideTitle && <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>}
+                    {!hideTitle && (backLabel
+                        ? <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={onBack} aria-label={t('thread.backTo', { place: backLabel })}
+                            sx={{ color: 'text.secondary', flexShrink: 0, minWidth: 0, maxWidth: 140, px: 0.75, '& .MuiButton-icon': { mr: 0.5 } }}>
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{backLabel}</Box>
+                        </Button>
+                        : <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>)}
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
                         : <ThreadTitle title={thread.title} onSave={saveTitle} />}
@@ -394,12 +401,14 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </Button>
                         </Tooltip>
                     )}
-                    {/* The info rail's own switch, out where it can be found; the rail is on wherever it fits. */}
-                    {wide && railTop == null && (
-                        <Tooltip title={railOn ? t('rail.hide') : t('rail.show')}>
-                            <IconButton size="small" onClick={toggleRail} aria-expanded={railOn}
-                                aria-label={railOn ? t('rail.hide') : t('rail.show')} sx={{ flexShrink: 0 }}>
-                                {railOn ? <RailHide fontSize="small" /> : <RailShow fontSize="small" />}
+                    {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards take the conversation's place until it is pressed again. */}
+                    {thread && (
+                        <Tooltip title={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}>
+                            <IconButton size="small" onClick={() => (wide ? toggleRail() : setDetailsOpen((open) => !open))}
+                                aria-expanded={wide ? railOn : sheet}
+                                aria-label={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}
+                                sx={{ flexShrink: 0, ...(sheet && { bgcolor: 'action.selected' }) }}>
+                                {wide && !railOn ? <RailShow fontSize="small" /> : <RailHide fontSize="small" />}
                             </IconButton>
                         </Tooltip>
                     )}
@@ -473,6 +482,28 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 )}
             </Box>
 
+            {sheet && thread && (
+                <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', bgcolor: 'background.default' }}>
+                    <ThreadInfoRail
+                        sheet
+                        thread={thread}
+                        folder={session}
+                        tasks={tasks}
+                        canReview={canReview}
+                        onReview={() => { setDetailsOpen(false); setDiffOpen(true); }}
+                        onChanged={() => onRefresh?.()}
+                        onReveal={(call) => { setDetailsOpen(false); void openInChat({ call }); }}
+                        subagents={subagents}
+                        onOpenAgent={(agent) => { setDetailsOpen(false); openAgent(agent); }}
+                        onShowAgent={(agent) => { setDetailsOpen(false); void openInChat({ call: agent.call }, agent.event_id); }}
+                        extra={railExtra}
+                        configuredModel={configuredModel}
+                        permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
+                    />
+                </Box>
+            )}
+            {/* The conversation stays mounted under the cards, so its scroll and draft survive. */}
+            <Box sx={{ display: sheet ? 'none' : 'contents' }}>
             {focused && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={() => setFocus(null)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
@@ -598,6 +629,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 onClose={() => setConfirm(null)}
                 onConfirm={() => confirm && void runConfirmed(confirm)}
             />
+            </Box>
         </Box>
         {rail && (
             <ThreadInfoRail
@@ -611,7 +643,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 subagents={subagents}
                 onOpenAgent={openAgent}
                 onShowAgent={(agent) => void openInChat({ call: agent.call }, agent.event_id)}
-                top={railTop}
                 extra={railExtra}
                 configuredModel={configuredModel}
                 permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}

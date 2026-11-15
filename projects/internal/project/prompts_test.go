@@ -51,9 +51,10 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.NotContains(t, s, "pull request", "a thread without a repository has no PR rule")
 
 	s = threadSystemPrompt(l, p, &db.Thread{Title: "Fix bug", Branch: "tb/fix", BaseBranch: "main", Cwd: "/w"})
-	assert.Contains(t, s, "push your own branch")
+	assert.Contains(t, s, "create_pr tool")
 	assert.Contains(t, s, "report the failure")
 	assert.NotContains(t, s, "gh")
-	assert.Contains(t, s, "Never merge it yourself")
+	assert.Contains(t, s, "with the merge tool")
+	assert.Contains(t, s, "Never merge it yourself by hand")
 	assert.NotContains(t, s, "Do not push", "a PR may be asked for, so pushing is not banned outright")
 }

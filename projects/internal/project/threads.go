@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -95,6 +96,9 @@ const (
 // what makes it a thread: its queue, the per-project limit, approvals in the
 // thread view, and the report to the coordinator after each turn.
 type Threads struct {
+	// links opens a thread's merge request; it is read when needed because the
+	// service may swap its GitHub.
+	links  func() *Links
 	store  *db.Store
 	layout Layout
 	hub    *Hub
@@ -118,6 +122,9 @@ type Threads struct {
 	OnStep func(t db.Thread, e db.ThreadEvent)
 	// SessionToolsConfig provides the MCP configuration scoped to the current thread.
 	SessionToolsConfig func(threadID string) (string, error)
+	// RevokeTools ends the thread's tool access once its session is closed
+	// (resolve, archive, pause); the next turn gets a fresh one.
+	RevokeTools func(threadID string)
 
 	// StallAfter is how long a running thread may show no activity before
 	// the coordinator is told; zero means DefaultStallAfter.
@@ -774,6 +781,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	addDirectories(doc, dirs...)
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
 	grantAutoGit(doc, p, t)
+	grantBuiltinTools(doc, p)
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -1100,6 +1108,9 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 	if legacy := m.layout.LibraryDir(SessionOwner(t.ID)); dirExists(legacy) {
 		addDirectories(doc, legacy)
 	}
+	// A folder session has the Projects tools too: the permission rules are the
+	// same as a project thread's.
+	grantBuiltinTools(doc, p)
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -1411,6 +1422,44 @@ func (m *Threads) StopProject(projectID string) {
 	}
 }
 
+func (m *Threads) revokeTools(threadID string) {
+	if m.RevokeTools != nil {
+		m.RevokeTools(threadID)
+	}
+}
+
+// ReleaseProject ends every worker's and folder session's process and tool
+// access in a project, for a pause or an archive: the threads stay readable,
+// and a thread that runs again after a resume or an unarchive gets a fresh
+// session and fresh tools. The project's main thread is the coordinator's and
+// is left to it (ListThreads does not return it). Call it once the project
+// refuses new messages, so nothing starts a session behind this.
+func (m *Threads) ReleaseProject(projectID string) {
+	threads, err := m.store.ListThreads(projectID)
+	if err != nil {
+		return
+	}
+	var wg sync.WaitGroup
+	for _, t := range threads {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			lock := m.lifecycleLock(id)
+			lock.Lock()
+			defer lock.Unlock()
+			if done := m.stop(id, Source{Kind: db.SourceSystem}); done != nil {
+				select {
+				case <-done:
+				case <-time.After(agentboot.SessionCloseTimeout):
+				}
+			}
+			m.engine.Evict(m.sessionOf(id))
+			m.revokeTools(id)
+		}(t.ID)
+	}
+	wg.Wait()
+}
+
 // PendingRequest returns the transcript event of a request the thread is
 // still waiting on; ok is false once it is answered or given up.
 func (m *Threads) PendingRequest(threadID, requestID string) (db.ThreadEvent, bool) {
@@ -1450,6 +1499,11 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	if err == nil {
 		m.releaseChats(t)
 		m.cleanTmp(t)
+		// After the status is saved, not before: the stopped turn's own
+		// bookkeeping races the save (it writes no "Stopped." once the
+		// thread is resolved), and nothing can start a session meanwhile, as
+		// the lifecycle lock is held.
+		m.revokeTools(threadID)
 	}
 	return t, err
 }
@@ -1467,7 +1521,7 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 		}
 	}
 	m.engine.Evict(m.sessionOf(threadID))
-	return m.update(threadID, func(t *db.Thread) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		if t.ArchivedAt == nil {
 			now := time.Now()
 			t.ArchivedAt = &now
@@ -1476,6 +1530,10 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 			t.Status, t.WaitReason = db.ThreadIdle, ""
 		}
 	})
+	if err == nil {
+		m.revokeTools(threadID) // after the save, as in Resolve
+	}
+	return t, err
 }
 
 // RestoreSession returns an archived session to the list in its stored state.
@@ -1561,9 +1619,36 @@ func (m *Threads) SetTitle(threadID, title string) (*db.Thread, error) {
 	return t, nil
 }
 
-// Merge merges a thread's branch into its base in the main checkout and
-// resolves the thread.
-func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error) {
+// How a thread's branch is merged, on GitHub: its PR is squash-merged there, or
+// only opened (a merge request) and left for review. There is no third way, and
+// nothing is merged in the local checkout.
+const (
+	MergeSquash       = "squash"
+	MergeMergeRequest = "merge_request"
+)
+
+// MergeSpec says how and with which words a thread's branch is merged.
+type MergeSpec struct {
+	// Method is MergeSquash or MergeMergeRequest.
+	Method string
+	// Message is the squash commit's message; empty leaves it to GitHub.
+	Message string
+	// Title and Body describe the PR when one is opened; empty means the thread's
+	// title and its last report.
+	Title, Body string
+}
+
+// ErrBadMergeMethod is a merge asked for with a method that is neither of the two.
+var ErrBadMergeMethod = errors.New(`method must be "squash" or "merge_request"`)
+
+// Merge merges a thread's branch on GitHub the way spec says (Links.Merge does
+// the GitHub side; the thread's merge tool calls the same). A squash resolves
+// the thread; a merge request leaves it as it is: the branch is not merged
+// until the PR is.
+func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*db.Thread, error) {
+	if spec.Method != MergeSquash && spec.Method != MergeMergeRequest {
+		return nil, ErrBadMergeMethod
+	}
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -1577,19 +1662,58 @@ func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error
 	if m.Running(threadID) {
 		return nil, errors.New("the thread is still working; wait for it to finish or stop it")
 	}
-	if err := MergeBranch(ctx, t.RepoPath, t.BaseBranch, t.Branch, fmt.Sprintf("Merge %s: %s", t.Branch, t.Title)); err != nil {
+	// A merge tool call may have merged it already: only the thread is left to close.
+	for _, k := range t.Links {
+		if k.Kind == db.LinkPR && k.State == db.LinkStateMerged && k.Head == t.Branch {
+			if spec.Method == MergeMergeRequest {
+				return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
+			}
+			return m.resolveMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
+		}
+	}
+	var links *Links
+	if m.links != nil {
+		links = m.links()
+	}
+	if links == nil {
+		return nil, errors.New("merging is not available here")
+	}
+	out, err := links.Merge(ctx, t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
+	if err != nil {
 		return nil, err
 	}
-	t, err = m.update(threadID, func(t *db.Thread) {
+	switch {
+	case out.Merged:
+		return m.resolveMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
+	case out.Existed:
+		return m.noteLinks(threadID, fmt.Sprintf("PR #%d is already open for %s; the branch was pushed again: %s", out.Item.Number, t.Branch, out.Item.URL))
+	}
+	return m.noteLinks(threadID, fmt.Sprintf("Opened PR #%d for %s into %s: %s", out.Item.Number, t.Branch, t.BaseBranch, out.Item.URL))
+}
+
+// resolveMerged marks the thread's branch merged and the thread resolved.
+func (m *Threads) resolveMerged(threadID, note string) (*db.Thread, error) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
 		t.MergedAt, t.ResolvedAt, t.Status, t.WaitReason = &now, &now, db.ThreadResolved, ""
 	})
 	if err == nil {
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Merged %s into %s.", t.Branch, t.BaseBranch)})
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
 		m.releaseChats(t)
 		m.cleanTmp(t)
 	}
 	return t, err
+}
+
+// noteLinks records a note in the thread and returns it as stored now (its
+// links were written by the merge itself).
+func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
+	return t, nil
 }
 
 // Diff returns a thread's changes for review.
@@ -1602,6 +1726,18 @@ func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
 		return Diff{}, errors.New("this thread has no worktree branch to review")
 	}
 	return BranchDiff(ctx, t.Cwd, t.BaseBranch, t.Branch)
+}
+
+// DiffFile returns one file of a thread's changes; see BranchFileDiff.
+func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string) (FileDiff, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return FileDiff{}, err
+	}
+	if t.Branch == "" {
+		return FileDiff{}, errors.New("this thread has no worktree branch to review")
+	}
+	return BranchFileDiff(ctx, t.Cwd, t.BaseBranch, path, oldPath)
 }
 
 // Recover runs at startup: turns that were running when the process stopped
@@ -1972,6 +2108,9 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	if p.m.builtinToolAllowed(p.threadID, req.ToolName) {
+		return agentboot.ApprovalResponse{Approved: true}, nil
+	}
 	key, scopable := allowKey(req.ToolName, req.Input)
 	if scopable && p.m.isAllowed(p.threadID, key) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
@@ -1997,6 +2136,30 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 		}
 	}
 	return agentboot.ApprovalResponse{Approved: ans.Allow, Reason: reason}, nil
+}
+
+// builtinToolAllowed is the answer for a Projects tool that reached the
+// approval prompt anyway (a permission mode or a profile rule the settings
+// file does not outrank): the tools are allowed as grantBuiltinTools says,
+// except the ones that always ask and the ones the thread's project asked to
+// approve itself.
+func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
+	if !strings.HasPrefix(tool, builtinToolsRule+"__") {
+		return false
+	}
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return false
+	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return false
+	}
+	name := strings.TrimPrefix(tool, builtinToolsRule+"__")
+	if slices.Contains(alwaysAskTools, name) {
+		return false
+	}
+	return p.ThreadGitHubAccess != GitHubAsk || !slices.Contains(githubWriteTools, name)
 }
 
 func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {

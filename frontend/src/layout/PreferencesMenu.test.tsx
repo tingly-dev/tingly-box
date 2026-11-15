@@ -29,3 +29,16 @@ it('opens the log page from the gear menu and closes the menu', () => {
     expect(screen.getByTestId('location').textContent).toBe('/system/logs');
     expect(onClose).toHaveBeenCalled();
 });
+
+it('switches to the phone interface from the gear menu and remembers it', () => {
+    localStorage.clear();
+    render(
+        <MemoryRouter>
+            <PreferencesMenu anchorEl={document.body} onClose={vi.fn()} />
+        </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: 'mobile.shell.desktop' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'mobile.shell.mobile' }));
+    expect(localStorage.getItem('ui.shell')).toBe('mobile');
+    expect(screen.getByRole('button', { name: 'mobile.shell.mobile' })).toHaveAttribute('aria-pressed', 'true');
+});

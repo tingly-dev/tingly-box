@@ -290,6 +290,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'image',
                 icon: <IconPhoto sx={{ fontSize: 22 }} />,
                 label: t('layout.image', { defaultValue: 'Image' }),
+                railLabel: t('layout.imageRail', { defaultValue: 'Image' }),
                 defaultPath: '/image/playground',
                 // The Image API entry leads, set off by a divider; Playground
                 // stays the default landing (defaultPath). Then the work
@@ -326,6 +327,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'projects',
                 icon: <IconFolder sx={{ fontSize: 22 }} />,
                 label: t('layout.workspace', { defaultValue: 'Workspace' }),
+                railLabel: t('layout.workspaceRail', { defaultValue: 'Workspace' }),
                 defaultPath: '/workspace',
                 attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
                 sidebar: enableProjects ? (onNavigate: () => void) => (
@@ -346,6 +348,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'powerups' as const,
                 icon: <IconBolt sx={{ fontSize: 22 }} />,
                 label: t('layout.powerUps', { defaultValue: 'Power-ups' }),
+                railLabel: t('layout.powerUpsRail', { defaultValue: 'Power-ups' }),
                 defaultPath: powerUpChildren.find((item): item is NavItemBase => item.type !== 'divider')?.path,
                 children: powerUpChildren,
             }] as ActivityItem[] : []),

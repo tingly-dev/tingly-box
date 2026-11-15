@@ -41,6 +41,8 @@ type anthropicToOpenAIConverter struct {
 	toolCallID       string
 	toolCallName     string
 	toolCallArgs     strings.Builder
+	initialToolInput string
+	stopReason       string
 	hasToolCalls     bool
 	suppressToolCall bool
 	// toolCallIndex is the Chat tool_calls[].index of the current tool call;
@@ -142,11 +144,14 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 
 	case "content_block_start":
 		if event.ContentBlock.Type == "text" {
-			// no chunk to emit; text deltas come via content_block_delta
+			if event.ContentBlock.Text != "" {
+				c.emitChunk(wire.ChatStreamDelta{Content: event.ContentBlock.Text}, nil)
+			}
 		} else if event.ContentBlock.Type == "tool_use" {
 			c.toolCallID = event.ContentBlock.ID
 			c.toolCallName = event.ContentBlock.Name
 			c.toolCallArgs.Reset()
+			c.initialToolInput = protocol.AnthropicToolInputJSON(event.ContentBlock.RawJSON(), event.ContentBlock.Input)
 			c.suppressToolCall = c.hooks != nil && c.hooks.ShouldSuppressTool != nil && c.hooks.ShouldSuppressTool(c.toolCallName)
 			if !c.suppressToolCall {
 				c.hasToolCalls = true
@@ -170,6 +175,9 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 			}
 		} else if event.ContentBlock.Type == "thinking" {
 			c.thinkingText.Reset()
+			if event.ContentBlock.Thinking != "" {
+				c.emitChunk(wire.ChatStreamDelta{ReasoningContent: event.ContentBlock.Thinking}, nil)
+			}
 		} else if event.ContentBlock.Type == "redacted_thinking" {
 			c.thinkingText.Reset()
 			c.thinkingText.WriteString("[REDACTED THINKING]")
@@ -200,6 +208,13 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 
 	case "content_block_stop":
 		if c.toolCallID != "" {
+			if c.toolCallArgs.Len() == 0 {
+				args := c.initialToolInput
+				c.toolCallArgs.WriteString(args)
+				if !c.suppressToolCall {
+					c.emitChunk(wire.ChatStreamDelta{ToolCalls: []wire.ChatStreamToolCall{{Index: c.toolCallIndex, Function: wire.ChatStreamToolFunction{Arguments: &args}}}}, nil)
+				}
+			}
 			c.pendingToolCalls = append(c.pendingToolCalls, AnthropicToOpenAIToolCall{
 				ID:        c.toolCallID,
 				Name:      c.toolCallName,
@@ -208,10 +223,15 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 			c.toolCallID = ""
 			c.toolCallName = ""
 			c.toolCallArgs.Reset()
+			c.initialToolInput = ""
 			c.suppressToolCall = false
 		}
 
 	case "message_delta":
+		// A later usage-only delta must not clear an already reported stop.
+		if event.Delta.StopReason != "" {
+			c.stopReason = string(event.Delta.StopReason)
+		}
 		c.acc.ConsumeBeta(event)
 
 	case "message_stop":
@@ -223,7 +243,9 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 			}
 		}
 		finishReason := "stop"
-		if c.hasToolCalls {
+		if c.stopReason == "max_tokens" {
+			finishReason = "length"
+		} else if c.hasToolCalls {
 			finishReason = openaiFinishReasonToolCalls
 		}
 		chunk := c.newChunk(wire.ChatStreamDelta{}, &finishReason)

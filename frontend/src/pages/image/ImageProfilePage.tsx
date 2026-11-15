@@ -44,7 +44,7 @@ const ImageProfilePage: React.FC = () => {
             prompts: [{ id: 'p1', name: '', text: '' }],
             activePromptId: 'p1',
             model: '',
-            size: '1024x1024',
+            size: 'auto',
             quality: 'auto',
             count: 1,
         });

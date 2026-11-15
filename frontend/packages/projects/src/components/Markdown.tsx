@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
@@ -9,6 +9,9 @@ import { useCopyFeedback } from '../hooks/useCopyFeedback';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from '../transcript/conversationStyles';
+import { remarkAutolinkBoundary } from '../transcript/autolink';
+
+type RemarkPlugin = NonNullable<Options['remarkPlugins']>[number];
 
 /** A fenced code block: highlighted, with a copy button. */
 export function CodeBlock({ code, language }: { code: string; language: string }) {
@@ -95,7 +98,7 @@ export const Markdown = memo(function Markdown({ text, conversation = false, saf
             }}
         >
             <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkAutolinkBoundary as RemarkPlugin]}
                 urlTransform={safe ? safeUrl : undefined}
                 components={{
                     a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,

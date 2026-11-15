@@ -62,7 +62,7 @@ func TestSwitchingToAutoModeRefreshesThreadSettingsOnNextTurn(t *testing.T) {
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	_, ask := settingsPerms(t, f.threads.layout.SettingsFile(f.project.ID, th.ID))
-	assert.Empty(t, ask)
+	assert.Equal(t, []string{githubToolRule(toolMerge)}, ask, "only the merge asks")
 
 	_, err = f.threads.SetPermissionMode(th.ID, "auto")
 	require.NoError(t, err)

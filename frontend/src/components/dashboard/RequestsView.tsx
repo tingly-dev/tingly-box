@@ -321,26 +321,19 @@ export interface RecordsQueryParams {
 }
 
 interface RequestsViewProps {
-    /** Most recent records in range (capped sample) — feeds the table directly
-     *  when it covers the whole range. */
-    records: UsageRecord[];
-    loading: boolean;
-    /** Real total in range from the server; records may be capped below it. */
-    totalCount?: number;
-    /** Query the sample was fetched with; used to page the rest server-side. */
+    /** Time window + dashboard filters the table pages through. */
     queryParams?: RecordsQueryParams | null;
 }
 
-export default function RequestsView({ records, loading, totalCount, queryParams }: RequestsViewProps) {
+export default function RequestsView({ queryParams }: RequestsViewProps) {
     const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(50);
 
-    // When the sample holds every record in range, filter/paginate it locally
-    // (no extra requests). Otherwise the table switches to server-side paging
-    // so every record stays reachable instead of only the most recent slice.
-    const sampleComplete = totalCount == null || records.length >= totalCount;
-
+    // The table asks the server for exactly the page on screen. It used to
+    // fetch a 500-row sample first and page it locally, which sent ten pages'
+    // worth of rows on every visit (and then asked again for page one whenever
+    // the range held more than 500).
     const [serverRows, setServerRows] = useState<UsageRecord[]>([]);
     const [serverTotal, setServerTotal] = useState(0);
     const [serverLoading, setServerLoading] = useState(false);
@@ -356,7 +349,7 @@ export default function RequestsView({ records, loading, totalCount, queryParams
     }, [resetKey]);
 
     useEffect(() => {
-        if (sampleComplete || !queryParams) return;
+        if (!queryParams) return;
         const seq = ++serverSeq.current;
         setServerLoading(true);
         (async () => {
@@ -388,27 +381,17 @@ export default function RequestsView({ records, loading, totalCount, queryParams
                 }
             }
         })();
-    }, [sampleComplete, queryParams, statusFilter, page, rowsPerPage]);
-
-    const filtered = statusFilter === 'all'
-        ? records
-        : records.filter(r => statusFilter === 'success' ? r.status === 'success' : r.status !== 'success');
-
-    const paged = filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
-
-    const tableRecords = sampleComplete ? paged : serverRows;
-    const tableTotal = sampleComplete ? filtered.length : serverTotal;
-    const tableLoading = sampleComplete ? loading && records.length === 0 : serverLoading;
+    }, [queryParams, statusFilter, page, rowsPerPage]);
 
     return (
         <Box>
             <RequestTable
-                records={tableRecords}
-                total={tableTotal}
+                records={serverRows}
+                total={serverTotal}
                 page={page}
                 rowsPerPage={rowsPerPage}
                 statusFilter={statusFilter}
-                loading={tableLoading}
+                loading={serverLoading}
                 onStatusFilterChange={s => { setStatusFilter(s); setPage(0); }}
                 onPageChange={setPage}
                 onRowsPerPageChange={r => { setRowsPerPage(r); setPage(0); }}

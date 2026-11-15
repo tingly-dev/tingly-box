@@ -180,6 +180,12 @@ Never hit in production since `StoreManager` builds `UsageStore` directly
 over its own already-open `*gorm.DB` — surfaced when
 `stats_usage_bench_test.go` became `NewUsageStore`'s first-ever caller.
 
+### Dashboard reads (`UsageStore`)
+
+The dashboard's read path (rollup tables, empty-day markers, index pinning,
+dropped indexes, performance cache) is documented with measurements in
+`usage-dashboard-db-cost.md`.
+
 ### Audit: is your store on a hot path?
 
 Every store under `internal/db/` follows the same shape: a GORM-backed

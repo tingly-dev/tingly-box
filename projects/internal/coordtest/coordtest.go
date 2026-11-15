@@ -9,6 +9,7 @@
 package coordtest
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -88,12 +89,22 @@ func (t *Turn) call(name string, args any) (string, bool) {
 	if err != nil {
 		return "coordtest: " + err.Error(), true
 	}
+	out, isErr, err := CallText(t.Ctx, session, name, args)
+	if err != nil {
+		return "coordtest: " + err.Error(), true
+	}
+	return out, isErr
+}
+
+// CallText runs a Projects MCP tool and returns its text content and whether
+// the tool reported a failure; err is a failure to reach the server.
+func CallText(ctx context.Context, session *mcp.ClientSession, name string, args any) (string, bool, error) {
 	if args == nil {
 		args = map[string]any{}
 	}
-	res, err := session.CallTool(t.Ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
-		return "coordtest: " + err.Error(), true
+		return "", false, err
 	}
 	var text []string
 	for _, c := range res.Content {
@@ -101,7 +112,7 @@ func (t *Turn) call(name string, args any) (string, bool) {
 			text = append(text, tc.Text)
 		}
 	}
-	return strings.Join(text, "\n"), res.IsError
+	return strings.Join(text, "\n"), res.IsError, nil
 }
 
 // Calls are the tool calls this turn made, in order.
@@ -214,18 +225,24 @@ func (t *Turn) ThreadRef(title string) string {
 	return m[1]
 }
 
+// ToolSession connects to the Projects tools of a session whose MCP config is
+// at configPath (ExecutionOptions.MCPConfigPath). The caller closes it.
+func ToolSession(ctx context.Context, configPath string) (*mcp.ClientSession, error) {
+	url, err := serverURL(configPath)
+	if err != nil {
+		return nil, err
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "coordtest", Version: "1"}, nil)
+	return client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: url}, nil)
+}
+
 func (t *Turn) connect() (*mcp.ClientSession, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.session != nil {
 		return t.session, nil
 	}
-	url, err := serverURL(t.Opts.MCPConfigPath)
-	if err != nil {
-		return nil, err
-	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "coordtest", Version: "1"}, nil)
-	session, err := client.Connect(t.Ctx, &mcp.StreamableClientTransport{Endpoint: url}, nil)
+	session, err := ToolSession(t.Ctx, t.Opts.MCPConfigPath)
 	if err != nil {
 		return nil, err
 	}

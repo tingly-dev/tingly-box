@@ -9,7 +9,7 @@ export const footerHeight = 60;
 export const activityItemMinHeight = 52;
 export const activityItemGap = 0.5;
 export const activityItemRadius = 1.25;
-export const activityItemPaddingX = 1;
+export const activityItemPaddingX = 0.5;
 export const activityItemPaddingY = 1.25;
 export const activityContainerPaddingY = 1;
 

@@ -17,6 +17,10 @@ Every route element in `src/routes/appRoutes.tsx` (the route table `App.tsx` ren
 
 **`vite.config.wails.ts`'s `manualChunks`/`optimizeDeps` must stay in sync with `vite.config.ts`.** They're separate config files (Rollup can't share a function across two `defineConfig` calls), so a fix applied to one doesn't propagate to the other — this has drifted before (the wails config kept forcing `recharts`/`d3` into an eager `recharts-vendor` chunk after the web config was fixed to leave them lazy). When you change one file's chunking/`optimizeDeps` logic, apply the same change to the other, or explain in a comment why they intentionally differ.
 
+## Data loading
+
+Call the API through `api.*` / `controlApi` / `fetchUIAPI` (identical concurrent GETs are folded into one request there; a raw `fetch` is not), keep large libraries and locale bundles out of code reachable from `Layout`/`App`, and gate new pollers on `document.visibilityState`. Measure with `scripts/measure-data-loading.mjs`; numbers, the short-lived read cache and open candidates are in `.design/frontend-data-loading.md`.
+
 ## Reuse existing hooks instead of hand-rolling
 
 These get reinvented locally often enough that it's worth naming explicitly:

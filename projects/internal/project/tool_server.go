@@ -18,6 +18,9 @@ func (f *sessionToolsMCP) tools(t *db.Thread, p *db.Project) []Tool {
 	if c := f.service.Coordinator; c != nil {
 		out = c.coordinatorTools()
 	}
+	if f.service.Links != nil {
+		out = append(out, f.githubTools()...)
+	}
 	return append(out, Tool{Name: "send_file", Description: f.sendFileDescription(t, p), Strict: true,
 		Properties: map[string]any{
 			"path":    strProp("Path to the file to publish in this conversation"),
@@ -63,7 +66,7 @@ func (f *sessionToolsMCP) buildFor(threadID string) (*mcp.Server, *coordinatorTo
 	}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "tingly-projects", Version: "1.0.0"}, nil)
 	for _, tool := range f.tools(t, p) {
-		if tool.CoordinatorOnly && turn == nil {
+		if (tool.CoordinatorOnly && turn == nil) || (tool.ThreadOnly && turn != nil) {
 			continue
 		}
 		if err := f.register(srv, tool, t.ID, turn); err != nil {

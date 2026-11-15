@@ -73,6 +73,7 @@ export const settings: Dict<typeof settingsEn> = {
         notificationsEnable: '桌面通知',
         notificationsOn: '开 — 仅在本标签页隐藏或最小化时提醒',
         notificationsOff: '关',
+        notificationsAsk: '已开启，等待你在浏览器里允许——点“开启”，浏览器会询问一次',
         notificationsScope: '包括：提问、权限批准、失败的轮次、完成的轮次、协调者请求拍板。',
         notificationsBlocked: '浏览器已拦截本站点的通知。请在本站点的浏览器设置中允许通知，然后重新打开此开关。',
         notificationsUnsupported: '当前浏览器不支持桌面通知。',

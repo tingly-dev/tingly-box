@@ -481,6 +481,7 @@ Current date: %s
 		if t.Branch != "" {
 			fmt.Fprintf(&b, " branch=%s commits=%d", t.Branch, t.CommitsAhead)
 		}
+		b.WriteString(linksNote(t.Links))
 		if t.WaitReason != "" {
 			fmt.Fprintf(&b, " waiting_on_user=%q", clip(t.WaitReason, 200))
 		}

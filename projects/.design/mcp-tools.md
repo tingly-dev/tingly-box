@@ -22,7 +22,7 @@ The rule that carries over every step: **an action is a method on `Threads` or `
 
 ## What exists
 
-Tools today: one table. The coordinator's 13 tools are `Coordinator.coordinatorTools()` (`coordinator_tools.go`); `read_shared_file`, `list_shared_files` and `send_file` are added in `sessionToolsMCP.tools` (`tool_server.go`); `sessionToolsMCP.buildFor` makes the server of one session. They are `start_thread`, `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, `read_shared_file`, `list_shared_files`, and `send_file` (every thread). `sessionToolsMCP.config` starts one loopback listener and gives each thread a random capability URL; the thread id is bound to the URL and the project id is never taken from the model.
+Tools today: one table. The coordinator's 13 tools are `Coordinator.coordinatorTools()` (`coordinator_tools.go`); `read_shared_file`, `list_shared_files` and `send_file` are added in `sessionToolsMCP.tools` (`tool_server.go`); `sessionToolsMCP.buildFor` makes the server of one session. They are `start_thread`, `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, `read_shared_file`, `list_shared_files`, and `send_file` (every thread). `sessionToolsMCP.config` starts one loopback listener and gives each thread a random capability URL; the thread id is bound to the URL and the project id is never taken from the model. The URL is issued once per thread and kept for the life of the process, so every turn and resume of a thread uses the same one. It is **revoked** (path unserved, config file removed) when the thread is resolved, when a session is archived, and when its project is paused or archived (`Threads.ReleaseProject`, called once the project refuses messages; it also closes the threads' resident processes, since a process keeps the URL it started with). For a thread the revocation comes after its new status is saved, not before: the interrupted turn's own bookkeeping races that save (it writes no "Stopped." note once the thread is resolved), and doing it earlier made that race flip about one run in five in the golden test. A paused or archived project answers nothing. The next turn of a reopened, restored, resumed or unarchived thread gets a fresh URL and a fresh process. A project's main thread is not revoked: the coordinator's tools already refuse a paused or archived project, and its turn state lives with the URL.
 
 Gates every coordinator call passes (`coordinatorToolTurn.run`): schema validation, an active turn, project not paused or archived, project settings unchanged since the turn began, `no_update` refused on a user-triggered turn. Trust: text from others is wrapped in `envelope(trustRelay, …)`; `message_thread` takes `cite` (ids of the user's own messages) checked by `quoteUser`.
 
@@ -126,20 +126,26 @@ To verify while implementing, not assumed here: what happens to a pending approv
 - `Reopen` on a working thread leaves it working.
 - `coordtest` flow: stop a running thread, message it, resolve it, reopen it, message it.
 
+## Step 5: issue and PR tools for threads (built)
+
+The first tools a thread calls on itself, and the first `ThreadOnly` tools (the counterpart of `CoordinatorOnly`: `buildFor` keeps them from a project's main thread, and `TestToolsOfEachScope` pins who gets what). `create_issue`, `create_pr`, `update`, `comment`, `view` (issues and PRs addressed by their shared number, one read tool and four write tools so permissions stay per tool; `create_pr` takes an optional local `head` and a `base`, so a thread can open a stack of PRs); design, authorization rules and the refresh policy are in [github-tools.md](./github-tools.md). The tool list golden has them for the worker and the folder session; the coordinator's list and golden outputs are unchanged, and the coordinator reads the records through `get_thread` and `list_threads`.
+
 ## Later (only when asked for, each its own change)
 
 Listed so the direction is visible, not as a commitment. Each needs its own small decision first.
 
 - **More thread actions:** `retry_thread`, `get_thread_diff`, `set_thread_settings` (permission mode, model, effort, auto-answer). Widening a session's permissions should not be silent; that is the first case where an approval rule is needed.
-- **Merge** (`merge_thread`): irreversible. This is when to add an approval rule: the call carries the ids of the user's own messages, checked with `quoteUser` like `cite`, and an audit event quotes them (an earlier version of the table had this gate; it was cut as unused). A stronger form binds approval to an answered decision card. Decide then, not now.
+- **Merge** (`merge_thread`, the coordinator's): irreversible. (A thread's own `merge` tool exists since the GitHub merge: see `github-tools.md`, where it always asks through an `ask` rule rather than this gate.) This is when to add an approval rule: the call carries the ids of the user's own messages, checked with `quoteUser` like `cite`, and an audit event quotes them (an earlier version of the table had this gate; it was cut as unused). A stronger form binds approval to an answered decision card. Decide then, not now.
 - **Project settings** (`set_project_settings` for the concurrency limit and similar): needs `Service.UpdateProject` extracted from the handler, and the tool sets `EditsProject` so the turn adopts its own change.
-- **Worker and folder-session tools** (`set_branch`, `link`, `set_progress`, from the awareness and message-channel designs): the first tools a thread calls on itself. `CoordinatorOnly` already keeps the coordinator's tools away from them; a tool only a worker should have is a new field then, with the existing test that no worker tool takes a thread id.
+- **Worker and folder-session tools** (`set_branch`, `link`, `set_progress`, from the awareness and message-channel designs): `set_branch`, `link` are still ahead (the GitHub tools above were the first ones a thread calls on itself, with the `ThreadOnly` field this line asked for and the test that no worker tool takes a thread id).
 - **Resources:** library delete, channel bindings (read-only first), usage.
 - **Session control:** `compact_thread` after the slash-command PRs land.
 
 Never for a model: create, delete, pause or archive a project; `repos`; the coordinator's own profile, model or effort; answering a worker's permission request; choosing a decision card; uploads and downloads.
 
-Push and PR creation are out of scope: Projects has no such code, and credentials belong to the host.
+Push and PR creation, issues and the record of them are in [github-tools.md](./github-tools.md): five thread-only tools that act on the thread's own repository and branch with the host's `gh` login. Close and force-push are still out of scope; merge exists only as the thread's `merge` tool, which always asks.
+
+Every tool of this server runs in a thread without an approval card: the thread's settings file allows the whole `mcp__tingly-projects` server and the thread's approval prompt answers any call that still reaches it (the coordinator's prompter does the same). Only the four tools that publish on GitHub can be opted out, per project; the reasoning and the probe are under Authorization in `github-tools.md`. A future tool that is irreversible must not rely on this blanket allow: it needs the approval rule above, and its own `ask` rule so that it wins over the allow.
 
 ## Decisions taken here and why
 

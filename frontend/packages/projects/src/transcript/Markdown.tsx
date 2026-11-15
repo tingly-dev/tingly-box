@@ -7,6 +7,7 @@ import {useTranscriptHost} from './context';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from './conversationStyles';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { autolinkBoundaryConfig } from './autolink';
 
 // Plain text of a rendered node tree: a fenced block's code reaches the code
 // component as parsed children, but a code block takes a string.
@@ -59,6 +60,7 @@ const Markdown = ({content}: {content: string}) => (
             content={content}
             components={components}
             escapeRawHtml
+            config={autolinkBoundaryConfig}
             openLinksInNewTab
             disableDefaultStyles
         />

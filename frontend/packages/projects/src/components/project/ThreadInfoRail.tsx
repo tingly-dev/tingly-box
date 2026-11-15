@@ -12,6 +12,7 @@ import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { timeAgo } from '../../utils/format';
 import { CopyValue, Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 import { agentIcon, agentState } from './ThreadActivityPopover';
+import { ThreadLinksCard } from './LinksCard';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -120,10 +121,10 @@ interface Props {
     /** The permission mode's display name (the picker sits at the message box). */
     permission?: string;
     configuredModel?: string;
-    /** A card above the rest, folded into the rail from the page (a folder's sessions). */
-    top?: ReactNode;
     /** Cards the host adds (SessionSlots.railCards), after Usage. */
     extra?: ReactNode;
+    /** The cards at the width of the pane, in place of the conversation, not docked beside it. */
+    sheet?: boolean;
     /** Lists the thread's subagents (its Agent calls) for the rail's own card. */
     subagents?: { list: () => Promise<Subagent[]> };
     /** Opens a subagent on its own, in place of the conversation. */
@@ -138,7 +139,7 @@ interface Props {
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, top, extra, subagents, onOpenAgent, onShowAgent }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, extra, subagents, onOpenAgent, onShowAgent, sheet }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
@@ -146,12 +147,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
     const hasChanges = !!thread.branch || thread.commits_ahead > 0 || thread.uncommitted || !!thread.merged_at;
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
-        <InfoRailFrame label={t('rail.title')}>
-            {top != null && (
-                <RailCard id="sessions" title={t('session.sessions')}>
-                    <Box sx={{ mx: -0.75, maxHeight: 320, overflowY: 'auto' }}>{top}</Box>
-                </RailCard>
-            )}
+        <InfoRailFrame label={t('rail.title')} sheet={sheet}>
             <StatusCard thread={thread} />
             <RailCard id="env" title={t('rail.environment')}>
                 <Fact label={t('rail.folder')} labelWidth={64}><CopyValue value={thread.cwd} /></Fact>
@@ -164,6 +160,7 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             </RailCard>
             <UsageCard thread={thread} />
             {extra}
+            <ThreadLinksCard thread={thread} />
             {hasChanges && (
                 <RailCard id="changes" title={t('rail.changes')}>
                     {thread.merged_at
@@ -175,9 +172,8 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
                     {canReview && <Button size="small" variant="outlined" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
                 </RailCard>
             )}
-            {(folder || tasks.length > 0) && (
+            {tasks.length > 0 && (
                 <RailCard id="tasks" title={t('session.backgroundTasks')} aside={running.length > 0 ? t('session.tasksRunning', { count: running.length }) : undefined}>
-                    {tasks.length === 0 && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('tasks.none')}</Typography>}
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}
                     {finished.length > 0 && (
                         <>

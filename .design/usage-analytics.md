@@ -217,10 +217,11 @@ It contains additive sums needed to reconstruct request counts, token totals, er
 - `group_by=provider`
 - `group_by=user`
 - `group_by=daily`
+- `group_by=scenario`, and a `scenario` filter with `group_by=daily` — from the companion `usage_daily_scenario` table (one row per `(UTC day, scenario)`), only when no provider/model/user filter is set
 
-provided there is a bounded multi-day window and no scenario/rule/status filter. Complete middle days come from `usage_daily`; partial edge days come from `usage_records`. The additive buckets are merged before error, streaming, and latency rates are derived.
+provided there is a bounded multi-day window and no rule/team/status filter (and no scenario filter on a model/provider/user grouping). Complete middle days come from `usage_daily`; partial edge days come from `usage_records`. The additive buckets are merged before error, streaming, and latency rates are derived.
 
-`GetTimeSeries(interval=day)` uses the same completed-day/edge-day strategy when its filters are limited to provider/model/user. Unsupported shapes or an aggregation failure fall back to a raw scan.
+`GetTimeSeries(interval=day)` uses the same completed-day/edge-day strategy when its filters are limited to provider/model/user, or to a lone `scenario` (served from `usage_daily_scenario`). Unsupported shapes or an aggregation failure fall back to a raw scan.
 
 The steady-state query cost of the daily path is effectively flat in raw record count; the original benchmark measured roughly 25× faster reads around 200k records over 90 days.
 
@@ -464,8 +465,9 @@ Use the repository `ui-preview` workflow to inspect:
 - A new roster axis (e.g. by scenario) should be built on the shared `useRosterAxis` hook and `RosterBreakdownTable` component (`components/dashboard/RosterAxis.tsx`) rather than re-implementing the search/sort/page/selection/detail-load lifecycle or the breakdown table markup per axis.
 - Never hand-derive one mock aggregation from another (e.g. provider sums from per-model figures) as a separately maintained literal — compute it from the one source array at request time.
 - Parse `YYYY-MM-DD` as local midnight (`new Date(\`${date}T00:00:00\`)`), not bare UTC-parsed dates.
-- `usage_daily` has no scenario/rule/status dimension; those filters require raw scans unless the aggregate schema is extended.
+- `usage_daily` has no scenario/rule/status dimension; scenario lives in `usage_daily_scenario` (no provider/model/user), and rule/status/team filters or scenario combined with provider/model/user require raw scans unless the aggregate schema is extended. See `usage-dashboard-db-cost.md` for why scenario is not a `usage_daily` dimension.
+- A completed day with no traffic is stored as a zero-count marker row in `usage_daily`; every reader of `usage_daily` must filter `request_count > 0`.
 - Adding a new summed column to both `usage_records` and `usage_daily` does not require dropping `usage_daily`; historical source rows contribute the migrated zero value.
-- A true aggregate layout change must update the schema-rebuild condition and preserve merged/raw equivalence tests in `../internal/db/usage_daily_test.go`.
+- A true aggregate layout change must update the schema-rebuild condition and preserve merged/raw equivalence tests in `../internal/db/usage_daily_test.go` and `usage_daily_rollup_test.go`.
 - `middleware.Gzip()` is JSON-only; never attach it to streaming/SSE routes.
 - API additions start from backend models and Swagger definitions, followed by `task codegen`; generated files are never hand-edited.

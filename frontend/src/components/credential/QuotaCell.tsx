@@ -15,7 +15,7 @@ import { useTheme } from '@mui/material/styles';
 import { getStatusColor } from '@/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
-import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
+import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useNotify } from '@/hooks/useNotify';

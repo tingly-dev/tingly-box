@@ -116,6 +116,7 @@ export function useRosterAxis<T extends MetricRow, D, R>({
     rowsPerPage,
     range,
     loadDetail,
+    enabled = true,
 }: {
     roster: T[];
     getKey: (row: T) => string;
@@ -124,6 +125,11 @@ export function useRosterAxis<T extends MetricRow, D, R>({
     rowsPerPage: number;
     range: R;
     loadDetail: (selected: T | undefined, range: R) => Promise<D[]>;
+    /** Load the detail only while this axis is the one on screen. A hidden
+     *  axis used to fetch its detail up front, so a page with three axes sent
+     *  three detail queries on load and showed one. The detail already loaded
+     *  for the same row and range is kept when the axis is shown again. */
+    enabled?: boolean;
 }): RosterAxis<T, D> {
     const [search, setSearch] = useState('');
     const [sortField, setSortField] = useState<SortField>('total');
@@ -133,6 +139,11 @@ export function useRosterAxis<T extends MetricRow, D, R>({
     const [detail, setDetail] = useState<D[]>([]);
     const [detailLoading, setDetailLoading] = useState(false);
     const detailSeq = useRef(0);
+    type DetailKey = { selected: T | undefined; range: R; loadDetail: typeof loadDetail };
+    const requestedFor = useRef<DetailKey | null>(null);
+    // What `detail` currently describes; lets a freshly shown axis report
+    // "loading" on its first render instead of flashing an empty table.
+    const [detailFor, setDetailFor] = useState<DetailKey | null>(null);
 
     const visibleRows = useMemo(
         () => filterAndSort(roster, search, searchText, sortField, sortDirection, nameOf),
@@ -164,13 +175,18 @@ export function useRosterAxis<T extends MetricRow, D, R>({
     );
 
     useEffect(() => {
+        if (!enabled) return;
+        const last = requestedFor.current;
+        if (last && last.selected === selected && last.range === range && last.loadDetail === loadDetail) return;
+        const key: DetailKey = { selected, range, loadDetail };
+        requestedFor.current = key;
         const seq = ++detailSeq.current;
         setDetailLoading(true);
         loadDetail(selected, range)
-            .then((result) => { if (seq === detailSeq.current) setDetail(result); })
-            .catch(() => { if (seq === detailSeq.current) setDetail([]); })
+            .then((result) => { if (seq === detailSeq.current) { setDetail(result); setDetailFor(key); } })
+            .catch(() => { if (seq === detailSeq.current) { setDetail([]); setDetailFor(key); } })
             .finally(() => { if (seq === detailSeq.current) setDetailLoading(false); });
-    }, [selected, range, loadDetail]);
+    }, [selected, range, loadDetail, enabled]);
 
     const handleSort = (field: SortField) => {
         if (field === sortField) {
@@ -186,7 +202,9 @@ export function useRosterAxis<T extends MetricRow, D, R>({
         sortField, sortDirection, page, setPage, handleSort,
         visibleRows, pagedRows,
         selectedKey, setSelectedKey, selected,
-        detail, detailLoading,
+        detail,
+        detailLoading: detailLoading
+            || (enabled && !(detailFor && detailFor.selected === selected && detailFor.range === range && detailFor.loadDetail === loadDetail)),
     };
 }
 

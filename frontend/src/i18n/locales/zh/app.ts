@@ -86,8 +86,32 @@ export default {
     "moveUp": "上移",
     "saved": "已保存"
   },
+  "mobile": {
+    "tabBar": "主导航",
+    "shell": {
+      "title": "界面",
+      "desktop": "桌面版",
+      "mobile": "手机版",
+      "auto": "自动",
+      "hint": "手机版在本设备上使用手机布局，桌面版使用完整界面；按浏览器记住。"
+    },
+    "subPages": {
+      "switch": "切换{{title}}的页面"
+    },
+    "more": {
+      "title": "更多",
+      "tab": "更多",
+      "manage": "管理",
+      "system": "系统",
+      "preferences": "主题、语言与反馈",
+      "interface": "界面",
+      "useDesktop": "使用桌面版界面",
+      "useDesktopHint": "切回完整界面"
+    }
+  },
   "layout": {
     "workspace": "工作区",
+    "workspaceRail": "工作区",
     "workspaceTip": { "title": "认识工作区", "text": "在一处管理项目、工作目录和 IM 聊天。" },
     "workspaceGate": { "title": "开启工作区", "text": "开启工作区扩展功能后，即可使用项目、工作目录和 IM 聊天。", "enable": "开启工作区", "error": "无法开启工作区，请重试。" },
     "projects": "项目",
@@ -190,6 +214,7 @@ export default {
     "days": "天",
     "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
@@ -232,6 +257,7 @@ export default {
     "help": "帮助与技巧",
     "helpShort": "帮助",
     "powerUps": "扩展",
+    "powerUpsRail": "扩展",
     "tools": "工具",
     "servertool": "服务端工具",
     "botsRunning": "{{total}} 个 bot 中 {{active}} 个在运行"

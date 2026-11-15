@@ -3,6 +3,7 @@
 // minting, version/health/shortcut/imagegen info, and the system + MCP
 // runtime config get/set endpoints.
 import type {components} from '@/client';
+import {readCached} from './readCache';
 import {
     controlApi,
     getControlApiClient as getClient,
@@ -13,14 +14,15 @@ export const systemApi = {
     // Status endpoints
     getStatus: async (): Promise<any> => controlApi((client, headers) => client.GET('/api/v1/status', {headers})),
 
-    getProviders: async (): Promise<any> => {
-        const body = await controlApi((client, headers) => client.GET('/api/v2/providers', {headers}));
-        if (body?.success && body?.data) {
-            // Sort providers alphabetically by name to reduce UI changes
-            body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
-        }
-        return body;
-    },
+    getProviders: async (opts: {fresh?: boolean} = {}): Promise<any> =>
+        readCached('providers', async () => {
+            const body = await controlApi((client, headers) => client.GET('/api/v2/providers', {headers}));
+            if (body?.success && body?.data) {
+                // Sort providers alphabetically by name to reduce UI changes
+                body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
+            }
+            return body;
+        }, opts),
 
     // Get provider catalog entries (service providers for dropdown)
     getProviderCatalogs: async (): Promise<any> =>
@@ -79,7 +81,7 @@ export const systemApi = {
         })),
 
     getToken: async (): Promise<any> =>
-        controlApi((client, headers) => client.GET('/api/v1/token', {headers})),
+        readCached('token', () => controlApi((client, headers) => client.GET('/api/v1/token', {headers}))),
 
     // Imports providers from a base64/JSONL export bundle. Every imported
     // provider is always created with a freshly minted UUID.
