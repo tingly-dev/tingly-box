@@ -896,3 +896,14 @@ provider) is still registered at the bottom of `flag_paths.go`. Run it with:
 go test ./internal/protocoltest -run TestFlagPaths -count=1
 go run ./cli/harness matrix --mode=flag_paths
 ```
+
+## Response retention acceptance
+
+`harness matrix --mode=response_retention` and `TestResponseRetention` share
+`response_retention.go`. Forty cases traverse the gateway over HTTP with a
+controlled Anthropic Messages provider, covering both V1/Beta and Chat/Responses,
+stream/nonstream. Tool argument strings are compared exactly on the client wire
+so float64 normalization cannot conceal large-integer corruption. Initial text,
+Chat thinking, finish reasons, usage tails and Responses terminal snapshots are
+checked on the same path. `--mode=all` includes this section. Live provider
+behavior and actual tool execution are outside this suite's evidence.
