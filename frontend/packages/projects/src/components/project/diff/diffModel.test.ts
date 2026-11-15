@@ -62,6 +62,8 @@ describe('filterFiles', () => {
         expect(firstReviewable(files, [1, 2, 0])).toBe(0);
         expect(firstReviewable(files, [1, 2])).toBe(1);
         expect(firstReviewable(files, [])).toBe(-1);
+        const huge = [f('big.log', { additions: 90000 }), f('small.ts')];
+        expect(firstReviewable(huge, [0, 1])).toBe(1);
     });
     it('ties the viewed mark to the file’s change', () => {
         expect(viewedSignature(f('a'))).not.toBe(viewedSignature(f('a', { additions: 2 })));

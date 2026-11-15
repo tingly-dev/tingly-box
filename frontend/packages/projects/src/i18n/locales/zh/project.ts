@@ -106,6 +106,8 @@ export const project: Dict<typeof projectEn> = {
             tooLargeBody: '该文件的补丁太大，无法一次加载。',
             noContent: '没有行改动（仅重命名或权限变更）。',
             loadFailed: '无法加载该文件的 diff。', retry: '重试',
+            omitted_one: '还有 {{count}} 个文件未列出：改动太大，无法全部列出。请用 git 查看。', omitted_other: '还有 {{count}} 个文件未列出：改动太大，无法全部列出。请用 git 查看。',
+            linesCut_one: '{{count}} 行过长的内容已被截短。', linesCut_other: '{{count}} 行过长的内容已被截短。',
             cutOff: '仅显示补丁的开头，其余部分太长无法加载。',
             renamedFrom: '重命名自 {{path}}',
             status: { added: '新增', modified: '修改', deleted: '删除', renamed: '重命名', copied: '复制', typechange: '类型变更' },

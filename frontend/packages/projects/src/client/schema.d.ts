@@ -1522,6 +1522,11 @@ export interface components {
             deletions: number;
             /** @description Field files */
             files: components["schemas"]["DiffFile"][];
+            /**
+             * Format: int64
+             * @description Field files_omitted
+             */
+            files_omitted?: number;
             /** @description Field uncommitted */
             uncommitted: string;
         };
@@ -1581,6 +1586,11 @@ export interface components {
         FileDiff: {
             /** @description Field binary */
             binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field lines_cut
+             */
+            lines_cut?: number;
             /** @description Field patch */
             patch: string;
             /** @description Field path */

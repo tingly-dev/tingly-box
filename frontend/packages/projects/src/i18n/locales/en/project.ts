@@ -103,6 +103,8 @@ export const project = {
             tooLargeBody: 'This file’s patch is too large to load at once.',
             noContent: 'No line changes (a rename or a mode change only).',
             loadFailed: 'Could not load this file’s diff.', retry: 'Retry',
+            omitted_one: '{{count}} more file is not listed: the change is too large to list. Review it with git.', omitted_other: '{{count}} more files are not listed: the change is too large to list. Review them with git.',
+            linesCut_one: '{{count}} very long line was shortened.', linesCut_other: '{{count}} very long lines were shortened.',
             cutOff: 'Showing the start of the patch: the rest is too long to load.',
             renamedFrom: 'Renamed from {{path}}',
             status: { added: 'Added', modified: 'Modified', deleted: 'Deleted', renamed: 'Renamed', copied: 'Copied', typechange: 'Type changed' },

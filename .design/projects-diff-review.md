@@ -17,10 +17,19 @@ inside the first big lock file and the rest was silently dropped.
   content: ~85 bytes a file.
 - `GET /threads/:id/diff/file?path=&old_path=&force=` is one file's patch,
   read when that file is opened. A patch over 512 KB is not sent (`too_large`)
-  unless `force=true`, which reads up to 32 MB (`truncated` past that). Git is
-  stopped at the cap, not read to the end. Binary files have no patch. Paths are
+  unless `force=true`, which reads up to 8 MB (`truncated` past that, ending on a
+  whole line). Git is stopped at the cap, not read to the end. Binary files have no patch. Paths are
   taken literally (`--literal-pathspecs`), so a name is never read as an option
   or pathspec magic.
+- Masking for the extreme cases, so no change can be too big to open:
+  - a line longer than 2000 bytes is shortened to its start plus `… [+N chars]`
+    (`lines_cut` says how many): one minified or embedded-blob line can outweigh
+    the whole file;
+  - the summary lists at most 10,000 files (`files_omitted` counts the rest;
+    `additions` / `deletions` still cover all). The dialog says the rest is to be
+    reviewed with git. Merge is unaffected;
+  - the browser keeps the last 6 parsed patches and refetches an older one when
+    it is revisited, so paging through huge files does not accumulate memory.
 - `generated` is true for lock files, minified/generated code and
   vendored/dist directories (a name list in `diff.go`), and for anything the
   repository marks `linguist-generated` / `linguist-vendored` in `.gitattributes`.
@@ -33,8 +42,8 @@ screen).
 - Nothing is fetched or drawn for a file until it is opened; the next file is
   prefetched. The list and the patch are both windowed (`useVirtualWindow`,
   equal-height rows), so cost follows the screen, not the change size.
-- The dialog opens on the first file that is not generated or binary.
-- A generated file shows a folded notice with **Show diff**; a file over 4000
+- The dialog opens on the first file that opens by itself (not generated, binary or
+over 4000 lines). A generated file shows a folded notice with **Show diff**; a file over 4000
   changed lines shows **Large diff · Load anyway**; a binary shows a note.
   The backend's own cap gets the same button.
 - Filter by path, **Hide generated**, **Unviewed only**. **Viewed** checkboxes

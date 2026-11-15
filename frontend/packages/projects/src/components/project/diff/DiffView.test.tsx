@@ -103,4 +103,27 @@ describe('DiffView', () => {
         fireEvent.change(screen.getByLabelText('thread.diff.filterPlaceholder'), { target: { value: 'zzz' } });
         expect(screen.getByText('thread.diff.noMatch')).toBeInTheDocument();
     });
+
+    it('says how many files the server left out of the list, and which long lines were shortened', async () => {
+        get.mockImplementation(() => reply(patchOf(3), { lines_cut: 2 }));
+        render(<DiffView threadId="t1" diff={{ ...diffOf([file('a.ts')]), files_omitted: 30002 }} />);
+        expect(screen.getByText('thread.diff.omitted:30002')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText('thread.diff.linesCut:2')).toBeInTheDocument());
+    });
+
+    it('keeps only the last few patches in memory: an old file is fetched again when revisited', async () => {
+        const files = Array.from({ length: 10 }, (_, i) => file(`f${i}.ts`));
+        render(<DiffView threadId="t1" diff={diffOf(files)} />);
+        const flush = () => act(async () => undefined);
+        await flush();
+        for (let i = 0; i < 9; i++) {
+            fireEvent.keyDown(window, { key: 'j' });
+            await flush();
+        }
+        const fetched = (name: string) => get.mock.calls.filter((c) => queryOf(c).path === name).length;
+        expect(fetched('f0.ts')).toBe(1);
+        fireEvent.click(screen.getByTitle('f0.ts'));
+        await flush();
+        await waitFor(() => expect(fetched('f0.ts')).toBe(2));
+    });
 });

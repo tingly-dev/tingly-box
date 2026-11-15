@@ -11,18 +11,22 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Diff is the summary of a thread's changes for review: one entry per file,
 // without their content. A file's patch is loaded on its own (DiffFile), so a
 // change of any size opens at once and only what is read is sent.
 type Diff struct {
-	Base        string     `json:"base"`
-	Branch      string     `json:"branch"`
-	Files       []DiffFile `json:"files"`
-	Additions   int        `json:"additions"`
-	Deletions   int        `json:"deletions"`
-	Uncommitted string     `json:"uncommitted"`
+	Base   string     `json:"base"`
+	Branch string     `json:"branch"`
+	Files  []DiffFile `json:"files"`
+	// FilesOmitted counts the files past maxListedFiles that are not listed;
+	// Additions and Deletions still cover them.
+	FilesOmitted int    `json:"files_omitted,omitempty"`
+	Additions    int    `json:"additions"`
+	Deletions    int    `json:"deletions"`
+	Uncommitted  string `json:"uncommitted"`
 }
 
 // DiffFile is one changed file of a Diff.
@@ -51,12 +55,23 @@ type FileDiff struct {
 	TooLarge bool `json:"too_large,omitempty"`
 	// Truncated is true when even a forced read hit maxForcedPatch.
 	Truncated bool `json:"truncated,omitempty"`
+	// LinesCut counts lines longer than maxLineBytes that were shortened (a
+	// minified bundle, an embedded blob): one such line can outweigh the file.
+	LinesCut int `json:"lines_cut,omitempty"`
 }
 
 const (
-	maxFilePatch   = 512 << 10
-	maxForcedPatch = 32 << 20
+	maxFilePatch = 512 << 10
+	// maxLineBytes keeps a line's start and drops the rest.
+	maxLineBytes = 2000
 )
+
+// maxListedFiles bounds the summary of a change that touches far more files
+// than anyone reviews one by one.
+var maxListedFiles = 10000
+
+// maxForcedPatch is what "load anyway" reads of one file.
+var maxForcedPatch = 8 << 20
 
 // BranchDiff summarizes base...HEAD of a worktree, plus the uncommitted
 // changes the merge will not include.
@@ -68,11 +83,15 @@ func BranchDiff(ctx context.Context, worktree, base, branch string) (Diff, error
 		return d, err
 	}
 	d.Files = parseDiffSummary(out)
-	markGenerated(ctx, worktree, d.Files)
 	for _, f := range d.Files {
 		d.Additions += f.Additions
 		d.Deletions += f.Deletions
 	}
+	if len(d.Files) > maxListedFiles {
+		d.FilesOmitted = len(d.Files) - maxListedFiles
+		d.Files = d.Files[:maxListedFiles]
+	}
+	markGenerated(ctx, worktree, d.Files)
 	d.Uncommitted, _ = git(ctx, worktree, "status", "--short")
 	return d, nil
 }
@@ -231,6 +250,9 @@ func BranchFileDiff(ctx context.Context, worktree, base, filePath, oldPath strin
 	if over {
 		if force {
 			d.Truncated = true
+			if i := bytes.LastIndexByte(out, '\n'); i >= 0 {
+				out = out[:i+1] // end on a whole line
+			}
 		} else {
 			d.TooLarge = true
 			return d, nil
@@ -240,8 +262,45 @@ func BranchFileDiff(ctx context.Context, worktree, base, filePath, oldPath strin
 		d.Binary = true
 		return d, nil
 	}
-	d.Patch = string(out)
+	d.Patch, d.LinesCut = cutLongLines(string(out))
 	return d, nil
+}
+
+// cutLongLines shortens every line longer than maxLineBytes to its start plus
+// a "[+N chars]" marker, and says how many it cut. The cut falls on a
+// character boundary.
+func cutLongLines(patch string) (string, int) {
+	if len(patch) <= maxLineBytes {
+		return patch, 0
+	}
+	var b strings.Builder
+	cut := 0
+	for rest := patch; rest != ""; {
+		line, tail := rest, ""
+		if i := strings.IndexByte(rest, '\n'); i >= 0 {
+			line, tail = rest[:i+1], rest[i+1:]
+		}
+		rest = tail
+		if len(line) <= maxLineBytes+1 {
+			b.WriteString(line)
+			continue
+		}
+		body := strings.TrimSuffix(line, "\n")
+		n := maxLineBytes
+		for n > 0 && !utf8.RuneStart(body[n]) {
+			n--
+		}
+		b.WriteString(body[:n])
+		fmt.Fprintf(&b, " … [+%d chars]", utf8.RuneCountInString(body[n:]))
+		if len(body) < len(line) {
+			b.WriteByte('\n')
+		}
+		cut++
+	}
+	if cut == 0 {
+		return patch, 0
+	}
+	return b.String(), cut
 }
 
 // gitCapped runs git and keeps at most limit bytes of its output; over reports

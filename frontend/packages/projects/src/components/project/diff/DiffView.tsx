@@ -17,6 +17,8 @@ type Loaded =
 const changedLines = (f: DiffFile) => f.additions + f.deletions;
 const isLarge = (f: DiffFile) => changedLines(f) > LARGE_FILE_LINES;
 const fmt = (n: number) => n.toLocaleString();
+// Parsed patches kept in memory; a forced one can be megabytes.
+const KEEP_PATCHES = 6;
 
 /** A thread's changes: the file list on one side, one file's patch on the
  * other. Nothing is rendered or fetched for a file until it is opened, so a
@@ -32,6 +34,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
     const [opened, setOpened] = useState<Set<string>>(() => new Set());
     const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
     const requested = useRef(new Set<string>());
+    const loadOrder = useRef<string[]>([]);
 
     const isViewed = useCallback((f: DiffFile) => viewed[f.path] === viewedSignature(f), [viewed]);
     const viewedSet = useMemo(() => new Set(files.filter(isViewed).map((f) => f.path)), [files, isViewed]);
@@ -51,7 +54,21 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
         requested.current.add(key);
         setLoaded((m) => ({ ...m, [file.path]: { state: 'loading' } }));
         unwrap(api.GET('/api/v1/threads/{id}/diff/file', { params: { path: { id: threadId }, query: { path: file.path, old_path: file.old_path || undefined, force: force || undefined } } }))
-            .then((data) => setLoaded((m) => ({ ...m, [file.path]: { state: 'ok', file: data, parsed: parsePatch(data.patch) } })))
+            .then((data) => {
+                const parsed = parsePatch(data.patch);
+                loadOrder.current = [...loadOrder.current.filter((p) => p !== file.path), file.path];
+                setLoaded((m) => {
+                    const next = { ...m, [file.path]: { state: 'ok', file: data, parsed } satisfies Loaded };
+                    // Patches pile up as files are paged through; keep the recent ones.
+                    while (loadOrder.current.length > KEEP_PATCHES) {
+                        const old = loadOrder.current.shift() as string;
+                        delete next[old];
+                        requested.current.delete(old);
+                        requested.current.delete(`${old}#force`);
+                    }
+                    return next;
+                });
+            })
             .catch((e: Error) => {
                 requested.current.delete(key);
                 setLoaded((m) => ({ ...m, [file.path]: { state: 'error', message: e.message } }));
@@ -66,6 +83,10 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
     }, [selected, autoLoad, loaded, load, opened]);
 
     // The next file is fetched while the current one is read.
+    useEffect(() => {
+        if (selectedPath && loadOrder.current.includes(selectedPath)) loadOrder.current = [...loadOrder.current.filter((p) => p !== selectedPath), selectedPath];
+    }, [selectedPath]);
+
     const nextPath = useMemo(() => {
         const pos = indexes.findIndex((i) => files[i].path === selectedPath);
         return pos >= 0 && pos + 1 < indexes.length ? files[indexes[pos + 1]].path : null;
@@ -133,6 +154,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
                     </Typography>
                     <TextField size="small" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('thread.diff.filterPlaceholder')}
                         slotProps={{ htmlInput: { 'aria-label': t('thread.diff.filterPlaceholder') }, input: { startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> } }} />
+                    {!!diff.files_omitted && <Typography sx={{ fontSize: fontSizes.sm, color: 'warning.main' }}>{t('thread.diff.omitted', { count: diff.files_omitted })}</Typography>}
                     <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
                         <Chip size="small" clickable variant={hideGenerated ? 'filled' : 'outlined'} color={hideGenerated ? 'primary' : 'default'} label={t('thread.diff.hideGenerated')} onClick={() => setHideGenerated((v) => !v)} />
                         <Chip size="small" clickable variant={unviewedOnly ? 'filled' : 'outlined'} color={unviewedOnly ? 'primary' : 'default'} label={t('thread.diff.unviewedOnly')} onClick={() => setUnviewedOnly((v) => !v)} />
@@ -207,7 +229,11 @@ function FileBody({ file, entry, autoLoad, onOpen, onForce, onRetry }: {
     return (
         <>
             <DiffPatchView parsed={entry.parsed} />
-            {entry.file.truncated && <Typography sx={{ px: 1.5, py: 0.5, fontSize: fontSizes.sm, color: 'text.secondary', borderTop: 1, borderColor: 'divider' }}>{t('thread.diff.cutOff')}</Typography>}
+            {(entry.file.truncated || !!entry.file.lines_cut) && (
+                <Typography sx={{ px: 1.5, py: 0.5, fontSize: fontSizes.sm, color: 'text.secondary', borderTop: 1, borderColor: 'divider' }}>
+                    {[entry.file.truncated && t('thread.diff.cutOff'), !!entry.file.lines_cut && t('thread.diff.linesCut', { count: entry.file.lines_cut })].filter(Boolean).join(' ')}
+                </Typography>
+            )}
         </>
     );
 }
