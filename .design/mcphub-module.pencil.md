@@ -111,7 +111,8 @@ builtin_registry.RegisterBuiltinTools
    └─► source github-builtin "GitHub (gh)"
         · stdio: <自身绝对路径> mcp-github   · Preset="github"(子集+scope 复用)
         · 默认启用;已存在则保留 enabled/visibility/tools/env
-        · 远程 PAT 预设(github-mcp-server)原样保留,并存可选
+        · 远程 PAT 预设已删除(fd61fb7db):无人使用,内置源零配置覆盖同一子集;
+          托管端点保存在 mcphub/github.RemoteEndpoint,未来复活归 mcphub
 
 cli/tingly-box main.go ── "mcp-github" (hidden) ──► command.MCPGithubCmdKong
                                                           │ 无 AppManager(stdio 子进程)
