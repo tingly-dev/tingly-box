@@ -98,3 +98,57 @@ func TestAnthropicToolIDMappingReservesShortIDs(t *testing.T) {
 		t.Fatal("conversion modified the input messages")
 	}
 }
+
+func TestAnthropicToolIDsRemainPairedWithMixedContent(t *testing.T) {
+	ids := []string{"toolu_" + strings.Repeat("a", 80), "toolu_" + strings.Repeat("b", 80)}
+	req := &anthropic.MessageNewParams{
+		Model:     "m",
+		MaxTokens: 100,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewAssistantMessage(
+				anthropic.NewTextBlock("before tools"),
+				anthropic.NewToolUseBlock(ids[0], map[string]any{"n": 1}, "first"),
+				anthropic.NewTextBlock("between tools"),
+				anthropic.NewToolUseBlock(ids[1], map[string]any{"n": 2}, "second"),
+			),
+			{
+				Role: anthropic.MessageParamRoleUser,
+				Content: []anthropic.ContentBlockParamUnion{
+					anthropic.NewTextBlock("tool outputs:"),
+					anthropic.NewToolResultBlock(ids[0], "first result", false),
+					anthropic.NewImageBlockBase64("image/png", "iVBORw0KGgo="),
+					anthropic.NewToolResultBlock(ids[1], "second result", false),
+				},
+			},
+		},
+	}
+
+	out, _ := ConvertAnthropicToOpenAIRequest(req, false, false, false)
+	if out.Messages[0].OfAssistant == nil {
+		t.Fatalf("assistant tool calls were not preserved: %+v", out.Messages)
+	}
+	calls := out.Messages[0].OfAssistant.ToolCalls
+	if len(calls) != len(ids) {
+		t.Fatalf("expected %d tool calls, got %d", len(ids), len(calls))
+	}
+	for _, call := range calls {
+		if len(call.OfFunction.ID) > maxToolCallIDLength {
+			t.Fatalf("tool call ID %q exceeds OpenAI limit", call.OfFunction.ID)
+		}
+	}
+
+	toolMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(ids))
+	for _, message := range out.Messages[1:] {
+		if message.OfTool != nil {
+			toolMessages = append(toolMessages, message)
+		}
+	}
+	if len(toolMessages) != len(ids) {
+		t.Fatalf("expected %d tool messages, got %d", len(ids), len(toolMessages))
+	}
+	for i, message := range toolMessages {
+		if message.OfTool.ToolCallID != calls[i].OfFunction.ID {
+			t.Fatalf("tool call %q does not match result %q", calls[i].OfFunction.ID, message.OfTool.ToolCallID)
+		}
+	}
+}
