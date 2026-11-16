@@ -105,6 +105,7 @@ The table below covers all 74 preset entries in `internal/catalog/providers.json
 | `hyperbolic-xyz` | Hyperbolic | API Key / compatible API |
 | `runcrate-ai` | Runcrate | API Key / compatible API |
 | `cloudgpu-app` | CloudGPU | API Key / compatible API |
+| `uberllm-dev` | UberLLM | API Key / compatible API |
 | `vercel-ai-gateway` | Vercel AI Gateway | API Key / compatible API |
 | `cloudflare-ai-gateway` | Cloudflare AI Gateway | API Key / compatible API |
 | `typesafe-ai` | TypeSafe AI (Jev) | API Key / compatible API |
