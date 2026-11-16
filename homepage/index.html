@@ -339,7 +339,7 @@ npx --registry=https://registry.npmmirror.com -y tingly-box@latest</code></pre>
 <pre role="tabpanel" id="i-docker" aria-labelledby="it-docker" hidden><code>mkdir tingly-data
 docker run -d --name tingly-box \
   -p 12580:12580 \
-  -v "$(pwd)/tingly-data:/home/tingly/.tingly-box" \
+  -v "$(pwd)/tingly-data:/app/.tingly-box" \
   ghcr.io/tingly-dev/tingly-box</code></pre>
 <pre role="tabpanel" id="i-openai" aria-labelledby="it-openai" hidden><code><span class="c"># any OpenAI-compatible client works the same way</span>
 from openai import OpenAI
