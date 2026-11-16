@@ -2030,6 +2030,7 @@ let mockTeams = [
 let mockLimitPolicies: Array<{ kind: string; ref: string; limits: Record<string, number>; overflow?: string; queue_timeout_seconds?: number }> = [
     { kind: 'team', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, overflow: 'queue' },
     { kind: 'team_member', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, overflow: 'queue', queue_timeout_seconds: 20 },
+    { kind: 'user', ref: 'user-design', limits: { max_concurrent: 1, max_requests: 200, window_seconds: 3600 }, overflow: 'reject' },
 ]
 let mockSharingKeys = [
     { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
