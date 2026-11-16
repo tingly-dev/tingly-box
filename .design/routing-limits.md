@@ -153,7 +153,11 @@ section only covers what an account/rule-level limit gives a Team on its own.
 - `GET /api/v1/limits/status` → live state per limited provider/service (in-flight, window usage, pressure,
   state). Backed by `Registry.Stat`. Used for badges.
 - UI: provider edit dialogs (API-key and OAuth) get an "Account limits" section with a live status line;
-  each service node in the rule graph gets a "Limits" action (dialog with live status); the two overflow
+  each service node in the rule graph gets a "Limits" action (dialog with live status) and, at rest, a small
+  limits icon on the node's top-left (blue when the rule's own share is limited, grey when only the account is;
+  hover shows both sets of numbers; unlimited nodes show nothing). The icon sits on the left because the hover
+  action bar is pinned top-right and would cover, and block hover on, anything placed there; it also stops
+  `mouseover` so the node's identity tooltip does not open on top of it. The two overflow
   flags appear in the rule Plugins card via the flag registry; the smart-rule catalog lists the two new
   positions. The rule update payload carries `limits` through (the UpdateRule PUT is full-replace — dropping
   the field there would silently wipe limits on any UI save). Status is polled every 4 s only while one of the

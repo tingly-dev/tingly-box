@@ -26,6 +26,7 @@ import { ProviderLabel } from '../ProviderLogo.tsx';
 import { ProbeMenu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
+import LimitsBadge from '../limits/LimitsBadge';
 import LimitsDialog from '../limits/LimitsDialog';
 import { isEmptyLimits, type Limits } from '../limits/LimitsEditor';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
@@ -338,6 +339,13 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 }}>
                                     {provider.model || t('rule.service.selectModel')}
                                 </Typography>
+                                {/* Caps visible at rest, not only in the hover action bar
+                                    (service share and/or account). Left side: the action bar
+                                    is pinned to the top-right and would cover (and block
+                                    hover on) anything placed there. Clear of the tier disk. */}
+                                <Box sx={{ position: 'absolute', left: hasTier ? 26 : 0, top: '50%', transform: 'translateY(-50%)', lineHeight: 0 }}>
+                                    <LimitsBadge serviceLimits={provider.limits} accountLimits={providerInfo.provider?.limits} />
+                                </Box>
                             </Box>
                         </NodeTooltip>
 
@@ -435,7 +443,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ p: 0.5 }}
                                 color={isEmptyLimits(provider.limits) ? 'default' : 'primary'}
                             >
-                                <LimitsIcon sx={{ fontSize: '1rem' }} />
+                                <LimitsIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}

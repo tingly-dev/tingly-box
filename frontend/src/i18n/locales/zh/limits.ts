@@ -55,6 +55,16 @@ export default {
   "person": {
       "title": "{{name}} 的限额",
       "hint": "限制此 Key 的使用者在所有账号和模型上的总用量；Team 的限额仍然同时生效。"
+    },
+  "summary": {
+      "concurrent": "并发 {{n}}",
+      "requests": "{{n}} 次请求 / {{window}}",
+      "tokens": "{{n}} Token / {{window}}",
+      "steer": "达到 {{n}}% 时提前分流",
+      "quota": "上游额度用到 {{n}}% 时停用",
+      "service": "此规则的份额",
+      "account": "账号",
+      "indicator": "已设置限额"
     }
   }
 };

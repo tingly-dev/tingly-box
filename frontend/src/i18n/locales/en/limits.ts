@@ -55,6 +55,16 @@ export default {
   "person": {
       "title": "Limits for {{name}}",
       "hint": "Caps what this key's user may use, across every account and model. The team's limits still apply."
+    },
+  "summary": {
+      "concurrent": "{{n}} concurrent",
+      "requests": "{{n}} requests / {{window}}",
+      "tokens": "{{n}} tokens / {{window}}",
+      "steer": "steer away at {{n}}%",
+      "quota": "stop at {{n}}% of upstream quota",
+      "service": "This rule's share",
+      "account": "Account",
+      "indicator": "Limits are set"
     }
   }
 };
