@@ -1,14 +1,12 @@
 package protocolserver
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -55,6 +53,10 @@ func (ph *ProtocolHandler) HandleResponsesCompact(c *gin.Context) {
 	// not establish whether this provider implements /responses/compact.
 	provider = provider.ResolveStyle(ph.resolveAttemptStyle(c, rule, provider, protocol.TypeOpenAIResponses))
 	SetTrackingContext(c, rule, provider, service.Model, requestModel, false)
+	if provider.APIStyle == protocol.APIStyleAnthropic {
+		unsupportedResponsesCompaction(c, "Native compact is not supported on the Anthropic endpoint")
+		return
+	}
 	ResolveRuleFlagsWithScenario(c, rule, scenario, ph.deps.Config.GetScenarioConfig(scenario), protocol.TypeOpenAIResponses, protocol.TypeOpenAIResponses, provider)
 	upstreamBody, err := sjson.SetBytes(body, "model", service.Model)
 	if err != nil {
@@ -62,14 +64,7 @@ func (ph *ProtocolHandler) HandleResponsesCompact(c *gin.Context) {
 		return
 	}
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
-	var wrapper interface {
-		ResponsesCompact(context.Context, []byte) ([]byte, error)
-	}
-	if provider.APIStyle == protocol.APIStyleAnthropic {
-		wrapper = ph.deps.ClientPool.GetAnthropicClient(c.Request.Context(), provider, service.Model)
-	} else {
-		wrapper = ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, service.Model)
-	}
+	wrapper := ph.deps.ClientPool.GetOpenAIClient(c.Request.Context(), provider, service.Model)
 	result, cancel, err := forwarding.ForwardOpenAIResponsesCompact(fc, wrapper, upstreamBody)
 	if cancel != nil {
 		defer cancel()
@@ -120,14 +115,10 @@ func writeCompactUpstreamError(c *gin.Context, err error) {
 	kind, code := "api_error", ""
 	status := failure.Status
 	var upstream *openai.Error
-	var anthropicErr *anthropic.Error
 	if errors.As(err, &upstream) {
 		kind, code = upstream.Type, upstream.Code
 	}
-	if errors.As(err, &anthropicErr) {
-		kind = string(anthropicErr.Type())
-		code = gjson.Get(anthropicErr.RawJSON(), "error.code").String()
-	}
+
 	unsupported := code == "unsupported_compaction" || code == "unsupported_operation" || code == "not_implemented"
 	if status == http.StatusMethodNotAllowed || status == http.StatusNotImplemented {
 		unsupported = true

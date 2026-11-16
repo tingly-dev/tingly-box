@@ -60,9 +60,10 @@ the targeted protocol tests, because they cannot be induced by provider JSON alo
 harness matrix --mode=native_compact --json
 ```
 
-Runs 18 real-HTTP gateway contracts for standalone native compact and continuation.
-The gateway attempts the upstream compact endpoint even for a Chat/Anthropic
-configured provider, then distinguishes unsupported-operation responses from auth,
+Runs 15 real-HTTP gateway contracts for standalone native compact and continuation.
+The gateway attempts compact on Chat-configured OpenAI-compatible endpoints,
+short-circuits resolved Anthropic endpoints without dispatch, and distinguishes
+upstream unsupported-operation responses from auth,
 quota, model and transient errors. Checks opaque state without numeric rounding,
 provider authentication, exact request count, and no summary inference on failure.
 Shared with `TestNativeCompactAcceptance` and included in `--mode=all`. This does

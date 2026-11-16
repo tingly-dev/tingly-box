@@ -8,14 +8,16 @@ Responses compact operation. This increment is native forwarding only.
 The route uses normal model authentication, team scope, model alias/rule
 resolution and one selected service. It resolves the provider's OpenAI dual URL
 when available (respecting the existing explicit style override), then actually
-attempts `responses/compact`. A Chat inference preference or Anthropic API style
-is not evidence that the provider lacks this endpoint. No preliminary inference,
+attempts `responses/compact` on OpenAI-compatible endpoints. A Chat inference
+preference is not evidence that this endpoint is absent. A resolved Anthropic
+endpoint currently short-circuits to HTTP 400 `unsupported_compaction` without
+any upstream request. A dual provider resolved to its OpenAI URL still attempts
+compact normally. No preliminary inference,
 capability probe, summary prompt or conversion is performed.
 
 OpenAI-compatible providers use their usual SDK transport/auth; Codex OAuth uses
 `/backend-api/codex/responses/compact`, account/session headers and the existing
-`:fast` model mapping. Anthropic-style providers use the Anthropic SDK's existing
-authentication and proxy transport to attempt `v1/responses/compact`. Google API-key
+`:fast` model mapping. Google API-key
 HTTP bases are attempted with `x-goog-api-key`. Cloud/issuer-specific transports
 retain their own supported operations; this does not add compact implementations
 to proprietary provider APIs.
@@ -28,7 +30,7 @@ response (missing output array or containing an error) is a 502, never a success
 
 ## Client error contract
 
-Only after an actual upstream failure, a missing endpoint (plain 404), 405, 501,
+On attempted upstreams, a missing endpoint (plain 404), 405, 501,
 or an explicit unsupported-operation code on 400/404 is normalized to:
 
 ```json
@@ -66,9 +68,10 @@ go build -o harness ./cli/harness
 ./harness matrix --mode=native_compact --json
 ```
 
-The CLI and `TestNativeCompactAcceptance` share 18 real-HTTP gateway cases: native
-compact-to-continue with exact opaque state, successful compact on Chat/Anthropic
-configured providers, unsupported responses only after dispatch, provider auth,
+The CLI and `TestNativeCompactAcceptance` share 15 real-HTTP gateway cases: native
+compact-to-continue with exact opaque state, successful compact on Chat-configured
+providers, zero upstream calls for resolved Anthropic endpoints, unsupported
+responses after dispatch on other endpoints, provider auth,
 malformed success, and terminal/nonterminal upstream errors. The section runs in
 `--mode=all`. Additional SDK/router tests cover Codex JSON path/auth, cancellation,
 auth/team middleware, model aliasing, raw replay fields, and response validation.

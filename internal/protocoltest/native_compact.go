@@ -26,10 +26,7 @@ type nativeCompactCase struct {
 
 func nativeCompactCases() []recorderCase {
 	specs := []nativeCompactCase{
-		{name: "anthropic_forbidden", target: protocol.TypeAnthropicBeta, status: 403, code: "permission_denied", wantStatus: 403, wantCode: "permission_denied"},
-		{name: "anthropic_transient_failure", target: protocol.TypeAnthropicBeta, status: 503, code: "server_error", wantStatus: 503, wantCode: "server_error"},
 		{name: "chat_configured_native_success", target: protocol.TypeOpenAIChat, status: 200, wantStatus: 200},
-		{name: "anthropic_configured_native_success", target: protocol.TypeAnthropicBeta, status: 200, wantStatus: 200},
 		{name: "native_compact_to_continue", target: protocol.TypeOpenAIResponses, status: 200, wantStatus: 200},
 		{name: "malformed_success", target: protocol.TypeOpenAIResponses, status: 200, wantStatus: 502, malformed: true},
 		{name: "chat_unsupported", target: protocol.TypeOpenAIChat, status: 404, wantStatus: 400, wantCode: "unsupported_compaction"},
@@ -120,6 +117,9 @@ func runNativeCompact(t flagTB, env *TestEnv, spec nativeCompactCase) {
 		t.Errorf("error code: %s, want %s", response.RawBody, spec.wantCode)
 	}
 	wantCalls := int32(1)
+	if spec.target == protocol.TypeAnthropicBeta {
+		wantCalls = 0
+	}
 	if compactCalls.Load() != wantCalls {
 		t.Errorf("compact calls=%d, want %d", compactCalls.Load(), wantCalls)
 	}

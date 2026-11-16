@@ -222,7 +222,7 @@ func TestCompactUnsupportedAndUpstreamErrorContract(t *testing.T) {
 	}
 }
 
-func TestCompactTriesNonNativeBackendBeforeUnsupported(t *testing.T) {
+func TestCompactDispatchAndAnthropicShortCircuit(t *testing.T) {
 	for _, style := range []protocol.APIStyle{protocol.APIStyleOpenAI, protocol.APIStyleAnthropic, protocol.APIStyleGoogle} {
 		t.Run(string(style), func(t *testing.T) {
 			var calls atomic.Int32
@@ -247,7 +247,11 @@ func TestCompactTriesNonNativeBackendBeforeUnsupported(t *testing.T) {
 			router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/tingly/openai/v1/responses/compact", strings.NewReader(`{"model":"compact-model","input":"ordinary history"}`)))
 			require.Equal(t, 400, w.Code, w.Body.String())
 			require.Equal(t, "unsupported_compaction", gjson.Get(w.Body.String(), "error.code").String())
-			require.Equal(t, int32(1), calls.Load())
+			if style == protocol.APIStyleAnthropic {
+				require.Zero(t, calls.Load(), "Anthropic must fail before network dispatch")
+			} else {
+				require.Equal(t, int32(1), calls.Load())
+			}
 		})
 	}
 }

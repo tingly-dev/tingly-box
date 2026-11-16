@@ -70,9 +70,7 @@ func ForwardOpenAIDecisions(fc *ForwardContext, wrapper client.OpenAIClientInter
 
 // ForwardOpenAIResponsesCompact skips the chat conversion/assembly pipeline:
 // the returned output array is the caller's canonical next context window.
-func ForwardOpenAIResponsesCompact(fc *ForwardContext, wrapper interface {
-	ResponsesCompact(context.Context, []byte) ([]byte, error)
-}, body []byte) ([]byte, context.CancelFunc, error) {
+func ForwardOpenAIResponsesCompact(fc *ForwardContext, wrapper client.OpenAIClientInterface, body []byte) ([]byte, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}

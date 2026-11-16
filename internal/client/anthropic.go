@@ -26,7 +26,6 @@ const ClaudeCodeSystemBody = "You are a file search specialist for Claude Code, 
 // Both AnthropicClient and ClaudeClient (for Claude Code OAuth) implement this interface.
 type AnthropicClientInterface interface {
 	// Core API methods
-	ResponsesCompact(ctx context.Context, body []byte) ([]byte, error)
 	MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error)
 	MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion]
 	BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error)
@@ -257,14 +256,4 @@ func (c *AnthropicClient) ListModels(ctx context.Context) (*ModelListResult, err
 	}
 
 	return &ModelListResult{Models: models, Raw: res}, nil
-}
-
-// ResponsesCompact tries the native JSON operation with the provider's existing
-// Anthropic transport/authentication. It performs no Messages conversion.
-func (c *AnthropicClient) ResponsesCompact(ctx context.Context, body []byte) ([]byte, error) {
-	var out []byte
-	if err := c.client.Post(ctx, "v1/responses/compact", nil, &out, anthropicOption.WithRequestBody("application/json", body)); err != nil {
-		return nil, err
-	}
-	return validateNativeCompactResponse(out)
 }
