@@ -61,11 +61,7 @@ func warmStartLimits(guard *routing.LimitsGuard, cfg *config.Config, usage *db.U
 				logrus.WithError(err).Warnf("[limits] warm start for %s failed", key)
 				return
 			}
-			events := make([]limits.UsageEvent, len(rows))
-			for i, r := range rows {
-				events[i] = limits.UsageEvent{At: r.At, Requests: r.Requests, Tokens: r.Tokens}
-			}
-			reg.Seed(key, s.Limits, events)
+			reg.Seed(key, s.Limits, usageEvents(rows))
 		}
 	}
 	seenAcct := map[string]bool{}
@@ -89,16 +85,20 @@ func warmStartLimits(guard *routing.LimitsGuard, cfg *config.Config, usage *db.U
 // policyWindowSince returns how far back a policy's window reaches.
 func policyWindowSince(l ai.Limits) time.Time { return time.Now().Add(-l.Window()) }
 
+func usageEvents(rows []db.UsageMinute) []limits.UsageEvent {
+	events := make([]limits.UsageEvent, len(rows))
+	for i, r := range rows {
+		events[i] = limits.UsageEvent{At: r.At, Requests: r.Requests, Tokens: r.Tokens}
+	}
+	return events
+}
+
 func seedWindow(guard *routing.LimitsGuard, key string, l ai.Limits, rows []db.UsageMinute) {
 	reg := guard.Registry()
 	if !reg.WindowEmpty(key, l) { // already counting: seeding again would double count
 		return
 	}
-	events := make([]limits.UsageEvent, len(rows))
-	for i, r := range rows {
-		events[i] = limits.UsageEvent{At: r.At, Requests: r.Requests, Tokens: r.Tokens}
-	}
-	reg.Seed(key, l, events)
+	reg.Seed(key, l, usageEvents(rows))
 }
 
 // warmStartPolicy seeds the usage window(s) of a person / team / model policy
@@ -113,31 +113,18 @@ func warmStartPolicy(guard *routing.LimitsGuard, usage *db.UsageStore, policies 
 	fail := func(err error) {
 		logrus.WithError(err).Warnf("[limits] warm start for %s %s failed", p.Kind, p.Ref)
 	}
+	// The usage_records column and limits key of the kinds that map to one.
+	var column, key string
 	switch p.Kind {
 	case ai.LimitPolicyUser:
 		if strings.HasPrefix(p.Ref, "euser:") {
 			return
 		}
-		rows, err := usage.UsageMinutesWhere(map[string]string{"user_id": p.Ref}, since)
-		if err != nil {
-			fail(err)
-			return
-		}
-		seedWindow(guard, routing.UserLimitKey(p.Ref), p.Limits, rows)
+		column, key = "user_id", routing.UserLimitKey(p.Ref)
 	case ai.LimitPolicyTeam:
-		rows, err := usage.UsageMinutesWhere(map[string]string{"team_id": p.Ref}, since)
-		if err != nil {
-			fail(err)
-			return
-		}
-		seedWindow(guard, routing.TeamLimitKey(p.Ref), p.Limits, rows)
+		column, key = "team_id", routing.TeamLimitKey(p.Ref)
 	case ai.LimitPolicyModel:
-		rows, err := usage.UsageMinutesWhere(map[string]string{"model": p.Ref}, since)
-		if err != nil {
-			fail(err)
-			return
-		}
-		seedWindow(guard, routing.ModelLimitKey(p.Ref), p.Limits, rows)
+		column, key = "model", routing.ModelLimitKey(p.Ref)
 	case ai.LimitPolicyTeamMember:
 		byUser, err := usage.UsageMinutesByUser(p.Ref, since)
 		if err != nil {
@@ -152,7 +139,16 @@ func warmStartPolicy(guard *routing.LimitsGuard, usage *db.UsageStore, policies 
 			}
 			seedWindow(guard, routing.UserLimitKey(uid), p.Limits, rows)
 		}
+		return
+	default:
+		return
 	}
+	rows, err := usage.UsageMinutesWhere(map[string]string{column: p.Ref}, since)
+	if err != nil {
+		fail(err)
+		return
+	}
+	seedWindow(guard, key, p.Limits, rows)
 }
 
 // initLimitPolicies connects the person / team / model policy store to the

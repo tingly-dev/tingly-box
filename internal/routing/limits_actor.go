@@ -59,31 +59,21 @@ func (o *actorOverflow) merge(p ai.LimitPolicy) {
 }
 
 // actorSubjects resolves the person and team subjects of a request, with the
-// policy behind each scope (for overflow). A person's explicit `user` policy
+// policies behind each scope (for overflow; a request may carry two persons:
+// its key's and an enterprise identity). A person's explicit `user` policy
 // replaces the team's `team_member` template for the same counter.
-func (g *LimitsGuard) actorSubjects(a Actor) (subs []limits.Subject, byScope map[limits.Scope]ai.LimitPolicy) {
+func (g *LimitsGuard) actorSubjects(a Actor) (subs []limits.Subject, byScope map[limits.Scope][]ai.LimitPolicy) {
 	if g == nil || g.policies == nil {
 		return nil, nil
 	}
-	byScope = map[limits.Scope]ai.LimitPolicy{}
+	byScope = map[limits.Scope][]ai.LimitPolicy{}
 	add := func(key string, scope limits.Scope, p ai.LimitPolicy) {
 		l := p.Limits.Normalize()
 		if l == nil {
 			return
 		}
 		subs = append(subs, limits.Subject{Key: key, Scope: scope, Limits: *l})
-		if prev, ok := byScope[scope]; ok { // two persons (key + enterprise id): the stricter overflow wins
-			var o actorOverflow
-			o.merge(prev)
-			o.merge(p)
-			if o.reject {
-				p.Overflow = ai.LimitOverflowReject
-			}
-			if prev.QueueTimeoutSeconds > 0 && (p.QueueTimeoutSeconds == 0 || prev.QueueTimeoutSeconds < p.QueueTimeoutSeconds) {
-				p.QueueTimeoutSeconds = prev.QueueTimeoutSeconds
-			}
-		}
-		byScope[scope] = p
+		byScope[scope] = append(byScope[scope], p)
 	}
 	if a.TeamID != "" {
 		if p, ok := g.policies.GetLimitPolicy(ai.LimitPolicyTeam, a.TeamID); ok {
@@ -108,11 +98,14 @@ func (g *LimitsGuard) actorSubjects(a Actor) (subs []limits.Subject, byScope map
 	return subs, byScope
 }
 
-func overflowFor(blocked limits.Scope, byScope map[limits.Scope]ai.LimitPolicy) actorOverflow {
+func overflowFor(blocked limits.Scope, byScope map[limits.Scope][]ai.LimitPolicy) actorOverflow {
 	var o actorOverflow
 	for _, sc := range []limits.Scope{limits.ScopeUser, limits.ScopeTeam} {
-		if blocked&sc != 0 {
-			o.merge(byScope[sc])
+		if blocked&sc == 0 {
+			continue
+		}
+		for _, p := range byScope[sc] {
+			o.merge(p)
 		}
 	}
 	if o.timeout == 0 {
