@@ -13,6 +13,7 @@ export const oauthBrandColors = {
   xai: '#000000',
   zcode: '#3859FF',
   workbuddy: '#14C38E',
+  qoder: '#2ADB5C',
   generic: '#9E9E9E',
 } as const;
 
