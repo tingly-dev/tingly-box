@@ -13,7 +13,7 @@
 #
 #   <image>              image tag to run, e.g. tingly-box-smoke:build
 #   <container-data-dir> bind-mount target inside the container, e.g.
-#                        /home/tingly/.tingly-box or /app/.tingly-box
+#                        /app/.tingly-box for both image variants
 set -euo pipefail
 
 IMAGE="${1:?usage: docker-smoke-test.sh <image> <container-data-dir>}"
@@ -82,3 +82,24 @@ if [ "$ok" != "1" ]; then
 fi
 
 echo "OK: $IMAGE wrote into a bind mount it did not own at container start"
+
+# The entrypoint must resolve the same HOME/data path after dropping privileges.
+docker run --rm "$IMAGE" sh -c 'test "$HOME" = /app'
+
+# Recreate the container against the same storage; an operator's existing file
+# must remain readable and unchanged after ownership adjustment.
+docker stop "$CONTAINER" >/dev/null
+docker rm "$CONTAINER" >/dev/null
+# shellcheck disable=SC2016 # Expanded by the privileged child shell.
+priv sh -c 'printf "%s" persistence-sentinel > "$1/persistence-sentinel"' sh "$HOST_DIR"
+docker run --rm -v "$HOST_DIR:$DATA_DIR" "$IMAGE" sh -c \
+    'test "$(cat /app/.tingly-box/persistence-sentinel)" = persistence-sentinel'
+
+# Old source-image mounts must fail explicitly, even when currently empty.
+if legacy_output="$(docker run --rm -v "$HOST_DIR:/home/tingly/.tingly-box" "$IMAGE" true 2>&1)"; then
+    echo "FAIL: legacy mount was silently accepted" >&2
+    exit 1
+fi
+printf '%s\n' "$legacy_output" | grep -q "ERROR: legacy data path"
+priv test -f "$HOST_DIR/persistence-sentinel"
+echo "OK: unified HOME, recreation persistence and legacy-mount rejection"

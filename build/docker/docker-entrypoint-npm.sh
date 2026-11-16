@@ -8,6 +8,13 @@ set -e
 
 DATA_DIR="/app/.tingly-box"
 
+# Older source images used this mount target. Refuse to start with it still
+# attached: silently using the new volume would make existing config disappear.
+if [ -e /home/tingly/.tingly-box ]; then
+    echo "ERROR: legacy data path /home/tingly/.tingly-box detected. Stop this container and remount the same host directory or named volume at /app/.tingly-box. Back up existing data first; do not delete the old volume." >&2
+    exit 1
+fi
+
 if [ "$(id -u)" = "0" ]; then
     mkdir -p "$DATA_DIR"
     owner="$(stat -c '%u:%g' "$DATA_DIR")"

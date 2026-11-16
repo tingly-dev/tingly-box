@@ -60,12 +60,12 @@ docker build -f build/docker/docker.build.Dockerfile -t tingly-box:latest .
 docker run -d \
   --name tingly-box \
   -p 12580:12580 \
-  -v "$(pwd)/data/.tingly-box:/home/tingly/.tingly-box" \
+  -v "$(pwd)/data/.tingly-box:/app/.tingly-box" \
   tingly-box:latest
 
 # CLI usage against the same data directory
 docker run -it --rm \
-  -v "$(pwd)/data/.tingly-box:/home/tingly/.tingly-box" \
+  -v "$(pwd)/data/.tingly-box:/app/.tingly-box" \
   tingly-box:latest tingly list
 ```
 
@@ -82,8 +82,7 @@ docker run -it --rm \
 Config, memory, logs and the database all live under a single directory tree
 (see `internal/config/app_config.go`), so only one bind mount is needed:
 
-- `docker.build.Dockerfile`: `/home/tingly/.tingly-box`
-- `docker.npm.Dockerfile` / `docker-compose.yml`: `/app/.tingly-box`
+- Both Dockerfiles and `docker-compose.yml`: `/app/.tingly-box`
 
 #### Docker Desktop (macOS / Windows): prefer a named volume
 
@@ -169,8 +168,7 @@ tar czf tingly-config-backup.tar.gz -C data .tingly-box
 
 3. **Configuration not persisting**
    - Check the volume mount path matches the image you're running
-     (`/home/tingly/.tingly-box` for the source-build image,
-     `/app/.tingly-box` for the npm image / Compose).
+     (`/app/.tingly-box` for both image variants and Compose).
 
 4. **`database disk image is malformed` / usage dashboard returns HTTP 500**
    - The SQLite file was written by more than one process, or lives on a
@@ -203,3 +201,22 @@ docker buildx build --platform linux/amd64 -f build/docker/docker.build.Dockerfi
 # Build multi-arch image
 docker buildx build --platform linux/amd64,linux/arm64 -f build/docker/docker.build.Dockerfile -t tingly-box:latest .
 ```
+
+## Upgrading older source-built images
+
+Both image variants now use `/app/.tingly-box`. Older source-built images used
+`/home/tingly/.tingly-box`; both new entrypoints refuse to start if that
+legacy path is present, rather than silently opening an empty configuration.
+
+1. Stop the old container and back up its data before recreating it.
+2. Keep the **same host directory or named volume**, changing only the container
+   mount target from `/home/tingly/.tingly-box` to `/app/.tingly-box`. No data copy
+   or format migration is needed when reusing that storage.
+3. Start the new container and verify the existing configuration before removing
+   any old container or storage. Do not attach both old and new targets.
+
+If the old container used an anonymous volume, inspect its mounts before removing
+it and explicitly reuse that volume at the new target. If the data was in the
+container writable layer, back it up from the stopped container first and restore
+it into the new mount. Do not use `docker compose down -v` or prune volumes during
+migration. The image does not automatically copy, merge, or delete old data.
