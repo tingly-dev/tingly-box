@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { getTotalTokens } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import api from '@/services/api';
+import { useTeamContext } from '@/contexts/TeamContext';
+import { usageAccountLabel } from '@/utils/usageAccountLabel';
 import { toLocalISOString, getLocalMidnight } from '@/utils/datetime';
 
 export interface Provider {
@@ -82,6 +84,7 @@ export function useDashboardData({
     initialScenario?: string;
 }) {
     const { t } = useTranslation();
+    const { teams } = useTeamContext();
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -377,7 +380,7 @@ export function useDashboardData({
     const identityLabel = (identity: UsageIdentity): string =>
         identity.type === 'owner'
             ? t('dashboard.overview.mainAccount', { defaultValue: 'Main account' })
-            : identity.label;
+            : usageAccountLabel(identity.label, identity.teamId, teams);
 
     const selectedIdentity = usageIdentities.find((i) => i.userId === selectedUser);
     const selectedIdentityLabel = selectedUser === 'all'
