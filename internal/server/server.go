@@ -183,7 +183,8 @@ type Server struct {
 	remoteCoderMu     sync.Mutex
 
 	// account concurrency/usage limits (nil-safe); see .design/routing-limits.md
-	limitsGuard *routing.LimitsGuard
+	limitsGuard   *routing.LimitsGuard
+	limitPolicies *db.LimitPolicyStore // person / team / model policies (nil = scopes off)
 
 	// lifecycle management for long-lived background components created during setup
 	ctx    context.Context
@@ -484,6 +485,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		wireLimitsQuota(limitsGuard, quotaMgr)
 	}
 	warmStartLimits(limitsGuard, cfg, server.UsageStore())
+	server.limitPolicies = initLimitPolicies(limitsGuard, cfg, server.UsageStore())
 
 	// Construct the WebUI Management API's control handler. This MUST be the
 	// last step before setupMiddleware/setupRoutes — every field it reads

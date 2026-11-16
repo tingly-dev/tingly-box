@@ -2,15 +2,18 @@ package server
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/limits"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	limitsmodule "github.com/tingly-dev/tingly-box/internal/server/module/limits"
 )
 
 // initLimits enables account concurrency/usage limits on the selection
@@ -81,4 +84,149 @@ func warmStartLimits(guard *routing.LimitsGuard, cfg *config.Config, usage *db.U
 			seed(routing.ServiceLimitKey(rule.UUID, svc), subs, svc.Provider, svc.Model, rule.UUID)
 		}
 	}
+}
+
+// policyWindowSince returns how far back a policy's window reaches.
+func policyWindowSince(l ai.Limits) time.Time { return time.Now().Add(-l.Window()) }
+
+func seedWindow(guard *routing.LimitsGuard, key string, l ai.Limits, rows []db.UsageMinute) {
+	reg := guard.Registry()
+	if !reg.WindowEmpty(key, l) { // already counting: seeding again would double count
+		return
+	}
+	events := make([]limits.UsageEvent, len(rows))
+	for i, r := range rows {
+		events[i] = limits.UsageEvent{At: r.At, Requests: r.Requests, Tokens: r.Tokens}
+	}
+	reg.Seed(key, l, events)
+}
+
+// warmStartPolicy seeds the usage window(s) of a person / team / model policy
+// from usage_records, so a restart (or a freshly saved policy) does not hand
+// out a fresh budget. Idempotent: windows that already count are left alone.
+// Enterprise identities ("euser:") are not recorded in usage_records and start empty.
+func warmStartPolicy(guard *routing.LimitsGuard, usage *db.UsageStore, policies *db.LimitPolicyStore, p ai.LimitPolicy) {
+	if guard == nil || usage == nil || !p.Limits.HasBudget() {
+		return
+	}
+	since := policyWindowSince(p.Limits)
+	fail := func(err error) {
+		logrus.WithError(err).Warnf("[limits] warm start for %s %s failed", p.Kind, p.Ref)
+	}
+	switch p.Kind {
+	case ai.LimitPolicyUser:
+		if strings.HasPrefix(p.Ref, "euser:") {
+			return
+		}
+		rows, err := usage.UsageMinutesWhere(map[string]string{"user_id": p.Ref}, since)
+		if err != nil {
+			fail(err)
+			return
+		}
+		seedWindow(guard, routing.UserLimitKey(p.Ref), p.Limits, rows)
+	case ai.LimitPolicyTeam:
+		rows, err := usage.UsageMinutesWhere(map[string]string{"team_id": p.Ref}, since)
+		if err != nil {
+			fail(err)
+			return
+		}
+		seedWindow(guard, routing.TeamLimitKey(p.Ref), p.Limits, rows)
+	case ai.LimitPolicyModel:
+		rows, err := usage.UsageMinutesWhere(map[string]string{"model": p.Ref}, since)
+		if err != nil {
+			fail(err)
+			return
+		}
+		seedWindow(guard, routing.ModelLimitKey(p.Ref), p.Limits, rows)
+	case ai.LimitPolicyTeamMember:
+		byUser, err := usage.UsageMinutesByUser(p.Ref, since)
+		if err != nil {
+			fail(err)
+			return
+		}
+		for uid, rows := range byUser {
+			if policies != nil {
+				if _, explicit := policies.GetLimitPolicy(ai.LimitPolicyUser, uid); explicit {
+					continue // the explicit policy governs (and seeds) this person
+				}
+			}
+			seedWindow(guard, routing.UserLimitKey(uid), p.Limits, rows)
+		}
+	}
+}
+
+// initLimitPolicies connects the person / team / model policy store to the
+// guard and warm-starts every stored policy. Returns the store (nil when the
+// database is unavailable: those scopes are then simply off).
+func initLimitPolicies(guard *routing.LimitsGuard, cfg *config.Config, usage *db.UsageStore) *db.LimitPolicyStore {
+	sm := cfg.StoreManager()
+	if guard == nil || sm == nil || sm.LimitPolicy() == nil {
+		return nil
+	}
+	store := sm.LimitPolicy()
+	guard.SetPolicies(store)
+	for _, p := range store.List("", "") {
+		warmStartPolicy(guard, usage, store, p)
+	}
+	return store
+}
+
+// limitsDirectory resolves the people and teams that limit policies refer to
+// from the team and API-token stores (membership = "has a key bound to the
+// team"; the person is the key's user_id, never its secret).
+type limitsDirectory struct {
+	teams  *db.TeamStore
+	tokens *db.APITokenStore
+}
+
+func (d limitsDirectory) TeamName(teamID string) string {
+	if d.teams == nil {
+		return ""
+	}
+	if t, err := d.teams.Get(teamID); err == nil && t != nil {
+		return t.Name
+	}
+	return ""
+}
+
+func keyInfo(r db.APITokenRecord) limitsmodule.KeyInfo {
+	return limitsmodule.KeyInfo{UserID: r.UserID, TeamID: r.TeamID, DisplayName: r.DisplayName, Enabled: r.Enabled}
+}
+
+func (d limitsDirectory) KeysOfTeam(teamID string) []limitsmodule.KeyInfo {
+	if d.tokens == nil {
+		return nil
+	}
+	records, _, err := d.tokens.ListTokensForTeam("", teamID, nil, 1000, 0)
+	if err != nil {
+		return nil
+	}
+	out := make([]limitsmodule.KeyInfo, 0, len(records))
+	for _, r := range records {
+		out = append(out, keyInfo(r))
+	}
+	return out
+}
+
+func (d limitsDirectory) KeyByUserID(userID string) (limitsmodule.KeyInfo, bool) {
+	if d.tokens == nil || userID == "" {
+		return limitsmodule.KeyInfo{}, false
+	}
+	records, _, err := d.tokens.ListTokensForTeam(userID, "", nil, 1, 0)
+	if err != nil || len(records) == 0 {
+		return limitsmodule.KeyInfo{}, false
+	}
+	return keyInfo(records[0]), true
+}
+
+// limitsModuleDeps builds the person / team / model collaborators of the limits API.
+func (s *Server) limitsModuleDeps() limitsmodule.Deps {
+	deps := limitsmodule.Deps{Policies: s.limitPolicies}
+	if sm := s.config.StoreManager(); sm != nil {
+		deps.Directory = limitsDirectory{teams: sm.Team(), tokens: sm.APIToken()}
+	}
+	deps.OnPolicyChanged = func(p ai.LimitPolicy) {
+		warmStartPolicy(s.limitsGuard, s.UsageStore(), s.limitPolicies, p)
+	}
+	return deps
 }

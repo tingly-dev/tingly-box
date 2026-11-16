@@ -30,7 +30,7 @@ func writeSelectionError(c *gin.Context, err error) {
 		}
 		c.Header("Retry-After", strconv.Itoa(secs))
 		writeErrorResponse(c, http.StatusTooManyRequests, ErrorResponse{
-			Error: ErrorDetail{Message: le.Error(), Type: "rate_limit_error"},
+			Error: ErrorDetail{Message: le.Error(), Type: "rate_limit_error", Code: le.Code()},
 		})
 		return
 	}

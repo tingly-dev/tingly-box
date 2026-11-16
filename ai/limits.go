@@ -89,3 +89,87 @@ func (l *Limits) Normalize() *Limits {
 	}
 	return &out
 }
+
+// LimitPolicyKind selects what a LimitPolicy governs. See
+// .design/routing-limits.md §10.
+type LimitPolicyKind string
+
+const (
+	// LimitPolicyUser caps one person. Ref is the sharing key's user_id (or
+	// "euser:<enterprise user id>" for enterprise-context identities).
+	LimitPolicyUser LimitPolicyKind = "user"
+	// LimitPolicyTeam caps a whole team together. Ref is the team id.
+	LimitPolicyTeam LimitPolicyKind = "team"
+	// LimitPolicyTeamMember is a per-member template: every distinct user in
+	// the team gets its own counter governed by it. Ref is the team id. An
+	// explicit LimitPolicyUser policy replaces it for that user.
+	LimitPolicyTeamMember LimitPolicyKind = "team_member"
+	// LimitPolicyModel caps an upstream model across all accounts and rules.
+	// Ref is the upstream model name.
+	LimitPolicyModel LimitPolicyKind = "model"
+)
+
+// Overflow behaviours for actor-scoped (user/team) concurrency blocks.
+const (
+	LimitOverflowQueue  = "queue"
+	LimitOverflowReject = "reject"
+)
+
+// IsValid reports whether k is one of the known kinds.
+func (k LimitPolicyKind) IsValid() bool {
+	switch k {
+	case LimitPolicyUser, LimitPolicyTeam, LimitPolicyTeamMember, LimitPolicyModel:
+		return true
+	}
+	return false
+}
+
+// IsActor reports whether the kind is evaluated at request start (before
+// routing) rather than per candidate account.
+func (k LimitPolicyKind) IsActor() bool {
+	return k == LimitPolicyUser || k == LimitPolicyTeam || k == LimitPolicyTeamMember
+}
+
+// LimitPolicy is one limit rule over a person, team or model.
+type LimitPolicy struct {
+	Kind LimitPolicyKind `json:"kind"`
+	Ref  string          `json:"ref"`
+	// Limits are the caps. soft_percent is only meaningful for model
+	// policies (candidate steering) and quota_percent never is; both are
+	// cleared for actor kinds by NormalizePolicy.
+	Limits Limits `json:"limits"`
+	// Overflow is what an actor-scoped concurrency block does: "queue"
+	// (default) waits up to QueueTimeoutSeconds, "reject" answers 429 at
+	// once. Usage-window blocks always reject. Ignored for model policies,
+	// which follow the rule's limit_overflow flag.
+	Overflow            string `json:"overflow,omitempty"`
+	QueueTimeoutSeconds int    `json:"queue_timeout_seconds,omitempty"`
+}
+
+// NormalizePolicy clamps a policy into its valid shape: limits normalized,
+// meaningless fields cleared, overflow defaulted. ok=false means the policy
+// holds no limit and should be deleted.
+func NormalizePolicy(p LimitPolicy) (out LimitPolicy, ok bool) {
+	out = p
+	l := p.Limits.Normalize()
+	if l == nil {
+		return out, false
+	}
+	out.Limits = *l
+	out.Limits.QuotaPercent = 0
+	if p.Kind.IsActor() {
+		out.Limits.SoftPercent = 0
+		if out.Overflow != LimitOverflowReject {
+			out.Overflow = LimitOverflowQueue
+		}
+		if out.QueueTimeoutSeconds < 0 {
+			out.QueueTimeoutSeconds = 0
+		}
+	} else {
+		out.Overflow, out.QueueTimeoutSeconds = "", 0
+	}
+	if out.Limits.IsZero() {
+		return out, false
+	}
+	return out, true
+}

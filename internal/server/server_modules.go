@@ -146,7 +146,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// their response models always appear in openapi.json regardless of
 		// whether quota tracking happens to be configured on this build.
 		providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger()),
-		limitsmodule.NewHandler(s.config, s.limitsGuard),
+		limitsmodule.NewHandler(s.config, s.limitsGuard, s.limitsModuleDeps()),
 	)
 
 	// Projects: schema generation mounts an in-memory app that never starts.

@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
-
 	"github.com/tingly-dev/tingly-box/internal/limits"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -21,18 +21,52 @@ func ServiceLimitKey(ruleUUID string, svc *loadbalance.Service) string {
 	return "svc:" + ruleUUID + "/" + svc.ServiceID()
 }
 
+// ModelLimitKey is the key of an upstream model's cross-account cap.
+func ModelLimitKey(model string) string { return "model:" + model }
+
+// UserLimitKey / TeamLimitKey are the keys of a person's and a team's caps.
+func UserLimitKey(userID string) string { return "user:" + userID }
+func TeamLimitKey(teamID string) string { return "team:" + teamID }
+
+// EnterpriseUserRef is the policy ref of an enterprise-context identity.
+func EnterpriseUserRef(id string) string { return "euser:" + id }
+
 // LimitError is returned by selection when every candidate is at its limit and
 // the rule's overflow policy does not allow routing anyway. Handlers map it to
 // HTTP 429.
 type LimitError struct {
-	RuleUUID   string
-	Reasons    limits.Reason
+	RuleUUID string
+	Reasons  limits.Reason
+	// Scopes names who is exhausted. Zero (or only account/service/model
+	// scopes) means the upstream pool; ScopeUser/ScopeTeam mean the caller's
+	// own cap, which no other account can fix.
+	Scopes     limits.Scope
 	RetryAfter time.Duration
 	Waited     time.Duration
 }
 
+// Code is the stable machine-readable error code for the 429 body.
+func (e *LimitError) Code() string {
+	switch {
+	case e.Scopes&limits.ScopeUser != 0:
+		return "user_limit_exceeded"
+	case e.Scopes&limits.ScopeTeam != 0:
+		return "team_limit_exceeded"
+	default:
+		return "upstream_limit_exceeded"
+	}
+}
+
 func (e *LimitError) Error() string {
-	msg := fmt.Sprintf("all upstream accounts are at their %s limit; retry in %ds", e.Reasons, int(e.RetryAfter.Seconds()+0.5))
+	var msg string
+	switch e.Code() {
+	case "user_limit_exceeded":
+		msg = fmt.Sprintf("your %s limit is reached; retry in %ds", e.Reasons, int(e.RetryAfter.Seconds()+0.5))
+	case "team_limit_exceeded":
+		msg = fmt.Sprintf("your team's %s limit is reached; retry in %ds", e.Reasons, int(e.RetryAfter.Seconds()+0.5))
+	default:
+		msg = fmt.Sprintf("all upstream accounts are at their %s limit; retry in %ds", e.Reasons, int(e.RetryAfter.Seconds()+0.5))
+	}
 	if e.Waited > 0 {
 		msg += fmt.Sprintf(" (waited %s)", e.Waited.Round(time.Millisecond))
 	}
@@ -44,7 +78,17 @@ func (e *LimitError) Error() string {
 type LimitsGuard struct {
 	reg       *limits.Registry
 	providers ProviderResolver
+	policies  PolicyResolver
 }
+
+// PolicyResolver looks up person / team / model limit policies
+// (db.LimitPolicyStore satisfies it). Nil disables those scopes.
+type PolicyResolver interface {
+	GetLimitPolicy(kind ai.LimitPolicyKind, ref string) (ai.LimitPolicy, bool)
+}
+
+// SetPolicies enables person / team / model scopes.
+func (g *LimitsGuard) SetPolicies(p PolicyResolver) { g.policies = p }
 
 // NewLimitsGuard builds a guard over reg; providers resolves account-level limits.
 func NewLimitsGuard(reg *limits.Registry, providers ProviderResolver) *LimitsGuard {
@@ -69,14 +113,22 @@ func (g *LimitsGuard) Subjects(ruleUUID string, svc *loadbalance.Service) []limi
 	if g.providers != nil {
 		if p, err := g.providers.GetProviderByUUID(svc.Provider); err == nil && p != nil {
 			if l := p.Limits.Normalize(); l != nil {
-				out = append(out, limits.Subject{Key: AccountLimitKey(svc.Provider), Limits: *l, Quota: svc.Provider})
+				out = append(out, limits.Subject{Key: AccountLimitKey(svc.Provider), Scope: limits.ScopeAcct, Limits: *l, Quota: svc.Provider})
 			}
 		}
 	}
 	if l := svc.Limits.Normalize(); l != nil {
 		l.QuotaPercent = 0 // quota is an account property
 		if !l.IsZero() {
-			out = append(out, limits.Subject{Key: ServiceLimitKey(ruleUUID, svc), Limits: *l})
+			out = append(out, limits.Subject{Key: ServiceLimitKey(ruleUUID, svc), Scope: limits.ScopeSvc, Limits: *l})
+		}
+	}
+	if g.policies != nil && svc.Model != "" {
+		if p, ok := g.policies.GetLimitPolicy(ai.LimitPolicyModel, svc.Model); ok {
+			if l := p.Limits.Normalize(); l != nil {
+				l.QuotaPercent = 0
+				out = append(out, limits.Subject{Key: ModelLimitKey(svc.Model), Scope: limits.ScopeModel, Limits: *l})
+			}
 		}
 	}
 	return out
