@@ -2027,6 +2027,11 @@ let mockTeams = [
     { id: defaultMockTeamID, name: 'Default', slug: 'default', enabled: true, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
     { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
 ]
+let mockLimitPolicies: Array<{ kind: string; ref: string; limits: Record<string, number>; overflow?: string; queue_timeout_seconds?: number }> = [
+    { kind: 'team', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, overflow: 'queue' },
+    { kind: 'team_member', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, overflow: 'queue', queue_timeout_seconds: 20 },
+    { kind: 'user', ref: 'user-design', limits: { max_concurrent: 1, max_requests: 200, window_seconds: 3600 }, overflow: 'reject' },
+]
 let mockSharingKeys = [
     { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
     { token_id: 'tb-share-platform00000000000000000000000001', user_id: 'user-platform', team_id: '00000000-0000-0000-0000-000000000002', display_name: 'Platform CI', enabled: true, created_at: '2026-07-12T00:00:00Z' },
@@ -2483,11 +2488,32 @@ export const handlers = [
         })
     }),
 
+    // Person / team / model limit policies (routing limits)
+    http.get('/api/v1/limit-policies', ({ request }) => {
+        const q = new URL(request.url).searchParams
+        const data = mockLimitPolicies.filter((p) => (!q.get('kind') || p.kind === q.get('kind')) && (!q.get('ref') || p.ref === q.get('ref')))
+        return HttpResponse.json({ success: true, data })
+    }),
+
+    http.put('/api/v1/limit-policies/:kind/:ref', async ({ params, request }) => {
+        const body = await request.json() as any
+        const empty = !body.limits || Object.values(body.limits).every((v) => !v)
+        mockLimitPolicies = mockLimitPolicies.filter((p) => !(p.kind === params.kind && p.ref === params.ref))
+        if (empty) return HttpResponse.json({ success: true, exists: false })
+        const policy = { kind: params.kind as string, ref: params.ref as string, limits: body.limits, overflow: body.overflow, queue_timeout_seconds: body.queue_timeout_seconds }
+        mockLimitPolicies = [...mockLimitPolicies, policy]
+        return HttpResponse.json({ success: true, exists: true, data: policy })
+    }),
+
     // Live account/service limit state (routing limits)
     http.get('/api/v1/limits/status', () => {
         return HttpResponse.json({
             success: true,
             data: [
+                { scope: 'team', key: 'team:00000000-0000-0000-0000-000000000002', ref: '00000000-0000-0000-0000-000000000002', label: 'Platform',
+                  limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, inflight: 3, requests: 212, tokens: 3900000, pressure: 0.78, state: 'ok' },
+                { scope: 'user', key: 'user:user-platform', ref: 'user-platform', label: 'Platform CI', inherited_from: 'team_member',
+                  limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, inflight: 2, requests: 96, tokens: 910000, pressure: 1, state: 'blocked' },
                 { scope: 'account', key: 'acct:mock-provider-anthropic', provider_uuid: 'mock-provider-anthropic', provider_name: 'Anthropic',
                   limits: { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
                   inflight: 3, requests: 41, tokens: 1700000, pressure: 0.85, state: 'hot' },

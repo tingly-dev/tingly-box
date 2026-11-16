@@ -354,6 +354,7 @@ export default {
       "active": "已启用",
       "inactive": "已停用",
       "moveTooltip": "移动到其他 Team",
+      "limitsTooltip": "此人的限额",
       "deleteTooltip": "删除密钥"
     }
   },

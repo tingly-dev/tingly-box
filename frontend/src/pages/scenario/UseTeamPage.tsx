@@ -6,8 +6,9 @@ import {
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip,
 } from '@mui/material';
-import {Delete, Duplicate, Edit, HelpOutline, Info as IconInfo} from '@/components/icons';
+import {Delete, Duplicate, Edit, HelpOutline, Info as IconInfo, Speed as IconLimits} from '@/components/icons';
 import DuplicateDialog from '@/components/DuplicateDialog';
+import TeamLimitsDialog from '@/components/limits/TeamLimitsDialog';
 import {suggestTeamCopyName} from '@/utils/copyName';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -59,6 +60,7 @@ const UseTeamPageContent: React.FC = () => {
     const keyActions = useSharingKeyActions({teams, onChanged: teamKeys.reload});
     const keysOverview = useTeamKeysOverviewExpanded();
     const [teamGuideOpen, setTeamGuideOpen] = useState(false);
+    const [teamLimitsOpen, setTeamLimitsOpen] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [teamName, setTeamName] = useState('');
@@ -190,6 +192,12 @@ const UseTeamPageContent: React.FC = () => {
                                         <HelpOutline fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
+                                <Tooltip title={t('limits.team.buttonTooltip')}>
+                                    <IconButton size="small" aria-label={t('limits.team.button')}
+                                                onClick={() => setTeamLimitsOpen(true)}>
+                                        <IconLimits fontSize="small" sx={{color: 'text.secondary'}} />
+                                    </IconButton>
+                                </Tooltip>
                                 <Tooltip title={t('teams.editTeam')}>
                                     <IconButton size="small" aria-label={t('teams.editTeam')} onClick={openEditor}>
                                         <Edit fontSize="small" sx={{color: 'text.secondary'}} />
@@ -290,6 +298,10 @@ const UseTeamPageContent: React.FC = () => {
 
             <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
             <TeamGuideDialog open={teamGuideOpen} onClose={() => setTeamGuideOpen(false)} />
+            {currentTeam && (
+                <TeamLimitsDialog open={teamLimitsOpen} onClose={() => setTeamLimitsOpen(false)}
+                                  teamId={currentTeam.id} teamName={currentTeam.name} />
+            )}
 
             <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('teams.editTeam')}</DialogTitle>
