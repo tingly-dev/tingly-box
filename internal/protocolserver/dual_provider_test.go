@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/ai"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -50,6 +51,8 @@ func newDualProviderRouterWithProxy(t *testing.T, upstreamURL, proxyURL string, 
 		APIBase:          "http://127.0.0.1:1/v1",
 		APIBaseOpenAI:    upstreamURL + "/v1",
 		APIBaseAnthropic: "http://127.0.0.1:1/anthropic",
+		// This fixture explicitly serves both Chat and Responses.
+		OpenAIEndpointMode: ai.EndpointModeBoth,
 	}))
 	require.NoError(t, cfg.AddRule(typ.Rule{
 		Scenario: scenario, RequestModel: requestModel, Active: true,

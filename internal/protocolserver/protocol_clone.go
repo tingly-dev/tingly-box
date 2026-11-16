@@ -5,6 +5,7 @@ import (
 
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/compaction"
 )
 
 // Per-attempt request cloning for mid-request failover.
@@ -56,5 +57,8 @@ func CloneResponsesParams(template *responses.ResponseNewParams) (*responses.Res
 	}
 	var out responses.ResponseNewParams
 	err = json.Unmarshal(b, &out)
+	if err == nil {
+		err = compaction.PreserveReplayFields(&out, b)
+	}
 	return &out, err
 }

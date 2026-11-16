@@ -214,3 +214,13 @@ func TestMatrixResponseRetentionMode(t *testing.T) {
 		t.Fatalf("unexpected parsed flags: %+v", cli.Matrix)
 	}
 }
+
+func TestMatrixNativeCompactMode(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"matrix", "--mode=native_compact", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	if cli.Matrix.Mode != "native_compact" || !cli.Matrix.JsonOutput {
+		t.Fatalf("unexpected flags: %+v", cli.Matrix)
+	}
+}

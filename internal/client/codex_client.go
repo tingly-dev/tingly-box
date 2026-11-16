@@ -12,6 +12,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
@@ -116,6 +118,24 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 	applyCodexDefaultsToParams(&req)
 	// Call the base implementation
 	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
+}
+
+// ResponsesCompact uses the native JSON endpoint, not the streaming response
+// assembler. Only the gateway's virtual model suffix needs resolving here.
+func (c *CodexClient) ResponsesCompact(ctx context.Context, body []byte) ([]byte, error) {
+	model := gjson.GetBytes(body, "model").String()
+	if strings.HasSuffix(model, fastModelSuffix) {
+		var err error
+		body, err = sjson.SetBytes(body, "model", strings.TrimSuffix(model, fastModelSuffix))
+		if err != nil {
+			return nil, err
+		}
+		body, err = sjson.SetBytes(body, "service_tier", "priority")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return c.OpenAIClient.ResponsesCompact(ctx, body)
 }
 
 // ImagesGenerate creates a new image generation request.
