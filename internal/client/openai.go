@@ -34,6 +34,7 @@ type OpenAIClientInterface interface {
 	ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
 	EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
 	DecisionsNew(ctx context.Context, body []byte) ([]byte, error)
+	ResponsesCompact(ctx context.Context, body []byte) ([]byte, error)
 
 	// Utility methods
 	ListModels(ctx context.Context) (*ModelListResult, error)
@@ -162,6 +163,34 @@ func (c *OpenAIClient) DecisionsNew(ctx context.Context, body []byte) ([]byte, e
 	opts := append([]option.RequestOption{option.WithRequestBody("application/json", body)}, override...)
 	err := c.client.Post(ctx, path, nil, &out, opts...)
 	return out, err
+}
+
+// ResponsesCompact preserves the native compaction window as opaque JSON. In
+// particular, round-tripping input through SDK unions can invent required IDs
+// or discard future item fields. Authentication, timeouts and HTTP errors still
+// go through the same SDK transport as other Responses requests.
+func (c *OpenAIClient) ResponsesCompact(ctx context.Context, body []byte) ([]byte, error) {
+	var out []byte
+	opts := []option.RequestOption{option.WithRequestBody("application/json", body)}
+	if c.provider != nil && c.provider.APIStyle == protocol.APIStyleGoogle && !c.provider.IsOAuth() {
+		opts = append(opts, option.WithHeader("x-goog-api-key", c.provider.GetAccessToken()), option.WithHeaderDel("Authorization"))
+	}
+	err := c.client.Post(ctx, "responses/compact", nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return validateNativeCompactResponse(out)
+}
+
+func validateNativeCompactResponse(out []byte) ([]byte, error) {
+	var window struct {
+		Output json.RawMessage `json:"output"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(out, &window) != nil || len(window.Output) == 0 || window.Output[0] != '[' || (len(window.Error) > 0 && string(window.Error) != "null") {
+		return nil, &protocol.EmptyResponseError{Err: fmt.Errorf("upstream compact endpoint did not return an output array")}
+	}
+	return out, nil
 }
 
 // decisionsTarget falls back to {APIBase}/decisions for unknown hosts. Fixed

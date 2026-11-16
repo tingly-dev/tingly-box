@@ -54,6 +54,21 @@ they do not establish live-provider compatibility or execute an external tool.
 MCP execution-hook suppression and mutable SDK-field behavior remain covered by
 the targeted protocol tests, because they cannot be induced by provider JSON alone.
 
+### Native compact acceptance
+
+```sh
+harness matrix --mode=native_compact --json
+```
+
+Runs 18 real-HTTP gateway contracts for standalone native compact and continuation.
+The gateway attempts the upstream compact endpoint even for a Chat/Anthropic
+configured provider, then distinguishes unsupported-operation responses from auth,
+quota, model and transient errors. Checks opaque state without numeric rounding,
+provider authentication, exact request count, and no summary inference on failure.
+Shared with `TestNativeCompactAcceptance` and included in `--mode=all`. This does
+not invoke the real Codex CLI or establish live-provider ciphertext acceptance.
+See [the compact contract](../../.design/compaction.md).
+
 ### Scope
 
 The harness guards the **AI data plane** — protocol conversion, traffic

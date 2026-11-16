@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tidwall/sjson"
+	"github.com/tingly-dev/tingly-box/internal/protocol/compaction"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -208,6 +210,14 @@ func (ph *ProtocolHandler) runOpenAIResponsesAttempt(c *gin.Context, req *protoc
 		return
 	}
 	req.Model = responses.ResponsesModel(actualModel)
+	if plan.Target != protocol.TypeOpenAIResponses {
+		for _, item := range req.Input.OfInputItemList {
+			if item.OfCompaction != nil {
+				unsupportedResponsesCompaction(c, "Native compaction state requires a compatible Responses provider")
+				return
+			}
+		}
+	}
 
 	reqCtx, err := ph.TransformOpenAIResponses(c, req, plan, isStreaming, scenarioType)
 	if err != nil {
@@ -236,16 +246,8 @@ func (ph *ProtocolHandler) convertToResponsesParams(bodyBytes []byte, actualMode
 		return nil, err
 	}
 
-	var raw map[string]any
-	if err := json.Unmarshal(processedData, &raw); err != nil {
-		return nil, err
-	}
-
-	// Override the model
-	raw["model"] = actualModel
-
-	// Marshal back to JSON and unmarshal into ResponseNewParams
-	modifiedJSON, err := json.Marshal(raw)
+	// Patch only model so opaque native extensions never round through float64.
+	modifiedJSON, err := sjson.SetBytes(processedData, "model", actualModel)
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +257,9 @@ func (ph *ProtocolHandler) convertToResponsesParams(bodyBytes []byte, actualMode
 		return nil, err
 	}
 
+	if err := compaction.PreserveReplayFields(params, modifiedJSON); err != nil {
+		return nil, err
+	}
 	return params, nil
 }
 

@@ -92,6 +92,7 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 
 	// Responses API endpoints (OpenAI compatible)
 	group.POST("/responses", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesCreate)...)
+	group.POST("/responses/compact", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("responses_compact"), ph.HandleResponsesCompact)...)
 	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesGet)...)
 
 	// Chat completions endpoint (Anthropic compatible)
@@ -135,6 +136,7 @@ func (ph *ProtocolHandler) SetupOpenAIEndpoints(group *gin.RouterGroup, modelAut
 
 	// Responses API endpoints (OpenAI compatible)
 	group.POST("/responses", ph.modelAuthChain(modelAuth, ph.HandleResponsesCreate)...)
+	group.POST("/responses/compact", ph.modelAuthChain(modelAuth, DeclareOperation("responses_compact"), ph.HandleResponsesCompact)...)
 	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, ph.HandleResponsesGet)...)
 }
 

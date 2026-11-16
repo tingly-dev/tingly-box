@@ -46,14 +46,15 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		req.Header.Del("X-ChatGPT-Account-ID")
 	}
 
-	// The dedicated Codex images endpoints (images/generations, images/edits)
-	// speak plain JSON request/response — no Responses-API body rules, no SSE.
+	// Native images and standalone compaction speak plain JSON request/response
+	// — no Responses-create body rules and no SSE validation.
 	// Only headers and path rewriting apply to them. Which protocol a path
 	// speaks is decided once, by the path-rewrite step above, rather than
 	// re-derived here from the rewritten path string.
-	imagesEndpoint := protocol == codexProtocolPlainJSON
+	plainJSONEndpoint := protocol == codexProtocolPlainJSON
+	compactEndpoint := strings.HasSuffix(newPath, "/responses/compact")
 
-	if !imagesEndpoint {
+	if !plainJSONEndpoint {
 		req.Header.Set("OpenAI-Beta", "responses=experimental")
 		//req.Header.Set("originator", "tingly-box")
 	}
@@ -62,16 +63,19 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	// ChatGPT backend API does NOT support: max_tokens, max_completion_tokens, temperature, top_p, max_output_tokens
 
 	var filtered []byte
-	if req.Body != nil && req.Method == "POST" && !imagesEndpoint {
+	if req.Body != nil && req.Method == "POST" && (!plainJSONEndpoint || compactEndpoint) {
 		body, err := io.ReadAll(req.Body)
 		_ = req.Body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 
-		filtered, err = t.filterField(body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to filter field: %w", err)
+		filtered = body
+		if !compactEndpoint {
+			filtered, err = t.filterField(body)
+			if err != nil {
+				return nil, fmt.Errorf("failed to filter field: %w", err)
+			}
 		}
 
 		applyCodexSessionAffinityHeader(req, filtered)
@@ -101,7 +105,7 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 		return resp, nil
 	}
 
-	if imagesEndpoint {
+	if plainJSONEndpoint {
 		return resp, nil
 	}
 
@@ -407,14 +411,26 @@ const (
 	// codexProtocolResponsesSSE is the Responses API: SSE-only, with the
 	// stream/store/param-filtering rules filterField applies.
 	codexProtocolResponsesSSE codexProtocol = iota
-	// codexProtocolPlainJSON is the Codex-native images endpoints
-	// (images/generations, images/edits): plain JSON request/response.
+	// codexProtocolPlainJSON is used by native images and responses/compact.
 	codexProtocolPlainJSON
 )
 
 // rewriteCodexPath rewrites path to its Codex backend equivalent and
 // classifies the protocol that backend path speaks.
 func rewriteCodexPath(path string) (string, codexProtocol) {
+	// Compact is a separate JSON contract, including on older Codex clients.
+	// Handle it before the generic Responses/SSE path rewriting below.
+	if strings.HasSuffix(path, "/responses/compact") {
+		switch {
+		case path == "/backend-api/responses/compact":
+			path = "/backend-api/codex/responses/compact"
+		case strings.HasPrefix(path, "/backend-api/v1/"):
+			path = strings.Replace(path, "/backend-api/v1/", "/backend-api/codex/", 1)
+		case strings.HasPrefix(path, "/v1/") && !strings.Contains(path, "/codex/"):
+			path = strings.Replace(path, "/v1/", "/codex/", 1)
+		}
+		return path, codexProtocolPlainJSON
+	}
 	if strings.HasPrefix(path, "/backend-api/") {
 		return rewriteCodexAPIPath(path)
 	}
