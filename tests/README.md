@@ -27,9 +27,13 @@ fingerprints, raw Codex stdout/stderr, test logs, source snapshots, version and
 binary hashes, and SHA256SUMS; upstream fixtures must match byte for byte.
 
 The Go experiment is opt-in (`TINGLY_CODEX_BIN`); ordinary test runs skip it.
-Recorded results and the complete proof archive are under
-[`evidence/`](evidence/). These prove the synthetic failure and fix, not the
-unobserved cause of any particular user's deployment.
+The 2026-11-16 run with Codex CLI 0.159.0-alpha.3 includes
+[12 case results](evidence/codex-responses-completion.json) and the
+[complete proof archive](evidence/codex-responses-completion.zip).
+With five retries enabled, null usage failed after six requests before the fix
+and completed after one request with the fix. The truncated-stream control
+still failed in both versions. These prove the synthetic failure and fix, not
+the unobserved cause of any particular user's deployment.
 
 ## Quick Start
 
