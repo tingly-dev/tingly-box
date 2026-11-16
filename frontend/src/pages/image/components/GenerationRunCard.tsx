@@ -62,7 +62,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
     // The request as it went over the wire, so the line doubles as the answer
     // to "what do I send to get this": n only when it was more than one.
     const requested = Math.max(run.count ?? 1, 1);
-    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}`;
+    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}${run.reasoningEffort && run.reasoningEffort !== 'auto' ? ` · effort=${run.reasoningEffort}` : ''}`;
     // One slot per requested image, from the moment the run starts: the card
     // has its final shape while it is pending, results land in their slots,
     // and a slot that stays empty is a missing image the user can see in

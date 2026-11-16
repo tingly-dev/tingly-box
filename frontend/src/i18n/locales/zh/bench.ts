@@ -166,6 +166,7 @@ export default {
     "customHeight": "高度（像素）",
     "customSizeError": "宽度和高度都需要填写正整数。",
     "quality": "质量",
+    "reasoningEffort": "思考强度",
     "count": "数量",
     "generate": "生成",
     "generateAnother": "再生成一批 · {{count}} 个进行中",

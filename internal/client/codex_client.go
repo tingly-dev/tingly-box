@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // guard
@@ -402,6 +403,7 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 	params := responses.ResponseNewParams{
 		Model: strings.TrimSuffix(req.Model, fastModelSuffix),
 	}
+	applyCodexImageReasoning(&params, imagegen.ReasoningEffort(&req))
 
 	// Set default values directly on the struct
 	params.Store = param.NewOpt(false)

@@ -166,6 +166,7 @@ export default {
     "customHeight": "Height (px)",
     "customSizeError": "Enter a positive whole number for width and height.",
     "quality": "Quality",
+    "reasoningEffort": "Thinking effort",
     "count": "N",
     "generate": "Generate",
     "generateAnother": "Generate another · {{count}} running",

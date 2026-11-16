@@ -199,6 +199,7 @@ func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGener
 		}
 		return resp.ToOpenAI(), nil
 	default:
+		imagegen.OmitReasoningEffort(&req)
 		return c.client.Images.Generate(ctx, req)
 	}
 }
@@ -230,6 +231,7 @@ func (c *OpenAIClient) ImagesEdit(ctx context.Context, req openai.ImageEditParam
 		}
 		return resp.ToOpenAI(), nil
 	default:
+		imagegen.OmitReasoningEffort(&req)
 		return c.client.Images.Edit(ctx, req)
 	}
 }

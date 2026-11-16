@@ -54,6 +54,15 @@ generation 我们继续沿用已验证的 Responses API(image_generation tool)
 
 ## 2. 分层设计
 
+生成与改图均接受可选的网关扩展 `reasoning_effort`，前端提供
+`auto|low|medium|high`，默认 `auto`。JSON 生成、JSON 改图和 multipart
+改图只解析并传递原始选择，使用方式由实际后端适配器决定：Codex
+Responses 把 `auto`（含未传）映射为 `reasoning.effort: low`，显式档位
+按值传递；Codex 原生改图忽略该提示，不因此切换端点。其它后端
+暂不使用此提示，不凭域名或模型前缀推断支持情况。该设置与
+`quality` 独立，历史重试、请求回填、方案保存保留原始选择，旧记录
+缺字段时按 auto 恢复。
+
 与 generation 完全同构,每层只加一个对称成员:
 
 ```text

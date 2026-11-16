@@ -180,6 +180,7 @@ export default {
     "customHeight": "Высота (пиксели)",
     "customSizeError": "Введите положительные целые числа для ширины и высоты.",
     "quality": "Качество",
+    "reasoningEffort": "Уровень размышления",
     "count": "N",
     "generate": "Сгенерировать",
     "generateAnother": "Сгенерировать ещё · выполняется: {{count}}",
