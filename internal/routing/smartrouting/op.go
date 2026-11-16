@@ -257,20 +257,34 @@ var Operations = []SmartOp{
 			Type:        ValueTypeInt,
 		},
 	},
+
+	// Service concurrency operations (in-flight / max_concurrent %, see routing limits)
+	{Position: PositionServiceConcurrency, Operation: OpServiceConcurrencyUtilLe, Meta: SmartOpMeta{Description: "Tightest in-flight/concurrency-cap ratio across services <= value (%)", Type: ValueTypeInt}},
+	{Position: PositionServiceConcurrency, Operation: OpServiceConcurrencyUtilGe, Meta: SmartOpMeta{Description: "Tightest in-flight/concurrency-cap ratio across services >= value (%)", Type: ValueTypeInt}},
+	{Position: PositionServiceConcurrency, Operation: OpServiceConcurrencyUtilLt, Meta: SmartOpMeta{Description: "Tightest in-flight/concurrency-cap ratio across services < value (%)", Type: ValueTypeInt}},
+	{Position: PositionServiceConcurrency, Operation: OpServiceConcurrencyUtilGt, Meta: SmartOpMeta{Description: "Tightest in-flight/concurrency-cap ratio across services > value (%)", Type: ValueTypeInt}},
+
+	// Service usage operations (request/token budget per window, %, see routing limits)
+	{Position: PositionServiceUsage, Operation: OpServiceUsagePctLe, Meta: SmartOpMeta{Description: "Tightest usage-window consumption across services <= value (%)", Type: ValueTypeInt}},
+	{Position: PositionServiceUsage, Operation: OpServiceUsagePctGe, Meta: SmartOpMeta{Description: "Tightest usage-window consumption across services >= value (%)", Type: ValueTypeInt}},
+	{Position: PositionServiceUsage, Operation: OpServiceUsagePctLt, Meta: SmartOpMeta{Description: "Tightest usage-window consumption across services < value (%)", Type: ValueTypeInt}},
+	{Position: PositionServiceUsage, Operation: OpServiceUsagePctGt, Meta: SmartOpMeta{Description: "Tightest usage-window consumption across services > value (%)", Type: ValueTypeInt}},
 }
 
 const (
-	PositionModel           SmartOpPosition = "model"             // Request model name
-	PositionThinking        SmartOpPosition = "thinking"          // Thinking mode enabled
-	PositionContextSystem   SmartOpPosition = "context_system"    // System message content in context
-	PositionContextUser     SmartOpPosition = "context_user"      // User message content in context
-	PositionLatestUser      SmartOpPosition = "latest_user"       // Latest user message
-	PositionToken           SmartOpPosition = "token"             // Token count
-	PositionServiceTTFT     SmartOpPosition = "service_ttft"      // Service TTFT characteristics
-	PositionServiceCapacity SmartOpPosition = "service_capacity"  // Service seat capacity (affinity utilization)
-	PositionServiceQuota    SmartOpPosition = "service_quota"     // Upstream provider quota usage (%)
-	PositionAgentClaudeCode SmartOpPosition = "agent.claude_code" // Claude Code agent request kind (main / subagent / compact)
-	PositionTime            SmartOpPosition = "time"              // Current time in a configured timezone
+	PositionModel              SmartOpPosition = "model"               // Request model name
+	PositionThinking           SmartOpPosition = "thinking"            // Thinking mode enabled
+	PositionContextSystem      SmartOpPosition = "context_system"      // System message content in context
+	PositionContextUser        SmartOpPosition = "context_user"        // User message content in context
+	PositionLatestUser         SmartOpPosition = "latest_user"         // Latest user message
+	PositionToken              SmartOpPosition = "token"               // Token count
+	PositionServiceTTFT        SmartOpPosition = "service_ttft"        // Service TTFT characteristics
+	PositionServiceCapacity    SmartOpPosition = "service_capacity"    // Service seat capacity (affinity utilization)
+	PositionServiceQuota       SmartOpPosition = "service_quota"       // Upstream provider quota usage (%)
+	PositionServiceConcurrency SmartOpPosition = "service_concurrency" // In-flight requests vs the concurrency cap (%)
+	PositionServiceUsage       SmartOpPosition = "service_usage"       // Request/token window usage vs its budget (%)
+	PositionAgentClaudeCode    SmartOpPosition = "agent.claude_code"   // Claude Code agent request kind (main / subagent / compact)
+	PositionTime               SmartOpPosition = "time"                // Current time in a configured timezone
 )
 
 const (
@@ -321,6 +335,16 @@ const (
 	OpServiceQuotaPctGe SmartOpOperation = "pct_ge" // Tightest quota used% >= value (%)
 	OpServiceQuotaPctLt SmartOpOperation = "pct_lt" // Tightest quota used% < value (%)
 	OpServiceQuotaPctGt SmartOpOperation = "pct_gt" // Tightest quota used% > value (%)
+
+	// Service concurrency / usage operations (see .design/routing-limits.md)
+	OpServiceConcurrencyUtilLe SmartOpOperation = "util_le"
+	OpServiceConcurrencyUtilGe SmartOpOperation = "util_ge"
+	OpServiceConcurrencyUtilLt SmartOpOperation = "util_lt"
+	OpServiceConcurrencyUtilGt SmartOpOperation = "util_gt"
+	OpServiceUsagePctLe        SmartOpOperation = "pct_le"
+	OpServiceUsagePctGe        SmartOpOperation = "pct_ge"
+	OpServiceUsagePctLt        SmartOpOperation = "pct_lt"
+	OpServiceUsagePctGt        SmartOpOperation = "pct_gt"
 
 	// Agent (Claude Code) request kind operations
 	OpAgentClaudeCodeEquals SmartOpOperation = "equals" // Claude Code request kind equals the value

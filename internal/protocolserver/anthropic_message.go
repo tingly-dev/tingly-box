@@ -125,12 +125,8 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqParams)
 	if err != nil {
 		logrus.WithError(err).Errorf("Select service error")
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		writeSelectionError(c, err)
+		c.Abort()
 		return
 	}
 

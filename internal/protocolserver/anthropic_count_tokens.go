@@ -80,12 +80,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 
 	provider, selectedService, err := ph.selectService(c, scenarioType, rule, nil)
 	if err != nil {
-		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		writeSelectionError(c, err)
 		return
 	}
 

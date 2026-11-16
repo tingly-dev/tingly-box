@@ -63,7 +63,7 @@ func (ph *ProtocolHandler) HandleOpenAIDecisions(c *gin.Context) {
 	// Single-shot endpoints share content-free selection (no smart routing).
 	provider, selectedService, err := ph.selectServiceForEmbeddings(c, scenarioType, rule)
 	if err != nil {
-		decisionBadRequest(c, err.Error())
+		writeSelectionError(c, err)
 		return
 	}
 

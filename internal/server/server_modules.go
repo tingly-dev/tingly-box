@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	limitsmodule "github.com/tingly-dev/tingly-box/internal/server/module/limits"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
@@ -145,6 +146,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// their response models always appear in openapi.json regardless of
 		// whether quota tracking happens to be configured on this build.
 		providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger()),
+		limitsmodule.NewHandler(s.config, s.limitsGuard),
 	)
 
 	// Projects: schema generation mounts an in-memory app that never starts.

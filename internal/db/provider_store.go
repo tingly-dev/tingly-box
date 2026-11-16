@@ -42,6 +42,10 @@ type ProviderRecord struct {
 	// ("", "chat", "responses", "both"). See ai.OpenAIEndpointMode.
 	OpenAIEndpointMode string `gorm:"column:openai_endpoint_mode"`
 
+	// Limits is the account-level concurrency/usage cap (see
+	// .design/routing-limits.md). Additive column; NULL = no limits.
+	Limits *ai.Limits `gorm:"column:limits;type:text;serializer:json"`
+
 	// Credential fields - stored with provider as a unit
 	// For api_key auth: stores the API key
 	// For oauth auth: stores OAuth access token
@@ -98,6 +102,11 @@ func cloneStrings(s []string) []string {
 	return slices.Clone(s)
 }
 
+// cloneLimits copies and normalizes limits; an all-zero value stays NULL.
+func cloneLimits(l *ai.Limits) *ai.Limits {
+	return l.Normalize()
+}
+
 func cloneExtraFields(m map[string]any) map[string]any {
 	if len(m) == 0 {
 		return nil
@@ -144,6 +153,7 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		Timeout:            r.Timeout,
 		LastUpdated:        r.LastUpdated,
 		OpenAIEndpointMode: ai.OpenAIEndpointMode(r.OpenAIEndpointMode),
+		Limits:             cloneLimits(r.Limits),
 	}
 
 	provider.Tags = cloneStrings(r.Tags)
@@ -190,6 +200,7 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 		Timeout:            p.Timeout,
 		LastUpdated:        p.LastUpdated,
 		OpenAIEndpointMode: string(p.OpenAIEndpointMode),
+		Limits:             cloneLimits(p.Limits),
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -237,6 +248,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	record.Timeout = p.Timeout
 	record.LastUpdated = p.LastUpdated
 	record.OpenAIEndpointMode = string(p.OpenAIEndpointMode)
+	record.Limits = cloneLimits(p.Limits)
 	record.UpdatedAt = time.Now()
 
 	record.Tags = cloneStrings(p.Tags)

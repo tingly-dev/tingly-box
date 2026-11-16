@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // Service represents a provider-model combination for load balancing
@@ -17,6 +19,7 @@ type Service struct {
 	TimeWindow    int          `yaml:"time_window" json:"time_window"`                           // Statistics time window in seconds
 	ModelCapacity *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
 	Tier          int          `yaml:"tier,omitempty" json:"tier,omitempty"`                     // Tier within a rule: lower number = tried first (T0 is highest priority). Used by TacticTier.
+	Limits        *ai.Limits   `yaml:"limits,omitempty" json:"limits,omitempty"`                 // This rule's share of the account: concurrency/usage caps (see .design/routing-limits.md)
 	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
 }
 

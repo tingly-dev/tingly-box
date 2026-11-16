@@ -67,10 +67,13 @@ func (r *Router) evaluateRule(ctx *RequestContext, rule *SmartRouting, idx int) 
 	origStats := ctx.ServiceStats
 	origCap := ctx.ServiceCapacity
 	origQuota := ctx.ServiceQuota
+	origLimits := ctx.ServiceLimits
 	ctx.ServiceStats = collectRuleStats(rule.Services)
 	ctx.ServiceCapacity = filterCapacityForRule(ctx.ServiceCapacity, rule.Services)
 	ctx.ServiceQuota = filterQuotaForRule(ctx.ServiceQuota, rule.Services)
+	ctx.ServiceLimits = filterForRule(ctx.ServiceLimits, rule.Services, func(l ServiceLimitInfo) string { return l.ServiceID })
 	defer func() {
+		ctx.ServiceLimits = origLimits
 		ctx.ServiceStats = origStats
 		ctx.ServiceCapacity = origCap
 		ctx.ServiceQuota = origQuota
@@ -118,6 +121,12 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 		return r.evaluateServiceCapacityOp(ctx, op)
 	case PositionServiceQuota:
 		return r.evaluateServiceQuotaOp(ctx, op)
+	case PositionServiceConcurrency:
+		return r.evaluateServiceLimitOp(ctx, op, "service_concurrency", "tightest concurrency",
+			func(l ServiceLimitInfo) (float64, bool) { return l.Concurrency, l.HasConcurrency })
+	case PositionServiceUsage:
+		return r.evaluateServiceLimitOp(ctx, op, "service_usage", "tightest usage",
+			func(l ServiceLimitInfo) (float64, bool) { return l.Usage, l.HasUsage })
 	case PositionAgentClaudeCode:
 		return r.evaluateAgentClaudeCodeOp(ctx, op)
 	case PositionTime:
@@ -583,6 +592,48 @@ func (r *Router) evaluateServiceQuotaOp(ctx *RequestContext, op *SmartOp) OpEval
 	return res
 }
 
+// evaluateServiceLimitOp compares the tightest load (max, like service_quota:
+// one hot service makes the pool look hot) of the rule's limited services
+// against the threshold. Unlimited services are skipped; with no limited
+// service at all the op passes so limit-blind rules never block routing.
+// Op names are util_* for concurrency and pct_* for usage.
+func (r *Router) evaluateServiceLimitOp(ctx *RequestContext, op *SmartOp, position, label string, pick func(ServiceLimitInfo) (float64, bool)) OpEvalResult {
+	res := newOpResult(op)
+	tightest, any := 0.0, false
+	for _, l := range ctx.ServiceLimits {
+		if v, ok := pick(l); ok {
+			if !any || v > tightest {
+				tightest = v
+			}
+			any = true
+		}
+	}
+	if !any {
+		res.Matched = true
+		res.Reason = "no limit configured; pass"
+		return res
+	}
+	threshold, err := op.Int()
+	if err != nil {
+		log.Printf("[smart_routing] invalid %s value '%s': %v", position, op.Value, err)
+		res.Reason = fmt.Sprintf("invalid int: %v", err)
+		return res
+	}
+	res.Actual = fmt.Sprintf("%.1f%%", tightest)
+	cmpOp := op.Operation
+	switch cmpOp { // util_* / pct_* share the same comparison
+	case "util_le", "util_ge", "util_lt", "util_gt":
+		cmpOp = SmartOpOperation("pct_" + string(cmpOp)[len("util_"):])
+	}
+	matched, reason, ok := comparePctThreshold(cmpOp, label, tightest, threshold)
+	if !ok {
+		res.Reason = fmt.Sprintf("unsupported %s op %q", position, op.Operation)
+		return res
+	}
+	res.Matched, res.Reason = matched, reason
+	return res
+}
+
 // evaluateAgentClaudeCodeOp evaluates the agent.claude_code position.
 // ctx.ClaudeCodeRequestKind is populated by SmartRoutingStage only when the
 // request scenario is claude_code; for other scenarios it is empty and no
@@ -692,7 +743,6 @@ func minFloat(vals []float64) float64 {
 	}
 	return m
 }
-
 
 func avgFloat(vals []float64) float64 {
 	var sum float64

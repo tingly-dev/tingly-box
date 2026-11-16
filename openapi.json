@@ -3881,6 +3881,28 @@
         }
       }
     },
+    "/api/v1/limits/status": {
+      "get": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Live state (in-flight, usage window, pressure) of every account and rule service that has limits configured",
+        "description": "Live state (in-flight, usage window, pressure) of every account and rule service that has limits configured",
+        "operationId": "apiV1LimitsStatusGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/log": {
       "get": {
         "tags": [
@@ -16315,6 +16337,139 @@
           "success"
         ]
       },
+      "LimitStatusEntry": {
+        "type": "object",
+        "properties": {
+          "inflight": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field inflight"
+          },
+          "key": {
+            "type": "string",
+            "description": "Field key"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "pressure": {
+            "type": "number",
+            "format": "double",
+            "description": "largest used/limit ratio; 1 = at the hard limit"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          },
+          "provider_uuid": {
+            "type": "string",
+            "description": "Field provider_uuid"
+          },
+          "request_model": {
+            "type": "string",
+            "description": "Field request_model"
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "requests admitted in the current usage window"
+          },
+          "rule_uuid": {
+            "type": "string",
+            "description": "Field rule_uuid"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "scope": {
+            "type": "string",
+            "description": "account (Provider.Limits) or service (one rule's share)",
+            "example": "account"
+          },
+          "state": {
+            "type": "string",
+            "description": "ok | hot | blocked",
+            "example": "ok"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "tokens recorded in the current usage window"
+          }
+        },
+        "required": [
+          "scope",
+          "key",
+          "provider_uuid",
+          "limits",
+          "inflight",
+          "requests",
+          "tokens",
+          "pressure",
+          "state"
+        ]
+      },
+      "Limits": {
+        "type": "object",
+        "properties": {
+          "max_concurrent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_concurrent"
+          },
+          "max_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_requests"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_tokens"
+          },
+          "quota_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field quota_percent"
+          },
+          "soft_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field soft_percent"
+          },
+          "window_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field window_seconds"
+          }
+        }
+      },
+      "LimitsStatusResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/LimitStatusEntry"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
       "LinkCheck": {
         "type": "object",
         "properties": {
@@ -19421,6 +19576,9 @@
             "description": "Field enabled",
             "example": true
           },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
           "name": {
             "type": "string",
             "description": "Field name",
@@ -20473,6 +20631,15 @@
               "type": "string"
             }
           },
+          "limit_overflow": {
+            "type": "string",
+            "description": "Field limit_overflow"
+          },
+          "limit_queue_timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field limit_queue_timeout"
+          },
           "openai_endpoint_override": {
             "type": "string",
             "description": "Field openai_endpoint_override"
@@ -20946,6 +21113,9 @@
           "active": {
             "type": "boolean",
             "description": "Field active"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
           },
           "model": {
             "type": "string",
@@ -23145,6 +23315,9 @@
             "type": "boolean",
             "description": "New enabled status"
           },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
           "name": {
             "type": "string",
             "description": "New provider name"
@@ -24892,6 +25065,10 @@
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "limits",
+      "description": "Operations related to limits"
     },
     {
       "name": "logs",
