@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -447,6 +448,73 @@ func TestHandleOpenAIResponsesStream_TerminalEventNoError(t *testing.T) {
 	_, err := HandleOpenAIResponsesStream(hc, stream, "gpt-4o")
 	require.NoError(t, err)
 	assert.NotContains(t, w.Body.String(), "upstream_truncated")
+}
+
+// Codex deserializes completion usage strictly. In particular, null is valid,
+// but a partial object created by backfilling only reasoning_tokens is not.
+func TestHandleOpenAIResponsesStream_CompletionUsageContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name  string
+		usage string
+	}{
+		{"null usage", `null`},
+		{"absent usage", ``},
+		{"absent details", `{"input_tokens":7,"output_tokens":3,"total_tokens":10}`},
+		{"empty details", `{"input_tokens":7,"output_tokens":3,"total_tokens":10,"input_tokens_details":{},"output_tokens_details":{}}`},
+		{"null counters", `{"input_tokens":7,"output_tokens":3,"total_tokens":10,"input_tokens_details":{"cached_tokens":null},"output_tokens_details":{"reasoning_tokens":null}}`},
+		{"null details", `{"input_tokens":7,"output_tokens":3,"total_tokens":10,"input_tokens_details":null,"output_tokens_details":null}`},
+		{"reported counters", `{"input_tokens":7,"output_tokens":3,"total_tokens":10,"input_tokens_details":{"cached_tokens":2,"cache_write_tokens":1},"output_tokens_details":{"reasoning_tokens":1}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			response := `{"id":"resp_contract","status":"completed"`
+			if tc.usage != "" {
+				response += `,"usage":` + tc.usage
+			}
+			response += `}`
+			decoder := newFakeResponsesDecoder([]string{`{"type":"response.completed","response":` + response + `}`})
+			upstream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+			stat, err := HandleOpenAIResponsesStream(newTestHandleContext(c), upstream, "model")
+			require.NoError(t, err)
+			events := parseSSEEvents(w.Body.String())
+			completed := events["response.completed"]
+			require.NotNil(t, completed)
+			raw, err := json.Marshal(completed)
+			require.NoError(t, err)
+			usage := gjson.GetBytes(raw, "response.usage")
+			if tc.usage == "" {
+				assert.False(t, usage.Exists())
+				return
+			}
+			if tc.usage == "null" {
+				assert.True(t, usage.Exists())
+				assert.Equal(t, gjson.Null, usage.Type)
+				return
+			}
+			for _, field := range []string{"input_tokens", "output_tokens", "total_tokens"} {
+				assert.Equal(t, gjson.Number, usage.Get(field).Type, field)
+				assert.Equal(t, gjson.Get(tc.usage, field).Int(), usage.Get(field).Int(), field)
+			}
+			for _, field := range []string{"input_tokens_details.cached_tokens", "output_tokens_details.reasoning_tokens"} {
+				detailsField, _, _ := strings.Cut(field, ".")
+				details := usage.Get(detailsField)
+				if details.IsObject() {
+					assert.Equal(t, gjson.Number, usage.Get(field).Type, field)
+					assert.Equal(t, gjson.Get(tc.usage, field).Int(), usage.Get(field).Int(), field)
+				}
+			}
+			if tc.name == "reported counters" {
+				assert.Equal(t, int64(1), usage.Get("input_tokens_details.cache_write_tokens").Int())
+				assert.Equal(t, 5, stat.InputTokens)
+				assert.Equal(t, 2, stat.CacheReadTokens)
+				assert.Equal(t, 1, stat.CacheWriteTokens)
+				assert.Equal(t, 1, stat.ReasoningTokens)
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
