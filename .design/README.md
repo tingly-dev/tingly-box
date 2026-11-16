@@ -68,6 +68,7 @@
 |---|---|---|
 | [connect-ai-flow.md](./connect-ai-flow.md) | Connect AI Flow | 设计说明；局部实施状态见正文 |
 | [oauth.md](./oauth.md) | OAuth | 设计说明；局部实施状态见正文 |
+| [antigravity.md](./antigravity.md) | Antigravity Code Assist 请求与响应契约、验收及来源边界 | 已实现；独立规格，非严格 clean-room 隔离声明；尚未用真实账号验证 |
 | [third-party-credentials.md](./third-party-credentials.md) | Third-Party Cloud Credentials (AWS Bedrock / GCP Vertex / Azure OpenAI) | 设计说明；局部实施状态见正文 |
 | [kimi-config.md](./kimi-config.md) | Kimi Code OAuth & Client Round Trip: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [zcode-oauth.md](./zcode-oauth.md) | ZCode OAuth (GLM Coding Plan) | 设计说明；局部实施状态见正文 |
