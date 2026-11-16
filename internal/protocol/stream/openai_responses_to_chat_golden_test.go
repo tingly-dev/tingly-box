@@ -138,7 +138,7 @@ func TestResponsesToChatConverter_GoldenSequence(t *testing.T) {
 	// 4. Tool call start chunk.
 	require.Len(t, got[3].Choices[0].Delta.ToolCalls, 1)
 	tc := got[3].Choices[0].Delta.ToolCalls[0]
-	assert.Equal(t, 1, tc.Index)
+	assert.Equal(t, 0, tc.Index) // Chat tool indices exclude preceding text output items.
 	assert.Equal(t, "call_1", tc.ID)
 	assert.Equal(t, "function", tc.Type)
 	assert.Equal(t, "get_weather", tc.Function.Name)

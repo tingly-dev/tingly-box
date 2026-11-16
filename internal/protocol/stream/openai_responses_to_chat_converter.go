@@ -22,7 +22,6 @@ type responsesToChatConverter struct {
 	// state
 	chatID          string
 	createdAt       int64
-	accumulated     strings.Builder
 	usage           *protocol.TokenUsage
 	totalTokens     int64
 	hasSentCreated  bool
@@ -31,16 +30,19 @@ type responsesToChatConverter struct {
 	completed       bool
 	toolCallIndexes map[string]int
 	toolCalls       map[int]*responsesToChatToolCall
+	textParts       responseTextTracker
 
 	// internal event queue
 	pending []interface{}
 }
 
 type responsesToChatToolCall struct {
-	id        string
-	callID    string
-	name      string
-	arguments strings.Builder
+	id               string
+	callID           string
+	name             string
+	chatIndex        int
+	initialArguments string
+	arguments        strings.Builder
 }
 
 // newResponsesToChatConverter creates a converter that reads from a Responses
@@ -55,6 +57,7 @@ func newResponsesToChatConverter(stream ResponsesStreamIter, responseModel strin
 		usage:           protocol.ZeroTokenUsage(),
 		toolCallIndexes: make(map[string]int),
 		toolCalls:       make(map[int]*responsesToChatToolCall),
+		textParts:       make(responseTextTracker),
 	}
 }
 
@@ -112,30 +115,30 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			c.pending = append(c.pending, c.roleChunk())
 		}
 
-	case "response.output_text.delta":
-		if !c.hasSentCreated {
-			c.pending = append(c.pending, c.roleChunk())
+	case "response.output_text.delta", "response.refusal.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
+		c.emitTextPart(int(evt.OutputIndex), responsePartIndex(*evt), responseTextKind(evt.Type), evt.Delta, false)
+	case "response.output_text.done", "response.refusal.done", "response.reasoning_text.done", "response.reasoning_summary_text.done":
+		text := evt.Text
+		if evt.Type == "response.refusal.done" {
+			text = evt.Refusal
 		}
-		c.accumulated.WriteString(evt.Delta)
-		c.pending = append(c.pending, c.textChunk(evt.Delta))
+		c.emitTextPart(int(evt.OutputIndex), responsePartIndex(*evt), responseTextKind(evt.Type), text, true)
 
-	case "response.output_text.done":
-		// handled in response.completed
-
+	case "response.content_part.added", "response.content_part.done":
+		kind, text := "text", evt.Part.Text
+		if evt.Part.Type == "refusal" {
+			kind, text = "refusal", evt.Part.Refusal
+		}
+		c.emitTextPart(int(evt.OutputIndex), int(evt.ContentIndex), kind, text, true)
+	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
+		c.emitTextPart(int(evt.OutputIndex), int(evt.SummaryIndex), "summary", evt.Part.Text, true)
 	case "response.output_item.added":
 		if evt.Item.Type == "function_call" {
-			if !c.hasSentCreated {
-				c.pending = append(c.pending, c.roleChunk())
-			}
-			index := int(evt.OutputIndex)
-			callID := evt.Item.CallID
-			if callID == "" {
-				callID = evt.Item.ID
-			}
-			c.toolCallIndexes[evt.Item.ID] = index
-			c.toolCalls[index] = &responsesToChatToolCall{id: evt.Item.ID, callID: callID, name: evt.Item.Name}
-			c.hasToolCalls = true
-			c.pending = append(c.pending, c.toolCallStartChunk(index, callID, evt.Item.Name))
+			item := evt.Item
+			initial := item.Arguments.OfString
+			item.Arguments.OfString = ""
+			c.emitOutputItem(int(evt.OutputIndex), item)
+			c.toolCalls[int(evt.OutputIndex)].initialArguments = initial
 		}
 
 	case "response.function_call_arguments.delta":
@@ -150,40 +153,21 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			toolCall.arguments.WriteString(evt.Delta)
 		}
 		c.hasToolCalls = true
-		c.pending = append(c.pending, c.toolCallDeltaChunk(index, evt.Delta))
+		if tc := c.toolCalls[index]; tc != nil {
+			c.pending = append(c.pending, c.toolCallDeltaChunk(tc.chatIndex, evt.Delta))
+		}
 
 	case "response.function_call_arguments.done":
 		index, ok := c.toolCallIndexes[evt.ItemID]
 		if !ok {
 			index = int(evt.OutputIndex)
 		}
-		if toolCall, ok := c.toolCalls[index]; ok && toolCall.arguments.Len() == 0 {
-			toolCall.arguments.WriteString(evt.Arguments)
+		if toolCall, ok := c.toolCalls[index]; ok {
+			c.emitToolArguments(index, toolCall, evt.Arguments)
 		}
 
 	case "response.output_item.done":
-		if evt.Item.Type == "function_call" {
-			index, ok := c.toolCallIndexes[evt.Item.ID]
-			if !ok {
-				index = int(evt.OutputIndex)
-			}
-			callID := evt.Item.CallID
-			if callID == "" {
-				callID = evt.Item.ID
-			}
-			toolCall, ok := c.toolCalls[index]
-			if !ok {
-				toolCall = &responsesToChatToolCall{id: evt.Item.ID}
-				c.toolCalls[index] = toolCall
-			}
-			toolCall.id = evt.Item.ID
-			toolCall.callID = callID
-			toolCall.name = evt.Item.Name
-			if toolCall.arguments.Len() == 0 {
-				toolCall.arguments.WriteString(evt.Item.Arguments.OfString)
-			}
-			c.hasToolCalls = true
-		}
+		c.emitOutputItem(int(evt.OutputIndex), evt.Item)
 
 	case "response.completed", "response.incomplete":
 		// `response.incomplete` is a terminal Responses API event, not a
@@ -203,6 +187,11 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			c.totalTokens = int64(c.usage.InputTokens + c.usage.CacheReadTokens + c.usage.OutputTokens)
 		}
 		c.emitCompletedOutput(evt.Response.Output)
+		for index, tc := range c.toolCalls {
+			if tc.arguments.Len() == 0 {
+				c.emitToolArguments(index, tc, tc.initialArguments)
+			}
+		}
 		// The terminal response carries the tier actually used (created may
 		// only say "auto") and any moderation verdict.
 		if tier := protocol.ChatServiceTierFromResponses(evt.Response.ServiceTier); tier != nil {
@@ -223,51 +212,85 @@ func (c *responsesToChatConverter) processEvent(evt *responses.ResponseStreamEve
 			},
 		})
 	}
+
 }
 
 // emitCompletedOutput appends chunks for any output items not yet streamed
 // (used when the provider sends all content in response.completed).
 func (c *responsesToChatConverter) emitCompletedOutput(output []responses.ResponseOutputItemUnion) {
-	if c.accumulated.Len() > 0 || len(c.toolCalls) > 0 {
-		return
+	for index, item := range output {
+		c.emitOutputItem(index, item)
 	}
-	for outputIndex, item := range output {
-		switch item.Type {
-		case "message":
-			for _, content := range item.Content {
-				if content.Type == "output_text" && content.Text != "" {
-					if !c.hasSentCreated {
-						c.pending = append(c.pending, c.roleChunk())
-					}
-					c.accumulated.WriteString(content.Text)
-					c.pending = append(c.pending, c.textChunk(content.Text))
-				}
+}
+
+// Snapshot events can carry fields omitted from deltas. Reconcile per item and
+// content part; seeing one streamed item must not suppress every other item.
+func (c *responsesToChatConverter) emitOutputItem(index int, item responses.ResponseOutputItemUnion) {
+	switch item.Type {
+	case "message":
+		for partIndex, part := range item.Content {
+			switch part.Type {
+			case "output_text":
+				c.emitTextPart(index, partIndex, "text", part.Text, true)
+			case "refusal":
+				c.emitTextPart(index, partIndex, "refusal", part.Refusal, true)
 			}
-		case "function_call":
-			if !c.hasSentCreated {
-				c.pending = append(c.pending, c.roleChunk())
-			}
-			index := outputIndex
+		}
+	case "reasoning":
+		for partIndex, part := range item.Summary {
+			c.emitTextPart(index, partIndex, "summary", part.Text, true)
+		}
+	case "function_call":
+		tc, ok := c.toolCalls[index]
+		if !ok {
 			callID := item.CallID
 			if callID == "" {
 				callID = item.ID
 			}
+			tc = &responsesToChatToolCall{id: item.ID, callID: callID, name: item.Name, chatIndex: len(c.toolCalls)}
+			c.toolCalls[index] = tc
+			c.toolCallIndexes[item.ID] = index
 			c.hasToolCalls = true
-			c.pending = append(c.pending, c.toolCallStartChunk(index, callID, item.Name))
-			if item.Arguments.OfString != "" {
-				c.pending = append(c.pending, c.toolCallDeltaChunk(index, item.Arguments.OfString))
+			if !c.hasSentCreated {
+				c.pending = append(c.pending, c.roleChunk())
 			}
+			c.pending = append(c.pending, c.toolCallStartChunk(tc.chatIndex, callID, item.Name))
 		}
+		c.emitToolArguments(index, tc, item.Arguments.OfString)
 	}
 }
 
+func (c *responsesToChatConverter) emitToolArguments(index int, tc *responsesToChatToolCall, snapshot string) {
+	if suffix := snapshotSuffix(tc.arguments.String(), snapshot); suffix != "" {
+		tc.arguments.WriteString(suffix)
+		c.pending = append(c.pending, c.toolCallDeltaChunk(tc.chatIndex, suffix))
+	}
+}
+
+func (c *responsesToChatConverter) emitTextPart(index, partIndex int, kind, text string, snapshot bool) {
+	text = c.textParts.retain(index, partIndex, kind, text, snapshot)
+	if text == "" {
+		return
+	}
+	if !c.hasSentCreated {
+		c.pending = append(c.pending, c.roleChunk())
+	}
+	delta := wire.ChatStreamDelta{}
+	switch kind {
+	case "refusal":
+		delta.Refusal = text
+	case "summary", "reasoning":
+		delta.ReasoningContent = text
+	default:
+		delta.Content = text
+	}
+	c.pending = append(c.pending, c.newChunk(delta, nil))
+}
+
 // responsesToChatFinishReason maps a terminal Responses API response to the
-// OpenAI Chat finish_reason. Tool calls take precedence; an incomplete
+// OpenAI Chat finish_reason. An incomplete
 // response is mapped to "length"/"content_filter" by its incomplete reason.
 func responsesToChatFinishReason(resp *responses.Response, hasToolCalls bool) string {
-	if hasToolCalls {
-		return openaiFinishReasonToolCalls
-	}
 	if resp != nil && resp.Status == responses.ResponseStatusIncomplete {
 		switch resp.IncompleteDetails.Reason {
 		case "max_output_tokens":
@@ -275,6 +298,9 @@ func responsesToChatFinishReason(resp *responses.Response, hasToolCalls bool) st
 		case "content_filter":
 			return "content_filter"
 		}
+	}
+	if hasToolCalls {
+		return openaiFinishReasonToolCalls
 	}
 	return "stop"
 }
@@ -284,10 +310,6 @@ func responsesToChatFinishReason(resp *responses.Response, hasToolCalls bool) st
 func (c *responsesToChatConverter) roleChunk() wire.ChatStreamChunk {
 	c.hasSentCreated = true
 	return c.newChunk(wire.ChatStreamDelta{Role: "assistant"}, nil)
-}
-
-func (c *responsesToChatConverter) textChunk(delta string) wire.ChatStreamChunk {
-	return c.newChunk(wire.ChatStreamDelta{Content: delta}, nil)
 }
 
 func (c *responsesToChatConverter) toolCallStartChunk(index int, id, name string) wire.ChatStreamChunk {

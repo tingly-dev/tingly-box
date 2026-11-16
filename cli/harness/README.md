@@ -41,12 +41,17 @@ harness matrix --mode=response_retention
 harness matrix --mode=response_retention --json > retention-results.json
 ```
 
-Runs 40 real-HTTP gateway cases for Chat/Responses clients against Anthropic
+Runs 73 real-HTTP gateway cases. Forty cover Chat/Responses clients against Anthropic
 V1/Beta upstream fixtures, in streaming and nonstream modes. Checks exact large
 integer tool arguments, empty input, split deltas replacing initial snapshots,
 initial text, Chat thinking, trailing usage and max-token truncation. Assertions
 inspect raw client wire values, bypassing semantic normalization that could hide
-number rounding. The suite also runs under `--mode=all` and
+number rounding. Another 33 cover Responses upstreams converted to Chat and
+Anthropic V1/Beta: argument/item/terminal snapshots, partial argument completion,
+repeated snapshots, initial argument fallback, text/refusal/summary part snapshots,
+mixed final output and truncation. Checks include dense Chat tool indices,
+exact argument strings, one terminal event, and paired Anthropic block starts/stops.
+The suite also runs under `--mode=all` and
 `go test ./internal/protocoltest -run '^TestResponseRetention$'`.
 
 These are deterministic protocol acceptance cases with a controlled upstream;
