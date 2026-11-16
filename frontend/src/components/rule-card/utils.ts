@@ -33,6 +33,7 @@ function serviceToConfigProvider(service: any): ConfigProvider {
         active: service.active !== undefined ? service.active : true,
         time_window: service.time_window || 0,
         tier: service.tier ?? 0,
+        limits: service.limits,
     };
 }
 
@@ -159,6 +160,7 @@ export function cloneSmartRouting(smartRouting: SmartRouting): SmartRouting {
             active: service.active,
             time_window: service.time_window,
             tier: service.tier,
+            limits: service.limits ? { ...service.limits } : undefined,
         })),
     };
 }

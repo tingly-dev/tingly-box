@@ -509,11 +509,16 @@ const mockVirtualProviders = [
     },
 ]
 
+// Account limits (routing limits) shown in the provider edit dialog.
+const mockProviderLimits: Record<string, object> = {
+    'mock-provider-anthropic': { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
+}
+
 const getMockProviders = () => [
     ...mockStandardProviderCatalog.map(({ provider }) => provider),
     ...mockOAuthProviderCatalog.map(({ provider }) => provider),
     ...mockVirtualProviders,
-]
+].map((provider) => (mockProviderLimits[provider.uuid] ? { ...provider, limits: mockProviderLimits[provider.uuid] } : provider))
 
 const getMockProviderModels = (uuid: string): string[] => {
     const standardProvider = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
@@ -685,7 +690,7 @@ const mockV1Rules: Record<string, any[]> = {
             flags: { claude_code_compat: true, clean_header: true, skip_usage: true, session_affinity: 3600 },
             // Default providers in 3 tiers: T0 primary, T1 secondary, T2 budget
             services: [
-                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0, limits: { max_concurrent: 2, max_requests: 200, window_seconds: 3600, soft_percent: 75 } },
                 { uuid: 'svc-cc-t0-b', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true, tier: 0 },
                 { uuid: 'svc-cc-t1-a', provider: 'mock-provider-gemini', model: 'gemini-3.5-flash', weight: 1, active: true, tier: 1 },
                 { uuid: 'svc-cc-t2-a', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true, tier: 2 },
@@ -2475,6 +2480,22 @@ export const handlers = [
         return HttpResponse.json({
             success: true,
             data: getMockProviderCatalogs(),
+        })
+    }),
+
+    // Live account/service limit state (routing limits)
+    http.get('/api/v1/limits/status', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { scope: 'account', key: 'acct:mock-provider-anthropic', provider_uuid: 'mock-provider-anthropic', provider_name: 'Anthropic',
+                  limits: { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
+                  inflight: 3, requests: 41, tokens: 1700000, pressure: 0.85, state: 'hot' },
+                { scope: 'service', key: 'svc:builtin:claude_code:cc/mock-provider-anthropic/claude-sonnet-5', provider_uuid: 'mock-provider-anthropic',
+                  provider_name: 'Anthropic', rule_uuid: 'builtin:claude_code:cc', scenario: 'claude_code', request_model: 'claude-sonnet-5', model: 'claude-sonnet-5',
+                  limits: { max_concurrent: 2, max_requests: 200, window_seconds: 3600, soft_percent: 75 },
+                  inflight: 1, requests: 64, tokens: 0, pressure: 0.5, state: 'ok' },
+            ],
         })
     }),
 

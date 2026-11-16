@@ -1,4 +1,5 @@
 import {Box, Card, CardContent, Collapse, Stack,} from '@mui/material';
+import type { Limits } from './limits/LimitsEditor';
 import {alpha, styled} from '@mui/material/styles';
 import React, {useEffect, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -90,6 +91,7 @@ export interface UnifiedRoutingGraphProps {
     onServiceNodeClick?: (serviceUuid: string) => void;
     onEditProvider?: (providerUuid: string) => void;
     onTierChange?: (serviceUuid: string, tier: number) => void;
+    onLimitsChange?: (serviceUuid: string, limits: Limits) => void;
     onDeleteService?: (serviceUuid: string) => void;
     onAddService?: (tier?: number) => void;
     onToggleExpanded?: () => void;
@@ -185,6 +187,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             onServiceNodeClick,
                                                                             onEditProvider,
                                                                             onTierChange,
+                                                                            onLimitsChange,
                                                                             onDeleteService,
                                                                             onAddService,
                                                                             onToggleExpanded,
@@ -384,6 +387,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 onDelete={() => onDeleteService?.(p.uuid)}
                                 onNodeClick={() => onServiceNodeClick?.(p.uuid)}
                                 onEditProvider={onEditProvider}
+                                ruleUuid={record.uuid}
+                                onLimitsChange={onLimitsChange ? (limits) => onLimitsChange(p.uuid, limits) : undefined}
                                 showTier={false}
                                 forceShowActions={shouldShowActions ?? (hoveredTier === group.tier)}
                                 onMoveTierUp={group.tier > 0 && onTierChange ? () => onTierChange(p.uuid, group.tier - 1) : undefined}
@@ -411,7 +416,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 })}
             </Box>
         );
-    }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
+    }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onLimitsChange, record.uuid, onAddService, hoveredTier, guideMode, handleShowGuide]);
 
     // Render smart rules section
     const renderSmartRules = () => {

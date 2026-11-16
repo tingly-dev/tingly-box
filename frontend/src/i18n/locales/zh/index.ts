@@ -10,6 +10,7 @@ import remote from './remote';
 import image from './image';
 import claudeCode from './claudeCode';
 import projects from './projects';
+import limits from './limits';
 
 export default {
     ...app,
@@ -22,4 +23,5 @@ export default {
     ...image,
     ...claudeCode,
     ...projects,
+    ...limits,
 };

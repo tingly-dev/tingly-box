@@ -64,6 +64,8 @@ const POSITION_OPTIONS: PositionMeta[] = [
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)', category: 'service', placeholder: 'ms' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)', category: 'service', placeholder: '0–100' },
     { value: 'service_quota', label: 'Service Quota', description: 'Tightest upstream quota usage across services (%)', category: 'service', placeholder: '0–100' },
+    { value: 'service_concurrency', label: 'Service Concurrency', description: 'In-flight requests vs the concurrency cap, tightest service (%)', category: 'service', placeholder: '0–100' },
+    { value: 'service_usage', label: 'Service Usage', description: 'Request/token window usage vs its budget, tightest service (%)', category: 'service', placeholder: '0–100' },
 ];
 
 const VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }> | undefined> = {
@@ -116,6 +118,18 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         { value: 'pct_ge', label: 'Quota ≥', description: 'Tightest quota usage across services >= value (%)', valueType: 'int' },
         { value: 'pct_lt', label: 'Quota <', description: 'Tightest quota usage across services < value (%)', valueType: 'int' },
         { value: 'pct_gt', label: 'Quota >', description: 'Tightest quota usage across services > value (%)', valueType: 'int' },
+    ],
+    service_concurrency: [
+        { value: 'util_le', label: 'Busy ≤', description: 'Tightest in-flight/cap ratio across services <= value (%)', valueType: 'int' },
+        { value: 'util_ge', label: 'Busy ≥', description: 'Tightest in-flight/cap ratio across services >= value (%)', valueType: 'int' },
+        { value: 'util_lt', label: 'Busy <', description: 'Tightest in-flight/cap ratio across services < value (%)', valueType: 'int' },
+        { value: 'util_gt', label: 'Busy >', description: 'Tightest in-flight/cap ratio across services > value (%)', valueType: 'int' },
+    ],
+    service_usage: [
+        { value: 'pct_le', label: 'Used ≤', description: 'Tightest usage-window consumption across services <= value (%)', valueType: 'int' },
+        { value: 'pct_ge', label: 'Used ≥', description: 'Tightest usage-window consumption across services >= value (%)', valueType: 'int' },
+        { value: 'pct_lt', label: 'Used <', description: 'Tightest usage-window consumption across services < value (%)', valueType: 'int' },
+        { value: 'pct_gt', label: 'Used >', description: 'Tightest usage-window consumption across services > value (%)', valueType: 'int' },
     ],
     'agent.claude_code': [
         { value: 'equals', label: 'Equals', description: 'Claude Code request kind equals the value', valueType: 'string' },
