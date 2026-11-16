@@ -1,4 +1,5 @@
 import type { ThemePalette } from '../types';
+import type { ThemeTokens } from '../tokens';
 
 export const lightPalette: ThemePalette = {
   mode: 'light',
@@ -71,5 +72,52 @@ export const lightPalette: ThemePalette = {
       emptyIconBg: 'rgba(100, 116, 139, 0.1)',
     },
   },
-  isSunlit: false,
+};
+
+export const lightTokens: ThemeTokens = {
+  accent: '#2563eb',
+  text: '#1e293b',
+  textMuted: '#64748b',
+  textHelper: '#6b7280',
+  placeholder: '#94a3b8',
+  error: '#dc2626',
+  surface: {
+    card: '#ffffff',
+    appBar: '#ffffff',
+    menu: '#ffffff',
+    popover: '#ffffff',
+    dialog: '#ffffff',
+    tooltip: '#ffffff',
+  },
+  border: {
+    card: '#e2e8f0',
+    chrome: '#e2e8f0',
+    menu: '#e2e8f0',
+    tooltip: '#e2e8f0',
+    divider: '#e2e8f0',
+  },
+  shadow: {
+    menu: '0 10px 24px rgba(15, 23, 42, 0.08)',
+    tooltip: '0 4px 12px rgba(15, 23, 42, 0.08)',
+  },
+  input: {
+    bg: 'transparent',
+    border: '#d1d5db',
+    hoverBorder: '#9ca3af',
+    disabledBorder: '#e5e7eb',
+    filledBg: 'rgba(0, 0, 0, 0.04)',
+    filledHoverBg: 'rgba(0, 0, 0, 0.06)',
+    filledFocusBg: 'rgba(0, 0, 0, 0.06)',
+  },
+  button: {
+    outlinedBorder: '#d1d5db',
+    outlinedText: '#374151',
+    outlinedHoverBorder: '#9ca3af',
+    outlinedHoverBg: '#f9fafb',
+  },
+  menuItem: {
+    hover: '#f1f5f9',
+    selected: '#e0e7ff',
+    selectedHover: '#c7d2fe',
+  },
 };

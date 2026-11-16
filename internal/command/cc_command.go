@@ -101,19 +101,6 @@ func runCC(appManager *app.AppManager, profile string, portOverride int, claudeA
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
 	apiKey := globalConfig.GetModelToken()
 
-	// Unified mode determination:
-	// 1. If profile is used, use profile's unified setting
-	// 2. Otherwise, use scenario flag (defaults to false/separate mode)
-	var envUnified bool
-	if profileMeta != nil {
-		// Profile mode: use profile's unified setting
-		envUnified = profileMeta.Unified
-	} else {
-		// Default mode: use scenario flag
-		if sc := globalConfig.GetScenarioConfig(scenario); sc != nil {
-			envUnified = sc.GetDefaultFlags().Unified
-		}
-	}
 	// Build settings file. Profile mode uses the profileID; default mode uses
 	// "default" as a stable, predictable name so the file is reused across runs.
 	var settingsPath string
@@ -121,7 +108,7 @@ func runCC(appManager *app.AppManager, profile string, portOverride int, claudeA
 	if profileMeta != nil {
 		settingsPath, err = agent.MaterializeCCProfileSettings(globalConfig, baseURL, apiKey, scenarioPath, *profileMeta)
 	} else {
-		env := agent.GenerateCCEnv(globalConfig, baseURL, apiKey, scenarioPath, envUnified, false)
+		env := agent.GenerateCCEnv(globalConfig, baseURL, apiKey, scenarioPath, false)
 		settingsPath, err = agent.BuildCCProfileSettings("default", scenarioPath, "", env)
 	}
 	if err != nil {
@@ -168,11 +155,7 @@ func selectProfileInteractive(profiles []typ.ProfileMeta, notFoundName string) (
 		fmt.Fprintln(os.Stderr, "Available profiles:")
 	}
 	for _, p := range profiles {
-		mode := "separate"
-		if p.Unified {
-			mode = "unified"
-		}
-		fmt.Fprintf(os.Stderr, "  [%s] %s (%s)\n", p.ID, p.Name, mode)
+		fmt.Fprintf(os.Stderr, "  [%s] %s\n", p.ID, p.Name)
 	}
 	fmt.Fprintf(os.Stderr, "  [0] Continue without profile\n")
 

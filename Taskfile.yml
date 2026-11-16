@@ -12,20 +12,27 @@ includes:
     taskfile: ./build/Taskfile.linux.yml
   docker:
     taskfile: ./build/Taskfile.docker.yml
+  projects:
+    taskfile: ./projects/Taskfile.yml
+    dir: ./projects
+  remote:
+    taskfile: ./remote/Taskfile.yml
+    dir: ./remote
 
 vars:
   VERSION: ""
   BUILD_DIR: build
   DIST_DIR: build/dist
   PORT: 12580
-  BIN_NAME: "tingly-box"
+  # Do not share BIN_NAME with the flattened Wails tasks.
+  CLI_BIN_NAME: "tingly-box"
   BIN_DIR: "bin"
 
   # Submodule versions (format: "name:branch/tag/commit")
   # Example: "openai-go:tingly-dev-v3.32.0"
-  OPENAI_GO_VERSION: "tingly-dev-v3.76.0"
-  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.80.0"
-  GO_GENAI_VERSION: "upstream-v1.73.0"
+  OPENAI_GO_VERSION: "tingly-dev-v3.97.0"
+  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.84.0"
+  GO_GENAI_VERSION: "upstream-v1.77.0"
 
 tasks:
   build:
@@ -36,6 +43,11 @@ tasks:
       - task: web:dist
       - task: go:build
   
+  test:build:
+    desc: Test build task orchestration without compiling or installing dependencies
+    cmds:
+      - python3 script/test_task_build.py -v
+
   cleanup:
     cmds:
       - |
@@ -154,8 +166,8 @@ tasks:
         # Build with ldflags
         mkdir -p build
         LDFLAGS="-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME} -X main.goVersion=${GO_VERSION} -X main.platform=${PLATFORM}"
-        GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}} ./cli/tingly-box
-        CGO_ENABLED=${CGO_ENABLED} GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.BIN_NAME}}${BINARY_EXT} ./cli/tingly-box
+        GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.CLI_BIN_NAME}} ./cli/tingly-box
+        CGO_ENABLED=${CGO_ENABLED} GOOS={{.OS}} GOARCH={{.ARCH}} go build -ldflags="${LDFLAGS}" -o ./build/{{.CLI_BIN_NAME}}${BINARY_EXT} ./cli/tingly-box
 
   go:test:
     cmds:
@@ -236,15 +248,15 @@ tasks:
     desc: Run the GitHub Pages homepage (homepage/) with hot reload
     dir: homepage
     cmds:
-      - pnpm install
-      - pnpm dev
+      - 'pnpm install'
+      - 'pnpm dev'
 
   homepage:build:
     desc: Build the GitHub Pages homepage into homepage/dist
     dir: homepage
     cmds:
-      - pnpm install --frozen-lockfile
-      - pnpm build
+      - 'pnpm install --frozen-lockfile'
+      - 'pnpm build'
 
   check:zig:
     summary: Check if zig is installed

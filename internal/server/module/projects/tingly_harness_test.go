@@ -1,0 +1,634 @@
+package projects
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/imbot/core"
+	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
+	"github.com/tingly-dev/tingly-box/imbot/platform/tingly/testenv"
+	hostdb "github.com/tingly-dev/tingly-box/internal/db"
+	"github.com/tingly-dev/tingly-box/internal/remotehost"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/remote/access"
+	"github.com/tingly-dev/tingly-box/remote/bot"
+	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/chat"
+	"github.com/tingly-dev/tingly-box/swagger"
+)
+
+// This mirrors the TB host's transport facts using its live channel registry.
+type harnessTransportFacts struct{ registry *channel.Registry }
+
+func (h harnessTransportFacts) TransportFacts(id string, _ access.CapabilityName, _ access.ActionName) (access.TransportStatus, bool) {
+	if _, ok := h.registry.Get(id); ok {
+		return access.TransportOnline, true
+	}
+	return access.TransportOffline, false
+}
+
+// tinglyProjectsHarness runs the production bot manager, access store, channel
+// registry, Projects HTTP handlers, session engine and the Tingly transport.
+// A scripted Claude CLI speaks stream-json; no external IM or model is needed.
+type tinglyProjectsHarness struct {
+	env               *testenv.TestEnv
+	bridge            *ChatBridge
+	stores            *hostdb.StoreManager
+	otherID, chosenID string
+	workdir           string
+	dataDir           string
+	enabled           *atomic.Bool
+	registry          *channel.Registry
+	call              func(string, string, any, any)
+}
+
+func newTinglyProjectsHarness(t *testing.T) *tinglyProjectsHarness {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the scripted Claude CLI uses a POSIX executable")
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is required for the scripted Claude CLI")
+	}
+	gin.SetMode(gin.TestMode)
+	cli := filepath.Join(t.TempDir(), "claude")
+	script := "#!" + python + `
+import json, re, sys
+if '--version' in sys.argv:
+    print('2.1.218 (Claude Code)')
+    sys.exit(0)
+def call_tool(name, args):
+    import urllib.request
+    path = sys.argv[sys.argv.index('--mcp-config') + 1]
+    url = json.load(open(path))['mcpServers']['tingly-projects']['url']
+    def post(body, sid=None):
+        h = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'}
+        if sid: h['Mcp-Session-Id'] = sid
+        r = urllib.request.urlopen(urllib.request.Request(url, json.dumps(body).encode(), h))
+        return r.headers.get('Mcp-Session-Id'), r.read().decode()
+    sid, _ = post({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'harness', 'version': '1'}}})
+    post({'jsonrpc': '2.0', 'method': 'notifications/initialized'}, sid)
+    return post({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call', 'params': {'name': name, 'arguments': args}}, sid)[1]
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg.get('type') != 'user': continue
+    text = msg.get('message', {}).get('content', '')
+    if text == 'ask question':
+        q = {'question':'Pick a color', 'header':'Color', 'options':[{'label':'Red','description':''},{'label':'Blue','description':''}], 'multiSelect':False}
+        print(json.dumps({'type':'control_request','request_id':'question-1','request':{'subtype':'can_use_tool','tool_name':'AskUserQuestion','tool_use_id':'tool-1','input':{'questions':[q]}}}), flush=True)
+        answer = json.loads(sys.stdin.readline())
+        text = 'answered Blue' if 'Blue' in json.dumps(answer) else 'answer missing'
+    if text in ('request approval', 'request denial'):
+        print(json.dumps({'type':'control_request','request_id':'permission-1','request':{'subtype':'can_use_tool','tool_name':'Bash','input':{'command':'echo harness'}}}), flush=True)
+        response = json.loads(sys.stdin.readline())
+        text += ' approved' if response.get('response', {}).get('response', {}).get('behavior') == 'allow' else ' rejected'
+    if '--system-prompt' in sys.argv:
+        events = re.findall(r'<event[^>]*trust="principal"[^>]*>\n(.*?)\n</event>', str(text), re.DOTALL)
+        out = 'You said: ' + (events[-1] if events else str(text))
+        if events and events[-1] == 'ask decision':
+            reply = call_tool('request_decision', {'question': 'Ship it now?', 'options': [{'label': 'Ship', 'consequence': 'goes to prod'}, {'label': 'Wait', 'consequence': 'one more review'}], 'recommended': 1, 'reason': 'reviewers are still reading'})
+            out = 'Decision asked' if 'asked the user' in reply else 'Decision failed: ' + reply
+        elif events and events[-1].startswith('start worker '):
+            reply = call_tool('start_thread', {'title': 'Worker thread', 'task': events[-1][len('start worker '):], 'repo': 'none'})
+            out = 'Worker started' if 'started thread' in reply else 'Worker failed: ' + reply
+    else:
+        out = 'Harness reply: ' + str(text)
+    print(json.dumps({'type':'assistant','message':{'id':'msg','type':'message','role':'assistant','model':'harness','content':[{'type':'text','text':out}],'usage':{'input_tokens':1,'output_tokens':1}}}), flush=True)
+    print(json.dumps({'type':'result','subtype':'success','is_error':False,'result':out}), flush=True)
+`
+	require.NoError(t, os.WriteFile(cli, []byte(script), 0700))
+	t.Setenv("CLAUDE_CLI_PATH", cli)
+	env := testenv.NewTestEnv(t)
+	_, otherID := env.AddTinglyBot()
+	_, chosenID := env.AddTinglyBot()
+	bridge := NewChatBridge()
+	// TB's real Projects host: the scripted CLI above is its coordinator and
+	// threads, launched with the host's Claude Code environment.
+	cfg := newConfig(t)
+	t.Cleanup(func() { _ = cfg.CloseStores() })
+	tbHost := NewHost(cfg)
+	tbHost.SetChatBridge(bridge)
+	dataDir := t.TempDir()
+	app, err := projectsapp.New(projectsapp.Options{Host: tbHost, DataDir: dataDir})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = app.Close() })
+	pairing := false
+	workdir := realTempDir(t)
+	reg := channel.NewRegistry()
+	stores, err := hostdb.NewStoreManager(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = stores.Close() })
+	for _, id := range []string{otherID, chosenID} {
+		_, err := stores.ImBotSettings().CreateSettings(hostdb.Settings{UUID: id, Name: id, Platform: "tingly", AuthType: "none", Auth: map[string]string{}, Enabled: true, RequirePairing: &pairing, DefaultCwd: workdir})
+		require.NoError(t, err)
+		require.NoError(t, stores.BotAccess().PutCapability(context.Background(), access.BotCapability{BotUUID: id, Name: access.CapabilityRemoteControl, Enabled: true}))
+	}
+	stores.BotAccess().SetTransportFactsSource(harnessTransportFacts{registry: reg})
+	settings := remotehost.NewSettingsStore(stores.ImBotSettings())
+	manager := bot.NewManager(settings, bot.NewNotifyConsumer(), chat.NewConsumer(settings, chat.WithProjectRouter(bridge)))
+	manager.SetChatStore(stores.RemoteChats())
+	manager.SetAccessStore(stores.BotAccess())
+	manager.SetChannelRegistry(reg)
+	enabled := &atomic.Bool{}
+	enabled.Store(true)
+	bridge.SetTargetBlocked(stores.BotAccess().IsExternalTargetBlocked)
+	bridge.Bind(app, reg, enabled.Load, func() { app.Start(env.Context()) }, stores.RemoteChats().IsChatDisabled)
+	for _, id := range []string{otherID, chosenID} {
+		require.NoError(t, manager.Start(env.Context(), id))
+	}
+	t.Cleanup(func() {
+		manager.StopAll()
+		for _, id := range []string{otherID, chosenID} {
+			manager.WaitForStop(id, 5*time.Second)
+		}
+	})
+	require.Eventually(t, func() bool { return reg.Len() == 2 }, 5*time.Second, 10*time.Millisecond)
+	app.Start(env.Context())
+	router := gin.New()
+	module.Mount(&module.Routes{Manager: swagger.NewRouteManager(router)}, NewHandler(app, func() bool { return true }, nil))
+	call := func(method, path string, body any, out any) {
+		t.Helper()
+		data, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(data))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		require.Less(t, rec.Code, http.StatusBadRequest, rec.Body.String())
+		if out != nil {
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), out))
+		}
+	}
+	return &tinglyProjectsHarness{env: env, bridge: bridge, stores: stores, otherID: otherID, chosenID: chosenID, workdir: workdir, dataDir: dataDir, enabled: enabled, registry: reg, call: call}
+}
+
+func TestTinglySessionIMRoundTrip(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	env, bridge, stores, otherID, chosenID, call := h.env, h.bridge, h.stores, h.otherID, h.chosenID, h.call
+	var folder struct {
+		ID string `json:"id"`
+	}
+	call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &folder)
+	var thread struct {
+		ID string `json:"id"`
+	}
+	call("POST", "/projects/"+folder.ID+"/threads", map[string]any{"content": "initial"}, &thread)
+	var lastDetail json.RawMessage
+	require.Eventually(t, func() bool {
+		var detail struct {
+			Thread struct {
+				Status     string `json:"status"`
+				WaitReason string `json:"wait_reason"`
+			} `json:"thread"`
+		}
+		call("GET", "/threads/"+thread.ID, nil, &detail)
+		lastDetail, _ = json.Marshal(detail)
+		return detail.Thread.Status == "idle"
+	}, 3*time.Second, 25*time.Millisecond, "last thread state: %s", &lastDetail)
+	alice := env.NewUser("alice")
+	selected := alice.OpenDM(chosenID)
+	other := alice.OpenDM(otherID)
+	call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": selected.ChatID, "bot_uuid": chosenID, "thread_id": thread.ID}, nil)
+	// A stale remembered bot must not override the explicit web binding.
+	bridge.RememberBot("tingly", selected.ChatID, otherID)
+	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "from web"}, nil)
+	selected.WaitText(10*time.Second).AssertContains(t, "Harness reply: from web")
+	other.ExpectNoEvent(200*time.Millisecond, tingly.EventSend)
+	selected.SendText("from IM")
+	selected.WaitText(10*time.Second).AssertContains(t, "Harness reply: from IM")
+	var events struct {
+		Events []struct {
+			Content string `json:"content"`
+			Source  string `json:"source"`
+		} `json:"events"`
+	}
+	call("GET", "/threads/"+thread.ID+"/events", nil, &events)
+	found := false
+	for _, event := range events.Events {
+		if event.Content == "from IM" && event.Source == "im" {
+			found = true
+		}
+	}
+	require.True(t, found, "IM input should be recorded on the bound session")
+
+	// Approval cards travel to the selected bot, and a button response goes
+	// through the real bot authorization gate back into the running session.
+	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "request approval"}, nil)
+	prompt := selected.WaitText(10 * time.Second)
+	prompt.AssertContains(t, "echo harness")
+	button, ok := prompt.ButtonByLabel("Allow")
+	require.True(t, ok, "approval must be actionable from IM")
+	button.Click()
+	selected.WaitText(10*time.Second).AssertContains(t, "Harness reply: request approval approved")
+	selected.WaitRestate(prompt.MessageID, 10*time.Second)
+
+	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "request denial"}, nil)
+	denied := selected.WaitText(10 * time.Second)
+	denyButton, ok := denied.ButtonByLabel("Deny")
+	require.True(t, ok)
+	denyButton.Click()
+	selected.WaitText(10*time.Second).AssertContains(t, "Harness reply: request denial rejected")
+	selected.WaitRestate(denied.MessageID, 10*time.Second)
+
+	// A text answer to AskUserQuestion is consumed by the pending request,
+	// not enqueued as another user turn.
+	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "ask question"}, nil)
+	selected.WaitText(10*time.Second).AssertContains(t, "Pick a color")
+	selected.SendText("2")
+	selected.WaitText(10*time.Second).AssertContains(t, "Harness reply: answered Blue")
+
+	// Rebinding the same chat to another bot must move outbound delivery even
+	// though the first bot was the last one to receive an inbound message.
+	call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": other.ChatID, "bot_uuid": otherID, "thread_id": thread.ID}, nil)
+	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "after rebind"}, nil)
+	other.WaitText(10*time.Second).AssertContains(t, "Harness reply: after rebind")
+	selected.ExpectNoEvent(200*time.Millisecond, tingly.EventSend)
+	call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": selected.ChatID, "bot_uuid": chosenID, "thread_id": thread.ID}, nil)
+
+	// Blocking the chat stops both directions without silently reassigning it.
+	_, err := stores.RemoteChats().GetOrCreateChat(selected.ChatID, "tingly")
+	require.NoError(t, err)
+	require.NoError(t, stores.RemoteChats().SetChatDisabled(selected.ChatID, true))
+	require.True(t, stores.RemoteChats().IsChatDisabled(selected.ChatID))
+	call("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "blocked output"}, nil)
+	selected.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
+	selected.SendText("blocked input")
+	selected.ExpectNoEvent(300*time.Millisecond, tingly.EventSend)
+	call("GET", "/threads/"+thread.ID+"/events", nil, &events)
+	for _, event := range events.Events {
+		require.NotEqual(t, "blocked input", event.Content)
+	}
+
+}
+
+func TestTinglyNewChatAndSessionCommands(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("new-user").OpenDM(h.chosenID)
+	// With no prior association, the bot adopts its configured folder and the
+	// first message starts a session. Even an immediate reply must reach IM.
+	chat.SendText("first message")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: first message")
+	var list struct {
+		Bindings []struct {
+			ThreadID string `json:"thread_id"`
+			BotUUID  string `json:"bot_uuid"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	first := list.Bindings[0].ThreadID
+	require.NotEmpty(t, first)
+	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
+	h.bridge.ForgetBots()
+	h.call("POST", "/threads/"+first+"/messages", map[string]any{"content": "after restart"}, nil)
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: after restart")
+	chat.SendText("/new")
+	chat.WaitText(10*time.Second).AssertContains(t, "next message")
+	chat.SendText("second session")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: second session")
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.NotEqual(t, first, list.Bindings[0].ThreadID)
+	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
+	chat.SendText("/verbose on")
+	chat.WaitText(10*time.Second).AssertContains(t, "Verbose is on")
+}
+
+func TestTinglyPublishedFileReachesBoundChat(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("file-user").OpenDM(h.chosenID)
+	chat.SendText("start")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
+	var list struct {
+		Bindings []struct {
+			ID       string `json:"id"`
+			ThreadID string `json:"thread_id"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	file := filepath.Join(h.workdir, "result.txt")
+	require.NoError(t, os.WriteFile(file, []byte("file contents"), 0o600))
+	_, err := h.bridge.App().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Result")
+	require.NoError(t, err)
+	message := chat.WaitMedia(10 * time.Second)
+	require.Len(t, message.Media, 1)
+	require.Equal(t, "result.txt", message.Media[0].Filename)
+	stored, err := url.Parse(message.Media[0].URL)
+	require.NoError(t, err)
+	contents, err := os.ReadFile(stored.Path)
+	require.NoError(t, err)
+	require.Equal(t, "file contents", string(contents))
+	require.Contains(t, message.Text, "Result")
+	// Rebinding changes the delivery target without restarting the session.
+	other := h.env.NewUser("new-file-user").OpenDM(h.chosenID)
+	h.call("DELETE", "/projects/channel-bindings/"+list.Bindings[0].ID, nil, nil)
+	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": other.ChatID, "bot_uuid": h.chosenID, "thread_id": list.Bindings[0].ThreadID}, nil)
+	_, err = h.bridge.App().PublishFile(context.Background(), list.Bindings[0].ThreadID, file, "Moved")
+	require.NoError(t, err)
+	other.WaitMedia(10*time.Second).AssertContains(t, "Moved")
+	chat.ExpectNoEvent(300*time.Millisecond, tingly.EventSend, tingly.EventMedia)
+}
+
+func TestTinglyBindFolderBeforeFirstSession(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("folder-binding-user").OpenDM(h.chosenID)
+	var folder struct {
+		ID string `json:"id"`
+	}
+	h.call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &folder)
+	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": chat.ChatID, "bot_uuid": h.chosenID, "project_id": folder.ID}, nil)
+	var list struct {
+		Bindings []struct {
+			ProjectID       string `json:"project_id"`
+			TargetProjectID string `json:"target_project_id"`
+			ThreadID        string `json:"thread_id"`
+			BotUUID         string `json:"bot_uuid"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.Empty(t, list.Bindings[0].ThreadID)
+	chat.SendText("from a folder binding")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: from a folder binding")
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.NotEmpty(t, list.Bindings[0].ThreadID)
+	require.Equal(t, h.chosenID, list.Bindings[0].BotUUID)
+	first := list.Bindings[0].ThreadID
+	chat.SendText("/new")
+	chat.WaitText(10*time.Second).AssertContains(t, "next message")
+	chat.SendText("second session")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: second session")
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.NotEqual(t, first, list.Bindings[0].ThreadID)
+	require.Equal(t, folder.ID, list.Bindings[0].TargetProjectID)
+	chat.SendText("/session 1")
+	chat.WaitText(10*time.Second).AssertContains(t, "This chat now talks to")
+	h.call("GET", "/projects/channel-bindings?project_id="+folder.ID, nil, &list)
+	require.Len(t, list.Bindings, 1)
+	require.Equal(t, first, list.Bindings[0].ThreadID)
+	require.Equal(t, folder.ID, list.Bindings[0].TargetProjectID)
+}
+
+func TestTinglyCoordinatorIMRoundTrip(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("coordinator-user").OpenDM(h.chosenID)
+	var project struct {
+		ID           string `json:"id"`
+		MainThreadID string `json:"main_thread_id"`
+	}
+	h.call("POST", "/projects", map[string]any{"name": "Harness project"}, &project)
+	h.call("PUT", "/projects/channel-bindings", map[string]any{"platform": "tingly", "chat_id": chat.ChatID, "bot_uuid": h.chosenID, "project_id": project.ID}, nil)
+	h.call("POST", "/threads/"+project.MainThreadID+"/messages", map[string]any{"content": "coordinator web"}, nil)
+	chat.WaitText(10*time.Second).AssertContains(t, "You said: coordinator web")
+	chat.SendText("coordinator IM")
+	chat.WaitText(10*time.Second).AssertContains(t, "You said: coordinator IM")
+}
+
+func TestTinglyProjectsFeatureGate(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("feature-user").OpenDM(h.chosenID)
+	h.enabled.Store(false)
+	chat.SendText("hello while disabled")
+	chat.WaitText(10*time.Second).AssertContains(t, "Turn on Projects")
+	h.enabled.Store(true)
+	chat.SendText("hello when enabled")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: hello when enabled")
+}
+
+func TestTinglyBlockedAccessStopsSessionDelivery(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("blocked-user").OpenDM(h.chosenID)
+	chat.SendText("establish session")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: establish session")
+	targets, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatBlocked(context.Background(), h.chosenID, targets[0].ID, true))
+	var list struct {
+		Bindings []struct {
+			ThreadID string `json:"thread_id"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	id := list.Bindings[0].ThreadID
+	h.call("POST", "/threads/"+id+"/messages", map[string]any{"content": "must not be delivered"}, nil)
+	require.Eventually(t, func() bool {
+		var events struct {
+			Events []struct {
+				Content string `json:"content"`
+			} `json:"events"`
+		}
+		h.call("GET", "/threads/"+id+"/events", nil, &events)
+		for _, e := range events.Events {
+			if strings.Contains(e.Content, "Harness reply: must not be delivered") {
+				return true
+			}
+		}
+		return false
+	}, 10*time.Second, 25*time.Millisecond)
+	chat.ExpectNoEvent(500*time.Millisecond, tingly.EventSend)
+}
+
+func TestTinglyRegisteredDirectories(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("directory-user").OpenDM(h.chosenID)
+	chat.SendText("start")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
+	first, second := realTempDir(t), realTempDir(t)
+	var f1, f2 struct {
+		ID string `json:"id"`
+	}
+	h.call("POST", "/projects", map[string]any{"type": "folder", "path": first}, &f1)
+	h.call("POST", "/projects", map[string]any{"type": "folder", "path": second}, &f2)
+	h.call("PATCH", "/projects/"+f2.ID, map[string]any{"archived": true}, nil)
+	// A regular paired chat has start permission but not privileged access. It
+	// may still pick among the folders the operator registered: /dir lists
+	// them, /dir N and the buttons switch.
+	chat.SendText("/dir")
+	result := chat.WaitText(10 * time.Second)
+	result.AssertContains(t, "Registered folders:").AssertContains(t, first).AssertContains(t, h.workdir)
+	require.NotContains(t, result.Text, second, "archived folders are excluded")
+	number := ""
+	for _, line := range strings.Split(result.Text, "\n") {
+		if strings.Contains(line, first) {
+			words := strings.Fields(line)
+			if len(words) > 0 {
+				number = strings.TrimSuffix(words[0], ".")
+			}
+		}
+	}
+	require.NotEmpty(t, number)
+	// /help offers only what the chat can run.
+	chat.SendText("/help")
+	help := chat.WaitText(10*time.Second).AssertContains(t, "/dir [N]")
+	require.NotContains(t, help.Text, "/cd")
+	// A free path needs the permission, and the chat is told which one
+	// instead of the command looking broken.
+	free := realTempDir(t)
+	for _, text := range []string{"/cd " + free, "\uff0fcd " + free, "/dir " + free} {
+		chat.SendText(text)
+		chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
+	}
+	chat.SendCallback("old-message", "action:bind")
+	chat.WaitText(10*time.Second).AssertContains(t, "Any folder and files")
+	current := h.currentFolder(t, chat)
+	require.Equal(t, h.workdir, current, "a free path did not move the chat")
+	// A newly registered folder must not change an already displayed number.
+	h.call("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, nil)
+	chat.SendText("/dir " + number)
+	chat.WaitText(10*time.Second).AssertContains(t, first)
+	chat.SendText("new directory message")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: new directory message")
+	current = h.currentFolder(t, chat)
+	require.Equal(t, first, current, "the registered folder was picked without the permission")
+
+	// With the permission a free path works too.
+	targets, err := h.stores.BotAccess().ListDirectChats(context.Background(), h.chosenID)
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	require.NoError(t, h.stores.BotAccess().SetDirectChatPermission(context.Background(), h.chosenID, targets[0].ID, access.CapabilityRemoteControl, access.ActionRemoteControlPrivileged, access.EffectAllow))
+	chat.SendText("/help")
+	chat.WaitText(10*time.Second).AssertContains(t, "/cd <path>")
+	chat.SendText("/cd " + free)
+	chat.WaitText(10*time.Second).AssertContains(t, free)
+	current = h.currentFolder(t, chat)
+	require.Equal(t, free, current)
+
+	// A button on an old list must not switch to a folder after it is archived.
+	h.call("PATCH", "/projects/"+f1.ID, map[string]any{"archived": true}, nil)
+	chat.SendCallback("old-message", "project:switch:"+first)
+	chat.WaitText(10*time.Second).AssertContains(t, "no longer available")
+}
+
+func TestTinglyProjectsAndFoldersAreDistinct(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	chat := h.env.NewUser("picker-user").OpenDM(h.chosenID)
+	chat.SendText("start")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
+	// Choosing a project needs only start: no privileged grant here.
+	var project, archived struct {
+		ID string `json:"id"`
+	}
+	h.call("POST", "/projects", map[string]any{"name": "Project Alpha"}, &project)
+	h.call("POST", "/projects", map[string]any{"name": "Archived Project"}, &archived)
+	h.call("PATCH", "/projects/"+archived.ID, map[string]any{"archived": true}, nil)
+	otherFolder := realTempDir(t)
+	h.call("POST", "/projects", map[string]any{"type": "folder", "path": otherFolder}, nil)
+	chat.SendText("/project")
+	listed := chat.WaitText(10 * time.Second)
+	listed.AssertContains(t, "Project Alpha")
+	require.NotContains(t, listed.Text, "Archived Project")
+	require.NotContains(t, listed.Text, otherFolder, "folders are not projects")
+	number := ""
+	for _, line := range strings.Split(listed.Text, "\n") {
+		if strings.Contains(line, "Project Alpha") {
+			parts := strings.Fields(line)
+			if len(parts) > 0 {
+				number = strings.TrimSuffix(parts[0], ".")
+			}
+		}
+	}
+	require.NotEmpty(t, number)
+	// New projects added after the list must not change which ID that number means.
+	h.call("POST", "/projects", map[string]any{"name": "Project Added Later"}, nil)
+	chat.SendText("/project " + number)
+	chat.WaitText(10*time.Second).AssertContains(t, "coordinator of Project Alpha")
+	chat.SendText("hello coordinator")
+	chat.WaitText(10*time.Second).AssertContains(t, "You said: hello coordinator")
+	chat.SendText("/dir")
+	dirs := chat.WaitText(10 * time.Second)
+	dirs.AssertContains(t, otherFolder)
+	require.NotContains(t, dirs.Text, "Project Alpha", "projects are not folders")
+	require.Contains(t, dirs.Text, "This chat has not picked a folder.", "a project is not a folder binding")
+	chat.SendText("/project")
+	chat.WaitText(10*time.Second).AssertContains(t, "Project Alpha ✓")
+}
+
+// A file or image a chat sends is stored in the project's uploads as
+// `uploads/<id>-<name>` and recorded under the name the sender gave it; an
+// image with no name is named by when it came, never by a platform media id.
+func TestTinglyChatFilesKeepTheirNames(t *testing.T) {
+	h := newTinglyProjectsHarness(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/pic") {
+			_, _ = w.Write(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 32)...))
+			return
+		}
+		_, _ = w.Write([]byte("%PDF-1.4 report"))
+	}))
+	defer srv.Close()
+	chat := h.env.NewUser("file-name-user").OpenDM(h.chosenID)
+	chat.SendText("start")
+	chat.WaitText(10*time.Second).AssertContains(t, "Harness reply: start")
+	var list struct {
+		Bindings []struct {
+			ThreadID string `json:"thread_id"`
+		} `json:"bindings"`
+	}
+	h.call("GET", "/projects/channel-bindings", nil, &list)
+	require.Len(t, list.Bindings, 1)
+	threadID := list.Bindings[0].ThreadID
+	h.setPrivileged(t, chat, true)
+
+	chat.SendMedia([]core.MediaAttachment{{Type: "document", URL: srv.URL + "/dl/AgACAgIAAxkDAAIB", MimeType: "application/pdf", Filename: "季度报告 final.pdf"}})
+	firstReply := chat.WaitText(10 * time.Second).Text
+	chat.SendMedia([]core.MediaAttachment{{Type: "image", URL: srv.URL + "/dl/pic", MimeType: "image/png"}})
+	chat.WaitText(10 * time.Second)
+
+	var events struct {
+		Events []struct {
+			Payload string `json:"payload"`
+		} `json:"events"`
+	}
+	h.call("GET", "/threads/"+threadID+"/events", nil, &events)
+	var names, paths []string
+	for _, e := range events.Events {
+		var p struct {
+			Attachments []struct{ Name, Path string } `json:"attachments"`
+		}
+		if json.Unmarshal([]byte(e.Payload), &p) == nil {
+			for _, a := range p.Attachments {
+				names, paths = append(names, a.Name), append(paths, a.Path)
+			}
+		}
+	}
+	require.Len(t, names, 2)
+	require.Equal(t, "季度报告 final.pdf", names[0])
+	require.Regexp(t, `^image-\d{8}-\d{6}\.png$`, names[1])
+	require.Regexp(t, `^uploads/[0-9a-f]{12}-季度报告 final\.pdf$`, paths[0])
+	var detail struct {
+		Thread struct {
+			ProjectID string `json:"project_id"`
+		} `json:"thread"`
+	}
+	h.call("GET", "/threads/"+threadID, nil, &detail)
+	stored := filepath.Join(h.dataDir, "projects", detail.Thread.ProjectID, "library", filepath.FromSlash(paths[0]))
+	require.Contains(t, firstReply, stored, "the actual process received the persistent path")
+	body, err := os.ReadFile(stored)
+	require.NoError(t, err)
+	require.Equal(t, "%PDF-1.4 report", string(body))
+	require.NotContains(t, firstReply, "tb-chat-files-")
+	for _, p := range paths {
+		require.NotContains(t, p, "AgACAgIAAxkDAAIB")
+	}
+}

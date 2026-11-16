@@ -17,6 +17,7 @@ import (
 // runner drives the lifecycle.
 type Transport struct {
 	accumulator *MessageAccumulator
+	compact     compactTracker
 	execCtx     executionContext
 }
 
@@ -76,13 +77,10 @@ func (t *Transport) Classify(ev protocol.Event) (agentboot.EventKind, agentboot.
 // 0+ rich claude.Message values for the runner to wrap as MessageEvents.
 // Implements [agentboot.AgentTransport].
 func (t *Transport) AccumulateMessage(ev protocol.Event) []any {
+	out := t.compact.observe(ev)
 	msgs, _, _ := t.accumulator.AddEvent(ev)
-	if len(msgs) == 0 {
-		return nil
-	}
-	out := make([]any, len(msgs))
-	for i, m := range msgs {
-		out[i] = m
+	for _, m := range msgs {
+		out = append(out, m)
 	}
 	return out
 }
@@ -126,10 +124,40 @@ func (t *Transport) EncodeControlRequest(reqID string, req agentboot.ControlRequ
 		body = map[string]any{"subtype": ControlRequestSubtypeInterrupt}
 	case agentboot.StopTaskRequest:
 		body = map[string]any{"subtype": ControlRequestSubtypeStopTask, "task_id": r.TaskID}
+	case agentboot.SetModelRequest:
+		model := r.Model
+		if model == "" {
+			model = "default"
+		}
+		body = map[string]any{"subtype": ControlRequestSubtypeSetModel, "model": model}
+	case agentboot.SetPermissionModeRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeSetPermissionMode, "mode": r.Mode}
+	case agentboot.ApplySettingsRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeApplyFlagSettings, "settings": r.Settings}
+	case agentboot.ContextUsageRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeGetContextUsage}
 	default:
 		return nil
 	}
 	return map[string]any{"type": ControlMsgTypeRequest, "request_id": reqID, "request": body}
+}
+
+// DecodeControlResponse recognizes Claude's answer to a host-initiated
+// control request. Implements [agentboot.ControlResponseDecoder].
+func (t *Transport) DecodeControlResponse(ev protocol.Event) (string, error, bool) {
+	if ev.Type != ControlMsgTypeResponse {
+		return "", nil, false
+	}
+	resp, _ := ev.Data["response"].(map[string]any)
+	reqID, _ := resp["request_id"].(string)
+	if reqID == "" {
+		return "", nil, false
+	}
+	if sub, _ := resp["subtype"].(string); sub == ControlResponseSubtypeError {
+		msg, _ := resp["error"].(string)
+		return reqID, &agentboot.ControlRejectedError{Message: msg}, true
+	}
+	return reqID, nil, true
 }
 
 // IsTurnStart reports whether ev opens a turn: in stream-json mode Claude
@@ -195,6 +223,7 @@ func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEven
 			AgentType: agentboot.AgentTypeClaude,
 			ToolName:  toolName,
 			Input:     stamped,
+			Reason:    decisionReason(controlData),
 			SessionID: t.execCtx.sessionID,
 			ChatID:    t.execCtx.chatID,
 			Platform:  t.execCtx.platform,
@@ -204,6 +233,24 @@ func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEven
 	default:
 		logrus.Warnf("claude transport: unsupported control subtype %q", subtype)
 		return nil, nil
+	}
+}
+
+// decisionReason is why Claude Code asks about a tool call, as far as it says:
+// the classifier's own words when auto mode gives a call back to the user, or
+// the kind of rule that matched. Empty when it just asks (the mode requires
+// it).
+func decisionReason(req map[string]any) string {
+	if reason, _ := req["decision_reason"].(string); strings.TrimSpace(reason) != "" {
+		return strings.TrimSpace(reason)
+	}
+	switch kind, _ := req["decision_reason_type"].(string); kind {
+	case "":
+		return ""
+	case "rule":
+		return "matched an ask rule in the permission settings"
+	default:
+		return kind
 	}
 }
 
@@ -249,10 +296,18 @@ func (t *Transport) buildPermissionResponse(requestID string, result agentboot.A
 		if updatedInput == nil {
 			updatedInput = originalInput
 		}
-		innerResponse["response"] = map[string]interface{}{
+		allow := map[string]interface{}{
 			"behavior":     "allow",
 			"updatedInput": updatedInput,
 		}
+		if len(result.AddDirectories) > 0 {
+			allow["updatedPermissions"] = []map[string]any{{
+				"type":        "addDirectories",
+				"directories": result.AddDirectories,
+				"destination": "session",
+			}}
+		}
+		innerResponse["response"] = allow
 	} else {
 		message := result.Reason
 		if message == "" {

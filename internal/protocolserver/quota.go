@@ -24,11 +24,11 @@ type QuotaReader interface {
 // keys are refused until a team can opt in.
 func (ph *ProtocolHandler) HandleScenarioQuota(c *gin.Context) {
 	if c.GetString(constant.CtxKeyAuthKind) == constant.AuthKindSharingKey {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: ErrorDetail{Message: "Quota is not shared with sharing keys", Type: "forbidden_error"}})
+		writeErrorResponse(c, http.StatusForbidden, ErrorResponse{Error: ErrorDetail{Message: "Quota is not shared with sharing keys", Type: "forbidden_error"}})
 		return
 	}
 	if ph.deps.QuotaReader == nil {
-		c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: ErrorDetail{Message: "Quota is not available on this server", Type: "service_unavailable"}})
+		writeErrorResponse(c, http.StatusServiceUnavailable, ErrorResponse{Error: ErrorDetail{Message: "Quota is not available on this server", Type: "service_unavailable"}})
 		return
 	}
 

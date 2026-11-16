@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { alpha } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -77,16 +78,6 @@ interface RequestJourneyProps {
     getTrace: (traceId: string) => Promise<TraceDetail | null>;
 }
 
-// Fields already stated by the row header, the row line itself, or the rule
-// breakdown. Repeating them in the payload is pure noise.
-const SUPPRESSED_FIELDS = new Set([
-    'request_id', 'source', 'stage', 'type', 'time', 'level', 'msg',
-    'trace', 'request', 'trace_id',
-    'status', 'latency', 'method', 'path', 'body_size', 'client_ip', 'user_agent',
-    'scenario', 'request_model', 'routed_model', 'routed_provider',
-    'outcome', 'matched_rule_index', 'selected_provider', 'selected_model',
-]);
-
 const formatDuration = (ms: number): string =>
     ms >= 1000 ? `${(ms / 1000).toFixed(2)} s` : `${Math.round(ms)} ms`;
 
@@ -97,7 +88,8 @@ const formatFieldValue = (key: string, value: unknown): string => {
         if (key.endsWith('_ns')) return formatDuration(value / 1e6);
         if (key.endsWith('_ms')) return formatDuration(value);
     }
-    if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+    if (key === 'latency' && typeof value === 'number') return formatDuration(value / 1e6);
+    if (typeof value === 'object' && value !== null) return JSON.stringify(value, null, 2);
     return String(value);
 };
 
@@ -127,14 +119,7 @@ const describeSpan = (span: TimedSpan): { name: string; detail: string } => {
 };
 
 const buildRows = (events: ModelRequestEvent[], spans: TraceSpan[]): JourneyRow[] => {
-    // The root span is the request itself — the table row already states its
-    // outcome, so it never takes a row of its own.
-    const ids = new Set(spans.map((s) => s.span_id));
-    const all = spans.map(timed);
-    const children = all.filter((s) => s.parent_span_id && ids.has(s.parent_span_id));
-    const stageSpans = children.length > 0 ? children : all.length > 1 ? all : [];
-
-    const rows: JourneyRow[] = stageSpans.map((span) => {
+    const rows: JourneyRow[] = spans.map(timed).map((span) => {
         const { name, detail } = describeSpan(span);
         const attrs = span.attributes || {};
         return {
@@ -146,21 +131,21 @@ const buildRows = (events: ModelRequestEvent[], spans: TraceSpan[]): JourneyRow[
             tone: span.status_code === 'Error' ? 'error' : span.status_code === 'Ok' ? 'ok' : 'plain',
             start: span.start,
             durationMs: span.end - span.start,
-            payload: Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b)),
+            payload: [
+                ['name', span.name], ['status', span.status_code || 'Unset'],
+                ['status_message', span.status_message || ''],
+                ...Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b)),
+            ],
         };
     });
 
-    // The access log envelope repeats the row header verbatim (status, latency,
-    // path), so it earns no row — unless it is all we have, as when a request
-    // dies in auth before any stage runs.
-    const staged = events.filter((e) => e.source !== 'http');
-    const relevant = staged.length > 0 ? staged : events;
-
-    relevant.forEach((event, i) => {
+    // Retain the HTTP envelope: it can be the sole owner of an error even
+    // when routing/upstream events exist for the same request.
+    events.forEach((event) => {
         const fields = event.fields || {};
         const rules = Array.isArray(fields.trace) ? (fields.trace as RoutingRule[]) : undefined;
         rows.push({
-            key: `log:${i}`,
+            key: `log:${JSON.stringify(event)}`,
             kind: 'log',
             name: event.stage || event.source,
             // Smart routing's message ("rule matched") says nothing the stage
@@ -170,12 +155,11 @@ const buildRows = (events: ModelRequestEvent[], spans: TraceSpan[]): JourneyRow[
                 ? `${rules.length} routing rule${rules.length === 1 ? '' : 's'} evaluated` +
                   (typeof fields.matched_rule_index === 'number' ? ` · #${fields.matched_rule_index} matched` : ' · no match')
                 : event.message,
-            tone: isErrorLevel(event.level) ? 'error' : event.level === 'warning' ? 'warning' : 'plain',
+            tone: isErrorLevel(event.level) || !!fields.error ? 'error' : event.level === 'warning' || event.level === 'warn' ? 'warning' : 'plain',
             start: new Date(event.time).getTime(),
-            payload: Object.keys(fields)
-                .filter((k) => !SUPPRESSED_FIELDS.has(k))
+            payload: [['message', event.message], ['time', event.time], ['level', event.level], ...Object.keys(fields)
                 .sort()
-                .map((k) => [k, formatFieldValue(k, fields[k])] as [string, string]),
+                .map((k) => [k, formatFieldValue(k, fields[k])] as [string, string])] as [string, string][],
             rules,
             matchedRule: typeof fields.matched_rule_index === 'number' ? fields.matched_rule_index : -1,
         });
@@ -197,10 +181,10 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
             width: 58,
             height: 17,
             fontSize: fontSizes.micro,
-            fontWeight: 700,
+            fontWeight: 600,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
-            borderRadius: 0.5,
+            borderRadius: radius.chip,
             color: tone === 'error' ? 'error.main' : kind === 'stage' ? 'primary.main' : 'text.disabled',
             backgroundColor: (theme) => tone === 'error'
                 ? alpha(theme.palette.error.main, 0.1)
@@ -221,7 +205,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 <Typography
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         color: matched === rule.rule_index ? 'success.main' : 'text.disabled',
                     }}
                 >
@@ -230,7 +214,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 {rule.ops?.map((op, i) => (
                     <Typography
                         key={i}
-                        sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', pl: 2 }}
+                        sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled', pl: 2 }}
                     >
                         {op.position}.{op.operation} — {op.reason}
                     </Typography>
@@ -241,8 +225,17 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
 );
 
 const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
-    // undefined = still loading, null = evicted from the ring, object = loaded
-    const [trace, setTrace] = useState<TraceDetail | null | undefined>(undefined);
+    // Associate each response with the log snapshot that requested it, so
+    // auto-refresh can fetch spans completed since the previous snapshot.
+    const [traceState, setTraceState] = useState<{
+        id?: string;
+        events?: ModelRequestEvent[];
+        detail?: TraceDetail | null;
+        error?: string;
+    }>({});
+    const current = traceState.id === traceId && traceState.events === events;
+    const trace = current ? traceState.detail : undefined;
+    const traceError = current ? traceState.error : undefined;
     const [openRow, setOpenRow] = useState<string | null>(null);
 
     useEffect(() => {
@@ -250,19 +243,19 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
         let cancelled = false;
         getTrace(traceId)
             .then((detail) => {
-                if (!cancelled) setTrace(detail);
+                if (!cancelled) setTraceState({ id: traceId, events, detail });
             })
-            .catch(() => {
-                if (!cancelled) setTrace(null);
+            .catch((error: unknown) => {
+                if (!cancelled) setTraceState({ id: traceId, events, error: error instanceof Error ? error.message : 'Failed to load trace' });
             });
         return () => {
             cancelled = true;
         };
-    }, [traceId, getTrace]);
+    }, [traceId, getTrace, events]);
 
     const rows = useMemo(() => buildRows(events, trace?.spans ?? []), [events, trace]);
 
-    if (rows.length === 0) {
+    if (rows.length === 0 && !traceError) {
         return (
             <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                 Nothing recorded for this request.
@@ -318,7 +311,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             <Typography
                                 sx={{
                                     fontFamily: fontMono,
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     color: toneColor(row.tone),
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
@@ -333,7 +326,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                 <Typography
                                     sx={{
                                         fontFamily: fontMono,
-                                        fontSize: fontSizes.xs,
+                                        fontSize: fontSizes.micro,
                                         color: row.tone === 'error' ? 'error.main' : 'text.secondary',
                                         whiteSpace: 'nowrap',
                                     }}
@@ -344,7 +337,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell}>
                             <Typography
-                                sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', textAlign: 'right' }}
+                                sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled', textAlign: 'right' }}
                             >
                                 {row.durationMs != null ? formatDuration(row.durationMs) : ''}
                             </Typography>
@@ -356,10 +349,10 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             <Collapse in={open} timeout="auto" unmountOnExit>
                                 <Stack spacing={0.1} sx={{ py: 0.5 }}>
                                     {row.rules && <RoutingRules rules={row.rules} matched={row.matchedRule ?? -1} />}
-                                    {row.payload.map(([k, v]) => (
+                                    {row.payload.map(([k, v], i) => (
                                         <Typography
-                                            key={k}
-                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', wordBreak: 'break-all' }}
+                                            key={`${k}:${i}`}
+                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: k === 'error' ? 'error.main' : 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                                         >
                                             {k}={v}
                                         </Typography>
@@ -376,6 +369,8 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                     Stage timings unavailable — this trace is no longer in the in-memory buffer.
                 </Typography>
             )}
+            {traceError && <Typography variant="caption" sx={{ gridColumn: '1 / -1', color: 'error.main' }}>Failed to load stage timings: {traceError}</Typography>}
+            {!!trace?.dropped_spans && <Typography variant="caption" sx={{ gridColumn: '1 / -1', color: 'warning.main' }}>{trace.dropped_spans} spans were dropped; stage timings are incomplete.</Typography>}
         </Box>
     );
 };

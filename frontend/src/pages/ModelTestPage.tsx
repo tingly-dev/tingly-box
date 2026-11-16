@@ -20,6 +20,7 @@ import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import { ProbeDialog } from '@/components/probe/ProbeDialog';
 import type { Provider } from '../types/provider';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ModelCardProps {
     model: string;
@@ -99,7 +100,7 @@ const ModelCard = ({ model, provider, isTesting, onTest, onViewResult, hasResult
                         startIcon={isTesting ? <CircularProgress size={14} /> : undefined}
                         sx={{
                             textTransform: 'none',
-                            borderRadius: 1.5,
+                            borderRadius: radius.card,
                             fontSize: fontSizes.sm,
                         }}
                     >
@@ -277,7 +278,7 @@ const ModelTestPage = () => {
                     disabled={refreshing}
                     sx={{
                         textTransform: 'none',
-                        borderRadius: 1.5,
+                        borderRadius: radius.card,
                     }}
                 >
                     {refreshing ? 'Refreshing...' : 'Refresh Models'}

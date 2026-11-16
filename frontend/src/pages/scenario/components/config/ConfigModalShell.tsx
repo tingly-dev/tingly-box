@@ -2,6 +2,7 @@ import { Box, Button, CircularProgress, Dialog, DialogTitle, Tab, Tabs, Typograp
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { shouldIgnoreDialogClose } from '@/components/dialogClose';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ConfigModalTabsProps {
     value: string;
@@ -52,7 +53,7 @@ export const ConfigModalShell: React.FC<ConfigModalShellProps> = ({
         slotProps={{
             paper: {
                 sx: {
-                    borderRadius: 3,
+                    borderRadius: radius.card,
                     maxHeight: '90vh',
                 },
             }

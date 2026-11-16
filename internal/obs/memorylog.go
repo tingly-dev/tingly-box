@@ -175,6 +175,9 @@ func (h *MemoryLogHook) Size() int {
 	return h.count
 }
 
+// Capacity is the configured number of entries the ring can retain.
+func (h *MemoryLogHook) Capacity() int { return h.maxEntries }
+
 // GetLatest returns the newest N log entries.
 func (h *MemoryLogHook) GetLatest(n int) []*logrus.Entry {
 	h.mu.RLock()

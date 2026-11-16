@@ -34,7 +34,7 @@ directly.  By convention, `APIBase` is set to the OpenAI URL.
 
 | Constraint | Reason |
 |---|---|
-| Manual creation requires `api_key`; ZCode/ZCodeCN OAuth is an issuer-specific exception | Their OAuth flow resolves a static API key accepted on both endpoints. `ai.IssuerSupportsDual` admits only those issuers; editing an existing dual-capable OAuth provider preserves its URLs. Other OAuth issuers remain single-endpoint. |
+| Manual creation requires `api_key`; ZCode/ZCodeCN OAuth is an issuer-specific exception | Their OAuth flow resolves a static API key accepted on both endpoints. `ai.DualEndpoints` is the one per-issuer table of (Anthropic, OpenAI) bases behind `ai.IssuerSupportsDual`, the web create path and the CLI import, so an issuer joins by one row once its second native endpoint is verified to accept the OAuth bearer; editing an existing dual-capable OAuth provider preserves its URLs. Kimi Code is the second pair of rows, one per account platform (`kimi_code`: `api.kimi.com/coding/v1` + `api.kimi.com/coding`; `kimi_code_intl`: the same paths on `api.kimi.ai`; per Kimi's model docs). The two platforms are separate issuers, as with ZCode: the mainland site does not serve overseas accounts and kimi-cli reaches the overseas one through `auth.kimi.ai`, so a re-authorisation must never swap one for the other; its Anthropic side reuses the kimi-cli headers of the OpenAI side (`NewKimiAnthropicClient`). Existing single-endpoint Kimi credentials keep their stored URLs; only newly authorised ones are dual. Other OAuth issuers remain single-endpoint. |
 | `APIStyle` must not be `google` | Google auth is per-project, not per-endpoint |
 | Template **optional** | A template pre-fills both URLs; custom endpoints supply the second URL manually (see Add flow). |
 
@@ -118,6 +118,8 @@ so the backend payload is identical for both surfaces.
 ---
 
 ## Edit flow
+
+The OAuth credential detail dialog shows the protocol(s) the credential serves at the top: both badges plus a "served natively, no translation" line for a dual credential, the chosen style (editable) with an "other protocols are converted" line for a single one.
 
 How an existing provider opens depends on its stored shape:
 

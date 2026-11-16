@@ -175,7 +175,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-error-midstream-close","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}
@@ -234,7 +234,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-incomplete","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}
@@ -304,7 +304,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-multi_turn","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}
@@ -374,7 +374,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-streaming_text","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}
@@ -508,7 +508,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-text","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}
@@ -578,7 +578,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-thinking","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}
@@ -648,7 +648,7 @@ event: response.in_progress
 data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"<ID1>","object":"response","created_at":<TS>,"status":"in_progress","output":[],"model":"pv-openai_responses-to-anthropic_beta-tool_result","incomplete_details":null,"error":null}}
 
 event: response.output_item.added
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress"}}
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"<ID2>","type":"message","role":"assistant","status":"in_progress","content":[]}}
 
 event: response.content_part.added
 data: {"type":"response.content_part.added","sequence_number":3,"item_id":"<ID2>","output_index":0,"content_index":0,"part":{"annotations":[],"text":"","type":"output_text"}}

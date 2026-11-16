@@ -1,11 +1,14 @@
 package obs
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -323,6 +326,8 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 		source = LogSource(src)
 	} else if id := RequestIDFromContext(entry.Context); id != "" {
 		source = LogSourceModelRequest
+	}
+	if id := RequestIDFromContext(entry.Context); id != "" {
 		if _, exists := entry.Data["request_id"]; !exists {
 			entry.Data["request_id"] = id
 		}
@@ -340,7 +345,7 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 	fields := make(map[string]interface{}, len(entry.Data))
 	for k, v := range entry.Data {
 		if k != "source" { // Don't duplicate source in fields
-			fields[k] = v
+			fields[k] = detachValue(v)
 		}
 	}
 
@@ -387,10 +392,6 @@ func (m *MultiLogger) ReadJSONLogs(limit int) ([]LogEntry, error) {
 // legacy entry is treated as LogSourceSystem. Reading stops once limit matching
 // entries are collected.
 func (m *MultiLogger) ReadJSONLogsBySource(limit int, allowed ...LogSource) ([]LogEntry, error) {
-	m.mu.RLock()
-	logPath := m.jsonLogger.Filename
-	m.mu.RUnlock()
-
 	set := make(map[LogSource]struct{}, len(allowed))
 	for _, s := range allowed {
 		set[s] = struct{}{}
@@ -403,7 +404,54 @@ func (m *MultiLogger) ReadJSONLogsBySource(limit int, allowed ...LogSource) ([]L
 		_, ok := set[src]
 		return ok
 	}
-	return readLogEntriesBackwards(logPath, limit, keep)
+	return m.ReadJSONLogsFiltered(limit, keep)
+}
+
+// ReadJSONLogsFiltered applies keep before the limit across the active file
+// and rotated history, so unrelated logs do not consume a view's window.
+func (m *MultiLogger) ReadJSONLogsFiltered(limit int, keep func(LogEntry) bool) ([]LogEntry, error) {
+	m.mu.RLock()
+	logPath := m.jsonLogger.Filename
+	m.mu.RUnlock()
+	entries, err := readLogEntriesBackwards(logPath, limit, keep)
+	if err != nil || (limit > 0 && len(entries) >= limit) || logPath == "" {
+		return entries, err
+	}
+	// Lumberjack keeps recent history in timestamped siblings after rotation.
+	// Include those files so restarting or rotating does not erase the UI's
+	// request history while the data is still retained on disk.
+	files, err := os.ReadDir(filepath.Dir(logPath))
+	if err != nil {
+		return nil, err
+	}
+	ext := filepath.Ext(logPath)
+	prefix := strings.TrimSuffix(filepath.Base(logPath), ext) + "-"
+	var backups []string
+	for _, f := range files {
+		if !f.Type().IsRegular() || !strings.HasPrefix(f.Name(), prefix) || !strings.HasSuffix(f.Name(), ext) {
+			continue
+		}
+		stamp := strings.TrimSuffix(strings.TrimPrefix(f.Name(), prefix), ext)
+		if _, err := time.Parse("2006-01-02T15-04-05.000", stamp); err == nil {
+			backups = append(backups, filepath.Join(filepath.Dir(logPath), f.Name()))
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(backups)))
+	for _, path := range backups {
+		n := limit
+		if limit > 0 {
+			n -= len(entries)
+		}
+		older, err := readLogEntriesBackwards(path, n, keep)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, older...)
+		if limit > 0 && len(entries) >= limit {
+			break
+		}
+	}
+	return entries, nil
 }
 
 // Close closes the logger
@@ -555,31 +603,29 @@ func readLogEntriesBackwards(filePath string, limit int, keep func(LogEntry) boo
 			return nil, fmt.Errorf("failed to read from file: %w", err)
 		}
 
-		if len(partialLine) > 0 {
-			buffer = append(partialLine, buffer...)
-			partialLine = nil
-		}
-
-		for i := len(buffer) - 1; i >= 0; i-- {
-			char := buffer[i]
-
-			if char != '\n' {
-				partialLine = append([]byte{char}, partialLine...)
-				continue
+		// The unfinished suffix belongs AFTER the earlier block. Prepending
+		// it corrupts every log line crossing a block boundary.
+		buffer = append(buffer, partialLine...)
+		end := len(buffer)
+		for end > 0 {
+			i := bytes.LastIndexByte(buffer[:end], '\n')
+			if i < 0 {
+				break
 			}
-
-			if len(partialLine) > 0 {
+			line := buffer[i+1 : end]
+			if len(line) > 0 {
 				var entry LogEntry
-				if err := json.Unmarshal(partialLine, &entry); err == nil && (keep == nil || keep(entry)) {
+				if err := json.Unmarshal(line, &entry); err == nil && (keep == nil || keep(entry)) {
 					// Append entries in order found (newest first since we're reading backwards)
 					entries = append(entries, entry)
 					if limit > 0 && len(entries) >= limit {
 						return entries, nil
 					}
 				}
-				partialLine = nil
 			}
+			end = i
 		}
+		partialLine = append([]byte(nil), buffer[:end]...)
 	}
 
 	// Handle last line (if file doesn't end with newline)

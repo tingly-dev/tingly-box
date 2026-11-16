@@ -173,7 +173,7 @@ export const ImportModal = ({
                             value={base64Data}
                             onChange={(e) => setBase64Data(e.target.value)}
                             disabled={loading}
-                            sx={{ fontFamily: fontMono, fontSize: fontSizes.lg }}
+                            sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}
                         />
                     </TabPanel>
 
@@ -194,7 +194,7 @@ export const ImportModal = ({
                             value={jsonlData}
                             onChange={(e) => setJsonlData(e.target.value)}
                             disabled={loading}
-                            sx={{ fontFamily: fontMono, fontSize: fontSizes.lg }}
+                            sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}
                         />
                     </TabPanel>
 

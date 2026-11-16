@@ -254,6 +254,7 @@ type applyOptions struct {
 	extras                map[string]any
 	defaultMode           string
 	showThinkingSummaries *bool
+	coAuthoredBy          *bool
 }
 
 // WithBackup enables or disables backup when applying settings.
@@ -284,6 +285,15 @@ func WithDefaultMode(mode string) ApplyOption {
 func WithShowThinkingSummaries(show bool) ApplyOption {
 	return func(opts *applyOptions) {
 		opts.showThinkingSummaries = &show
+	}
+}
+
+// WithCoAuthoredBy sets whether Claude Code credits itself in commits and PRs.
+// One choice writes two keys: the legacy top-level includeCoAuthoredBy and the
+// newer attribution object that replaces it (see buildClaudeSettings).
+func WithCoAuthoredBy(include bool) ApplyOption {
+	return func(opts *applyOptions) {
+		opts.coAuthoredBy = &include
 	}
 }
 

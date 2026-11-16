@@ -139,8 +139,15 @@ export default {
   },
   "playground": {
     "imageTitle": "Image Playground",
-    "noImageModels": "Add an image model rule on the Image API page to start generating images.",
-    "addImageModel": "Add a model",
+    "modelPicker": {
+      "chooseFirst": "Choose a model to start",
+      "chooseAnother": "Choose another model…",
+      "chooserTitle": "Choose an image model",
+      "yourRules": "Your rules",
+      "addFailed": "Could not use {{model}}: {{error}}"
+    },
+    "useFromApp": "Use from your app",
+    "useFromAppHint": "Call these models from your own app through the Image API",
     "model": "Model",
     "prompt": "Prompt",
     "promptPlaceholder": "Describe the image you want to generate…",
@@ -153,7 +160,13 @@ export default {
     "promptEditorTitle": "Prompt",
     "promptEditorDone": "Done",
     "size": "Size",
+    "customSize": "Custom…",
+    "customSizeTitle": "Custom size",
+    "customWidth": "Width (px)",
+    "customHeight": "Height (px)",
+    "customSizeError": "Enter a positive whole number for width and height.",
     "quality": "Quality",
+    "reasoningEffort": "Thinking effort",
     "count": "N",
     "generate": "Generate",
     "generateAnother": "Generate another · {{count}} running",
@@ -181,8 +194,10 @@ export default {
     "referenceReorderHint": "drag a thumbnail to reorder",
     "referenceThumbAlt": "Reference image {{number}}",
     "viewSourceImage": "View original image {{number}}",
-    "previewEmpty": "Generated and imported images appear here",
-    "previewHint": "Drop an image here to work on it without generating anything.",
+    "previewEmpty": "Generated images appear here",
+    "previewHint": "To crop, slice or mask an image without generating, import it here.",
+    "importFile": "Import",
+    "importClipboard": "From clipboard",
     "sessionOutputs": "Session images",
     "outputDirLabel": "Generated images are saved to",
     "importCount": "{{count}} imported",
@@ -214,7 +229,7 @@ export default {
     "reuse": {
       "action": "Edit this request",
       "loaded": "Request loaded into the panel — edit it and generate again",
-      "modelMissing": "{{model}} has no rule any more — pick a model before generating",
+      "modelMissing": "{{model}} is no longer available — pick a model before generating",
       "failed": "Could not load this request"
     },
     "gallery": {

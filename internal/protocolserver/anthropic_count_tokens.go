@@ -31,7 +31,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
 		logrus.Debugf("Failed to read request body: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		writeErrorResponse(c, http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 			},
@@ -44,7 +44,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 	// always use beta for token count
 	var params anthropic.BetaMessageCountTokensParams
 	if err := json.Unmarshal(bodyBytes, &params); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("Message error: %s", err.Error()),
 				Type:    "invalid_request_error",
@@ -57,7 +57,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 
 	requestModel = params.Model
 	if requestModel == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
 				Type:    "invalid_request_error",
@@ -69,7 +69,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 	// Check if this is the request requestModel name first
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -80,7 +80,7 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 
 	provider, selectedService, err := ph.selectService(c, scenarioType, rule, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -123,7 +123,7 @@ func (ph *ProtocolHandler) anthropicCountTokens(c *gin.Context, provider *typ.Pr
 
 	switch apiStyle {
 	default:
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("Unsupported API style: %s %s", provider.Name, apiStyle),
 				Type:    "invalid_request_error",

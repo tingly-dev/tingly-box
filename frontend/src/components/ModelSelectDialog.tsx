@@ -23,6 +23,12 @@ interface ModelSelectTabProps {
     selectedModel?: string;
     activeTab?: string; // Provider UUID
     onSelected?: (option: ProviderSelectTabOption) => void;
+    // Multi-select: which models are picked, across providers. When set, a
+    // click on a model only reports it through onSelected (the caller toggles
+    // it) and the cards show this instead of selectedProvider/selectedModel.
+    isModelSelected?: (providerUuid: string, model: string) => boolean;
+    // Extra control at the end of the models toolbar row.
+    toolbarEnd?: React.ReactNode;
     onSelectionClear?: () => void; // Called when selection should be cleared (e.g., after deleting selected model)
     onProviderChange?: (provider: Provider) => void; // Called when switching to a provider tab
     onCustomModelSave?: (provider: Provider, customModel: string) => void;
@@ -36,13 +42,25 @@ function ModelSelectTabInner({
     selectedModel,
     activeTab: externalActiveTab,
     onSelected,
+    isModelSelected,
+    toolbarEnd,
     onSelectionClear,
     onProviderChange,
     onCustomModelSave,
     singleProvider,
 }: ModelSelectTabProps) {
     const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
-    const { providerModels, refreshingProviders, fetchModels, refreshModels } = useProviderModels();
+    const { providerModels, refreshingProviders, fetchModels: fetchProviderModels } = useProviderModels();
+    // Providers whose first fetch has settled, so the panel can tell "still
+    // loading" apart from "loaded, nothing here" and not flash an empty list.
+    const [fetchedProviders, setFetchedProviders] = useState<ReadonlySet<string>>(() => new Set());
+    const fetchModels = useCallback(async (providerUuid: string) => {
+        try {
+            return await fetchProviderModels(providerUuid);
+        } finally {
+            setFetchedProviders(prev => prev.has(providerUuid) ? prev : new Set(prev).add(providerUuid));
+        }
+    }, [fetchProviderModels]);
     const gridLayout = useGridLayout();
     const {
         internalCurrentTab,
@@ -60,9 +78,10 @@ function ModelSelectTabInner({
 
     const handleModelSelect = useCallback(async (provider: Provider, model: string) => {
         onSelected?.({ provider, model });
-        // Track recent model
-        addRecentModel(provider.uuid, model);
-    }, [onSelected, addRecentModel]);
+        // Track recent model. Not while multi-selecting: a click there only
+        // toggles, and reordering Recent would move cards under the cursor.
+        if (!isModelSelected) addRecentModel(provider.uuid, model);
+    }, [onSelected, addRecentModel, isModelSelected]);
 
     // Providers edited through the in-dialog "Edit Provider" button. Callers
     // own the providers prop and only refetch it on their own surfaces, so an
@@ -227,11 +246,19 @@ function ModelSelectTabInner({
                 const currentProvider = flattenedProviders.find(p => p.uuid === currentTab);
                 if (!currentProvider) return null;
 
+                const modelsLoading = !providerModels[currentTab]
+                    && (refreshingProviders.includes(currentTab) || !fetchedProviders.has(currentTab));
+
                 return (
                     <ModelsPanel
                         provider={currentProvider}
+                        modelsLoading={modelsLoading}
                         selectedProvider={selectedProvider}
                         selectedModel={selectedModel}
+                        isModelSelected={isModelSelected
+                            ? (model) => isModelSelected(currentProvider.uuid, model)
+                            : undefined}
+                        toolbarEnd={toolbarEnd}
                         columns={gridLayout.columns}
                         modelsPerPage={gridLayout.modelsPerPage}
                         onModelSelect={handleModelSelect}

@@ -74,6 +74,22 @@ func TestDecisionsScenarioDescriptor(t *testing.T) {
 	}
 }
 
+func TestImagePromptScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioImagePrompt)
+	if !ok {
+		t.Fatalf("expected %q descriptor to be registered", ScenarioImagePrompt)
+	}
+	if !d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatalf("expected imageprompt descriptor to allow rule binding and path use, got %+v", d)
+	}
+	if !ScenarioSupportsTransport(ScenarioImagePrompt, TransportOpenAI) {
+		t.Fatalf("expected imageprompt scenario to support TransportOpenAI")
+	}
+	if ScenarioSupportsTransport(ScenarioImagePrompt, TransportImageGen) || ScenarioSupportsTransport(ScenarioImagePrompt, TransportAnthropic) {
+		t.Fatalf("imageprompt scenario serves chat completions only")
+	}
+}
+
 func TestOpenAIScenarioSupportsBothTransports(t *testing.T) {
 	if !ScenarioSupportsTransport(ScenarioOpenAI, TransportOpenAI) {
 		t.Fatalf("openai scenario should support TransportOpenAI")

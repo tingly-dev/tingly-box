@@ -63,6 +63,7 @@ func (h *Handler) GetClaudeConfig(c *gin.Context) {
 		DefaultMode:           defaultMode,
 		InstallStatusLine:     snapshot.StatusLine,
 		ShowThinkingSummaries: agent.NormalizeClaudeCodeShowThinkingSummaries(snapshot.ShowThinkingSummaries),
+		CoAuthoredBy:          agent.NormalizeClaudeCodeCoAuthoredBy(snapshot.CoAuthoredBy),
 	})
 }
 
@@ -232,6 +233,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	// targets the correct tingly-box port.  The env section is replaced on
 	// every apply, so this must be set unconditionally to survive re-applies.
 	env["TINGLY_API_URL"] = baseURL
+	agent.OmitFollowedDefaultModel(env)
 
 	// Install status line script if requested (before applying settings)
 	var err error
@@ -242,6 +244,11 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	var opts []config.ApplyOption
 	opts = append(opts, config.WithDefaultMode(defaultMode))
 	opts = append(opts, config.WithShowThinkingSummaries(agent.NormalizeClaudeCodeShowThinkingSummaries(req.ShowThinkingSummaries)))
+	if snapshot, readErr := agent.ReadMainClaudeCodeSettings(); readErr == nil {
+		if include, write := coAuthoredByToWrite(req.CoAuthoredBy, snapshot.CoAuthoredBy); write {
+			opts = append(opts, config.WithCoAuthoredBy(include))
+		}
+	}
 	if req.InstallStatusLine {
 		var scriptCreated bool
 		statusLinePath, scriptCreated, err = config.InstallStatusLineScript()
@@ -608,6 +615,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 
 	// Build context windows map from rules for models with context_1m flag
 	contextWindows := config.BuildContextWindowsFromRules(cfg)
+	prefs.ModelAutoCompactPercent = config.BuildCompactPercentsFromRules(cfg)
 
 	port := h.resolvedPort()
 	codexBaseURL := middleware.BaseURLFromRequest(c, port) + "/tingly/codex"
@@ -725,6 +733,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 
 	// Build context windows map from rules for models with context_1m flag
 	contextWindows := config.BuildContextWindowsFromRules(cfg)
+	prefs.ModelAutoCompactPercent = config.BuildCompactPercentsFromRules(cfg)
 
 	port := h.resolvedPort()
 	codexBaseURL := middleware.BaseURLFromRequest(c, port) + "/tingly/codex"
@@ -770,7 +779,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		Models:     models,
 	}
 	if writeCatalog && len(models) > 0 {
-		catalogBytes, err := config.RenderCodexModelCatalog(models, contextWindows)
+		catalogBytes, err := config.RenderCodexModelCatalogWithPrefs(models, contextWindows, prefs)
 		if err == nil {
 			resp.CatalogJson = string(catalogBytes)
 		}
@@ -781,4 +790,20 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 // RestoreCodexConfig rolls back Codex config files to their most recent backup.
 func (h *Handler) RestoreCodexConfig(c *gin.Context) {
 	h.restoreAgent(c, agent.AgentTypeCodex)
+}
+
+// coAuthoredByToWrite decides whether an apply rewrites the Co-Authored-By
+// keys. What the user's settings.json already says wins: a request that
+// carries no choice (one-click apply, the 1M re-apply), or one that matches the
+// file, leaves includeCoAuthoredBy and attribution exactly as written, custom
+// attribution text included. Only a real flip, or a file that says nothing
+// (tb's default, off), writes them.
+func coAuthoredByToWrite(requested, current *bool) (include bool, write bool) {
+	if current == nil {
+		return agent.NormalizeClaudeCodeCoAuthoredBy(requested), true
+	}
+	if requested == nil || *requested == *current {
+		return false, false
+	}
+	return *requested, true
 }

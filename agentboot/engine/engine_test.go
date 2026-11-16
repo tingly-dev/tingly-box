@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,6 +36,24 @@ func (m *memStore) count(id string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.entries[id])
+}
+
+func TestReleaseRefusesBackgroundWorkAndSettlingCallback(t *testing.T) {
+	e := New(Config{Store: newMemStore()})
+	t.Cleanup(func() { e.Shutdown(context.Background()) })
+	e.mu.Lock()
+	e.live["s"] = []TaskBrief{{TaskID: "task"}}
+	e.mu.Unlock()
+	if err := e.Release("s"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Release with background work = %v, want ErrBusy", err)
+	}
+	e.mu.Lock()
+	delete(e.live, "s")
+	e.settling["s"] = 1
+	e.mu.Unlock()
+	if err := e.Release("s"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Release during callback = %v, want ErrBusy", err)
+	}
 }
 
 func TestStart_LosingClaimRecordsNothing(t *testing.T) {
@@ -72,6 +91,14 @@ func TestLaunchSignature_ChangesWhenTheSettingsFileChanges(t *testing.T) {
 	}
 	if launchSignature(opts) == before {
 		t.Fatal("signature unchanged after the profile's settings changed; the resident process would not restart")
+	}
+}
+
+func TestLaunchSignatureChangesWhenMCPChanges(t *testing.T) {
+	a := agentboot.ExecutionOptions{MCPServers: map[string]interface{}{"projects": map[string]interface{}{"url": "http://localhost/one"}}}
+	b := agentboot.ExecutionOptions{MCPServers: map[string]interface{}{"projects": map[string]interface{}{"url": "http://localhost/two"}}}
+	if launchSignature(a) == launchSignature(b) {
+		t.Fatal("MCP configuration changes must restart the resident process")
 	}
 }
 
@@ -182,4 +209,210 @@ func TestPrompter_HostAnswersApprovals(t *testing.T) {
 			t.Fatal("the engine recorded an approval the host answered")
 		}
 	}
+}
+
+// Model and permission mode are changed on the live process, so they must
+// not be part of what forces a restart.
+func TestLaunchSignature_IgnoresModelAndPermissionMode(t *testing.T) {
+	a := launchSignature(agentboot.ExecutionOptions{Model: "a", PermissionMode: "default"})
+	b := launchSignature(agentboot.ExecutionOptions{Model: "b", PermissionMode: "plan"})
+	if a != b {
+		t.Fatal("a model or permission-mode change would restart the process instead of being applied live")
+	}
+}
+
+type fakeLive struct {
+	models, modes []string
+	applied       []map[string]any
+	err           error
+	settingsErr   error
+}
+
+func (f *fakeLive) ApplySettings(_ context.Context, s map[string]any) error {
+	f.applied = append(f.applied, s)
+	return f.settingsErr
+}
+
+func (f *fakeLive) SetModel(_ context.Context, m string) error {
+	f.models = append(f.models, m)
+	return f.err
+}
+
+func (f *fakeLive) SetPermissionMode(_ context.Context, m string) error {
+	f.modes = append(f.modes, m)
+	return f.err
+}
+
+func TestApplyLive(t *testing.T) {
+	newEngine := func() *Engine { return &Engine{launch: map[string]launchState{}} }
+	have := launchState{sig: "s", model: "a", mode: "default"}
+
+	t.Run("nothing changed sends nothing", func(t *testing.T) {
+		f := &fakeLive{}
+		if !newEngine().applyLive("id", f, have, have) || len(f.models)+len(f.modes) != 0 {
+			t.Fatalf("sent %v %v", f.models, f.modes)
+		}
+	})
+	t.Run("changed model and mode are applied and remembered", func(t *testing.T) {
+		e, f := newEngine(), &fakeLive{}
+		want := launchState{sig: "s", model: "b", mode: "plan"}
+		if !e.applyLive("id", f, have, want) {
+			t.Fatal("applyLive failed")
+		}
+		if len(f.models) != 1 || f.models[0] != "b" || len(f.modes) != 1 || f.modes[0] != "plan" {
+			t.Fatalf("sent %v %v", f.models, f.modes)
+		}
+		if got := e.launch["id"]; got != want {
+			t.Fatalf("remembered %+v, want %+v", got, want)
+		}
+	})
+	t.Run("a refused change asks for a restart", func(t *testing.T) {
+		e, f := newEngine(), &fakeLive{err: errors.New("rejected")}
+		if e.applyLive("id", f, have, launchState{sig: "s", model: "b", mode: "default"}) {
+			t.Fatal("a refused model change must fall back to a restart")
+		}
+	})
+	t.Run("going back to the launch default mode needs a restart", func(t *testing.T) {
+		f := &fakeLive{}
+		if newEngine().applyLive("id", f, have, launchState{sig: "s", model: "a", mode: ""}) || len(f.modes) != 0 {
+			t.Fatal("an unnamed mode cannot be sent live")
+		}
+	})
+}
+
+func TestInject_WithoutARunningTurnIsNotInjectable(t *testing.T) {
+	e, _, _ := newScripted(t, func(*enginetest.Turn) error { return nil }, nil)
+	if err := e.Inject("none", "hello"); !errors.Is(err, ErrNotInjectable) {
+		t.Fatalf("Inject = %v, want ErrNotInjectable", err)
+	}
+}
+
+func TestLaunchSignatureChangesForEffort(t *testing.T) {
+	if launchSignature(agentboot.ExecutionOptions{Effort: "low"}) == launchSignature(agentboot.ExecutionOptions{Effort: "high"}) {
+		t.Fatal("a changed effort must restart the resident process before the next turn")
+	}
+}
+
+func rewriteSettings(t *testing.T, path, doc string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeSettings(t *testing.T, doc string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	rewriteSettings(t, path, doc)
+	return path
+}
+
+// Permission rules are applied to the live process (applyLive), so editing
+// them must not change what forces a restart; any other key still does.
+func TestLaunchSignature_IgnoresPermissionRules(t *testing.T) {
+	path := writeSettings(t, "{}")
+	sig := func(doc string) string {
+		rewriteSettings(t, path, doc)
+		return launchSignature(agentboot.ExecutionOptions{SettingsPath: path})
+	}
+	base := sig(`{"env":{"A":"1"},"permissions":{"allow":["Bash(a)"]}}`)
+	for name, doc := range map[string]string{
+		"rules added":       `{"env":{"A":"1"},"permissions":{"allow":["Bash(a)","Bash(b)"],"ask":["Bash(c)"]}}`,
+		"rules removed":     `{"env":{"A":"1"}}`,
+		"auto mode rules":   `{"env":{"A":"1"},"permissions":{"allow":["Bash(a)"]},"autoMode":{"allow":["x"]}}`,
+		"key order differs": `{"permissions":{"allow":["Bash(a)"]},"env":{"A":"1"}}`,
+	} {
+		if got := sig(doc); got != base {
+			t.Errorf("%s changed the launch signature", name)
+		}
+	}
+	if sig(`{"env":{"A":"2"},"permissions":{"allow":["Bash(a)"]}}`) == base {
+		t.Error("a changed env must still change the launch signature")
+	}
+	if sig(`not json`) == sig(`also not json`) {
+		t.Error("an unparseable settings file is still hashed whole")
+	}
+}
+
+func TestLiveSettingsAndDelta(t *testing.T) {
+	opts := func(doc string) agentboot.ExecutionOptions {
+		return agentboot.ExecutionOptions{SettingsPath: writeSettings(t, doc)}
+	}
+	if got := liveSettings(opts(`{"env":{"A":"1"}}`)); got != "" {
+		t.Errorf("no rules: %q", got)
+	}
+	if got := liveSettings(agentboot.ExecutionOptions{}); got != "" {
+		t.Errorf("no settings file: %q", got)
+	}
+	with := liveSettings(opts(`{"env":{"A":"1"},"permissions":{"allow":["Bash(a)"]},"autoMode":{"allow":["x"]}}`))
+	if with != `{"autoMode":{"allow":["x"]},"permissions":{"allow":["Bash(a)"]}}` {
+		t.Errorf("live part = %s", with)
+	}
+
+	b, _ := json.Marshal(liveDelta("", with))
+	if string(b) != with {
+		t.Errorf("delta from nothing = %s, want everything", b)
+	}
+	only := `{"permissions":{"allow":["Bash(b)"]}}`
+	b, _ = json.Marshal(liveDelta(with, only))
+	if string(b) != `{"autoMode":{},"permissions":{"allow":["Bash(b)"]}}` {
+		t.Errorf("a dropped key is sent empty: %s", b)
+	}
+	b, _ = json.Marshal(liveDelta(only, ""))
+	if string(b) != `{"permissions":{}}` {
+		t.Errorf("all rules gone: %s", b)
+	}
+}
+
+func TestApplyLive_PermissionRules(t *testing.T) {
+	newEngine := func() *Engine { return &Engine{launch: map[string]launchState{}} }
+	have := launchState{sig: "s", model: "a", mode: "default", live: `{"permissions":{"allow":["Bash(a)"]}}`}
+
+	t.Run("changed rules are pushed and remembered", func(t *testing.T) {
+		e, f := newEngine(), &fakeLive{}
+		want := have
+		want.live = `{"permissions":{"allow":["Bash(a)","Bash(b)"]}}`
+		if !e.applyLive("id", f, have, want) {
+			t.Fatal("applyLive asked for a restart")
+		}
+		if len(f.applied) != 1 || len(f.models)+len(f.modes) != 0 {
+			t.Fatalf("applied %v, models %v, modes %v", f.applied, f.models, f.modes)
+		}
+		if got := e.launch["id"]; got != want {
+			t.Fatalf("remembered %+v, want %+v", got, want)
+		}
+	})
+	t.Run("a refused push never restarts and is tried again", func(t *testing.T) {
+		e, f := newEngine(), &fakeLive{settingsErr: errors.New("unsupported")}
+		want := have
+		want.live = `{"permissions":{"allow":["Bash(b)"]}}`
+		if !e.applyLive("id", f, have, want) {
+			t.Fatal("a refused rule push must not ask for a restart")
+		}
+		if got, ok := e.launch["id"]; ok && got.live == want.live {
+			t.Fatalf("remembered rules the process refused: %+v", got)
+		}
+		e.applyLive("id", f, have, want)
+		if len(f.applied) != 2 {
+			t.Fatalf("pushed %d times, want one try per turn", len(f.applied))
+		}
+	})
+	t.Run("mode and rules together", func(t *testing.T) {
+		e, f := newEngine(), &fakeLive{}
+		want := launchState{sig: "s", model: "a", mode: "plan", live: ""}
+		if !e.applyLive("id", f, have, want) {
+			t.Fatal("applyLive asked for a restart")
+		}
+		if len(f.modes) != 1 || len(f.applied) != 1 {
+			t.Fatalf("modes %v, applied %v", f.modes, f.applied)
+		}
+	})
+	t.Run("a refused mode still asks for a restart", func(t *testing.T) {
+		e, f := newEngine(), &fakeLive{err: errors.New("no")}
+		want := have
+		want.mode = "plan"
+		if e.applyLive("id", f, have, want) {
+			t.Fatal("a refused mode change restarts as before")
+		}
+	})
 }

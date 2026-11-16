@@ -1,48 +1,24 @@
-export interface MCPSourceConfig {
-    id?: string;
-    name?: string;
-    enabled?: boolean;
-    transport?: 'http' | 'stdio' | 'sse' | 'advisor';
-    endpoint?: string;
-    headers?: Record<string, string>;
-    tools?: string[];
-    command?: string;
-    args?: string[];
-    cwd?: string;
-    env?: Record<string, string>;
-    proxy_url?: string;
-    visibility?: 'client' | 'server';
-    // Local mode specific fields
-    connection_type?: 'stdio' | 'http' | 'sse';
-    auth_type?: 'none' | 'headers' | 'oauth';
-    tools_to_execute?: string[];
-    tools_auto_exec?: string[];
-    allowed_extra_headers?: string[];
-    auto_registered?: boolean;
-    advisor?: {
-        provider_uuid?: string;
-        model?: string;
-        max_uses_per_request?: number;
-        max_tokens?: number;
-    };
-}
+import type { components } from '@/client';
 
-export interface MCPRuntimeConfig {
-    sources?: MCPSourceConfig[];
-    request_timeout?: number;
-    strip_disabled_mcp_tools?: boolean;
-}
+export type MCPSourceConfig = components['schemas']['MCPSourceConfig'];
+export type MCPRuntimeConfig = components['schemas']['MCPRuntimeConfig'];
+export type MCPConfigResponse = components['schemas']['MCPRuntimeConfigResponse'];
+export type MCPCatalogTool = components['schemas']['CatalogTool'];
+export type MCPSourceStatus = components['schemas']['SourceStatus'];
+export type MCPProfile = components['schemas']['MCPProfile'];
+export type MCPProfileTool = components['schemas']['MCPProfileTool'];
+export type MCPToolUsage = components['schemas']['MCPToolUsage'];
+export type MCPRouteSource = components['schemas']['RouteSource'];
+export type MCPProfileRoute = components['schemas']['ProfileRoute'];
+export type MCPRoutingSnapshot = components['schemas']['RoutingSnapshot'];
 
-export interface MCPConfigResponse {
-    success: boolean;
-    config?: MCPRuntimeConfig;
-    error?: string;
-}
+export const MCP_DEFAULT_PROFILE_ID = 'default' as const;
 
 export const BUILTIN_WEBTOOLS_ID = 'webtools' as const;
 export const BUILTIN_ADVISOR_ID = 'advisor' as const;
-export const BUILTIN_IDS = [BUILTIN_WEBTOOLS_ID, BUILTIN_ADVISOR_ID] as const;
-export type BuiltinId = typeof BUILTIN_IDS[number];
+export const BUILTIN_SERVER_WEBTOOLS_ID = 'server-webtools' as const;
+export const BUILTIN_IDS = [BUILTIN_WEBTOOLS_ID, BUILTIN_ADVISOR_ID, BUILTIN_SERVER_WEBTOOLS_ID] as const;
+export type BuiltinId = (typeof BUILTIN_IDS)[number];
 
 export interface MCPKVPair {
     key: string;
@@ -51,6 +27,7 @@ export interface MCPKVPair {
 
 export interface MCPSourceFormValue {
     id: string;
+    name: string;
     enabled: boolean;
     transport: 'http' | 'stdio' | 'sse';
     endpoint: string;
@@ -63,12 +40,32 @@ export interface MCPSourceFormValue {
     useGlobalProxy: boolean;
     proxyUrl: string;
     visibility: 'client' | 'server';
+    headers: MCPKVPair[];
+    usage: MCPToolUsage;
+    preset?: string;
+    original?: MCPSourceConfig;
 }
+
+export const MCP_GITHUB_PRESET = 'github' as const;
+export const MCP_GITHUB_ENDPOINT = 'https://api.githubcopilot.com/mcp/';
+
+// The GitHub integration is a fixed subset of the official GitHub MCP server:
+// the tools it offers are decided by Tingly Box, not by this form.
+export const githubSourceFormValue = (id: string, token: string): MCPSourceFormValue => ({
+    ...defaultMCPSourceFormValue(),
+    id,
+    name: 'GitHub',
+    transport: 'http',
+    endpoint: MCP_GITHUB_ENDPOINT,
+    headers: [{ key: 'Authorization', value: `Bearer ${token.trim()}` }],
+    preset: MCP_GITHUB_PRESET,
+});
 
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
 
 export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     id: '',
+    name: '',
     enabled: true,
     transport: 'stdio',
     endpoint: '',
@@ -81,6 +78,8 @@ export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     useGlobalProxy: true,
     proxyUrl: '',
     visibility: 'client',
+    headers: [],
+    usage: { client: true, gateway: false },
 });
 
 const isPassthroughValue = (key: string, value: string): boolean => value === `\${${key}}`;
@@ -109,9 +108,10 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         args = [];
     }
 
-    const normalizedTransport = source.transport === 'http' || source.transport === 'sse' || source.transport === 'stdio'
-        ? source.transport
-        : 'stdio';
+    const normalizedTransport =
+        source.transport === 'http' || source.transport === 'sse' || source.transport === 'stdio'
+            ? source.transport
+            : 'stdio';
 
     // advisor is an in-process backend transport; keep frontend UX on stdio editor.
     if (source.transport === 'advisor' && !command) {
@@ -120,7 +120,15 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
     }
 
     return {
+        original: source,
+        headers: Object.entries(source.headers || {}).map(([key, value]) => ({ key, value })),
+        usage: source.usage ?? {
+            client: source.visibility !== 'server' && source.transport !== 'advisor',
+            gateway: source.visibility === 'server' || source.transport === 'advisor',
+        },
+        preset: source.preset,
         id: source.id || '',
+        name: source.name || '',
         enabled: source.enabled ?? true,
         transport: normalizedTransport,
         endpoint: source.endpoint || '',
@@ -150,35 +158,39 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
     }
 
     const source: MCPSourceConfig = {
+        ...form.original,
+        usage: form.usage,
         id: form.id.trim(),
+        name: form.name.trim() || form.id.trim(),
         enabled: form.enabled,
         transport: form.transport,
         tools: (form.tools || []).map((t) => t.trim()).filter(Boolean),
         visibility: form.visibility,
+        ...(form.preset ? { preset: form.preset } : {}),
     };
 
-    if (form.transport === 'http') {
+    if (form.transport === 'http' || form.transport === 'sse') {
         source.endpoint = form.endpoint.trim();
+        source.headers = Object.fromEntries(
+            form.headers.filter((row) => row.key.trim()).map((row) => [row.key.trim(), row.value])
+        );
     } else {
         // Handle builtin command marker
         if (form.command === 'builtin') {
             // Convert builtin marker to actual tingly-box command
+            source.origin = 'builtin';
             source.command = 'tingly-box';
             source.args = ['mcp-builtin'];
         } else {
             source.command = form.command.trim();
-            source.args = (form.args || []).map((a) => a.trim()).filter(Boolean);
+            source.args = [...form.args];
         }
         source.cwd = form.cwd.trim();
     }
 
-    if (Object.keys(envMap).length > 0) {
-        source.env = envMap;
-    }
+    source.env = envMap;
 
-    if (!form.useGlobalProxy && form.proxyUrl.trim()) {
-        source.proxy_url = form.proxyUrl.trim();
-    }
+    source.proxy_url = form.useGlobalProxy ? '' : form.proxyUrl.trim();
 
     return source;
 };

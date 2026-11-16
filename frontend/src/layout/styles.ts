@@ -11,11 +11,13 @@ import {
     activityItemPaddingX,
     activityItemPaddingY,
     activityItemRadius,
+    footerHeight,
     headerHeight,
 } from './constants';
 import { Z_INDEX } from '../constants/zIndex';
 import type { SxProps } from '@mui/material';
-import type { Theme } from '@mui/material/styles';
+import { alpha, type Theme } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ---------------------------------------------------------------------------
 // Layout — main content area
@@ -28,12 +30,13 @@ export const mobileContentSx = {
     pb: 3,
     overflowY: 'auto',
     scrollBehavior: 'smooth',
+    // Theme-aware: a light-grey track read as a bright stripe in dark mode.
     '&::-webkit-scrollbar': { width: 8 },
-    '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
+    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
-        backgroundColor: 'grey.300',
-        borderRadius: 1,
-        '&:hover': { backgroundColor: 'grey.400' },
+        backgroundColor: 'divider',
+        borderRadius: radius.pill,
+        '&:hover': { backgroundColor: 'text.disabled' },
     },
 } as const;
 
@@ -117,7 +120,7 @@ export const activityBottomClusterSx: SxProps<Theme> = {
  *  there is more content beyond it. */
 export const activityIconsScrollSx: SxProps<Theme> = (theme) => {
     const paper = theme.palette.background.paper;
-    const shadow = theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.12)';
+    const shadow = alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.5 : 0.12);
     return {
         flex: 1,
         minHeight: 0,
@@ -144,8 +147,16 @@ export const activityRailSx: SxProps<Theme> = {
     display: 'flex',
     flexDirection: 'column',
     bgcolor: 'background.paper',
-    borderRight: '1px solid',
-    borderColor: 'divider',
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: footerHeight,
+        borderRight: '1px solid',
+        borderColor: 'divider',
+        pointerEvents: 'none',
+    },
 };
 
 /** Expand handle on the ActivityBar — only shown when the Sidebar is collapsed.
@@ -201,30 +212,9 @@ export const activityLogoButtonSx: SxProps<Theme> = {
 // Sidebar — secondary nav list
 // ---------------------------------------------------------------------------
 
-/** Shared sizing for the sidebar's nav-style rows, kept here so every row is
- *  the same height whether or not it happens to carry a subtitle. `mx` is part
- *  of the row geometry (inset from the rail edge), so it lives here too.
- *  minHeight is sized to comfortably fit two text lines (primary 14px +
- *  secondary 11px ≈ 31px) with breathing room above and below. */
-export const NAV_ROW_SX = {
-    mx: 1,
-    minHeight: 52,
-    borderRadius: 1.25,
-    py: 1,
-    px: 2,
-} as const;
-
-export const navRowTextSlotProps = (active: boolean) => ({
-    primary: { noWrap: true, variant: 'body2' as const, sx: { fontWeight: 500, lineHeight: 1.3, fontSize: '0.875rem' } },
-    secondary: {
-        variant: 'caption' as const,
-        sx: {
-            fontSize: '0.6875rem',
-            lineHeight: 1.2,
-            color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-        },
-    },
-});
+// Nav rows (sizing, selected look, text) live in @tingly/ui so the Projects
+// sidebar draws the same rows.
+export { NAV_ROW_SX, navRowSelectedSx, navRowTextSlotProps } from '@tingly/ui/theme/nav';
 
 export const sidebarContainerSx: SxProps<Theme> = {
     height: '100%',
@@ -255,7 +245,7 @@ export const sidebarListScrollSx: SxProps<Theme> = {
     '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
         backgroundColor: 'grey.300',
-        borderRadius: 1,
+        borderRadius: radius.pill,
         '&:hover': { backgroundColor: 'grey.400' },
     },
 };

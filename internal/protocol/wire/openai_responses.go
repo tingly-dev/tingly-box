@@ -118,6 +118,15 @@ type ResponsesUsageWire struct {
 type ResponsesInputTokensDetailsWire struct {
 	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
 	CachedTokens     int64 `json:"cached_tokens"`
+	// Retention-tier split of the writes (gpt-5.6+). Omitempty like
+	// CacheWriteTokens: absent means the channel never reported a split, and
+	// older clients must not be handed a field they don't know.
+	CacheWriteTokensDetails *ResponsesCacheWriteTokensDetailsWire `json:"cache_write_tokens_details,omitempty"`
+}
+
+type ResponsesCacheWriteTokensDetailsWire struct {
+	Ttl30mTokens int64 `json:"ttl_30m_tokens"`
+	Ttl12hTokens int64 `json:"ttl_12h_tokens"`
 }
 
 type ResponsesOutputTokensDetailsWire struct {
@@ -146,7 +155,28 @@ type ResponsesOutputItemWire struct {
 	Content   []ResponsesContentPartWire `json:"content,omitempty"`
 	CallID    string                     `json:"call_id,omitempty"`
 	Name      string                     `json:"name,omitempty"`
+	Namespace string                     `json:"namespace,omitempty"`
 	Arguments *string                    `json:"arguments,omitempty"`
+}
+
+// MarshalJSON ensures message items always carry "content" (an empty array
+// when unset): the real Responses API sends "content":[] on a message's
+// response.output_item.added, and Codex ignores a message item without it,
+// then drops every output_text delta for lack of an active item (#1922).
+func (i ResponsesOutputItemWire) MarshalJSON() ([]byte, error) {
+	type plain ResponsesOutputItemWire
+	if i.Type != "message" {
+		return json.Marshal(plain(i))
+	}
+	content := i.Content
+	if content == nil {
+		content = []ResponsesContentPartWire{}
+	}
+	// The outer Content shadows plain's omitempty one.
+	return json.Marshal(struct {
+		plain
+		Content []ResponsesContentPartWire `json:"content"`
+	}{plain(i), content})
 }
 
 type ResponsesContentPartWire struct {

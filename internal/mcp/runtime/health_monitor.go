@@ -42,7 +42,7 @@ func (h *HealthMonitor) Start(ctx context.Context, interval time.Duration) {
 	h.interval = interval
 	h.mu.Unlock()
 
-	go h.monitor(ctx)
+	go h.monitor(ctx, interval)
 }
 
 // Stop stops health monitoring.
@@ -58,6 +58,10 @@ func (h *HealthMonitor) Stop(ctx context.Context) {
 	select {
 	case h.stopCh <- struct{}{}:
 		// Signal stop
+	case <-h.stoppedCh:
+		return
+	case <-ctx.Done():
+		return
 	case <-time.After(5 * time.Second):
 		logrus.Warn("health monitor: timeout sending stop signal")
 	}
@@ -73,12 +77,12 @@ func (h *HealthMonitor) Stop(ctx context.Context) {
 }
 
 // monitor runs the health check loop.
-func (h *HealthMonitor) monitor(ctx context.Context) {
-	ticker := time.NewTicker(h.interval)
+func (h *HealthMonitor) monitor(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	defer close(h.stoppedCh)
 
-	logrus.Debugf("health monitor: started for source=%s interval=%v", h.source.GetSourceID(), h.interval)
+	logrus.Debugf("health monitor: started for source=%s interval=%v", h.source.GetSourceID(), interval)
 
 	for {
 		select {

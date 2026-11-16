@@ -1,16 +1,24 @@
 package stream
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/openai/openai-go/v3"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
@@ -40,6 +48,9 @@ type chatToResponsesConverter struct {
 
 	// pending is an internal queue of events to yield one-by-one
 	pending []wire.ResponsesEvent
+
+	// namespaces restores the namespace of calls to flattened namespace tools.
+	namespaces toolnamespace.Index
 }
 
 // pendingToolCallResponse tracks a tool call being assembled from stream chunks
@@ -53,7 +64,7 @@ type pendingToolCallResponse struct {
 
 // NewChatToResponsesConverter creates a converter that reads from an OpenAI
 // Chat Completions stream and yields Responses API wire events.
-func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) *chatToResponsesConverter {
+func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string, namespaces toolnamespace.Index) *chatToResponsesConverter {
 	return &chatToResponsesConverter{
 		stream:           stream,
 		responseModel:    responseModel,
@@ -63,6 +74,7 @@ func NewChatToResponsesConverter(stream OpenAIChatStream, responseModel string) 
 		textOutputIndex:  -1,
 		usage:            protocol.ZeroTokenUsage(),
 		pendingToolCalls: make(map[int]*pendingToolCallResponse),
+		namespaces:       namespaces,
 	}
 }
 
@@ -73,17 +85,28 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 		c.pending = c.pending[1:]
 		return evt, false, nil
 	}
+	if c.completedSent {
+		return nil, true, nil
+	}
 
 	// Read upstream chunks until we have at least one event to yield
 	for {
 		if !c.stream.Next() {
 			if err := c.stream.Err(); err != nil {
-				return nil, false, err
+				if c.finishReason == "" || !isChatStreamTeardownError(err) {
+					return nil, false, err
+				}
+				// Output is complete even if the connection breaks before [DONE].
+				// Keep all usage read so far; explicit failures still propagate.
+				logrus.WithError(err).Warn("chat to responses stream errored after finish_reason; preserving completed output")
 			}
-			if !c.completedSent {
+			if c.finishReason == "" {
 				return nil, false, fmt.Errorf("chat stream ended without a finish reason")
 			}
-			return nil, true, nil
+			// include_usage is a trailing chunk after finish_reason. Only finalize
+			// after draining it; Codex uses the completed usage to trigger compaction.
+			c.emitCompletionEvents()
+			return c.Next()
 		}
 
 		chunk := c.stream.Current()
@@ -95,6 +118,22 @@ func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
 			return evt, false, nil
 		}
 	}
+}
+
+// Only recognized transport teardown errors can be recovered after output has
+// finished. Do not infer this from an error message or suppress arbitrary SDK
+// errors (including malformed JSON), cancellation, deadlines or provider errors.
+func isChatStreamTeardownError(err error) bool {
+	var apiErr *openai.Error
+	var sseErr *openaistream.StreamError
+	var netErr net.Error
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.As(err, &apiErr) || errors.As(err, &sseErr) ||
+		(errors.As(err, &netErr) && netErr.Timeout()) {
+		return false
+	}
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED)
 }
 
 func (c *chatToResponsesConverter) Usage() *protocol.TokenUsage {
@@ -172,7 +211,7 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 				Type:           "response.output_item.added",
 				SequenceNumber: c.nextSeq(),
 				OutputIndex:    toolOutputIndex,
-				Item:           newResponsesFunctionCallItem(itemID, callID, toolCall.Function.Name, "", "in_progress"),
+				Item:           newResponsesFunctionCallItem(c.namespaces, itemID, callID, toolCall.Function.Name, "", "in_progress"),
 			})
 		}
 
@@ -192,17 +231,6 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 	// Check for completion
 	if choice.FinishReason != "" {
 		c.finishReason = string(choice.FinishReason)
-
-		if !c.hasUsage && c.usage.OutputTokens == 0 {
-			outputTokens := int64(c.accumulatedText.Len() / 4)
-			for _, ptc := range c.pendingToolCalls {
-				outputTokens += int64(ptc.arguments.Len() / 4)
-			}
-			c.usage = protocol.NewTokenUsageFull(c.usage.InputTokens, int(outputTokens),
-				c.usage.CacheReadTokens, c.usage.CacheWriteTokens, c.usage.ReasoningTokens)
-		}
-
-		c.emitCompletionEvents()
 	}
 }
 
@@ -211,6 +239,14 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 func (c *chatToResponsesConverter) emitCompletionEvents() {
 	if c.completedSent {
 		return
+	}
+	if !c.hasUsage && c.usage.OutputTokens == 0 {
+		outputTokens := int64(c.accumulatedText.Len() / 4)
+		for _, ptc := range c.pendingToolCalls {
+			outputTokens += int64(ptc.arguments.Len() / 4)
+		}
+		c.usage = protocol.NewTokenUsageFull(c.usage.InputTokens, int(outputTokens),
+			c.usage.CacheReadTokens, c.usage.CacheWriteTokens, c.usage.ReasoningTokens)
 	}
 	c.completedSent = true
 
@@ -272,7 +308,7 @@ func (c *chatToResponsesConverter) emitCompletionEvents() {
 			Type:           "response.output_item.done",
 			SequenceNumber: c.nextSeq(),
 			OutputIndex:    ptc.outputIdx,
-			Item:           newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, arguments, "completed"),
+			Item:           newResponsesFunctionCallItem(c.namespaces, ptc.itemID, callID, ptc.name, arguments, "completed"),
 		})
 	}
 
@@ -289,7 +325,7 @@ func (c *chatToResponsesConverter) emitCompletionEvents() {
 	for _, idx := range sortedIndexes {
 		ptc := c.pendingToolCalls[idx]
 		callID := ptc.callID
-		output[ptc.outputIdx] = newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), itemStatus)
+		output[ptc.outputIdx] = newResponsesFunctionCallItem(c.namespaces, ptc.itemID, callID, ptc.name, ptc.arguments.String(), itemStatus)
 	}
 
 	if isIncomplete {
@@ -400,12 +436,14 @@ func newResponsesMessageItem(itemID, status, text string) wire.ResponsesOutputIt
 	}
 }
 
-func newResponsesFunctionCallItem(itemID, callID, name, arguments, status string) wire.ResponsesOutputItemWire {
+func newResponsesFunctionCallItem(namespaces toolnamespace.Index, itemID, callID, name, arguments, status string) wire.ResponsesOutputItemWire {
+	namespace, name := namespaces.Restore(name)
 	return wire.ResponsesOutputItemWire{
 		ID:        itemID,
 		CallID:    callID,
 		Type:      "function_call",
 		Name:      name,
+		Namespace: namespace,
 		Arguments: &arguments,
 		Status:    status,
 	}

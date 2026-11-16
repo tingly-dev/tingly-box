@@ -20,6 +20,12 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithRequestModel(CreateRequest{}),
 		swagger.WithResponseModel(TeamInfo{}),
 	)
+	group.POST("/teams/:team_id/duplicate", h.Duplicate,
+		swagger.WithTags("teams"),
+		swagger.WithDescription("Duplicate a team's routing into a new team; sharing keys are not copied"),
+		swagger.WithRequestModel(TeamDuplicateRequest{}),
+		swagger.WithResponseModel(TeamInfo{}),
+	)
 	group.PUT("/teams/:team_id", h.Update,
 		swagger.WithTags("teams"),
 		swagger.WithDescription("Update a team"),

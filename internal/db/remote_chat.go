@@ -2,7 +2,7 @@ package db
 
 import "time"
 
-// The Chat domain struct lives in remote/control/bot; this package implements
+// The Chat domain struct lives in remote/bot; this package implements
 // bot.ChatStoreInterface against it (converting to/from RemoteChatRecord
 // below), mirroring how remote_session_store.go backs session.SessionStore.
 
@@ -29,14 +29,8 @@ type RemoteChatRecord struct {
 	IsWhitelisted bool   `gorm:"column:is_whitelisted;index:idx_remote_chats_whitelisted"`
 	WhitelistedBy string `gorm:"column:whitelisted_by"`
 
-	BashCwd string `gorm:"column:bash_cwd"`
-
 	// ContextToken mirrors bot.Chat.ContextToken (WeChat ilink reply context).
 	ContextToken string `gorm:"column:context_token"`
-
-	CurrentAgent string `gorm:"column:current_agent"`
-
-	Verbose *bool `gorm:"column:verbose"`
 
 	Disabled   bool      `gorm:"column:disabled;index:idx_remote_chats_disabled"`
 	DisabledAt time.Time `gorm:"column:disabled_at"`

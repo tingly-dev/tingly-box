@@ -8,7 +8,8 @@ import bench from './bench';
 import agent from './agent';
 import remote from './remote';
 import image from './image';
-import desk from './desk';
+import claudeCode from './claudeCode';
+import projects from './projects';
 
 export default {
     ...app,
@@ -19,5 +20,6 @@ export default {
     ...agent,
     ...remote,
     ...image,
-    ...desk,
+    ...claudeCode,
+    ...projects,
 };

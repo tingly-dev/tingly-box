@@ -10,6 +10,7 @@ import { useVersion } from '@/contexts/VersionContext';
 import { useSelfUpdate } from '@/hooks/useSelfUpdate';
 import { CopyIconButton } from '@/components/CopyIconButton';
 import { Paper } from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface UpdatePanelDialogProps {
     open: boolean;
@@ -23,10 +24,8 @@ interface UpdatePanelDialogProps {
 const updateMethodForSource = (source: string | null): 'npx' | 'npm' | null => {
     switch (source) {
         case 'npx':
-        case 'npx-bundle':
             return 'npx';
         case 'npm':
-        case 'npm-bundle':
             return 'npm';
         default:
             return null;
@@ -161,7 +160,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                         overflow: 'hidden',
                         border: '1px solid',
                         borderColor: 'divider',
@@ -343,7 +342,7 @@ export const UpdatePanelDialog: React.FC<UpdatePanelDialogProps> = ({ open, onCl
                                     sx={{
                                         fontFamily: fontMono,
                                         color: 'text.primary',
-                                        fontSize: '0.875rem',
+                                        fontSize: fontSizes.base,
                                         pr: 5,
                                         wordBreak: 'break-all',
                                     }}

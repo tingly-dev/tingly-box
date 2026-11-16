@@ -1,3 +1,4 @@
+import {CredentialCards} from "@/components/credential/CredentialCards";
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
 import {
@@ -5,6 +6,7 @@ import {
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {QuotaCell} from "@/components/credential/QuotaCell";
+import type {RedeemOutcome} from "@/hooks/useProviderQuota";
 import {ProviderLabel} from "@/components/ProviderLogo";
 import {
     Check,
@@ -17,7 +19,7 @@ import {
     Route,
     Visibility,
 } from '@/components/icons';
-import ConfirmDialog from "@/components/ConfirmDialog";
+import ConfirmPopover from "@/components/ConfirmPopover";
 import {
     Box,
     Button,
@@ -26,7 +28,6 @@ import {
     Menu,
     MenuItem,
     Modal,
-    Paper,
     Stack,
     Switch,
     Table,
@@ -46,9 +47,12 @@ import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 interface ApiKeyTableProps {
     providers: Provider[];
+    view?: "table" | "list" | "card";
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
@@ -56,6 +60,7 @@ interface ApiKeyTableProps {
     providerQuotas?: { [uuid: string]: ProviderQuota };
     refreshingQuotas?: Set<string>;
     onQuotaRefresh?: (providerUuid: string) => void;
+    onQuotaRedeem?: (providerUuid: string, rewardId: string) => Promise<RedeemOutcome>;
 }
 
 interface TokenModalState {
@@ -88,6 +93,7 @@ const columnsFor = (showQuota: boolean) => showQuota ? COLUMNS : COLUMNS.filter(
 
 const ApiKeyTable = ({
                          providers,
+                         view = "table",
                          onEdit,
                          onToggle,
                          onDelete,
@@ -95,6 +101,7 @@ const ApiKeyTable = ({
                          providerQuotas,
                          refreshingQuotas,
                          onQuotaRefresh,
+                         onQuotaRedeem,
                      }: ApiKeyTableProps) => {
     const [tokenModal, setTokenModal] = useState<TokenModalState>({
         open: false,
@@ -203,26 +210,21 @@ const ApiKeyTable = ({
 
     return (
         <TableContainer
-            component={Paper}
-            elevation={0}
             sx={{
-                border: 1,
-                borderColor: "divider",
-                borderRadius: 2,
-                boxShadow: "none",
+                ...(view === "table" && tableFrameSx),
                 overflowX: "auto",
             }}
         >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
-            <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
-                    <TableRow sx={{bgcolor: "action.hover"}}>
+                    <TableRow>
                         {columns.map((col) => (
                             <TableCell
                                 key={col.label}
                                 align={col.align}
-                                sx={{fontWeight: 600, width: col.width, py: 1.25, ...col.sx}}
+                                sx={{width: col.width, ...col.sx}}
                             >
                                 {col.label}
                             </TableCell>
@@ -293,6 +295,7 @@ const ApiKeyTable = ({
                                             quota={providerQuotas?.[provider.uuid]}
                                             refreshing={refreshingQuotas?.has(provider.uuid) ?? false}
                                             onRefresh={() => onQuotaRefresh?.(provider.uuid)}
+                                                onRedeem={onQuotaRedeem && (rewardId => onQuotaRedeem(provider.uuid, rewardId))}
                                         />
                                     </TableCell>
                                 )}
@@ -390,7 +393,7 @@ const ApiKeyTable = ({
                                             gap: 0.5,
                                             border: 1,
                                             borderColor: "divider",
-                                            borderRadius: 1.5,
+                                            borderRadius: radius.card,
                                             p: 0.5,
                                             width: "fit-content",
                                         }}
@@ -440,7 +443,7 @@ const ApiKeyTable = ({
                         </React.Fragment>
                     ))}
                 </TableBody>
-            </Table>
+            </Table>}
             {/* Overflow menu (shared, driven by moreMenu state) */}
             <Menu
                 anchorEl={moreMenu.anchorEl}
@@ -488,8 +491,9 @@ const ApiKeyTable = ({
                             <MenuItem
                                 key="delete"
                                 onClick={() => {
+                                    const anchor = moreMenu.anchorEl;
                                     handleMoreClose();
-                                    handleDeleteClick(p.uuid);
+                                    handleDeleteClick(p.uuid, anchor);
                                 }}
                                 sx={{color: "error.main"}}
                             >
@@ -512,7 +516,7 @@ const ApiKeyTable = ({
                         bgcolor: "background.paper",
                         boxShadow: 24,
                         p: 4,
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                     }}
                 >
                     <Typography variant="h6" sx={{mb: 2}}>
@@ -535,7 +539,7 @@ const ApiKeyTable = ({
                                 sx={{
                                     p: 2,
                                     bgcolor: "action.hover",
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     fontFamily: fontMono,
                                     wordBreak: "break-all",
                                     border: "1px solid",
@@ -569,10 +573,10 @@ const ApiKeyTable = ({
                 </Box>
             </Modal>
             {/* Delete Confirmation */}
-            <ConfirmDialog
-                open={deleteModal.open}
+            <ConfirmPopover
+                anchorEl={deleteModal.anchorEl}
                 title="Delete Provider"
-                description={`Are you sure you want to delete the provider "${deleteModal.rowName}"? This action cannot be undone.`}
+                description={`Delete "${deleteModal.rowName}"? This cannot be undone.`}
                 confirmLabel="Delete"
                 confirmColor="error"
                 onClose={handleCloseDeleteModal}

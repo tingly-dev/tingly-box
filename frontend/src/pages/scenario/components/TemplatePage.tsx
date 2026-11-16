@@ -7,6 +7,7 @@ import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
 import EmptyState from '@/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
+import {api} from '@/services/api';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
@@ -62,6 +63,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         allowDeleteRule = false,
         allowToggleRule = true,
         allowAddRule = true,
+        allowReorder = false,
         scenario,
         showAddApiKeyButton = true,
         showCreateRuleButton = true,
@@ -88,7 +90,22 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
 
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
-    const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
+    // Per-page collapse state of every rule, remembered across navigation and reload.
+    const expandedStorageKey = `tingly:rule-expanded:${props.scenario ?? 'default'}`;
+    const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>(() => {
+        try {
+            return JSON.parse(localStorage.getItem(expandedStorageKey) || '{}');
+        } catch {
+            return {};
+        }
+    });
+    useEffect(() => {
+        try {
+            localStorage.setItem(expandedStorageKey, JSON.stringify(expandedStates));
+        } catch {
+            // storage unavailable: state just isn't remembered
+        }
+    }, [expandedStorageKey, expandedStates]);
     const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
     const [logDialogOpen, setLogDialogOpen] = useState<boolean>(false);
     const [showGuide, setShowGuide] = useState<boolean>(false);
@@ -120,7 +137,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         handleRuleChange,
         handleProviderModelsChange,
         handleRefreshModels,
-        handleCreateRule: createRule,
+        handleCreateRules: createRules,
     } = useTemplatePageRules({
         rules,
         onRulesChange,
@@ -141,16 +158,45 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     // above stay anchored to the real, backend-ordered array.
     const {sortMode, toggleSortMode, sortedRules} = useRuleSort(rules);
 
-    // Routed through a ref so onCreateFromModel doesn't capture a stale createRule.
-    const createRuleRef = useRef(createRule);
-    useEffect(() => {
-        createRuleRef.current = createRule;
-    }, [createRule]);
+    // Hard ordering: move one rule (pin = jump to top, up/down = nudge one
+    // slot) and persist the whole new order. Optimistic locally, then the
+    // server round-trip; on failure the list reloads to the server truth.
+    // Only offered in the original order view — the name-sorted view is a
+    // lens, not the list, so moving within it would mislead.
+    const handleReorder = useCallback(async (ruleUuid: string, direction: 'top' | 'up' | 'down') => {
+        if (!scenario || !allowReorder || sortMode !== 'original') return;
+        const from = rules.findIndex(r => r.uuid === ruleUuid);
+        if (from < 0) return;
+        const next = [...rules];
+        const [moved] = next.splice(from, 1);
+        const to = direction === 'top' ? 0 : direction === 'up' ? Math.max(0, from - 1) : Math.min(next.length, from + 1);
+        next.splice(to, 0, moved);
+        if (direction === 'up' && to === from) return;
 
-    const runCreateRuleAndScroll = useCallback(async (
-        options?: { providerUuid: string; model: string }
+        onRulesChange(next);
+        try {
+            const result = await api.reorderRules(scenario, next.map(r => r.uuid));
+            if (!result?.success) {
+                throw new Error(result?.error || 'Unknown error');
+            }
+        } catch (error) {
+            console.error('Error reordering rules:', error);
+            showNotification(`Failed to reorder rules: ${(error as Error).message}`, 'error');
+            await loadRules?.(scenario);
+        }
+    }, [rules, scenario, allowReorder, sortMode, onRulesChange, loadRules, showNotification]);
+
+    // Routed through a ref so onCreateFromModels doesn't capture a stale createRules.
+    const createRulesRef = useRef(createRules);
+    useEffect(() => {
+        createRulesRef.current = createRules;
+    }, [createRules]);
+
+    // One rule per picked model, then scroll to the first new one.
+    const runCreateRulesAndScroll = useCallback(async (
+        options: { providerUuid: string; model: string }[]
     ) => {
-        const newUuid = await createRuleRef.current(options);
+        const [newUuid] = await createRulesRef.current(options);
         if (newUuid) {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
@@ -171,11 +217,11 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         rules,
         onRuleChange: handleRuleChange,
         showNotification,
-        onCreateFromModel: (option) => {
-            void runCreateRuleAndScroll({
+        onCreateFromModels: (options) => {
+            void runCreateRulesAndScroll(options.map(option => ({
                 providerUuid: option.provider.uuid,
                 model: option.model,
-            });
+            })));
         },
     });
 
@@ -380,7 +426,8 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             py: 8,
                             color: 'text.secondary'
                         }}>
-                            {t('templatePage.noRules')}
+                            {/* Without "New Model" there is nothing to click: don't point at it. */}
+                            {t(allowAddRule ? 'templatePage.noRules' : 'templatePage.noRulesFixed')}
                         </Box>
                     ) : (
                         sortedRules.map((rule, index) => {
@@ -391,6 +438,9 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             // so only attach it in the original, insertion-ordered view.
                             const isLastRule = sortMode === 'original' && index === sortedRules.length - 1;
                             const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
+                            // Edge rules have nothing to move toward; a single-rule
+                            // list has no ordering to change at all.
+                            const reorderEnabled = allowReorder && sortMode === 'original' && sortedRules.length > 1;
 
                             return (
                                 <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
@@ -411,6 +461,10 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             allowDeleteRule={allowDeleteRule}
                                             onRuleDelete={onRuleDelete}
                                             allowToggleRule={allowToggleRule}
+                                            allowReorder={reorderEnabled}
+                                            onMoveRule={handleReorder}
+                                            canMoveUp={reorderEnabled && index > 0}
+                                            canMoveDown={reorderEnabled && index < sortedRules.length - 1}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                             onContext1MToggle={onContext1MToggle}
                                             quickProbeSignal={probeAllSignal}

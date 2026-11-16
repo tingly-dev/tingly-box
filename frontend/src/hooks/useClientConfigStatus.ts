@@ -12,12 +12,13 @@ const REFRESH_MS = 15_000;
 
 // Tools whose config file the gateway can read back and compare
 // (GET /api/v1/config/<tool>/status).
-export type ClientConfigTool = 'claude' | 'codex' | 'dsh';
+export type ClientConfigTool = 'claude' | 'codex' | 'dsh' | 'workbuddy';
 
 const STATUS_PATHS = {
     claude: '/api/v1/config/claude/status',
     codex: '/api/v1/config/codex/status',
     dsh: '/api/v1/config/dsh/status',
+    workbuddy: '/api/v1/config/workbuddy/status',
 } as const;
 
 /** `tool` null = this page has no readable config; nothing is fetched. */

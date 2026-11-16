@@ -4,8 +4,9 @@ import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { overlay } from '@tingly/ui/theme/overlay';
 
-type AgentType = 'claude-code' | 'smart-guide' | 'custom' | 'mock';
+type AgentType = 'claude-code' | 'custom' | 'mock';
 
 interface AgentInfo {
     description: string;
@@ -33,7 +34,7 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
                     'Run tests, builds, and debug',
                     'Git operations: commit, push, rebase',
                 ],
-                config: 'Click the Profile node to the right to route @cc through a Claude Code profile.',
+                config: 'Click the Profile node to the right to pick the Claude Code profile this bot\'s chats run under.',
             },
             zh: {
                 description: '由 Claude Code CLI 驱动的全栈开发代理——功能实现、重构、测试、构建和 Git 操作。',
@@ -42,7 +43,7 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
                     '运行测试、构建与调试',
                     'Git 操作：提交、推送、变基',
                 ],
-                config: '点击右侧 Profile 节点，为 @cc 选择 Claude Code Profile。',
+                config: '点击右侧 Profile 节点，选择这个 bot 的聊天使用的 Claude Code Profile。',
             },
             ru: {
                 description: 'Полноценный агент разработки (Claude Code CLI) — реализация, рефакторинг, тесты, сборки и операции с Git в вашем локальном окружении.',
@@ -51,39 +52,7 @@ const AGENT_TYPE_CONFIG: Record<AgentType, {
                     'Запуск тестов, сборок и отладка',
                     'Операции с Git: коммит, push, rebase',
                 ],
-                config: 'Нажмите на узел Profile справа, чтобы направить @cc через профиль Claude Code.',
-            },
-        },
-    },
-    'smart-guide': {
-        label: 'SmartGuide',
-        info: {
-            en: {
-                description: 'A navigation and coordination assistant (@tb) — explores the project, answers questions, and handles small edits, then hands off heavy implementation to @cc.',
-                features: [
-                    'Explore files & explain architecture',
-                    'Small precise edits: config, env vars',
-                    'Persistent memory (MEMORY.md)',
-                ],
-                config: 'Click the Model node to select provider and model.',
-            },
-            zh: {
-                description: '导航与协调助手（@tb）——探索项目、回答问题、处理小改动，重度实现交由 @cc。',
-                features: [
-                    '探索文件并讲解架构',
-                    '精准小改动：配置、环境变量',
-                    '跨会话持久记忆（MEMORY.md）',
-                ],
-                config: '点击右侧 Model 节点选择服务商和模型。',
-            },
-            ru: {
-                description: 'Помощник по навигации и координации (@tb) — изучает проект, отвечает на вопросы и вносит небольшие правки, а тяжёлую реализацию передаёт @cc.',
-                features: [
-                    'Изучение файлов и объяснение архитектуры',
-                    'Точечные небольшие правки: конфиги, переменные окружения',
-                    'Постоянная память (MEMORY.md)',
-                ],
-                config: 'Нажмите на узел Model, чтобы выбрать провайдера и модель.',
+                config: 'Нажмите на узел Profile справа, чтобы выбрать профиль Claude Code для чатов этого бота.',
             },
         },
     },
@@ -171,7 +140,7 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                     </Box>
                 ))}
             </Box>
-            <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.24)' }} />
+            <Divider sx={{ my: 0.75, borderColor: overlay.onDark.line }} />
             <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', color: 'inherit' }}>
                 {info.config}
             </Typography>

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import api from '@/services/api';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface MetricPercentiles {
     sample_count: number;
@@ -91,31 +92,21 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
     ];
 
     return (
-        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, backgroundColor: 'background.paper', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <Box sx={{ px: 2.25, pt: 2, pb: 0.75, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>{t('dashboard.performance.title', { defaultValue: 'Response Performance' })}</Typography>
+                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>{t('dashboard.performance.title', { defaultValue: 'Response Performance' })}</Typography>
                 {loading && <CircularProgress size={18} />}
             </Box>
-            <Box sx={{ px: 2.25, pb: 1, display: 'grid', gridTemplateColumns: '52px repeat(3, minmax(0, 1fr))', columnGap: 1 }}>
-                <Box />
-                {metrics.map(({ key, title, metric }) => (
-                    <Box key={key} sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 600, fontSize: fontSizes.sm }}>{title}</Typography>
-                        <Typography sx={{ color: 'text.disabled', fontSize: fontSizes.micro, mt: 0.2 }}>
-                            {t('dashboard.performance.sampleCount', { n: metric?.sample_count.toLocaleString() ?? 0 })}
-                        </Typography>
-                    </Box>
-                ))}
-            </Box>
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', '& > * + *': { borderTop: '1px solid', borderColor: 'divider' } }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', pb: 0.5, '& > * + *': { borderTop: '1px solid', borderColor: 'divider' } }}>
                 {PERCENTILES.map(({ key, label }) => (
-                    <Box key={key} sx={{ px: 2.25, py: 1.25, minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: '52px repeat(3, minmax(0, 1fr))', alignItems: 'center', columnGap: 1 }}>
-                        <Typography sx={{ color: 'text.secondary', fontSize: fontSizes.xs, fontWeight: 600 }}>{label}</Typography>
+                    <Box key={key} sx={{ px: 2.25, py: 0.75, minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: '40px repeat(3, minmax(0, 1fr))', alignItems: 'center', columnGap: 1 }}>
+                        <Typography sx={{ color: 'text.disabled', fontSize: fontSizes.sm, fontWeight: 500 }}>{label.toLowerCase()}</Typography>
                         {metrics.map((metric) => {
                             const value = formatMetricValue(metric.metric, metric.kind, key);
                             return (
-                                <Typography key={metric.key} sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650, fontSize: fontSizes.lg, whiteSpace: 'nowrap' }}>
-                                    {value}
+                                <Typography key={metric.key} sx={{ whiteSpace: 'nowrap', fontSize: fontSizes.sm, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+                                    {metric.title}{' '}
+                                    <Box component="span" sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 600 }}>{value}</Box>
                                 </Typography>
                             );
                         })}

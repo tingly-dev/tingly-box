@@ -1,6 +1,7 @@
 import {Box, Stack, Typography} from '@mui/material';
 import React, {type ReactNode} from 'react';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ============================================================================
 // Types
@@ -53,7 +54,7 @@ const TabButton: React.FC<{
             transition: 'all 0.15s ease-in-out',
             '&:hover': {
                 backgroundColor: 'action.hover',
-                borderRadius: 0.5,
+                borderRadius: radius.chip,
             },
         }}
     >

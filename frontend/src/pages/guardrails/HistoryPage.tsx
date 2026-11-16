@@ -9,7 +9,6 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
-    Paper,
     Stack,
     Table,
     TableBody,
@@ -32,6 +31,7 @@ import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { formatTimestamp } from '@/utils/datetime';
 import { fontSizes } from '@/theme/fonts';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 type GuardrailsHistoryEntry = {
     time: string;
@@ -176,25 +176,23 @@ const GuardrailsHistoryPage = () => {
     const filtersActive = selectedVerdicts.length > 0 || timeFilter !== 'all';
 
     return (
-        <PageLayout loading={loading}>
+        <PageLayout
+            loading={loading}
+            // A page header like Guardrails' Overview and Secrets, not a card of its own.
+            title="Event History"
+            subtitle="Recent Guardrails activity. Expand a row only when you need the full context."
+            rightAction={
+                <Stack direction="row" spacing={1}>
+                    <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={loadHistory}>
+                        Refresh
+                    </Button>
+                    <Button variant="outlined" size="small" color="error" startIcon={<DeleteOutline />} onClick={() => setClearConfirmOpen(true)}>
+                        Clear
+                    </Button>
+                </Stack>
+            }
+        >
             <Stack spacing={3}>
-                <UnifiedCard
-                    title="Event History"
-                    titleHeadingLevel={1}
-                    subtitle="Recent Guardrails activity. Expand a row only when you need the full context."
-                    size="full"
-                    rightAction={
-                        <Stack direction="row" spacing={1}>
-                            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadHistory}>
-                                Refresh
-                            </Button>
-                            <Button variant="outlined" color="error" startIcon={<DeleteOutline />} onClick={() => setClearConfirmOpen(true)}>
-                                Clear
-                            </Button>
-                        </Stack>
-                    }
-                />
-
                 <UnifiedCard title={rowCountLabel} size="full">
                     <Stack spacing={2}>
                         <Stack
@@ -276,7 +274,7 @@ const GuardrailsHistoryPage = () => {
                             )}
                         </Stack>
 
-                        <TableContainer component={Paper} variant="outlined">
+                        <TableContainer sx={tableFrameSx}>
                             <Table size="small">
                                 <TableHead>
                                     <TableRow>

@@ -370,29 +370,23 @@ const GuardrailsRulesPage = () => {
     };
 
     return (
-        <PageLayout loading={loading}>
+        <PageLayout
+            loading={loading}
+            // A page header like Guardrails' Overview and Secrets, not a card of its own.
+            title="Policies"
+            subtitle="Policies define concrete rules. Groups are managed separately and control which policy sets are active. Built-in policies are marked directly in the list."
+            rightAction={
+                <Button variant="outlined" size="small" onClick={() => navigate('/guardrails/groups')}>
+                    Manage Groups
+                </Button>
+            }
+        >
             <Stack spacing={3}>
-                <UnifiedCard
-                    title="Policies"
-                    titleHeadingLevel={1}
-                    subtitle="Policies define concrete rules. Groups are managed separately and control which policy sets are active. Built-in policies are marked directly in the list."
-                    size="full"
-                    rightAction={
-                        <Stack direction="row" spacing={1}>
-                            <Button variant="outlined" size="small" onClick={() => navigate('/guardrails/groups')}>
-                                Manage Groups
-                            </Button>
-                        </Stack>
-                    }
-                >
-                    <Stack spacing={1.5}>
-                        {loadError && <Alert severity="error">{loadError}</Alert>}
-                    </Stack>
-                </UnifiedCard>
+                {loadError && <Alert severity="error">{loadError}</Alert>}
 
+                {/* The list's count, as Groups (n) and Events (n) on the sibling pages. */}
                 <UnifiedCard
-                    title="Policies"
-                    subtitle={`${policies.length} polic${policies.length === 1 ? 'y' : 'ies'} configured`}
+                    title={`Policies (${policies.length})`}
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={1}>

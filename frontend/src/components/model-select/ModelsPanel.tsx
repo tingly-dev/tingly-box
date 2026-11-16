@@ -1,4 +1,3 @@
-import { AddCircleOutline as AddCircleOutlineIcon } from '@/components/icons';
 import { NavigateBefore as NavigateBeforeIcon } from '@/components/icons';
 import { NavigateNext as NavigateNextIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
@@ -32,6 +31,7 @@ import { useNewModels } from '@/hooks/useNewModels';
 import { useModelDescriptions } from '@/hooks/useModelDescriptions';
 import { notify } from '@/utils/notify';
 import { fetchUIAPI } from '@/services/api';
+import AddCustomModelCard from './AddCustomModelCard';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
@@ -65,8 +65,16 @@ export interface ModelsPanelProps {
     provider: Provider;
     selectedProvider?: string;
     selectedModel?: string;
+    // Multi-select: which models of this provider are picked. Overrides
+    // selectedProvider/selectedModel for the cards' selected state.
+    isModelSelected?: (model: string) => boolean;
+    // Extra control at the end of the toolbar row, after search (e.g. a mode switch).
+    toolbarEnd?: React.ReactNode;
     columns: number;
     modelsPerPage: number;
+    // True until this provider's model list first arrives: the panel shows a
+    // loading state instead of flashing "0 models" / a partial list.
+    modelsLoading?: boolean;
     onModelSelect: (provider: Provider, model: string) => void;
     onCustomModelEdit: (provider: Provider, value?: string) => void;
     onCustomModelDelete: (provider: Provider, customModel: string) => void;
@@ -79,8 +87,11 @@ export function ModelsPanel({
     provider,
     selectedProvider,
     selectedModel,
+    isModelSelected: isModelSelectedProp,
+    toolbarEnd,
     columns,
     modelsPerPage,
+    modelsLoading = false,
     onModelSelect,
     onCustomModelEdit,
     onCustomModelDelete,
@@ -130,6 +141,9 @@ export function ModelsPanel({
     }, [refreshTrigger, provider.uuid, fetchModels]);
 
     const isProviderSelected = selectedProvider === provider.uuid;
+    const isModelSelected = (model: string) => isModelSelectedProp
+        ? isModelSelectedProp(model)
+        : isProviderSelected && selectedModel === model;
     const isRefreshing = refreshingProviders.includes(provider.uuid);
     const backendCustomModels = providerModels?.[provider.uuid]?.custom_model || [];
 
@@ -165,16 +179,33 @@ export function ModelsPanel({
         ...standardModelsForDisplay.map(model => ({ model, type: 'standard' as const })),
     ];
 
+    // The "Custom Model" card takes the first cell of every page.
+    const modelsPerGridPage = Math.max(1, modelsPerPage - 1);
+
     // Pagination and search
     const { searchTerms, handleSearchChange, getPaginatedData, setCurrentPage } = usePagination(
         [provider.uuid],
-        modelsPerPage
+        modelsPerGridPage
     );
 
     // Filter by search term
     const searchTerm = searchTerms[provider.uuid] || '';
+    // The shortcut sections can contain models absent from the main list. Include
+    // them in search results, but show each model only once while searching.
+    const searchModels = [...allModels];
+    const seenModels = new Set(searchModels.map(({ model }) => model));
+    for (const model of [
+        ...(newModels[provider.uuid]?.newModels || []),
+        ...(recentModels[provider.uuid] || []),
+        ...(providerModels?.[provider.uuid]?.star_models || []),
+    ]) {
+        if (!seenModels.has(model)) {
+            searchModels.push({ model, type: 'standard' });
+            seenModels.add(model);
+        }
+    }
     const filteredModels = searchTerm
-        ? allModels.filter(({ model }) => model.toLowerCase().includes(searchTerm.toLowerCase()))
+        ? searchModels.filter(({ model }) => model.toLowerCase().includes(searchTerm.toLowerCase()))
         : allModels;
 
     // Device-local memory of searches that led to a pick (or were submitted
@@ -188,8 +219,8 @@ export function ModelsPanel({
 
     const pagination = getPaginatedData(filteredModels.map(m => m.model), provider.uuid);
     const paginatedItems = filteredModels.slice(
-        (pagination.currentPage - 1) * modelsPerPage,
-        pagination.currentPage * modelsPerPage
+        (pagination.currentPage - 1) * modelsPerGridPage,
+        pagination.currentPage * modelsPerGridPage
     );
 
     const handlePageChange = useCallback((newPage: number) => {
@@ -259,21 +290,13 @@ export function ModelsPanel({
                         <Button
                             variant="outlined"
                             size="small"
-                            startIcon={<AddCircleOutlineIcon />}
-                            onClick={() => onCustomModelEdit(provider)}
-                            sx={{ minWidth: 100 }}
-                        >
-                            Custom Model
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            size="small"
                             startIcon={isRefreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
                             onClick={() => refreshModels(provider.uuid)}
                             disabled={isRefreshing}
+                            title="Fetch the latest model list from the provider"
                             sx={{ minWidth: 100 }}
                         >
-                            {isRefreshing ? 'Fetching...' : 'Refresh'}
+                            {isRefreshing ? 'Refreshing models…' : 'Refresh models'}
                         </Button>
                         {onProviderEdit && (
                             <Button
@@ -309,6 +332,7 @@ export function ModelsPanel({
                         onKeyDown={(e) => { if (e.key === 'Enter') rememberSearch(searchTerm); }}
                         sx={{ width: 200 }}
                     />
+                    {toolbarEnd}
                 </Stack>
 
                 {/* Recent searches — only while the box is empty, so they never compete with live results */}
@@ -331,6 +355,19 @@ export function ModelsPanel({
                     </Stack>
                 )}
 
+                {modelsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                        {/* Fade in only if loading is slow, so a quick fetch shows no spinner blink */}
+                        <CircularProgress
+                            size={24}
+                            sx={{
+                                opacity: 0,
+                                animation: 'modelsPanelSpinnerIn 0.2s ease 0.4s forwards',
+                                '@keyframes modelsPanelSpinnerIn': { to: { opacity: 1 } },
+                            }}
+                        />
+                    </Box>
+                ) : (<>
                 {/* Model count */}
                 <Typography
                     variant="caption"
@@ -342,11 +379,12 @@ export function ModelsPanel({
                 </Typography>
 
                 {/* New Models Section */}
-                {newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
+                {!searchTerm && newModels[provider.uuid]?.newModels && newModels[provider.uuid].newModels.length > 0 && (
                     <NewModelsSection
                         provider={provider}
                         newModels={newModels[provider.uuid].newModels}
                         selectedModel={isProviderSelected ? selectedModel : undefined}
+                        isModelSelected={isModelSelectedProp}
                         onModelSelect={selectModel}
                         onDismiss={() => clearNewModels(provider.uuid)}
                         columns={columns}
@@ -354,18 +392,19 @@ export function ModelsPanel({
                 )}
 
                 {/* Recent Models Section */}
-                {recentModels[provider.uuid]?.length > 0 && (
+                {!searchTerm && recentModels[provider.uuid]?.length > 0 && (
                     <RecentModelsSection
                         provider={provider}
                         recentModels={recentModels[provider.uuid]}
                         selectedModel={isProviderSelected ? selectedModel : undefined}
+                        isModelSelected={isModelSelectedProp}
                         onModelSelect={selectModel}
                         columns={columns}
                     />
                 )}
 
                 {/* Star Models Section */}
-                {providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
+                {!searchTerm && providerModels?.[provider.uuid]?.star_models && providerModels[provider.uuid].star_models!.length > 0 && (
                     <Box>
                         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                             Starred Models
@@ -375,7 +414,7 @@ export function ModelsPanel({
                                 <ModelCard
                                     key={`${provider.uuid}:${starModel}`}
                                     model={starModel}
-                                    isSelected={isProviderSelected && selectedModel === starModel}
+                                    isSelected={isModelSelected(starModel)}
                                     onClick={() => selectModel(starModel)}
                                     variant="starred"
                                     description={getDescription(starModel)}
@@ -389,8 +428,9 @@ export function ModelsPanel({
                 {/* All Models Section */}
                 <Box sx={{ minHeight: 200 }}>
                     <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.8 }}>
+                        <AddCustomModelCard onClick={() => onCustomModelEdit(provider)} />
                         {paginatedItems.map(({ model, type }) => {
-                            const isModelSelected = isProviderSelected && selectedModel === model;
+                            const modelSelected = isModelSelected(model);
 
                             if (type === 'custom') {
                                 // Determine variant based on custom model source
@@ -407,7 +447,7 @@ export function ModelsPanel({
                                         key={`${provider.uuid}:${model}`}
                                         model={model}
                                         provider={provider}
-                                        isSelected={isModelSelected}
+                                        isSelected={modelSelected}
                                         onEdit={() => onCustomModelEdit(provider, model)}
                                         onDelete={() => onCustomModelDelete(provider, model)}
                                         onSelect={() => selectModel(model)}
@@ -419,7 +459,7 @@ export function ModelsPanel({
                                     <ModelCard
                                         key={`${provider.uuid}:${model}`}
                                         model={model}
-                                        isSelected={isModelSelected}
+                                        isSelected={modelSelected}
                                         onClick={() => selectModel(model)}
                                         variant="standard"
                                         description={getDescription(model)}
@@ -431,7 +471,7 @@ export function ModelsPanel({
                     </Box>
 
                     {/* Empty state */}
-                    {paginatedItems.length === 0 && (
+                    {paginatedItems.length === 0 && searchTerm && (
                         <Box sx={{ textAlign: 'center', py: 4 }}>
                             <Typography variant="body2" sx={{
                                 color: "text.secondary"
@@ -468,6 +508,7 @@ export function ModelsPanel({
                         </Stack>
                     </Box>
                 )}
+                </>)}
             </Stack>
             </Box>
             {/* Provider Quota Bars - fixed at the bottom */}

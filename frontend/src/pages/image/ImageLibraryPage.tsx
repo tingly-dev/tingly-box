@@ -25,6 +25,10 @@ import { fontMono } from '@/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
 import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';
+import ThumbImage from './components/ThumbImage';
+import { THUMB_EDGE_TILE } from './components/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 type Tab = 'images' | 'snippets';
 
@@ -122,10 +126,10 @@ const ImageLibraryPage: React.FC = () => {
                                 <ButtonBase
                                     key={asset.id}
                                     onClick={() => { setConfirmingDelete(false); setRenaming(false); setOpenAsset(asset); }}
-                                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: 1.5 }}
+                                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: radius.card }}
                                 >
-                                    <Box sx={{ aspectRatio: '1 / 1', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover' }}>
-                                        <Box component="img" src={asset.src} alt={asset.name} sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                                    <Box sx={{ aspectRatio: '1 / 1', borderRadius: radius.card, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                                        <ThumbImage src={asset.src} alt={asset.name} edge={THUMB_EDGE_TILE} fit="contain" />
                                     </Box>
                                     <Typography noWrap sx={{ mt: 0.75, fontSize: 13 }}>{asset.name}</Typography>
                                 </ButtonBase>
@@ -166,7 +170,7 @@ const ImageLibraryPage: React.FC = () => {
             <Dialog open={openAsset !== null} onClose={() => setOpenAsset(null)} maxWidth="sm" fullWidth>
                 {openAsset && (
                     <>
-                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: '1.05rem' }}>
+                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: fontSizes.title }}>
                             {renaming ? (
                                 <TextField
                                     autoFocus
@@ -202,7 +206,7 @@ const ImageLibraryPage: React.FC = () => {
                             </IconButton>
                         </DialogTitle>
                         <DialogContent dividers>
-                            <Box sx={{ bgcolor: 'action.hover', borderRadius: 1.5, display: 'flex', justifyContent: 'center', mb: confirmingDelete ? 2 : 0 }}>
+                            <Box sx={{ bgcolor: 'action.hover', borderRadius: radius.card, display: 'flex', justifyContent: 'center', mb: confirmingDelete ? 2 : 0 }}>
                                 <Box component="img" src={openAsset.src} alt={openAsset.name} sx={{ maxWidth: '100%', maxHeight: 360, display: 'block' }} />
                             </Box>
                             {confirmingDelete && (
@@ -235,7 +239,7 @@ const ImageLibraryPage: React.FC = () => {
             </Dialog>
 
             <Dialog open={snippetDraft !== null} onClose={() => setSnippetDraft(null)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontSize: '1.05rem' }}>
+                <DialogTitle sx={{ fontSize: fontSizes.title }}>
                     {snippetDraft?.id
                         ? t('imageLibrary.editSnippetTitle', { defaultValue: 'Edit snippet' })
                         : t('imageLibrary.newSnippet', { defaultValue: 'New snippet' })}

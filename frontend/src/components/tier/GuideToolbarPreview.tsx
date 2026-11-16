@@ -8,6 +8,7 @@ import {
     Key as KeyIcon,
 } from '@/components/icons';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type GuideToolbarButton = 'connectAI' | 'newRule';
 
@@ -24,7 +25,7 @@ const pulse = keyframes`
 
 /**
  * A non-functional replica of the page toolbar (Troubleshoot · Connect AI ·
- * New Rule), shown inside the routing guide so users can recognise the exact
+ * New Model), shown inside the routing guide so users can recognise the exact
  * button a step is asking them to click. The taught button pulses; a small
  * "Click here" tag points at it.
  */
@@ -53,13 +54,13 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 left: '50%',
                 transform: 'translateX(-50%)',
                 fontSize: fontSizes.micro,
-                fontWeight: 700,
+                fontWeight: 600,
                 letterSpacing: '0.02em',
                 color: 'primary.contrastText',
                 bgcolor: 'primary.main',
                 px: 0.75,
                 py: 0.15,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 whiteSpace: 'nowrap',
                 boxShadow: 1,
                 pointerEvents: 'none',
@@ -90,7 +91,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 px: 1.5,
                 pt: 3,
                 pb: 1,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 border: '1px dashed',
                 borderColor: 'divider',
                 bgcolor: 'background.paper',
@@ -136,7 +137,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                         tabIndex={-1}
                         sx={{ pointerEvents: 'none', ...ring(highlight === 'newRule') }}
                     >
-                        {t('templateActions.newRule', { defaultValue: 'New Rule' })}
+                        {t('templateActions.newRule', { defaultValue: 'New Model' })}
                     </Button>
                 </Box>
             </Stack>

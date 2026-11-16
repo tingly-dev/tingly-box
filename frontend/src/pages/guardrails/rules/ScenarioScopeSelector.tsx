@@ -6,8 +6,9 @@ import {
     LaptopMac,
     Rule,
 } from '@/components/icons';
-import { Anthropic, Claude, OpenAI } from '@/components/BrandIcons';
+import { Anthropic, Claude, OpenAI, WorkBuddy } from '@/components/BrandIcons';
 import { toggleValue } from './listField';
+import { radius } from '@tingly/ui/theme/radius';
 
 const getScenarioPresentation = (scenario: string) => {
     switch (scenario) {
@@ -40,6 +41,12 @@ const getScenarioPresentation = (scenario: string) => {
                 label: 'Xcode',
                 description: 'Xcode-integrated coding workflows.',
                 icon: <LaptopMac sx={{ fontSize: 18 }} />,
+            };
+        case 'workbuddy':
+            return {
+                label: 'WorkBuddy',
+                description: 'Tencent WorkBuddy custom-model traffic.',
+                icon: <WorkBuddy size={18} />,
             };
         case 'custom':
             return {
@@ -79,7 +86,7 @@ const ScenarioScopeSelector = ({
     onChange,
     helperText,
 }: ScenarioScopeSelectorProps) => (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 2 }}>
         <Stack spacing={1.5}>
             <Box>
                 <Typography variant="subtitle2">{title}</Typography>
@@ -111,7 +118,7 @@ const ScenarioScopeSelector = ({
                                 border: '1px solid',
                                 borderColor: selected ? 'primary.main' : 'divider',
                                 bgcolor: selected ? 'action.selected' : 'background.paper',
-                                borderRadius: 2,
+                                borderRadius: radius.card,
                                 p: 1.5,
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',

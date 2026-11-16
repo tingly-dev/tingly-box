@@ -29,7 +29,12 @@ type ScenarioUpdateRequest struct {
 // ProfileCreateRequest represents the request to create or rename a profile
 type ProfileCreateRequest struct {
 	Name    string `json:"name" binding:"required"`
-	Unified bool   `json:"unified,omitempty"` // Optional, defaults to false (separate mode)
+	Unified bool   `json:"unified,omitempty"` // Deprecated and ignored: Claude Code has no modes (TEP-2197)
+}
+
+// ProfileDuplicateRequest represents the request to copy a profile
+type ProfileDuplicateRequest struct {
+	Name string `json:"name,omitempty" example:"work-copy"` // Optional; empty picks a free "<source>-copy" name
 }
 
 // ProfileUpdateRequest represents the request to update a profile
@@ -93,4 +98,32 @@ type ScenarioUpdateResponse struct {
 type ScenarioDescriptorsResponse struct {
 	Success bool                     `json:"success" example:"true"`
 	Data    []typ.ScenarioDescriptor `json:"data"`
+}
+
+// ClaudeCodeSlotRequest gives a Claude Code model slot a rule of its own
+// (enabled) or hands it back to the main rule.
+type ClaudeCodeSlotRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ClaudeCodeSlotsData lists the slots that have a rule of their own in a
+// unified-mode Claude Code scenario; Rule is the toggled slot's rule.
+type ClaudeCodeSlotsData struct {
+	Slots []string  `json:"slots"`
+	Rule  *typ.Rule `json:"rule,omitempty"`
+}
+
+type ClaudeCodeSlotsResponse struct {
+	Success bool                `json:"success"`
+	Data    ClaudeCodeSlotsData `json:"data"`
+}
+
+// ClaudeCodeUseProfileRequest names the profile (ID or name) whose routing the
+// default Claude Code config is overwritten with.
+type ClaudeCodeUseProfileRequest struct {
+	Profile string `json:"profile" binding:"required" example:"p1"`
+}
+
+type ClaudeCodeUseProfileResponse struct {
+	Success bool `json:"success"`
 }

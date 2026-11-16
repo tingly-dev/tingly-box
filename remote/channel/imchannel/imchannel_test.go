@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/remote/ask"
 	"github.com/tingly-dev/tingly-box/remote/channel"
-	"github.com/tingly-dev/tingly-box/remote/control/ask"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 )
 
@@ -15,6 +15,7 @@ type fakeSender struct {
 	lastText      string
 	lastParseMode imbot.ParseMode
 	lastMetadata  map[string]any
+	lastMedia     []imbot.MediaAttachment
 	err           error
 }
 
@@ -24,11 +25,71 @@ func (s *fakeSender) SendMessage(ctx context.Context, target string, opts *imbot
 		s.lastText = opts.Text
 		s.lastParseMode = opts.ParseMode
 		s.lastMetadata = opts.Metadata
+		s.lastMedia = opts.Media
 	}
 	if s.err != nil {
 		return nil, s.err
 	}
 	return &imbot.SendResult{MessageID: "m1"}, nil
+}
+
+func TestSendFileToFeishuAndLark(t *testing.T) {
+	for _, platform := range []string{"feishu", "lark"} {
+		t.Run(platform, func(t *testing.T) {
+			s := &fakeSender{}
+			c := New("bot", platform, s, nil, nil)
+			if err := c.SendFile(context.Background(), "ou_user", "/tmp/image.png", "image.png", "image/png", "caption"); err != nil {
+				t.Fatal(err)
+			}
+			if s.lastTarget != "ou_user" || s.lastText != "caption" || s.lastParseMode != imbot.ParseModeMarkdown || len(s.lastMedia) != 1 || s.lastMedia[0].Type != "image" || s.lastMedia[0].URL != "file:///tmp/image.png" {
+				t.Fatalf("unexpected message: target=%q text=%q media=%+v", s.lastTarget, s.lastText, s.lastMedia)
+			}
+		})
+	}
+}
+
+func TestSendFileToUploadPlatforms(t *testing.T) {
+	for _, platform := range []string{"dingtalk", "weixin", "wecom", "telegram"} {
+		t.Run(platform, func(t *testing.T) {
+			s := &fakeSender{}
+			c := New("bot", platform, s, nil, func(target string) string {
+				if target == "chat1" {
+					return "ctx-token"
+				}
+				return ""
+			})
+			if err := c.SendFile(context.Background(), "chat1", "/tmp/a b.pdf", "a b.pdf", "application/pdf", "cap"); err != nil {
+				t.Fatal(err)
+			}
+			if len(s.lastMedia) != 1 || s.lastMedia[0].Type != "document" || s.lastMedia[0].URL != "file:///tmp/a%20b.pdf" || s.lastMedia[0].Filename != "a b.pdf" {
+				t.Fatalf("media = %+v", s.lastMedia)
+			}
+			if s.lastMetadata["context_token"] != "ctx-token" {
+				t.Fatalf("metadata = %v", s.lastMetadata)
+			}
+		})
+	}
+}
+
+func TestSendFileUnsupportedPlatformErrors(t *testing.T) {
+	for _, platform := range []string{"slack", "discord", "whatsapp"} {
+		s := &fakeSender{}
+		c := New("bot", platform, s, nil, nil)
+		if err := c.SendFile(context.Background(), "c", "/tmp/a.png", "a.png", "image/png", ""); err == nil {
+			t.Errorf("%s: want unsupported error", platform)
+		}
+		if s.lastTarget != "" {
+			t.Errorf("%s: nothing may be sent", platform)
+		}
+	}
+}
+
+func TestSendFilePropagatesSendError(t *testing.T) {
+	s := &fakeSender{err: context.DeadlineExceeded}
+	c := New("bot", "dingtalk", s, nil, nil)
+	if err := c.SendFile(context.Background(), "c", "/tmp/a.png", "a.png", "image/png", ""); err == nil {
+		t.Fatal("send error must surface")
+	}
 }
 
 type fakePrompter struct {

@@ -234,3 +234,17 @@ func TestClaudeCodeConfig_Restore_AfterApplyTwice(t *testing.T) {
 		t.Errorf("expected settings.json to be restored to the first apply's key, got %s", data)
 	}
 }
+
+func TestBuildEnv_DefaultModelOnlyWhenSonnetIsSplit(t *testing.T) {
+	following := (&ClaudeCodeParams{ModelConfig: ClaudeCodeModelConfig{Default: "cc", SubAgent: "sub"}}).BuildEnv()
+	if v, ok := following["ANTHROPIC_MODEL"]; ok {
+		t.Errorf("ANTHROPIC_MODEL = %q, want it unset when sonnet follows the default", v)
+	}
+	if following["ANTHROPIC_DEFAULT_SONNET_MODEL"] != "cc" {
+		t.Errorf("sonnet = %q, want cc", following["ANTHROPIC_DEFAULT_SONNET_MODEL"])
+	}
+	split := (&ClaudeCodeParams{ModelConfig: ClaudeCodeModelConfig{Default: "cc", Sonnet: "sonnet"}}).BuildEnv()
+	if split["ANTHROPIC_MODEL"] != "cc" {
+		t.Errorf("ANTHROPIC_MODEL = %q, want cc when sonnet is split", split["ANTHROPIC_MODEL"])
+	}
+}

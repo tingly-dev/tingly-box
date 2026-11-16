@@ -15,9 +15,14 @@ import { useTheme } from '@mui/material/styles';
 import { getStatusColor } from '@/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
-import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
+import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { useNotify } from '@/hooks/useNotify';
+import type { RedeemOutcome } from '@/hooks/useProviderQuota';
+import type { UsageRedeem } from '@/types/quota';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Older than this, the figure is dimmed: the cache is refreshed in the
 // background, so a stale snapshot means the refresher could not reach upstream.
@@ -37,6 +42,8 @@ interface QuotaCellProps {
     quota: ProviderQuota | undefined;
     refreshing: boolean;
     onRefresh: () => void;
+    /** Spends a reward (a reset card) of this provider; the spend button shows only when given. */
+    onRedeem?: (rewardId: string) => Promise<RedeemOutcome>;
 }
 
 /** "5h" / "7d" / "30m" from a window's period; undefined when it has none. */
@@ -72,6 +79,15 @@ interface CellLine {
     exhausted?: boolean;
 }
 
+/** A clock time today, or date and time on another day, in the browser's locale. */
+function formatRetryTime(at: number): string {
+    const date = new Date(at);
+    const sameDay = date.toDateString() === new Date().toDateString();
+    return date.toLocaleString([], sameDay
+        ? { hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 /**
  * The Quota column of the credential tables. One line per window worth a
  * figure — the same ring the rule graph shows on a service node, the window's
@@ -89,10 +105,33 @@ interface CellLine {
  * No reading → "—", nothing more (.design/quota-semantics.md §3.6), but the
  * cell stays clickable so a reading can still be requested.
  */
-export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
+export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellProps) {
     const { t } = useTranslation();
     const theme = useTheme();
+    const notify = useNotify();
     const [rawOpen, setRawOpen] = useState(false);
+    // Spending a reward cannot be undone, so it always goes through a dialog
+    // that says what it will do; `spending` keeps a double click from sending
+    // a second request while the first is out.
+    const [pendingCard, setPendingCard] = useState<{ label: string; redeem: UsageRedeem } | null>(null);
+    const [spending, setSpending] = useState(false);
+    const spendCard = async (target = pendingCard) => {
+        if (!target || !onRedeem || spending) return;
+        setSpending(true);
+        try {
+            const outcome = await onRedeem(target.redeem.id);
+            const { status, message = '' } = outcome;
+            if (status === 'spent') notify.success(t(target.redeem.scope === 'daily' ? 'providerTable.quota.redeem.checkedIn' : 'providerTable.quota.redeem.spent'));
+            else if (status === 'unconfirmed') notify.warning(t('providerTable.quota.redeem.unconfirmed'));
+            else if (status === 'rejected') notify.error(t('providerTable.quota.redeem.rejected', { message }));
+            else if (status === 'not_found') notify.error(t('providerTable.quota.redeem.notFound'));
+            else if (status === 'busy') notify.error(t('providerTable.quota.redeem.busy'));
+            else notify.error(t('providerTable.quota.redeem.error'));
+        } finally {
+            setSpending(false);
+            setPendingCard(null);
+        }
+    };
     const { resourceItems } = useQuotaBars(quota);
     const windows = quotaToWindows(quota);
     const tightest = tightestWindow(quota);
@@ -149,6 +188,14 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
     const stale = Number.isFinite(fetchedAt) && now - fetchedAt > STALE_AFTER_MS;
     const lastError = quota?.last_error;
     const hasRaw = quota?.raw_response != null;
+    // The server keeps the last good reading past a failed refresh, with its
+    // own fetched_at and the error beside it: the figure is then old, which the
+    // dimming says the same way as a snapshot nobody has refreshed.
+    const dimmed = stale || !!lastError;
+    // While automatic refreshes are held back after repeated failures, say when
+    // the next one comes; clicking the cell still refreshes right now.
+    const retryAt = quota?.backoff ? new Date(quota.backoff.next_attempt_at).getTime() : NaN;
+    const retryText = Number.isFinite(retryAt) && retryAt > now ? formatRetryTime(retryAt) : undefined;
 
     // A cost that restates a money window (e.g. Kimi's booster wallet) would
     // show the same amount twice; it only earns a row when nothing else does.
@@ -189,7 +236,7 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                 {resourceItems.map(item => (
                     <Box key={item.key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                         <TooltipRow dot dotMuted={item.exhausted} label={item.window.label ?? item.key} value={item.countLabel} />
-                        {item.entries.map(({ key, label, window }) => {
+                        {item.entries.map(({ key, label, window, redeem }) => {
                             const voucher = window.unit === 'credits' && window.limit === 1;
                             const resetsAt = window.resets_at ? new Date(window.resets_at).getTime() : NaN;
                             return (
@@ -197,11 +244,24 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                                     key={key}
                                     indent
                                     label={label}
-                                    value={voucher
-                                        ? window.label
-                                        : isCountable(window)
-                                            ? t('rule.service.quota.left', { value: formatQuotaRemaining(window, formatNumber) })
-                                            : formatQuotaAvailable(window, formatNumber)}
+                                    // A spendable entry offers the action where the status would
+                                    // be: "available" is implied by being listed and spendable.
+                                    value={onRedeem && redeem
+                                        ? (
+                                            <UseButton
+                                                label={t(redeem.scope === 'daily' ? 'providerTable.quota.redeem.checkin' : 'providerTable.quota.redeem.use')}
+                                                // A check-in is harmless and can be repeated, so it goes
+                                                // straight through; a card is spent only after a dialog.
+                                                onClick={() => (redeem.auto
+                                                    ? void spendCard({ label, redeem })
+                                                    : setPendingCard({ label, redeem }))}
+                                            />
+                                        )
+                                        : voucher
+                                            ? window.label
+                                            : isCountable(window)
+                                                ? t('rule.service.quota.left', { value: formatQuotaRemaining(window, formatNumber) })
+                                                : formatQuotaAvailable(window, formatNumber)}
                                     detail={voucher
                                         ? window.description
                                         : Number.isFinite(resetsAt) && resetsAt > now
@@ -220,6 +280,18 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                         {lastError
                             ? t('providerTable.quota.readFailed')
                             : quota ? t('providerTable.quota.noLimits') : t('providerTable.quota.none')}
+                    </Typography>
+                )}
+                {/* A failed read stores no raw response, so the reason upstream
+                    gave is the only thing that says what to fix. */}
+                {lastError && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                        {lastError}
+                    </Typography>
+                )}
+                {lastError && retryText && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {t('providerTable.quota.retryAt', { time: retryText })}
                     </Typography>
                 )}
             </Box>
@@ -348,8 +420,8 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                     px: 0.75,
                     py: 0.25,
                     mx: -0.75,
-                    borderRadius: 1,
-                    opacity: stale && !refreshing ? 0.5 : 1,
+                    borderRadius: radius.row,
+                    opacity: dimmed && !refreshing ? 0.5 : 1,
                     cursor: refreshing ? 'progress' : 'pointer',
                     '&:hover': { bgcolor: 'action.hover' },
                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
@@ -358,6 +430,20 @@ export function QuotaCell({ quota, refreshing, onRefresh }: QuotaCellProps) {
                 {figure}
             </Box>
         </Tooltip>
+        <ConfirmDialog
+            open={!!pendingCard}
+            title={t('providerTable.quota.redeem.title', { label: pendingCard?.label ?? '' })}
+            description={pendingCard?.redeem.scope === 'weekly'
+                ? t('providerTable.quota.redeem.weekly')
+                : pendingCard?.redeem.scope === '5h'
+                    ? t('providerTable.quota.redeem.fiveHour')
+                    : t('providerTable.quota.redeem.other')}
+            confirmLabel={t('providerTable.quota.redeem.confirm')}
+            confirmingLabel={t('providerTable.quota.redeem.confirming')}
+            loading={spending}
+            onClose={() => setPendingCard(null)}
+            onConfirm={() => spendCard()}
+        />
         <QuotaRawResponseDialog
             open={rawOpen}
             onClose={() => setRawOpen(false)}
@@ -419,6 +505,26 @@ function TooltipAction({ icon, label, disabled, onClick }: {
 }
 
 /**
+ * The action in a spendable entry's value slot: the same bold black text a
+ * figure there would be, so the row reads the same with or without it.
+ */
+function UseButton({ label, onClick }: { label: string; onClick: () => void }) {
+    return (
+        <Box
+            component="button"
+            type="button"
+            onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                onClick();
+            }}
+            sx={{ font: 'inherit', fontWeight: 'inherit', color: 'inherit', background: 'none', border: 0, p: 0, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+        >
+            {label}
+        </Box>
+    );
+}
+
+/**
  * One window in the hover: a small ring when the window has a share left,
  * its full name, and the figure right-aligned so a column of figures lines up;
  * the reset time sits underneath in the secondary color.
@@ -449,7 +555,7 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
                 {value}
             </Typography>
             {detail && (
-                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.xs, lineHeight: 1.3 }}>
+                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.micro, lineHeight: 1.3 }}>
                     {detail}
                 </Typography>
             )}

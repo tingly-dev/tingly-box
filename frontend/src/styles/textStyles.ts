@@ -1,5 +1,6 @@
 import { type SxProps, type Theme } from '@mui/material/styles';
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Shared style for clickable monospace text (URLs, tokens, commands).
 export const copyableTextStyle: SxProps<Theme> = {
@@ -17,6 +18,6 @@ export const copyableTextStyle: SxProps<Theme> = {
         backgroundColor: 'action.hover',
     },
     py: 1,
-    borderRadius: 1,
+    borderRadius: radius.row,
     transition: 'all 0.2s ease-in-out',
 };

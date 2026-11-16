@@ -52,8 +52,7 @@ func (b *Bot) sendActionCard(ctx context.Context, target string, opts *core.Send
 // action set.
 func buildActionCard(text string, set *core.ActionSet) *larkcard.MessageCard {
 	elements := []larkcard.MessageCardElement{
-		larkcard.NewMessageCardDiv().
-			Text(larkcard.NewMessageCardLarkMd().Content(text)),
+		larkcard.NewMessageCardMarkdown().Content(text),
 	}
 
 	// Feishu lays actions out itself, so rows are flattened.

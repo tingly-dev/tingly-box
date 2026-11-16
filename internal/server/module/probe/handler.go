@@ -1,9 +1,12 @@
 package probe
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -90,7 +93,7 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 		c.JSON(http.StatusOK, E2EResponse{
 			Success: false,
 			Error: &errorDetail{
-				Message: err.Error(),
+				Message: probeErrorMessage(err),
 				Type:    "probe_error",
 			},
 		})
@@ -147,7 +150,7 @@ func (h *Handler) HandleCurlProbe(c *gin.Context) {
 		c.JSON(http.StatusOK, CurlResponse{
 			Success: false,
 			Error: &errorDetail{
-				Message: err.Error(),
+				Message: probeErrorMessage(err),
 				Type:    "probe_error",
 			},
 		})
@@ -198,4 +201,17 @@ func (h *Handler) HandleLightweightProbe(c *gin.Context) {
 
 	data := h.light.Probe(c.Request.Context(), provider)
 	c.JSON(http.StatusOK, LightweightResponse{Success: true, Data: data})
+}
+
+// probeErrorMessage describes a failed probe. The SDKs' own Error() text for an
+// upstream answer is just "<vendor> API error: 401 Unauthorized", so those are
+// rendered with the upstream's status and message instead; transport and
+// internal errors keep their raw text, which is what diagnoses them.
+func probeErrorMessage(err error) string {
+	var oaiErr *openai.Error
+	var anthropicErr *anthropic.Error
+	if errors.As(err, &oaiErr) || errors.As(err, &anthropicErr) {
+		return protocol.UpstreamMessage(err)
+	}
+	return err.Error()
 }

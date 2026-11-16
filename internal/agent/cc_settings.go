@@ -52,43 +52,40 @@ func acquireCCProfileBuildLock(path string) func() {
 	}
 }
 
-// GenerateCCEnv builds the env map for Claude Code settings.json.
+// ccSlotEnvKeys maps each single model slot to the env var Claude Code reads.
+var ccSlotEnvKeys = map[string]string{
+	"haiku":    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+	"sonnet":   "ANTHROPIC_DEFAULT_SONNET_MODEL",
+	"opus":     "ANTHROPIC_DEFAULT_OPUS_MODEL",
+	"fable":    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+	"subagent": "CLAUDE_CODE_SUBAGENT_MODEL",
+}
+
+// ClaudeCodeSlotModels resolves the model id Claude Code sends for each model
+// slot, keyed by env var, and reports whether any of them carries the 1M
+// context marker. It is the one place that maps the Claude Code rules onto the
+// env, shared by the settings file (GenerateCCEnv) and the tbclient env.
 //
 // scenarioPath is "claude_code" for the main scenario or "claude_code:p1" for
-// a profile. isProfile=true → tier models resolved from profile-scoped built-in
+// a profile. isProfile=true → slot models resolved from profile-scoped built-in
 // UUIDs; isProfile=false → resolved from main-scenario built-in UUIDs (with
 // legacy-UUID fallback for pre-migration configs).
 //
 // Reading the rule's request_model (instead of assuming the seeded name) keeps
 // the env aligned when a user renames a rule's model; the seeded name is the
 // fallback when the rule is missing or inactive.
-func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, unified, isProfile bool) map[string]string {
-	env := map[string]string{
-		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
-		"ANTHROPIC_AUTH_TOKEN": apiKey,
-		"TINGLY_API_URL":       baseURL,
-	}
-	// Named profiles inherit tunables from the main settings file. The main
-	// synthetic profile keeps the historical canonical defaults.
-	if !isProfile {
-		env["DISABLE_TELEMETRY"] = "1"
-		env["DISABLE_ERROR_REPORTING"] = "1"
-		env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
-		env["API_TIMEOUT_MS"] = "3000000"
-	}
-
-	// Track whether any resolved rule has the 1M context flag so we can
-	// mirror the frontend quick-config's auto-compact window adjustment.
-	context1M := false
-
+func ClaudeCodeSlotModels(cfg *serverconfig.Config, scenarioPath string, isProfile bool) (models map[string]string, context1M bool) {
 	ruleModel := func(fallback string, uuids ...string) string {
 		if cfg != nil {
 			for _, uuid := range uuids {
+				if uuid == "" {
+					continue
+				}
 				if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
 					if m := strings.TrimSpace(r.RequestModel); m != "" {
-						// Mirror the frontend quick-config: a rule with the 1M context
-						// flag advertises itself to Claude Code via the [1m] suffix (the
-						// client strips it back and sends the context-1m beta header).
+						// A rule with the 1M context flag advertises itself to
+						// Claude Code via the [1m] suffix (the client strips it
+						// back and sends the context-1m beta header).
 						if r.Flags.Context1M {
 							context1M = true
 							if !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
@@ -114,26 +111,45 @@ func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath strin
 		return ruleModel(legacyFallback, serverconfig.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
 	}
 
-	if unified {
-		model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "tingly/cc")
-		env["ANTHROPIC_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = model
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
-	} else {
-		env["ANTHROPIC_MODEL"] = tierModel("default", serverconfig.RuleUUIDBuiltinCCDefault, "tingly/cc-default")
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", serverconfig.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", serverconfig.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", serverconfig.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
-		// The fable tier arrived after separate mode shipped, so a profile or
-		// install may have no active fable rule (never seeded, or switched off);
-		// the bare tier name is not routable, so the alias follows the default
-		// tier instead.
-		env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = ruleModel(env["ANTHROPIC_MODEL"], serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), "fable"))
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", serverconfig.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
+	models = map[string]string{}
+	model := tierModel("cc", serverconfig.RuleUUIDBuiltinCC, "cc")
+	models["ANTHROPIC_MODEL"] = model
+	// A slot with a rule of its own (config.SetClaudeCodeSlot) requests that
+	// rule; every other slot follows the default slot.
+	for slot, key := range ccSlotEnvKeys {
+		own := ruleModel("", serverconfig.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), slot))
+		if own == "" && !isProfile {
+			own = ruleModel("", serverconfig.LegacyCCRuleUUID(slot))
+		}
+		if own != "" {
+			models[key] = own
+		} else {
+			models[key] = model
+		}
 	}
+	return models, context1M
+}
+
+// GenerateCCEnv builds the env map for Claude Code settings.json; the model
+// slots come from ClaudeCodeSlotModels.
+func GenerateCCEnv(cfg *serverconfig.Config, baseURL, apiKey, scenarioPath string, isProfile bool) map[string]string {
+	env := map[string]string{
+		"ANTHROPIC_BASE_URL":   baseURL + "/tingly/" + scenarioPath,
+		"ANTHROPIC_AUTH_TOKEN": apiKey,
+		"TINGLY_API_URL":       baseURL,
+	}
+	// Named profiles inherit tunables from the main settings file. The main
+	// synthetic profile keeps the historical canonical defaults.
+	if !isProfile {
+		env["DISABLE_TELEMETRY"] = "1"
+		env["DISABLE_ERROR_REPORTING"] = "1"
+		env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+		env["API_TIMEOUT_MS"] = "3000000"
+	}
+
+	models, context1M := ClaudeCodeSlotModels(cfg, scenarioPath, isProfile)
+	maps.Copy(env, models)
+	OmitFollowedDefaultModel(env)
 
 	// Mirror the frontend quick-config: when any resolved model rule has the
 	// 1M context flag, adjust the auto-compact window to match so Claude Code
@@ -154,6 +170,9 @@ type ClaudeCodeSettingsSnapshot struct {
 	DefaultMode           string
 	StatusLine            bool
 	ShowThinkingSummaries *bool
+	// CoAuthoredBy is whether Claude credits itself in commits; nil when the
+	// file sets neither attribution nor includeCoAuthoredBy.
+	CoAuthoredBy *bool
 }
 
 // ReadMainClaudeCodeSettings reads the user's source-of-truth settings file.
@@ -181,6 +200,8 @@ func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
 		Permissions           json.RawMessage `json:"permissions"`
 		StatusLine            json.RawMessage `json:"statusLine"`
 		ShowThinkingSummaries *bool           `json:"showThinkingSummaries"`
+		IncludeCoAuthoredBy   *bool           `json:"includeCoAuthoredBy"`
+		Attribution           json.RawMessage `json:"attribution"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return snapshot, fmt.Errorf("failed to parse Claude Code settings: %w", err)
@@ -208,7 +229,25 @@ func readClaudeCodeSettings(path string) (ClaudeCodeSettingsSnapshot, error) {
 	}
 	snapshot.StatusLine = len(raw.StatusLine) > 0 && string(raw.StatusLine) != "null"
 	snapshot.ShowThinkingSummaries = raw.ShowThinkingSummaries
+	snapshot.CoAuthoredBy = readCoAuthoredBy(raw.IncludeCoAuthoredBy, raw.Attribution)
 	return snapshot, nil
+}
+
+// readCoAuthoredBy resolves the Co-Authored-By choice the way Claude Code
+// does: attribution.commit wins when present (an empty string hides the
+// trailer, a missing key keeps Claude Code's default credit), otherwise the
+// legacy includeCoAuthoredBy. A malformed attribution falls back the same way.
+func readCoAuthoredBy(include *bool, attribution json.RawMessage) *bool {
+	if len(attribution) > 0 && string(attribution) != "null" {
+		var parsed struct {
+			Commit *string `json:"commit"`
+		}
+		if err := json.Unmarshal(attribution, &parsed); err == nil {
+			on := parsed.Commit == nil || *parsed.Commit != ""
+			return &on
+		}
+	}
+	return include
 }
 
 // CCProfileSettingsResolution contains both the inherited profile base and the
@@ -272,7 +311,7 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 	if snapshot.Exists {
 		baseEnv = maps.Clone(snapshot.Env)
 	} else {
-		defaults := DefaultClaudeCodePrefs(profile.Unified)
+		defaults := DefaultClaudeCodePrefs()
 		defaultValues, valuesErr := defaults.Values()
 		if valuesErr != nil {
 			return CCProfileSettingsResolution{}, valuesErr
@@ -282,8 +321,12 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 
 	baseEnv = upgradeLegacyCCEnv(baseEnv)
 
-	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, profile.Unified, true)
+	generated := GenerateCCEnv(cfg, baseURL, apiKey, scenarioPath, true)
 	maps.Copy(baseEnv, generated)
+	if _, ok := generated["ANTHROPIC_MODEL"]; !ok {
+		// An earlier apply may have left it in the main settings file.
+		delete(baseEnv, "ANTHROPIC_MODEL")
+	}
 	basePreferences, err := ClaudeCodePrefsFromEnv(baseEnv)
 	if err != nil {
 		return CCProfileSettingsResolution{}, err

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	tbagent "github.com/tingly-dev/tingly-box/internal/agent"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
@@ -27,12 +26,6 @@ type TBClient interface {
 
 	// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario.
 	GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error)
-
-	// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot.
-	EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error
-
-	// DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot.
-	DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error
 
 	// GetDataDir returns the data directory path for storing sessions and other data.
 	GetDataDir() string
@@ -71,7 +64,7 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	apiKey := c.config.GetModelToken()
 
 	models := c.resolveClaudeCodeModels()
-	prefs := tbagent.DefaultClaudeCodePrefs(false)
+	prefs := tbagent.DefaultClaudeCodePrefs()
 	prefs.AnthropicModel = models.def
 	prefs.AnthropicDefaultHaikuModel = models.haiku
 	prefs.AnthropicDefaultSonnetModel = models.sonnet
@@ -83,12 +76,20 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build claude code env: %w", err)
 	}
+	tbagent.OmitFollowedDefaultModel(envMap)
 
 	env := make([]string, 0, len(envMap))
 	for k, v := range envMap {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 	return env, nil
+}
+
+// ClaudeCodeDefaultModel is the request model Claude Code is pointed at by
+// default (ANTHROPIC_MODEL in GetClaudeCodeEnv): the claude_code scenario's
+// default tier, which its routing rules resolve.
+func (c *TBClientImpl) ClaudeCodeDefaultModel() string {
+	return c.resolveClaudeCodeModels().def
 }
 
 // GetClaudeCodeSettingsPathForProfile materializes the profiled scenario
@@ -140,17 +141,6 @@ func (c *TBClientImpl) GetHTTPEndpointForScenario(ctx context.Context, scenario 
 	}, nil
 }
 
-// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot.
-func (c *TBClientImpl) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
-	return c.config.EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, modelID)
-}
-
-// DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot.
-func (c *TBClientImpl) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
-	ruleUUID := serverconfig.SmartGuideRuleUUID(botUUID)
-	return c.config.DeleteRule(ruleUUID)
-}
-
 // GetDataDir returns the data directory path for storing sessions and other data.
 func (c *TBClientImpl) GetDataDir() string {
 	if c.config == nil {
@@ -172,54 +162,17 @@ type claudeCodeModels struct {
 	def, haiku, sonnet, opus, subagent, fable string
 }
 
-// resolveClaudeCodeModels resolves the per-tier request models the same way the
-// frontend's derivePrefsFromRules does.
+// resolveClaudeCodeModels resolves the per-tier request models of the main
+// claude_code scenario through the same resolver as the settings file.
 func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
-	byUUID := map[string]string{}
-	for _, rule := range c.config.GetRequestConfigs() {
-		if rule.GetScenario() != typ.ScenarioClaudeCode || !rule.Active {
-			continue
-		}
-		if m := strings.TrimSpace(rule.RequestModel); m != "" {
-			if rule.Flags.Context1M && !strings.HasSuffix(m, serverconfig.Context1MSuffix) {
-				m += serverconfig.Context1MSuffix
-			}
-			byUUID[rule.UUID] = m
-		}
-	}
-
-	ruleModel := func(uuid, legacyUUID, fallback string) string {
-		if m, ok := byUUID[uuid]; ok {
-			return m
-		}
-		if m, ok := byUUID[legacyUUID]; ok {
-			return m
-		}
-		return fallback
-	}
-
-	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil && sc.GetDefaultFlags().Separate {
-		def := ruleModel("builtin:claude_code:default", "built-in-cc-default", "tingly/cc-default")
-		return claudeCodeModels{
-			def:      def,
-			haiku:    ruleModel("builtin:claude_code:haiku", "built-in-cc-haiku", "tingly/cc-haiku"),
-			sonnet:   ruleModel("builtin:claude_code:sonnet", "built-in-cc-sonnet", "tingly/cc-sonnet"),
-			opus:     ruleModel("builtin:claude_code:opus", "built-in-cc-opus", "tingly/cc-opus"),
-			subagent: ruleModel("builtin:claude_code:subagent", "built-in-cc-subagent", "tingly/cc-subagent"),
-			// No active fable rule (never seeded, or switched off): the bare tier
-			// name is not routable, so the alias follows the default tier.
-			fable: ruleModel(serverconfig.RuleUUIDCCFable, "", def),
-		}
-	}
-
-	unified := ruleModel("builtin:claude_code:cc", "built-in-cc", "tingly/cc")
+	m, _ := tbagent.ClaudeCodeSlotModels(c.config, string(typ.ScenarioClaudeCode), false)
 	return claudeCodeModels{
-		def:      unified,
-		haiku:    unified,
-		sonnet:   unified,
-		opus:     unified,
-		subagent: unified,
-		fable:    unified,
+		def:      m["ANTHROPIC_MODEL"],
+		haiku:    m["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+		sonnet:   m["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+		opus:     m["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+		subagent: m["CLAUDE_CODE_SUBAGENT_MODEL"],
+		fable:    m["ANTHROPIC_DEFAULT_FABLE_MODEL"],
 	}
 }
 
@@ -246,6 +199,8 @@ func GetScenarioEndpointPath(scenario typ.RuleScenario) string {
 		return "/tingly/opencode"
 	case typ.ScenarioPi:
 		return "/tingly/pi"
+	case typ.ScenarioWorkBuddy:
+		return "/tingly/workbuddy"
 	case typ.ScenarioDsh:
 		return "/tingly/dsh"
 	case typ.ScenarioXcode:

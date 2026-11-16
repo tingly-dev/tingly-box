@@ -16,11 +16,12 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // maxImageEditFormMemory caps how much of a multipart image-edit upload is
@@ -50,7 +51,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	scenarioType := typ.RuleScenario(scenario)
 
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
 				Type:    "invalid_request_error",
@@ -60,7 +61,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 	}
 
 	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportImageGen) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("scenario %s does not support image edit", scenario),
 				Type:    "invalid_request_error",
@@ -71,7 +72,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 
 	req, err := parseImageEditRequest(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -85,7 +86,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -96,7 +97,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageEdit(c *gin.Context) {
 
 	provider, selectedService, err := ph.selectServiceForImageGeneration(c, scenarioType, rule)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -230,6 +231,7 @@ func parseImageEditMultipart(c *gin.Context) (*openai.ImageEditParams, error) {
 	req.ResponseFormat = openai.ImageEditParamsResponseFormat(formValue("response_format"))
 	req.OutputFormat = openai.ImageEditParamsOutputFormat(formValue("output_format"))
 	req.InputFidelity = openai.ImageEditParamsInputFidelity(formValue("input_fidelity"))
+	imagegen.SetReasoningEffort(req, formValue(imagegen.ReasoningEffortField))
 	if v := formValue("user"); v != "" {
 		req.User = param.NewOpt(v)
 	}
@@ -264,6 +266,7 @@ func readMultipartFile(fh *multipart.FileHeader) ([]byte, error) {
 // carries one or more inline images (data URL or bare base64); Mask carries
 // one the same way.
 type imageEditJSONRequest struct {
+	ReasoningEffort   string              `json:"reasoning_effort,omitempty"`
 	Image             imageEditJSONImages `json:"image"`
 	Mask              string              `json:"mask,omitempty"`
 	Prompt            string              `json:"prompt"`
@@ -323,6 +326,7 @@ func parseImageEditJSON(c *gin.Context) (*openai.ImageEditParams, error) {
 	if jsonReq.N != nil {
 		req.N = param.NewOpt(*jsonReq.N)
 	}
+	imagegen.SetReasoningEffort(req, jsonReq.ReasoningEffort)
 	if jsonReq.OutputCompression != nil {
 		req.OutputCompression = param.NewOpt(*jsonReq.OutputCompression)
 	}

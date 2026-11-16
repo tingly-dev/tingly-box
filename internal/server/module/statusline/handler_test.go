@@ -791,3 +791,16 @@ func TestHandlerQuotaBlacklistsTinglyBoxUpstream(t *testing.T) {
 		})
 	}
 }
+
+// A usage carrying LastError is the last good reading kept past a failed
+// refresh; the status line cannot say it is stale, so it shows none.
+func TestQuotaForStatusLine_DropsReadingKeptPastAFailure(t *testing.T) {
+	usage := &quota.ProviderUsage{ProviderType: quota.ProviderTypeAnthropic}
+	if quotaForStatusLine(usage) == nil {
+		t.Fatal("a healthy usage must be shown")
+	}
+	usage.LastError = "unexpected status code: 403"
+	if quotaForStatusLine(usage) != nil {
+		t.Fatal("a usage whose latest refresh failed must not reach the status line")
+	}
+}

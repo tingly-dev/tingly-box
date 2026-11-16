@@ -10,13 +10,17 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyIconButton } from '@/components/CopyIconButton';
-import { Close, Edit, ErrorOutline, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
+import { Close, Edit, ErrorOutline, Palette, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_CARD } from './imageThumbnails';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface GenerationRunCardProps {
     run: GenerationRun;
@@ -24,6 +28,8 @@ interface GenerationRunCardProps {
     onRetry: (run: GenerationRun) => void;
     // Puts the run's whole request back into the panel.
     onReuse: (run: GenerationRun) => void;
+    // Keeps a run that worked as a profile; only offered outside a profile.
+    onSaveAsProfile?: (run: GenerationRun) => void;
     onOpenSource: (run: GenerationRun, index: number) => void;
     onUseAsReference: (src: string) => void;
     onOpenOutput: (image: SelectedImage) => void;
@@ -34,11 +40,14 @@ interface GenerationRunCardProps {
 // prompt away as text (a prompt should never have to be selected by hand),
 // put the whole request back in the panel, and drop the card. While a run
 // is in flight Cancel is what removes it, so `onRemove` is left out there.
-const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
+// Memoised: the panel re-renders on every keystroke and every run landing,
+// and a card whose run did not change has nothing new to show.
+const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
     run,
     onCancel,
     onRetry,
     onReuse,
+    onSaveAsProfile,
     onOpenSource,
     onUseAsReference,
     onOpenOutput,
@@ -49,10 +58,11 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
     const copyPromptLabel = t('playground.copyPrompt', { defaultValue: 'Copy prompt' });
     const promptCopiedLabel = t('playground.promptCopied', { defaultValue: 'Copied' });
     const removeRunLabel = t('playground.removeRun', { defaultValue: 'Remove this generation' });
+    const saveAsProfileLabel = t('imageProfile.saveRunAs', { defaultValue: 'Save this request as a profile' });
     // The request as it went over the wire, so the line doubles as the answer
     // to "what do I send to get this": n only when it was more than one.
     const requested = Math.max(run.count ?? 1, 1);
-    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}`;
+    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}${run.reasoningEffort && run.reasoningEffort !== 'auto' ? ` · effort=${run.reasoningEffort}` : ''}`;
     // One slot per requested image, from the moment the run starts: the card
     // has its final shape while it is pending, results land in their slots,
     // and a slot that stays empty is a missing image the user can see in
@@ -82,6 +92,21 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                     <RestartAlt sx={{ fontSize: 16 }} />
                 </IconButton>
             </Tooltip>
+            {/* The moment a setup is worth keeping is when it just worked,
+                so the profile is made from this run, not from the panel. */}
+            {onSaveAsProfile && (runActions.status ?? 'completed') === 'completed' && (
+                <Tooltip title={saveAsProfileLabel}>
+                    <IconButton
+                        size="small"
+                        onClick={() => { onSaveAsProfile(runActions); }}
+                        aria-label={saveAsProfileLabel}
+                        data-testid="imagegen-save-run-as-profile"
+                        sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                    >
+                        <Palette sx={{ fontSize: 16 }} />
+                    </IconButton>
+                </Tooltip>
+            )}
             {onRemoveClick && (
                 // A destructive action, so it gets its own hover colour
                 // (error, not the neutral text.primary the other two use) —
@@ -254,7 +279,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                     return (
                                         <Box
                                             key={`${run.id}-${index}`}
-                                            sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}
+                                            sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, borderRadius: radius.row, overflow: 'hidden', bgcolor: 'action.hover' }}
                                         >
                                             <ButtonBase
                                                 onClick={() => onOpenOutput(runImage(run, 'output', index, src))}
@@ -271,20 +296,14 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                                     },
                                                 }}
                                             >
-                                                <Box
-                                                    component="img"
+                                                <ThumbImage
                                                     src={src}
+                                                    edge={THUMB_EDGE_CARD}
+                                                    fit="contain"
                                                     alt={t('playground.resultAlt', {
                                                         defaultValue: 'Generated image {{number}}',
                                                         number: index + 1,
                                                     })}
-                                                    sx={{
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        maxHeight: '100%',
-                                                        objectFit: 'contain',
-                                                        display: 'block',
-                                                    }}
                                                 />
                                                 <Box className="image-preview-overlay" sx={zoomScrimSx}>
                                                     <ZoomIn sx={{ fontSize: 30 }} />
@@ -328,7 +347,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
                                         data-testid={pending ? 'imagegen-slot-pending' : 'imagegen-slot-missing'}
                                         sx={{
                                             minHeight: 0,
-                                            borderRadius: 1,
+                                            borderRadius: radius.row,
                                             border: 1,
                                             borderStyle: 'dashed',
                                             borderColor: 'divider',
@@ -377,6 +396,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = ({
             </CardContent>
         </Card>
     );
-};
+});
+GenerationRunCard.displayName = 'GenerationRunCard';
 
 export default GenerationRunCard;

@@ -1,0 +1,699 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Popover, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
+import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { api, isFolder, type BackgroundTask, type components, unwrap, type Project, type Thread, type ThreadEvent } from '../client';
+import { ConversationPane } from '../components/project/ConversationPane';
+import { OverviewPane, type OverviewTab } from '../components/project/OverviewPane';
+import { ThreadActivityPopover } from '../components/project/ThreadActivityPopover';
+import { StatusThreadsPopover } from '../components/project/StatusThreadsPopover';
+import { ModelPicker } from '../components/ModelPicker';
+import { EffortPicker } from '../components/EffortPicker';
+import { loadPermissionModes, PermissionModeSelect } from '../components/workdir/PermissionModeSelect';
+import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
+import { mergeThreadSettings, useThreadSettings } from '../hooks/useThreadSettings';
+import { ProjectSettingsDialog, type SettingsTab } from '../components/project/ProjectSettingsDialog';
+import { primaryPath, projectDirectories } from '../components/project/RepoField';
+import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
+import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
+import { ThreadPanel } from '../components/project/ThreadPanel';
+import { CoordinatorStatus } from '../components/project/CoordinatorStatus';
+import { FloatingWindow } from '../components/workspace/FloatingWindow';
+import { OverviewBand } from '../components/workspace/OverviewBand';
+import { PlacementMenu } from '../components/workspace/PlacementMenu';
+import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
+import { ExpandMore, FloatWindow, Folder, Pause, Settings, Star, StarBorder } from '../components/icons';
+import { useNotify } from '../hooks/useNotify';
+import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
+import { ThreadRequestsProvider, useThreadRequestsStore } from '../hooks/threadRequests';
+import { useTranscript } from '../hooks/useTranscript';
+import { usePlacement } from '../hooks/usePlacement';
+import { useProjectsHost } from '../host/ProjectsHost';
+import { readLocal, writeLocal } from '../utils/storage';
+import { needsUser } from '../components/project/threadStatus';
+import { changesLiveTasks } from '../components/workdir/backgroundTasks';
+import { ControlTooltip } from '../components/ControlTooltip';
+import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../components/composerPicker';
+
+
+// The permission modes a project can give its threads (the server refuses others).
+type ThreadMode = NonNullable<components['schemas']['UpdateProjectRequest']['thread_permission_mode']>;
+const THREAD_MODES = ['default', 'acceptEdits', 'auto', 'bypassPermissions'];
+// The thinking-effort levels beside each model choice (the server refuses others).
+type EffortLevel = NonNullable<components['schemas']['UpdateProjectRequest']['coordinator_effort']>;
+
+function upsert<T extends { id: string }>(list: T[], item: T): T[] {
+    const i = list.findIndex((x) => x.id === item.id);
+    if (i < 0) return [...list, item];
+    const next = list.slice();
+    next[i] = item;
+    return next;
+}
+
+export default function ProjectPage() {
+    const { id = '' } = useParams();
+    const { t } = useTranslation('projects');
+    const navigate = useNavigate();
+    const notify = useNotify();
+    const { onProjectsChanged: refresh, paths: routes, embedded, session } = useProjectsHost();
+    const [params, setParams] = useSearchParams();
+    const threadId = params.get('thread') ?? '';
+
+    const [project, setProject] = useState<Project | null>(null);
+    const [threads, setThreads] = useState<Thread[]>([]);
+    // What the threads wait on, answered from their cards.
+    const requests = useThreadRequestsStore(threads);
+    const { observe: observeRequest, refresh: refreshRequests, hydrated: requestsRead, review: reviewRequests } = requests;
+    // The project conversation: the main thread's events.
+    const [busy, setBusy] = useState(false);
+    const [worktreeMenuOpen, setWorktreeMenuOpen] = useState(false);
+    const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
+    const openThreadId = useRef(threadId);
+    // The coordinator's own status, for the Overview's Status tab.
+    const [coordinator, setCoordinator] = useState<Thread | undefined>(undefined);
+    const [queued, setQueued] = useState(0);
+    const [recovery, setRecovery] = useState('');
+    const [recoveryAction, setRecoveryAction] = useState<'retry' | 'skip' | null>(null);
+    const [recovering, setRecovering] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const pane = useWorkspacePane();
+    // IM chats bound to this project (null when the host has no IM).
+    const im = useProjectIm(project?.main_thread_id ? { threadId: project.main_thread_id, projectId: project.id, name: project.name } : null);
+    const placement = usePlacement();
+    // The Overview as a window or a band opens and closes with the header button; remembered per browser.
+    const [windowOpen, setWindowOpen] = useState(() => readLocal('overviewWindowOpen') !== '0');
+    const [bandOpen, setBandOpen] = useState(() => readLocal('overviewBandOpen') !== '0');
+    // With the Overview as a band, the Library and the issues and PRs open in a window of their own.
+    const [bandWindow, setBandWindow] = useState<'library' | 'links' | null>(null);
+    // A narrow screen has one surface: the drawer. With the Overview on top the thread sits below it.
+    const overviewAt = pane.narrow ? 'side' : placement.overview;
+    // The thread picked in the side-pane Overview while "float from the Overview" is on. It floats over the
+    // Overview; at most one window, since picking another thread only swaps it.
+    const [overviewFloatId, setOverviewFloatId] = useState<string | null>(null);
+    const floatedFromOverview = placement.overviewFloat && overviewAt === 'side' && !!threadId && overviewFloatId === threadId;
+    const threadAt = pane.narrow ? 'main' : floatedFromOverview ? 'float' : overviewAt === 'top' && placement.thread !== 'main' ? 'side' : placement.thread;
+    const remember = (key: string, set: (v: boolean) => void) => (v: boolean) => {
+        writeLocal(key, v ? '1' : '0');
+        set(v);
+    };
+    const setWindow = remember('overviewWindowOpen', setWindowOpen);
+    const setBand = remember('overviewBandOpen', setBandOpen);
+    const [worktreeChoice, setWorktreeChoice] = useState<{ projectId: string; shared: boolean } | null>(null);
+    const worktreeReply = useRef<((choice: boolean | null) => void) | null>(null);
+    useEffect(() => () => { worktreeReply.current?.(null); worktreeReply.current = null; }, [id]);
+    const answerWorktree = (choice: boolean | null) => {
+        const reply = worktreeReply.current;
+        worktreeReply.current = null;
+        setWorktreeChoice(null);
+        reply?.(choice);
+    };
+    const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+    const [memoryKey, setMemoryKey] = useState(0);
+    const [libraryKey, setLibraryKey] = useState(0);
+    const [modes, setModes] = useState<string[]>([]);
+    const projectSaving = useRef(false);
+    const [savingDefaults, setSavingDefaults] = useState(false);
+    useEffect(() => { loadPermissionModes().then(setModes).catch(() => undefined); }, []);
+
+    const mainThreadId = project?.main_thread_id ?? '';
+    // The conversation (the main thread) and the open thread: their latest
+    // entries, then only what changes (useTranscript).
+    const conversation = useTranscript(mainThreadId);
+    const { apply: applyMain, edit: editMain } = conversation;
+    const messages = conversation.events;
+    const opened = useTranscript(threadId);
+    const { apply: applyOpened } = opened;
+    const threadEvents = opened.events;
+
+    const load = useCallback(async () => {
+        try {
+            const d = await unwrap(api.GET('/api/v1/projects/{id}', { params: { path: { id } } }));
+            setProject(d.project);
+            setThreads(d.threads);
+            setBusy(d.coordinator_busy);
+            setCoordinator(d.coordinator);
+            setQueued(d.coordinator_queued ?? 0);
+            setRecovery(d.coordinator_recovery ?? '');
+            setError(null);
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [id]);
+
+    const loadThread = useCallback(async (tid: string) => {
+        try {
+            const d = await unwrap(api.GET('/api/v1/threads/{id}', { params: { path: { id: tid } } }));
+            setThreads((list) => upsert(list, d.thread));
+            // Only the open thread's tasks: a slow answer for a thread the user left must not land on the next one.
+            if (openThreadId.current === tid) setLiveTasks(d.background_tasks ?? []);
+        } catch (e) {
+            notify((e as Error).message, 'error');
+        }
+    }, [notify]);
+
+    useEffect(() => {
+        setProject(null);
+        setThreads([]);
+        setBusy(false);
+        void load();
+    }, [load]);
+
+    useEffect(() => {
+        openThreadId.current = threadId;
+        setLiveTasks([]);
+        if (threadId) void loadThread(threadId);
+    }, [threadId, loadThread]);
+
+    const onEvent = useCallback((ev: ProjectEvent) => {
+        switch (ev.type) {
+            case 'message_delta': {
+                const d = ev.data as { id: string; text: string };
+                editMain((list) => list.map((m) => (m.id === d.id ? { ...m, content: m.content + d.text } : m)));
+                break;
+            }
+            case 'thread': {
+                const th = ev.data as Thread;
+                // The main thread is the conversation, not a row of the Overview.
+                if (th.id === mainThreadId) {
+                    setCoordinator(th);
+                    break;
+                }
+                setThreads((list) => upsert(list, th));
+                if (th.status !== 'working' && th.status !== 'waiting') setLibraryKey((k) => k + 1);
+                // No refresh(): the shared list's own stream covers thread events.
+                break;
+            }
+            case 'thread_event': {
+                const e = ev.data as ThreadEvent;
+                if (e.thread_id !== mainThreadId) observeRequest(e);
+                if (e.thread_id === mainThreadId) applyMain(e);
+                else if (e.thread_id === threadId) {
+                    applyOpened(e);
+                    // The live tasks come with the thread, not its transcript.
+                    if (changesLiveTasks(e)) void loadThread(threadId);
+                }
+                break;
+            }
+            case 'coordinator':
+                setBusy((ev.data as { busy: boolean }).busy);
+                if (!(ev.data as { busy: boolean }).busy) void load();
+                break;
+            case 'project': {
+                const d = ev.data as Project & { memory?: string };
+                if (d.memory !== undefined) setMemoryKey((k) => k + 1);
+                else if (d.id) setProject(d);
+                break;
+            }
+        }
+    }, [threadId, mainThreadId, observeRequest, applyMain, editMain, applyOpened, load, loadThread]);
+
+    const resolveRecovery = async () => {
+        if (!recovery || !recoveryAction) return;
+        setRecovering(true);
+        try {
+            await unwrap(api.POST('/api/v1/projects/{id}/coordinator/recover', {
+                params: { path: { id } }, body: { input_id: recovery, action: recoveryAction },
+            }));
+            setRecovery('');
+            setRecoveryAction(null);
+        } catch (e) {
+            notify((e as Error).message, 'error');
+        } finally { setRecovering(false); }
+    };
+
+    // Stopping the coordinator's turn ends it without recovery: the reply it
+    // got to stays, and the refreshed detail says whether it is busy still.
+    const stopCoordinator = async () => {
+        try {
+            const d = await unwrap(api.POST('/api/v1/projects/{id}/coordinator/stop', { params: { path: { id } } }));
+            setBusy(d.coordinator_busy);
+            setQueued(d.coordinator_queued ?? 0);
+            setRecovery(d.coordinator_recovery ?? '');
+            await conversation.catchUp().catch(() => undefined);
+        } catch (e) {
+            notify((e as Error).message, 'error');
+        }
+    };
+
+    useProjectEvents(id, onEvent, () => {
+        void load();
+        refreshRequests();
+        conversation.catchUp().catch(() => undefined);
+        if (threadId) {
+            void loadThread(threadId);
+            opened.catchUp().catch(() => undefined);
+        }
+    });
+
+    const selected = threads.find((th) => th.id === threadId);
+    const settings = useThreadSettings(selected, false, (saved) => setThreads((list) => list.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, false) : th)));
+    // A turn is in flight while the thread works or waits on a request it
+    // raised (approvals only exist inside a running turn).
+    const threadRunning = selected?.status === 'working'
+        || (selected?.status === 'waiting' && !!threadEvents?.some((e) => (e.kind === 'approval' || e.kind === 'ask') && e.payload?.includes('"state":"pending"')));
+
+    const threadMap = useMemo(() => new Map(threads.map((th) => [th.id, th])), [threads]);
+    const waiting = threads.filter((th) => needsUser(th.status)).length;
+
+    const openThread = (tid: string, drill?: { focus?: string; task?: string }) => {
+        // A drill-in names the one subagent (focus) or background task (task) to open with the thread.
+        setParams((p) => {
+            p.set('thread', tid);
+            p.delete('review');
+            if (drill?.focus) p.set('focus', drill.focus); else p.delete('focus');
+            if (drill?.task) p.set('task', drill.task); else p.delete('task');
+            return p;
+        });
+        if (threadAt === 'side') pane.reveal();
+        else if (pane.narrow) pane.setDrawerOpen(false);
+    };
+    // A notification's deep link (?review=<thread>): the card opens what the thread
+    // waits on; a thread that waits on nothing answerable opens as a page instead.
+    const review = params.get('review');
+    useEffect(() => {
+        if (!review) return;
+        const th = threads.find((x) => x.id === review);
+        if (!th || (th.status === 'waiting' && !requestsRead(review))) return;
+        if ((requests.byThread[review]?.length ?? 0) > 0) {
+            setParams((p) => {
+                p.delete('review');
+                return p;
+            }, { replace: true });
+            reviewRequests(review);
+        } else {
+            openThread(review);
+        }
+        // openThread only reads state the effect's inputs already cover.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [review, threads, requests.byThread, requestsRead, reviewRequests]);
+    // The status area's counts, opened into their lists (the band's pill, the
+    // coordinator's fact): what they count, one click from each entry.
+    const [activity, setActivity] = useState<{ targets: Thread[]; anchor: HTMLElement } | null>(null);
+    const openTasksList = (targets: Thread[], anchor: HTMLElement) => setActivity({ targets, anchor });
+    const closeActivity = () => setActivity(null);
+    // A status count, opened into its list: which threads (sessions in a folder) stand in that state.
+    const [statusList, setStatusList] = useState<{ label: string; threads: Thread[]; anchor: HTMLElement } | null>(null);
+    const openStatusList = (label: string, list: Thread[], anchor: HTMLElement) => setStatusList({ label, threads: list, anchor });
+    const closeStatusList = () => setStatusList(null);
+    const openStatusThreads = (status: string, anchor: HTMLElement) =>
+        openStatusList(t(`overview.group.${status}`), threads.filter((th) => th.status === status), anchor);
+    const clearDrill = () => setParams((p) => {
+        p.delete('focus');
+        p.delete('task');
+        return p;
+    }, { replace: true });
+    const openFromOverview = (tid: string) => {
+        setOverviewFloatId(tid);
+        openThread(tid);
+    };
+    const dockThread = () => {
+        setOverviewFloatId(null);
+        placement.setThread('main');
+    };
+    const closeThread = () => setParams((p) => {
+        p.delete('thread');
+        return p;
+    });
+    const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'primary_directory_mode'>) => {
+        if (projectSaving.current) return;
+        projectSaving.current = true;
+        setSavingDefaults(true);
+        try {
+            const saved = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body }));
+            setProject((current) => current?.id === saved.id ? saved : current);
+            // Archiving unbinds the project's IM chats.
+            if (body.archived) window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
+            refresh();
+        } catch (e) {
+            notify((e as Error).message, 'error');
+        } finally {
+            projectSaving.current = false;
+            setSavingDefaults(false);
+        }
+    };
+
+    const primary = project && projectDirectories(project).find((r) => r.root === primaryPath(project));
+    const withPrimaryMode = (p: Project, mode: 'shared' | 'worktree') => ({ primary_directory_mode: { path: primaryPath(p), workspace_mode: mode } });
+
+    // A folder is a project too, but its page is the folder page.
+    if (project && isFolder(project)) {
+        const to = routes.folder(project.path);
+        return <Navigate to={threadId ? `${to}${to.includes('?') ? '&' : '?'}session=${encodeURIComponent(threadId)}` : to} replace />;
+    }
+
+    if (error) {
+        return (
+            <Box sx={{ maxWidth: 720, mx: 'auto', pt: embedded ? 3 : 8, px: 2 }}>
+                <Alert severity="error" action={<Button color="inherit" component={RouterLink} to={routes.list}>{t('projects.all')}</Button>}>{error}</Alert>
+            </Box>
+        );
+    }
+
+    const blocked = !!project && (project.paused || !!project.archived_at);
+    const banner = project?.archived_at ? (
+        <Alert severity="info" sx={{ mb: 1 }} action={<Button color="inherit" size="small" onClick={() => void patch({ archived: false })}>{t('projectSettings.unarchive')}</Button>}>{t('project.archivedBanner')}</Alert>
+    ) : project?.paused ? (
+        <Alert severity="warning" icon={<Pause />} sx={{ mb: 1 }} action={<Button color="inherit" size="small" onClick={() => void patch({ paused: false })}>{t('projectSettings.resume')}</Button>}>{t('project.pausedBanner')}</Alert>
+    ) : null;
+
+    const canPlace = !pane.narrow;
+    const threadEl = threadId ? (
+        <ThreadPanel
+            // Per thread: its draft and menus start fresh.
+            key={threadId}
+            projectId={id}
+            threadId={threadId}
+            thread={selected}
+            events={threadEvents}
+            more={opened.more}
+            onLoadEarlier={opened.loadEarlier}
+            subagents={opened.subagents}
+            running={threadRunning}
+            liveTasks={liveTasks}
+            disabled={blocked}
+            settingsSaving={settings.saving}
+            canSend={settings.canSend}
+            railExtra={selected && session?.railCards?.({ thread: selected, launch: { profile: selected.profile_override ?? project?.thread_profile ?? '', model: selected.model_override || (selected.profile_override == null ? project?.thread_model : '') || '' } })}
+            configuredModel={selected?.model_override || `${t('threadSettings.projectDefault')} · ${project?.thread_model || t('threadSettings.defaultModel')}`}
+            permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.projectDefault')} · ${t(`session.mode.${project?.thread_permission_mode || 'acceptEdits'}`)}`}
+            modelControl={selected && (
+                session?.workerLaunchPickers ? session.workerLaunchPickers({ profileOverride: selected.profile_override ?? null, projectProfile: project?.thread_profile ?? '', model: selected.model_override || (selected.profile_override == null ? project?.thread_model : '') || '', disabled: blocked || selected.status === 'resolved' || settings.saving, onChange: (profile, model) => void settings.setWorkerLaunch(profile, model) }) : <ThreadSettingsPickers show="model" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                    modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+            )}
+            belowComposer={selected && !session?.workerLaunchPickers && !!(selected.profile_override ?? project?.thread_profile) && (
+                <Alert severity="warning" action={<Button color="inherit" size="small" disabled={settings.saving} onClick={() => void settings.setWorkerLaunch('', '')}>{t('threadSettings.useConnection')}</Button>}>
+                    {t('threadSettings.threadProfileUnavailable')}
+                </Alert>
+            )}
+            effortControl={selected && (
+                <EffortPicker value={selected.effort_override || ''}
+                    defaultLabel={`${t('threadSettings.projectDefault')} · ${project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}`}
+                    defaultDisplayLabel={project?.thread_effort ? t(`effort.${project.thread_effort}`) : t('effort.default')}
+                    disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    onChange={(value) => void settings.setEffort(value as components['schemas']['EffortRequest']['effort'])} />
+            )}
+            composerContext={selected && (
+                <ThreadSettingsPickers show="permission" value={{ profile: '', model: selected.model_override ?? '' }} permissionMode={selected.permission_mode ?? ''}
+                    modes={modes} disabled={blocked || selected.status === 'resolved' || settings.saving}
+                    defaultModel={project?.thread_model} defaultPermissionMode={project?.thread_permission_mode || 'acceptEdits'}
+                    onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+            )}
+            onBack={closeThread}
+            backLabel={threadAt === 'side' ? t('project.overview') : t('thread.backCoordinator')}
+            hideTitle={threadAt === 'float'}
+            initialFocus={params.get('focus') ?? undefined}
+            initialTask={params.get('task') ?? undefined}
+            onDrillConsumed={clearDrill}
+            actions={canPlace && overviewAt !== 'top' && (
+                <Tooltip title={t(threadAt === 'float' ? 'window.dock' : 'window.float')}>
+                    <IconButton
+                        size="small"
+                        onClick={() => {
+                            if (threadAt === 'float') dockThread();
+                            else placement.setThread('float');
+                        }}
+                        aria-label={t(threadAt === 'float' ? 'window.dock' : 'window.float')}
+                    ><FloatWindow fontSize="small" /></IconButton>
+                </Tooltip>
+            )}
+        />
+    ) : null;
+    const overviewEl = (initialTab?: OverviewTab) => (
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} onStatus={openStatusThreads} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
+    );
+    const threadInSide = !!threadEl && threadAt === 'side';
+    // The side pane holds the Overview, or the open thread in its place; with the
+    // Overview elsewhere it holds only the thread.
+    const side = overviewAt === 'side' ? (threadInSide ? threadEl : overviewEl()) : threadInSide ? threadEl : null;
+    const paneToggle = overviewAt === 'window'
+        ? { onClick: () => setWindow(!windowOpen), expanded: windowOpen }
+        : overviewAt === 'top'
+            ? { onClick: () => setBand(!bandOpen), expanded: bandOpen }
+            : undefined;
+
+    return (
+        <ThreadRequestsProvider value={requests}>
+            <WorkspaceLayout
+                pane={pane}
+                headerInsetXs={embedded ? 2 : 6}
+                paneLabel={t('project.overview')}
+                paneAttention={waiting > 0}
+                title={project ? (
+                    // One line: the name, then the goal as long as it fits.
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, minWidth: 0 }}>
+                        <Typography variant="h5" noWrap title={project.name} sx={{ flexShrink: { xs: 1, md: 0 }, minWidth: 0, maxWidth: { md: '80%' } }}>
+                            {/* No Projects sidebar in a host: the way back to the list is here. */}
+                            {embedded && (
+                                <>
+                                    <Link component={RouterLink} to={routes.list} color="text.secondary" underline="hover">{t('projects.title')}</Link>
+                                    <Box component="span" sx={{ color: 'text.disabled', mx: 0.75 }}>/</Box>
+                                </>
+                            )}
+                            {/* The name goes back to the project itself: the bare page, without the open thread. */}
+                            <Link component={RouterLink} to={routes.project(project.id)} color="inherit" underline="hover">{project.name}</Link>
+                        </Typography>
+                        {project.goal && <Typography variant="body2" color="text.secondary" noWrap title={project.goal} sx={{ minWidth: 0, display: { xs: 'none', md: 'block' } }}>{project.goal}</Typography>}
+                    </Box>
+                ) : <Skeleton width={200} />}
+                actions={project && (
+                    <>
+                        {/* Wide screens keep the bound chats in the header; narrow ones get their own row below it. */}
+                        {im && <Box sx={{ display: { xs: 'none', md: 'flex' }, minWidth: 0, flexShrink: 1 }}><ProjectImTags im={im} /></Box>}
+                        {canPlace && <PlacementMenu overview={placement.overview} thread={placement.thread} onOverview={placement.setOverview} onThread={placement.setThread} overviewFloat={placement.overviewFloat} onOverviewFloat={placement.setOverviewFloat} />}
+                        <Tooltip title={project.starred ? t('common.unstar') : t('common.star')}>
+                            <IconButton size="small" onClick={() => void patch({ starred: !project.starred })}>{project.starred ? <Star fontSize="small" color="primary" /> : <StarBorder fontSize="small" />}</IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('projectSettings.title')}>
+                            <IconButton size="small" onClick={() => setSettingsTab('general')} aria-label={t('projectSettings.title')}><Settings fontSize="small" /></IconButton>
+                        </Tooltip>
+                    </>
+                )}
+                notice={im && (
+                    <Box sx={{ display: { xs: 'flex', md: 'none' }, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+                        <ProjectImTags im={im} maxVisible={99} showLabel />
+                    </Box>
+                )}
+                side={side}
+                sideAlwaysOpen={overviewAt !== 'side'}
+                paneToggle={paneToggle}
+                top={overviewAt === 'top' ? (
+                    <OverviewBand threads={threads} selectedId={threadId} open={bandOpen} onToggle={() => setBand(!bandOpen)} onOpen={openThread} onTasks={openTasksList} onStatusList={openStatusThreads} onLibrary={() => setBandWindow('library')} onLinks={() => setBandWindow('links')} />
+                ) : undefined}
+                main={<Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ flex: 1, minHeight: 0, display: threadId && threadAt === 'main' ? 'none' : 'flex', flexDirection: 'column' }}>
+                    {project && <CoordinatorStatus project={project} coordinator={coordinator} queued={queued} extra={coordinator && session?.railCards?.({ thread: coordinator, launch: { profile: project.coordinator_profile ?? '', model: project.coordinator_model ?? '' } })} />}
+                    {messages === null ? (
+                    <Box sx={{ flex: 1, p: 3 }}><Skeleton variant="rounded" height={80} /></Box>
+                ) : (
+                    <ConversationPane
+                        projectId={id}
+                        messages={messages}
+                        more={conversation.more}
+                        onLoadEarlier={conversation.loadEarlier}
+                        threads={threadMap}
+                        busy={busy}
+                        disabled={blocked || !project || savingDefaults || !!recovery}
+                        disabledReason={<>
+                            {banner}
+                            {recovery && <Alert severity="warning" sx={{ mb: 1 }} action={<Stack direction="row"><Button color="inherit" size="small" onClick={() => setRecoveryAction('retry')}>{t('conversation.recoveryRetry')}</Button><Button color="inherit" size="small" onClick={() => setRecoveryAction('skip')}>{t('conversation.recoverySkip')}</Button></Stack>}>{t('conversation.recoveryMessage')}</Alert>}
+                            <Dialog open={recoveryAction !== null} onClose={() => setRecoveryAction(null)}>
+                                <DialogTitle>{t('conversation.recoveryTitle')}</DialogTitle>
+                                <DialogContent><DialogContentText>{t(recoveryAction === 'retry' ? 'conversation.recoveryRetryConfirm' : 'conversation.recoverySkipConfirm')}</DialogContentText></DialogContent>
+                                <DialogActions><Button onClick={() => setRecoveryAction(null)}>{t('common.cancel')}</Button><Button disabled={recovering} onClick={() => void resolveRecovery()}>{t(recoveryAction === 'retry' ? 'conversation.recoveryRetry' : 'conversation.recoverySkip')}</Button></DialogActions>
+                            </Dialog>
+                            {!session?.launchPickers && project?.coordinator_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ coordinator_profile: '', coordinator_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.coordinatorProfileUnavailable')}</Alert>}
+                            {!session?.launchPickers && project?.thread_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ thread_profile: '', thread_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.defaultProfileUnavailable')}</Alert>}
+                        </>}
+                        threadId={mainThreadId}
+                        model={project?.coordinator_model}
+                        onModelChange={session?.launchPickers ? undefined : (m) => void patch({ coordinator_model: m })}
+                        modelControl={project && session?.launchPickers?.({ value: { profile: project.coordinator_profile || '', model: project.coordinator_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ coordinator_profile: next.profile, coordinator_model: next.model }) })}
+                        effort={project?.coordinator_effort}
+                        onEffortChange={(e) => void patch({ coordinator_effort: e as EffortLevel })}
+                        composerContext={project && (
+                            // Defaults stay project-scoped; the selected worker's overrides are in its own panel.
+                            <>
+                                <Typography variant="caption" color="text.secondary" title={t('threadSettings.defaultsHelp')}>{t('threadSettings.defaults')}</Typography>
+                                {primary?.kind === 'git' && <ControlTooltip title={t('repo.primaryModeHelp', { path: primary.root })} suppressed={worktreeMenuOpen}>
+                                    <Select
+                                        size="small" variant="standard" disableUnderline IconComponent={ExpandMore}
+                                        value={primary.workspace_mode}
+                                        inputProps={{ 'aria-label': t('threadSettings.worktreeMode') }}
+                                        disabled={blocked || savingDefaults}
+                                        onChange={(e) => void patch(withPrimaryMode(project, e.target.value as 'shared' | 'worktree'))}
+                                        renderValue={(value) => <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}><Folder /><Typography noWrap sx={composerPickerLabelSx}>{t(`threadSettings.workspace.${value}`)}</Typography></Stack>}
+                                        sx={composerPickerSx}
+                                        MenuProps={composerPickerMenuProps}
+                                        open={worktreeMenuOpen}
+                                        onOpen={() => setWorktreeMenuOpen(true)}
+                                        onClose={() => setWorktreeMenuOpen(false)}
+                                    >
+                                        <MenuItem value="worktree">{t('threadSettings.workspace.worktree')}</MenuItem>
+                                        <MenuItem value="shared">{t('threadSettings.workspace.shared')}</MenuItem>
+                                    </Select>
+                                </ControlTooltip>}
+                                <PermissionModeSelect
+                                    value={project.thread_permission_mode || 'acceptEdits'}
+                                    modes={THREAD_MODES}
+                                    allowInherit={false}
+                                    label={t('threadSettings.defaultPermissions')}
+                                    disabled={blocked || savingDefaults}
+                                    onChange={(m) => void patch({ thread_permission_mode: m as ThreadMode })}
+                                />
+                                {session?.launchPickers ? session.launchPickers({ value: { profile: project.thread_profile || '', model: project.thread_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ thread_profile: next.profile, thread_model: next.model }) }) : <ModelPicker
+                                    source="projects"
+                                    value={project.thread_model}
+                                    disabled={blocked || savingDefaults}
+                                    onChange={(m) => void patch({ thread_model: m })}
+                                />}
+                                <EffortPicker
+                                    value={project.thread_effort || ''}
+                                    disabled={blocked || savingDefaults}
+                                    onChange={(e) => void patch({ thread_effort: e as EffortLevel })}
+                                />
+                            </>
+                        )}
+                        onOpenThread={openThread}
+                        onOpenTasks={openTasksList}
+                        onSend={async (text, attachments) => {
+                            if (projectSaving.current) return false;
+                            try {
+                                if (!(text.trim() === '/clear' && attachments.length === 0) && readLocal('worktreeNoticeSeen') !== '1' && project && primary?.kind === 'git') {
+                                    const choice = await new Promise<boolean | null>((resolve) => {
+                                        worktreeReply.current = resolve;
+                                        setWorktreeChoice({ projectId: id, shared: primary.workspace_mode === 'shared' });
+                                    });
+                                    if (choice === null) return false;
+                                    if (choice !== (primary.workspace_mode === 'shared')) {
+                                        const body = withPrimaryMode(project, choice ? 'shared' : 'worktree');
+                                        const saved = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id } }, body }));
+                                        setProject((current) => current?.id === saved.id ? saved : current);
+                                        refresh();
+                                    }
+                                    writeLocal('worktreeNoticeSeen', '1');
+                                }
+                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
+                                // Older servers accept /clear synchronously, without a coordinator turn.
+                                if (text.trim() !== '/clear' || attachments.length > 0) setBusy(true);
+                                // The message shows at once; the reply streams in over the event stream.
+                                await conversation.catchUp().catch(() => undefined);
+                                return true;
+                            } catch (e) {
+                                notify((e as Error).message, 'error');
+                                return false;
+                            }
+                        }}
+                        onChooseDecision={async (mid, index) => {
+                            try {
+                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/choose', { params: { path: { id: mainThreadId, eid: mid } }, body: { index } }));
+                                conversation.apply(m);
+                                // The pick is the user's next message; the reply streams in after it.
+                                await conversation.catchUp().catch(() => undefined);
+                            } catch (e) {
+                                notify((e as Error).message, 'error');
+                            }
+                        }}
+                        onStartSuggestions={async (mid, indexes) => {
+                            try {
+                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/start', { params: { path: { id: mainThreadId, eid: mid } }, body: { indexes } }));
+                                conversation.apply(m);
+                            } catch (e) {
+                                notify((e as Error).message, 'error');
+                            }
+                        }}
+                        onStop={stopCoordinator}
+                    />
+                    )}
+                    </Box>
+                    {threadAt === 'main' && threadEl}
+                </Box>}
+            />
+
+            <FloatingWindow
+                open={overviewAt === 'window' && windowOpen}
+                title={t('project.overview')}
+                storageKey="overview"
+                defaultSize={{ w: 460, h: 520 }}
+                attention={waiting > 0}
+                onClose={() => setWindow(false)}
+                onDock={() => placement.setOverview('side')}
+            >
+                {overviewEl()}
+            </FloatingWindow>
+            <FloatingWindow
+                open={overviewAt !== 'side' && bandWindow !== null}
+                title={bandWindow === 'links' ? t('links.title') : t('overview.library')}
+                storageKey={bandWindow === 'links' ? 'links' : 'library'}
+                defaultSize={{ w: 460, h: 480 }}
+                onClose={() => setBandWindow(null)}
+            >
+                {bandWindow && overviewEl(bandWindow)}
+            </FloatingWindow>
+            <FloatingWindow
+                open={threadAt === 'float' && !!threadEl}
+                title={selected?.title ?? ''}
+                // From the Overview it gets its own spot beside the pane, so the list stays clickable.
+                storageKey={floatedFromOverview ? 'thread-overview' : 'thread'}
+                defaultSize={{ w: 520, h: 640 }}
+                clearRight={floatedFromOverview && pane.open ? pane.width : 0}
+                attention={!!selected && needsUser(selected.status)}
+                onClose={closeThread}
+                onDock={dockThread}
+            >
+                {threadEl}
+            </FloatingWindow>
+
+            <Dialog open={worktreeChoice !== null && worktreeChoice.projectId === id} onClose={() => answerWorktree(null)} aria-labelledby="worktree-notice-title" maxWidth="sm" fullWidth>
+                <DialogTitle id="worktree-notice-title">{t('worktreeNotice.title')}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>{t('repo.primaryModeHelp', { path: primary?.root })}</DialogContentText>
+                    <DialogContentText>{t('worktreeNotice.description')}</DialogContentText>
+                    <RadioGroup value={worktreeChoice?.shared ? 'shared' : 'worktree'} onChange={(e) => setWorktreeChoice({ projectId: id, shared: e.target.value === 'shared' })} sx={{ mt: 1 }}>
+                        <FormControlLabel value="worktree" control={<Radio />} label={t('worktreeNotice.worktree')} />
+                        <FormControlLabel value="shared" control={<Radio />} label={t('worktreeNotice.shared')} />
+                    </RadioGroup>
+                    <DialogContentText>{t('worktreeNotice.changeLater')}</DialogContentText>
+                </DialogContent>
+                <DialogActions><Button onClick={() => answerWorktree(null)}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => answerWorktree(worktreeChoice?.shared ?? null)}>{t('worktreeNotice.continue')}</Button></DialogActions>
+            </Dialog>
+            {im?.dialog}
+
+            {/* What a status count stands for: the threads in that state, each row opening the thread (its tasks pill keeps drilling into what it runs). */}
+            <Popover open={!!statusList} anchorEl={statusList?.anchor ?? null} onClose={closeStatusList}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
+                {statusList && (
+                    <StatusThreadsPopover label={statusList.label} threads={statusList.threads} onOpen={openThread}
+                        onTasks={openTasksList} onClose={closeStatusList} />
+                )}
+            </Popover>
+
+            {/* What a status-area count stands for: a thread's (or every working thread's) running tasks and subagents, each row opening its detail. */}
+            <Popover open={!!activity} anchorEl={activity?.anchor ?? null} onClose={closeActivity}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
+                {activity && (
+                    <ThreadActivityPopover targets={activity.targets} onClose={closeActivity}
+                        onOpenAgent={(tid, call) => openThread(tid, { focus: call })}
+                        onOpenTask={(tid, taskId) => openThread(tid, { task: taskId })}
+                        onOpenThread={(tid) => openThread(tid)} />
+                )}
+            </Popover>
+
+            {project && settingsTab && (
+                <ProjectSettingsDialog
+                    project={project}
+                    open
+                    tab={settingsTab}
+                    onTab={setSettingsTab}
+                    onClose={() => setSettingsTab(null)}
+                    onChanged={(p) => {
+                        setProject(p);
+                        if (!p.archived_at && project.archived_at) navigate(routes.project(p.id));
+                    }}
+                    memoryKey={memoryKey}
+                />
+            )}
+        </ThreadRequestsProvider>
+    );
+}

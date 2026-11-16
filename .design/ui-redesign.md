@@ -120,7 +120,7 @@ rail + sidebar 两列布局是现有用户最熟悉的东西，也是 VS Code �
 | 问题 | 在现有结构内的改法 | 用户感知 |
 |---|---|---|
 | rail 在 1440×900 下放不下 | 底部 Feedback / 语言 / 主题 / 用户 4 个图标合并成 1 个用户菜单，腾出 3 个位置 | 很小：高频图标位置不变 |
-| 单页目的地也要走两级 | activity 只有一个子页时不显示 sidebar（Bench 已经是这样），推广为通用规则 | 很小 |
+| 单页目的地也要走两级 | activity 只有一个子页时不显示 sidebar；Power-ups 例外：即使只启用一项也保留二级布局，保持扩展导航一致 | 很小 |
 | Dashboard 的 sidebar 放了 6 个时间范围 | 时间范围改为页内分段选择器；sidebar 只留 概览 / 用量 / Team usage / Quota history。`/dashboard/7d` 等 URL 保留，页内选择器直接读 URL | 小：时间范围从左边移到页面顶部 |
 | 4 行都叫 "Claude Code" | profile 行的主标签改为 profile 名字（`p2 · sonnet`），缩进挂在 Claude Code 下面，品牌图标保留 | 小 |
 | 桌面窗口宽度不够 | 窗口宽度 < 1200px 时 sidebar 自动折叠（`useSidebarCollapsed` 已有），rail 保持不变；悬停 rail 图标时以浮层展开 sidebar | 小：只影响窄窗口 |

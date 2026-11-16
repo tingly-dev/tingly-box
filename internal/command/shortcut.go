@@ -10,7 +10,7 @@ import (
 )
 
 // LaunchSource is how the running tingly-box process was invoked (binary,
-// npx, npm, npx-bundle, npm-bundle) — see internal/shortcut for the source
+// npx, npm) — see internal/shortcut for the source
 // constants. It comes
 // from the global --source flag and is bound into Kong's Run() calls, so any
 // subcommand that needs it (shortcut, start, restart) can read it directly

@@ -216,6 +216,21 @@ tasks:
         -H "Authorization: Bearer {{.OPENROUTER_KEY}}" \
         -H "Accept: application/json" \
         {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
+      - |
+        echo "example: /api/v1/credits (documented for management keys; an inference key was answered too)"
+        cat << EOF
+        {
+          "data": {
+            "total_credits": 0,
+            "total_usage": 0.007911
+          }
+        }
+        EOF
+      - |
+        curl https://openrouter.ai/api/v1/credits \
+        -H "Authorization: Bearer {{.OPENROUTER_KEY}}" \
+        -H "Accept: application/json" \
+        {{ if .PROXY }}--proxy "{{.PROXY}}"{{ end }} | jq
 
   codex:
     cmds:

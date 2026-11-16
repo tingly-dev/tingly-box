@@ -149,9 +149,11 @@ func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 
 // Server settings
 
-func (ac *AppConfig) GetServerPort() int           { return ac.config.GetServerPort() }
-func (ac *AppConfig) SetServerPort(port int) error { return ac.config.SetServerPort(port) }
-func (ac *AppConfig) GetJWTSecret() string         { return ac.config.GetJWTSecret() }
+func (ac *AppConfig) GetServerPort() int              { return ac.config.GetServerPort() }
+func (ac *AppConfig) SetServerPort(port int) error    { return ac.config.SetServerPort(port) }
+func (ac *AppConfig) GetProjectsDir() string          { return ac.config.GetProjectsDir() }
+func (ac *AppConfig) SetProjectsDir(dir string) error { return ac.config.SetProjectsDir(dir) }
+func (ac *AppConfig) GetJWTSecret() string            { return ac.config.GetJWTSecret() }
 
 // Runtime flags
 

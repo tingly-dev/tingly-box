@@ -2,15 +2,17 @@ import CardGrid from "@/components/CardGrid.tsx";
 import PageLayout from '@/components/PageLayout';
 import PageHeader from '@/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
-import AgentActivityDialog from './components/AgentActivityDialog';
-import AgentStatusRow, { AgentLooksIn } from './components/AgentStatusRow';
+import AgentStatusRow, { AgentLogButton } from './components/AgentStatusRow';
 import AgentAccessSection, { useAccessExpanded } from './components/AgentAccessSection';
 import ProfileSetupDialog from './components/ProfileSetupDialog';
 import { useAgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
 import { isCredentialProvider } from '@/utils/providers';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
-import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './components/ScenarioCardHeader';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, agentPageHeaderSx } from './components/ScenarioCardHeader';
+import PluginFeatures from '@/components/PluginFeatures';
+import { usePluginsActive } from '@/hooks/usePluginsActive';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
+import { useSlotRouting } from "@/pages/scenario/hooks/useSlotRouting";
 import ConfigRow from "@/components/ConfigRow.tsx";
 import { ChoiceToggle } from "@/components/ChoiceToggle";
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -21,6 +23,7 @@ import { copyableTextStyle } from '@/styles/textStyles';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { Delete as DeleteIcon } from '@/components/icons';
 import { Edit as EditIcon } from '@/components/icons';
+import { Duplicate as DuplicateIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { Terminal as TerminalIcon } from '@/components/icons';
 import Switch from '@mui/material/Switch';
@@ -46,6 +49,9 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import DuplicateDialog from '@/components/DuplicateDialog';
+import { suggestProfileCopyName } from '@/utils/copyName';
+import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -56,10 +62,8 @@ const BASE_SCENARIO = 'claude_code';
 const commandModeForSource = (source: string | null): 'npx' | 'global' | null => {
     switch (source) {
         case 'npx':
-        case 'npx-bundle':
             return 'npx';
         case 'npm':
-        case 'npm-bundle':
         case 'binary':
             return 'global';
         default:
@@ -83,21 +87,23 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
         isLoading,
-    } = useScenarioPageInternal(scenario);
+    } = useScenarioPageInternal(scenario, { skipRules: true });
     const { launchSource } = useVersion();
 
     // Profile state
     const { getProfiles, refresh: refreshProfiles } = useProfileContext();
     const currentProfile = getProfiles(BASE_SCENARIO).find(p => p.id === profileId);
-    const [requestsOpen, setRequestsOpen] = useState(false);
     const [setupOpen, setSetupOpen] = useState(false);
     const [logOpen, setLogOpen] = useState(false);
     const [renameProfileOpen, setRenameProfileOpen] = useState(false);
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
+    const duplicateProfile = useDuplicateProfile();
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
-    const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
+    // The profile's rules and its Slots row.
+    const slots = useSlotRouting(scenario, `builtin:${scenario}:cc`, !!currentProfile);
     // npx matches the primary installation path and does not assume that the
     // package has also installed a permanent executable on PATH. Keep the
     // global command available as an explicit alternative for those who have.
@@ -120,11 +126,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     // elsewhere) instead of two separate always-expanded rows — same info,
     // less vertical space, one at a time.
     const [profileConfigTab, setProfileConfigTab] = useState<'quickstart' | 'settings-file'>('quickstart');
-
-    // Update unified mode when profile changes
-    useEffect(() => {
-        setUnifiedMode(currentProfile?.unified || false);
-    }, [currentProfile]);
 
     useEffect(() => {
         setSettingsArtifact(null);
@@ -187,13 +188,29 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
 
     // Profile quick start command. Keep the old `cc --profile` form compatible
     // in the CLI, but surface the new direct `profile <name>` form in the UI.
-    const ccCommand = React.useMemo(() => {
+    // Shown by name (the human handle); the id works too — hovering shows both
+    // complete commands.
+    const buildCommand = (ref: string) => {
         if (commandMode === 'npx') {
             const packageSpec = appVersion ? `tingly-box@${appVersion}` : 'tingly-box';
-            return `npx -y ${packageSpec} profile ${profileId}`;
+            return `npx -y ${packageSpec} profile ${ref}`;
         }
-        return `tingly-box profile ${profileId}`;
-    }, [commandMode, appVersion, profileId]);
+        return `tingly-box profile ${ref}`;
+    };
+    const profileRef = currentProfile?.name || profileId || '';
+    const ccCommand = React.useMemo(() => buildCommand(profileRef), [commandMode, appVersion, profileRef]);
+    // Both spellings in full — by name and by id — under a one-line hint, so
+    // the hover answers "which command can I run" without a round trip.
+    const commandHint = (
+        <Box sx={{ fontFamily: fontMono, whiteSpace: 'pre-line' }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontFamily: 'inherit' }}>
+                {t('claudeCode.profile.profileRefHint', { id: profileId || '' })}
+            </Typography>
+            {buildCommand(profileRef)}
+            {'\n'}
+            {buildCommand(profileId || '')}
+        </Box>
+    );
 
     // Facts, not clicks: a provider exists, a request has come through this profile.
     const observation = useAgentObservation(scenario);
@@ -201,9 +218,13 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const providerConnected = isLoading ? null : providers.some((p: any) => p.enabled && isCredentialProvider(p));
     const access = useAccessExpanded(scenario, launched !== true);
     const accessUrl = `${baseUrl}/tingly/${scenario}`;
+    // Whether any plugin is on, read independently of the connection card's
+    // fold state, so the folded card can surface the row only when it matters.
+    const pluginsActive = usePluginsActive(scenario);
+    const pluginsRow = <PluginFeatures scenario={scenario} />;
 
     return (
-        <PageLayout loading={isLoading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
+        <PageLayout loading={isLoading || slots.loading} loadingContent={<ScenarioPageSkeleton />} notification={notification}>
             <Stack spacing={2}>
             <PageHeader
                 // The profile's alias is its name: "Claude Code - ds". Rename / delete act on
@@ -223,6 +244,11 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                 <EditIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                             </IconButton>
                         </Tooltip>
+                        <Tooltip title={t('claudeCode.profile.duplicateProfile')}>
+                            <IconButton size="small" aria-label={t('claudeCode.profile.duplicateProfile')} onClick={() => setDuplicateOpen(true)}>
+                                <DuplicateIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
                         <Tooltip title={t('claudeCode.profile.deleteProfile')}>
                             <IconButton size="small" color="error" aria-label={t('claudeCode.profile.deleteProfile')} onClick={() => setDeleteProfileOpen(true)}>
                                 <DeleteIcon fontSize="small" />
@@ -236,36 +262,53 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         connected={launched === true}
                         configStatus={null}
                         unconnectedText={t('agentStatus.noRequestsYet')}
-                        // The alias is in the title; the id stays here since the launch command uses it.
-                        leading={`${currentProfile ? `${profileId} · ` : ''}${unifiedMode ? t('claudeCode.profile.unified') : t('claudeCode.profile.separate')}`}
+                        // The alias is in the title; the id stays visible here —
+                        // the launch command names the profile, the id still works.
+                        leading={currentProfile ? profileId : ''}
                     />
                 )}
                 // Same shape as the Agent pages: looks-in first, the key action
                 // (Setup Guide) filled and rightmost.
                 actions={(
                     <>
-                        <AgentLooksIn
-                            onOpenRequests={() => setRequestsOpen(true)}
-                            onOpenLog={() => setLogOpen(true)}
-                            onOpenUsage={() => navigate(`/dashboard/today?scenario=${encodeURIComponent(scenario)}`)}
-                        />
+                        <AgentLogButton onOpenLog={() => setLogOpen(true)} />
                         <Button onClick={() => setSetupOpen(true)} variant="contained" size="small">
                             {t('scenarioPage.setupGuide')}
                         </Button>
                     </>
                 )}
-                sx={{
-                    pb: 0,
-                    borderBottom: 0,
-                    flexDirection: { xs: 'column', md: 'row' },
-                    alignItems: { xs: 'flex-start', md: 'center' },
-                    '& h1': { whiteSpace: 'nowrap' },
-                    // The buttons stay on one row (the primary one never drops to a line of its
-                    // own); the status text wraps under the title instead.
-                    '& > :last-child': { flexWrap: { md: 'nowrap' }, flexShrink: { md: 0 } },
-                }}
+                sx={agentPageHeaderSx()}
             />
-                <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={accessUrl}>
+                {/* This page is special: it connects through the launch command,
+                    not the Base URL, so the folded line is the launch config. */}
+                <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={accessUrl}
+                    foldedContent={(
+                        <ConfigRow
+                            tabs={[{
+                                key: 'quickstart',
+                                label: t('claudeCode.profile.quickStart'),
+                                content: (
+                                    <Tooltip title={commandHint} arrow>
+                                        <Typography
+                                            variant="subtitle2"
+                                            onClick={() => copyToClipboard(ccCommand, 'command')}
+                                            sx={copyableTextStyle}
+                                        >
+                                            {ccCommand}
+                                        </Typography>
+                                    </Tooltip>
+                                ),
+                            }]}
+                            activeTab="quickstart"
+                            onTabChange={() => {}}
+                        />
+                    )}
+                    foldedExtras={(
+                        <>
+                            {pluginsActive && pluginsRow}
+                        </>
+                    )}
+                >
                   <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                     <Box sx={{ px: 2, pb: 0.5 }}>
                         <ConfigRow
@@ -274,14 +317,15 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                     key: 'quickstart',
                                     label: t('claudeCode.profile.quickStart'),
                                     content: (
-                                        <Typography
-                                            variant="subtitle2"
-                                            onClick={() => copyToClipboard(ccCommand, 'command')}
-                                            sx={copyableTextStyle}
-                                            title={t('claudeCode.profile.clickToCopy')}
-                                        >
-                                            {ccCommand}
-                                        </Typography>
+                                        <Tooltip title={commandHint} arrow>
+                                            <Typography
+                                                variant="subtitle2"
+                                                onClick={() => copyToClipboard(ccCommand, 'command')}
+                                                sx={copyableTextStyle}
+                                            >
+                                                {ccCommand}
+                                            </Typography>
+                                        </Tooltip>
                                     ),
                                     actions: (
                                         <>
@@ -302,7 +346,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                                         value: 'npx', label: 'NPX', tooltip: 'Use npx command',
                                                         // The same green "n" disc the old icon-only switch used for npx.
                                                         icon: (
-                                                            <Box component="span" sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'success.main', color: 'background.paper', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>
+                                                            <Box component="span" sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'success.main', color: 'background.paper', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, lineHeight: 1 }}>
                                                                 n
                                                             </Box>
                                                         ),
@@ -392,7 +436,13 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
                         compact={true}
+                        showPlugins={false}
                     />
+                    {/* Slots and plugins live in the connection card: they are
+                        per-connection settings, set alongside the URL. Rows use
+                        pt:1 so the gaps match the card's edge rhythm. */}
+                    <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
+                    <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
                   </Box>
                 </AgentAccessSection>
             <CardGrid>
@@ -405,6 +455,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
 
                 <TemplatePage
                     scenario={scenario}
+                    rules={slots.rules}
+                    onRulesChange={slots.setRules}
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}
@@ -412,7 +464,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                 />
 
                 <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
-                <AgentActivityDialog scenario={scenario} open={requestsOpen} onClose={() => setRequestsOpen(false)} />
 
                 <ProfileSetupDialog
                     open={setupOpen}
@@ -458,6 +509,15 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     </DialogActions>
                 </Dialog>
 
+                <DuplicateDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    title={t('claudeCode.profile.duplicateTitle')}
+                    description={t('claudeCode.profile.duplicateDescription', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
+                    label={t('claudeCode.profile.profileName')}
+                    initialName={suggestProfileCopyName(currentProfile?.name || '', getProfiles(BASE_SCENARIO).map(p => p.name))}
+                    onSubmit={(name) => duplicateProfile(profileId || '', name)}
+                />
                 <ConfirmDialog
                     open={deleteProfileOpen}
                     onClose={() => setDeleteProfileOpen(false)}

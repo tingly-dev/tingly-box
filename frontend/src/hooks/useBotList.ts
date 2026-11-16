@@ -1,6 +1,7 @@
 import {api, enrichBotsWithCapabilities} from '@/services/api';
 import type {BotSettings} from '@/types/bot';
-import {useCallback, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {useEntityLabels} from '@/components/entity/useEntityLabels';
 import {useTranslation} from 'react-i18next';
 
 // useBotList is the single owner of the "load the ImBot list" operation plus
@@ -26,12 +27,20 @@ export interface UseBotListOptions {
 
 export function useBotList({notify, spinnerOnRefresh = false}: UseBotListOptions) {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
     // Starts true (not false) so the very first render doesn't see an empty
     // `bots` array and briefly flash an empty state before the initial fetch
     // has had a chance to resolve.
     const [bots, setBots] = useState<BotSettings[]>([]);
     const [loading, setLoading] = useState(true);
     const [restartingUuid, setRestartingUuid] = useState<string | null>(null);
+    // Toasts name the bot (`平台 · alias · id`); read the latest list without re-creating callbacks.
+    const botsRef = useRef<BotSettings[]>([]);
+    useEffect(() => { botsRef.current = bots; }, [bots]);
+    const botName = useCallback((uuid: string) => {
+        const bot = botsRef.current.find((b) => b.uuid === uuid);
+        return bot ? entities.botText(bot) : uuid;
+    }, [entities]);
 
     const load = useCallback(async () => {
         try {
@@ -55,7 +64,7 @@ export function useBotList({notify, spinnerOnRefresh = false}: UseBotListOptions
         try {
             const result = await api.restartImBot(uuid);
             if (result?.success) {
-                notify(t('remoteControl.notify.botRestarted', {defaultValue: 'Bot restarted'}), 'success');
+                notify(t('remoteControl.notify.botRestarted', {defaultValue: 'Restarted {{bot}}', bot: botName(uuid)}), 'success');
                 await load();
             } else {
                 notify(t('remoteControl.notify.restartFailed', {defaultValue: 'Failed to restart bot: {{error}}', error: result?.error || 'Unknown error'}), 'error');
@@ -66,13 +75,14 @@ export function useBotList({notify, spinnerOnRefresh = false}: UseBotListOptions
         } finally {
             setRestartingUuid(null);
         }
-    }, [load, notify, t]);
+    }, [load, notify, t, botName]);
 
     const remove = useCallback(async (uuid: string) => {
+        const name = botName(uuid);
         try {
             const result = await api.deleteImBotSetting(uuid);
             if (result?.success) {
-                notify(t('remoteControl.notify.botDeleted', {defaultValue: 'Bot deleted successfully'}), 'success');
+                notify(t('remoteControl.notify.botDeleted', {defaultValue: 'Deleted {{bot}}', bot: name}), 'success');
                 await load();
             } else {
                 notify(t('remoteControl.notify.deleteFailed', {defaultValue: 'Failed to delete bot: {{error}}', error: result?.error}), 'error');
@@ -80,7 +90,7 @@ export function useBotList({notify, spinnerOnRefresh = false}: UseBotListOptions
         } catch (err) {
             notify(t('remoteControl.notify.deleteFailedGeneric', {defaultValue: 'Failed to delete bot'}), 'error');
         }
-    }, [load, notify, t]);
+    }, [load, notify, t, botName]);
 
     const isRestarting = useCallback((uuid: string) => restartingUuid === uuid, [restartingUuid]);
 

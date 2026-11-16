@@ -18,39 +18,6 @@ export type {
     ScanResult,
 };
 
-// Additional types not in codegen (UI-specific)
-export interface User {
-    id: string;
-    name: string;
-    email?: string;
-    avatar?: string;
-}
-
-export type RecordingType =
-    | 'code-review'
-    | 'debug'
-    | 'refactor'
-    | 'test'
-    | 'custom';
-
-export interface Recording {
-    id: string;
-    timestamp: Date;
-    user: User;
-    project: string;
-    type: RecordingType;
-    content: string;
-    duration: number;
-    model: string;
-    summary?: string;
-}
-
-export interface RecordingCalendarDay {
-    date: Date;
-    count: number;
-    hasRecordings: boolean;
-}
-
 export type IDESource =
     | 'claude_code'
     | 'opencode'
@@ -80,11 +47,4 @@ export interface GroupingStrategyCustom {
 export interface SkillFilter {
     searchQuery: string;
     ideSource?: IDESource;
-}
-
-export interface RecordingFilter {
-    searchQuery: string;
-    userFilter?: string;
-    projectFilter?: string;
-    typeFilter?: RecordingType;
 }

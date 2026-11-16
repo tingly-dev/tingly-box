@@ -2,6 +2,7 @@ import { host } from '@/host';
 import type { paths } from '@/client';
 import { getApiBaseUrl } from '@/utils/protocol';
 import createClient from 'openapi-fetch';
+import { coalescedFetch } from './coalescedFetch';
 
 export type ApiClient = ReturnType<typeof createClient<paths>>;
 
@@ -9,7 +10,7 @@ let clientPromise: Promise<ApiClient> | null = null;
 
 export const getControlApiClient = async (): Promise<ApiClient> => {
     if (!clientPromise) {
-        clientPromise = getApiBaseUrl().then((baseUrl) => createClient<paths>({ baseUrl }));
+        clientPromise = getApiBaseUrl().then((baseUrl) => createClient<paths>({ baseUrl, fetch: coalescedFetch }));
     }
     return clientPromise;
 };

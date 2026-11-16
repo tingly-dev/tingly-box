@@ -72,13 +72,33 @@ func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.R
 	return req
 }
 
-// isClaudeCodeBackend: Anthropic's host, or a Claude Code OAuth provider on
-// any host (a relay still needs the identity rewrite).
-func isClaudeCodeBackend(ctx *TransformContext, host string) bool {
-	if host == "api.anthropic.com" || host == "claude.ai" {
-		return true
-	}
+// isClaudeCodeOAuth reports whether the provider is a Claude Code OAuth
+// provider, on Anthropic's host or a relay in front of it. Only the Claude
+// OAuth chain carries the Claude Code identity (billing header + metadata).
+// Any other credential on Anthropic's host, such as an API key, is plain API
+// usage: the billing header would have Anthropic bill it as Claude Code,
+// which the API credits of Max/Team plans do not cover.
+func isClaudeCodeOAuth(ctx *TransformContext) bool {
 	return ctx != nil && ctx.Provider != nil && ctx.Provider.IsClaudeCodeProvider()
+}
+
+// reconcileAnthropicV1Thinking applies Anthropic's wire rules for thinking
+// (thinking.ReconcileV1WithRequest), then the model's thinking dialects
+// (ops.ApplyAnthropicV1ModelTransform). Only for Anthropic's backend: a
+// third-party Anthropic-compatible provider gets the request as the client
+// sent it, since rewriting it (thinking on, then off on the next tool turn)
+// invalidated the provider's prompt cache for the whole conversation.
+// Thinking the gateway produces from an OpenAI client's effort is reconciled
+// where it is produced (request.applyOpenAIEffortAsThinking).
+func reconcileAnthropicV1Thinking(req *anthropic.MessageNewParams) *anthropic.MessageNewParams {
+	thinking.ReconcileV1WithRequest(req)
+	return ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
+}
+
+// reconcileAnthropicBetaThinking is reconcileAnthropicV1Thinking for Beta requests.
+func reconcileAnthropicBetaThinking(req *anthropic.BetaMessageNewParams) *anthropic.BetaMessageNewParams {
+	thinking.ReconcileBetaWithRequest(req)
+	return ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 }
 
 func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic.MessageNewParams, providerURL string) *anthropic.MessageNewParams {
@@ -87,17 +107,11 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
 	switch {
-	case isClaudeCodeBackend(ctx, host):
-		// Anthropic's wire rules for thinking, before model-specific thinking
-		// reconciliation. Only here: a third-party Anthropic-compatible
-		// provider gets the request as the client sent it, since rewriting
-		// it (thinking on, then off on the next tool turn) invalidated the
-		// provider's prompt cache for the whole conversation. Thinking the
-		// gateway produces from an OpenAI client's effort is reconciled
-		// where it is produced (request.applyOpenAIEffortAsThinking).
-		thinking.ReconcileV1WithRequest(req)
-		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
+	case isClaudeCodeOAuth(ctx):
+		req = reconcileAnthropicV1Thinking(req)
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
+	case host == "api.anthropic.com" || host == "claude.ai": // any other credential, e.g. an API key
+		req = reconcileAnthropicV1Thinking(req)
 	case host == "api.deepseek.com":
 		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
@@ -111,17 +125,11 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 	}
 	host, _ := ops.SplitProviderHostPath(providerURL)
 	switch {
-	case isClaudeCodeBackend(ctx, host):
-		// Anthropic's wire rules for thinking, before model-specific thinking
-		// reconciliation. Only here: a third-party Anthropic-compatible
-		// provider gets the request as the client sent it, since rewriting
-		// it (thinking on, then off on the next tool turn) invalidated the
-		// provider's prompt cache for the whole conversation. Thinking the
-		// gateway produces from an OpenAI client's effort is reconciled
-		// where it is produced (request.applyOpenAIEffortAsThinking).
-		thinking.ReconcileBetaWithRequest(req)
-		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
+	case isClaudeCodeOAuth(ctx):
+		req = reconcileAnthropicBetaThinking(req)
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
+	case host == "api.anthropic.com" || host == "claude.ai": // any other credential, e.g. an API key
+		req = reconcileAnthropicBetaThinking(req)
 	case host == "api.deepseek.com":
 		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)

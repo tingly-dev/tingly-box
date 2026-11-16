@@ -1,11 +1,11 @@
 import React from 'react';
-import { Computer, DarkMode, LightMode, WbTwilight } from '../icons';
+import { Computer, DarkMode, LightMode } from '../icons';
 import { SvgIcon } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import type { SvgIconComponent } from '../icons';
 import type { ThemeMode, ResolvedThemeMode } from './types';
 
-export const THEME_MODE_VALUES = ['light', 'dark', 'sunlit', 'claude', 'ds', 'system'] as const satisfies readonly ThemeMode[];
+export const THEME_MODE_VALUES = ['light', 'dark', 'claude', 'ds', 'system'] as const satisfies readonly ThemeMode[];
 export const SYSTEM_THEME_MODE_VALUES = ['light', 'dark'] as const satisfies readonly ResolvedThemeMode[];
 
 type ThemeLabelResolver = (key: string) => string;
@@ -47,10 +47,19 @@ export const isThemeMode = (value: string | null): value is ThemeMode => (
     THEME_MODE_VALUES.some((mode) => mode === value)
 );
 
+// Retired modes and the mode that replaces them. Sunlit was a light variant,
+// so a user who picked it keeps a light app instead of following the system.
+const RETIRED_THEME_MODES: Record<string, ThemeMode> = { sunlit: 'light' };
+
+/** A stored theme mode, with retired modes mapped forward; anything else is 'system'. */
+export const readStoredThemeMode = (value: string | null): ThemeMode => {
+    if (isThemeMode(value)) return value;
+    return (value && RETIRED_THEME_MODES[value]) || 'system';
+};
+
 export const getThemeOptions = (t: ThemeLabelResolver) => [
     { value: 'light', label: t('layout.activityBar.light'), renderIcon: createMuiThemeIcon(LightMode) },
     { value: 'dark', label: t('layout.activityBar.dark'), renderIcon: createMuiThemeIcon(DarkMode) },
-    { value: 'sunlit', label: t('layout.activityBar.sunlit'), renderIcon: createMuiThemeIcon(WbTwilight) },
     { value: 'claude', label: t('layout.activityBar.claude'), renderIcon: ClaudeThemeIcon },
     { value: 'ds', label: t('layout.activityBar.ds'), renderIcon: DeepSeekThemeIcon },
     { value: 'system', label: t('layout.activityBar.system'), renderIcon: createMuiThemeIcon(Computer) },

@@ -6,6 +6,8 @@ export interface RecentModelsSectionProps {
     provider: Provider;
     recentModels: string[];
     selectedModel?: string;
+    // Overrides selectedModel when several models can be selected at once.
+    isModelSelected?: (model: string) => boolean;
     onModelSelect: (model: string) => void;
     columns: number;
 }
@@ -14,6 +16,7 @@ export function RecentModelsSection({
     provider,
     recentModels,
     selectedModel,
+    isModelSelected,
     onModelSelect,
     columns,
 }: RecentModelsSectionProps) {
@@ -31,7 +34,7 @@ export function RecentModelsSection({
                     <ModelCard
                         key={`${provider.uuid}:${model}`}
                         model={model}
-                        isSelected={selectedModel === model}
+                        isSelected={isModelSelected ? isModelSelected(model) : selectedModel === model}
                         onClick={() => onModelSelect(model)}
                         variant="standard"
                         provider={provider}

@@ -200,6 +200,38 @@ func TestConvertToResponsesParams_Simple(t *testing.T) {
 	_ = params
 }
 
+func TestConvertToResponsesParams_PreservesCompactionHistory(t *testing.T) {
+	body := []byte(`{"model":"alias","tools":[{"type":"web_search"}],"input":[{"type":"reasoning","summary":[],"encrypted_content":"opaque-reasoning"},{"type":"compaction","encrypted_content":"opaque-compaction"},{"type":"compaction_trigger"}]}`)
+	h := &ProtocolHandler{}
+	params, err := h.convertToResponsesParams(body, "upstream-model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Model string `json:"model"`
+		Input []struct {
+			Type             string `json:"type"`
+			EncryptedContent string `json:"encrypted_content"`
+		} `json:"input"`
+		Tools []struct {
+			Type string `json:"type"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Model != "upstream-model" || len(decoded.Input) != 3 || len(decoded.Tools) != 1 || decoded.Tools[0].Type != "web_search" {
+		t.Fatalf("compaction request changed during conversion: %s", raw)
+	}
+	if decoded.Input[0].EncryptedContent != "opaque-reasoning" || decoded.Input[1].EncryptedContent != "opaque-compaction" || decoded.Input[2].Type != "compaction_trigger" {
+		t.Fatalf("compaction history changed during conversion: %s", raw)
+	}
+}
+
 func TestConvertToResponsesParams_Complex(t *testing.T) {
 	body := []byte(`{
 		"model": "gpt-4o",

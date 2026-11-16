@@ -27,16 +27,40 @@ func (s *Server) mcpEnabled() bool {
 	return protocolserver.MCPEnabled(s.config)
 }
 
-// deskEnabled reports whether the experimental Desk surface
-// (a web front door onto local Claude Code, see .design/desk.md)
-// is turned on. Off by default: it runs an arbitrary local coding agent on
-// the host, so it opts in the same way guardrails/MCP do rather than being
+// projectsEnabled reports whether Projects (a coordinator conversation
+// running Claude Code threads in git worktrees, see .design/projects.md) is
+// turned on. Off by default: it runs an arbitrary local coding agent on the
+// host, so it opts in the same way guardrails/MCP do rather than being
 // always-on.
-func (s *Server) deskEnabled() bool {
+func (s *Server) projectsEnabled() bool {
 	if s.config == nil {
 		return false
 	}
-	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionDesk)
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionProjects)
+}
+
+// adoptProjectsForRemote turns Projects on, once, for an install that was
+// already chatting through Remote: since Projects' switch also gates chat
+// control (.design/remote-into-projects.md), leaving it off would cut those
+// chats off on upgrade. A switch that was ever set, either way, is left
+// alone, so this decides only for installs that never chose.
+func (s *Server) adoptProjectsForRemote() {
+	if s.config == nil || s.config.HasScenarioFlag(typ.ScenarioGlobal, constant.ExtensionProjects) {
+		return
+	}
+	sm := s.config.StoreManager()
+	if sm == nil || sm.ImBotSettings() == nil {
+		return
+	}
+	bots, err := sm.ImBotSettings().ListEnabledSettings()
+	if err != nil || len(bots) == 0 {
+		return
+	}
+	if err := s.config.SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionProjects, true); err != nil {
+		logrus.WithError(err).Warn("Failed to turn on Projects for the IM bots in use")
+		return
+	}
+	logrus.Infof("Turned on Projects: %d IM bot(s) in use now chat through it", len(bots))
 }
 
 func (s *Server) initGuardrailsRuntime() {

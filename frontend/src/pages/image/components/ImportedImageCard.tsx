@@ -13,6 +13,9 @@ import { Close, Edit, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { formatBytes, stripCardBasis, STRIP_CARD_HEIGHT } from './imageGenSession';
 import type { ImportedImage } from './ImageGenPlayground.types';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_CARD } from './imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ImportedImageCardProps {
     item: ImportedImage;
@@ -56,7 +59,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 .join(' · ')}
                         </Typography>
                     </Box>
-                    <Box sx={{ position: 'relative', flex: { xs: 1, lg: 'none' }, aspectRatio: { lg: '1 / 1' }, minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                    <Box sx={{ position: 'relative', flex: { xs: 1, lg: 'none' }, aspectRatio: { lg: '1 / 1' }, minHeight: 0, borderRadius: radius.row, overflow: 'hidden', bgcolor: 'action.hover' }}>
                         <ButtonBase
                             onClick={onOpen}
                             aria-label={t('playground.openImported', { defaultValue: 'Open {{name}}', name: item.name })}
@@ -67,12 +70,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 '&:hover .image-preview-overlay, &:focus-visible .image-preview-overlay': { opacity: 1 },
                             }}
                         >
-                            <Box
-                                component="img"
-                                src={item.src}
-                                alt={item.name}
-                                sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                            />
+                            <ThumbImage src={item.src} alt={item.name} edge={THUMB_EDGE_CARD} fit="contain" />
                             <Box className="image-preview-overlay" sx={zoomScrimSx}>
                                 <ZoomIn sx={{ fontSize: 30 }} />
                             </Box>

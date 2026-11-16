@@ -81,7 +81,9 @@ func (r *Runner) Open(ctx context.Context, prompt string, opts ExecutionOptions)
 	proc, err := r.procFactory.Start(runCtx, *spec)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("start process: %w", err)
+		// A launch failure is a pre-output process failure: wrap it as a
+		// ProcessError so [PreOutputFailure] recognizes it as retryable.
+		return nil, newProcessError(r.driver.Type(), fmt.Errorf("start process: %w", err))
 	}
 
 	decoder := protocol.NewDecoder(proc.Stdout())

@@ -18,6 +18,7 @@ import {
 import { type SkillLocation } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface SkillLocationCardProps {
     location: SkillLocation;
@@ -47,7 +48,7 @@ const SkillLocationCard = ({
                 flexDirection: 'column',
                 border: 1,
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 transition: 'all 0.2s',
                 '&:hover': {
                     boxShadow: 3,

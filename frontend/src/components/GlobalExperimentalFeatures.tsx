@@ -1,19 +1,16 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import type {ExperimentalFeature} from '@/components/ExperimentalFeatureGate';
-import { Code as IconCode, Psychology as IconBrain, Shield as IconShield, SettingsApplications, TestPipe as IconTestPipe } from '@/components/icons';
+import { Folder as IconFolder, Psychology as IconBrain, Shield as IconShield, SettingsApplications, TestPipe as IconTestPipe } from '@/components/icons';
 import {Alert, Box, Chip, Typography,} from '@mui/material';
 import {alpha} from '@mui/material/styles';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../services/api';
+import {armWorkspaceImHint} from '@tingly/projects/workspace-im-hint';
+import { radius } from '@tingly/ui/theme/radius';
 
 const SKILL_FEATURES = [
-    {
-        key: 'skill_user',
-        labelKey: 'system.experimentalFeatures.userPrompts',
-        descriptionKey: 'system.experimentalFeatures.enableUserPrompts',
-    },
     {
         key: 'skill_ide',
         labelKey: 'system.experimentalFeatures.skills',
@@ -33,7 +30,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [mcpEnabled, setMCPEnabled] = useState(false);
     const [benchEnabled, setBenchEnabled] = useState(false);
-    const [deskEnabled, setDeskEnabled] = useState(false);
+    const [projectsEnabled, setProjectsEnabled] = useState(false);
     const [loading, setLoading] = useState(true);
     const [updatingFeature, setUpdatingFeature] = useState<ExperimentalFeature>();
     const [actionError, setActionError] = useState(false);
@@ -64,9 +61,9 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             const benchResult = await api.getScenarioFlag('_global', 'bench');
             setBenchEnabled(benchResult?.data?.value || false);
 
-            // Load Desk flag
-            const deskResult = await api.getScenarioFlag('_global', 'desk');
-            setDeskEnabled(deskResult?.data?.value || false);
+            // Load Projects flag
+            const projectsResult = await api.getScenarioFlag('_global', 'projects');
+            setProjectsEnabled(projectsResult?.data?.value || false);
 
         } catch (error) {
             console.error('Failed to load global experimental features:', error);
@@ -86,6 +83,8 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             const result = await api.setScenarioFlag('_global', featureKey, newValue);
             if (!result.success) throw new Error('Feature update was rejected');
 
+            // First enablement of Workspace: its home's IM hint pops once, there.
+            if (featureKey === 'projects' && newValue) armWorkspaceImHint();
             updateLocalState();
             await refresh();
             if (newValue && requestedFeature === featureKey && returnTo) {
@@ -100,7 +99,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
         }
     };
 
-    const toggleFeature = (featureKey: 'skill_user' | 'skill_ide') => {
+    const toggleFeature = (featureKey: 'skill_ide') => {
         const newValue = !features[featureKey];
         return finishUpdate(
             featureKey,
@@ -124,9 +123,9 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
         return finishUpdate('bench', newValue, () => setBenchEnabled(newValue));
     };
 
-    const toggleDesk = () => {
-        const newValue = !deskEnabled;
-        return finishUpdate('desk', newValue, () => setDeskEnabled(newValue));
+    const toggleProjects = () => {
+        const newValue = !projectsEnabled;
+        return finishUpdate('projects', newValue, () => setProjectsEnabled(newValue));
     };
 
     useEffect(() => {
@@ -168,7 +167,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 px: 1.5,
                 mx: -1.5,
                 gap: 3,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 borderLeft: '3px solid',
                 borderLeftColor: requestedFeature === featureKey ? 'primary.main' : 'transparent',
                 bgcolor: requestedFeature === featureKey
@@ -195,12 +194,11 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
 
     const requestedFeatureName = requestedFeature
         ? {
-            skill_user: t('system.experimentalFeatures.userPrompts'),
             skill_ide: t('system.experimentalFeatures.skills'),
             guardrails: t('system.experimentalFeatures.guardrails'),
             mcp: `${t('system.experimentalFeatures.mcp')} Tools`,
             bench: t('system.experimentalFeatures.bench'),
-            desk: t('system.experimentalFeatures.desk', {defaultValue: 'Desk'}),
+            projects: t('system.experimentalFeatures.projects'),
         }[requestedFeature]
         : undefined;
 
@@ -261,7 +259,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
             {/* MCP Section */}
             {featureRow(
                 'mcp',
-                <SettingsApplications sx={{ fontSize: '1rem', color: 'text.secondary' }} />,
+                <SettingsApplications sx={{ fontSize: 16, color: 'text.secondary' }} />,
                 `${t('system.experimentalFeatures.mcp')} Tools`,
                 t('system.experimentalFeatures.enableMCP'),
                 mcpEnabled,
@@ -286,20 +284,20 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
                 toggleBench,
             )}
 
-            {/* Desk Section */}
+            {/* Projects Section */}
             {featureRow(
-                'desk',
-                <IconCode sx={{ fontSize: 16, color: 'text.secondary' }} />,
-                t('system.experimentalFeatures.desk', {defaultValue: 'Desk'}),
-                t('system.experimentalFeatures.enableDesk', {defaultValue: 'Run Claude Code on this machine from a browser tab, in a folder you choose.'}),
-                deskEnabled,
-                toggleDesk,
+                'projects',
+                <IconFolder sx={{ fontSize: 16, color: 'text.secondary' }} />,
+                t('system.experimentalFeatures.projects'),
+                t('system.experimentalFeatures.enableProjects'),
+                projectsEnabled,
+                toggleProjects,
             )}
 
-            {deskEnabled && (
+            {projectsEnabled && (
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
-                        {t('system.experimentalFeatures.deskEnabledInfo', {defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.'})}
+                        {t('system.experimentalFeatures.projectsEnabledInfo')}
                     </Typography>
                 </Alert>
             )}

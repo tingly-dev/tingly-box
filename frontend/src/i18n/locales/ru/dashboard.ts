@@ -138,6 +138,7 @@ export default {
         "cacheRead": "прочитано",
         "cacheWrite": "записано"
       },
+      "byRequestHourlyOnly": "Отдельные запросы показываются только за сегодня и вчера.",
       "viewModes": {
         "summary": "Сводка",
         "byRequest": "По запросам",

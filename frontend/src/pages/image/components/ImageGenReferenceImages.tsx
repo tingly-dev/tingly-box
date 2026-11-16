@@ -6,6 +6,9 @@ import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn, tablerMui } fro
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import type { ReferenceMask } from './ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE } from './imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
 
 const LibraryPhoto = tablerMui(IconLibraryPhoto);
 
@@ -118,7 +121,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 position: 'relative',
                 width: 56,
                 height: 56,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 flexShrink: 0,
                 cursor: 'grab',
                 opacity: dragging ? 0.4 : 1,
@@ -141,17 +144,15 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                     width: '100%',
                     height: '100%',
                     display: 'block',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     overflow: 'hidden',
                     '&:hover .reference-zoom, &:focus-visible .reference-zoom': { opacity: 1 },
                 }}
             >
-                <Box
-                    component="img"
+                <ThumbImage
                     src={image.previewUrl}
                     alt={t('playground.referenceThumbAlt', { defaultValue: 'Reference image {{number}}', number: index + 1 })}
-                    decoding="async"
-                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    edge={THUMB_EDGE_BADGE}
                 />
                 {image.mask ? (
                     <Box
@@ -338,7 +339,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                     p: 1,
                     border: '1px dashed',
                     borderColor: 'divider',
-                    borderRadius: 1.5,
+                    borderRadius: radius.card,
                     bgcolor: 'action.hover',
                     minHeight: referenceImages.length === 0 ? 44 : 64,
                     alignItems: 'center',
@@ -397,7 +398,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                         // so the strip stays one row.
                                         width: referenceSources.length > 3 ? 40 : 56,
                                         height: 56,
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         color: 'text.secondary',
                                         border: '1px solid',
                                         borderColor: 'divider',

@@ -15,6 +15,7 @@ import {
 import { Close } from '@/components/icons';
 import CodeBlock from '@/components/CodeBlock';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface DecisionsGuideModalProps {
     open: boolean;
@@ -146,7 +147,7 @@ const DecisionsGuideModal: React.FC<DecisionsGuideModalProps> = ({
             onClose={onClose}
             maxWidth="md"
             fullWidth
-            slotProps={{ paper: { sx: { borderRadius: 3 } } }}
+            slotProps={{ paper: { sx: { borderRadius: radius.card } } }}
         >
             <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography component="span" variant="h6" sx={{ fontWeight: 600 }}>

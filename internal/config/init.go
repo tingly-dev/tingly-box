@@ -11,8 +11,8 @@ var DefaultRules []typ.Rule
 // the built-in Claude Code / Claude Desktop rules below, and applied to every
 // Claude Code / Claude Desktop / Codex rule (built-in or user-created) by
 // migrate20260610 (defaultBuiltinRuleFlagsOnce). session_affinity is rule-only
-// (no scenario-level inheritance); those are the sole sources of the default.
-// Other scenarios are off unless set per-rule.
+// (no scenario-level inheritance). New Team rules also get it at creation
+// (applyScenarioCreateDefaults). Other scenarios are off unless set per-rule.
 const defaultSessionAffinitySeconds = 1800
 
 func init() {
@@ -43,13 +43,12 @@ func init() {
 			},
 			Active: true,
 		},
-		ccRule(RuleUUIDCC, "tingly/cc", "Default proxy rule for Claude Code", true),
-		ccRule(RuleUUIDCCHaiku, "tingly/cc-haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality", false),
-		ccRule(RuleUUIDCCSonnet, "tingly/cc-sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.", false),
-		ccRule(RuleUUIDCCOpus, "tingly/cc-opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.", false),
-		ccRule(RuleUUIDCCDefault, "tingly/cc-default", "Claude Code - Default model - for general task", false),
-		ccRule(RuleUUIDCCSubagent, "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents", false),
-		ccRule(RuleUUIDCCFable, "tingly/cc-fable", "Claude Code - Fable model - model to use for the fable alias", false),
+		ccRule(RuleUUIDCC, "cc", "Default proxy rule for Claude Code", true),
+		ccRule(RuleUUIDCCHaiku, "haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality", false),
+		ccRule(RuleUUIDCCSonnet, "sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.", false),
+		ccRule(RuleUUIDCCOpus, "opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.", false),
+		ccRule(RuleUUIDCCSubagent, "subagent", "Claude Code - Subagent model - model to use for subagents", false),
+		ccRule(RuleUUIDCCFable, "fable", "Claude Code - Fable model - model to use for the fable alias", false),
 		{
 			UUID:          RuleUUIDOpenCode,
 			Scenario:      typ.ScenarioOpenCode,

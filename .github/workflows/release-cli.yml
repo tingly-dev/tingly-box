@@ -2,8 +2,8 @@ name: Release CLI
 
 # The CLI half of a release: build the six CLI binaries around the shared
 # frontend build, gate on the harness, publish the GitHub release (the zips +
-# checksums.txt), dispatch the CLI npm publish (npm.yml, pending its
-# `production` approval) and verify the result (verify-release-cli.yml). The
+# checksums.txt), announce the CLI npm publish (npm.yml is run by hand, with
+# parameters of your choosing) and verify the result (verify-release-cli.yml). The
 # desktop GUI is a separate, independent pipeline (release-gui.yml); release.yml
 # runs the two in parallel.
 #
@@ -283,31 +283,31 @@ jobs:
 
   # The explicit conditions on the jobs below: a skipped ancestor (frontend,
   # harness when orchestrated) would otherwise skip them too.
-  trigger-npm-publish:
+  # When orchestrated, release.yml announces one combined CLI + GUI publish.
+  announce-npm-publish:
     needs: github-release
-    if: ${{ !cancelled() && needs.github-release.result == 'success' }}
+    if: ${{ !cancelled() && !inputs.orchestrated && needs.github-release.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: read
     steps:
-      # Only for the local dispatch-npm action.
+      # Only for the local announce-npm action.
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           sparse-checkout: .github
 
-      - name: Dispatch NPX publish workflow
-        uses: ./.github/actions/dispatch-npm
+      - name: Announce NPX publish
+        uses: ./.github/actions/announce-npm
         with:
           tag: ${{ inputs.release_tag }}
           publish_cli: true
-          publish_gui: false # release-gui.yml dispatches its own
+          publish_gui: false
           build_docker: true
 
   # Verify the CLI release we just published. verify-release-cli.yml's own
   # `release: published` trigger never fires for it (same GITHUB_TOKEN rule
-  # as above), so call it directly. Non-blocking for the npm dispatch.
+  # as above), so call it directly. Non-blocking for the npm announcement.
   verify-release:
     needs: github-release
     if: ${{ !cancelled() && needs.github-release.result == 'success' }}

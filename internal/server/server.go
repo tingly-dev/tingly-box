@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
 	"log"
 	"net/http"
 	"strings"
@@ -42,6 +41,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/worker/tokenrefresh"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
@@ -154,9 +154,9 @@ type Server struct {
 	// stops the hourly quota-window request loop
 	quotaWindowStop context.CancelFunc
 
-	// desk is nil when the store is unavailable; Stop shuts it down
-	// so no resident Claude Code process outlives the server.
-	desk *desksvc.Service
+	// projects is nil when it could not open its store; Stop closes it so
+	// no thread's Claude Code process outlives the server.
+	projects *projectsapp.App
 
 	// options
 	enableUI    bool
@@ -172,7 +172,10 @@ type Server struct {
 	// record options (recording enablement is flag-driven per scenario —
 	// see GetScenarioRecordMode; these only configure where/how sinks write)
 	recordDir string
-	recordCAS bool // additionally write content-addressed slim records + blobs
+	// projectsDir is where embedded Projects keeps its data; empty falls back
+	// to "<config dir>-project".
+	projectsDir string
+	recordCAS   bool // additionally write content-addressed slim records + blobs
 
 	// remote control lifecycle management
 	remoteCoderCtx    context.Context
@@ -189,8 +192,7 @@ type Server struct {
 
 	version string
 
-	// launchSource is how this process was itself invoked ("", "npx",
-	// "npx-bundle") — see WithLaunchSource.
+	// launchSource is how this process was itself invoked ("", "binary", "npx", "npm") — see WithLaunchSource.
 	launchSource string
 
 	// webHandler serves the status, log, request-trace and token endpoints

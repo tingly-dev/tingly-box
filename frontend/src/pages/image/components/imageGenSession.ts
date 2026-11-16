@@ -34,6 +34,59 @@ export const resultSrc = (image: ImageResult): string => {
     return src;
 };
 
+const base64ToBlob = (b64: string, type = 'image/png'): Blob => {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type });
+};
+
+// A base64 data URL as the bytes it carries; null for anything else (a plain
+// or URL-encoded data URL, a link), which the caller leaves as it is.
+export const base64DataUrlToBlob = (dataUrl: string): Blob | null => {
+    const match = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/s.exec(dataUrl);
+    if (!match) return null;
+    try {
+        return base64ToBlob(match[2], match[1] || 'image/png');
+    } catch {
+        return null;
+    }
+};
+
+// What a result is kept as for the rest of the session. A provider's inline
+// base64 is decoded once into a Blob and everything downstream (render,
+// thumbnails, download, IndexedDB) works from a blob: URL: the multi-megabyte
+// string is not held in the heap per image, not cloned on every IndexedDB
+// read/write, and not re-hashed or re-flattened by every comparison. A result
+// that already came as a URL is left alone.
+export const toSessionImage = (image: ImageResult): ImageResult => {
+    if (image.url || !image.b64_json) return image;
+    try {
+        const blob = base64ToBlob(image.b64_json);
+        return { url: URL.createObjectURL(blob), blob };
+    } catch {
+        return image;
+    }
+};
+
+// Blob URLs do not outlive a page, so a session read back from IndexedDB gets
+// new ones for the blobs it kept. Done in place: the loaded objects are the
+// ones the store believes it holds, and replacing them would make the next
+// save rewrite every record.
+export const reviveSessionBlobs = (runs: GenerationRun[], imports: ImportedImage[]) => {
+    runs.forEach((run) => run.images.forEach((image) => {
+        if (image.blob) image.url = URL.createObjectURL(image.blob);
+    }));
+    runs.forEach((run) => {
+        if (run.sourceBlobs && run.sourceBlobs.length === (run.sourceImages?.length ?? 0)) {
+            run.sourceImages = run.sourceBlobs.map((blob) => URL.createObjectURL(blob));
+        }
+    });
+    imports.forEach((item) => {
+        if (item.blob) item.src = URL.createObjectURL(item.blob);
+    });
+};
+
 /**
  * One of a run's images, as the lightbox wants it. Every surface that opens an
  * image belonging to a run — the card, the overview, the filmstrip — needs the

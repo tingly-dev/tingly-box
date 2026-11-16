@@ -1,12 +1,15 @@
 package protocolserver
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
+	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
@@ -22,6 +25,34 @@ func newTestTracerHandler() (*ProtocolHandler, *tracetest.InMemoryExporter) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	ph := NewHandler(ProtocolHandlerDeps{Tracer: pkgotel.NewTracer(tp)})
 	return ph, exporter
+}
+
+func TestRecoveredFailureDoesNotMarkSuccessfulRootAsFailed(t *testing.T) {
+	ph, exporter := newTestTracerHandler()
+	engine := gin.New()
+	engine.GET("/tingly/:scenario/success", ph.tracingMiddleware, func(c *gin.Context) {
+		c.Error(errors.New("first provider returned 429"))
+		c.Set(constant.CtxKeyRecoveredErrorCount, 1)
+		c.Status(200)
+	})
+	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/tingly/openai/success", nil))
+	spans := exporter.GetSpans()
+	if len(spans) != 1 || spans[0].Status.Code == codes.Error {
+		t.Fatalf("recovered request must retain a successful root: %+v", spans)
+	}
+	if attrMap(spans[0])["http.response.status_code"] != int64(200) {
+		t.Fatal("final response status must remain 200")
+	}
+}
+
+func TestBufferedSuccessfulAttemptHasOKSpan(t *testing.T) {
+	ph, exporter := newTestTracerHandler()
+	span := ph.startFailoverAttemptSpan(context.Background(), 1, "provider:model", "provider")
+	endFailoverAttemptSpan(span, true, http.StatusOK)
+	spans := exporter.GetSpans()
+	if len(spans) != 1 || spans[0].Status.Code != codes.Ok {
+		t.Fatalf("buffered HTTP 200 must be successful: %+v", spans)
+	}
 }
 
 func attrMap(span tracetest.SpanStub) map[string]interface{} {
@@ -197,6 +228,12 @@ func TestTracingMiddleware_SpanSurvivesPanic(t *testing.T) {
 	}
 	if got := attrMap(spans[0])["gen_ai.request.model"]; got != "tingly/cc" {
 		t.Errorf("span should carry what the handler set before panicking, got %v", got)
+	}
+	if got := attrMap(spans[0])["http.response.status_code"]; got != int64(500) {
+		t.Errorf("panic span status = %v, want 500", got)
+	}
+	if spans[0].Status.Code != codes.Error {
+		t.Errorf("panic span must be marked as error, got %v", spans[0].Status)
 	}
 }
 

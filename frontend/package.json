@@ -9,10 +9,10 @@
     "dev:mock": "vite --mode mock",
     "dev:real": "vite --mode production",
     "build:dev": "vite build --minify false --mode development",
-    "build": "vite build --mode production",
+    "build": "vite build --mode production && node scripts/precompress.mjs dist",
     "preview": "vite preview",
     "gen:api": "openapi-typescript ../openapi.json -o ./src/client/schema.d.ts",
-    "lint": "oxlint src packages",
+    "lint": "oxlint src packages && node scripts/check-style-literals.mjs",
     "lint:fix": "oxlint src packages --fix",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,11 +20,12 @@
   },
   "dependencies": {
     "@ant-design/x-markdown": "^2.9.0",
+    "@fontsource-variable/inter": "^5.3.0",
     "@lobehub/icons-static-svg": "^1.95.1",
     "@mui/material": "^9.5.0",
-    "@mui/x-date-pickers": "^9.15.0",
     "@tabler/icons-react": "^3.49.0",
     "@tingly/mannequin": "workspace:*",
+    "@tingly/projects": "workspace:*",
     "@tingly/ui": "workspace:*",
     "@tingly/vision": "workspace:*",
     "date-fns": "^4.4.0",
@@ -73,7 +74,7 @@
     "d3-contour": "^4.0.2"
   },
   "optionalDependencies": {
-    "@wailsio/runtime": "3.0.0-beta.26"
+    "@wailsio/runtime": "3.0.0"
   },
   "msw": {
     "workerDirectory": [

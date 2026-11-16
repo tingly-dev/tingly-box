@@ -6,6 +6,8 @@ export interface VerificationResult {
     details?: string;
     responseTime?: number;
     modelsCount?: number;
+    /** True when the probe ended because it was cancelled (user stop or watchdog timeout). */
+    cancelled?: boolean;
 }
 
 interface RunProbeParams {
@@ -19,7 +21,44 @@ interface RunProbeParams {
 interface ProbeMessages {
     failed: string;
     networkError: string;
+    cancelled: string;
+    timedOut: string;
 }
+
+// Total wall-clock bound for one "Test Connection" run. The backend already
+// times out each sub-probe (OPTIONS 5s, models 15s, chat/responses 10s) and
+// honours request-context cancellation, but they run sequentially — a fully
+// hung upstream can chain to ~40s. The watchdog bounds the whole run and the
+// same signal doubles as the user's Cancel button.
+export const PROBE_TIMEOUT_MS = 30_000;
+
+export interface ProbeRun {
+    /** Abort signal wired into the probe HTTP request(s). */
+    signal: AbortSignal;
+    /** True once the watchdog fired (as opposed to an explicit user cancel). */
+    timedOut: () => boolean;
+    /** Abort the in-flight probe — the UI's Stop button. */
+    cancel: () => void;
+    /** Stop the watchdog timer; call when the probe run settles. */
+    dispose: () => void;
+}
+
+// Opens a cancellable probe run: one AbortController shared by every probe of
+// the run (single- or dual-protocol), with the timeout watchdog pre-armed.
+export const beginProbeRun = (): ProbeRun => {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, PROBE_TIMEOUT_MS);
+    return {
+        signal: controller.signal,
+        cancel: () => controller.abort(),
+        dispose: () => clearTimeout(timer),
+        timedOut: () => timedOut,
+    };
+};
 
 // Runs the lightweight provider probe and shapes the result into the
 // {success,message,details,...} record the dialog renders. Pure I/O — does
@@ -27,7 +66,9 @@ interface ProbeMessages {
 export const runProviderProbe = async (
     params: RunProbeParams,
     messages: ProbeMessages,
+    run?: ProbeRun,
 ): Promise<VerificationResult> => {
+    const signal = run?.signal;
     try {
         const result = await api.probeProviderLightweight(
             params.name,
@@ -35,7 +76,15 @@ export const runProviderProbe = async (
             params.apiBase,
             params.token,
             params.authType,
+            signal,
         );
+
+        // openapi-fetch resolves (not rejects) on abort — controlApi swallows
+        // the fetch error into {success:false,error}. Check the signal before
+        // shaping so a cancelled run never masquerades as a failed probe.
+        if (signal?.aborted) {
+            return cancelledResult(messages, run);
+        }
 
         if (result.success && result.data) {
             const probeData = result.data;
@@ -89,9 +138,18 @@ export const runProviderProbe = async (
             message: result.error?.message || messages.failed,
         };
     } catch (_error) {
+        if (signal?.aborted) {
+            return cancelledResult(messages, run);
+        }
         return {
             success: false,
             message: messages.networkError,
         };
     }
 };
+
+const cancelledResult = (messages: ProbeMessages, run?: ProbeRun): VerificationResult => ({
+    success: false,
+    cancelled: true,
+    message: run?.timedOut() ? messages.timedOut : messages.cancelled,
+});

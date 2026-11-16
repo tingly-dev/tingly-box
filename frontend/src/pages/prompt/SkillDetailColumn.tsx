@@ -13,6 +13,7 @@ import { type Skill, type SkillLocation } from '@/types/prompt';
 import { formatFileSize, getTwoLevelDisplayName } from '@/components/prompt/skill/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
 import { fontMono } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface SkillDetailColumnProps {
     selectedSkill: Skill | null;
@@ -181,7 +182,7 @@ const SkillDetailColumn = ({
                                     minHeight: '100%',
                                 },
                                 '& .ant-markdown': {
-                                    fontSize: '0.875rem',
+                                    fontSize: fontSizes.base,
                                     lineHeight: 1.6,
                                 },
                             }}
@@ -199,7 +200,7 @@ const SkillDetailColumn = ({
                             sx={{
                                 p: 2,
                                 fontFamily: fontMono,
-                                fontSize: '0.875rem',
+                                fontSize: fontSizes.base,
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',
                                 lineHeight: 1.6,

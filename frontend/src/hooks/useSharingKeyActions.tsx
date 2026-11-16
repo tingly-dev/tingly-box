@@ -21,7 +21,7 @@ import type { Team } from '@/types/team';
 import TeamKeyScopeAlert from '@/components/TeamKeyScopeAlert';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
-type TableActionProps = Pick<
+export type SharingKeyTableActions = Pick<
     ComponentProps<typeof SharingKeysTable>,
     'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove'
 >;
@@ -35,7 +35,7 @@ interface UseSharingKeyActionsOptions {
 
 /**
  * Create / move / enable / delete behaviour for Sharing Keys, shared by every
- * surface that lists them (the per-Team dialog and the all-keys page) so the
+ * surface that lists them (the Team page's key card and the all-keys page) so the
  * dialogs, copy and notifications stay identical. Spread `tableProps` into
  * `SharingKeysTable` and render `dialogs` once.
  */
@@ -112,7 +112,7 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
         }
     };
 
-    const tableProps: TableActionProps = {
+    const tableProps: SharingKeyTableActions = {
         visibleTokens,
         onToggleVisibility: (tokenId) => setVisibleTokens((prev) => ({ ...prev, [tokenId]: !prev[tokenId] })),
         onCopy: async (tokenId) => {

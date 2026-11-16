@@ -1,8 +1,14 @@
 # Theme system notes
 
-Design decisions for `frontend/src/theme/`, kept in one place since they all
-touch the same handful of files (`theme/palettes/*.ts`,
-`theme/components/*.ts`). Two entries so far.
+Design decisions for the theme (`frontend/packages/ui/src/theme/`, re-exported
+from `frontend/src/theme/`). Two entries so far.
+
+**Structure (2026-11, `visual-system.md` step 2).** A theme is its MUI palette
+plus a `ThemeTokens` table (`tokens.ts`), both in `palettes/<theme>.ts`. Every
+component override is written once in `components/factory.ts` and reads only
+tokens, so a styling change lands in all themes at once. `components/ds.ts`
+holds the few DeepSeek-only extras (misty background, brand-blue controls).
+`createAppTheme` deep-merges base → factory → extras → MUI locale.
 
 ## DS (DeepSeek) theme palette
 
@@ -60,6 +66,11 @@ formerly `103, 153, 254`), raised roughly 1.4-1.6x across the board:
 The background gradient (`dsBackgroundGradient` — the misty hero wash) is
 untouched; it's independent of the brand-blue accent and wasn't part of the
 readability complaint.
+
+**Update (2026-11, `visual-system.md` step 4):** the gradient variant and
+`buttonVariants.ts` are gone — the primary button is MUI's own contained
+style (`primary.main`, `primary.dark` on hover), which handles the disabled
+state itself, so root cause 1 cannot recur.
 
 ### Where this lives
 
@@ -127,6 +138,5 @@ same bug existed in every theme.
 
 ### Where this lives
 
-- `frontend/src/theme/components/buttonVariants.ts`
-- `frontend/src/theme/palettes/{light,dark,claude,sunlit,ds}.ts`
+- `frontend/packages/ui/src/theme/palettes/{light,dark,claude,ds}.ts` (sunlit was retired in 2026-11, see `visual-system.md`)
 - `frontend/src/components/ConnectProviderDialog.tsx`

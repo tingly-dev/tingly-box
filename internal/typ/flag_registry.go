@@ -181,6 +181,13 @@ func RuleFlagRegistry() []FlagSpec {
 		},
 		// ── Reasoning ──────────────────────────────────────────────────────
 		{
+			Key:         "disable_thinking_budget",
+			Label:       "Remove thinking budget",
+			Description: "Remove thinking.budget_tokens from Anthropic-compatible upstream requests while retaining the thinking mode. Use for providers that reject a budget; Anthropic's enabled thinking requires one.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryReasoning,
+		},
+		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
 			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (low 4K / medium 10K / high 20K / max 32K).",
@@ -242,7 +249,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "session_affinity",
 			Label:       "Session affinity",
-			Description: "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP. On by default (1800s) for the built-in Claude Code / Claude Desktop / Codex rules.",
+			Description: "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP. On by default (1800s) for the built-in Claude Code / Claude Desktop / Codex rules and for newly created Team rules.",
 			Type:        FlagTypeInt,
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",

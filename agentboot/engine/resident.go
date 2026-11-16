@@ -35,17 +35,20 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 		OnUnsolicitedTurn: func() (context.Context, agentboot.Prompter) {
 			return e.beginUnsolicitedTurn(sessionID)
 		},
-		OnUnsolicitedTurnComplete: func(_ *agentboot.Result, err error) {
-			e.endUnsolicitedTurn(sessionID, err)
+		OnUnsolicitedTurnComplete: func(res *agentboot.Result, err error) {
+			e.endUnsolicitedTurn(sessionID, res, err)
 		},
 		OnTerminated: func(string) {
 			e.mu.Lock()
-			if e.residents[sessionID] == r {
+			gone := e.residents[sessionID] == r
+			if gone {
 				delete(e.residents, sessionID)
-				// Its background tasks ended with it.
-				delete(e.live, sessionID)
 			}
 			e.mu.Unlock()
+			if gone {
+				// Its background tasks ended with it.
+				e.clearTasks(sessionID)
+			}
 		},
 	})
 	e.mu.Lock()
@@ -56,13 +59,26 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 
 // record turns one agent message into transcript entries.
 func (e *Engine) record(sessionID string, conv *converter, raw any) {
+	e.checkInitMode(sessionID, raw)
 	if ev, ok := raw.(agentboot.ErrorEvent); ok {
 		if ev.Err != nil {
 			e.appendError(sessionID, ev.Err.Error())
 		}
 		return
 	}
+	e.mu.Lock()
+	r := e.runs[sessionID]
+	e.mu.Unlock()
+	var capture *compactCapture
+	if r != nil {
+		capture = r.compact
+	}
+	if ev, ok := raw.(agentboot.CompactEvent); ok && capture != nil {
+		capture.add(ev)
+	}
+	conv.localText = capture != nil
 	for _, m := range conv.messages(raw) {
+		e.trackTasks(sessionID, m)
 		e.store.Append(sessionID, m)
 		e.noteTask(sessionID, m)
 	}
@@ -100,7 +116,7 @@ func (e *Engine) currentMode(id string) string {
 	return e.permissionMode(id)
 }
 
-func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
+func (e *Engine) endUnsolicitedTurn(sessionID string, res *agentboot.Result, err error) {
 	e.mu.Lock()
 	r, ok := e.runs[sessionID]
 	if ok && r.unsolicited {
@@ -111,7 +127,16 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 		// is still this turn's to settle.
 		r = nil
 	}
+	e.settling[sessionID]++
 	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		e.settling[sessionID]--
+		if e.settling[sessionID] == 0 {
+			delete(e.settling, sessionID)
+		}
+		e.mu.Unlock()
+	}()
 	interrupted := false
 	if r != nil {
 		interrupted = r.stopped.Load()
@@ -128,7 +153,12 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, err error) {
 		end.Stopped = true
 	case err != nil:
 		e.store.SetFailed(sessionID, err.Error())
-		e.appendError(sessionID, err.Error())
+		// A failed result line is already in the transcript: the converter
+		// wrote it as an error entry. Only a turn that ended without one (the
+		// process died) still needs its line here.
+		if res == nil || res.Error == "" {
+			e.appendError(sessionID, err.Error())
+		}
 		end.Err = err
 	default:
 		e.store.SetCompleted(sessionID, "")

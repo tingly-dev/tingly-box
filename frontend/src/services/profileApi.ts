@@ -5,6 +5,9 @@ import {controlApi} from './openapi';
 
 export type ClaudeCodeModels = components['schemas']['ClaudeCodeModelsData'];
 export type ClaudeCodeModelTier = components['schemas']['ClaudeCodeModelTier'];
+export type ClaudeCodeRoute = components['schemas']['ClaudeCodeRouteResponse'];
+
+const routeRequests = new Map<string, Promise<ClaudeCodeRoute | undefined>>();
 
 export const profileApi = {
     // Profile API
@@ -28,11 +31,20 @@ export const profileApi = {
         }));
     },
 
-    createProfile: async (scenario: string, name: string, unified?: boolean): Promise<any> => {
+    createProfile: async (scenario: string, name: string): Promise<any> => {
         return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/profiles', {
             headers,
             params: {path: {scenario}},
-            body: {name, unified},
+            body: {name},
+        }));
+    },
+
+    // Copy a profile into a new one. An empty name lets the backend pick a free "<name>-copy".
+    duplicateProfile: async (scenario: string, id: string, name?: string): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/profiles/{id}/duplicate', {
+            headers,
+            params: {path: {scenario, id}},
+            body: name ? {name} : {},
         }));
     },
 
@@ -67,6 +79,23 @@ export const profileApi = {
             params: {path: {scenario: 'claude_code'}, query: {profile}},
         }));
         return res?.success ? res.data : undefined;
+    },
+
+    // Where a Claude Code session's next request goes under a profile and
+    // tier, with the routed provider's quota: a session's status line and its
+    // rail's quota card ask for the same route at the same moment, so a request
+    // already in flight is shared. Resolves undefined on failure.
+    getClaudeCodeRoute: (q: {profile: string; tier: string; model?: string}): Promise<ClaudeCodeRoute | undefined> => {
+        const key = JSON.stringify([q.profile, q.tier, q.model ?? '']);
+        const pending = routeRequests.get(key);
+        if (pending) return pending;
+        const request = controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/route', {
+            headers,
+            params: {path: {scenario: 'claude_code'}, query: {profile: q.profile, tier: q.tier, model: q.model}},
+        })).then((res) => (res && typeof res.scenario === 'string' ? res as ClaudeCodeRoute : undefined))
+            .finally(() => routeRequests.delete(key));
+        routeRequests.set(key, request);
+        return request;
     },
 
     getClaudeCodeProfileConfig: async (scenario: string, id: string): Promise<any> => {

@@ -24,7 +24,7 @@ func HandleOpenAIChatToResponsesStream(hc *protocol.HandleContext, stream *opena
 		}
 	}()
 
-	conv := NewChatToResponsesConverter(stream, responseModel)
+	conv := NewChatToResponsesConverter(stream, responseModel, hc.Namespaces)
 
 	usage, err := RunConverter(hc, conv, responsesSSEWriter(c))
 

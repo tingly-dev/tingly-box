@@ -86,7 +86,7 @@ func (c *Config) SetServerPort(port int) error {
 	defer c.mu.Unlock()
 
 	c.ServerPort = port
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetServerHost returns the configured server host
@@ -107,7 +107,7 @@ func (c *Config) SetServerHost(host string) error {
 	defer c.mu.Unlock()
 
 	c.ServerHost = host
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetDefaultMaxTokens returns the configured default max_tokens
@@ -180,7 +180,43 @@ func (c *Config) SetToolConfig(toolType string, config interface{}) error {
 	}
 
 	c.ToolConfigs[toolType] = data
-	return c.Save()
+	return c.saveLocked()
+}
+
+// UpdateMCPRuntimeConfig performs a read-modify-save under one lock so edits to
+// different sources cannot overwrite each other. A failed save rolls back memory.
+func (c *Config) UpdateMCPRuntimeConfig(change func(*typ.MCPRuntimeConfig) error) (*typ.MCPRuntimeConfig, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var next typ.MCPRuntimeConfig
+	previous, existed := c.ToolConfigs[ToolTypeMCPRuntime]
+	if existed {
+		if err := json.Unmarshal(previous, &next); err != nil {
+			return nil, err
+		}
+	}
+	typ.ApplyMCPRuntimeDefaults(&next)
+	if err := change(&next); err != nil {
+		return nil, err
+	}
+	typ.ApplyMCPRuntimeDefaults(&next)
+	data, err := json.Marshal(next)
+	if err != nil {
+		return nil, err
+	}
+	if c.ToolConfigs == nil {
+		c.ToolConfigs = make(map[string]json.RawMessage)
+	}
+	c.ToolConfigs[ToolTypeMCPRuntime] = data
+	if err := c.saveLocked(); err != nil {
+		if existed {
+			c.ToolConfigs[ToolTypeMCPRuntime] = previous
+		} else {
+			delete(c.ToolConfigs, ToolTypeMCPRuntime)
+		}
+		return nil, err
+	}
+	return &next, nil
 }
 
 // SetDefaultMaxTokens updates the default max_tokens
@@ -189,7 +225,7 @@ func (c *Config) SetDefaultMaxTokens(maxTokens int) error {
 	defer c.mu.Unlock()
 
 	c.DefaultMaxTokens = maxTokens
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetVerbose returns the verbose setting
@@ -204,7 +240,7 @@ func (c *Config) SetVerbose(verbose bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Verbose = verbose
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetDebug returns the debug setting
@@ -219,7 +255,7 @@ func (c *Config) SetDebug(debug bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Debug = debug
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetOpenBrowser returns the open browser setting
@@ -276,4 +312,22 @@ func (c *Config) ApplyHTTPTransportConfig() {
 		RespectEnvProxy:     c.HTTPTransport.RespectEnvProxy,
 	}
 	client.SetTransportConfig(config)
+}
+
+// GetProjectsDir returns the Projects data directory chosen with
+// --projects-dir, or "" for the default.
+func (c *Config) GetProjectsDir() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.ProjectsDir
+}
+
+// SetProjectsDir remembers the Projects data directory.
+func (c *Config) SetProjectsDir(dir string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ProjectsDir = dir
+	return c.saveLocked()
 }

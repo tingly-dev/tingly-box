@@ -11,13 +11,12 @@ import (
 // ClaudeCodeRequestModels defines all request models for Claude Code scenario
 // When applying claude-code agent, all these rules should be updated for convenience
 var ClaudeCodeRequestModels = []string{
-	"tingly/cc", // General model (for unified mode)
-	"tingly/cc-haiku",
-	"tingly/cc-sonnet",
-	"tingly/cc-opus",
-	"tingly/cc-default",
-	"tingly/cc-subagent",
-	"tingly/cc-fable",
+	"cc", // the default slot
+	"haiku",
+	"sonnet",
+	"opus",
+	"subagent",
+	"fable",
 }
 
 // OpenCodeRequestModels defines all request models for OpenCode scenario
@@ -39,10 +38,34 @@ var DshRequestModels = []string{
 	"tingly-dsh",
 }
 
-// createOrUpdateClaudeCodeRules creates or updates all Claude Code rules.
-// For convenience, all tingly/cc-* rules are updated with the same provider + model.
+// claudeCodeSlotRules are the built-in rules behind the single model slots.
+var claudeCodeSlotRules = []string{"haiku", "sonnet", "opus", "subagent", "fable"}
+
+// createOrUpdateClaudeCodeRules points the Claude Code rules at one provider +
+// model: the default slot rule is switched on, a slot rule that is on (a slot
+// with a rule of its own) is left alone, and every other slot rule gets the
+// provider while staying off, so splitting that slot later still routes.
 func (aa *AgentApply) createOrUpdateClaudeCodeRules(providerUUID, model string) (int, int, error) {
-	return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels, providerUUID, model)
+	created, updated, err := aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels[:1], providerUUID, model)
+	if err != nil {
+		return created, updated, err
+	}
+	for _, name := range claudeCodeSlotRules {
+		uuid := aa.config.ClaudeCodeRuleUUID(typ.ScenarioClaudeCode, name)
+		if uuid == "" {
+			continue
+		}
+		rule := aa.config.GetRuleByUUID(uuid)
+		if rule.Active {
+			continue
+		}
+		rule.Services = []*loadbalance.Service{{Active: true, Provider: providerUUID, Model: model}}
+		if err := aa.config.UpdateRule(rule.UUID, *rule); err != nil {
+			return created, updated, fmt.Errorf("failed to update rule %s: %w", rule.RequestModel, err)
+		}
+		updated++
+	}
+	return created, updated, nil
 }
 
 // createOrUpdateOpenCodeRules creates or updates OpenCode rules.

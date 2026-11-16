@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"sync/atomic"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -93,6 +96,153 @@ func TestNewClaudeClient_StripV1FromBase(t *testing.T) {
 	c, err := NewClaudeClient(context.Background(), provider, "", sessionID)
 	require.NoError(t, err)
 	require.NotNil(t, c)
+}
+
+// TestNewClaudeClient_UsesProviderProxyURL pins that Claude Code OAuth traffic
+// goes through provider.ProxyURL, as the other vendor OAuth clients do, instead
+// of the SDK's default client (which follows HTTP(S)_PROXY and ignores
+// proxy_url). The stub acts as the forward proxy for a plain-HTTP upstream that
+// does not resolve, so a request that skips the proxy fails.
+func TestNewClaudeClient_UsesProviderProxyURL(t *testing.T) {
+	var proxied []string
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxied = append(proxied, r.Host+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4-6",` +
+			`"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn",` +
+			`"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	t.Cleanup(proxy.Close)
+
+	provider := newOAuthProvider()
+	provider.UUID = "test-claude-proxy-url"
+	provider.APIBase = "http://claude-upstream.invalid"
+	provider.ProxyURL = proxy.URL
+	provider.OAuthDetail.Issuer = ai.IssuerClaudeCode
+	// The pool keys transports by provider, not by proxy URL; drop this one so
+	// a repeated run (-count) dials its own stub.
+	t.Cleanup(func() { GetGlobalTransportPool().InvalidateProvider(provider.UUID) })
+
+	c, err := NewClaudeClient(context.Background(), provider, "claude-sonnet-4-6", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, c.Close()) })
+
+	req := &anthropic.MessageNewParams{
+		Model:     "claude-sonnet-4-6",
+		MaxTokens: 16,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(`{"device_id":"d","account_uuid":"a","session_id":"sess-1"}`)
+
+	_, err = c.MessagesNew(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude-upstream.invalid/v1/messages"}, proxied)
+}
+
+// proxyRoutingChildEnv marks the re-executed test process that
+// TestNewClaudeClient_ProxyRouting starts for each case.
+const proxyRoutingChildEnv = "TINGLY_TEST_PROXY_ROUTING_CHILD"
+
+// TestNewClaudeClient_ProxyRouting pins which proxy Claude Code OAuth traffic
+// takes when HTTP(S)_PROXY is set: provider.ProxyURL wins, and without one the
+// request goes direct unless respect_env_proxy is on, the same policy as the
+// other pool-backed providers. http.ProxyFromEnvironment reads the environment
+// once per process, so each case sends its request from a fresh test process;
+// both proxies are stubs here, and the route is read from which one saw it.
+func TestNewClaudeClient_ProxyRouting(t *testing.T) {
+	if os.Getenv(proxyRoutingChildEnv) != "" {
+		t.Skip("child process")
+	}
+	cases := []struct {
+		name          string
+		providerProxy bool
+		respectEnv    bool
+		want          string // "provider", "env" or "direct"
+	}{
+		{"env and provider proxy", true, false, "provider"},
+		{"env proxy only", false, false, "direct"},
+		{"env proxy only, respect_env_proxy on", false, true, "env"},
+		{"env and provider proxy, respect_env_proxy on", true, true, "provider"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var providerHits, envHits atomic.Int32
+			providerProxy := countingProxy(t, &providerHits)
+			envProxy := countingProxy(t, &envHits)
+
+			cmd := exec.Command(os.Args[0], "-test.run=^TestNewClaudeClient_ProxyRoutingChild$")
+			cmd.Env = append(os.Environ(),
+				proxyRoutingChildEnv+"=1",
+				"HTTP_PROXY="+envProxy.URL, "HTTPS_PROXY="+envProxy.URL,
+				"http_proxy="+envProxy.URL, "https_proxy="+envProxy.URL,
+				"NO_PROXY=", "no_proxy=",
+			)
+			if tc.providerProxy {
+				cmd.Env = append(cmd.Env, "TINGLY_TEST_PROVIDER_PROXY="+providerProxy.URL)
+			}
+			if tc.respectEnv {
+				cmd.Env = append(cmd.Env, "TINGLY_TEST_RESPECT_ENV_PROXY=1")
+			}
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err, "child process:\n%s", out)
+
+			got := "direct"
+			switch {
+			case providerHits.Load() > 0:
+				got = "provider"
+			case envHits.Load() > 0:
+				got = "env"
+			}
+			assert.Equal(t, tc.want, got, "child process:\n%s", out)
+		})
+	}
+}
+
+// TestNewClaudeClient_ProxyRoutingChild sends the request for one case of
+// TestNewClaudeClient_ProxyRouting; it only runs in the re-executed process.
+func TestNewClaudeClient_ProxyRoutingChild(t *testing.T) {
+	if os.Getenv(proxyRoutingChildEnv) == "" {
+		t.Skip("runs only as a child of TestNewClaudeClient_ProxyRouting")
+	}
+	if os.Getenv("TINGLY_TEST_RESPECT_ENV_PROXY") == "1" {
+		on := true
+		SetTransportConfig(&TransportConfig{RespectEnvProxy: &on})
+	}
+
+	provider := newOAuthProvider()
+	provider.UUID = "test-claude-proxy-routing"
+	provider.APIBase = "http://claude-upstream.invalid"
+	provider.ProxyURL = os.Getenv("TINGLY_TEST_PROVIDER_PROXY")
+	provider.OAuthDetail.Issuer = ai.IssuerClaudeCode
+
+	c, err := NewClaudeClient(context.Background(), provider, "claude-sonnet-4-6", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	req := &anthropic.MessageNewParams{
+		Model:     "claude-sonnet-4-6",
+		MaxTokens: 16,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(`{"device_id":"d","account_uuid":"a","session_id":"sess-1"}`)
+
+	// A direct request cannot resolve the upstream, so its error is expected;
+	// the parent reads the route from the proxies, not from this result.
+	_, _ = c.MessagesNew(context.Background(), req)
+}
+
+// countingProxy is a forward proxy stub that answers every request with a
+// Messages response and counts the requests it saw.
+func countingProxy(t *testing.T, hits *atomic.Int32) *httptest.Server {
+	t.Helper()
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4-6",` +
+			`"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn",` +
+			`"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	t.Cleanup(s.Close)
+	return s
 }
 
 // ===================================================================

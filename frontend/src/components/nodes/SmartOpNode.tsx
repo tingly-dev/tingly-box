@@ -22,6 +22,7 @@ import {
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
@@ -95,7 +96,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontSize: fontSizes.micro,
-                                fontWeight: 700,
+                                fontWeight: 600,
                                 flexShrink: 0,
                                 lineHeight: 1,
                             }}
@@ -106,8 +107,8 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                     <Typography
                         sx={{
-                            fontSize: fontSizes.xs,
-                            fontWeight: 700,
+                            fontSize: fontSizes.micro,
+                            fontWeight: 600,
                             color: 'text.secondary',
                             flexGrow: 1,
                             lineHeight: 1,
@@ -132,7 +133,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                     aria-label="Move smart rule up"
                                 >
-                                    <KeyboardArrowUp sx={{ fontSize: '0.875rem' }} />
+                                    <KeyboardArrowUp sx={{ fontSize: 14 }} />
                                 </IconButton>
                             </NodeTooltip>
                         )}
@@ -144,7 +145,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                     aria-label="Move smart rule down"
                                 >
-                                    <KeyboardArrowDown sx={{ fontSize: '0.875rem' }} />
+                                    <KeyboardArrowDown sx={{ fontSize: 14 }} />
                                 </IconButton>
                             </NodeTooltip>
                         )}
@@ -155,7 +156,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                 aria-label={t('rule.smart.deleteTooltip')}
                             >
-                                <DeleteIcon sx={{ fontSize: '0.875rem' }} />
+                                <DeleteIcon sx={{ fontSize: 14 }} />
                             </IconButton>
                         </NodeTooltip>
                     </Stack>
@@ -177,7 +178,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         <Typography
                             sx={{
-                                fontSize: fontSizes.xs,
+                                fontSize: fontSizes.micro,
                                 color: 'text.disabled',
                                 fontStyle: 'italic',
                                 textAlign: 'center',
@@ -202,7 +203,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         cursor: 'pointer',
                                         px: 0.75,
                                         py: 0.35,
-                                        borderRadius: 0.75,
+                                        borderRadius: radius.chip,
                                         border: '1px solid',
                                         borderColor: 'transparent',
                                         backgroundColor: 'action.hover',

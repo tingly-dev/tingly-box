@@ -26,6 +26,8 @@
 | [probe-panel.pencil.md](./probe-panel.pencil.md) | Probe 面板轴、打开状态与 cURL 流程 | [probe.md](./probe.md) |
 | [imbot-output.pencil.md](./imbot-output.pencil.md) | 消息序列及回复归属；历史图与现行降级分开 | [imbot-output.md](./imbot-output.md) |
 | [npm.pencil.md](./npm.pencil.md) | `tb gui` / `tb app` 与 `npx tingly-box-gui` 的启动、取回与缓存流程 | [npm.md](./npm.md) |
+| [projects-desk-absorption.pencil.md](./projects-desk-absorption.pencil.md) | Desk 并入 Projects：前后对比、数据模型、宿主能力与插槽、切换流程、等待信号、文件去向 | [projects-desk-absorption.md](./projects-desk-absorption.md) |
+| [projects-im.pencil.md](./projects-im.pencil.md) | IM 并入 Projects：绑定模型、入站/出站路由、双端审批、页面去向与绑定入口、阶段并行关系 | [projects-im.md](./projects-im.md) |
 
 ## 架构与持久化
 
@@ -40,7 +42,7 @@
 | [config-migration.md](./config-migration.md) | Config Migration Pipeline | 设计说明；局部实施状态见正文 |
 | [rule-storage.md](./rule-storage.md) | Rule 存储迁移：config.json → SQLite | 设计说明；局部实施状态见正文 |
 | [rule-uuid.md](./rule-uuid.md) | Rule UUID Conventions | 设计说明；局部实施状态见正文 |
-| [remote-storage.md](./remote-storage.md) | Remote 存储重设计 | 设计说明；局部实施状态见正文 |
+| [remote-storage.md](./remote-storage.md) | Remote 存储重设计 | chat 表仍在用；session 存储随旧路径删除（remote-into-projects.md 第 4 期） |
 ## 协议、路由与请求能力
 
 | 文档 | 内容 | 状态 / 阅读边界 |
@@ -66,20 +68,27 @@
 |---|---|---|
 | [connect-ai-flow.md](./connect-ai-flow.md) | Connect AI Flow | 设计说明；局部实施状态见正文 |
 | [oauth.md](./oauth.md) | OAuth | 设计说明；局部实施状态见正文 |
+| [antigravity.md](./antigravity.md) | Antigravity Code Assist 请求与响应契约、验收及来源边界 | 已实现；独立规格，非严格 clean-room 隔离声明；尚未用真实账号验证 |
 | [third-party-credentials.md](./third-party-credentials.md) | Third-Party Cloud Credentials (AWS Bedrock / GCP Vertex / Azure OpenAI) | 设计说明；局部实施状态见正文 |
 | [kimi-config.md](./kimi-config.md) | Kimi Code OAuth & Client Round Trip: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [zcode-oauth.md](./zcode-oauth.md) | ZCode OAuth (GLM Coding Plan) | 设计说明；局部实施状态见正文 |
+| [provider-rewards.md](./provider-rewards.md) | Provider rewards：GLM 重置卡读取与使用、WorkBuddy 每日签到（自动领取） | 设计说明；协议为社区来源，未经真实账号验证 |
+| [workbuddy-oauth.md](./workbuddy-oauth.md) | WorkBuddy OAuth、额度 (Tencent WorkBuddy / CodeBuddy) | 已实现；与第三方实测实现对齐，尚未用真实账号验证，见正文 |
+| [workbuddy-agent.md](./workbuddy-agent.md) | WorkBuddy as an agent（自定义模型接入、Auto Config 写已安装版本的 `~/.workbuddy/models.json`（国内版）/ `~/.workbuddy-ai/models.json`（国际版）） | 已实现；2026-10-21 在 Windows 实机确认文件位置与数组格式 |
 | [deepseek.md](./deepseek.md) | DeepSeek | 设计说明；局部实施状态见正文 |
 | [codex.md](./codex.md) | Codex as a Client | 设计说明；局部实施状态见正文 |
 | [codex-auth.md](./codex-auth.md) | Codex Auth Modes: gateway, direct ChatGPT, and hybrid | 设计说明；局部实施状态见正文 |
 | [codex-config.md](./codex-config.md) | Codex Quick Config: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [claude-code.md](./claude-code.md) | Claude Code — design index | 入口索引；会话与 OAuth 兼容层独立 |
 | [claude-code-config.md](./claude-code-config.md) | Claude Code Quick Config: Design and Decisions | 设计说明；局部实施状态见正文 |
+| [claude-code-slots.md](./claude-code-slots.md) | Claude Code: per-slot rules (no modes) | 已实现（TEP #2197）；取代 unified/separate 模式 |
+| [claude-code-default-switch.md](./claude-code-default-switch.md) | Claude Code: use a profile as the default | 已实现：显式覆盖，无备份无还原 |
 | [cursor.md](./cursor.md) | Cursor Scenario — the public-URL constraint | 设计说明；局部实施状态见正文 |
 | [opencode-session.md](./opencode-session.md) | OpenCode Zen session header | 设计说明；局部实施状态见正文 |
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |
 | [quota-semantics.md](./quota-semantics.md) | Quota 语义归一 | 设计说明；局部实施状态见正文 |
 | [quota-relay.md](./quota-relay.md) | Quota 中继：端侧看到中央的 quota | 设计说明；局部实施状态见正文 |
+| [quota-backoff.md](./quota-backoff.md) | Quota 请求失败退避 | 已实现 |
 | [team.md](./team.md) | Team and Sharing Key Authorization | 设计说明；局部实施状态见正文 |
 | [security.md](./security.md) | Security: Design Decisions | 设计说明；局部实施状态见正文 |
 ## Agent、Bot 与会话
@@ -88,19 +97,30 @@
 |---|---|---|
 | [afk.md](./afk.md) | AFK — Agent Framework Kit | 设计说明；局部实施状态见正文 |
 | [agentboot-refactor.md](./agentboot-refactor.md) | Agentboot Refactor | 已完成的重构记录；后续决定见附录 |
-| [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | P0–P2 完成；默认关闭；P3 待做 |
+| [agentboot-live-control.md](./agentboot-live-control.md) | AgentBoot 会话中途注入消息与在线改参数 | TEP #2114，已用真实 CLI 验证 |
+| [slash-commands.md](./slash-commands.md) | 会话控制 API（先做 `Compact` / `ContextUsage`）：agentboot 里与后端无关的小接口，Claude 实现映射 `/compact` 与 `get_context_usage`；web/IM 的斜杠命令只是它的前端，`/clear` 等不下发；列出已有同类调用与未来候选 | 设计，未实现；证据见 `.research/slash-commands-claude-code.md` |
+| [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | 已退役：Remote 的 `@cc` 执行路径已删除，聊天走 Projects（remote-into-projects.md） |
 | [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7 |
 | [bot-arch.md](./bot-arch.md) | Bot Architecture — resource, channel, consumers (+ naming) | 设计说明；局部实施状态见正文 |
+| [bot-im-alias-display.md](./bot-im-alias-display.md) | Bot / IM 统一展示格式 `平台 · alias · id`（群聊：`平台群 · alias · id`） 与命名模型（平台名即默认别名，不覆盖用户别名） | 已实现；拆出的后续项见正文 §7 |
 | [bot-capability-access-control.md](./bot-capability-access-control.md) | Bot Capability Access Control — Bot、Direct Chat、Group 与 Actor | 资源/授权核心已实现；验收项按正文核对 |
 | [bot-interaction-api.md](./bot-interaction-api.md) | Bot Interaction Interface — auth + open two-kind API (notify / interactive) | 通用 API 已实现；旧 hook HTTP 鉴权待迁移 |
 | [bot-panic-isolation.md](./bot-panic-isolation.md) | Bot Panic Isolation — recover at the trust boundary | 设计说明；局部实施状态见正文 |
 | [imbot-sync.md](./imbot-sync.md) | ImBot State Sync: Event-Driven with a Reconcile Backstop | 设计说明；局部实施状态见正文 |
 | [imbot-output.md](./imbot-output.md) | ImBot 输出预估 — Predicted Per-Platform Chat Output, and the Noise Problem | 当前矩阵 + 已标注的修复前推演 |
 | [im-feishu.md](./im-feishu.md) | Feishu/Lark: IM Service Built Directly, Not via the Fat SDK Client | 设计说明；局部实施状态见正文 |
-| [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | 设计说明；局部实施状态见正文 |
-| [desk.md](./desk.md) | Desk (MVP) | 设计说明；局部实施状态见正文 |
-| [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；现行 runtime 见 afk |
-| [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 已交付的起源记录；现行设计见 afk |
+| [remote-cc-profile.md](./remote-cc-profile.md) | Remote @cc Profile Selection | `@cc` 已退役；bot 的 profile 如何用于 Projects 线程见 remote-into-projects.md |
+| [desk.md](./desk.md) | Desk (MVP)：已并入 Projects；§3 的会话引擎行为仍然适用 | 已退役 |
+| [projects-attachments.md](./projects-attachments.md) | Projects 附件：文件、图片、长文本作为输入，统一落盘在项目 uploads（TEP-2107） | 进行中 |
+| [projects-panel.md](./projects-panel.md) | Projects 面板：项目和工作目录共用一个侧边栏（TEP-2063） | 已实现 |
+| [projects-desk-absorption.md](./projects-desk-absorption.md) | Desk 并入 Projects：工作目录会话、宿主能力与插槽、切换 | 已实施 |
+| [projects-im.md](./projects-im.md) | IM 聊天并入 Projects：chat 绑定到线程、IM 里审批、点名线程（TEP-2143；旧路径保留的决定见下一行） | 部分实施 |
+| [remote-into-projects.md](./remote-into-projects.md) | Remote 的聊天控制（`@cc`、`@tb`、`/cd` 等）逐项迁到 Projects 的文件夹或项目，Remote 只留接入层 | 已实施；`@tb`/`@cc` 已下线 |
+| [projects-sessions.md](./projects-sessions.md) | Projects 的统一模型：一切会话都是 Thread（项目对话、线程、文件夹会话、IM 聊天同构），Claude 调研、命名收拾、迁移与交付 | 提案 |
+| [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
+| [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
+| [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；`@tb` 已下线（remote-into-projects.md） |
+| [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 起源记录；`@tb` 已下线（remote-into-projects.md） |
 ## Image 与图形工具
 
 | 文档 | 内容 | 状态 / 阅读边界 |
@@ -113,6 +133,8 @@
 | [playground-run-reentry.md](./playground-run-reentry.md) | Playground 运行卡片的重入(Re-entry) | 设计说明；局部实施状态见正文 |
 | [sketch-canvas.md](./sketch-canvas.md) | Sketch Canvas(生图 Playground 的草图与人偶输入) | 设计说明；局部实施状态见正文 |
 | [mannequin-standard.md](./mannequin-standard.md) | 人偶标准(Mannequin Standard) | 设计说明；局部实施状态见正文 |
+| [image-to-prompt.md](./image-to-prompt.md) | Image to Prompt(反推提示词):图片 → 可编辑的提示词，指令可改（TEP-2206） | 已实施(v1) |
+| [idea-to-prompt.md](./idea-to-prompt.md) | Idea to Prompt(扩写提示词):几个词 → 完整的生图提示词，与反推共用场景和部件（TEP-2226） | 已实施(v1) |
 | [pose-from-image.md](./pose-from-image.md) | 从一张图片得到姿势 | 关键点换算已实现；模型接入/交付待决定 |
 ## 观测与测试
 
@@ -143,15 +165,19 @@
 | 文档 | 内容 | 状态 / 阅读边界 |
 |---|---|---|
 | [ux-principles.md](./ux-principles.md) | UX-First 原则 | 设计说明；局部实施状态见正文 |
+| [agent-quickstart.md](./agent-quickstart.md) | Agent 页 Quick Start 与安装入口 | 已实施（TEP-2336） |
 | [onboarding-ux.md](./onboarding-ux.md) | Onboarding UX — guidance for first-time users | 设计说明；局部实施状态见正文 |
 | [ui-redesign.md](./ui-redesign.md) | UI 重设计 — 决策、实施状态与后续 | 部分落地；有撤回及后续项 |
 | [agent-page-redesign.md](./agent-page-redesign.md) | Agent 页重设计 — 模板、配置状态与实施边界 | A–D 落地；E 部分撤回；Profile 暂缓 |
 | [ux-review.md](./ux-review.md) | UX 梳理 — 前端"杂乱"的审计、讨论与决定 | 讨论中；Star 入口、Dashboard 头部、Agent 页 v4 已确定并有 PR |
+| [workspace-layout.md](./workspace-layout.md) | Workspace 布局 — 保留全部摆放、统一内容与交互的一致性契约（方案 C）；备选 A / B；首页部分已批准；与 [projects-placement.md](./projects-placement.md) 相关 | 提案，等待决定；未实施 |
+| [mobile-ui.md](./mobile-ui.md) | Mobile UI — a phone-native shell for Agent and the Projects workspace (TEP-2558); clickable prototype in `mobile-prototype/` | 提案；未实施 |
 | [ui-flow-analysis.md](./ui-flow-analysis.md) | UI 动线分析 — 发现、人工打标反馈与实现结论 | 第 1 轮已落地；其余项见正文 |
 | [refactor-frontend-2026-09.md](./refactor-frontend-2026-09.md) | Frontend Refactor 2026-09 — Plan & Survey Reports (merged) | 已完成的历史审计与交付记录 |
 | [icon-hierarchy.md](./icon-hierarchy.md) | Icon Hierarchy | 设计说明；局部实施状态见正文 |
 | [i18n.md](./i18n.md) | 前端 i18n 文案按功能大类分文件 | 现行契约 |
 | [theme.md](./theme.md) | Theme system notes | 设计说明；局部实施状态见正文 |
+| [visual-system.md](./visual-system.md) | 视觉规范与整体升级 — 审计、目标规范、分步计划 | 第一轮已合并；第二轮进行中 |
 | [gui-host-bridge.md](./gui-host-bridge.md) | Host bridge: one frontend for the browser tab and the desktop window | 设计说明；局部实施状态见正文 |
 | [gui-packaging.md](./gui-packaging.md) | Desktop GUI packaging | 设计说明；局部实施状态见正文 |
 | [host-binding.md](./host-binding.md) | Host Binding: Design and Decision | 设计说明；局部实施状态见正文 |

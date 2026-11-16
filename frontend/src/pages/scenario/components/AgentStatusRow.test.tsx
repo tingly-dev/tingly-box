@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import AgentStatusRow, { AgentLooksIn, formatErrorRate, formatRelativeTime } from './AgentStatusRow';
+import AgentStatusRow, { AgentLogButton, formatErrorRate, formatRelativeTime } from './AgentStatusRow';
 
 // No i18n instance in tests: t() returns the key, which is what we match on.
 const base = {
@@ -43,22 +43,12 @@ describe('AgentStatusRow', () => {
     });
 });
 
-describe('AgentLooksIn', () => {
+describe('AgentLogButton', () => {
     it('opens the log', () => {
         const onOpenLog = vi.fn();
-        render(<AgentLooksIn onOpenRequests={vi.fn()} onOpenUsage={vi.fn()} onOpenLog={onOpenLog} />);
+        render(<AgentLogButton onOpenLog={onOpenLog} />);
         fireEvent.click(screen.getByRole('button', { name: 'agentStatus.log' }));
         expect(onOpenLog).toHaveBeenCalledOnce();
-    });
-
-    it('opens requests and usage', () => {
-        const onOpenRequests = vi.fn();
-        const onOpenUsage = vi.fn();
-        render(<AgentLooksIn onOpenRequests={onOpenRequests} onOpenUsage={onOpenUsage} onOpenLog={vi.fn()} />);
-        fireEvent.click(screen.getByRole('button', { name: 'agentStatus.requests' }));
-        fireEvent.click(screen.getByRole('button', { name: 'agentStatus.usage' }));
-        expect(onOpenRequests).toHaveBeenCalledOnce();
-        expect(onOpenUsage).toHaveBeenCalledOnce();
     });
 });
 

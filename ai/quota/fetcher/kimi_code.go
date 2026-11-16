@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 
 const (
 	kimiCodeAPIBase        = "https://api.kimi.com/coding/v1"
+	kimiCodeIntlAPIBase    = "https://api.kimi.ai/coding/v1"
 	kimiCodeFixedPointCent = 1_000_000
 )
 
@@ -197,16 +200,30 @@ type kimiCodeUser struct {
 	} `json:"membership"`
 }
 
+// kimiCodeRatioUsage is one entry of "usages", the shape that carries the
+// monthly allowances: {"limit_month_code":{"used_ratio":1,"reset_time":"…"}}.
+// It reports only a share used (0–1), never counts.
+type kimiCodeRatioUsage struct {
+	UsedRatio kimiCodeNumber `json:"used_ratio"`
+	ResetTime string         `json:"reset_time"`
+}
+
 type kimiCodeUsageResponse struct {
-	User          kimiCodeUser           `json:"user"`
-	Usage         kimiCodeUsageDetail    `json:"usage"`
-	Limits        []kimiCodeLimit        `json:"limits"`
-	BoosterWallet *kimiCodeBoosterWallet `json:"boosterWallet"`
+	User          kimiCodeUser                  `json:"user"`
+	Usage         kimiCodeUsageDetail           `json:"usage"`
+	Usages        map[string]kimiCodeRatioUsage `json:"usages"`
+	Limits        []kimiCodeLimit               `json:"limits"`
+	BoosterWallet *kimiCodeBoosterWallet        `json:"boosterWallet"`
 }
 
 func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
+	intl := provider.OAuthIssuer() == ai.IssuerKimiCodeIntl
+	production := kimiCodeAPIBase
+	if intl {
+		production = kimiCodeIntlAPIBase
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		endpoint(f.baseURL, kimiCodeAPIBase, "/usages"), nil)
+		endpoint(f.baseURL, production, "/usages"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -219,6 +236,11 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 	// entitlement (an expired plan reads as permission_denied), not the shape
 	// of the client.
 	req.Header.Set("User-Agent", "")
+	if intl {
+		// api.kimi.ai refuses clients without a browser-like or CLI user
+		// agent (403), unlike the mainland host.
+		req.Header.Set("User-Agent", "KimiCLI/1.10.6")
+	}
 
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 	resp, err := client.Do(req)
@@ -302,8 +324,78 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 		})
 	}
 
+	addKimiCodeRatioUsages(usage, apiResp.Usages)
 	addKimiCodeWallet(usage, apiResp.BoosterWallet)
 	return usage, nil
+}
+
+// addKimiCodeRatioUsages adds the "usages" entries. "limit_5h" restates the
+// 5h entry of "limits", which has the counts, so an entry whose period a
+// window already covers is skipped; the monthly ones exist only here.
+func addKimiCodeRatioUsages(usage *quota.ProviderUsage, usages map[string]kimiCodeRatioUsage) {
+	covered := make(map[int]bool, len(usage.Windows))
+	for _, w := range usage.Windows {
+		covered[w.WindowMinutes] = true
+	}
+	keys := make([]string, 0, len(usages))
+	for key := range usages {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		item := usages[key]
+		if !item.UsedRatio.Valid {
+			continue
+		}
+		minutes, label := kimiCodeRatioPeriod(key)
+		if minutes > 0 && covered[minutes] {
+			continue
+		}
+		percent := math.Max(0, math.Min(100, item.UsedRatio.Value*100))
+		var resetsAt *time.Time
+		if parsed, err := time.Parse(time.RFC3339Nano, item.ResetTime); err == nil {
+			resetsAt = &parsed
+		}
+		usage.AddWindow(key, &quota.UsageWindow{
+			Type:          windowTypeForMinutes(minutes),
+			Kind:          quota.WindowKindLimit, // recovers on its own; see Pct(WindowKindLimit)
+			Used:          percent,
+			Limit:         100,
+			UsedPercent:   percent,
+			Unit:          quota.UsageUnitPercent,
+			ResetsAt:      resetsAt,
+			WindowMinutes: minutes,
+			Label:         label,
+			Description:   fmt.Sprintf("%.0f%% used", percent),
+		})
+	}
+}
+
+// kimiCodeRatioPeriod reads a "usages" key: "limit_5h", "limit_7d",
+// "limit_month_code". An unknown name stays unsized and keeps its key as label.
+func kimiCodeRatioPeriod(key string) (int, string) {
+	name := strings.TrimPrefix(key, "limit_")
+	if scope, ok := strings.CutPrefix(name, "month"); ok {
+		label := "Monthly limit"
+		if scope = strings.TrimPrefix(scope, "_"); scope != "" {
+			label = fmt.Sprintf("Monthly limit (%s)", scope)
+		}
+		return 30 * 24 * 60, label
+	}
+	if len(name) >= 2 {
+		if n, err := strconv.Atoi(name[:len(name)-1]); err == nil && n > 0 {
+			switch name[len(name)-1] {
+			case 'm':
+				return n, fmt.Sprintf("%dm limit", n)
+			case 'h':
+				return n * 60, fmt.Sprintf("%dh limit", n)
+			case 'd':
+				return n * 24 * 60, fmt.Sprintf("%dd limit", n)
+			}
+		}
+	}
+	return 0, key
 }
 
 func formatKimiCodeUsage(used, limit float64) string {

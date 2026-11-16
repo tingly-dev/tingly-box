@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 func TestKimiHook_BeforeAuth_NoOp(t *testing.T) {
@@ -63,5 +65,24 @@ func TestKimiOsVersion_ReturnsKnownValue(t *testing.T) {
 	got := KimiOsVersion()
 	if got == "" {
 		t.Fatal("expected non-empty OS version")
+	}
+}
+
+func TestKimiPlatformsAreSeparateIssuers(t *testing.T) {
+	registry := DefaultRegistry()
+	for issuer, host := range map[ai.Issuer]string{
+		ai.IssuerKimiCode:     "https://auth.kimi.com",
+		ai.IssuerKimiCodeIntl: "https://auth.kimi.ai",
+	} {
+		cfg, ok := registry.Get(issuer)
+		if !ok {
+			t.Fatalf("%s is not registered", issuer)
+		}
+		if cfg.DeviceCodeURL != host+"/api/oauth/device_authorization" || cfg.TokenURL != host+"/api/oauth/token" {
+			t.Errorf("%s: device %q token %q", issuer, cfg.DeviceCodeURL, cfg.TokenURL)
+		}
+		if _, err := ParseIssuer(issuer); err != nil {
+			t.Errorf("%s: %v", issuer, err)
+		}
 	}
 }

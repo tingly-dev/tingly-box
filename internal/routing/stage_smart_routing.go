@@ -397,7 +397,10 @@ func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []sma
 			}
 			pctPtr, looked := pctByProvider[svc.Provider]
 			if !looked {
-				if usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil && usage != nil {
+				// A usage carrying LastError is the last good reading kept past a
+				// failed refresh, possibly hours old: shown to people, but not
+				// something to route on.
+				if usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil && usage != nil && usage.LastError == "" {
 					if pct, ok := usage.Pct(quota.WindowKindLimit); ok {
 						pctPtr = &pct
 					}

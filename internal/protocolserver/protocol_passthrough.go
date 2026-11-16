@@ -7,12 +7,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -43,7 +43,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		writeErrorResponse(c, http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to marshal response: " + err.Error(),
 				Type:    "api_error",
@@ -54,7 +54,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 
 	var responseMap map[string]interface{}
 	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		writeErrorResponse(c, http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to process response: " + err.Error(),
 				Type:    "api_error",
@@ -74,7 +74,7 @@ func (ph *ProtocolHandler) nonstreamOpenAIChat(c *gin.Context, provider *typ.Pro
 	if ShouldRoundtripResponse(c, "anthropic") {
 		roundtripped, err := RoundtripOpenAIResponseViaAnthropic(response, responseModel, provider, req.Model)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
+			writeErrorResponse(c, http.StatusInternalServerError, ErrorResponse{
 				Error: ErrorDetail{
 					Message: "Failed to roundtrip response: " + err.Error(),
 					Type:    "api_error",

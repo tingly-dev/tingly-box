@@ -9,10 +9,12 @@ export const configApplyApi = {
     // `preferences` is the source of truth: each key is a Claude Code env
     // var name (e.g. ANTHROPIC_MODEL), and the backend writes them straight
     // into ~/.claude/settings.json under "env".
-    applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean, defaultMode: string = 'acceptEdits', showThinkingSummaries: boolean = true): Promise<any> => {
+    // `coAuthoredBy` left out, or equal to what settings.json says, leaves its
+    // keys as the user wrote them (off when the file has none).
+    applyClaudeConfig: async (preferences: Record<string, string>, installStatusLine?: boolean, defaultMode: string = 'auto', showThinkingSummaries: boolean = true, coAuthoredBy?: boolean): Promise<any> => {
         return controlApi((client, headers) => client.POST('/api/v1/config/apply/claude', {
             headers,
-            body: {preferences, installStatusLine, defaultMode, showThinkingSummaries},
+            body: {preferences, installStatusLine, defaultMode, showThinkingSummaries, coAuthoredBy},
         }));
     },
 
@@ -22,6 +24,15 @@ export const configApplyApi = {
 
     getOpenCodeConfigPreview: async (): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/config/preview/opencode', {headers}));
+    },
+
+    // WorkBuddy: merges the scenario's models into each installed edition's models.json (~/.workbuddy, ~/.workbuddy-ai).
+    applyWorkBuddyConfig: async (): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/config/apply/workbuddy', {headers}));
+    },
+
+    getWorkBuddyConfigPreview: async (): Promise<any> => {
+        return controlApi((client, headers) => client.GET('/api/v1/config/preview/workbuddy', {headers}));
     },
 
     applyCodexConfig: async (

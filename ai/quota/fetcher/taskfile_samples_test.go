@@ -117,16 +117,24 @@ func TestTaskfileSamples(t *testing.T) {
 	// pro at 25% and flash at 10%: the account figure is pro, not the mean.
 	check(t, "gemini", u, want{pct: 25, ok: true, tightest: "tightest", windows: 1})
 
-	// ── openrouter (free tier, limit null) ──
-	s = serve(t, `{"data":{"label":"sk-or-v1-c1a...5a2","limit":null,"limit_remaining":null,"usage":0,
-	"usage_daily":0,"usage_weekly":0,"usage_monthly":0,"is_free_tier":true,"creator_user_id":"user_xxx"}}`)
+	// ── openrouter (free tier, limit null; nothing purchased, a cent spent) ──
+	s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/credits" {
+			_, _ = w.Write([]byte(`{"data":{"total_credits":0,"total_usage":0.007911}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"label":"sk-or-v1-c1a...5a2","limit":null,"limit_remaining":null,"usage":0,
+	"usage_daily":0,"usage_weekly":0,"usage_monthly":0,"is_free_tier":true,"creator_user_id":"user_xxx"}}`))
+	}))
+	t.Cleanup(s.Close)
 	u, err = (&OpenRouterFetcher{}).Fetch(context.Background(),
 		&ai.Provider{UUID: "u", Name: "OpenRouter", Token: "k", APIBase: s.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A free key has no cap at all, so there is no percentage to report.
-	check(t, "openrouter", u, want{ok: false, windows: 1})
+	// A free key has no cap and the balance is an amount, never a share, so
+	// there is no percentage to report — only the balance and the monthly spend.
+	check(t, "openrouter", u, want{ok: false, windows: 2})
 
 	// ── codex (fresh) ──
 	codexFresh := `{"user_id":"user-j5z","account_id":"user-j5z","plan_type":"prolite",

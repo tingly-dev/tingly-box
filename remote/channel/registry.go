@@ -44,6 +44,20 @@ func (r *Registry) Get(id string) (Channel, bool) {
 	return c, ok
 }
 
+// ByPlatform returns the registered channels of one platform ("telegram",
+// "feishu", …), in no particular order.
+func (r *Registry) ByPlatform(platform string) []Channel {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []Channel
+	for _, c := range r.channels {
+		if c.Platform() == platform {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // Len returns the number of registered channels.
 func (r *Registry) Len() int {
 	r.mu.RLock()

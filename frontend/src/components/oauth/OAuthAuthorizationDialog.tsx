@@ -14,8 +14,11 @@ import {
     Typography,
 } from '@mui/material';
 import {useEffect, useState} from 'react';
+import WorkBuddyConnectionNote from './WorkBuddyConnectionNote';
+import QoderConnectionNote from './QoderConnectionNote';
 import api from "@/services/api.ts";
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Type for timer (browser vs Node.js)
 type TimerId = ReturnType<typeof setTimeout>;
@@ -28,6 +31,7 @@ export interface OAuthAuthorizationData {
     expires_in?: number;
     interval?: number;
     provider?: string;
+    providerId?: string;
     flow_type: 'standard' | 'device_code';
     session_id?: string; // Session ID for status tracking
 }
@@ -261,6 +265,8 @@ const OAuthAuthorizationDialog = ({
                 </DialogTitle>
                 <DialogContent>
                     <Stack spacing={3}>
+                        <WorkBuddyConnectionNote providerId={authData?.providerId}/>
+                        <QoderConnectionNote providerId={authData?.providerId}/>
                         {/* Error message */}
                         {errorMessage && (
                             <Alert severity="error" aria-live="polite">
@@ -309,7 +315,7 @@ const OAuthAuthorizationDialog = ({
                                         gap: 2,
                                         p: 2,
                                         bgcolor: 'action.hover',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         border: '2px dashed',
                                         borderColor: 'primary.main',
                                     }}

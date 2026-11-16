@@ -42,9 +42,9 @@ import {
     IconEdit,
     IconFileDescription,
     IconCopy,
+    IconCopyPlus,
     IconClipboard,
     IconKey,
-    IconRestore,
     IconArrowUpRight,
     IconExternalLink,
     IconMapPin,
@@ -89,6 +89,7 @@ import {
     IconSun,
     IconMoon,
     IconBrandGithub,
+    IconFolder,
     IconFolderOpen,
     IconPointFilled,
     IconBolt,
@@ -150,6 +151,9 @@ import {
     IconMessageReport,
     IconMessage,
     IconWaveSine,
+    IconCircle,
+    IconGitFork,
+    IconChartDots3,
     IconCircleFilled,
     IconWorldDownload,
     IconGridDots,
@@ -195,8 +199,9 @@ export const DeleteSweep = tablerMui(IconTrashX);
 export const Edit = tablerMui(IconEdit);
 export const Search = tablerMui(IconSearch);
 export const Refresh = tablerMui(IconRefresh);
-export const RestartAlt = tablerMui(IconRestore);
+export const RestartAlt = tablerMui(IconReload);
 export const ContentCopy = tablerMui(IconCopy);
+export const Duplicate = tablerMui(IconCopyPlus);
 export const ContentPaste = tablerMui(IconClipboard);
 export const Upload = tablerMui(IconUpload);
 export const Download = tablerMui(IconDownload);
@@ -247,6 +252,7 @@ export const Logout = tablerMui(IconLogout);
 
 // --- Content / objects -------------------------------------------------------
 export const Description = tablerMui(IconFileDescription);
+export const Folder = tablerMui(IconFolder);
 export const FolderOpen = tablerMui(IconFolderOpen);
 export const ListAlt = tablerMui(IconListDetails);
 export const Code = tablerMui(IconCode);
@@ -352,11 +358,14 @@ export const Undo = tablerMui(IconArrowBackUp);
 
 // --- Custom / AI -------------------------------------------------------------
 export const AiAgents = tablerMui(IconAiAgents);
+export const Decisions = tablerMui(IconGitFork);
+export const Embedding = tablerMui(IconChartDots3);
 
 // --- Media -------------------------------------------------------------------
 export const Photo = tablerMui(IconPhoto);
 export const Vector = tablerMui(IconVector);
 export const WaveSine = tablerMui(IconWaveSine);
+export const CircleOutlined = tablerMui(IconCircle);
 export const Circle = tablerMuiFilled(IconCircleFilled);
 
 // --- Infrastructure ----------------------------------------------------------

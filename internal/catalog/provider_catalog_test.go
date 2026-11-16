@@ -223,6 +223,31 @@ func TestLatestOpenAIAndCodexModels(t *testing.T) {
 	}
 }
 
+func TestCodexTerraContext(t *testing.T) {
+	tm := NewProviderCatalogManager(EmbeddedOnly())
+	if err := tm.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := tm.GetTemplate("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"gpt-6.1-terra", "gpt-6.1-terra:fast"} {
+		found := false
+		for _, model := range provider.Models {
+			if model.ID == id {
+				found = true
+				if model.Context != 500000 {
+					t.Errorf("%s context = %d, want 500000", id, model.Context)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("missing Codex model %s", id)
+		}
+	}
+}
+
 // TestTemplateManagerFetchTemplates tests template fetching from various sources
 func TestTemplateManagerFetchTemplates(t *testing.T) {
 	tests := []struct {
@@ -581,6 +606,18 @@ func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
 			openAIBaseURL:          "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/compat",
 			anthropicBaseURL:       "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic",
 			supportsModelsEndpoint: false,
+		},
+		{
+			id:                     "runcrate-ai",
+			openAIBaseURL:          "https://api.runcrate.ai/v1",
+			anthropicBaseURL:       "https://api.runcrate.ai",
+			supportsModelsEndpoint: true,
+		},
+		{
+			id:                     "cloudgpu-app",
+			openAIBaseURL:          "https://cloudgpu.app/v1",
+			anthropicBaseURL:       "https://cloudgpu.app",
+			supportsModelsEndpoint: true,
 		},
 	}
 

@@ -13,8 +13,6 @@ import {
     TablePagination,
     TableRow,
     TableSortLabel,
-    ToggleButton,
-    ToggleButtonGroup,
     Typography,
     alpha,
     useTheme,
@@ -23,14 +21,14 @@ import { ArrowForward } from '@/components/icons';
 import SearchField from '@/components/SearchField';
 import { UsageMetricValueCells } from '@/components/dashboard';
 import type { AggregatedStat, MetricRow, RosterAxisState } from '@/components/dashboard';
-import { formatDateTime, getModelKey, getProviderKey } from './userUsageModel';
+import { formatDateTime, getModelKey, getProviderKey, accountKey } from './userUsageModel';
 import type { UserUsageRow, ViewMode, PrimaryColumn } from './userUsageModel';
-import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Shared card anatomy for the roster table and the detail card below it.
 export const usageTableCardSx = {
     width: '100%',
-    borderRadius: 2,
+    borderRadius: radius.card,
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
@@ -114,53 +112,19 @@ export default function RosterTable({
         >
             <Box
                 sx={{
-                    minHeight: 72,
+                    minHeight: 64,
                     p: 2.5,
                     display: 'flex',
                     flexWrap: 'wrap',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
+                    justifyContent: 'flex-end',
                     gap: 1.5,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                 }}
             >
-                {/* Axis switcher lives on the table it controls
-                    (conventional dashboard position), and doubles
-                    as the card's title — a separate "All users"
-                    caption would repeat it. */}
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                    <ToggleButtonGroup
-                        size="small"
-                        exclusive
-                        value={viewMode}
-                        onChange={(_, value: ViewMode | null) => value && onViewModeChange(value)}
-                        aria-label={t('dashboard.userUsage.viewMode', { defaultValue: 'View' })}
-                        sx={{
-                            '& .MuiToggleButton-root': {
-                                px: 1.5,
-                                py: 0.25,
-                                fontSize: fontSizes.md,
-                                textTransform: 'none',
-                            },
-                        }}
-                    >
-                        <ToggleButton value="account">
-                            {t('dashboard.userUsage.byAccount', { defaultValue: 'By account' })}
-                        </ToggleButton>
-                        <ToggleButton value="model">
-                            {t('dashboard.userUsage.byModel', { defaultValue: 'By model' })}
-                        </ToggleButton>
-                        <ToggleButton value="provider">
-                            {t('dashboard.userUsage.byProvider', { defaultValue: 'By provider' })}
-                        </ToggleButton>
-                    </ToggleButtonGroup>
-                    <Chip
-                        size="small"
-                        label={activeAxis.visibleRows.length}
-                        sx={{ height: 22 }}
-                    />
-                </Stack>
+                {/* The axis switcher lives in the page toolbar: it scopes the
+                    roster, the Top list and the detail card. */}
                 <SearchField
                     value={activeAxis.search}
                     onChange={(event) => activeAxis.setSearch(event.target.value)}
@@ -180,21 +144,7 @@ export default function RosterTable({
             >
                 <Table stickyHeader sx={{ minWidth: showCacheWrite ? 1080 : 980 }}>
                     <TableHead>
-                        <TableRow
-                            sx={{
-                                backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                                '& .MuiTableCell-root': {
-                                    fontWeight: 600,
-                                    fontSize: fontSizes.sm,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                    color: 'text.secondary',
-                                    py: 1.25,
-                                    borderBottom: '1px solid',
-                                    borderColor: 'divider',
-                                },
-                            }}
-                        >
+                        <TableRow>
                             {primaryColumns.map((col, index) => (
                                 <TableCell
                                     key={col.kind === 'sort' ? col.field : `label-${index}`}
@@ -216,63 +166,70 @@ export default function RosterTable({
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {viewMode === 'account' && (activeAxis.pagedRows as UserUsageRow[]).map((row) => renderRow(
-                            row.token_id,
-                            row.user_id === activeAxis.selectedKey,
-                            row,
-                            (
-                                <TableCell>
-                                    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                                        <Avatar sx={{
-                                            width: 34,
-                                            height: 34,
-                                            fontSize: 14,
-                                            bgcolor: row.user_id === activeAxis.selectedKey ? 'primary.main' : alpha(theme.palette.primary.main, 0.1),
-                                            color: row.user_id === activeAxis.selectedKey ? 'primary.contrastText' : 'primary.main',
-                                        }}>
-                                            {row.display_name.slice(0, 1).toUpperCase()}
-                                        </Avatar>
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-                                                <Typography
-                                                    variant="body1"
-                                                    noWrap
-                                                    sx={{ color: 'text.primary', fontWeight: 600 }}
-                                                >
-                                                    {row.display_name}
+                        {viewMode === 'account' && (activeAxis.pagedRows as UserUsageRow[]).map((row) => {
+                            // The axis (and the Top list beside it) keys accounts by
+                            // user_id — selecting with token_id here would put the
+                            // click outside the axis' key space and the selection
+                            // would snap straight back to the first row.
+                            const key = accountKey(row);
+                            return renderRow(
+                                key,
+                                key === activeAxis.selectedKey,
+                                row,
+                                (
+                                    <TableCell>
+                                        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                                            <Avatar sx={{
+                                                width: 34,
+                                                height: 34,
+                                                fontSize: 14,
+                                                bgcolor: row.user_id === activeAxis.selectedKey ? 'primary.main' : alpha(theme.palette.primary.main, 0.1),
+                                                color: row.user_id === activeAxis.selectedKey ? 'primary.contrastText' : 'primary.main',
+                                            }}>
+                                                {row.display_name.slice(0, 1).toUpperCase()}
+                                            </Avatar>
+                                            <Box sx={{ minWidth: 0 }}>
+                                                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                                                    <Typography
+                                                        variant="body1"
+                                                        noWrap
+                                                        sx={{ color: 'text.primary', fontWeight: 600 }}
+                                                    >
+                                                        {row.display_name}
+                                                    </Typography>
+                                                    {row.account_type === 'primary' && (
+                                                        <Chip
+                                                            size="small"
+                                                            color="primary"
+                                                            variant="outlined"
+                                                            label={t('dashboard.userUsage.primary', { defaultValue: 'Primary' })}
+                                                            sx={{ height: 22 }}
+                                                        />
+                                                    )}
+                                                    {!row.enabled && (
+                                                        <Chip
+                                                            size="small"
+                                                            label={t('dashboard.userUsage.disabled', { defaultValue: 'Disabled' })}
+                                                            sx={{ height: 22 }}
+                                                        />
+                                                    )}
+                                                </Stack>
+                                                <Typography variant="body2">
+                                                    {row.account_type === 'primary'
+                                                        ? t('dashboard.userUsage.globalToken', { defaultValue: 'Global model token' })
+                                                        : row.last_used_at
+                                                        ? t('dashboard.userUsage.lastUsed', {
+                                                            value: formatDateTime(row.last_used_at),
+                                                            defaultValue: `Last used ${formatDateTime(row.last_used_at)}`,
+                                                        })
+                                                        : t('dashboard.userUsage.neverUsed', { defaultValue: 'Never used' })}
                                                 </Typography>
-                                                {row.account_type === 'primary' && (
-                                                    <Chip
-                                                        size="small"
-                                                        color="primary"
-                                                        variant="outlined"
-                                                        label={t('dashboard.userUsage.primary', { defaultValue: 'Primary' })}
-                                                        sx={{ height: 22 }}
-                                                    />
-                                                )}
-                                                {!row.enabled && (
-                                                    <Chip
-                                                        size="small"
-                                                        label={t('dashboard.userUsage.disabled', { defaultValue: 'Disabled' })}
-                                                        sx={{ height: 22 }}
-                                                    />
-                                                )}
-                                            </Stack>
-                                            <Typography variant="body2">
-                                                {row.account_type === 'primary'
-                                                    ? t('dashboard.userUsage.globalToken', { defaultValue: 'Global model token' })
-                                                    : row.last_used_at
-                                                    ? t('dashboard.userUsage.lastUsed', {
-                                                        value: formatDateTime(row.last_used_at),
-                                                        defaultValue: `Last used ${formatDateTime(row.last_used_at)}`,
-                                                    })
-                                                    : t('dashboard.userUsage.neverUsed', { defaultValue: 'Never used' })}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
-                                </TableCell>
-                            ),
-                        ))}
+                                            </Box>
+                                        </Stack>
+                                    </TableCell>
+                                ),
+                            );
+                        })}
                         {viewMode === 'model' && (activeAxis.pagedRows as AggregatedStat[]).map((row) => {
                             const key = getModelKey(row);
                             return renderRow(

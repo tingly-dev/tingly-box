@@ -50,6 +50,24 @@ func (mm *ModelListManager) GetModels(uid string) []string {
 	return mm.modelStore.GetModels(uid, ModelCacheTTL)
 }
 
+// GetStaleModels returns the last stored model list regardless of age. It is
+// the fallback for when a refetch of an expired list fails: the previous real
+// list beats an embedded template or nothing.
+func (mm *ModelListManager) GetStaleModels(uid string) []string {
+	return mm.modelStore.GetModels(uid, 0)
+}
+
+// InvalidateModels marks the cached list stale so the next read re-queries
+// upstream; the list itself is kept as the stale fallback.
+func (mm *ModelListManager) InvalidateModels(uid string) error {
+	return mm.modelStore.InvalidateModels(uid)
+}
+
+// GetLastUpdatedAt returns when the provider's list was last saved.
+func (mm *ModelListManager) GetLastUpdatedAt(uid string) (time.Time, bool) {
+	return mm.modelStore.GetLastUpdatedAt(uid)
+}
+
 // GetAllProviders returns all provider UUIDs that have models
 func (mm *ModelListManager) GetAllProviders() []string {
 	return mm.modelStore.GetAllProviders()

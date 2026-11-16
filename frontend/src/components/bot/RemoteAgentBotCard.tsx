@@ -1,3 +1,5 @@
+import { EntityLabel } from '@tingly/ui';
+import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import {
     Delete as DeleteIcon,
     Edit as EditIcon,
@@ -22,22 +24,18 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import type {BotSettings} from '@/types/bot';
 import {capabilityEnabled, ccProfileIdFromDefaultAgent, isPairingRequired} from '@/types/bot';
 import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';
-import type {Provider} from '@/types/provider';
 import type {ProfileInfo} from '@/contexts/ProfileContext';
 import RemoteControlGraph from './RemoteControlGraph';
 import BotAccessDialog from './BotAccessDialog';
-import PairingCodePanel from './PairingCodePanel';
 import {useRemoteAccess} from './useRemoteAccess';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface RemoteAgentBotCardProps {
     bot: BotSettings;
-    providers: Provider[];
     onMountToggle: (mounted: boolean) => void;
-    onModelClick: () => void;
-    /** Configured Claude Code profiles (resolves the @cc profile node label). */
+    /** Configured Claude Code profiles (resolves the profile node label). */
     ccProfiles?: ProfileInfo[];
     /** Opens the Claude Code profile picker for this bot. */
     onCCProfileClick?: () => void;
@@ -50,17 +48,13 @@ interface RemoteAgentBotCardProps {
 }
 
 // RemoteAgentBotCard is the PURPOSE card: one row per bot on the Remote page.
-// The switch decides whether this bot drives Claude Code / SmartGuide from
-// chat. Below it, the bot's route (RemoteControlGraph): who can send commands
-// in → this bot → @tb / @cc forks; each node opens its editor. Access and
-// pairing live in the Access work surface opened from the entry node, which
-// reads this card's own access data, so authorization has one source of
-// truth. Edit / restart / delete stay here so the page is self-sufficient.
+// The switch decides whether this bot's chats can use Claude Code. Below it,
+// the bot's route (RemoteControlGraph): who can send messages in → this bot →
+// Claude Code → the profile it runs under; each node opens its editor. Access and
+// pairing are shown in the route using this card’s access data. Edit / restart / delete stay here so the page is self-sufficient.
 const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     bot,
-    providers,
     onMountToggle,
-    onModelClick,
     ccProfiles,
     onCCProfileClick,
     onEdit,
@@ -70,13 +64,13 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     isRestarting = false,
 }) => {
     const {t} = useTranslation();
+    const entities = useEntityLabels();
     const isMounted = capabilityEnabled(bot,'remote_control');
     const isEnabled = bot.enabled ?? true;
     const ccProfileId = ccProfileIdFromDefaultAgent(bot.default_agent);
 
     const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [accessDialogOpen, setAccessDialogOpen] = useState(false);
 
     // Off when this purpose isn't live: unmounted, or the bot itself is
     // disabled. An off card is quiet rather than struck through: no paper
@@ -95,7 +89,6 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
     const failed = checked && Boolean(access.error);
     // Live, checked, and nobody can drive it: the state the notice is for.
     const nobody = checked && !failed && controllerCount === 0;
-    const noModel = checked && !failed && controllerCount > 0 && !(bot.smartguide_provider && bot.smartguide_model);
     const ccProfileName = ccProfiles?.find((p) => p.id === ccProfileId)?.name;
     const BrandIcon = PLATFORM_BRAND_ICONS[bot.platform || ''];
 
@@ -109,10 +102,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 ? t('remoteAgent.card.statusError', {defaultValue: 'Couldn\'t check who can control'})
                 : nobody
                     ? t('remoteAgent.card.statusNobody', {defaultValue: 'Nobody can control yet'})
-                    : noModel
-                        ? t('remoteAgent.card.statusNoModel', {defaultValue: '@tb has no model yet'})
-                        : t('remoteAgent.card.statusControllers', {defaultValue: '{{count}} can control', count: controllerCount});
-    const statusColor = !checked ? 'text.secondary' : (failed || nobody || noModel) ? 'warning.main' : 'success.main';
+                    : t('remoteAgent.card.statusControllers', {defaultValue: '{{count}} can control', count: controllerCount});
+    const statusColor = !checked ? 'text.secondary' : (failed || nobody) ? 'warning.main' : 'success.main';
 
     // Readiness: while a live bot is unusable, the concrete next step sits in
     // the same row (see ux-principles #11).
@@ -131,7 +122,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
             bgcolor: isActive ? 'background.paper' : 'transparent',
             border: '1px solid',
             borderColor: 'divider',
-            borderRadius: 2,
+            borderRadius: radius.card,
             transition: 'background-color 0.18s ease-out',
         }}>
             {/* Header: platform + bot name, one status line, one switch */}
@@ -143,7 +134,7 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                     {BrandIcon && <BrandIcon size={24} grayscale={!isActive}/>}
                     <Box sx={{minWidth: 0}}>
                         <Typography noWrap variant="subtitle2" sx={{fontWeight: 600, color: isActive ? 'text.primary' : 'text.secondary'}}>
-                            {bot.name || bot.platform}
+                            <EntityLabel {...entities.bot(bot)} platformIcon={undefined} copy />
                         </Typography>
                         <Typography noWrap variant="caption" sx={{display: 'block', color: statusColor}}>
                             {status}
@@ -188,12 +179,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{px: 2, pb: 1}}>
                     <Alert
                         severity="warning"
-                        action={<Button color="inherit" size="small" onClick={() => setAccessDialogOpen(true)}>
-                            {t('remoteAgent.card.manageAccess', {defaultValue: 'Manage access'})}
-                        </Button>}
                     >
                         {noticeText}
-                        {pairing && access.pendingChats.length === 0 && <PairingCodePanel bot={bot} revealByDefault/>}
                     </Alert>
                 </Box>
             )}
@@ -203,10 +190,8 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, px: 2, pb: expanded ? 0 : 1.25, mt: -0.5}}>
                     {!expanded && (
                         <Typography variant="caption" noWrap sx={{minWidth: 0, color: 'text.secondary'}}>
-                            <Box component="span" sx={{fontFamily: fontMono}}>@tb</Box>{' '}
-                            {bot.smartguide_model || '—'}
+                            {t('remoteAgent.card.claudeCode', {defaultValue: 'Claude Code'})}
                             {'  ·  '}
-                            <Box component="span" sx={{fontFamily: fontMono}}>@cc</Box>{' '}
                             {ccProfileId
                                 ? (ccProfileName || ccProfileId)
                                 : t('remoteAgent.ccProfile.default', {defaultValue: 'Default'})}
@@ -224,18 +209,12 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
                 <Box sx={{px: 2, pb: 0.5}}>
                     <RemoteControlGraph
                         imbot={bot}
-                        providers={providers}
                         isBotEnabled={isActive}
                         readOnly={isToggling}
-                        onModelClick={onModelClick}
                         onBotClick={isRestarting ? undefined : onEdit}
                         ccProfiles={ccProfiles}
                         onCCProfileClick={onCCProfileClick}
-                        directChatCount={access.controllers.length}
-                        groupCount={access.controllingGroups.length}
-                        accessLoading={access.loading}
-                        accessError={access.error}
-                        onAccessClick={() => setAccessDialogOpen(true)}
+                        accessContent={<BotAccessDialog inline scope="remote_control" remoteAccess={access} open bot={bot} onClose={() => {}} />}
                     />
                 </Box>
             </Collapse>
@@ -243,18 +222,11 @@ const RemoteAgentBotCard: React.FC<RemoteAgentBotCardProps> = ({
             <ConfirmDialog
                 open={deleteModalOpen}
                 title={t('remoteControl.card.deleteTitle', { defaultValue: 'Delete Bot Configuration' })}
-                description={t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: bot.name || bot.platform })}
+                description={t('remoteControl.card.deleteConfirm', { defaultValue: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.', name: entities.botText(bot) })}
                 confirmLabel={t('remoteControl.card.delete', { defaultValue: 'Delete' })}
                 confirmColor="error"
                 onClose={() => setDeleteModalOpen(false)}
                 onConfirm={() => { setDeleteModalOpen(false); onDelete(); }}
-            />
-            <BotAccessDialog
-                scope="remote_control"
-                remoteAccess={access}
-                open={accessDialogOpen}
-                bot={bot}
-                onClose={() => setAccessDialogOpen(false)}
             />
         </Box>
     );

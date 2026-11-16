@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/sdkstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -35,6 +36,9 @@ type StageOpenAIAttempt struct {
 	// it out of a complete Chat answer.
 	DisableStreamUsage bool
 	StripUsage         bool
+	// Namespaces restores the namespace of a Responses client's calls to its
+	// `namespace` tools, which reach the Beta pipeline as flat functions.
+	Namespaces toolnamespace.Index
 }
 
 // ServeStageOpenAI is the HTTP adapter for OpenAI clients on a Beta
@@ -81,6 +85,7 @@ func (ph *ProtocolHandler) completeStageOpenAI(c *gin.Context, endpoint stage.En
 
 	if attempt.Client == protocol.TypeOpenAIResponses {
 		hc := protocol.NewHandleContext(c, attempt.ResponseModel)
+		hc.Namespaces = attempt.Namespaces
 		_, _ = nonstream.HandleAnthropicBetaToResponses(hc, message, attempt.ActualModel)
 		return
 	}
@@ -114,6 +119,7 @@ func (ph *ProtocolHandler) streamStageOpenAI(c *gin.Context, endpoint stage.Endp
 	}
 
 	hc := protocol.NewHandleContext(c, attempt.ResponseModel)
+	hc.Namespaces = attempt.Namespaces
 	// As for Anthropic clients (streamStageAnthropic): an SSE comment keeps
 	// the started stream alive while the pipeline runs a server tool.
 	keepAlive := sdkstream.OnHeartbeat(func() {

@@ -88,6 +88,7 @@ const DshConfigModal: React.FC<DshConfigModalProps> = ({
             const response = await api.applyDshConfig(prefs as Record<string, string>);
             if (response?.success) {
                 showNotification?.(t('dshConfig.applySuccess'), 'success');
+                onClose();
             } else {
                 showNotification?.(response?.message || t('dshConfig.applyFailed'), 'error');
             }

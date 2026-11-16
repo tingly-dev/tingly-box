@@ -106,11 +106,47 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithRequestModel(ProfileUpdateRequest{}),
 	)
 
+	// POST /scenario/:scenario/profiles/:id/duplicate - Copy a profile
+	router.POST("/scenario/:scenario/profiles/:id/duplicate", h.DuplicateProfile,
+		swagger.WithDescription("Copy a profile (rules, flags and Claude Code overrides) into a new profile"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ProfileDuplicateRequest{}),
+	)
+
+	router.GET("/scenario/:scenario/claude-code/slots", h.GetClaudeCodeSlots,
+		swagger.WithDescription("List the Claude Code model slots that have a rule of their own in unified mode (main routing or a profile)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
+	)
+
+	router.PUT("/scenario/:scenario/claude-code/slots/:slot", h.SetClaudeCodeSlot,
+		swagger.WithDescription("Give a Claude Code model slot a rule of its own in unified mode (enabled), or hand it back to the main rule"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ClaudeCodeSlotRequest{}),
+		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
+	)
+
+	router.POST("/scenario/:scenario/claude-code/use-profile", h.UseClaudeCodeProfile,
+		swagger.WithDescription("Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ClaudeCodeUseProfileRequest{}),
+		swagger.WithResponseModel(ClaudeCodeUseProfileResponse{}),
+	)
+
 	router.GET("/scenario/:scenario/models", h.GetClaudeCodeModels,
 		swagger.WithDescription("List the model tiers Claude Code can be asked for under the main routing or a profile, each with its current route"),
 		swagger.WithTags("scenarios"),
 		swagger.WithQuery("profile", "string", "Claude Code profile id; empty is the main claude_code routing"),
 		swagger.WithResponseModel(ClaudeCodeModelsResponse{}),
+	)
+
+	router.GET("/scenario/:scenario/route", h.GetClaudeCodeRoute,
+		swagger.WithDescription("Where a Claude Code session's next request is routed, and the quota it draws on (a session's status line)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithQuery("profile", "string", "Claude Code profile id; empty is the main claude_code routing"),
+		swagger.WithQuery("tier", "string", "Model tier alias the session asks for; empty is the default tier"),
+		swagger.WithQuery("model", "string", "Model the latest turn asked for, used when the tier cannot be read"),
+		swagger.WithResponseModel(ClaudeCodeRouteResponse{}),
 	)
 
 	router.GET("/scenario/:scenario/profiles/:id/claude-config", h.GetProfileClaudeConfig,

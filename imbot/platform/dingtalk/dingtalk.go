@@ -1,11 +1,9 @@
 package dingtalk
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -30,7 +28,13 @@ type Bot struct {
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
 	mu         sync.RWMutex
-	webhookMap map[string]string // conversationID -> webhook URL
+	webhookMap map[string]string       // conversationID -> webhook URL
+	convMap    map[string]conversation // conversationID -> OpenAPI addressing
+	msgs       *msgRefs                // msgId -> conversation, for reactions
+
+	// REST bases; overridable so tests can point at a local server.
+	oapiBase string
+	apiBase  string
 
 	// access token cache for REST API calls (e.g. reactions)
 	tokenMu     sync.Mutex
@@ -58,6 +62,10 @@ func NewDingTalkBot(config *core.Config) (*Bot, error) {
 	bot := &Bot{
 		BaseBot:    core.NewBaseBot(config),
 		webhookMap: make(map[string]string),
+		convMap:    make(map[string]conversation),
+		msgs:       newMsgRefs(),
+		oapiBase:   defaultOAPIBase,
+		apiBase:    defaultAPIBase,
 	}
 
 	return bot, nil
@@ -146,7 +154,9 @@ func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDat
 	if data.SessionWebhook != "" {
 		b.webhookMap[data.ConversationId] = data.SessionWebhook
 	}
+	b.convMap[data.ConversationId] = conversation{direct: data.ConversationType == "1", staffID: data.SenderStaffId}
 	b.mu.Unlock()
+	b.msgs.put(data.MsgId, msgRef{conversationID: data.ConversationId, robotCode: data.RobotCode})
 
 	// Use adapter to convert platform message to core message
 	coreMessage, err := b.adapter.AdaptChatBotMessage(ctx, data)
@@ -154,6 +164,8 @@ func (b *Bot) onChatBotMessage(ctx context.Context, data *chatbot.BotCallbackDat
 		b.Logger().Error("Failed to adapt message: %v", err)
 		return []byte(""), nil
 	}
+
+	b.resolveMediaURLs(ctx, data.RobotCode, coreMessage)
 
 	// Emit message to handlers
 	b.EmitMessage(*coreMessage)
@@ -172,14 +184,14 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 	// segments render as a quoted block (Dimmed).
 	core.ResolveTextFromSegments(opts, core.GetPlatformCapabilities(core.PlatformDingTalk).EffectiveThinkingRender())
 
-	// Handle text message
-	if opts.Text != "" {
-		return b.sendText(ctx, target, opts)
-	}
-
-	// Handle media
+	// Media first: its text is a caption, and sending only the text would drop
+	// the attachment silently.
 	if len(opts.Media) > 0 {
 		return b.sendMedia(ctx, target, opts)
+	}
+
+	if opts.Text != "" {
+		return b.sendText(ctx, target, opts)
 	}
 
 	return nil, core.NewBotError(core.ErrUnknown, "no content to send", false)
@@ -199,39 +211,6 @@ func (b *Bot) SendMedia(ctx context.Context, target string, media []core.MediaAt
 	})
 }
 
-// React adds an emoji reaction to a message via DingTalk REST API.
-// messageID must be the DingTalk msgId (from incoming message data.MsgId).
-func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
-	token, err := b.getAccessToken(ctx)
-	if err != nil {
-		return fmt.Errorf("dingtalk react: get token: %w", err)
-	}
-
-	url := "https://api.dingtalk.com/v1.0/im/messages/" + messageID + "/reactions"
-	body, _ := json.Marshal(map[string]interface{}{
-		"reactionType": map[string]string{"emojiCode": emoji},
-	})
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("dingtalk react: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-acs-dingtalk-access-token", token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("dingtalk react: http: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("dingtalk react: status %d: %s", resp.StatusCode, string(data))
-	}
-	return nil
-}
-
 // getAccessToken returns a cached or fresh DingTalk access token.
 func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
 	b.tokenMu.Lock()
@@ -244,7 +223,7 @@ func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
 	clientID := b.Config().Auth.ClientID
 	clientSecret := b.Config().Auth.ClientSecret
 
-	url := fmt.Sprintf("https://oapi.dingtalk.com/gettoken?appkey=%s&appsecret=%s", clientID, clientSecret)
+	url := fmt.Sprintf("%s/gettoken?appkey=%s&appsecret=%s", b.oapiBase, clientID, clientSecret)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -252,7 +231,7 @@ func (b *Bot) getAccessToken(ctx context.Context) (string, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("get token request: %w", err)
+		return "", fmt.Errorf("get token request: %w", scrubURLError(err))
 	}
 	defer resp.Body.Close()
 
@@ -324,34 +303,6 @@ func (b *Bot) sendText(ctx context.Context, conversationID string, opts *core.Se
 
 	b.UpdateLastActivity()
 	return lastResult, nil
-}
-
-// sendMedia sends media using SDK's ChatbotReplier
-func (b *Bot) sendMedia(ctx context.Context, conversationID string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	// Get webhook URL for this conversation
-	b.mu.RLock()
-	webhookURL, ok := b.webhookMap[conversationID]
-	b.mu.RUnlock()
-
-	if !ok || webhookURL == "" {
-		return nil, core.NewBotError(core.ErrPlatformError, "no webhook URL for conversation; must receive a message first", false)
-	}
-
-	if len(opts.Media) == 0 {
-		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
-	}
-
-	media := opts.Media[0]
-
-	// Note: Stream mode webhook doesn't support direct media upload
-	// Media needs to be uploaded first via REST API to get media ID
-	// then sent using the appropriate message type
-	switch media.Type {
-	case "image", "video", "audio", "document":
-		return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("media type %s requires upload via REST API first", media.Type), false)
-	default:
-		return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("unsupported media type: %s", media.Type), false)
-	}
 }
 
 // getChatType converts DingTalk conversation type to core.ChatType

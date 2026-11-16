@@ -16,7 +16,7 @@
  * slots into its group without renumbering the others.
  *
  *   1 Agent
- *     1-1-agents.png            – Agent selection overview
+ *     1-1-agents.png            – Agent list (sidebar edit mode: show / hide agents)
  *     1-2-claude-code.png       – Claude Code setup + routing rules
  *     1-3-model-select.png      – Model select dialog (routing graph → New Rule)
  *   2 Team
@@ -28,9 +28,11 @@
  *     4-1-team-usage.png        – Per-user team usage
  *     4-2-dashboard.png         – Usage dashboard (today)
  *   5 Remote
- *     5-1-remote.png            – Telegram remote control routes
+ *     5-1-remote.png            – Remote Control: bots and the agent each one drives
  *   6 Credential
  *     6-1-connect-ai.png        – Connect AI provider dialog
+ *   7 Projects
+ *     7-1-projects.png          – A project: coordinator chat + its threads
  *
  * Not every shot goes into output.gif — the frames are the explicit list in
  * docs/images/gif-frames.txt (read by create_gif.sh). Add a shot here first,
@@ -38,9 +40,11 @@
  *
  *   theme-preview/{light,dark,claude}-dashboard.png
  *
- * Experimental features (guardrails, mcp, bench, desk, prompt skills) are
+ * Experimental features (guardrails, mcp, bench, prompt skills) are
  * mocked always-on in mocks/handlers.ts; this script forces their flags off
- * so they neither get their own shot nor clutter the sidebar in the others.
+ * so they neither get their own shot nor clutter the sidebar in the others;
+ * a shot that needs one passes it in `flagsOn`. One-time coach marks are
+ * marked dismissed for the same reason.
  * The GitHub star banner is dismissed for the same reason.
  */
 // playwright lives in frontend/node_modules; ESM bare-specifier resolution starts
@@ -59,26 +63,30 @@ const BASE   = 'http://localhost:3000';
 const OUTDIR = path.resolve('../docs/images');
 const VP     = { width: 1440, height: 900 };
 
-async function makePage(browser, theme = 'light') {
+async function makePage(browser, theme = 'light', flagsOn = []) {
     const page = await browser.newPage();
     await page.setViewportSize(VP);
     page.on('pageerror', e => {
         if (!e.message.includes('Failed to get version')) console.error('[err]', e.message.slice(0, 120));
     });
-    await page.addInitScript((t) => {
+    await page.addInitScript(({ t, flagsOn }) => {
         localStorage.setItem('user_auth_token', 'mock-token-for-screenshots');
         localStorage.setItem('tingly-theme-mode', t);
         // Suppress first-run education overlays that would block product content
         localStorage.setItem('tb.routingGuideAutoShown', '1');
         sessionStorage.setItem('layout.githubStarBanner.dismissed', '1');
-        // Force experimental feature flags off (mock mode turns them all on).
+        // One-time coach marks (agent visibility eye, Power-ups moved to the user menu)
+        localStorage.setItem('layout.agentVisibilityTip.dismissed', '1');
+        localStorage.setItem('layout.powerUpsTip.dismissed', '1');
+        // Force experimental feature flags off (mock mode turns them all on),
+        // except the ones a shot asks for.
         const origFetch = window.fetch.bind(window);
         window.fetch = (input, init) => {
             const url = typeof input === 'string' ? input : input.url;
             const m = url.match(/\/api\/v1\/scenario\/_global\/flag\/(\w+)/);
             if (m && (!init || !init.method || init.method === 'GET') && (typeof input === 'string' || input.method === 'GET')) {
                 return Promise.resolve(new Response(JSON.stringify({
-                    success: true, data: { scenario: '_global', flag: m[1], value: false },
+                    success: true, data: { scenario: '_global', flag: m[1], value: flagsOn.includes(m[1]) },
                 }), { headers: { 'Content-Type': 'application/json' } }));
             }
             return origFetch(input, init);
@@ -87,13 +95,13 @@ async function makePage(browser, theme = 'light') {
         for (const key of ['claude_code', 'codex', 'vscode', 'openai', 'xcode']) {
             localStorage.setItem(`setup-card-collapsed-${key}`, 'true');
         }
-    }, theme);
+    }, { t: theme, flagsOn });
     return page;
 }
 
 async function shoot(browser, route, filename, opts = {}) {
-    const { theme = 'light', waitFor = 'nav', settle = 2500, interact } = opts;
-    const page = await makePage(browser, theme);
+    const { theme = 'light', waitFor = 'nav', settle = 2500, interact, flagsOn = [] } = opts;
+    const page = await makePage(browser, theme, flagsOn);
     await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle' });
     try { await page.waitForSelector(waitFor, { timeout: 8000 }); } catch { /* ok */ }
     await page.waitForTimeout(settle);
@@ -109,20 +117,30 @@ const browser = await chromium.launch({
 });
 
 // ── Agent ─────────────────────────────────────────────────────────────────
-await shoot(browser, '/agent', '1-1-agents.png', { settle: 2500 });
+// /agent has no overview page any more (it opens the last agent). The agent
+// list lives in the Agent sidebar: open its edit mode (the eye) so every
+// agent shows with its show/hide switch.
+await shoot(browser, '/agent/claude_desktop', '1-1-agents.png', {
+    settle: 2500,
+    interact: async (page) => {
+        try {
+            await page.getByRole('button', { name: 'Show or hide agents' }).first().click();
+            await page.mouse.move(VP.width - 10, VP.height - 10);
+            await page.waitForTimeout(800);
+        } catch (e) { console.warn('  ⚠ agent edit mode failed:', e.message.slice(0, 80)); }
+    },
+});
 await shoot(browser, '/agent/claude_code', '1-2-claude-code.png', { settle: 3000 });
 
-// Model select dialog: open the routing page, click "New Rule" to open the
+// Model select dialog: open the routing page, click "New Model" to open the
 // ModelSelectDialog, then click the Anthropic provider tab so the right-side
 // models panel loads. The dialog animates in; wait for its title first.
 await shoot(browser, '/agent/openai', '1-3-model-select.png', {
     settle: 3000,
     interact: async (page) => {
         try {
-            // Use JS click — getByRole/waitFor fails for this button despite it being visible
-            await page.evaluate(() => {
-                document.querySelector('button[aria-label="Create new routing rule"]')?.click();
-            });
+            // The toolbar button's accessible name is its tooltip, so match its text.
+            await page.locator('button', { hasText: /^New Model$/ }).click();
             const dialog = page.locator('[role="dialog"]').filter({ hasText: 'Select a model for your new rule' });
             await dialog.waitFor({ timeout: 8000 });
             await page.waitForTimeout(400);
@@ -163,7 +181,8 @@ await shoot(browser, '/dashboard/today', '4-2-dashboard.png', {
 });
 
 // ── Remote ────────────────────────────────────────────────────────────────
-await shoot(browser, '/remote-agent/telegram', '5-1-remote.png', { settle: 4000 });
+// Remote (the IM rail item) is behind the Projects switch, so turn it on here.
+await shoot(browser, '/remote-agent', '5-1-remote.png', { settle: 4000, flagsOn: ['projects'] });
 
 // ── Credential ────────────────────────────────────────────────────────────
 await shoot(browser, '/credentials', '6-1-connect-ai.png', {
@@ -178,6 +197,10 @@ await shoot(browser, '/credentials', '6-1-connect-ai.png', {
         } catch (e) { console.warn('  ⚠ connect-ai dialog failed:', e.message.slice(0, 80)); }
     },
 });
+
+// ── Projects ──────────────────────────────────────────────────────────────
+// Projects is a flagged power-up, so turn it on here.
+await shoot(browser, '/projects/p-latency', '7-1-projects.png', { settle: 3500, flagsOn: ['projects'] });
 
 // ── Theme previews ────────────────────────────────────────────────────────
 for (const theme of ['light', 'dark', 'claude']) {

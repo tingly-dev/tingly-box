@@ -55,7 +55,7 @@ jobs:
       focus: all
 
   # A called workflow's job permissions can only narrow its caller's, so the
-  # write scopes the pipelines need (release assets, npm dispatch) are granted here.
+  # write scopes the pipelines need (release assets) are granted here.
   # A tag push has no inputs: the tag is the ref name and both pipelines run.
   cli:
     name: Release CLI
@@ -64,7 +64,6 @@ jobs:
     uses: ./.github/workflows/release-cli.yml
     permissions:
       contents: write
-      actions: write
     with:
       release_tag: ${{ inputs.release_tag || github.ref_name }}
       orchestrated: true
@@ -76,7 +75,30 @@ jobs:
     uses: ./.github/workflows/release-gui.yml
     permissions:
       contents: write
-      actions: write
     with:
       release_tag: ${{ inputs.release_tag || github.ref_name }}
       orchestrated: true
+
+  # One npm.yml run publishes CLI and GUI together; suggest it for whichever
+  # pipelines succeeded. Nothing is dispatched or published here.
+  announce-npm:
+    name: Announce npm publish
+    needs: [cli, gui]
+    if: ${{ !cancelled() && (needs.cli.result == 'success' || needs.gui.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # For the local announce-npm action only.
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+
+      - name: Announce npm publish
+        uses: ./.github/actions/announce-npm
+        with:
+          tag: ${{ inputs.release_tag || github.ref_name }}
+          publish_cli: ${{ needs.cli.result == 'success' }}
+          publish_gui: ${{ needs.gui.result == 'success' }}
+          build_docker: ${{ needs.cli.result == 'success' }}

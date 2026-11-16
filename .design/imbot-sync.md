@@ -31,7 +31,7 @@ correctness.**
    carries per-bot running status (`Sync()` swallows individual start
    failures by design), so UX reports what actually happened: "started
    automatically" / "server notified but bot not running, check logs" /
-   "run `remote start …`".
+   "start the server".
 
 2. **The polling loop stays, but as a backstop** (`background.go`):
    one immediate sync at startup, then a 1-minute reconcile. It is no longer
@@ -52,6 +52,5 @@ correctness.**
   to an already-running bot (SmartGuide model, pairing) still require a
   restart (`POST /imbot-admin/restart/:uuid`); CLI paths that only change
   config intentionally do not poke reload.
-- The standalone-bot path (`tingly-box remote start`) running alongside a
-  server that also starts the same bot is a pre-existing hazard, unchanged
-  here.
+- The standalone-bot path (`tingly-box remote start`) is gone (the command is now `tingly-box bot`): bots run in
+  the server only (remote-into-projects.md).

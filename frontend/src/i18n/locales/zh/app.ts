@@ -1,5 +1,48 @@
 // App shell and shared copy: navigation, system settings, help, login, onboarding
 export default {
+  "logViewer": {
+    "views": "日志视图",
+    "tabs": {
+      "requests": "请求",
+      "usage": "用量",
+      "system": "系统"
+    },
+    "search": "搜索请求",
+    "errorsOnly": "只看错误",
+    "load": "加载",
+    "latest_other": "最近 {{count}} 条",
+    "refreshing": "刷新中…",
+    "count_other": "{{count}} 个请求",
+    "countFiltered": "{{shown}} / {{total}} 个请求",
+    "searchLogs": "搜索日志",
+    "allLevels": "全部",
+    "entries_other": "{{count}} 条",
+    "entriesFiltered": "{{shown}} / {{total}} 条",
+    "refreshLogs": "刷新日志",
+    "autoRefresh": "自动刷新",
+    "refreshNow": "立即刷新",
+    "refreshRequests": "刷新请求",
+    "columns": {
+      "time": "时间",
+      "agent": "Agent",
+      "model": "模型",
+      "provider": "提供商",
+      "status": "状态",
+      "latency": "耗时"
+    },
+    "loading": "加载中…",
+    "noMatch": "没有符合筛选条件的请求。",
+    "empty": "最近保留的记录里没有模型请求。",
+    "emptyAgent": "这个 Agent 还没有发过请求。收到第一个请求后会显示在这里。",
+    "loadFailed": "无法加载请求",
+    "detailGone": "这条请求的详情已不在保留的记录里。",
+    "detailFailed": "无法加载请求详情",
+    "error": "错误",
+    "retryHint": "点刷新重试。",
+    "loadingJourney": "正在加载请求经过…",
+    "usageHint": "其他日期、图表和性能在仪表盘里。",
+    "openDashboard": "在仪表盘中查看"
+  },
   "common": {
     "back": "返回",
     "add": "添加",
@@ -7,6 +50,7 @@ export default {
     "save": "保存",
     "delete": "删除",
     "edit": "编辑",
+    "duplicate": "复制",
     "confirm": "确认",
     "loading": "加载中...",
     "enabled": "已启用",
@@ -16,6 +60,8 @@ export default {
     "close": "关闭",
     "done": "完成",
     "applying": "应用中...",
+    "advanced": "高级",
+    "advancedCustomized": "已自定义 {{count}} 项",
     "copy": "复制",
     "copied": "已复制",
     "copyModelName": "复制模型名",
@@ -36,11 +82,40 @@ export default {
     "clear": "清除选择",
     "dismiss": "忽略",
     "moveDown": "下移",
+    "pinToTop": "置顶",
     "moveUp": "上移",
     "saved": "已保存"
   },
+  "mobile": {
+    "tabBar": "主导航",
+    "shell": {
+      "title": "界面",
+      "desktop": "桌面版",
+      "mobile": "手机版",
+      "auto": "自动",
+      "hint": "手机版在本设备上使用手机布局，桌面版使用完整界面；按浏览器记住。"
+    },
+    "subPages": {
+      "switch": "切换{{title}}的页面"
+    },
+    "more": {
+      "title": "更多",
+      "tab": "更多",
+      "manage": "管理",
+      "system": "系统",
+      "preferences": "主题、语言与反馈",
+      "interface": "界面",
+      "useDesktop": "使用桌面版界面",
+      "useDesktopHint": "切回完整界面"
+    }
+  },
   "layout": {
-    "desk": "工作台",
+    "workspace": "工作区",
+    "workspaceRail": "工作区",
+    "workspaceTip": { "title": "认识工作区", "text": "在一处管理项目、工作目录和 IM 聊天。" },
+    "workspaceGate": { "title": "开启工作区", "text": "开启工作区扩展功能后，即可使用项目、工作目录和 IM 聊天。", "enable": "开启工作区", "error": "无法开启工作区，请重试。" },
+    "projects": "项目",
+    "projectsWaiting": "有线程或会话在等你处理",
     "appTitle": "Tingly Box",
     "slogan": "智能，尽在掌握。",
     "version": "版本<br/>{{version}}",
@@ -56,6 +131,7 @@ export default {
       "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
       "usePi": "Pi",
+      "useWorkBuddy": "WorkBuddy",
       "useDsh": "DeepSeek",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
@@ -76,11 +152,6 @@ export default {
       "newProfile": "新建方案",
       "newTeam": "新建 Team",
       "profileName": "方案名称",
-      "mode": "模式",
-      "modeUnified": "统一：所有模型使用相同配置",
-      "modeSeparate": "分离：每个模型单独配置",
-      "separate": "分离",
-      "unified": "统一",
       "createProfileTooltip": "创建一个新的 Claude Code 配置方案，自定义设置",
       "createTeamTooltip": "创建一个独立鉴权的 Team 工作区",
       "sloganTooltip": "致，所有独立开发者、开发团队和智能应用。",
@@ -88,6 +159,7 @@ export default {
       "doneEditing": "完成",
       "expand": "展开侧边栏"
     },
+    "featureSwitch": { "disable": "关闭 {{name}}", "disabledTitle": "{{name}} 已关闭", "disabledText": "你可以在偏好设置 → 扩展中重新开启。", "teamTitle": "Team 已开启", "teamText": "Team 默认开启，可以点击此按钮关闭。" },
     "coachMarks": {
       "gotIt": "知道了",
       "agentVisibility": {
@@ -96,7 +168,7 @@ export default {
       },
       "powerUps": {
         "title": "扩展功能的开关移到了这里",
-        "text": "Team、Image、Remote、Bench 等可选项，现在在这个菜单的「扩展」里开启或关闭。"
+        "text": "Team、Image、项目、Bench 等可选项，现在在这个菜单的「扩展」里开启或关闭。"
       }
     },
     "activityBar": {
@@ -110,7 +182,6 @@ export default {
       "light": "浅色",
       "dark": "深色",
       "system": "跟随系统",
-      "sunlit": "日光",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "点击",
@@ -141,11 +212,13 @@ export default {
     "today": "今天",
     "yesterday": "昨天",
     "days": "天",
-    "remote": "远程",
+    "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
+    "imBots": "IM 机器人",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {
@@ -175,7 +248,6 @@ export default {
     "experimental": "实验功能",
     "develop": "开发者",
     "logs": "日志",
-    "userRequest": "用户请求",
     "skills": "技能",
     "addProfile": "新建方案",
     "addTeam": "添加 Team",
@@ -185,6 +257,7 @@ export default {
     "help": "帮助与技巧",
     "helpShort": "帮助",
     "powerUps": "扩展",
+    "powerUpsRail": "扩展",
     "tools": "工具",
     "servertool": "服务端工具",
     "botsRunning": "{{total}} 个 bot 中 {{active}} 个在运行"
@@ -283,17 +356,15 @@ export default {
       "saveFailed": "语言设置更新失败"
     },
     "experimentalFeatures": {
-      "desk": "工作台",
-      "enableDesk": "在浏览器中运行本机的 Claude Code，并选择其工作文件夹。",
-      "deskEnabledInfo": "任何能登录此 tingly-box 的用户都可以在本机启动 Claude Code 会话，并批准其工具调用。",
+      "projects": "项目",
+      "enableProjects": "在 Web 和 IM 聊天里使用 Claude Code：在你选择的目录里直接运行，或把工作交给项目，由协调者为每个任务开一个线程，各自在独立的 git worktree 里运行。",
+      "projectsEnabledInfo": "现在，任何能登录这个 tingly-box、或能通过它的 bot 使用远程控制的人，都可以在这台机器上、在其选择的目录和仓库里运行 Claude Code，并批准它的工具调用。",
       "title": "实验性功能",
       "description": "这些实验性功能适用于所有场景。各个场景可以覆盖这些设置。",
       "skills": "Skills",
-      "userPrompts": "用户提示词",
       "guardrails": "Guardrails",
       "mcp": "MCP",
       "bench": "Bench",
-      "enableUserPrompts": "管理用户请求可复用的指令",
       "enableIdeSkills": "管理来自 IDE 的代码片段和技能",
       "enableGuardrails": "阻止有风险的工具调用并过滤敏感输出",
       "enableMCP": "MCP（Model Context Protocol）工具，如网页搜索和网页获取",
@@ -333,6 +404,10 @@ export default {
   "help": {
     "title": "帮助与技巧",
     "description": "一些容易被忽略但很有用的小功能。",
+    "feedback": {
+      "description": "在 GitHub 上报告问题或分享建议。",
+      "action": "打开 GitHub Issues"
+    },
     "shortcut": {
       "title": "桌面快捷方式",
       "description": "一键重启 Tingly Box 并打开网页界面。仅创建，不会自动更新或自动重启。",

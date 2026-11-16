@@ -66,7 +66,10 @@ type CodexPrefs struct {
     ModelReasoningEffort            string `json:"model_reasoning_effort,omitempty"`
     ModelReasoningSummary           string `json:"model_reasoning_summary,omitempty"`
     ModelVerbosity                  string `json:"model_verbosity,omitempty"`
-    ModelSupportsReasoningSummaries string `json:"model_supports_reasoning_summaries,omitempty"`
+    // Catalog-only (not config.toml keys; see §"Schema alignment" below):
+    SupportsReasoningSummaries      string `json:"supports_reasoning_summaries,omitempty"`
+    EffectiveContextWindowPercent   string `json:"effective_context_window_percent,omitempty"`
+    AutoCompactPercent              string `json:"auto_compact_percent,omitempty"`
 }
 ```
 
@@ -85,7 +88,8 @@ self-contained.
 
 ## 4. Conservative defaults (the third-party decision)
 
-The original code hardcoded `model_supports_reasoning_summaries = true` and
+The original code hardcoded `model_supports_reasoning_summaries = true` (a key
+Codex's schema has since dropped; see "Schema alignment") and
 `model_reasoning_summary = "auto"`. That is correct for OpenAI o-series
 models, which natively return reasoning summaries via the Responses API's
 `reasoning.summary` field. It is **wrong by default for third-party models**
@@ -202,7 +206,7 @@ what changed:
     "model_reasoning_effort": "high",
     "model_reasoning_summary": "",
     "model_verbosity": "",
-    "model_supports_reasoning_summaries": ""
+    "supports_reasoning_summaries": ""
   },
   "writeCatalog": true          // null → true
 }
@@ -245,3 +249,87 @@ confirms — Quick form opens at safe defaults (all `(default)`, force-summary
 off, catalog on); changing reasoning effort reflects in the Manual TOML at
 both top level and in every `[profiles.*]`; toggling the catalog switch
 adds/removes Step 3 and the `model_catalog_json` line.
+
+---
+
+## Context-window headroom defaults (2026-10-19)
+
+The managed model catalog (`tingly-model-catalog.json`) sets
+`effective_context_window_percent = 82` (was 92; Codex's own default is 95)
+and `auto_compact_token_limit = 75%` of the window (was 85%). Tingly-routed
+third-party models spend more of the window on system prompt, tool overhead and
+output than Codex's first-party models assume, so we reserve more headroom and
+compact earlier. Compaction is always clamped to the effective percent so it
+fires before the usable window is exhausted.
+
+Both numbers are user-tunable in Auto Config (Quick tab, "Usable window" and
+"Auto-compact at"). They ride in `CodexPrefs` as `effective_context_window_percent`
+and `auto_compact_percent` (decimal strings, range 50–100, `""` = default) but are
+**catalog-only**: `toConfig()` never writes them to `config.toml`. On reopen,
+`ReadCodexConfig` restores non-default values from the applied catalog.
+
+`model_reasoning_effort` accepts `max` and `ultra` in addition to the older
+tiers — current Codex models advertise them in `supported_reasoning_levels`.
+
+## Per-model auto-compact (rule flag `codex_compact_percent`)
+
+The two headroom numbers above are shared by every catalog entry. Models differ
+(200K vs a 1M rule, different upstreams), so a Codex rule can override the
+auto-compact percent for its own model: `RuleFlags.CodexCompactPercent`
+(50–100, `0` = follow the shared value). It is **config-only**: it is read when
+the catalog is rendered (`BuildCompactPercentsFromRules` → `CodexPrefs.ModelAutoCompactPercent`,
+`json:"-"` so a request can never set it) and never enters the request
+pipeline, so it is deliberately not in `RuleFlagRegistry` (see `rule-flags.md`).
+
+- **Ceiling.** A catalog entry's compact percent is `min(percent, usable-window
+  percent)`. Codex is reported to ignore an auto-compact limit above 90% of the
+  window (third-party write-ups, unconfirmed), but that is deliberately not
+  enforced: the practical limit in use is lower than that anyway (see below), so
+  the warnings carry the guidance and nothing is clamped at 90.
+- **Editor.** A `Compact: 75% ▾` chip on the Codex rule header, next to `1M` and
+  `Endpoint`, opens a popover with a slider (`CodexCompactChip`). Unset reads
+  `Compact: Auto` and the popover shows the Auto Config value it follows; moving
+  the slider sets the override, "use Auto Config value" clears it.
+- **Slider layout.** The axis is labelled only at its ends (50% / 100%); zone
+  boundaries are never placed as labels on the axis, because a boundary close to
+  an end (96.4% on 1M) collides with the end label. The zones are painted on the
+  slider's own rail so they line up with the thumb at any width: hatched from the
+  usable-window percent up (values there still work, they are cut down), amber for
+  the "too few tokens left" stretch below it (only when the usable window has been
+  raised past it). A legend under the axis names each zone with its numbers.
+- **Warning is about tokens left, not a fixed percent.** What compaction needs
+  (summary request, system prompt, tool output, the reply) is roughly constant,
+  so the popover warns when fewer than 36,000 tokens would remain, using the
+  window the rule really has (1M with the `1M` flag, else 200K). 36,000 is the
+  empirical limit: 82% of a 200K window. Larger windows reach it at a higher
+  percent (96.4% on 1M). It is where warnings start, not a cap. The usable-window
+  cut-down is explained instead of silently applied.
+  `codexCompact.ts` mirrors the Go constants for the live preview; the server's
+  clamp is what is written.
+- **Read-back.** With overrides present the catalog no longer has one compact
+  value, so `ReadCodexConfig` restores the most common one as the shared value.
+- **Auto Config warns about the shared value too.** Under "Auto-compact at" the
+  Quick tab shows the same judgement for the shared percent against the default
+  200K window (a rule with the `1M` flag is judged on its own chip): an info line
+  when the usable window cuts it down, a warning when under 36,000 tokens would
+  remain. Typed values only; nothing is rewritten.
+- **Not covered.** The agent-apply bridge (`ai/agent`, CLI/IM apply) renders its
+  own catalog from default prefs and, like the `1M` window, does not carry rule
+  overrides; the UI "Auto Config" path does. Whether the 36,000 threshold is
+  right still wants a real long-session check against Codex.
+
+## Schema alignment: `supports_reasoning_summaries` (2026-10-19)
+
+The current upstream `config.schema.json` (root and `ConfigProfile` are
+`additionalProperties: false`) no longer has `model_supports_reasoning_summaries`.
+The per-model equivalent is the catalog entry's `supports_reasoning_summaries`,
+so the "Force reasoning summaries" toggle is now the catalog-only pref
+`supports_reasoning_summaries`: it sets that field on every entry of
+`tingly-model-catalog.json` and is never written to `config.toml`.
+
+- It therefore only takes effect when "Write model catalog" is on.
+- Migration: `CodexPrefsFromConfig` still reads the legacy
+  `model_supports_reasoning_summaries` key so an existing opt-in is not lost, and
+  `mergeCodexConfig` deletes it from the top level on the next apply (managed
+  profiles are rebuilt, so they never carry it). `ReadCodexConfig` also restores
+  the pref from the applied catalog.

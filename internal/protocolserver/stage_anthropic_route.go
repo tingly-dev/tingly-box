@@ -100,7 +100,7 @@ func (ph *ProtocolHandler) serveAnthropicPipeline(c *gin.Context, route anthropi
 // guardrails before the transform chain, so the gate does not screen it again.
 func (ph *ProtocolHandler) toolRoundConfig(c *gin.Context, provider *typ.Provider, actualModel string, requestScreened bool) toolround.Config {
 	var config toolround.Config
-	if ph.mcpEnabled() && ph.deps.MCPRuntime != nil {
+	if ph.serverToolsEnabled() && ph.deps.MCPRuntime != nil {
 		executor := mcp.NewServerToolExecutor(newServerOpsAdapter(ph, recording.FromGin(c)))
 		config.Owner = mcp.NewAnthropicBetaOwner(ph.deps.MCPRuntime.VirtualRegistry(), executor, provider.UUID)
 	}

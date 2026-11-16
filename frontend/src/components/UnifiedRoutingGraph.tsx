@@ -1,30 +1,32 @@
-import {Add as AddIcon,} from '@/components/icons';
-import {Box, Button, Card, CardContent, Collapse, Stack,} from '@mui/material';
+import {Box, Card, CardContent, Collapse, Stack,} from '@mui/material';
 import {alpha, styled} from '@mui/material/styles';
 import React, {useEffect, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
+import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import {
     getRouteGraphActiveColor,
     PROVIDER_NODE_STYLES,
+    ROUTE_GRAPH_QUIET_ROW_CLASS,
+    routeGraphQuietSx,
+    SMART_NODE_STYLES,
     SMALL_NODE_STYLES,
-    SMART_NODE_STYLES
 } from '@/components/nodes/styles';
 import {
     ActionAddNode,
     ArrowNode,
-    EntryNode,
     NodeContainer,
     ServiceEntryNode,
     ServiceNode,
     SmartOpNode,
     TierNode,
 } from '@/components/nodes';
+import NodeTooltip from '@/components/nodes/NodeTooltip';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
-import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
 import {useResponsesToggle} from '@/hooks/useResponsesToggle';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -129,6 +131,7 @@ const StyledCard = styled(Card, {
     boxShadow: 'none',
     margin: "3px",
     position: 'relative',
+    ...routeGraphQuietSx,
     ...(active ? {} : {
         '&::before': {
             content: '""',
@@ -137,7 +140,7 @@ const StyledCard = styled(Card, {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
+            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, ${overlay.hatch} 10px, ${overlay.hatch} 20px)`,
             pointerEvents: 'none',
             borderRadius: theme.shape.borderRadius,
         },
@@ -221,8 +224,40 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Track which tier is being hovered
     const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
     const [showTierGuide, setShowTierGuide] = React.useState(false);
-    const [showEntryGuide, setShowEntryGuide] = React.useState(false);
-    const [entryGuideMode, setEntryGuideMode] = React.useState<'direct' | 'smart'>('direct');
+
+    const [entryGuideMode, setEntryGuideMode] = React.useState<'direct' | 'smart' | null>(null);
+
+    // Hover teaching for the Default and Add condition nodes (the old
+    // Direct/Smart entry node's tooltip, split per concept), each with a link
+    // to the matching guide.
+    const linkedTooltip = (title: string, body: string, linkLabel: string, onOpen: () => void) => (
+        <Box sx={{whiteSpace: 'pre-line', maxWidth: 280}}>
+            <strong>{title}</strong>
+            {`\n${body}`}
+            <Box
+                component="span"
+                onClick={(e) => { e.stopPropagation(); onOpen(); }}
+                sx={{display: 'block', mt: 1, color: 'primary.main', cursor: 'pointer', fontWeight: 500, '&:hover': {textDecoration: 'underline'}}}
+            >
+                {linkLabel}
+            </Box>
+        </Box>
+    );
+    const guideTooltip = (title: string, body: string, linkLabel: string, mode: 'direct' | 'smart') =>
+        linkedTooltip(title, body, linkLabel, () => setEntryGuideMode(mode));
+    const defaultTooltip = guideTooltip(
+        t('rule.routing.directTooltipTitle'), t('rule.routing.directTooltipBody'),
+        t('rule.routing.viewDirectGuide'), 'direct');
+    const conditionTooltip = guideTooltip(
+        t('rule.routing.smartTooltipTitle'), t('rule.routing.smartTooltipBody'),
+        t('rule.routing.viewSmartGuide'), 'smart');
+
+    // A new, still empty tier the user just asked for. It lives here, not in
+    // the record: tiers are compacted to be contiguous on every save, which
+    // would drop an empty one before a model lands in it. Cleared whenever the
+    // service list changes (the model was added, or something else happened).
+    const [pendingTier, setPendingTier] = React.useState(false);
+    useEffect(() => { setPendingTier(false); }, [record.providers.length]);
 
     const handleShowGuide = () => {
         setShowTierGuide(true);
@@ -232,29 +267,25 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         setShowTierGuide(false);
     };
 
-    const handleShowDirectGuide = () => {
-        setEntryGuideMode('direct');
-        setShowEntryGuide(true);
-    };
+    // The add-fallback-tier node carries the tier node's teaching too: the
+    // same explanation, with the link to the tier guide.
+    const tierTooltip = linkedTooltip(
+        t('rule.nodes.fallbackTier'), t('rule.tooltips.fallbackTier'),
+        t('rule.tier.nodeTooltipLearnMore'), handleShowGuide);
 
-    const handleShowSmartGuide = () => {
-        setEntryGuideMode('smart');
-        setShowEntryGuide(true);
-    };
-
-    const handleEntryGuideClose = () => {
-        setShowEntryGuide(false);
-    };
-
-    // Determine effective mode
+    // There is no Direct/Smart switch: the left node is always Default, and a
+    // rule shows its conditions above it only while smartEnabled is on. Turning
+    // them off (the close node) keeps them saved; adding from Default turns them
+    // back on, so the pair acts as the old switch without a backend change.
     const smartEnabled = record.smartEnabled || false;
-    const effectiveMode: 'smart' | 'direct' = mode === 'auto'
-        ? (smartEnabled ? 'smart' : 'direct')
-        : mode;
-
     const smartRouting = record.smartRouting || [];
     const hasSmartRules = smartRouting.length > 0;
-    const showSmartRouting = effectiveMode === 'smart' || (mode === 'auto' && smartEnabled && hasSmartRules);
+    const showSmartRouting = mode !== 'direct' && hasSmartRules && smartEnabled;
+    const handleAddCondition = () => {
+        // Saved conditions that are switched off come back instead of a new empty one.
+        if (hasSmartRules && !smartEnabled) onSwitchRoutingMode?.();
+        else onAddSmartRule?.();
+    };
 
     const getApiStyle = React.useCallback((providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
@@ -312,7 +343,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // of the bottom tier — moving it further would just be renumbered back.
     const renderTierLayout = React.useCallback(() => {
         // Always show at least T0, even when no providers exist
-        const groups = tierGroups.length > 0 ? tierGroups : [{tier: 0, providers: [] as typeof sortedDefaultProviders}];
+        const baseGroups = tierGroups.length > 0 ? tierGroups : [{tier: 0, providers: [] as typeof sortedDefaultProviders}];
+        const lastGroup = baseGroups[baseGroups.length - 1];
+        // Only a filled bottom tier can have a new one below it.
+        const canAddTier = !guideMode && lastGroup.providers.length > 0;
+        const groups = pendingTier && canAddTier
+            ? [...baseGroups, {tier: lastGroup.tier + 1, providers: [] as typeof sortedDefaultProviders}]
+            : baseGroups;
 
         // In guide mode, always show action buttons on all services
         const shouldShowActions = guideMode ? true : undefined;
@@ -357,10 +394,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             active={active && !saving}
                             warning={record.providers.length === 0 && idx === 0}
                             onAdd={() => onAddService?.(group.tier)}
+                            // A model next to others in its tier shares its traffic;
+                            // an empty tier (a new one, or T0 of a new rule) just needs one.
+                            caption={group.providers.length > 0 ? t('rule.nodes.loadBalance') : undefined}
+                            quiet={group.providers.length > 0}
                             tooltip={
                                 record.providers.length === 0 && idx === 0
                                     ? t('rule.tooltips.addServiceFirst')
-                                    : t('rule.tooltips.addServiceSecond')
+                                    : group.providers.length > 0
+                                        ? t('rule.tooltips.loadBalance')
+                                        : t('rule.tooltips.addServiceToTier')
                             }
                         />
                     </Box>
@@ -368,7 +411,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 })}
             </Box>
         );
-    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
+    }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -419,14 +462,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         <ActionAddNode
                                             active={active}
                                             onAdd={() => handleAddServiceToSmartRule(index)}
-                                            tooltip="Add service to this smart rule"
+                                            caption={t('rule.nodes.loadBalance')}
+                                            tooltip={t('rule.tooltips.loadBalance')}
                                         />
                                     </Box>
                                 ) : (
                                     <ActionAddNode
                                         active={active}
                                         onAdd={() => handleAddServiceToSmartRule(index)}
-                                        tooltip="Add service to this smart rule"
+                                        quiet={false}
+                                        tooltip={t('rule.tooltips.addServiceToCondition')}
                                     />
                                 )}
                             </GraphRow>
@@ -434,54 +479,95 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     ))
                 ) : null}
 
-                {/* Add Smart Rule Button */}
-                <Box sx={{display: 'flex', justifyContent: 'flex-start', py: 2}}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<AddIcon/>}
-                        onClick={onAddSmartRule}
-                        disabled={!active || saving}
-                        sx={(theme) => ({
-                            width: SMART_NODE_STYLES.width,
-                            borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.72 : 0.82),
-                            color: getRouteGraphActiveColor(theme),
-                            backgroundColor: 'transparent',
-                            '&:hover': {
-                                borderColor: getRouteGraphActiveColor(theme),
-                                backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.12 : 0.06),
-                                boxShadow: `0 0 0 3px ${alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.14 : 0.10)}`,
-                            },
-                            '&.Mui-disabled': {
-                                borderColor: theme.palette.divider,
-                                color: theme.palette.text.disabled,
-                            },
-                        })}
-                    >
-                        Add Smart Rule
-                    </Button>
+                {/* Add condition sits in the condition column; the turn-off node lines up with the service column.
+                    The whole row is optional controls: it folds away at rest (the nodes themselves stay
+                    full-size — the row carries the quiet behavior). */}
+                <Box className={ROUTE_GRAPH_QUIET_ROW_CLASS}>
+                    <GraphRow>
+                        <NodeContainer>
+                            <ActionAddNode
+                                label={t('rule.ruleConditions.addCondition')}
+                                active={active && !saving}
+                                onAdd={() => onAddSmartRule?.()}
+                                tooltip={conditionTooltip}
+                                quiet={false}
+                            />
+                        </NodeContainer>
+                        <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
+                        <ActionAddNode
+                            label={t('rule.ruleConditions.closeConditions')}
+                            icon="close"
+                            width={PROVIDER_NODE_STYLES.width}
+                            active={active && !saving}
+                            onAdd={() => onSwitchRoutingMode?.()}
+                            tooltip={t('rule.ruleConditions.closeConditionsTooltip')}
+                            quiet={false}
+                        />
+                    </GraphRow>
                 </Box>
             </>
         );
     };
 
-    // Render default providers section
-    const renderDefaultProviders = () => {
+    // Render default providers section: Request (no conditions) or Others
+    // (what no condition matched), an arrow, then the tiers.
+    const renderDefaultProviders = () => (
+        <GraphRow sx={{alignItems: 'flex-start'}}>
+            <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
+                <ServiceEntryNode
+                    providersCount={record.providers.length}
+                    active={active && !saving}
+                    tooltip={defaultTooltip}
+                    others={showSmartRouting}
+                />
+            </NodeContainer>
+
+            <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
+                <ArrowNode direction="forward"/>
+            </Box>
+
+            {renderTierLayout()}
+        </GraphRow>
+    );
+
+    // The rule's last row, like the conditions' add / turn-off row: add a
+    // condition under the entry, a fallback tier under the tiers. A tier
+    // below is only for when every tier above is down, so it is named for
+    // that, apart from adding a model to a tier.
+    const lastTier = tierGroups.length > 0 ? tierGroups[tierGroups.length - 1] : undefined;
+    const canAddFallbackTier = !guideMode && !pendingTier && !!lastTier && lastTier.providers.length > 0;
+    const renderAddRow = () => {
+        const addCondition = !showSmartRouting;
+        if (!addCondition && !canAddFallbackTier) return null;
         return (
-            <GraphRow sx={{alignItems: 'flex-start'}}>
-                {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
-                    <ServiceEntryNode
-                        providersCount={record.providers.length}
-                        active={active}
-                    />
-                </NodeContainer>
-
-                <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
-                    <ArrowNode direction="forward"/>
-                </Box>
-
-                {renderTierLayout()}
-            </GraphRow>
+            // Optional controls only: the row folds away at rest, so no blank
+            // strip is reserved under the tiers (nodes stay full-size).
+            <Box className={ROUTE_GRAPH_QUIET_ROW_CLASS}>
+                <GraphRow>
+                    <NodeContainer sx={{width: SMART_NODE_STYLES.width}}>
+                        {addCondition && (
+                            <ActionAddNode
+                                label={t('rule.ruleConditions.addCondition')}
+                                active={active && !saving}
+                                onAdd={handleAddCondition}
+                                tooltip={conditionTooltip}
+                                quiet={false}
+                            />
+                        )}
+                    </NodeContainer>
+                    <Box sx={{visibility: 'hidden'}}><ArrowNode direction="forward"/></Box>
+                    {canAddFallbackTier && (
+                        <ActionAddNode
+                            label={t('rule.nodes.fallbackTier')}
+                            width={PROVIDER_NODE_STYLES.width}
+                            active={active && !saving}
+                            onAdd={() => setPendingTier(true)}
+                            tooltip={tierTooltip}
+                            quiet={false}
+                        />
+                    )}
+                </GraphRow>
+            </Box>
         );
     };
 
@@ -511,6 +597,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 endpointSelection={endpointSelection}
                 responsesProbing={responsesProbing}
                 onEndpointSelect={handleEndpointSelect}
+                onCompactChange={record.scenario === 'codex' ? (percent) => {
+                    onUpdateRecord?.('flags', { ...record.flags, codexCompactPercent: percent || undefined });
+                } : undefined}
+                compactPercent={record.flags?.codexCompactPercent || 0}
                 endpointApplicable={endpointApplicable}
                 pluginsCount={pluginsCount}
                 onPluginsClick={onPluginsClick}
@@ -522,11 +612,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 onClose={handleGuideClose}
             />
 
-            {/* Entry Guide Dialog */}
             <EntryGuideDialog
-                open={showEntryGuide}
-                onClose={handleEntryGuideClose}
-                mode={entryGuideMode}
+                open={entryGuideMode !== null}
+                onClose={() => setEntryGuideMode(null)}
+                mode={entryGuideMode ?? 'direct'}
             />
 
             {/* Graph Content */}
@@ -537,45 +626,11 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         <Box sx={{display: 'flex', alignItems: 'stretch', minWidth: 0}}>
                             <Box ref={scrollContainerRef} sx={{flexGrow: 1, minWidth: 0, overflowX: 'auto'}}>
                                 <GraphContainer>
-                                    <GraphRow sx={{alignItems: 'flex-start'}}>
-                                        {/* EntryNode - Direct/Smart mode selector */}
-                                        <Box sx={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            pr: 1,
-                                        }}>
-                                            <EntryNode
-                                                active={active}
-                                                smartEnabled={smartEnabled}
-                                                onSwitch={onSwitchRoutingMode}
-                                                switchDisabled={saving}
-                                                onShowDirectGuide={handleShowDirectGuide}
-                                                onShowSmartGuide={handleShowSmartGuide}
-                                            />
-                                        </Box>
-
-                                        {/* Arrow - height matches EntryNode so it stays centered under flex-start */}
-                                        <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: 72}}>
-                                            <ArrowNode direction="forward"/>
-                                        </Box>
-
-                                        {/* Smart Routing Section (conditional) */}
-                                        {showSmartRouting ? (
-                                            <Box sx={{
-                                                flex: 1,
-                                                display: 'flex',
-                                                alignItems: "flex-start",
-                                                flexDirection: 'column',
-                                                gap: 1.5
-                                            }}>
-                                                {renderSmartRules()}
-                                                {renderDefaultProviders()}
-                                            </Box>
-                                        ) : (
-                                            renderTierLayout()
-                                        )}
-                                    </GraphRow>
+                                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5}}>
+                                        {renderSmartRules()}
+                                        {renderDefaultProviders()}
+                                        {renderAddRow()}
+                                    </Box>
                                 </GraphContainer>
                             </Box>
 

@@ -12,6 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/toolround"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage/upstream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -59,6 +60,12 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 	}
 
 	stripUsage := shouldStripChatUsage(source)
+	// A Responses client's namespaced tool calls come back from the flat
+	// pipeline and are restored from the request's tools.
+	var namespaces toolnamespace.Index
+	if client, ok := source.Request.(*responses.ResponseNewParams); ok {
+		namespaces = toolnamespace.IndexOf(client.Tools)
+	}
 	ph.ServeStageOpenAI(c, endpoint, StageOpenAIAttempt{
 		Client:             source.SourceAPI,
 		Request:            req,
@@ -68,6 +75,7 @@ func (ph *ProtocolHandler) serveOpenAIOnAnthropic(c *gin.Context, plan *attemptP
 		Streaming:          isStreaming,
 		DisableStreamUsage: stripUsage,
 		StripUsage:         stripUsage,
+		Namespaces:         namespaces,
 	})
 }
 

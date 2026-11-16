@@ -6,11 +6,16 @@ import (
 	"strings"
 )
 
-const DefaultClaudeCodeDefaultMode = "acceptEdits"
+const DefaultClaudeCodeDefaultMode = "auto"
 
 // DefaultClaudeCodeShowThinkingSummaries mirrors Claude Code's own built-in
 // default for the top-level showThinkingSummaries setting.
 const DefaultClaudeCodeShowThinkingSummaries = true
+
+// DefaultClaudeCodeCoAuthoredBy is Tingly's default for crediting Claude in
+// commits and PRs. Unlike Claude Code's own default (on), tb leaves the
+// Co-Authored-By trailer out unless the user turns it on.
+const DefaultClaudeCodeCoAuthoredBy = false
 
 var validClaudeCodeDefaultModes = map[string]struct{}{
 	"acceptEdits":       {},
@@ -39,6 +44,15 @@ func NormalizeClaudeCodeDefaultMode(mode string) (string, bool) {
 func NormalizeClaudeCodeShowThinkingSummaries(v *bool) bool {
 	if v == nil {
 		return DefaultClaudeCodeShowThinkingSummaries
+	}
+	return *v
+}
+
+// NormalizeClaudeCodeCoAuthoredBy applies the Tingly default (off) when the
+// settings file has never said, and passes an explicit value through.
+func NormalizeClaudeCodeCoAuthoredBy(v *bool) bool {
+	if v == nil {
+		return DefaultClaudeCodeCoAuthoredBy
 	}
 	return *v
 }
@@ -171,10 +185,10 @@ func appendNoProxy(current string, hosts ...string) string {
 	return current
 }
 
-// DefaultClaudeCodePrefs returns tb's canonical defaults for the given
-// mode. Used by the CLI harness directly and as the seed value for the
+// DefaultClaudeCodePrefs returns tb's canonical defaults: every model slot on the
+// default rule. Used by the CLI harness directly and as the seed value for the
 // GUI quick-config form when no user customization exists yet.
-func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
+func DefaultClaudeCodePrefs() ClaudeCodePrefs {
 	p := ClaudeCodePrefs{
 		APITimeoutMs:                         "3000000",
 		ClaudeCodeMaxOutputTokens:            "32000",
@@ -184,21 +198,12 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		DisableErrorReporting:                "1",
 		ClaudeCodeDisableNonessentialTraffic: "1",
 	}
-	if unified {
-		p.AnthropicModel = "tingly/cc"
-		p.AnthropicDefaultHaikuModel = "tingly/cc"
-		p.AnthropicDefaultSonnetModel = "tingly/cc"
-		p.AnthropicDefaultOpusModel = "tingly/cc"
-		p.AnthropicDefaultFableModel = "tingly/cc"
-		p.ClaudeCodeSubagentModel = "tingly/cc"
-	} else {
-		p.AnthropicModel = "tingly/cc-default"
-		p.AnthropicDefaultHaikuModel = "tingly/cc-haiku"
-		p.AnthropicDefaultSonnetModel = "tingly/cc-sonnet"
-		p.AnthropicDefaultOpusModel = "tingly/cc-opus"
-		p.AnthropicDefaultFableModel = "tingly/cc-fable"
-		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
-	}
+	p.AnthropicModel = "cc"
+	p.AnthropicDefaultHaikuModel = "cc"
+	p.AnthropicDefaultSonnetModel = "cc"
+	p.AnthropicDefaultOpusModel = "cc"
+	p.AnthropicDefaultFableModel = "cc"
+	p.ClaudeCodeSubagentModel = "cc"
 	return p
 }
 

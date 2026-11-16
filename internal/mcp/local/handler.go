@@ -17,10 +17,11 @@ import (
 
 // Handler handles MCP Local mode HTTP requests
 type Handler struct {
-	cfg      *config.Config
-	registry *Registry
-	baseURL  string
-	runtime  *runtime.Runtime
+	cfg       *config.Config
+	registry  *Registry
+	baseURL   string
+	runtime   *runtime.Runtime
+	reconnect func(context.Context, string) error
 }
 
 // NewHandler creates a new Local mode handler
@@ -488,7 +489,17 @@ func (h *Handler) ReconnectClient(c *gin.Context) {
 	// Update state to connecting
 	h.registry.UpdateState(id, typ.MCPClientStateConnecting)
 
-	// TODO: Implement actual reconnection logic with transport
+	if h.reconnect == nil {
+		h.registry.UpdateState(id, typ.MCPClientStateError)
+		c.JSON(503, ClientResponse{Error: "transport unavailable"})
+		return
+	}
+	if err := h.reconnect(c.Request.Context(), client.Config.Name); err != nil {
+		h.registry.UpdateState(id, typ.MCPClientStateError)
+		c.JSON(200, ClientResponse{Error: err.Error()})
+		return
+	}
+	h.registry.UpdateState(id, typ.MCPClientStateConnected)
 
 	c.JSON(http.StatusOK, ClientResponse{
 		Success: true,
@@ -705,4 +716,8 @@ func isValidClientName(name string) bool {
 	}
 
 	return true
+}
+
+func (h *Handler) SetReconnect(reconnect func(context.Context, string) error) {
+	h.reconnect = reconnect
 }

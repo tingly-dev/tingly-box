@@ -104,6 +104,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                         title={title}
                         envMode={envModeProp}
                         onEnvModeChange={onEnvModeChange}
+                        showApiKeyRow={showApiKeyRow}
                     />
                 </Box>
 

@@ -26,6 +26,15 @@ func newFullChainContext(request interface{}, providerURL string, extra map[stri
 	}
 }
 
+// newFullChainContextWithClaudeCodeOAuth is newFullChainContext with a Claude
+// Code OAuth provider, the only kind the identity rewrite (billing header +
+// metadata) runs for.
+func newFullChainContextWithClaudeCodeOAuth(request interface{}, providerURL string, extra map[string]interface{}) *TransformContext {
+	ctx := newFullChainContext(request, providerURL, extra)
+	ctx.Provider = claudeCodeOAuthProvider(providerURL)
+	return ctx
+}
+
 // anthropicExtra returns the minimum extra map required by Anthropic vendor transforms.
 func anthropicExtra() map[string]interface{} {
 	return map[string]interface{}{
@@ -90,7 +99,7 @@ func TestFullChain_AnthropicV1_To_AnthropicV1_Passthrough(t *testing.T) {
 		},
 	}
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -141,7 +150,7 @@ func TestFullChain_AnthropicV1_Haiku_AdaptiveStripped(t *testing.T) {
 		},
 	}
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -174,7 +183,7 @@ func TestFullChain_AnthropicBeta_To_AnthropicBeta_Passthrough(t *testing.T) {
 		OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 	})
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -395,7 +404,7 @@ func TestFullChain_AnthropicV1_MultiTurn_ThinkingBlocksFiltered(t *testing.T) {
 }
 
 // =============================================
-// Full Chain: Anthropic v1 → Anthropic v1 (Claude AI provider)
+// Full Chain: Anthropic v1 → Anthropic v1 (Claude Code OAuth provider on claude.ai)
 // =============================================
 
 func TestFullChain_AnthropicV1_ClaudeAI_Provider(t *testing.T) {
@@ -407,7 +416,7 @@ func TestFullChain_AnthropicV1_ClaudeAI_Provider(t *testing.T) {
 
 	req := newAnthropicV1Request("claude-opus-4-6-20250514", 16384)
 
-	ctx := newFullChainContext(req, "https://claude.ai/api/v1/messages", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "https://claude.ai/api/v1/messages", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -415,7 +424,7 @@ func TestFullChain_AnthropicV1_ClaudeAI_Provider(t *testing.T) {
 	out, ok := result.Request.(*anthropic.MessageNewParams)
 	require.True(t, ok)
 
-	// claude.ai URL should match Anthropic provider
+	// A Claude Code OAuth provider on claude.ai gets the identity rewrite
 	require.NotEmpty(t, out.System)
 	assert.Contains(t, out.System[0].Text, "x-anthropic-billing-header")
 	assert.True(t, out.Metadata.UserID.Valid())
@@ -440,7 +449,7 @@ func TestFullChain_AnthropicV1_EmptyModel_ValidationFails(t *testing.T) {
 		},
 	}
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	_, err := chain.Execute(ctx)
 	require.Error(t, err)
@@ -471,7 +480,7 @@ func TestFullChain_AnthropicV1_ExistingBillingHeader_Replaced(t *testing.T) {
 		},
 	}
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -555,7 +564,7 @@ func TestFullChain_AnthropicV1_SupportedModels(t *testing.T) {
 				},
 			}
 
-			ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+			ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 			result, err := chain.Execute(ctx)
 			require.NoError(t, err)
@@ -604,7 +613,7 @@ func TestFullChain_AnthropicV1_UnsupportedModels(t *testing.T) {
 				},
 			}
 
-			ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+			ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 			result, err := chain.Execute(ctx)
 			require.NoError(t, err)

@@ -1,0 +1,177 @@
+package server
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
+)
+
+func (c client) upload(path, name, body string) (int, []project.Attachment) {
+	c.t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, err := w.CreateFormFile("files", name)
+	require.NoError(c.t, err)
+	_, _ = fw.Write([]byte(body))
+	require.NoError(c.t, w.Close())
+	resp, err := http.Post(c.base+path, w.FormDataContentType(), &buf)
+	require.NoError(c.t, err)
+	defer resp.Body.Close()
+	var out project.AttachmentsResponse
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out.Attachments
+}
+
+func (c client) fetch(path string) (int, string) {
+	c.t.Helper()
+	resp, err := http.Get(c.base + path)
+	require.NoError(c.t, err)
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
+}
+
+// Two threads of one folder see the same uploads, and a thread from before
+// uploads were shared per folder still opens its own old files.
+func TestFolderThreadsShareUploadsOverHTTP(t *testing.T) {
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil }}
+	root := t.TempDir()
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, root)
+	var f db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &f))
+
+	// Uploaded before any thread exists, used by the first message.
+	code, atts := c.upload("/projects/"+f.ID+"/attachments", "log.txt", "boom")
+	require.Equal(t, 201, code)
+	require.Len(t, atts, 1)
+	var s1, s2 db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "look", "attachments": []string{atts[0].Path}}, &s1))
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "me too"}, &s2))
+
+	// Both threads open it.
+	for _, id := range []string{s1.ID, s2.ID} {
+		code, body := c.fetch("/threads/" + id + "/attachments/file?path=" + url.QueryEscape(atts[0].Path))
+		assert.Equal(t, 200, code)
+		assert.Equal(t, "boom", body)
+	}
+
+	// Uploaded through the second thread, the first one sees it too.
+	code, more := c.upload("/threads/"+s2.ID+"/attachments", "b.txt", "bee")
+	require.Equal(t, 201, code)
+	code, body := c.fetch("/threads/" + s1.ID + "/attachments/file?path=" + url.QueryEscape(more[0].Path))
+	assert.Equal(t, 200, code)
+	assert.Equal(t, "bee", body)
+
+	// A file only in a thread's legacy area is still served to that thread,
+	// and not to another one.
+	legacy, err := project.Layout{Root: root}.SaveAttachment(project.SessionOwner(s1.ID), "old.txt", bytes.NewReader([]byte("old")), 0)
+	require.NoError(t, err)
+	code, body = c.fetch("/threads/" + s1.ID + "/attachments/file?path=" + url.QueryEscape(legacy.Path))
+	assert.Equal(t, 200, code)
+	assert.Equal(t, "old", body)
+	code, _ = c.fetch("/threads/" + s2.ID + "/attachments/file?path=" + url.QueryEscape(legacy.Path))
+	assert.NotEqual(t, 200, code)
+	_, err = os.Stat(filepath.Join(root, f.ID, "library", "uploads"))
+	assert.NoError(t, err, "uploads live in the folder project's library")
+}
+
+func TestWorkdirUploadPathsReachAgentOverHTTP(t *testing.T) {
+	prompts := make(chan string, 4)
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { prompts <- turn.Prompt; turn.Say("ok", 1, 1); return nil }}
+	root := t.TempDir()
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, root)
+	var folder db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &folder))
+	code, atts := c.upload("/projects/"+folder.ID+"/attachments", "first.txt", "first bytes")
+	require.Equal(t, 201, code)
+	var thread db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+folder.ID+"/threads", map[string]any{"content": "first", "attachments": []string{atts[0].Path}}, &thread))
+	check := func(a project.Attachment, wantText, wantBody string) {
+		t.Helper()
+		path := filepath.Join(root, folder.ID, "library", filepath.FromSlash(a.Path))
+		select {
+		case prompt := <-prompts:
+			require.Contains(t, prompt, wantText)
+			require.Contains(t, prompt, path)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, wantBody, string(data))
+		case <-time.After(5 * time.Second):
+			t.Fatal("agent did not receive message")
+		}
+	}
+	check(atts[0], "first", "first bytes")
+	code, atts = c.upload("/threads/"+thread.ID+"/attachments", "next.txt", "next bytes")
+	require.Equal(t, 201, code)
+	require.Equal(t, 200, c.do("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "next", "attachments": []string{atts[0].Path}, "mode": "queue"}, nil))
+	check(atts[0], "next", "next bytes")
+}
+
+// An attachment is read through the same checks as the Library: one swapped for a link is refused.
+func TestAttachmentDownloadRefusesLinks(t *testing.T) {
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil }}
+	root := t.TempDir()
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, root)
+	var f db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &f))
+	code, atts := c.upload("/projects/"+f.ID+"/attachments", "log.txt", "boom")
+	require.Equal(t, 201, code)
+	var s db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "look", "attachments": []string{atts[0].Path}}, &s))
+	get := func() (int, string) {
+		return c.fetch("/threads/" + s.ID + "/attachments/file?path=" + url.QueryEscape(atts[0].Path))
+	}
+	code, body := get()
+	require.Equal(t, 200, code)
+	assert.Equal(t, "boom", body)
+
+	outside := filepath.Join(t.TempDir(), "secret")
+	require.NoError(t, os.WriteFile(outside, []byte("SECRET"), 0o644))
+	stored, err := project.Layout{Root: root}.LibraryPath(f.ID, atts[0].Path)
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(stored))
+	require.NoError(t, os.Symlink(outside, stored))
+	code, body = get()
+	assert.Equal(t, 400, code)
+	assert.NotContains(t, body, "SECRET")
+}
+
+// An upload is stored as uploads/<id>-<name> so names stay unique, but the
+// file a person downloads carries the name they gave it, not the id.
+func TestUploadDownloadsKeepTheOriginalName(t *testing.T) {
+	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil }}
+	_, c := newServerAt(t, &project.Agents{Service: a.Service()}, t.TempDir())
+	var f db.Project
+	require.Equal(t, 200, c.do("POST", "/projects", map[string]any{"type": "folder", "path": t.TempDir()}, &f))
+	code, atts := c.upload("/projects/"+f.ID+"/attachments", "报告 final.txt", "boom")
+	require.Equal(t, 201, code)
+	var s db.Thread
+	require.Equal(t, 201, c.do("POST", "/projects/"+f.ID+"/threads", map[string]any{"content": "look", "attachments": []string{atts[0].Path}}, &s))
+
+	for _, path := range []string{
+		"/projects/" + f.ID + "/library/file?path=" + url.QueryEscape(atts[0].Path),
+		"/threads/" + s.ID + "/attachments/file?path=" + url.QueryEscape(atts[0].Path),
+	} {
+		resp, err := http.Get(c.base + path)
+		require.NoError(t, err)
+		resp.Body.Close()
+		require.Equal(t, 200, resp.StatusCode, path)
+		_, params, err := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+		require.NoError(t, err, path)
+		assert.Equal(t, "报告 final.txt", params["filename"], path)
+	}
+}

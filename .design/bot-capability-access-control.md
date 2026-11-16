@@ -414,6 +414,38 @@ approval button              → remote_control.approve
 /cd, file access, shell      → remote_control.start + remote_control.privileged
 ```
 
+特权动作（2026-11-04 重新划分，原因见 6.2.1）：在**直聊**里，从运维注册的文件夹和项目中**选择**只需
+`remote_control.start`：`/dir`、`/dir N`、`/project`、`/project N`、文件夹列表按钮和菜单的 project 按钮。
+**命名自由路径**需要 `remote_control.privileged`：`/cd <路径>`、`/dir <路径>`、目录浏览器（`bind:*`、`action:bind`）和发文件。
+**群聊**里工作目录被全体成员共用，这几条命令及相关按钮仍全部需要 privileged。`/dir` 的参数只有为空或
+`bot.ParseListNumber` 认的正整数才算选择，否则是路径——闸门与命令处理器共用这一个函数。
+
+命令按 `imbot.ParseSlashCommand(text, group)` 识别，`group` 是入站消息的聊天类型：群聊里 `/dir@bot`、`@bot /dir`、
+`@bot/dir`、`<@U1> /dir`、全角 `／dir` 与 `/dir` 同级；单聊里只有朴素的 `/dir`（容忍空白和全角斜杠），带 mention
+的写法是普通文本。闸门与 `HandleMessage` 必须用同一个解析器、同一个 group，否则特权命令会被当成
+`remote_control.start`。有待答审批时，文件夹命令仍按各自的动作判断，不会被当成 approve。
+
+被拒的特权动作，如果聊天本来可以 start，闸门回一句“需要‘任意文件夹和文件’权限”，指向管理界面里同名的开关，
+不再沉默；连 start 都没有的聊天、群里发的文件（只是聊天内容）不回，避免向未授权方泄露信息。`/help` 只列聊天能跑的
+命令（宿主通过 context 把与闸门同一个 authorizer 的 `bot.PrivilegeChecker` 交给 consumer）。管理界面 `BotAccessDialog`
+给每个能遥控的直聊、每个已授权的群成员一个开关，单行写 `remote_control.privileged`；“可遥控”预设保留已有授权，
+“无权限”和“仅通知”连同授权一起收回，授权从不作为副作用被打开。
+
+#### 6.2.1 为什么 `/cd`、`/dir`、`/project` 是特权（2026-11-04）
+
+PR #2360 把 `/dir` 从“本聊天用过的目录”改成“Projects 注册的全部文件夹”，并写明“现有模型没有逐目录权限”，所以整个
+文件系统导航挂在唯一的特权动作下；`/cd` 自 `8b4f1e094` 起就是特权，配对写 `privileged=deny` 来自“资源创建时写入
+完整显式 policy、缺失即拒”（§7.1）。后果：新配对的聊天跑 `/dir`、`/cd`、`/project` 被闸门静默丢弃，看起来是命令坏了。
+
+风险评估（判断，不是已验证的事实）：特权更像“意图与影响范围”的闸门，而不是硬边界——有 start + approve 的聊天可以
+`/yolo`，Claude Code 本身不限于 cwd。多出来的只有：改变会话所在目录（`/cd`、`/dir <路径>` 可指向任意已存在目录）、
+绑定别的项目协调者、在群里改动所有人共用的目录。数据模型里没有“所有者”，配对只证明拿过一次性码，不能按“所有者配对”
+区分默认值。
+
+决定（YZ）：选择类命令降为 start，自由路径和发文件保持特权，群聊不变，并在管理界面加开关（上面）。
+未采用：配对时默认授予（会推翻显式 deny 的设计，且不修复已配对聊天的 deny 行）。已配对的聊天保持 deny，
+运维用开关授予一次。群成员的“Privileged controller”预设（§12.4）仍由这个开关承担。
+
 ### 6.3 Why Interact is not a top-level Capability
 
 Interaction 是 Transport 的 `Prompt/Reply` 原语，会被两个 Capability 使用：

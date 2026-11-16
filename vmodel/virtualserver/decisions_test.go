@@ -57,3 +57,17 @@ func TestDecisionModelsAreListedAndSeeded(t *testing.T) {
 	}
 	assert.Contains(t, seeded, "decision-first")
 }
+
+func TestServe_SystemOne(t *testing.T) {
+	client := openAISDK(t)
+	var raw []byte
+	err := client.Post(context.Background(), "systemone", nil, &raw, openaiopt.WithRequestBody("application/json",
+		[]byte(`{"model":"decision-first","state":"hi","questions":{"q":{"type":"noul"}}}`)))
+	require.NoError(t, err)
+	assert.Equal(t, 1.0, gjson.GetBytes(raw, "answers.q.noul").Float())
+	err = client.Post(context.Background(), "decisions", nil, &raw, openaiopt.WithRequestBody("application/json",
+		[]byte(`{"model":"decision-first","input":"hi","questions":[{"type":"predicate","name":"q","instructions":"hi?"}]}`)))
+	require.NoError(t, err)
+	assert.Equal(t, "predicate", gjson.GetBytes(raw, "answers.0.type").String())
+	assert.Equal(t, 1.0, gjson.GetBytes(raw, "answers.0.probability").Float())
+}

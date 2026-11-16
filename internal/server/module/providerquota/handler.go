@@ -32,6 +32,9 @@ type Manager interface {
 	// IsProviderSupported reports whether the provider has a registered quota
 	// fetcher. Callers should skip quota fetching when this returns false.
 	IsProviderSupported(providerUUID string) bool
+	// Redeem spends one of the provider's rewards (a reset card) and re-reads
+	// its quota.
+	Redeem(ctx context.Context, providerUUID, rewardID string) (*quota.RedeemResult, error)
 	// StartAutoRefresh starts automatic refresh.
 	StartAutoRefresh(ctx context.Context)
 	// StopAutoRefresh stops automatic refresh.
@@ -327,4 +330,64 @@ func (h *Handler) BatchGetQuota(c *gin.Context) {
 	c.JSON(http.StatusOK, BatchGetQuotaResponse{
 		Data: result,
 	})
+}
+
+// RedeemStatus is the outcome of a reward spend. The client branches on it, so
+// every outcome has its own value instead of an HTTP status alone.
+type RedeemStatus string
+
+const (
+	RedeemSpent       RedeemStatus = "spent"       // the provider accepted; usage is read back
+	RedeemRejected    RedeemStatus = "rejected"    // the provider said no; nothing was spent
+	RedeemUnconfirmed RedeemStatus = "unconfirmed" // sent, outcome unknown; usage shows whether it is gone
+	RedeemNotFound    RedeemStatus = "not_found"   // the reward is not available (any more)
+	RedeemBusy        RedeemStatus = "busy"        // another spend for this provider is running
+	RedeemUnsupported RedeemStatus = "unsupported" // this provider has no spendable rewards
+)
+
+// RedeemResponse is the reward-spend response.
+type RedeemResponse struct {
+	Status  RedeemStatus         `json:"status"`
+	Message string               `json:"message,omitempty"`
+	Usage   *quota.ProviderUsage `json:"usage,omitempty"`
+}
+
+// RedeemReward spends one reward of a provider, e.g. a GLM reset card. It is
+// irreversible and is sent at most once: an unconfirmed outcome is reported,
+// never retried.
+// POST /api/v1/provider-quota/:uuid/rewards/:id/use
+func (h *Handler) RedeemReward(c *gin.Context) {
+	if !h.available(c) {
+		return
+	}
+	uuid, id := c.Param("uuid"), c.Param("id")
+	if uuid == "" || id == "" {
+		apierr.Message(c, http.StatusBadRequest, "provider uuid and reward id are required")
+		return
+	}
+
+	result, err := h.manager.Redeem(c.Request.Context(), uuid, id)
+	resp := RedeemResponse{Status: RedeemSpent}
+	if result != nil {
+		resp.Message, resp.Usage = result.Message, result.Usage
+	}
+	code := http.StatusOK
+	switch {
+	case err == nil:
+	case errors.Is(err, quota.ErrRedeemUnconfirmed):
+		resp.Status, resp.Message, code = RedeemUnconfirmed, err.Error(), http.StatusAccepted
+	case errors.Is(err, quota.ErrRedeemRejected):
+		resp.Status, resp.Message, code = RedeemRejected, err.Error(), http.StatusUnprocessableEntity
+	case errors.Is(err, quota.ErrRewardNotFound):
+		resp.Status, code = RedeemNotFound, http.StatusNotFound
+	case errors.Is(err, quota.ErrRedeemBusy):
+		resp.Status, code = RedeemBusy, http.StatusConflict
+	case errors.Is(err, quota.ErrRedeemUnsupported), errors.Is(err, quota.ErrProviderUnsupported):
+		resp.Status, code = RedeemUnsupported, http.StatusNotFound
+	default:
+		h.logger.WithError(err).WithField("provider_uuid", uuid).Error("failed to spend reward")
+		apierr.Message(c, http.StatusInternalServerError, "failed to spend reward")
+		return
+	}
+	c.JSON(code, resp)
 }

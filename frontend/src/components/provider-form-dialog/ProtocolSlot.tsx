@@ -1,194 +1,48 @@
 import {OpenAI, Anthropic} from '../BrandIcons';
-import {Box, Checkbox, InputBase, Link, Stack, Tooltip, Typography} from '@mui/material';
+import {Box, Checkbox, FormControlLabel, Link, Stack, TextField, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
-import { fontMono, fontSizes } from '@/theme/fonts';
-import { alpha } from '@mui/material/styles';
+import ProviderIcon from '@/components/ProviderIcon';
+import {fontMono} from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
-export interface ProtocolSlotData {
-    url: string;
-    enabled: boolean;
-}
-
+export interface ProtocolSlotData {url: string; enabled: boolean;}
 export type ProtocolKind = 'openai' | 'anthropic';
-
 interface ProtocolSlotProps {
-    kind: ProtocolKind;
+    kind: ProtocolKind | 'google';
+    selectionMode?: 'multiple' | 'fixed';
     slot: ProtocolSlotData;
     onUrlChange: (url: string) => void;
     onUrlBlur: () => void;
     onToggle: () => void;
     helperText?: string;
     urlError?: boolean;
-    /** Persistent /v1 suffix hint — shown above the URL field when true. */
-    v1Hint?: { show: boolean; onApply: () => void };
+    v1Hint?: {show: boolean; onApply: () => void};
 }
-
-interface BrandDef {
-    icon: React.ReactNode;
-    labelKey: string;
-    defaultLabel: string;
-}
-
-const BRAND: Record<ProtocolKind, BrandDef> = {
-    openai: {
-        icon: <OpenAI size={18}/>,
-        labelKey: 'providerDialog.protocol.openAILabel',
-        defaultLabel: 'OpenAI Compatible',
-    },
-    anthropic: {
-        icon: <Anthropic size={18}/>,
-        labelKey: 'providerDialog.protocol.anthropicLabel',
-        defaultLabel: 'Anthropic Compatible',
-    },
-};
-
-const DEFAULT_HELPERS: Record<ProtocolKind, string> = {
-    openai: 'Supports models from OpenAI, Google and many other OpenAI-compatible providers',
-    anthropic: 'For Anthropic-compatible AI providers, commonly used with Claude Code',
-};
-
-const ProtocolSlot: React.FC<ProtocolSlotProps> = ({
-    kind,
-    slot,
-    onUrlChange,
-    onUrlBlur,
-    onToggle,
-    helperText,
-    urlError,
-    v1Hint,
-}) => {
+const ProtocolSlot = ({kind, slot, onUrlChange, onUrlBlur, onToggle, helperText, urlError, v1Hint, selectionMode = 'multiple'}: ProtocolSlotProps) => {
     const {t} = useTranslation();
-    const brand = BRAND[kind];
-    const helper = helperText || DEFAULT_HELPERS[kind];
-    const enabled = slot.enabled;
-
-    return (
-        <Box
-            sx={{
-                borderRadius: 1,
-                px: 1.5,
-                py: 1,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                bgcolor: enabled ? 'action.selected' : 'transparent',
-                '&:hover': { bgcolor: enabled ? 'action.selected' : 'action.hover' },
-            }}
-            onClick={onToggle}
-        >
-            <Box sx={{display: 'flex', alignItems: 'flex-start', gap: 1}}>
-                <Box sx={{mt: 0.2, flexShrink: 0}}>{brand.icon}</Box>
-                <Box sx={{flex: 1, minWidth: 0}}>
-                    <Typography variant="body2" sx={{
-                        fontWeight: 500
-                    }}>
-                        {t(brand.labelKey, {defaultValue: brand.defaultLabel})}
-                    </Typography>
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: "text.secondary",
-                            display: 'block',
-                            lineHeight: 1.3,
-                            mt: 0.15
-                        }}>
-                        {helper}
-                    </Typography>
-                </Box>
-                <Checkbox
-                    size="small"
-                    checked={enabled}
-                    sx={{p: 0, mt: -0.5, flexShrink: 0}}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={onToggle}
-                />
-            </Box>
-            {enabled && (
-                <Tooltip
-                    open={v1Hint?.show ?? false}
-                    title={
-                        <Stack spacing={1} sx={{maxWidth: 160}}>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: "text.secondary",
-                                    lineHeight: 1.4
-                                }}>
-                                {t('providerDialog.v1Hint.message', {
-                                    defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
-                                })}
-                            </Typography>
-                            <Link
-                                component="button"
-                                type="button"
-                                variant="caption"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    v1Hint?.onApply();
-                                }}
-                                underline="always"
-                                sx={{fontWeight: 600, whiteSpace: 'nowrap', alignSelf: 'flex-start'}}
-                            >
-                                {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
-                            </Link>
-                        </Stack>
-                    }
-                    placement="left"
-                    arrow
-                    disableFocusListener
-                    disableHoverListener
-                    disableTouchListener
-                    slotProps={{
-                        tooltip: {
-                            sx: {
-                                bgcolor: 'background.paper',
-                                color: 'text.primary',
-                                border: 1,
-                                borderColor: 'divider',
-                                boxShadow: 2,
-                                px: 1.5,
-                                py: 1,
-                            },
-                        },
-                        arrow: {
-                            sx: {
-                                fontSize: 16,
-                                color: 'background.paper',
-                                '&::before': {border: 1, borderColor: 'divider'},
-                            },
-                        },
-                    }}
-                >
-                    <InputBase
-                        fullWidth
-                        size="small"
-                        placeholder={t('providerDialog.provider.placeholder', {defaultValue: 'Base URL'})}
-                        value={slot.url}
-                        onChange={(e) => onUrlChange(e.target.value)}
-                        onBlur={onUrlBlur}
-                        error={urlError}
-                        onClick={(e) => e.stopPropagation()}
-                        sx={{
-                            mt: 1.25,
-                            px: 1.5,
-                            py: 0.75,
-                            fontSize: fontSizes.md,
-                            fontFamily: fontMono,
-                            color: 'primary.main',
-                            bgcolor: 'background.default',
-                            borderRadius: 0.75,
-                            border: urlError ? 1 : '1px solid transparent',
-                            borderColor: urlError ? 'error.main' : 'divider',
-                            '&:hover': {borderColor: 'text.disabled'},
-                            '&:focus-within': {
-                                borderColor: 'primary.main',
-                                boxShadow: (theme) => `0 0 0 1px ${alpha(theme.palette.primary.main, 0.12)}`,
-                            },
-                        }}
-                    />
-                </Tooltip>
-            )}
-        </Box>
-    );
+    const label = kind === 'google' ? t('providerDialog.editUx.googleCompatible') : kind === 'openai' ? t('providerDialog.protocol.openAILabel') : t('providerDialog.protocol.anthropicLabel');
+    const helper = helperText || (kind === 'google' ? t('providerDialog.editUx.googleHint') : kind === 'openai' ? t('providerDialog.protocol.helperOpenAI') : t('providerDialog.protocol.helperAnthropic'));
+    const header = <Stack direction="row" spacing={1} sx={{alignItems: 'flex-start'}}>
+        <Box sx={{mt: 0.25, flexShrink: 0}}>{kind === 'google' ? <ProviderIcon identifier="google" size={18}/> : kind === 'openai' ? <OpenAI size={18}/> : <Anthropic size={18}/>}</Box>
+        <Box><Typography variant="body2" sx={{fontWeight: 600}}>{label}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{display: 'block', mt: 0.25}}>{helper}</Typography></Box>
+    </Stack>;
+    return <Box sx={{p: 1.5, border: 1, borderColor: urlError ? 'error.main' : 'divider', borderRadius: radius.card, bgcolor: slot.enabled ? 'action.hover' : 'transparent'}}>
+        {selectionMode === 'fixed' ? header : <FormControlLabel labelPlacement="start" sx={{m: 0, width: '100%', gap: 1, justifyContent: 'space-between', alignItems: 'flex-start'}}
+            control={<Checkbox size="small" checked={slot.enabled} onChange={onToggle} sx={{p: 0.25}}/>}
+            label={header}/>}
+        {slot.enabled && <Stack spacing={1} sx={{mt: 1.5}}>
+            <TextField fullWidth size="small" type="url" required
+                label={kind === 'google' ? t('providerDialog.provider.placeholder') : kind === 'openai' ? t('providerDialog.editUx.openAIUrl') : t('providerDialog.editUx.anthropicUrl')}
+                value={slot.url} onChange={e => onUrlChange(e.target.value)} onBlur={onUrlBlur}
+                placeholder="https://api.example.com" error={urlError}
+                helperText={urlError ? t('providerDialog.editUx.urlError') : undefined}
+                slotProps={{htmlInput: {spellCheck: false, autoComplete: 'off'}, input: {sx: {fontFamily: fontMono, bgcolor: 'background.paper'}}}}/>
+            {v1Hint?.show && <Box sx={{display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'baseline'}}>
+                <Typography variant="caption" color="text.secondary">{t('providerDialog.v1Hint.message')}</Typography>
+                <Link component="button" type="button" variant="caption" onClick={v1Hint.onApply}>{t('providerDialog.v1Hint.apply')}</Link>
+            </Box>}
+        </Stack>}
+    </Box>;
 };
-
 export default ProtocolSlot;

@@ -13,6 +13,7 @@ import {
     ToggleButtonGroup,
     Tooltip,
     Typography,
+    alpha,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Accessibility, Add, Close, Create, Delete, DeleteSweep, Eraser, Flip, Rotate3d, Undo } from '@/components/icons';
@@ -67,6 +68,8 @@ import {
     type ViewPresetKey,
     drawFigure,
 } from '@tingly/mannequin';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 type Tool = 'pen' | 'eraser' | 'pose';
 
@@ -114,12 +117,11 @@ type PoseDrag =
     // slow drag and a fast one end in the same place and nothing accumulates.
     | (PoseDragBase & { mode: 'turn'; origin: CanvasPoint; start: PoseFigure });
 
-// What a finished sketch hands back. `file`/`previewUrl` are the composited
-// pixels the model gets; `layers` is what it was made of, so re-opening it
+// What a finished sketch hands back. `file` is the composited pixels the model
+// gets; `layers` is what it was made of, so re-opening it
 // restores editable strokes and a posable figure instead of a picture of them.
 export interface SketchResult {
     file: File;
-    previewUrl: string;
     layers: SketchLayers;
 }
 
@@ -645,7 +647,6 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             }
             onSubmit({
                 file: new File([blob], `sketch-${Date.now()}.png`, { type: 'image/png' }),
-                previewUrl: output.toDataURL('image/png'),
                 // The layers travel with the result, as data rather than
                 // pixels: this is what makes a saved sketch re-editable.
                 layers: { size: dims, strokes, figures, backdrop: backdrop?.dataUrl ?? null },
@@ -666,7 +667,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
                 <Create fontSize="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: fontSizes.title }}>
                         {t('playground.sketch.title', { defaultValue: 'Sketch' })}
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
@@ -794,7 +795,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                                     bgcolor: swatch,
                                                     border: '2px solid',
                                                     borderColor: selected ? 'primary.main' : 'background.paper',
-                                                    boxShadow: selected ? '0 0 0 2px rgba(25, 118, 210, 0.35)' : '0 0 0 1px rgba(0,0,0,0.18)',
+                                                    boxShadow: (theme) => selected ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.35)}` : `0 0 0 1px ${alpha(theme.palette.common.black, 0.18)}`,
                                                     transition: 'box-shadow 0.12s ease-out',
                                                 }}
                                             />
@@ -863,7 +864,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                             justifyContent: 'center',
                             height: { xs: '55vh', sm: '60vh' },
                             minHeight: 240,
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             bgcolor: 'action.hover',
                             overflow: 'hidden',
                         }}
@@ -887,7 +888,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                     display: 'block',
                                     bgcolor: SKETCH_BACKGROUND,
                                     boxShadow: 1,
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     // Draw, don't scroll: the browser must not steal the gesture.
                                     touchAction: 'none',
                                     cursor: 'crosshair',
@@ -912,7 +913,7 @@ const SketchCanvasDialog: React.FC<SketchCanvasDialogProps> = ({
                                     top: 0,
                                     left: 0,
                                     display: 'block',
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     touchAction: 'none',
                                     userSelect: 'none',
                                     pointerEvents: tool === 'pose' ? 'auto' : 'none',

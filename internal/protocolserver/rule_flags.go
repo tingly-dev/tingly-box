@@ -74,6 +74,9 @@ func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	if flags.ThinkingEffort != typ.ThinkingEffortDefault {
 		preVendor = append(preVendor, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
 	}
+	if flags.DisableThinkingBudget {
+		preVendor = append(preVendor, transform.NewRemoveThinkingBudgetTransform())
+	}
 	if typ.ClaudeCodeVersionEnabled(flags.ClaudeCodeVersion) {
 		preVendor = append(preVendor, transform.NewClaudeCodeVersionTransform(flags.ClaudeCodeVersion))
 	}

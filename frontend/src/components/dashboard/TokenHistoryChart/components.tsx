@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { getThemeChartStyles } from '../chartStyles';
 import type { LegendItemProps, ChartDataPoint } from './types';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 export function LegendItem({ label, color, visible, onToggle }: LegendItemProps) {
     return (
@@ -20,7 +21,7 @@ export function LegendItem({ label, color, visible, onToggle }: LegendItemProps)
                 transition: 'opacity 0.18s ease-out, background-color 0.18s ease-out',
                 px: 1.5,
                 py: 0.5,
-                borderRadius: 1.5,
+                borderRadius: radius.card,
                 '&:hover': {
                     opacity: visible ? 0.8 : 0.5,
                     backgroundColor: 'action.hover',
@@ -31,7 +32,7 @@ export function LegendItem({ label, color, visible, onToggle }: LegendItemProps)
                 sx={{
                     width: 14,
                     height: 14,
-                    borderRadius: 2.5,
+                    borderRadius: radius.card,
                     backgroundColor: color,
                     border: '2px solid',
                     borderColor: visible ? color : 'transparent',
@@ -74,7 +75,7 @@ export function CustomTooltip({ active, payload }: any) {
                 backgroundColor: 'background.paper',
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 p: 2,
                 boxShadow: 'none',
             }}
@@ -101,7 +102,7 @@ export function CustomTooltip({ active, payload }: any) {
                             sx={{
                                 width: 10,
                                 height: 10,
-                                borderRadius: 2,
+                                borderRadius: radius.card,
                                 backgroundColor: entry.color,
                             }}
                         />
@@ -159,8 +160,11 @@ export function ChartWrapper({ title, hasData, children }: ChartWrapperProps) {
     return (
         <Box
             sx={{
-                p: 3,
-                borderRadius: 3,
+                // Same frame and title as Response Performance and Usage by Model beside it.
+                px: 2.25,
+                pt: 2,
+                pb: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 flexGrow: 1,
@@ -170,16 +174,8 @@ export function ChartWrapper({ title, hasData, children }: ChartWrapperProps) {
                 flexDirection: 'column',
             }}
         >
-            <Box sx={{ mb: 2.5 }}>
-                <Typography
-                    variant="h6"
-                    sx={{
-                        fontWeight: 600,
-                        fontSize: '1rem',
-                        letterSpacing: '-0.01em',
-                        color: 'text.primary',
-                    }}
-                >
+            <Box sx={{ mb: 1.5 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>
                     {title}
                 </Typography>
             </Box>
@@ -199,7 +195,7 @@ export function ChartWrapper({ title, hasData, children }: ChartWrapperProps) {
                         sx={{
                             width: 48,
                             height: 48,
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             backgroundColor: chartStyles.statCard.emptyIconBg,
                             display: 'flex',
                             alignItems: 'center',

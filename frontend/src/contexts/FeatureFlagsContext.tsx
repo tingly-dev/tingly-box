@@ -4,12 +4,11 @@ import { api } from '@/services/api';
 import { useAuth } from './AuthContext';
 
 interface FeatureFlagsContextType {
-    skillUser: boolean;
     skillIde: boolean;
     enableGuardrails: boolean;
     enableMCP: boolean;
     enableBench: boolean;
-    enableDesk: boolean;
+    enableProjects: boolean;
     loading: boolean;
     refresh: () => Promise<void>;
 }
@@ -30,32 +29,29 @@ interface FeatureFlagsProviderProps {
 
 export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ children }) => {
     const { isLoading: isAuthLoading } = useAuth();
-    const [skillUser, setSkillUser] = useState(false);
     const [skillIde, setSkillIde] = useState(false);
     const [enableGuardrails, setEnableGuardrails] = useState(false);
     const [enableMCP, setEnableMCP] = useState(false);
     const [enableBench, setEnableBench] = useState(false);
-    const [enableDesk, setEnableDesk] = useState(false);
+    const [enableProjects, setEnableProjects] = useState(false);
     const [loading, setLoading] = useState(true);
 
     // Only touches stable setters, so it never needs to be recreated (and the
     // memoized context value below can depend on a stable `refresh`).
     const loadFlags = useCallback(async () => {
         try {
-            const [skillUserResult, skillIdeResult, guardrailsResult, mcpResult, benchResult, deskResult] = await Promise.all([
-                api.getScenarioFlag('_global', 'skill_user'),
+            const [skillIdeResult, guardrailsResult, mcpResult, benchResult, projectsResult] = await Promise.all([
                 api.getScenarioFlag('_global', 'skill_ide'),
                 api.getScenarioFlag('_global', 'guardrails'),
                 api.getScenarioFlag('_global', 'mcp'),
                 api.getScenarioFlag('_global', 'bench'),
-                api.getScenarioFlag('_global', 'desk'),
+                api.getScenarioFlag('_global', 'projects'),
             ]);
-            setSkillUser(skillUserResult?.data?.value || false);
             setSkillIde(skillIdeResult?.data?.value || false);
             setEnableGuardrails(guardrailsResult?.data?.value || false);
             setEnableMCP(mcpResult?.data?.value || false);
             setEnableBench(benchResult?.data?.value || false);
-            setEnableDesk(deskResult?.data?.value || false);
+            setEnableProjects(projectsResult?.data?.value || false);
         } catch (error) {
             // Silently fail - flags will default to false
             // Don't log to console to avoid noise during initial auth
@@ -75,8 +71,8 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
     const refresh = loadFlags;
 
     const value = useMemo(() => ({
-        skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, loading, refresh,
-    }), [skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, loading, refresh]);
+        skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh,
+    }), [skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh]);
 
     return (
         <FeatureFlagsContext.Provider value={value}>

@@ -1,11 +1,11 @@
-// Binary execution + failure diagnostics shared by the cli and bundle shims.
+// Binary execution + failure diagnostics for npm launchers.
 
 import { execFileSync } from "child_process";
 
 // Run the resolved Go binary with inherited stdio. Returns on success; on
 // failure prints a detailed diagnostic and exits with the binary's code.
 // Optional hints: retryCmd (how the user re-invokes this shim) and cacheRoot
-// (cache dir worth clearing on ENOENT — the bundle shim has none).
+// (cache dir worth clearing on ENOENT).
 export function execBinary(binaryPath, args, { retryCmd, cacheRoot } = {}) {
 	try {
 		execFileSync(binaryPath, args, {

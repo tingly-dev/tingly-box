@@ -54,7 +54,6 @@ func NewAgentService(config Config, options ...ServiceOption) (*AgentService, er
 	if config.StreamBufferSize == 0 {
 		config.StreamBufferSize = 100
 	}
-
 	service := &AgentService{
 		config: config,
 		agents: make(map[AgentType]Agent),
@@ -160,6 +159,21 @@ func (s *AgentService) resolveAgent(agentType AgentType) (Agent, error) {
 		return nil, fmt.Errorf("agent type not supported: %s", agentType)
 	}
 	return agent, nil
+}
+
+// CompactPrompt is the user message that makes the agent of agentType (the
+// default when empty) compact its conversation; ErrCompactUnsupported if that
+// agent cannot.
+func (s *AgentService) CompactPrompt(agentType AgentType, instructions string) (string, error) {
+	agent, err := s.resolveAgent(agentType)
+	if err != nil {
+		return "", err
+	}
+	c, ok := agent.(Compactor)
+	if !ok {
+		return "", ErrCompactUnsupported
+	}
+	return c.CompactPrompt(instructions), nil
 }
 
 // Execute runs a prompt against the specified agent type and project path and

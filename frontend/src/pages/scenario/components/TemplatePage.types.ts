@@ -23,6 +23,13 @@ export interface TemplatePageProps {
     allowDeleteRule?: boolean;
     allowToggleRule?: boolean;
     allowAddRule?: boolean;
+    /**
+     * Hard ordering: show pin/move controls on each rule card. The order is
+     * persisted via POST /rules/reorder and drives /v1/models listing, match
+     * priority and client config generation. Slot pages (claude_code) keep it
+     * off — their order is the product-defined slot precedence.
+     */
+    allowReorder?: boolean;
     /** The page offers its own way into the scenario's logs (the Agent page's status row): no Troubleshoot in the "..." menu. */
     hideTroubleshoot?: boolean;
     showAddApiKeyButton?: boolean;

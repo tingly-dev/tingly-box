@@ -16,11 +16,15 @@ import {
     Typography,
 } from '@mui/material';
 import {useEffect, useRef, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import api from "@/services/api.ts";
 import {getOAuthRedirectPath} from "@/utils/protocol";
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
 import OAuthAuthorizationDialog, {type OAuthAuthorizationData} from './oauth/OAuthAuthorizationDialog';
+import WorkBuddyConnectionNote from './oauth/WorkBuddyConnectionNote';
+import QoderConnectionNote from './oauth/QoderConnectionNote';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface OAuthDialogProps {
     open: boolean;
@@ -38,6 +42,7 @@ interface OAuthDialogProps {
 }
 
 const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProviderUuid}: OAuthDialogProps) => {
+    const {t} = useTranslation();
     const isReauth = Boolean(reauthProviderUuid);
     const [authorizing, setAuthorizing] = useState<string | null>(null);
     const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -52,6 +57,9 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
     // For autoStartProviderId mode: whether user has clicked "Connect & Authorize"
     const [configConfirmed, setConfigConfirmed] = useState(false);
     const [authAttempt, setAuthAttempt] = useState(0);
+    // Ask once before the first start when no proxy is set (forgetting it means a
+    // timeout at the provider and a repeated flow).
+    const [proxyPromptOpen, setProxyPromptOpen] = useState(false);
     // Collapsed by default: the port-forwarding note for fixed-callback-port
     // providers (Claude Code, Codex) is only useful for remote deployments.
     const [showPortForwardHelp, setShowPortForwardHelp] = useState(false);
@@ -135,6 +143,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
         setConfigConfirmed(false);
         setAuthAttempt(0);
         setShowPortForwardHelp(false);
+        setProxyPromptOpen(false);
         onClose();
     };
 
@@ -210,6 +219,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                     expires_in: data.expires_in,
                     interval: data.interval,
                     provider: provider.name,
+                    providerId: provider.id,
                     flow_type: flowType,
                     session_id: data.session_id, // Session ID for status tracking
                 });
@@ -261,6 +271,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
     if (autoStartProviderId) {
         const provider = oauthProviders.find((p) => p.id === autoStartProviderId);
         const name = provider?.displayName || provider?.name || 'provider';
+        const isWorkBuddy = provider?.id === 'workbuddy' || provider?.id === 'workbuddy_cn';
         const isConnecting = configConfirmed && !initError;
 
         const handleRetry = () => {
@@ -323,7 +334,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 bgcolor: `${provider.color}15`,
-                                                borderRadius: 2,
+                                                borderRadius: radius.card,
                                                 flexShrink: 0,
                                             }}
                                         >
@@ -338,11 +349,14 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                             <Typography variant="body2" sx={{
                                                 color: "text.secondary"
                                             }}>
-                                                {provider.description}
+                                                {provider.descriptionKey ? t(provider.descriptionKey) : provider.description}
                                             </Typography>
                                         </Box>
                                     </Stack>
                                 )}
+
+                                <WorkBuddyConnectionNote providerId={provider?.id}/>
+                                <QoderConnectionNote providerId={provider?.id}/>
 
                                 {/* Some providers (Claude Code, Codex) redirect the browser to a fixed
                                     loopback port for the callback. On a remote deployment that port lives
@@ -365,7 +379,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                             </Button>
                                         </Stack>
                                         <Collapse in={showPortForwardHelp} timeout="auto" unmountOnExit>
-                                            <Box sx={{mt: 1, p: 1.5, bgcolor: 'action.hover', borderRadius: 1}}>
+                                            <Box sx={{mt: 1, p: 1.5, bgcolor: 'action.hover', borderRadius: radius.row}}>
                                                 <Typography variant="body2" sx={{color: 'text.secondary'}}>
                                                     If Tingly-Box runs on a remote server, this callback still
                                                     goes to <b>your</b> machine's port {provider.callbackPort} —
@@ -378,7 +392,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                                         mt: 1,
                                                         p: 1,
                                                         bgcolor: 'background.paper',
-                                                        borderRadius: 1,
+                                                        borderRadius: radius.row,
                                                         fontFamily: fontMono,
                                                         fontSize: fontSizes.md,
                                                         overflowX: 'auto',
@@ -409,7 +423,9 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                     helperText={
                                         autoDetectedProxy
                                             ? 'Auto-detected from existing provider. You can override if needed.'
-                                            : 'Optional: use a proxy to bypass regional restrictions.'
+                                            : isWorkBuddy
+                                                ? t('workbuddyConnection.proxyHint')
+                                                : 'Optional: use a proxy to bypass regional restrictions.'
                                     }
                                     size="small"
                                     color={autoDetectedProxy ? 'success' : 'primary'}
@@ -443,6 +459,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                     disabled={provider?.enabled === false}
                                     onClick={() => {
                                         if (configConfirmed) setAuthAttempt((attempt) => attempt + 1);
+                                        else if (!proxyUrl.trim()) setProxyPromptOpen(true);
                                         else setConfigConfirmed(true);
                                     }}
                                 >
@@ -450,6 +467,45 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
                                 </Button>
                             </Stack>
                         )}
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={open && proxyPromptOpen} onClose={() => setProxyPromptOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle>{t('oauthProxyPrompt.title')}</DialogTitle>
+                    <DialogContent>
+                        <Stack spacing={2} sx={{pt: 0.5}}>
+                            <Typography variant="body2" sx={{color: 'text.secondary'}}>
+                                {t('oauthProxyPrompt.body')}
+                            </Typography>
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                size="small"
+                                placeholder="http://127.0.0.1:7890 or socks5://127.0.0.1:7890"
+                                value={proxyUrl}
+                                onChange={(e) => handleProxyUrlChange(e.target.value)}
+                            />
+                            {globalProxyUrl && !useGlobalProxy && (
+                                <Button
+                                    size="small"
+                                    sx={{alignSelf: 'flex-start', textTransform: 'none'}}
+                                    onClick={() => handleUseGlobalProxyChange(true)}
+                                >
+                                    {t('oauthProxyPrompt.useQuick', {url: globalProxyUrl})}
+                                </Button>
+                            )}
+                            <Stack direction="row" spacing={1} sx={{justifyContent: 'flex-end'}}>
+                                <Button onClick={() => { setProxyPromptOpen(false); setConfigConfirmed(true); }}>
+                                    {t('oauthProxyPrompt.skip')}
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    disabled={!proxyUrl.trim()}
+                                    onClick={() => { setProxyPromptOpen(false); setConfigConfirmed(true); }}
+                                >
+                                    {t('oauthProxyPrompt.useProxy')}
+                                </Button>
+                            </Stack>
+                        </Stack>
                     </DialogContent>
                 </Dialog>
                 <OAuthAuthorizationDialog

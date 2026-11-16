@@ -6,6 +6,11 @@ type CreateRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
+// TeamDuplicateRequest names the copy; empty picks a free "<name> copy".
+type TeamDuplicateRequest struct {
+	Name string `json:"name,omitempty" example:"Research copy"`
+}
+
 type UpdateRequest struct {
 	Name string `json:"name" binding:"required"`
 }

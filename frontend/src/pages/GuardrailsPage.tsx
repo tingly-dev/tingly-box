@@ -1,3 +1,4 @@
+import StatusDot from '@tingly/ui/components/StatusDot';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
@@ -327,72 +328,33 @@ const GuardrailsPage = () => {
                                 </Tooltip>
                             }
                         >
+                            {/* Counts are plain numbers; a verdict's colour sits on its dot. */}
                             <Stack spacing={1.75}>
-                                <Stack
-                                    direction="row"
-                                    sx={{
-                                        justifyContent: "space-between",
-                                        alignItems: "center"
-                                    }}>
-                                    <Typography variant="body2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        Total Events
-                                    </Typography>
-                                    <Chip size="small" label={`${stats.historyCount}`} />
-                                </Stack>
-                                <Stack
-                                    direction="row"
-                                    sx={{
-                                        justifyContent: "space-between",
-                                        alignItems: "center"
-                                    }}>
-                                    <Typography variant="body2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        Allow
-                                    </Typography>
-                                    <Chip size="small" variant="outlined" label={`${stats.allowedEvents}`} />
-                                </Stack>
-                                <Stack
-                                    direction="row"
-                                    sx={{
-                                        justifyContent: "space-between",
-                                        alignItems: "center"
-                                    }}>
-                                    <Typography variant="body2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        Review
-                                    </Typography>
-                                    <Chip size="small" color="warning" variant="outlined" label={`${stats.reviewedEvents}`} />
-                                </Stack>
-                                <Stack
-                                    direction="row"
-                                    sx={{
-                                        justifyContent: "space-between",
-                                        alignItems: "center"
-                                    }}>
-                                    <Typography variant="body2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        Blocked
-                                    </Typography>
-                                    <Chip size="small" color="error" label={`${stats.blockedEvents}`} />
-                                </Stack>
-                                <Stack
-                                    direction="row"
-                                    sx={{
-                                        justifyContent: "space-between",
-                                        alignItems: "center"
-                                    }}>
-                                    <Typography variant="body2" sx={{
-                                        color: "text.secondary"
-                                    }}>
-                                        Masked
-                                    </Typography>
-                                    <Chip size="small" color="warning" label={`${stats.maskedEvents}`} />
-                                </Stack>
+                                {([
+                                    { label: 'Total Events', value: stats.historyCount },
+                                    { label: 'Allow', value: stats.allowedEvents, tone: 'success' },
+                                    { label: 'Review', value: stats.reviewedEvents, tone: 'warning' },
+                                    { label: 'Blocked', value: stats.blockedEvents, tone: 'error' },
+                                    { label: 'Masked', value: stats.maskedEvents, tone: 'warning' },
+                                ] as const).map((row) => (
+                                    <Stack
+                                        key={row.label}
+                                        direction="row"
+                                        sx={{
+                                            justifyContent: "space-between",
+                                            alignItems: "center"
+                                        }}>
+                                        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                            {'tone' in row && <StatusDot tone={row.tone} />}
+                                            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                                {row.label}
+                                            </Typography>
+                                        </Stack>
+                                        <Typography variant="body2" sx={{ color: "text.primary", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                                            {row.value}
+                                        </Typography>
+                                    </Stack>
+                                ))}
                             </Stack>
                         </UnifiedCard>
                     </Grid>

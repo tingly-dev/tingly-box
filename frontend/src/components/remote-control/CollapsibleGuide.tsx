@@ -2,6 +2,7 @@ import { KeyboardArrowDown, KeyboardArrowUp } from '@/components/icons';
 import { Box, Button, Card, Collapse, Divider, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CollapsibleGuideProps {
     platformName: string;
@@ -20,7 +21,7 @@ const CollapsibleGuide: React.FC<CollapsibleGuideProps> = ({ platformName, platf
     };
 
     return (
-        <Card variant="outlined" sx={{mb: 2, borderRadius: 2, boxShadow: 'none'}}>
+        <Card variant="outlined" sx={{mb: 2, borderRadius: radius.card, boxShadow: 'none'}}>
             <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, px: 2, py: 1.25}}>
                 <Box sx={{minWidth: 0}}>
                     <Typography variant="body2" sx={{fontWeight: 600}}>

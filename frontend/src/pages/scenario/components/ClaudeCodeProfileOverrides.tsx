@@ -14,6 +14,7 @@ import {
     IconButton,
     InputAdornment,
     MenuItem,
+    Popover,
     Select,
     Stack,
     Switch,
@@ -40,6 +41,7 @@ import {
 } from './ClaudeCodeQuickConfig';
 import { fontMono } from '@/theme/fonts';
 import { useNotify } from '@/hooks/useNotify';
+import { radius } from '@tingly/ui/theme/radius';
 
 type OverrideKey = PrefsKey | 'defaultMode';
 
@@ -65,7 +67,6 @@ const TEXT = {
         off: '关',
         discard: '放弃',
         add: '添加',
-        closeAdd: '关闭',
         search: '搜索可覆盖的运行参数',
         noSettings: '没有可添加的参数',
         common: '常用',
@@ -98,7 +99,6 @@ const TEXT = {
         off: 'Off',
         discard: 'Discard',
         add: 'Add',
-        closeAdd: 'Close',
         search: 'Search runtime settings',
         noSettings: 'No settings available',
         common: 'Common',
@@ -131,7 +131,6 @@ const TEXT = {
         off: 'Выкл',
         discard: 'Отменить',
         add: 'Добавить',
-        closeAdd: 'Закрыть',
         search: 'Поиск рабочих параметров',
         noSettings: 'Доступных параметров нет',
         common: 'Основные',
@@ -156,8 +155,15 @@ const TEXT = {
     },
 } as const;
 
-const COMMON_KEYS: OverrideKey[] = ['CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'defaultMode'];
+// Most used first: permission mode, then the context-size knobs.
+const COMMON_KEYS: OverrideKey[] = ['defaultMode', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS'];
 const PROFILE_OVERRIDE_FIELDS = CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind !== 'model');
+const RULE_OWNED_MODEL_KEYS = new Set(CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind === 'model').map(field => field.envName));
+
+// Model slots can change independently while this editor is open. They are
+// owned by routing rules and must not be submitted as stale profile overrides.
+export const profileRuntimePreferences = (prefs: ClaudeCodePrefs): Record<string, string> =>
+    Object.fromEntries(Object.entries(prefs).filter(([key]) => !RULE_OWNED_MODEL_KEYS.has(key as PrefsKey)));
 const FIELD_ORDER: OverrideKey[] = [
     ...COMMON_KEYS,
     ...PROFILE_OVERRIDE_FIELDS
@@ -209,9 +215,9 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     const [basePrefs, setBasePrefs] = React.useState<ClaudeCodePrefs>({});
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>({});
     const [loadedPrefs, setLoadedPrefs] = React.useState<ClaudeCodePrefs>({});
-    const [inheritedMode, setInheritedMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
-    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
-    const [loadedMode, setLoadedMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
+    const [inheritedMode, setInheritedMode] = React.useState<ClaudeCodeDefaultMode>('auto');
+    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('auto');
+    const [loadedMode, setLoadedMode] = React.useState<ClaudeCodeDefaultMode>('auto');
     const [selectedKeys, setSelectedKeys] = React.useState<Set<OverrideKey>>(new Set());
     const [loadedKeys, setLoadedKeys] = React.useState<Set<OverrideKey>>(new Set());
     const [hasOverrides, setHasOverrides] = React.useState(false);
@@ -219,7 +225,8 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     const [savingAction, setSavingAction] = React.useState<'save' | 'restore' | null>(null);
     const [loadError, setLoadError] = React.useState(false);
     const [message, setMessage] = React.useState<{ severity: 'success' | 'error'; text: string } | null>(null);
-    const [addOpen, setAddOpen] = React.useState(false);
+    const [addAnchor, setAddAnchor] = React.useState<HTMLElement | null>(null);
+    const addOpen = Boolean(addAnchor);
     const [addQuery, setAddQuery] = React.useState('');
     const [restoreOpen, setRestoreOpen] = React.useState(false);
 
@@ -227,7 +234,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         if (!result?.success || !result.data) return false;
         const nextBase = (result.data.basePreferences || {}) as ClaudeCodePrefs;
         const nextPrefs = (result.data.preferences || {}) as ClaudeCodePrefs;
-        const nextInheritedMode = (result.data.inheritedDefaultMode || 'acceptEdits') as ClaudeCodeDefaultMode;
+        const nextInheritedMode = (result.data.inheritedDefaultMode || 'auto') as ClaudeCodeDefaultMode;
         const nextMode = (result.data.defaultMode || nextInheritedMode) as ClaudeCodeDefaultMode;
         setBasePrefs(nextBase);
         setPrefs(nextPrefs);
@@ -283,7 +290,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
 
     const addOverride = (key: OverrideKey) => {
         setSelectedKeys(current => new Set(current).add(key));
-        setAddOpen(false);
+        setAddAnchor(null);
         setAddQuery('');
         setMessage(null);
     };
@@ -344,7 +351,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         () => api.updateClaudeCodeProfileConfig(
             'claude_code',
             profileId,
-            prefs as Record<string, string>,
+            profileRuntimePreferences(prefs),
             defaultMode,
         ),
         text.saved,
@@ -458,7 +465,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
             size="full"
             title={text.title}
             subtitle={subtitle}
-            titleMarginBottom={hasRows || addOpen ? 1.25 : 0}
+            titleMarginBottom={hasRows ? 1.25 : 0}
             sx={{
                 '& > .MuiCardContent-root': {
                     p: 2.5,
@@ -498,14 +505,14 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                     <Button
                         size="small"
                         variant="outlined"
-                        startIcon={addOpen ? <Close fontSize="small" /> : <Add fontSize="small" />}
-                        onClick={() => {
-                            setAddOpen(current => !current);
+                        startIcon={<Add fontSize="small" />}
+                        onClick={event => {
+                            setAddAnchor(event.currentTarget);
                             setAddQuery('');
                         }}
                         disabled={loading || saving || loadError || availableKeys.length === 0}
                     >
-                        {addOpen ? text.closeAdd : text.add}
+                        {text.add}
                     </Button>
                 </Box>
             )}
@@ -579,14 +586,16 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                 </Stack>
             </Collapse>
 
-            <Collapse in={addOpen && availableKeys.length > 0} unmountOnExit>
+            <Popover
+                open={addOpen && availableKeys.length > 0}
+                anchorEl={addAnchor}
+                onClose={() => setAddAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                slotProps={{ paper: { sx: { mt: 0.5, width: 'min(620px, calc(100vw - 32px))', borderRadius: radius.card } } }}
+            >
                 <Box
                     sx={{
-                        mt: hasRows ? 1.25 : 0,
-                        maxWidth: 620,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 1.5,
                         overflow: 'hidden',
                     }}
                 >
@@ -643,7 +652,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                         )}
                     </Box>
                 </Box>
-            </Collapse>
+            </Popover>
 
             {message && (
                 <Alert severity={message.severity} sx={{ mt: 1 }}>{message.text}</Alert>

@@ -697,3 +697,81 @@ func TestConvertOpenAIResponsesToChat_ReasoningEffort(t *testing.T) {
 		})
 	}
 }
+
+// Codex sends MCP tools as `namespace` tools and replays their calls with a
+// `namespace` field. A Chat upstream knows neither, so both must be flattened.
+const codexNamespaceRequest = `{
+  "model": "gpt-5",
+  "input": [
+    {"type":"message","role":"user","content":"list my linear issues"},
+    {"type":"function_call","call_id":"call_1","namespace":"mcp__linear__","name":"list_issues","arguments":"{}"},
+    {"type":"function_call_output","call_id":"call_1","output":"[]"}
+  ],
+  "tools": [
+    {"type":"function","name":"shell","parameters":{"type":"object","properties":{}}},
+    {"type":"namespace","name":"mcp__linear__","description":"Linear MCP","tools":[
+      {"type":"function","name":"list_issues","description":"List issues","parameters":{"type":"object","properties":{}}},
+      {"type":"function","name":"get_issue","parameters":{"type":"object","properties":{}}}
+    ]}
+  ]
+}`
+
+func TestConvertOpenAIResponsesToChat_NamespaceTools(t *testing.T) {
+	var params responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(codexNamespaceRequest), &params))
+
+	chat := ConvertOpenAIResponsesToChat(&params, 4096)
+
+	var tools []string
+	for _, tool := range chat.Tools {
+		tools = append(tools, tool.OfFunction.Function.Name)
+	}
+	assert.Equal(t, []string{"shell", "mcp__linear__list_issues", "mcp__linear__get_issue"}, tools)
+
+	// The replayed call must carry the same flat name the model was offered.
+	var calledAs string
+	for _, msg := range chat.Messages {
+		if msg.OfAssistant != nil && len(msg.OfAssistant.ToolCalls) > 0 {
+			calledAs = msg.OfAssistant.ToolCalls[0].OfFunction.Function.Name
+		}
+	}
+	assert.Equal(t, "mcp__linear__list_issues", calledAs)
+}
+
+// A namespace member must come out of both converters exactly as a plain
+// function with the same definition does, and plain functions must not change.
+func TestResponsesNamespaceMemberConvertsLikeAPlainFunction(t *testing.T) {
+	const schema = `{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`
+	var plain, namespaced responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[
+	  {"type":"function","name":"mcp__crm__find","description":"Find a customer","parameters":`+schema+`},
+	  {"type":"function","name":"mcp__crm__ping"}]}`), &plain))
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[{"type":"namespace","name":"mcp__crm__","description":"CRM","tools":[
+	  {"type":"function","name":"find","description":"Find a customer","parameters":`+schema+`},
+	  {"type":"function","name":"ping"}]}]}`), &namespaced))
+
+	wantChat, _ := json.Marshal(ConvertOpenAIResponsesToChat(&plain, 4096).Tools)
+	gotChat, _ := json.Marshal(ConvertOpenAIResponsesToChat(&namespaced, 4096).Tools)
+	assert.JSONEq(t, string(wantChat), string(gotChat))
+	assert.Contains(t, string(gotChat), `"required":["id"]`)
+	assert.Contains(t, string(gotChat), `"additionalProperties":false`)
+
+	wantAnthropic, _ := json.Marshal(ConvertOpenAIResponsesToAnthropicBetaRequest(plain, 4096).Tools)
+	gotAnthropic, _ := json.Marshal(ConvertOpenAIResponsesToAnthropicBetaRequest(namespaced, 4096).Tools)
+	assert.JSONEq(t, string(wantAnthropic), string(gotAnthropic))
+}
+
+// strict is not forwarded to a Chat upstream (the converter never set it); a
+// namespace member must behave exactly like a plain function here, so moving
+// a tool into a namespace never changes whether strict reaches the upstream.
+func TestResponsesStrictBehavesTheSameInANamespace(t *testing.T) {
+	var plain, namespaced responses.ResponseNewParams
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[
+	  {"type":"function","name":"mcp__crm__find","strict":true,"parameters":{"type":"object"}}]}`), &plain))
+	require.NoError(t, json.Unmarshal([]byte(`{"model":"m","input":"hi","tools":[{"type":"namespace","name":"mcp__crm__","description":"CRM","tools":[
+	  {"type":"function","name":"find","strict":true,"parameters":{"type":"object"}}]}]}`), &namespaced))
+
+	want, _ := json.Marshal(ConvertOpenAIResponsesToChat(&plain, 4096).Tools)
+	got, _ := json.Marshal(ConvertOpenAIResponsesToChat(&namespaced, 4096).Tools)
+	assert.JSONEq(t, string(want), string(got))
+}

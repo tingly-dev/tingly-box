@@ -1,6 +1,7 @@
 package agentboot
 
 import (
+	"context"
 	"errors"
 
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
@@ -93,8 +94,30 @@ type InterruptRequest struct{}
 // or subagent) by the id the agent reported for it.
 type StopTaskRequest struct{ TaskID string }
 
-func (InterruptRequest) isControlRequest() {}
-func (StopTaskRequest) isControlRequest()  {}
+// SetModelRequest switches the model of the running process. Takes effect
+// from the next turn; an empty Model resets to the agent's default.
+type SetModelRequest struct{ Model string }
+
+// SetPermissionModeRequest switches the permission mode of the running process.
+type SetPermissionModeRequest struct{ Mode string }
+
+// ApplySettingsRequest layers settings (permission rules, say) over those the
+// running process started with. Each top-level key replaces what an earlier
+// request set for that key; the process's own start-up settings stay under it.
+type ApplySettingsRequest struct{ Settings map[string]any }
+
+func (InterruptRequest) isControlRequest()         {}
+func (StopTaskRequest) isControlRequest()          {}
+func (SetModelRequest) isControlRequest()          {}
+func (SetPermissionModeRequest) isControlRequest() {}
+func (ApplySettingsRequest) isControlRequest()     {}
+
+// ControlRejectedError is the agent's error answer to a control request.
+type ControlRejectedError struct{ Message string }
+
+func (e *ControlRejectedError) Error() string {
+	return "agentboot: agent rejected control request: " + e.Message
+}
 
 // ErrControlUnsupported is returned for a [ControlRequest] the session's
 // agent transport can't encode.
@@ -107,6 +130,32 @@ type ControlRequestEncoder interface {
 	// EncodeControlRequest returns the wire value for req, or nil if the
 	// agent has no such request.
 	EncodeControlRequest(reqID string, req ControlRequest) any
+}
+
+// ControlResponseDecoder is implemented by transports whose agent answers a
+// host-initiated control request with a response event. Optional: without
+// it, [PersistentSession.SetModel] and friends return ErrControlUnsupported.
+type ControlResponseDecoder interface {
+	// DecodeControlResponse reports whether ev answers a control request
+	// and, if so, which one (reqID) and whether the agent rejected it
+	// (non-nil err, a *[ControlRejectedError]).
+	DecodeControlResponse(ev protocol.Event) (reqID string, err error, ok bool)
+}
+
+// ControlResponseBodyDecoder is implemented by transports whose control
+// answers carry data (a context-usage query). Optional, alongside
+// [ControlResponseDecoder]: without it a success answer has no body.
+type ControlResponseBodyDecoder interface {
+	// ControlResponseBody returns the body of a success answer ev, nil if
+	// it has none.
+	ControlResponseBody(ev protocol.Event) map[string]any
+}
+
+// ContextUsageProvider is implemented by sessions that can report their
+// context size ([ContextUsageReader] on the transport does the decoding).
+// The persistent session returned by Runner.Open implements it.
+type ContextUsageProvider interface {
+	ContextUsage(ctx context.Context) (ContextUsage, error)
 }
 
 // TurnStartDetector is implemented by transports that can tell which event

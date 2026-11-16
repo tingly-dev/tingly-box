@@ -186,3 +186,49 @@ func chatEvents(t *testing.T, values ...map[string]any) []stage.Event {
 	}
 	return events
 }
+
+// A Responses client's `namespace` tools reach the Chat upstream as flat
+// functions, and the Chat tool call comes back as a namespaced function_call.
+func TestResponsesToOpenAIChatNamespaceTools(t *testing.T) {
+	t.Parallel()
+
+	terminal := &chatMemoryEndpoint{complete: func(_ context.Context, call stage.Call) (*stage.Response, error) {
+		request := call.Request.(*openai.ChatCompletionNewParams)
+		if len(request.Tools) != 1 || request.Tools[0].OfFunction.Function.Name != "mcp__linear__get_issue" {
+			t.Fatalf("provider tools = %#v", request.Tools)
+		}
+		return &stage.Response{
+			Value: decodeChatCompletion(t, map[string]any{
+				"id": "chatcmpl_1", "object": "chat.completion", "model": "provider-model",
+				"choices": []any{map[string]any{
+					"index": 0, "finish_reason": "tool_calls",
+					"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []any{map[string]any{
+						"id": "call_1", "type": "function",
+						"function": map[string]any{"name": "mcp__linear__get_issue", "arguments": `{"id":"A-1"}`},
+					}}},
+				}},
+			}),
+		}, nil
+	}}
+	adapted, err := stage.Adapt(terminal, NewToOpenAIChat(ChatOptions{}))
+	if err != nil {
+		t.Fatalf("Adapt() error = %v", err)
+	}
+	var tools []responses.ToolUnionParam
+	if err := json.Unmarshal([]byte(`[{"type":"namespace","name":"mcp__linear__","description":"Linear","tools":[
+		{"type":"function","name":"get_issue","parameters":{"type":"object","properties":{}}}]}]`), &tools); err != nil {
+		t.Fatal(err)
+	}
+	result, err := adapted.Complete(context.Background(), stage.Call{Request: &responses.ResponseNewParams{
+		Model: "provider-model",
+		Input: responses.ResponseNewParamsInputUnion{OfString: param.NewOpt("hello")},
+		Tools: tools,
+	}})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	response := result.Value.(wire.ResponsesWireResponse)
+	if len(response.Output) != 1 || response.Output[0].Namespace != "mcp__linear__" || response.Output[0].Name != "get_issue" {
+		t.Fatalf("output = %#v", response.Output)
+	}
+}

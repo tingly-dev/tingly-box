@@ -1,5 +1,57 @@
 // App shell and shared copy: navigation, system settings, help, login, onboarding
 export default {
+  "logViewer": {
+    "views": "Разделы журнала",
+    "tabs": {
+      "requests": "Запросы",
+      "usage": "Использование",
+      "system": "Система"
+    },
+    "search": "Поиск запросов",
+    "errorsOnly": "Только ошибки",
+    "load": "Загрузить",
+    "latest_one": "Последняя {{count}}",
+    "latest_few": "Последние {{count}}",
+    "latest_many": "Последние {{count}}",
+    "latest_other": "Последние {{count}}",
+    "refreshing": "Обновление…",
+    "count_one": "{{count}} запрос",
+    "count_few": "{{count}} запроса",
+    "count_many": "{{count}} запросов",
+    "count_other": "{{count}} запроса",
+    "countFiltered": "{{shown}} из {{total}} запросов",
+    "searchLogs": "Поиск в журнале",
+    "allLevels": "Все",
+    "entries_one": "{{count}} запись",
+    "entries_few": "{{count}} записи",
+    "entries_many": "{{count}} записей",
+    "entries_other": "{{count}} записи",
+    "entriesFiltered": "{{shown}} из {{total}} записей",
+    "refreshLogs": "Обновить журнал",
+    "autoRefresh": "Автообновление",
+    "refreshNow": "Обновить сейчас",
+    "refreshRequests": "Обновить запросы",
+    "columns": {
+      "time": "Время",
+      "agent": "Агент",
+      "model": "Модель",
+      "provider": "Провайдер",
+      "status": "Статус",
+      "latency": "Задержка"
+    },
+    "loading": "Загрузка…",
+    "noMatch": "Нет запросов, подходящих под фильтры.",
+    "empty": "В сохранённой истории нет запросов к моделям.",
+    "emptyAgent": "Этот агент ещё не отправлял запросов. Первый запрос появится здесь.",
+    "loadFailed": "Не удалось загрузить запросы",
+    "detailGone": "Подробности запроса больше не хранятся в истории.",
+    "detailFailed": "Не удалось загрузить подробности запроса",
+    "error": "Ошибка",
+    "retryHint": "Нажмите «Обновить», чтобы повторить.",
+    "loadingJourney": "Загрузка пути запроса…",
+    "usageHint": "Другие дни, графики и производительность — на панели.",
+    "openDashboard": "Открыть в панели"
+  },
   "common": {
     "back": "Назад",
     "add": "Добавить",
@@ -7,6 +59,7 @@ export default {
     "save": "Сохранить",
     "delete": "Удалить",
     "edit": "Изменить",
+    "duplicate": "Дублировать",
     "confirm": "Подтвердить",
     "loading": "Загрузка...",
     "enabled": "Включено",
@@ -16,6 +69,8 @@ export default {
     "close": "Закрыть",
     "done": "Готово",
     "applying": "Применение...",
+    "advanced": "Дополнительно",
+    "advancedCustomized": "изменено: {{count}}",
     "copy": "Копировать",
     "copied": "Скопировано",
     "copyModelName": "Копировать имя модели",
@@ -36,11 +91,40 @@ export default {
     "clear": "Сбросить выбор",
     "dismiss": "Скрыть",
     "moveDown": "Вниз",
+    "pinToTop": "Закрепить вверху",
     "moveUp": "Вверх",
     "saved": "Сохранено"
   },
+  "mobile": {
+    "tabBar": "Основная навигация",
+    "shell": {
+      "title": "Интерфейс",
+      "desktop": "Десктоп",
+      "mobile": "Телефон",
+      "auto": "Авто",
+      "hint": "«Телефон» включает мобильную раскладку на этом устройстве, «Десктоп» — полный интерфейс. Запоминается для браузера."
+    },
+    "subPages": {
+      "switch": "Переключить страницу: {{title}}"
+    },
+    "more": {
+      "title": "Ещё",
+      "tab": "Ещё",
+      "manage": "Управление",
+      "system": "Система",
+      "preferences": "Тема, язык и обратная связь",
+      "interface": "Интерфейс",
+      "useDesktop": "Использовать десктопный интерфейс",
+      "useDesktopHint": "Вернуться к полному интерфейсу"
+    }
+  },
   "layout": {
-    "desk": "Рабочее место",
+    "workspace": "Рабочее пространство",
+    "workspaceRail": "Проекты",
+    "workspaceTip": { "title": "Знакомьтесь: рабочее пространство", "text": "Проекты, рабочие каталоги и чаты IM — в одном месте." },
+    "workspaceGate": { "title": "Включите рабочее пространство", "text": "Включите расширение «Рабочее пространство», чтобы пользоваться проектами, рабочими каталогами и чатами IM.", "enable": "Включить рабочее пространство", "error": "Не удалось включить рабочее пространство. Попробуйте ещё раз." },
+    "projects": "Проекты",
+    "projectsWaiting": "Claude ждёт вашего ответа",
     "appTitle": "Tingly Box",
     "slogan": "Ваш интеллект под управлением.",
     "version": "версия<br/>{{version}}",
@@ -55,6 +139,7 @@ export default {
       "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
       "usePi": "Pi",
+      "useWorkBuddy": "WorkBuddy",
       "useDsh": "DeepSeek",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
@@ -75,11 +160,6 @@ export default {
       "newProfile": "Новый профиль",
       "newTeam": "Новая команда",
       "profileName": "Название профиля",
-      "mode": "Режим",
-      "modeUnified": "Единый: одна модель для всего",
-      "modeSeparate": "Раздельный: отдельные модели",
-      "separate": "Раздельный",
-      "unified": "Единый",
       "createProfileTooltip": "Создать новый профиль Claude Code с собственными настройками",
       "createTeamTooltip": "Создать изолированное рабочее пространство команды",
       "sloganTooltip": "Для соло-разработчиков, команд и агентов.",
@@ -87,6 +167,7 @@ export default {
       "doneEditing": "Готово",
       "expand": "Развернуть боковую панель"
     },
+    "featureSwitch": { "disable": "Отключить {{name}}", "disabledTitle": "{{name}} отключено", "disabledText": "Включить снова можно в Настройки → Расширения.", "teamTitle": "Команда включена", "teamText": "Команда включена по умолчанию. Эта кнопка её отключает." },
     "coachMarks": {
       "gotIt": "Понятно",
       "agentVisibility": {
@@ -95,7 +176,7 @@ export default {
       },
       "powerUps": {
         "title": "Расширения переехали сюда",
-        "text": "Team, Image, Remote, Bench и другие необязательные пункты теперь включаются и выключаются в этом меню, в разделе «Расширения»."
+        "text": "Team, Image, Projects, Bench и другие необязательные пункты теперь включаются и выключаются в этом меню, в разделе «Расширения»."
       }
     },
     "activityBar": {
@@ -109,7 +190,6 @@ export default {
       "light": "Светлая",
       "dark": "Тёмная",
       "system": "Системная",
-      "sunlit": "Солнечная",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "Нажмите",
@@ -138,11 +218,13 @@ export default {
     "today": "Сегодня",
     "yesterday": "Вчера",
     "days": "Дней",
-    "remote": "Удалённо",
+    "remote": "IM",
     "image": "Изображения",
+    "imageRail": "Картинки",
     "imagePlayground": "Песочница",
     "remoteControl": "Удалённый доступ",
     "notify": "Уведомления IM",
+    "imBots": "IM-боты",
     "bots": "Боты",
     "overview": "Обзор",
     "platforms": {
@@ -172,7 +254,6 @@ export default {
     "experimental": "Эксперименты",
     "develop": "Разработка",
     "logs": "Журналы",
-    "userRequest": "Запрос пользователя",
     "skills": "Навыки",
     "addProfile": "Новый профиль",
     "addTeam": "Новая команда",
@@ -182,6 +263,7 @@ export default {
     "help": "Советы и помощь",
     "helpShort": "Помощь",
     "powerUps": "Расширения",
+    "powerUpsRail": "Модули",
     "tools": "Утилиты",
     "servertool": "Серверные",
     "botsRunning": "Работает ботов: {{active}} из {{total}}"
@@ -280,17 +362,15 @@ export default {
       "saveFailed": "Не удалось обновить настройки языка"
     },
     "experimentalFeatures": {
-      "desk": "Рабочее место",
-      "enableDesk": "Запускайте Claude Code на этой машине из браузера в выбранной папке.",
-      "deskEnabledInfo": "Любой пользователь с доступом к этому tingly-box может запускать сеансы Claude Code на этой машине и разрешать их вызовы инструментов.",
+      "projects": "Проекты",
+      "enableProjects": "Работайте с Claude Code из веба и чатов в мессенджерах: запускайте его в выбранной папке или передайте работу проекту — координатор запустит каждую задачу как поток в отдельном git worktree.",
+      "projectsEnabledInfo": "Теперь любой, кто может войти в этот tingly-box или пользоваться удалённым управлением через одного из его ботов, может запускать Claude Code на этой машине — в выбранных папках и репозиториях — и разрешать его вызовы инструментов.",
       "title": "Экспериментальные возможности",
       "description": "Эти экспериментальные возможности действуют глобально для всех сценариев. Отдельные сценарии могут переопределять эти настройки.",
       "skills": "Навыки",
-      "userPrompts": "Пользовательские промпты",
       "guardrails": "Защита",
       "mcp": "MCP",
       "bench": "Bench",
-      "enableUserPrompts": "Управление многоразовыми инструкциями для пользовательских запросов",
       "enableIdeSkills": "Управление фрагментами кода и навыками из вашей IDE",
       "enableGuardrails": "Блокировка рискованных вызовов инструментов и фильтрация чувствительных ответов",
       "enableMCP": "Инструменты MCP (Model Context Protocol): веб-поиск, загрузка страниц и другие",
@@ -330,6 +410,10 @@ export default {
   "help": {
     "title": "Советы и помощь",
     "description": "Несколько полезных, но легко упускаемых из виду функций.",
+    "feedback": {
+      "description": "Сообщите о проблеме или поделитесь идеей на GitHub.",
+      "action": "Открыть GitHub Issues"
+    },
     "shortcut": {
       "title": "Ярлык на рабочем столе",
       "description": "Одним щелчком перезапускает Tingly Box и открывает веб-интерфейс. Никогда не обновляется и не перезапускается автоматически — создание ярлыка ничего больше не делает.",

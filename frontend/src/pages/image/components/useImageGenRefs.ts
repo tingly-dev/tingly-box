@@ -15,16 +15,6 @@ export const readImageSize = (src: string): Promise<{ width: number; height: num
     image.src = src;
 });
 
-// Reads a File into a base64 data URL, the same representation already used
-// for generated images (`data:image/png;base64,...`) so reference thumbnails
-// and outputs render through one code path.
-const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-});
-
 // Which sketch the canvas dialog is working on: `null` closed, `index: null`
 // a new sketch, otherwise the reference image being redrawn.
 type SketchTarget = { index: number | null } | null;
@@ -82,7 +72,7 @@ export const useImageGenRefs = ({ showNotification, size, initialReferences }: U
         }
         if (accepted.length === 0) return;
         const withPreviews = await Promise.all(accepted.map(async (file): Promise<ReferenceImage> => {
-            const previewUrl = await fileToDataUrl(file);
+            const previewUrl = URL.createObjectURL(file);
             return { file, previewUrl, source: 'upload', ...(await readImageSize(previewUrl) ?? {}) };
         }));
         setReferenceImages((current) => addReferences(current, withPreviews, MAX_EDIT_REFERENCE_IMAGES, 'ignore').next);
@@ -117,8 +107,8 @@ export const useImageGenRefs = ({ showNotification, size, initialReferences }: U
 
     // Hands a completed output straight back in as the next run's reference —
     // the artifact for the next action, not just a notification that one
-    // exists. Reuses the already-rendered src as the preview (it's already a
-    // data URL/data-equivalent), so this never re-encodes the image.
+    // exists. The preview is a blob: URL onto the same bytes, so nothing is
+    // re-encoded and no base64 copy rides along into a profile.
     //
     // It joins the references rather than replacing them: the row holds up
     // to five, and "use this one too" is the common case. At the cap the
@@ -127,11 +117,12 @@ export const useImageGenRefs = ({ showNotification, size, initialReferences }: U
         try {
             const blob = await fetchBlob(src);
             const file = new File([blob], `reference-${Date.now()}.png`, { type: blob.type || 'image/png' });
+            const previewUrl = URL.createObjectURL(file);
             const next: ReferenceImage = {
                 file,
-                previewUrl: src,
+                previewUrl,
                 source: 'upload',
-                ...(await readImageSize(src) ?? {}),
+                ...(await readImageSize(previewUrl) ?? {}),
             };
             // The user pointed at this image, so it goes in; at the cap the
             // oldest makes room — and that is said out loud, because a reference
@@ -165,12 +156,13 @@ export const useImageGenRefs = ({ showNotification, size, initialReferences }: U
     }, [referenceImages.length]);
 
     const handleSketchSubmit = useCallback(async (result: SketchResult) => {
+        const previewUrl = URL.createObjectURL(result.file);
         const sketch: ReferenceImage = {
             file: result.file,
-            previewUrl: result.previewUrl,
+            previewUrl,
             source: 'sketch',
             layers: result.layers,
-            ...(await readImageSize(result.previewUrl) ?? {}),
+            ...(await readImageSize(previewUrl) ?? {}),
         };
         setReferenceImages((current) => {
             const index = sketchTarget?.index ?? null;

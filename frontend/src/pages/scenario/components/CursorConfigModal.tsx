@@ -4,6 +4,7 @@ import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageConte
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
 import { fontMono } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CursorConfigModalProps {
     open: boolean;
@@ -46,7 +47,7 @@ const CursorConfigModal: React.FC<CursorConfigModalProps> = ({
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 3,
+                        borderRadius: radius.card,
                     }
                 }
             }}

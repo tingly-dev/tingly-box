@@ -1,9 +1,8 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import type { BackendModule } from 'i18next';
 import en from './locales/en';
-import zh from './locales/zh';
-import ru from './locales/ru';
 
 // Single source of truth for the languages the UI ships. Adding a locale means
 // adding one row here (plus the locale file) — the language switchers, the MUI
@@ -37,15 +36,36 @@ export const resolveLanguage = (language?: string | null): AppLanguage => {
     return match ?? DEFAULT_LANGUAGE;
 };
 
+// English is the fallback for every other language, so it ships in the main
+// bundle. The other locales are ~0.5 MB of source between them and a user only
+// ever reads one, so each loads on demand: before first render for the
+// detected language (see `i18nReady`), and through changeLanguage() when the
+// user switches. i18next waits for the load before it flips `language`, so
+// switching never flashes raw keys.
 const resources = {
     en: {
         translation: en,
     },
-    zh: {
-        translation: zh,
-    },
-    ru: {
-        translation: ru,
+};
+
+const localeLoaders: Record<Exclude<AppLanguage, 'en'>, () => Promise<{ default: object }>> = {
+    zh: () => import('./locales/zh'),
+    ru: () => import('./locales/ru'),
+};
+
+const lazyLocales: BackendModule = {
+    type: 'backend',
+    init: () => {},
+    read: (language, namespace, callback) => {
+        const load = localeLoaders[language as keyof typeof localeLoaders];
+        // Only the main `translation` namespace is a locale file; others (the
+        // Projects package adds its own with addResourceBundle) have nothing
+        // to fetch.
+        if (!load || namespace !== 'translation') {
+            callback(null, {});
+            return;
+        }
+        load().then((m) => callback(null, m.default), (err) => callback(err, null));
     },
 };
 
@@ -88,11 +108,15 @@ const languageDetectorOptions = {
     caches: ['localStorage'],
 };
 
-i18n
+// Resolves once the detected language's strings are loaded; main.tsx waits on
+// it so the first paint is already translated.
+export const i18nReady = i18n
     .use(languageDetector) // Detect user language
+    .use(lazyLocales) // Load non-English locales on demand
     .use(initReactI18next) // Passes i18n down to react-i18next
     .init({
         resources,
+        partialBundledLanguages: true, // en is bundled, the rest come from the backend above
         fallbackLng: DEFAULT_LANGUAGE, // Use English by default
         defaultNS: 'translation',
         debug: false,

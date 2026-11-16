@@ -34,6 +34,26 @@ construction). The duo-topology rungs (duo / routing) trade speed for
 process-level fidelity: two full `server.Start()` child processes and real
 TCP between them.
 
+### Response retention acceptance
+
+```sh
+harness matrix --mode=response_retention
+harness matrix --mode=response_retention --json > retention-results.json
+```
+
+Runs 40 real-HTTP gateway cases for Chat/Responses clients against Anthropic
+V1/Beta upstream fixtures, in streaming and nonstream modes. Checks exact large
+integer tool arguments, empty input, split deltas replacing initial snapshots,
+initial text, Chat thinking, trailing usage and max-token truncation. Assertions
+inspect raw client wire values, bypassing semantic normalization that could hide
+number rounding. The suite also runs under `--mode=all` and
+`go test ./internal/protocoltest -run '^TestResponseRetention$'`.
+
+These are deterministic protocol acceptance cases with a controlled upstream;
+they do not establish live-provider compatibility or execute an external tool.
+MCP execution-hook suppression and mutable SDK-field behavior remain covered by
+the targeted protocol tests, because they cannot be induced by provider JSON alone.
+
 ### Scope
 
 The harness guards the **AI data plane** — protocol conversion, traffic
@@ -56,6 +76,14 @@ path — because that is the product's core. This boundary is deliberate:
   intentionally skips outbound dispatch helpers; tracked in the vmodel
   roadmap). See [Planned work & known issues](#planned-work--known-issues)
   below for scenario/fixture/upstream-coverage work still open.
+
+The `servertool` matrix also covers real SDK MCP servers over Streamable HTTP
+and SSE: discovery and gateway injection, owned-call suppression, argument
+forwarding, structured results, `isError`, and the second model round, across
+Anthropic/OpenAI sources and targets in stream and nonstream modes. These
+hermetic remote-MCP cases run in the existing `matrix-servertool` CI leg.
+Configuration persistence, lifecycle and client grants are covered by the MCP
+package integration tests.
 
 ### CI
 

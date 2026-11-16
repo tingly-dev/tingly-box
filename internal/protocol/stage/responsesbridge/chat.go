@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
@@ -59,6 +60,7 @@ func (b *openAIChatBridge) Open(_ context.Context, call stage.Call, operation st
 		operation:   operation,
 		targetCall:  targetCall,
 		sourceModel: sourceModel,
+		namespaces:  toolnamespace.IndexOf(responsesRequest.Tools),
 	}, nil
 }
 
@@ -66,6 +68,7 @@ type openAIChatSession struct {
 	operation   stage.Operation
 	targetCall  stage.Call
 	sourceModel string
+	namespaces  toolnamespace.Index
 }
 
 func (s *openAIChatSession) TargetCall() stage.Call { return s.targetCall }
@@ -78,7 +81,7 @@ func (s *openAIChatSession) ConvertComplete(_ context.Context, response *stage.R
 	if err != nil {
 		return nil, err
 	}
-	converted := nonstream.ConvertChatToResponsesWire(completion, s.sourceModel, string(completion.Model))
+	converted := nonstream.ConvertChatToResponsesWire(completion, s.sourceModel, string(completion.Model), s.namespaces)
 	usage := protocolusage.FromOpenAIChatCompletion(completion.Usage)
 	if !usage.HasUsage() {
 		usage = nil
@@ -107,5 +110,5 @@ func (s *openAIChatSession) ConvertStream(_ context.Context, target stage.EventS
 	if s.operation != stage.OperationStream {
 		return nil, fmt.Errorf("convert Chat stream to OpenAI Responses: session was opened for %s", s.operation)
 	}
-	return newChatResponsesStream(target, s.sourceModel)
+	return newChatResponsesStream(target, s.sourceModel, s.namespaces)
 }

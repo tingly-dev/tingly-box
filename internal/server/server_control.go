@@ -9,15 +9,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/agentboot/pool"
+	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/db"
-	desksvc "github.com/tingly-dev/tingly-box/internal/desk"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/internal/tbclient"
-	"github.com/tingly-dev/tingly-box/remote/control"
+	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
+	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
@@ -100,50 +99,15 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	// Engine-level routes first: the status line and notify hooks. The
 	// modules mounted below, and which of them exist, are decided in
 	// server_modules.go so this path and OpenAPI generation cannot drift.
-	engineMods, statusHandler := s.engineModules(false)
+	engineMods := s.engineModules(false)
 	module.Mount(&module.Routes{Engine: s.engine}, engineMods...)
 
 	manager := swagger.NewRouteManager(s.engine)
 	rt := s.UseWebAPIEndpoints(manager)
-	module.Mount(rt, s.apiModules(ctx, false, statusHandler)...)
+	module.Mount(rt, s.apiModules(ctx, false)...)
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	UseWebStaticEndpoints(s.engine)
-}
-
-// deskSessionPoolConfig mirrors imbot's sessionPoolConfig
-// (internal/server/module/imbot/manager.go) — same capacity/idle-timeout
-// reasoning applies to a browser-driven Claude Code session as to a bot one.
-var deskSessionPoolConfig = pool.Config{
-	MaxSessions: 10,
-	IdleTimeout: 10 * time.Minute,
-}
-
-// newDeskService builds the Desk service — a web front
-// door onto the same remote/session + agentboot machinery @cc already
-// drives, not a separate domain model (.design/desk.md). It builds
-// its own control.Core, an independent in-memory session.Manager cache over
-// the SAME session store @cc uses (sm.RemoteSessions()) — the sanctioned
-// pattern every remote-host entry point follows (see remote/control.Core).
-//
-// Only the running server may call this: the service reconciles stored
-// sessions on construction, so building one from schema generation would
-// rewrite a live server's sessions. Returns nil if it cannot be built.
-func newDeskService(sm *db.StoreManager, cfg *config.Config) *desksvc.Service {
-	if sm == nil {
-		return nil
-	}
-	maCore, err := control.NewCore(sm.RemoteSessions())
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to create desk control core, desk APIs will not be available")
-		return nil
-	}
-	return desksvc.NewService(desksvc.Config{
-		Sessions: maCore.Session,
-		Agent:    maCore.Agent,
-		Routing:  tbclient.NewTBClient(cfg),
-		Pool:     pool.New(deskSessionPoolConfig),
-	})
 }
 
 // RuntimeAuditSink builds the AuditFunc the scenario runtime hands to
@@ -154,4 +118,28 @@ func RuntimeAuditSink() remotescenario.AuditFunc {
 	return func(action string, fields map[string]any) {
 		logrus.WithFields(logrus.Fields(fields)).WithField("action", action).Info(action)
 	}
+}
+
+// newProjectsApp builds Projects with model access through this gateway.
+// Schema generation gets an in-memory app (nothing on disk, never started);
+// the running server keeps Projects' own database and project folders in
+// dataDir (--projects-dir, default "<config dir>-project"), never inside the
+// config dir, so a thread's working directory does not sit next to Tingly
+// Box's credentials.
+func newProjectsApp(cfg *config.Config, dataDir string, schema bool, chats *projectsmodule.ChatBridge, routes *statusline.Handler) *projectsapp.App {
+	host := projectsmodule.NewHost(cfg).WithRoutePreview(routes)
+	host.SetChatBridge(chats)
+	opts := projectsapp.Options{Host: host}
+	if !schema {
+		if dataDir == "" {
+			dataDir = options.DefaultProjectsDir(cfg.ConfigDir)
+		}
+		opts.DataDir = dataDir
+	}
+	app, err := projectsapp.New(opts)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to open Projects, its APIs will not be available")
+		return nil
+	}
+	return app
 }

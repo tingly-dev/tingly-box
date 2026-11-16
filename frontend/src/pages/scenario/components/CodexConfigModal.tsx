@@ -5,12 +5,14 @@ import { InfoOutlined, RestartAlt } from '@/components/icons';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs, mergeSavedCodexPrefs } from './CodexQuickConfig';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { ConfigModalShell, QuickApplyActions } from './config/ConfigModalShell';
+import { AdvancedSection } from './config/AdvancedSection';
 import { ManualFileSection } from './config/ManualFileSection';
 import { writeFileScripts } from './config/writeFileScripts';
 import { useAppliedPrefs } from './config/useAppliedPrefs';
 import { useDebouncedPreview } from './config/useDebouncedPreview';
 import { api } from '@/services/api';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CodexConfigModalProps {
     open: boolean;
@@ -66,6 +68,12 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [authJson, setAuthJson] = React.useState<string>(`{\n  "OPENAI_API_KEY": "${token}"\n}`);
     const [catalogJson, setCatalogJson] = React.useState<string>('');
     const [previewModels, setPreviewModels] = React.useState<string[]>([]);
+
+    const customizedCount = React.useMemo(() => {
+        const base = defaultCodexPrefs() as Record<string, string | undefined>;
+        const cur = prefs as Record<string, string | undefined>;
+        return Object.keys(cur).filter(k => (cur[k] ?? '') !== (base[k] ?? '')).length;
+    }, [prefs]);
 
     // Apply configuration state
     const [isApplying, setIsApplying] = React.useState(false);
@@ -177,6 +185,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             );
             if (response?.success) {
                 showNotification?.(t('codexConfig.applySuccess'), 'success');
+                onClose();
             } else {
                 showNotification?.(response?.message || t('codexConfig.applyFailed'), 'error');
             }
@@ -220,7 +229,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
                     <Context1MChangeBanner enabled={pendingContext1MChange} clientName="Codex" />
                 )}
 
-                <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                <Box sx={{ mb: 2, p: 2, borderRadius: radius.card, bgcolor: 'action.hover' }}>
                     {/* One 3-way select for the three valid auth states. Each
                         option's caption carries the concrete consequence
                         (routing + what lands in auth.json) so the two
@@ -332,12 +341,14 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
                 )}
 
                 {authMode !== 'chatgpt' && mainTab === 'quick' && !isConfigLoading && (
-                    <CodexQuickConfig
-                        prefs={prefs}
-                        setPrefs={setPrefs}
-                        writeCatalog={writeCatalog}
-                        setWriteCatalog={setWriteCatalog}
-                    />
+                    <AdvancedSection customizedCount={customizedCount}>
+                        <CodexQuickConfig
+                            prefs={prefs}
+                            setPrefs={setPrefs}
+                            writeCatalog={writeCatalog}
+                            setWriteCatalog={setWriteCatalog}
+                        />
+                    </AdvancedSection>
                 )}
 
                 {authMode !== 'chatgpt' && mainTab === 'manual' && (

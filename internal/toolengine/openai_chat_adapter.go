@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
@@ -258,11 +257,8 @@ func (o *OpenAIChatAdapter) ShouldSuppressEvent(event any, virtualRegistry *core
 	// Need to track which tool calls are virtual from their name
 	for _, tc := range delta.ToolCalls {
 		if tc.Function.Name != "" {
-			_, toolName, ok := runtime.ParseNormalizedToolName(tc.Function.Name)
-			if ok && virtualRegistry != nil {
-				if _, exists := virtualRegistry.Get(toolName); exists {
-					return true // Suppress virtual tool events
-				}
+			if IsVirtualTool(tc.Function.Name, virtualRegistry) {
+				return true
 			}
 		}
 	}

@@ -16,6 +16,8 @@ import { fetchBlob } from '@tingly/vision';
 // Longest edge, in CSS px × a 2× display. The grid's tiles top out near 260px.
 export const THUMB_EDGE_TILE = 512;
 export const THUMB_EDGE_BADGE = 96;
+// A result or imported-image card: up to a full-width card on a 2× display.
+export const THUMB_EDGE_CARD = 1024;
 
 // Plenty for a long session; past it the least recently asked-for thumbnail
 // is dropped (and its blob URL revoked) rather than growing without bound.

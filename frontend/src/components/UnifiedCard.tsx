@@ -3,6 +3,8 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import type { ElementType, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import { EMPTY_SX } from '@/constants/defaults';
+import { radius } from '@tingly/ui/theme/radius';
+import { elevation } from '@tingly/ui/theme/elevation';
 
 /**
  * Responsive column span for a card placed inside a `CardGrid` (MUI Grid v7).
@@ -45,6 +47,8 @@ interface UnifiedCardProps {
   // Header actions
   leftAction?: ReactNode;
   rightAction?: ReactNode;
+  /** Opt-in header layout overrides, for example stacking actions on narrow screens. */
+  headerSx?: SxProps<Theme>;
   sx?: SxProps<Theme>;
   // DOM id forwarded to the root Card — useful as a scroll/anchor target
   id?: string;
@@ -127,7 +131,7 @@ const cardVariants = {
     boxShadow: 'none',
   },
   elevated: {
-    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.10)',
+    boxShadow: elevation.lifted,
     border: 'none',
   },
 };
@@ -147,6 +151,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
   onClearMessage,
   leftAction,
   rightAction,
+  headerSx = EMPTY_SX,
   sx = EMPTY_SX,
   id,
   grid,
@@ -158,7 +163,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
       sx={{
         ...getCardDimensions(size, width, height),
         ...cardVariants[variant],
-        borderRadius: 2,
+        borderRadius: radius.card,
         border: '1px solid',
         borderColor: 'divider',
         backgroundColor: 'background.paper',
@@ -182,7 +187,10 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
       >
         {title && (
           <Box sx={{ mb: titleMarginBottom, flexShrink: 0 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 }}>
+            <Box sx={[
+              { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 },
+              ...(Array.isArray(headerSx) ? headerSx : [headerSx]),
+            ]}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                 {typeof title === 'string' || typeof title === 'number' ? (
                   <Typography

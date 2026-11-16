@@ -6,9 +6,9 @@
 //
 // It owns no storage. A host passes a Store, which receives every
 // transcript entry and status change, and keeps its own session records and
-// settings. Tingly Box's Desk is one host (over remote/session, the store IM
-// `@cc` shares); Projects' threads are meant to be another. The behaviour
-// and the reasons for it are in tingly-box's .design/desk.md §3.
+// settings. Projects' threads and working-folder sessions are its host. The
+// behaviour and the reasons for it are in tingly-box's .design/desk.md §3
+// (written for its first host).
 package engine
 
 import (
@@ -50,8 +50,9 @@ const (
 	KindApprovalResponse = "approval_response"
 	KindAskRequest       = "ask_request"
 	KindAskResponse      = "ask_response"
-	KindTask             = "task"  // payload: TaskEvent
-	KindUsage            = "usage" // payload: TurnUsage
+	KindTask             = "task"    // payload: TaskEvent
+	KindUsage            = "usage"   // payload: TurnUsage
+	KindCompact          = "compact" // payload: agentboot.CompactEvent
 	KindSystem           = "system"
 	KindError            = "error"
 )
@@ -123,10 +124,14 @@ type Engine struct {
 
 	mu   sync.Mutex
 	runs map[string]*run // session id -> live turn, while one is in flight
+	// settling tracks callbacks after the engine has released the turn claim.
+	settling map[string]int
 	// launch records what each resident process was started with (see
 	// launchSignature), so a changed setting restarts it instead of being
 	// silently ignored.
-	launch map[string]string
+	launch map[string]launchState
+	// lastTurn remembers each session's latest turn for Retry (turn.go).
+	lastTurn map[string]lastTurn
 	// residents holds the Conductor of each pooled process (resident.go).
 	residents map[string]*resident
 	// live is each session's running background tasks (tasks.go).
@@ -146,6 +151,10 @@ type run struct {
 	// the process directly.
 	unsolicited bool
 	stopped     atomic.Bool // the user stopped it, so its error result is expected
+	// compact collects the compaction events of a turn started by Compact.
+	compact *compactCapture
+	// end is how the turn ended; set before done closes.
+	end TurnEnd
 }
 
 var (
@@ -153,6 +162,10 @@ var (
 	ErrNoTurn = errors.New("no turn in progress")
 	// ErrBusy: the session has a turn in flight.
 	ErrBusy = errors.New("a turn is in progress")
+	// ErrNotSent: Compact's request never reached the agent, because it had
+	// just started a turn of its own. The host's OnTurnEnd already saw this
+	// (TurnEnd.NotSent); a host that re-queues on that must not do so again.
+	ErrNotSent = errors.New("the agent started a turn of its own first")
 	// ErrUnknownRequest: no pending approval or question has that id.
 	ErrUnknownRequest = errors.New("no such pending request")
 	// ErrTaskNotRunning: the session has no live background task by that id.
@@ -169,7 +182,9 @@ func New(cfg Config) *Engine {
 		hostPrompter:   cfg.Prompter,
 		onTurnEnd:      cfg.OnTurnEnd,
 		runs:           map[string]*run{},
-		launch:         map[string]string{},
+		settling:       map[string]int{},
+		launch:         map[string]launchState{},
+		lastTurn:       map[string]lastTurn{},
 		residents:      map[string]*resident{},
 		live:           map[string][]TaskBrief{},
 		stopKeepAlive:  make(chan struct{}),
@@ -233,15 +248,43 @@ func (e *Engine) Stop(id string) (<-chan struct{}, bool) {
 	return r.done, true
 }
 
+// ErrNotInjectable: Inject has nothing to join (no turn in flight on a live
+// process), so the message is a new turn for Start.
+var ErrNotInjectable = errors.New("no running turn to add the message to")
+
+// Inject adds prompt to the turn id has in flight, without ending it:
+// Claude takes it up at its next step. The message is recorded as the
+// user's. Returns ErrNotInjectable when there is no such turn, for the caller
+// to Start one instead.
+func (e *Engine) Inject(id, prompt string) error {
+	e.mu.Lock()
+	_, running := e.runs[id]
+	e.mu.Unlock()
+	res, ok := e.residentFor(id)
+	if !running || !ok {
+		return ErrNotInjectable
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
+	defer cancel()
+	if err := res.c.Inject(ctx, prompt); err != nil {
+		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) {
+			return ErrNotInjectable
+		}
+		return err
+	}
+	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
+	return nil
+}
+
 // Release closes id's resident process so something else (a terminal) can
 // take the Claude session over: two processes writing one session file
-// corrupt it. A turn in flight is refused with ErrBusy rather than killed,
-// and the session is claimed while the process closes, so no turn can
-// start in between and have its process closed under it.
+// corrupt it. A running turn, background task or unfinished turn callback is
+// refused with ErrBusy rather than killed. The session is claimed while the
+// process closes and its event reader drains, preventing a concurrent Start.
 func (e *Engine) Release(id string) error {
 	done := make(chan struct{})
 	e.mu.Lock()
-	if _, busy := e.runs[id]; busy {
+	if _, busy := e.runs[id]; busy || len(e.live[id]) > 0 || e.settling[id] > 0 {
 		e.mu.Unlock()
 		return ErrBusy
 	}
@@ -253,7 +296,27 @@ func (e *Engine) Release(id string) error {
 		e.mu.Unlock()
 		close(done)
 	}()
-	e.Evict(id)
+	if e.pool == nil {
+		return nil
+	}
+	e.mu.Lock()
+	resident := e.residents[id]
+	e.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	if err := e.pool.CloseAndRemove(ctx, id); err != nil {
+		return err
+	}
+	if resident != nil {
+		select {
+		case <-resident.c.Done():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	e.mu.Lock()
+	delete(e.launch, id)
+	e.mu.Unlock()
 	return nil
 }
 

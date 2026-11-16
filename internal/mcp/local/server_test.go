@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -18,8 +19,8 @@ func (h *stubHandler) ListTools(_ context.Context) ([]MCPTool, error) {
 	return []MCPTool{{Name: "stub_tool", Description: "stub"}}, nil
 }
 
-func (h *stubHandler) CallTool(_ context.Context, _ string, _ map[string]any) (string, error) {
-	return "ok", nil
+func (h *stubHandler) CallTool(_ context.Context, _ string, _ map[string]any) (coretool.ToolResult, error) {
+	return coretool.TextToolResult("ok"), nil
 }
 
 func TestMCPServer_StartAndStop(t *testing.T) {

@@ -21,6 +21,8 @@ import { TIER_GUIDE_STEPS, type GuideStep } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 export interface TierGuideDialogProps {
     open: boolean;
@@ -207,7 +209,7 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                                             sx={{
                                                 p: 1.5,
                                                 bgcolor: 'action.hover',
-                                                borderRadius: 1,
+                                                borderRadius: radius.row,
                                                 flex: '1 1 45%',
                                             }}
                                         >
@@ -230,7 +232,7 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                             minHeight: 280,
                             maxHeight: 400,
                             overflow: 'auto',
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             border: '1px solid',
                             borderColor: 'divider',
                             position: 'relative',
@@ -246,11 +248,11 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
                                 position: 'absolute',
                                 bottom: 8,
                                 right: 8,
-                                bgcolor: 'rgba(0,0,0,0.7)',
+                                bgcolor: overlay.badge,
                                 color: 'white',
                                 px: 1.5,
                                 py: 0.5,
-                                borderRadius: 1,
+                                borderRadius: radius.row,
                                 fontSize: fontSizes.sm,
                                 opacity: 0.8,
                             }}>

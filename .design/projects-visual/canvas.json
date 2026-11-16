@@ -1,0 +1,73 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-23T12:30:00Z"
+  },
+  "title": "Projects visual unification",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "A-Ethos.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 640,
+      "title": "0 · Projects 的气质"
+    },
+    "B-Now.dc.html": {
+      "x": 0,
+      "y": 760,
+      "w": 1440,
+      "h": 700,
+      "title": "1 · 现状：同一状态五种长相"
+    },
+    "C-Language.dc.html": {
+      "x": 0,
+      "y": 1580,
+      "w": 1440,
+      "h": 900,
+      "title": "2 · 统一后：状态语言"
+    },
+    "D-Primitives.dc.html": {
+      "x": 0,
+      "y": 2600,
+      "w": 1440,
+      "h": 820,
+      "title": "3 · 统一后：字号、圆角和列表行"
+    },
+    "E-ProjectPage.dc.html": {
+      "x": 0,
+      "y": 3540,
+      "w": 1440,
+      "h": 860,
+      "title": "4 · 统一后的 Project 页"
+    },
+    "F-FolderRail.dc.html": {
+      "x": 0,
+      "y": 4520,
+      "w": 1440,
+      "h": 860,
+      "title": "5 · 统一后的 Folder 会话页"
+    },
+    "G-FolderTree.dc.html": {
+      "x": 0,
+      "y": 5500,
+      "w": 1440,
+      "h": 700,
+      "title": "6 · 左侧 Folder 树"
+    }
+  },
+  "order": [
+    "A-Ethos.dc.html",
+    "B-Now.dc.html",
+    "C-Language.dc.html",
+    "D-Primitives.dc.html",
+    "E-ProjectPage.dc.html",
+    "F-FolderRail.dc.html",
+    "G-FolderTree.dc.html"
+  ],
+  "notes": {}
+}

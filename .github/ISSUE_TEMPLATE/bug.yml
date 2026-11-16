@@ -1,0 +1,66 @@
+name: Bug
+description: Something is broken or behaves differently from what you expect
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
+      options:
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
+        - Auth / OAuth
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - Projects
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: The request context, what you expected and what you got. Fill in the keys that apply and delete the rest.
+      value: |
+        - Agent / Client: e.g. Claude Code, Codex CLI, opencode, Gemini CLI, other apps
+        - Source Protocol: e.g. anthropic / openai / openai_responses / google (if protocol conversion is involved)
+        - Provider: e.g. Anthropic, OpenAI, Google AI Studio, OpenRouter, custom endpoint
+        - Model: e.g. claude-sonnet-4-5, gpt-5, gemini-2.5-pro
+        - Request Specifics: e.g. streaming / non-streaming, tool calls, image input, prompt cache, MCP
+
+        I did ... and expected ... but got ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Optional. Paste relevant logs or error messages.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Tingly-Box version, or the commit if you run from source.
+      placeholder: v0.1.0
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS & Architecture
+      description: Which operating system and CPU architecture are you running Tingly-Box on?
+      options:
+        - macOS Apple Silicon (M-chip)
+        - macOS Intel
+        - Windows x86_64
+        - Windows ARM64
+        - Linux x86_64
+        - Linux ARM64
+        - Other

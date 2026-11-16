@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material';
 import React from 'react';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface InstructionStepsProps {
     /** Numbered instruction lines shown before the value block. All but the
@@ -18,7 +19,7 @@ export const InstructionSteps: React.FC<InstructionStepsProps> = ({
     values,
     trailingStep,
 }) => (
-    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: radius.row, border: 1, borderColor: 'divider' }}>
         {steps.map((step, index) => (
             <Typography key={index} variant="subtitle2" sx={{ mb: index === steps.length - 1 ? 1 : 1.5 }}>
                 {step}

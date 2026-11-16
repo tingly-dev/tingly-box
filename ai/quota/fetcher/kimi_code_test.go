@@ -383,3 +383,56 @@ func TestKimiCodeSemantics(t *testing.T) {
 		t.Errorf("limit_2 = %d min, type %q; want unsized and custom", unsized.WindowMinutes, unsized.Type)
 	}
 }
+
+// The monthly allowances arrive only in "usages", as a share used; its 5h
+// entry restates "limits" and must not show twice.
+func TestKimiCodeFetcherReadsMonthlyUsages(t *testing.T) {
+	t.Parallel()
+
+	const response = `{
+		"limits": [{
+			"window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"},
+			"detail": {"limit": "100", "remaining": "100", "resetTime": "2026-10-21T08:28:30.200541Z"}
+		}],
+		"usages": {
+			"limit_5h": {"used_ratio": 0, "reset_time": "2026-10-21T08:28:30Z"},
+			"limit_month_total": {"used_ratio": 1, "reset_time": "2026-11-01T00:00:00Z"},
+			"limit_month_code": {"used_ratio": 0.25, "reset_time": "2026-11-01T00:00:00Z"}
+		}
+	}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	usage, err := (&KimiCodeFetcher{baseURL: server.URL}).Fetch(context.Background(), kimiCodeTestProvider())
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+	if len(usage.Windows) != 3 {
+		t.Fatalf("len(Windows) = %d, want 3 (5h from limits, two monthly from usages)", len(usage.Windows))
+	}
+	byKey := map[string]*quota.UsageWindow{}
+	for _, w := range usage.Windows {
+		byKey[w.Key] = w
+	}
+	if _, ok := byKey["limit_5h"]; ok {
+		t.Error("usages.limit_5h duplicated the 5h window from limits")
+	}
+	for key, want := range map[string]float64{"limit_month_total": 100, "limit_month_code": 25} {
+		w := byKey[key]
+		if w == nil {
+			t.Fatalf("missing window %s", key)
+		}
+		if w.UsedPercent != want || w.Type != quota.WindowTypeMonthly || w.WindowMinutes != 30*24*60 {
+			t.Errorf("%s = %+v, want %.0f%% used, monthly", key, w, want)
+		}
+		if w.ResetsAt == nil || !w.ResetsAt.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%s ResetsAt = %v", key, w.ResetsAt)
+		}
+	}
+	if got := byKey["limit_month_code"].Label; got != "Monthly limit (code)" {
+		t.Errorf("label = %q", got)
+	}
+}

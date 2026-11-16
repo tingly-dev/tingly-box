@@ -1,10 +1,12 @@
 import {
+    Alert,
     Box,
     Divider,
     MenuItem,
     Select,
     Stack,
     Switch,
+    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -13,6 +15,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { CODEX_COMPACT, planCodexCompact } from '@/components/rule-card/codexCompact';
+import { radius } from '@tingly/ui/theme/radius';
 
 // CodexPrefs mirrors the Go struct in internal/config (CodexPrefs).
 // Keys are the literal Codex config.toml keys so the object round-trips
@@ -22,8 +26,18 @@ export interface CodexPrefs {
     model_reasoning_effort?: string;
     model_reasoning_summary?: string;
     model_verbosity?: string;
-    model_supports_reasoning_summaries?: string; // "true" | ""
+    supports_reasoning_summaries?: string; // "true" | "" — catalog-only
+    // Catalog-only (tingly-model-catalog.json, not config.toml keys): decimal
+    // percent strings, "" = tingly-box default.
+    effective_context_window_percent?: string;
+    auto_compact_percent?: string;
 }
+
+// Mirrors codexEffectiveContextWindowPercent / codexDefaultAutoCompactTokenLimitPct
+// and the min/max bounds in internal/config/apply_config_codex.go.
+const CONTEXT_PERCENT_DEFAULTS = { effective_context_window_percent: 82, auto_compact_percent: 75 } as const;
+const CONTEXT_PERCENT_MIN = 50;
+const CONTEXT_PERCENT_MAX = 100;
 
 export function defaultCodexPrefs(): CodexPrefs {
     // Position reasoning effort to a concrete default ("medium") instead of
@@ -39,7 +53,9 @@ const CODEX_PREF_KEYS = [
     'model_reasoning_effort',
     'model_reasoning_summary',
     'model_verbosity',
-    'model_supports_reasoning_summaries',
+    'supports_reasoning_summaries',
+    'effective_context_window_percent',
+    'auto_compact_percent',
 ] as const satisfies readonly (keyof CodexPrefs)[];
 
 // Merge a previously-applied prefs object over the current defaults so
@@ -61,7 +77,7 @@ export function mergeSavedCodexPrefs(applied: CodexPrefs = {}): CodexPrefs {
 }
 
 type PrefsKey = keyof CodexPrefs;
-type Kind = 'enum' | 'bool';
+type Kind = 'enum' | 'bool' | 'percent';
 
 // ── Field structure (language-agnostic) ────────────────────────────────
 // Keep in sync with codexPrefSpec in internal/config/apply_config.go.
@@ -78,10 +94,12 @@ interface FieldStruct {
 const UNSET = '';
 
 const FIELD_STRUCT: FieldStruct[] = [
-    { key: 'model_reasoning_effort', kind: 'enum', enumValues: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] },
+    { key: 'model_reasoning_effort', kind: 'enum', enumValues: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] },
     { key: 'model_reasoning_summary', kind: 'enum', enumValues: ['auto', 'concise', 'detailed', 'none'] },
     { key: 'model_verbosity', kind: 'enum', enumValues: ['low', 'medium', 'high'] },
-    { key: 'model_supports_reasoning_summaries', kind: 'bool' },
+    { key: 'supports_reasoning_summaries', kind: 'bool' },
+    { key: 'effective_context_window_percent', kind: 'percent' },
+    { key: 'auto_compact_percent', kind: 'percent' },
 ];
 
 // ── Localized text bundles ─────────────────────────────────────────────
@@ -110,10 +128,20 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
         purpose: '控制回复的啰嗦程度',
         tooltip: 'low 适合简洁的编码助手；high 会给更多解释。留空则用 Codex 默认（medium）。',
     },
-    model_supports_reasoning_summaries: {
+    supports_reasoning_summaries: {
         label: '强制推理摘要',
         purpose: '在非 OpenAI 模型上强制开启推理摘要',
-        tooltip: '经 tingly-box 转发的模型需要打开此项才能正常返回推理摘要。tb 默认开启。',
+        tooltip: '经 tingly-box 转发的模型需要打开此项才能正常返回推理摘要。写入模型目录每个条目的 supports_reasoning_summaries（Codex 的 config.toml 已无对应键），需开启“写入模型目录”才生效。',
+    },
+    effective_context_window_percent: {
+        label: '可用窗口比例 (%)',
+        purpose: '上下文窗口里留给输入的比例，其余预留给系统提示、工具开销和输出',
+        tooltip: '写入模型目录的 effective_context_window_percent，范围 50–100。越低越保守。留空用 tb 默认（82）。',
+    },
+    auto_compact_percent: {
+        label: '自动压缩阈值 (%)',
+        purpose: '上下文用到窗口的这个比例时触发自动压缩',
+        tooltip: '写入模型目录的 auto_compact_token_limit（窗口 × 比例），范围 50–100，且不会高于可用窗口比例。留空用 tb 默认（75）。这是所有模型的默认值，单个模型可在规则行的“压缩”芯片里覆盖。',
     },
 };
 
@@ -133,10 +161,20 @@ const FIELDS_TEXT_EN: FieldTextMap = {
         purpose: 'How chatty the reply is',
         tooltip: 'low suits a concise coding assistant; high gives more explanation. Empty = Codex default (medium).',
     },
-    model_supports_reasoning_summaries: {
+    supports_reasoning_summaries: {
         label: 'Force reasoning summaries',
         purpose: 'Force reasoning summaries on non-OpenAI models',
-        tooltip: 'Models proxied through tingly-box need this on to return reasoning summaries. tb enables it by default.',
+        tooltip: 'Models proxied through tingly-box need this on to return reasoning summaries. Written to each model catalog entry as supports_reasoning_summaries (Codex\'s config.toml no longer has a matching key), so it only takes effect with "Write model catalog" on.',
+    },
+    effective_context_window_percent: {
+        label: 'Usable window (%)',
+        purpose: 'Share of the context window usable for input; the rest is reserved for system prompt, tool overhead and output',
+        tooltip: 'Written to the catalog as effective_context_window_percent, range 50–100. Lower is more conservative. Empty = tb default (82).',
+    },
+    auto_compact_percent: {
+        label: 'Auto-compact at (%)',
+        purpose: 'Compact the conversation once context reaches this share of the window',
+        tooltip: 'Written to the catalog as auto_compact_token_limit (window × percent), range 50–100, never above the usable window Empty = tb default (75). This is the default for every model; a single model can override it with the Compact chip on its rule row.',
     },
 };
 
@@ -156,10 +194,20 @@ const FIELDS_TEXT_RU: FieldTextMap = {
         purpose: 'Насколько развёрнуто отвечает модель',
         tooltip: 'low подходит для лаконичного помощника по коду; high даёт больше пояснений. Пусто — значение Codex по умолчанию (medium).',
     },
-    model_supports_reasoning_summaries: {
+    supports_reasoning_summaries: {
         label: 'Сводки принудительно',
         purpose: 'Включить сводки рассуждений для моделей не от OpenAI',
-        tooltip: 'Моделям, проксируемым через tingly-box, эта опция нужна, чтобы возвращать сводки рассуждений. tb включает её по умолчанию.',
+        tooltip: 'Моделям, проксируемым через tingly-box, эта опция нужна, чтобы возвращать сводки рассуждений. Записывается в каждую запись каталога как supports_reasoning_summaries (в config.toml Codex такого ключа больше нет), поэтому работает только при включённом «Каталоге моделей».',
+    },
+    effective_context_window_percent: {
+        label: 'Доступное окно (%)',
+        purpose: 'Доля контекстного окна под ввод; остальное резервируется под системный промпт, инструменты и вывод',
+        tooltip: 'Записывается в каталог как effective_context_window_percent, диапазон 50–100. Чем ниже, тем осторожнее. Пусто — значение tb по умолчанию (82).',
+    },
+    auto_compact_percent: {
+        label: 'Автосжатие при (%)',
+        purpose: 'Сжимать диалог, когда контекст достигает этой доли окна',
+        tooltip: 'Записывается в каталог как auto_compact_token_limit (окно × доля), диапазон 50–100, не выше доступного окна Пусто — значение tb по умолчанию (75). Это значение по умолчанию для всех моделей; для отдельной модели его можно переопределить чипом «Сжатие» в строке правила.',
     },
 };
 
@@ -191,6 +239,52 @@ function useLang(): AppLanguage {
     return resolveLanguage(i18n.language);
 }
 
+// ── Auto-compact warnings ──────────────────────────────────────────────
+// The shared default is judged against the default 200K window; a rule that
+// sets the 1M flag has far more room (the Compact chip on its header judges it
+// against its own window).
+
+const COMPACT_WARN_TEXT: Record<AppLanguage, { low: string; limited: string }> = {
+    zh: {
+        low: '按 200K 窗口估算，压缩时仅剩约 {remain} tokens（建议不低于 {min}）。长工具输出可能撞上窗口上限，导致压缩失败。',
+        limited: '高于「可用窗口 {effective}%」，实际按 {applied}% 生效。要更晚压缩，请先调高可用窗口。',
+    },
+    en: {
+        low: 'On a 200K window only about {remain} tokens would be free when compacting (at least {min} recommended). A long tool output could overflow the window and make compaction fail.',
+        limited: 'Higher than the usable window ({effective}%), so {applied}% is what takes effect. To compact later, raise the usable window first.',
+    },
+    ru: {
+        low: 'На окне 200K при сжатии останется около {remain} токенов (рекомендуется не менее {min}). Длинный вывод инструмента может переполнить окно, и сжатие не удастся.',
+        limited: 'Выше доступного окна ({effective}%), поэтому действует {applied}%. Чтобы сжимать позже, сначала увеличьте доступное окно.',
+    },
+};
+
+const parseCompactPercent = (raw: string | undefined, fallback: number): number => {
+    const n = Number.parseInt(raw ?? '', 10);
+    return Number.isFinite(n) && n >= CONTEXT_PERCENT_MIN && n <= CONTEXT_PERCENT_MAX ? n : fallback;
+};
+
+/** The warning for the shared auto-compact percent, or null when it is fine. */
+export function compactDefaultWarning(
+    prefs: CodexPrefs,
+    text: { low: string; limited: string },
+): { severity: 'warning' | 'info'; message: string } | null {
+    const effective = parseCompactPercent(prefs.effective_context_window_percent, CONTEXT_PERCENT_DEFAULTS.effective_context_window_percent);
+    const percent = parseCompactPercent(prefs.auto_compact_percent, CONTEXT_PERCENT_DEFAULTS.auto_compact_percent);
+    const plan = planCodexCompact({ window: CODEX_COMPACT.window, percent, effectivePercent: effective });
+    const fill = (tpl: string) => tpl
+        .replace('{value}', String(percent))
+        .replace('{applied}', String(plan.applied))
+        .replace('{effective}', String(effective))
+        .replace('{remain}', plan.remain.toLocaleString('en-US'))
+        .replace('{min}', CODEX_COMPACT.minRemaining.toLocaleString('en-US'));
+    switch (plan.status) {
+        case 'limited': return { severity: 'info', message: fill(text.limited) };
+        case 'low': return { severity: 'warning', message: fill(text.low) };
+        default: return null;
+    }
+}
+
 // ── Field row ──────────────────────────────────────────────────────────
 
 interface FieldRowProps {
@@ -212,7 +306,11 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
         </Box>
     );
 
+    const lang = useLang();
+    const warning = field.key === 'auto_compact_percent' ? compactDefaultWarning(prefs, COMPACT_WARN_TEXT[lang]) : null;
+
     return (
+        <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 44 }}>
             {/* Col 1 — Label + info icon */}
             <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
@@ -230,10 +328,10 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                     sx={{
                         px: 0.75,
                         py: 0.25,
-                        borderRadius: 0.75,
+                        borderRadius: radius.chip,
                         bgcolor: 'action.hover',
                         fontFamily: fontMono,
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         color: 'text.secondary',
                         whiteSpace: 'nowrap',
                     }}
@@ -250,13 +348,24 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         onChange={(_, c) => setValue(c ? 'true' : '')}
                     />
                 )}
+                {field.kind === 'percent' && (
+                    <TextField
+                        size="small"
+                        type="number"
+                        value={value}
+                        placeholder={String(CONTEXT_PERCENT_DEFAULTS[field.key as keyof typeof CONTEXT_PERCENT_DEFAULTS])}
+                        onChange={(e) => setValue(e.target.value)}
+                        slotProps={{ htmlInput: { min: CONTEXT_PERCENT_MIN, max: CONTEXT_PERCENT_MAX, step: 1 } }}
+                        sx={{ width: 160, '& input': { fontSize: fontSizes.md } }}
+                    />
+                )}
                 {field.kind === 'enum' && (
                     <Select
                         size="small"
                         value={value}
                         displayEmpty
                         onChange={(e) => setValue(e.target.value)}
-                        sx={{ minWidth: 160, fontSize: fontSizes.lg }}
+                        sx={{ minWidth: 160, fontSize: fontSizes.md }}
                     >
                         <MenuItem value={UNSET}>
                             <Typography variant="body2" sx={{
@@ -264,11 +373,17 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                             }}>{unsetLabel}</Typography>
                         </MenuItem>
                         {field.enumValues!.map((v) => (
-                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.lg }}>{v}</MenuItem>
+                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>{v}</MenuItem>
                         ))}
                     </Select>
                 )}
             </Box>
+        </Box>
+        {warning && (
+            <Alert severity={warning.severity} variant="outlined" sx={{ mb: 1, py: 0, fontSize: fontSizes.sm }}>
+                {warning.message}
+            </Alert>
+        )}
         </Box>
     );
 };
@@ -343,9 +458,9 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                         <Box
                             component="span"
                             sx={{
-                                px: 0.75, py: 0.25, borderRadius: 0.75,
+                                px: 0.75, py: 0.25, borderRadius: radius.chip,
                                 bgcolor: 'action.hover', fontFamily: fontMono,
-                                fontSize: fontSizes.xs, color: 'text.secondary', whiteSpace: 'nowrap',
+                                fontSize: fontSizes.micro, color: 'text.secondary', whiteSpace: 'nowrap',
                             }}
                         >
                             ~/.codex/tingly-model-catalog.json

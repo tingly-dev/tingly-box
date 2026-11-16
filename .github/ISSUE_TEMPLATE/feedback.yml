@@ -1,0 +1,34 @@
+name: Feedback
+description: "A note on how it feels to use (UX, wording, rough edges)"
+title: "[Feedback] "
+labels: ["feedback"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
+      options:
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
+        - Auth / OAuth
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - Projects
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What got in your way?
+      description: Where you were, what you were trying to do and what felt off. Screenshots help.
+      placeholder: When I ..., it felt ...
+    validations:
+      required: true

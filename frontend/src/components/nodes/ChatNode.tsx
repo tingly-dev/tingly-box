@@ -4,6 +4,7 @@ import {NODE_LAYER_STYLES, StyledBotGraphNode} from './styles';
 import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
 import {fontMono} from '@/theme/fonts';
+import {shortId} from '@tingly/ui';
 
 // ChatNode is a leaf of the notify routing graph: one chat a bot's channel can
 // deliver to. Shares StyledBotGraphNode with the rest of the remote/notify
@@ -15,9 +16,15 @@ import {fontMono} from '@/theme/fonts';
 // rather than drawn as a hatch.
 
 export interface ChatNodeProps {
+    /** The id drawn on the node (platform prefix already stripped). */
     chatID: string;
+    /** The stored external id, shown in full in the tooltip; defaults to chatID. */
+    fullChatID?: string;
     kind?: 'direct_chat' | 'group';
-    name?: string;
+    /** The chat's alias: primary text when present, the id then drops to a muted second line. */
+    alias?: string;
+    /** `平台 · alias · id` (group chats: `平台群 · alias · id`) as plain text, shown first in the tooltip. */
+    labelText?: string;
     targetID?: string;
     isPaired?: boolean;
     projectPath?: string;
@@ -28,8 +35,10 @@ export interface ChatNodeProps {
     blocked?: boolean;
 }
 
-const ChatNode: React.FC<ChatNodeProps> = ({chatID, kind = 'direct_chat', name, targetID, isPaired, projectPath, updatedAt, active = true, blocked = false}) => {
+const ChatNode: React.FC<ChatNodeProps> = ({chatID, fullChatID, kind = 'direct_chat', alias, labelText, targetID, isPaired, projectPath, updatedAt, active = true, blocked = false}) => {
     const {t} = useTranslation();
+    // Long platform ids are shortened here; the tooltip carries the full one.
+    const shownId = shortId(kind === 'group' ? 'group' : 'direct', chatID).text;
     return (
         <StyledBotGraphNode active={active && !blocked}>
             {/* Top layer identifies the real platform conversation; the tooltip
@@ -38,27 +47,36 @@ const ChatNode: React.FC<ChatNodeProps> = ({chatID, kind = 'direct_chat', name, 
                 <NodeTooltip
                     title={
                         <>
-                            {kind === 'group' ? 'Group ID' : 'Chat ID'}: {chatID}
-                            {targetID && (<><br/>Target UUID: {targetID}</>)}
+                            {labelText && (<>{labelText}<br/></>)}
+                            {kind === 'group' ? 'Group ID' : 'Chat ID'}: {fullChatID ?? chatID}
+                            {targetID && (<><br/>{t('notify.chat.internalUuid', {defaultValue: 'Internal target UUID'})}: {targetID}</>)}
                             {projectPath && (<><br/>Project: {projectPath}</>)}
                             {updatedAt && (<><br/>Updated: {new Date(updatedAt).toLocaleString()}</>)}
                         </>
                     }
                     placement="top"
                 >
-                    <Typography
-                        variant="body2"
-                        noWrap
-                        sx={{
-                            ...NODE_LAYER_STYLES.typography,
-                            fontFamily: fontMono,
-                            maxWidth: 190,
-                            color: blocked ? 'text.disabled' : 'text.primary',
-                            textDecoration: blocked ? 'line-through' : 'none',
-                        }}
-                    >
-                        {name || chatID}
-                    </Typography>
+                    <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 190}}>
+                        <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{
+                                ...NODE_LAYER_STYLES.typography,
+                                fontFamily: alias ? undefined : fontMono,
+                                fontWeight: alias ? 600 : undefined,
+                                maxWidth: 190,
+                                color: blocked ? 'text.disabled' : 'text.primary',
+                                textDecoration: blocked ? 'line-through' : 'none',
+                            }}
+                        >
+                            {alias || shownId}
+                        </Typography>
+                        {alias && (
+                            <Typography variant="caption" noWrap sx={{fontFamily: fontMono, maxWidth: 190, color: 'text.secondary'}}>
+                                {shownId}
+                            </Typography>
+                        )}
+                    </Box>
                 </NodeTooltip>
             </Box>
             <Divider sx={NODE_LAYER_STYLES.divider}/>

@@ -9,6 +9,7 @@ import {getThemeChartStyles} from '../chartStyles';
 import {ChartWrapper, CustomTooltip, LegendItem} from './components';
 import {calculateLabelInterval, formatChartData, formatYAxis, aggregateTo5MinBuckets} from './utils';
 import type {SeriesKey, SeriesVisibility, TimeSeriesData} from './types';
+import { chartCursorFill } from '@/theme/dataviz';
 
 interface HourlyTokenHistoryChartProps {
     data: TimeSeriesData[];
@@ -39,7 +40,7 @@ export function HourlyTokenHistoryChart({data}: HourlyTokenHistoryChartProps) {
         <ChartWrapper title={t('dashboard.chart.hourlyTitle', {defaultValue: 'Token Usage Over Time (5-Min)'})} hasData={hasData}>
             {hasData ? (
                 <>
-                    <Box sx={{display: 'flex', justifyContent: 'center', gap: 3, mb: 2}}>
+                    <Box sx={{display: 'flex', justifyContent: 'flex-start', gap: 3, mb: 1}}>
                         <LegendItem
                             label={t('dashboard.chart.cacheRead', {defaultValue: 'Cache Read'})}
                             color={chartStyles.token.cache.main}
@@ -83,22 +84,23 @@ export function HourlyTokenHistoryChart({data}: HourlyTokenHistoryChartProps) {
                             />
                             <XAxis
                                 dataKey="time"
-                                tick={{fontSize: 12, fill: 'text.secondary', fontWeight: 500}}
+                                tick={{fontSize: 12, fill: theme.palette.text.secondary, fontWeight: 500}}
                                 tickLine={false}
                                 axisLine={{stroke: chartStyles.chart.axis, strokeWidth: 1.5}}
                                 interval={labelInterval}
+                                padding={{left: 8, right: 44}}
                                 height={50}
                             />
                             <YAxis
                                 tickFormatter={formatYAxis}
-                                tick={{fontSize: 12, fill: 'text.secondary', fontWeight: 500}}
+                                tick={{fontSize: 12, fill: theme.palette.text.secondary, fontWeight: 500}}
                                 tickLine={false}
                                 axisLine={{stroke: chartStyles.chart.axis, strokeWidth: 1.5}}
                                 width={60}
                             />
                             <Tooltip
                                 content={<CustomTooltip/>}
-                                cursor={{fill: 'rgba(0, 0, 0, 0.05)'}}
+                                cursor={{ fill: chartCursorFill }}
                             />
                             <Area
                                 type="monotone"

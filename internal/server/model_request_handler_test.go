@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 )
 
@@ -27,6 +29,64 @@ func newModelRequestTestServer(t *testing.T) *WebHandler {
 	ml, err := obs.NewMultiLogger(cfg)
 	assert.NoError(t, err)
 	return NewWebHandler(WebDeps{MultiLogger: ml})
+}
+
+func TestRequestHistorySurvivesEvictionAndRestart(t *testing.T) {
+	cfg := obs.DefaultMultiLoggerConfig(t.TempDir())
+	cfg.MemorySinkConfig = map[obs.LogSource]obs.MemorySinkConfig{
+		obs.LogSourceHTTP: {MaxEntries: 1}, obs.LogSourceModelRequest: {MaxEntries: 1},
+	}
+	ml, err := obs.NewMultiLogger(cfg)
+	require.NoError(t, err)
+	h := NewWebHandler(WebDeps{MultiLogger: ml})
+	emitModelStage(h, "original", "upstream", logrus.ErrorLevel)
+	emitHTTP(h, logrus.Fields{"request_id": "original", "scenario": "openai", "status": 502, "latency": 250 * time.Millisecond, "error": "upstream unavailable"})
+	emitModelStage(h, "later", "upstream", logrus.InfoLevel)
+	emitHTTP(h, logrus.Fields{"request_id": "later", "scenario": "openai", "status": 200})
+	groups, err := h.collectRequestGroups()
+	require.NoError(t, err)
+	require.Len(t, groups["original"].events, 2)
+	require.Len(t, groups["later"].events, 2) // persisted + memory copies dedupe
+	require.NoError(t, ml.Close())
+	ml, err = obs.NewMultiLogger(cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ml.Close() })
+	h = NewWebHandler(WebDeps{MultiLogger: ml})
+	groups, err = h.collectRequestGroups()
+	require.NoError(t, err)
+	require.Equal(t, 502, groups["original"].summary.Status)
+	require.Equal(t, int64(250), groups["original"].summary.LatencyMs)
+	require.True(t, groups["original"].summary.HasError)
+	require.Len(t, groups["original"].events, 2)
+	// A read failure must not masquerade as an empty request history.
+	cfg.JSONLogPath = filepath.Dir(cfg.JSONLogPath)
+	ml2, err := obs.NewMultiLogger(cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ml2.Close() })
+	_, err = NewWebHandler(WebDeps{MultiLogger: ml2}).collectRequestGroups()
+	require.Error(t, err)
+}
+
+func TestRequestHistoryWindowExcludesUnrelatedLogs(t *testing.T) {
+	cfg := obs.DefaultMultiLoggerConfig(t.TempDir())
+	ml, err := obs.NewMultiLogger(cfg)
+	require.NoError(t, err)
+	h := NewWebHandler(WebDeps{MultiLogger: ml})
+	emitModelStage(h, "original", "upstream", logrus.ErrorLevel)
+	emitHTTP(h, logrus.Fields{"request_id": "original", "scenario": "openai", "status": 500})
+	for i := 0; i <= recentRequestEventLimit; i++ {
+		emitHTTP(h, logrus.Fields{"request_id": "poll", "path": "/api/v1/requests", "status": 200})
+		ml.GetLogrusLogger(obs.LogSourceSystem).Info("background heartbeat")
+	}
+	require.NoError(t, ml.Close())
+	ml, err = obs.NewMultiLogger(cfg)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ml.Close() })
+	groups, err := NewWebHandler(WebDeps{MultiLogger: ml}).collectRequestGroups()
+	require.NoError(t, err)
+	require.Contains(t, groups, "original")
+	require.Len(t, groups["original"].events, 2)
+	require.NotContains(t, groups, "poll")
 }
 
 func emitHTTP(h *WebHandler, fields logrus.Fields) {

@@ -7,7 +7,9 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaiparam "github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
+	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
 
@@ -92,12 +94,12 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 				if fn == nil {
 					continue
 				}
-				var argsInput interface{}
-				if fn.Function.Arguments != "" {
-					_ = json.Unmarshal([]byte(fn.Function.Arguments), &argsInput)
+				input, ok := protocol.ToolUseInput(fn.Function.Arguments)
+				if !ok {
+					logrus.Warnf("Function call arguments for tool %s are not a JSON object; sending empty input", fn.Function.Name)
 				}
 				blocks = append(blocks,
-					anthropic.NewBetaToolUseBlock(fn.ID, argsInput, fn.Function.Name),
+					anthropic.NewBetaToolUseBlock(fn.ID, input, fn.Function.Name),
 				)
 			}
 

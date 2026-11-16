@@ -57,7 +57,7 @@ Dashboard 头部方案 2 已实现（PR [#2030](https://github.com/tingly-dev/ti
 ## 2. 事实更正（避免后续讨论建立在错误数字上）
 
 - 一级入口在界面上叫 **"Agent"**，不是 "Home"；代码里它的 key 是 `scenario`，文案取自 `layout.nav.home`。
-- 默认可见的 Agent 侧栏约 **12 行**，不是 17 行：`custom`、`pi`、`cursor` 默认隐藏（`pages/scenario/scenarioRegistry.tsx` 的 `DEFAULT_HIDDEN`）。
+- 默认可见的 Agent 侧栏约 **12 行**，不是 17 行：`custom`、`pi`、`cursor` 默认隐藏（`pages/scenario/scenarioRegistry.tsx` 的 `DEFAULT_HIDDEN`）。（2026-10 更新：`DEFAULT_HIDDEN` 只剩 `cursor`，`custom`、`pi` 默认可见；已存的用户选择不迁移。）
 - 侧栏已有"眼睛"图标的编辑模式，可手动隐藏 / 显示 Agent；因此"自动判断常用并折叠"与现有机制重叠，且会让条目莫名消失，已撤回。
 - 一级图标栏在实验功能全开时是 11 项 + Help；默认用户看到约 7 项（Prompt / Tools / Guardrails / Bench / Desk 受实验开关控制）。
 

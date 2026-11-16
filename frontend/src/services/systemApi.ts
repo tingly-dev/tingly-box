@@ -3,6 +3,7 @@
 // minting, version/health/shortcut/imagegen info, and the system + MCP
 // runtime config get/set endpoints.
 import type {components} from '@/client';
+import {readCached} from './readCache';
 import {
     controlApi,
     getControlApiClient as getClient,
@@ -13,14 +14,15 @@ export const systemApi = {
     // Status endpoints
     getStatus: async (): Promise<any> => controlApi((client, headers) => client.GET('/api/v1/status', {headers})),
 
-    getProviders: async (): Promise<any> => {
-        const body = await controlApi((client, headers) => client.GET('/api/v2/providers', {headers}));
-        if (body?.success && body?.data) {
-            // Sort providers alphabetically by name to reduce UI changes
-            body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
-        }
-        return body;
-    },
+    getProviders: async (opts: {fresh?: boolean} = {}): Promise<any> =>
+        readCached('providers', async () => {
+            const body = await controlApi((client, headers) => client.GET('/api/v2/providers', {headers}));
+            if (body?.success && body?.data) {
+                // Sort providers alphabetically by name to reduce UI changes
+                body.data.sort((a: any, b: any) => a.name.localeCompare(b.name));
+            }
+            return body;
+        }, opts),
 
     // Get provider catalog entries (service providers for dropdown)
     getProviderCatalogs: async (): Promise<any> =>
@@ -79,7 +81,7 @@ export const systemApi = {
         })),
 
     getToken: async (): Promise<any> =>
-        controlApi((client, headers) => client.GET('/api/v1/token', {headers})),
+        readCached('token', () => controlApi((client, headers) => client.GET('/api/v1/token', {headers}))),
 
     // Imports providers from a base64/JSONL export bundle. Every imported
     // provider is always created with a freshly minted UUID.
@@ -98,8 +100,10 @@ export const systemApi = {
         })),
 
     // Lightweight probe for optional key validation using OPTIONS and models endpoint
-    // This is used by the "Test Connection" button - results are informational only
-    probeProviderLightweight: async (name: string, api_style: string, api_base: string, token: string, auth_type?: string): Promise<any> =>
+    // This is used by the "Test Connection" button - results are informational only.
+    // The optional signal cancels an in-flight probe (dialog Stop button / watchdog);
+    // the backend honours the dropped connection by cancelling its upstream probes.
+    probeProviderLightweight: async (name: string, api_style: string, api_base: string, token: string, auth_type?: string, signal?: AbortSignal): Promise<any> =>
         controlApi((client, headers) => client.POST('/api/v2/probe/lightweight', {
             headers,
             body: {
@@ -108,7 +112,8 @@ export const systemApi = {
                 api_base: api_base,
                 token: token,
                 auth_type: auth_type,
-            }
+            },
+            signal,
         })),
 
     getVersion: async (): Promise<string> => {
@@ -198,4 +203,16 @@ export const systemApi = {
             body: config,
         }));
     },
+    createMCPSource: (body: components['schemas']['MCPSourceConfig']) => controlApi((client,headers) => client.POST('/api/v1/mcp/sources',{headers,body})),
+    patchMCPSource: (id: string, body: components['schemas']['MCPSourceConfig']) => controlApi((client,headers) => client.PATCH('/api/v1/mcp/sources/{source_id}',{headers,params:{path:{source_id:id}},body})),
+    deleteMCPSource: (id: string) => controlApi((client,headers) => client.DELETE('/api/v1/mcp/sources/{source_id}',{headers,params:{path:{source_id:id}}})),
+    getMCPRouting: () => controlApi((client, headers) => client.GET('/api/v1/mcp/routing', {headers})),
+    probeMCPProfile: (id: string, body: components['schemas']['MCPClientProbeRequest']) => controlApi((client, headers) => client.POST('/api/v1/mcp/profiles/{profile_id}/probe', {headers, params: {path: {profile_id: id}}, body})),
+    getMCPCatalog: () => controlApi((client,headers) => client.GET('/api/v1/mcp/catalog',{headers})),
+    checkMCPSource: (id: string) => controlApi((client,headers) => client.POST('/api/v1/mcp/sources/{source_id}/check',{headers,params:{path:{source_id:id}}})),
+    reconnectMCPSource: (id: string) => controlApi((client,headers) => client.POST('/api/v1/mcp/sources/{source_id}/reconnect',{headers,params:{path:{source_id:id}}})),
+    callMCPTool: (body: components['schemas']['MCPToolCallRequest']) => controlApi((client,headers) => client.POST('/api/v1/mcp/tools/call',{headers,body})),
+    saveMCPProfile: (body: components['schemas']['MCPProfile']) => controlApi((client,headers) => client.PUT('/api/v1/mcp/profiles/{profile_id}',{headers,params:{path:{profile_id:body.id}},body})),
+    deleteMCPProfile: (id: string) => controlApi((client,headers) => client.DELETE('/api/v1/mcp/profiles/{profile_id}',{headers,params:{path:{profile_id:id}}})),
+
 };

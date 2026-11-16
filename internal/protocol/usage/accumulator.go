@@ -43,6 +43,14 @@ func (a *AnthropicAccumulator) Consume(evt *anthropic.MessageStreamEventUnion) {
 	// Parse the event once; the gjson fallback covers providers whose
 	// non-standard serialisation leaves the SDK's typed fields at zero.
 	parsed := gjson.Parse(strings.Clone(evt.RawJSON()))
+	if a.usage == nil {
+		a.usage = protocol.ZeroTokenUsage()
+	}
+	if speed := string(evt.Message.Usage.Speed); speed != "" {
+		a.usage.Speed = speed
+	} else if speed := parsed.Get("message.usage.speed").String(); speed != "" {
+		a.usage.Speed = speed
+	}
 	a.consumeRaw(
 		evt.Message.Usage.InputTokens,
 		parsed.Get("message.usage.input_tokens").Int(),
@@ -65,6 +73,12 @@ func (a *AnthropicAccumulator) Consume(evt *anthropic.MessageStreamEventUnion) {
 func (a *AnthropicAccumulator) ConsumeBeta(evt *anthropic.BetaRawMessageStreamEventUnion) {
 	// Beta events follow the same protocol as non-beta; no gjson fallback
 	// needed since BetaUsage fields are directly accessible.
+	if a.usage == nil {
+		a.usage = protocol.ZeroTokenUsage()
+	}
+	if speed := string(evt.Message.Usage.Speed); speed != "" {
+		a.usage.Speed = speed
+	}
 	a.consumeRaw(
 		evt.Message.Usage.InputTokens,
 		0, // no gjson fallback for beta — SDK fields are reliable

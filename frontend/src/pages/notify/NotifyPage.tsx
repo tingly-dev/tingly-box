@@ -77,12 +77,13 @@ const NotifyPage = () => {
             rightAction={(
                 <GuideAction
                     label={t('notify.guide.action', { defaultValue: 'API guide' })}
+                    width={520}
                     title={t('notify.guide.title', { defaultValue: 'IM Notify API Guide' })}
                     description={t('notify.guide.description', {
-                        defaultValue: 'Authentication, request examples, and target IDs',
+                        defaultValue: 'Pick a target, copy a ready-to-run request, or send a test',
                     })}
                 >
-                    <NotifyGuide />
+                    <NotifyGuide bots={bots} />
                 </GuideAction>
             )}
         >

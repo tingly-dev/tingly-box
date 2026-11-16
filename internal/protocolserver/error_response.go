@@ -23,6 +23,13 @@ type ErrorDetail struct {
 	Code    string `json:"code,omitempty"`
 }
 
+// writeErrorResponse retains validation/dispatch failures in the access log as
+// well as returning the existing wire response to the caller.
+func writeErrorResponse(c *gin.Context, status int, response ErrorResponse) {
+	c.Error(fmt.Errorf("%s: %s", response.Error.Type, response.Error.Message)).SetType(gin.ErrorTypePublic)
+	c.JSON(status, response)
+}
+
 // ProbeSyntheticRuleUUID marks the throwaway rule built for an
 // X-Tingly-Probe-Service request — it has no persisted identity. Owned here
 // (moved from root's handlers.go constant) since protocol_dispatch.go's
@@ -66,7 +73,7 @@ func SendErrorResponse(c *gin.Context, err error, desc string) {
 	// c.Error keeps the full raw error for the server-side access log
 	// (internal/middleware/memory_log.go); the JSON body below shows the
 	// client a categorized, non-leaky message instead.
-	asErr := fmt.Errorf("%s: %s", protocol.LoggableUpstreamError(err).Error(), desc)
+	asErr := fmt.Errorf("%w: %s", protocol.LoggableUpstreamError(err), desc)
 	c.Error(asErr).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	c.JSON(failure.Status, ErrorResponse{
 		Error: ErrorDetail{

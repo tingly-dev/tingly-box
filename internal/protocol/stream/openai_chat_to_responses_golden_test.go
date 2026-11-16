@@ -93,7 +93,7 @@ func TestChatToResponsesConverter_GoldenSequence(t *testing.T) {
 		},
 	}
 
-	conv := NewChatToResponsesConverter(newChatChunkStream(chunkSSE(t, chunks)), "gpt-4o-mini")
+	conv := NewChatToResponsesConverter(newChatChunkStream(chunkSSE(t, chunks)), "gpt-4o-mini", nil)
 
 	var got []wire.ResponsesEvent
 	for {

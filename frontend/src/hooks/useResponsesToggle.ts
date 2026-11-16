@@ -16,7 +16,12 @@ export interface UseResponsesToggleResult {
     onSelect: (selection: OpenAIEndpointSelection) => Promise<void>;
 }
 
-export type OpenAIEndpointSelection = 'auto' | 'chat' | 'responses';
+// The rule's single upstream-endpoint choice. chat/responses are the
+// openaiEndpointOverride flag; anthropic is the anthropicEndpointOverride flag
+// ("Force Anthropic style"). The two flags are never both set from here:
+// forcing the Anthropic style makes the OpenAI endpoint choice moot, so picking
+// one clears the other.
+export type OpenAIEndpointSelection = 'auto' | 'chat' | 'responses' | 'anthropic';
 
 // probeResponsesSupport runs the direct, real-upstream capability check the
 // toggle needs before trusting a provider/model with /responses traffic —
@@ -47,7 +52,9 @@ export function useResponsesToggle({
 }: UseResponsesToggleOptions): UseResponsesToggleResult {
     const [probing, setProbing] = useState(false);
     const rawSelection = record.flags?.openaiEndpointOverride;
-    const selection: OpenAIEndpointSelection = rawSelection === 'chat' || rawSelection === 'responses' ? rawSelection : 'auto';
+    const selection: OpenAIEndpointSelection = record.flags?.anthropicEndpointOverride === 'anthropic'
+        ? 'anthropic'
+        : rawSelection === 'chat' || rawSelection === 'responses' ? rawSelection : 'auto';
 
     // The pre-flight probe only validates the provider+model bound *at toggle
     // time*. If the user later swaps the rule's provider/model (drag a new
@@ -102,8 +109,12 @@ export function useResponsesToggle({
 
         // Auto follows the model catalog and provider declaration; forcing
         // Chat is also an immediate, explicit choice. Neither needs a probe.
+        if (nextSelection === 'anthropic') {
+            onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: 'auto', anthropicEndpointOverride: 'anthropic'});
+            return;
+        }
         if (nextSelection !== 'responses') {
-            onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: nextSelection});
+            onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: nextSelection, anthropicEndpointOverride: 'auto'});
             return;
         }
 
@@ -113,7 +124,7 @@ export function useResponsesToggle({
         try {
             const result = await probeResponsesSupport(primaryService);
             if (result.success) {
-                onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: 'responses'});
+                onUpdateRecord?.('flags', {...record.flags, openaiEndpointOverride: 'responses', anthropicEndpointOverride: 'auto'});
                 notify.success('Native Responses API enabled for this rule.');
             } else {
                 notify.error(

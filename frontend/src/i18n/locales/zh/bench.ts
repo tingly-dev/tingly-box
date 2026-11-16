@@ -139,8 +139,15 @@ export default {
   },
   "playground": {
     "imageTitle": "图像实验台",
-    "noImageModels": "先在 Image API 页面添加一条图像模型规则，即可开始生成图像。",
-    "addImageModel": "添加模型",
+    "modelPicker": {
+      "chooseFirst": "选一个模型开始",
+      "chooseAnother": "选择其他模型…",
+      "chooserTitle": "选择图像模型",
+      "yourRules": "我的规则",
+      "addFailed": "无法使用 {{model}}：{{error}}"
+    },
+    "useFromApp": "在你的应用里调用",
+    "useFromAppHint": "通过 Image API 在你自己的应用里调用这些模型",
     "model": "模型",
     "prompt": "提示词",
     "promptPlaceholder": "描述你想生成的图像…",
@@ -153,7 +160,13 @@ export default {
     "promptEditorTitle": "Prompt",
     "promptEditorDone": "完成",
     "size": "尺寸",
+    "customSize": "自定义…",
+    "customSizeTitle": "自定义尺寸",
+    "customWidth": "宽度（像素）",
+    "customHeight": "高度（像素）",
+    "customSizeError": "宽度和高度都需要填写正整数。",
     "quality": "质量",
+    "reasoningEffort": "思考强度",
     "count": "数量",
     "generate": "生成",
     "generateAnother": "再生成一批 · {{count}} 个进行中",
@@ -181,8 +194,10 @@ export default {
     "referenceReorderHint": "拖动缩略图可调整顺序",
     "referenceThumbAlt": "第 {{number}} 张参考图像",
     "viewSourceImage": "查看第 {{number}} 张原图",
-    "previewEmpty": "生成的图和导入的图都会出现在这里",
-    "previewHint": "把图拖进来，不生成也能直接加工。",
+    "previewEmpty": "生成的图会出现在这里",
+    "previewHint": "想裁剪、切分或局部重绘一张图而不生成，就把它导入到这里。",
+    "importFile": "导入",
+    "importClipboard": "从剪贴板",
     "sessionOutputs": "本次会话的图",
     "outputDirLabel": "生成结果保存在",
     "importCount": "导入 {{count}} 张",
@@ -214,7 +229,7 @@ export default {
     "reuse": {
       "action": "载入这次请求并编辑",
       "loaded": "已载入到左侧输入区——改完再生成一次",
-      "modelMissing": "{{model}} 已经没有对应规则了——请先选一个模型再生成",
+      "modelMissing": "{{model}} 已不可用——请先选一个模型再生成",
       "failed": "无法载入这次请求"
     },
     "gallery": {

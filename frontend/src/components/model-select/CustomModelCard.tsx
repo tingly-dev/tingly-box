@@ -1,5 +1,5 @@
 import { CheckCircle, Delete as DeleteIcon, Edit as EditIcon } from '@/components/icons';
-import { Box, Card, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, alpha } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
@@ -10,8 +10,9 @@ import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmPopover from '@/components/ConfirmPopover';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CustomModelCardProps {
     model: string;
@@ -34,7 +35,7 @@ export default function CustomModelCard({
     variant,
     loading = false,
 }: CustomModelCardProps) {
-    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteAnchor, setDeleteAnchor] = useState<HTMLElement | null>(null);
     const probe = useModelTestProbe();
 
     const handleCardClick = () => {
@@ -52,19 +53,19 @@ export default function CustomModelCard({
         e.stopPropagation();
         // Show confirmation dialog if model is selected, otherwise delete directly
         if (isSelected) {
-            setDeleteConfirmOpen(true);
+            setDeleteAnchor(e.currentTarget as HTMLElement);
         } else {
             onDelete();
         }
     };
 
     const handleConfirmDelete = () => {
-        setDeleteConfirmOpen(false);
+        setDeleteAnchor(null);
         onDelete();
     };
 
     const handleCancelDelete = () => {
-        setDeleteConfirmOpen(false);
+        setDeleteAnchor(null);
     };
 
     return (
@@ -74,7 +75,7 @@ export default function CustomModelCard({
                     width: '100%',
                     height: 60,
                     border: 1,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     cursor: loading ? 'wait' : 'pointer',
                     transition: modelCardTransition,
                     position: 'relative',
@@ -203,7 +204,7 @@ export default function CustomModelCard({
                                 p: 0.3,
                                 color: 'text.secondary',
                                 '&:hover': {
-                                    backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                                    backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
                                     color: 'error.main',
                                 }
                             }}
@@ -225,8 +226,8 @@ export default function CustomModelCard({
                 initialResult={probe.result ?? undefined}
                 onResult={probe.setResult}
             />
-            <ConfirmDialog
-                open={deleteConfirmOpen}
+            <ConfirmPopover
+                anchorEl={deleteAnchor}
                 onClose={handleCancelDelete}
                 onConfirm={handleConfirmDelete}
                 confirmColor="error"

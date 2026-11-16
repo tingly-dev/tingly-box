@@ -134,17 +134,27 @@ func TestExtractScenarioFromPath(t *testing.T) {
 func TestCalculateTPS_Streaming(t *testing.T) {
 	c := &gin.Context{}
 
-	// Set up context: first output token arrived 500ms ago.
+	// Set up context: first output token arrived 2s ago.
 	c.Set(ContextKeyStreamed, true)
-	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-500*time.Millisecond))
+	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-2*time.Second))
 
-	// Calculate TPS with 100 output tokens
-	tps := CalculateTPS(c, 100, true)
+	// Calculate TPS with 101 output tokens
+	tps := CalculateTPS(c, 101, true)
 
-	// Expected: 99 decode intervals / 0.5 seconds = 198 TPS
-	// Allow tolerance for execution time (180-220)
-	assert.GreaterOrEqual(t, tps, 180.0)
-	assert.LessOrEqual(t, tps, 220.0)
+	// Expected: 100 decode intervals / 2 seconds = 50 TPS
+	// Allow tolerance for execution time
+	assert.GreaterOrEqual(t, tps, 45.0)
+	assert.LessOrEqual(t, tps, 51.0)
+}
+
+// TestCalculateTPS_ShortDecodeWindow tests that a decode window shorter than
+// MinTPSDecodeWindow yields no TPS, since a large first chunk would inflate it.
+func TestCalculateTPS_ShortDecodeWindow(t *testing.T) {
+	c := &gin.Context{}
+
+	c.Set(ContextKeyFirstTokenTime, time.Now().Add(-100*time.Millisecond))
+
+	assert.Equal(t, 0.0, CalculateTPS(c, 2000, true))
 }
 
 // TestCalculateTPS_NonStreaming tests that non-streaming requests return 0 TPS

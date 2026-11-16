@@ -62,7 +62,7 @@ Keep: `ai`, `imbot`, `agentboot`, `gui/wails3`. Weak: `swagger` (sole consumer `
 | Config | `internal/config` (+ `clientconfig`, `migration` later) |
 | Credentials | ai/oauth, ai/quota, pkg/auth, module/oauth, tokenrefresh |
 | Observability | obs, otel, recording |
-| Agent runtime | afk, agentboot, desk, remote, imbot |
+| Agent runtime | afk, agentboot, remote, imbot |
 | Guardrails | guardrails |
 | MCP/tools | mcp, tool, toolengine, servertool |
 | Persistence | db, dataio, lock |

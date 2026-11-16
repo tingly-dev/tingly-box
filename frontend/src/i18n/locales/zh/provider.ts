@@ -1,5 +1,22 @@
 // Providers, credentials and access: provider dialogs, API keys, sharing keys, teams, access control
 export default {
+  "oauthProxyPrompt": {
+    "title": "这次登录需要代理吗？",
+    "body": "如果本机无法直接访问该服务商，请先设置代理，否则登录可能超时，需要从头再来。",
+    "useQuick": "使用快捷代理（{{url}}）",
+    "useProxy": "使用代理并继续",
+    "skip": "不用代理，继续"
+  },
+  "qoderConnection": {
+    "scope": "此第三方接入使用 Qoder 客户端接口。可用模型、额度及允许使用的客户端由 Qoder 决定，登录成功不代表所有客户端均可调用。请在账号授权范围及 Qoder 服务条款允许的范围内使用。"
+  },
+  "workbuddyConnection": {
+    "cardSummary": "日常使用 · 路由与工具扩展",
+    "proxyHint": "可选：为此连接设置网络代理。",
+      "cnDescription": "连接日常使用的 WorkBuddy / CodeBuddy 国内版账号，使用 Tingly Box 的路由与工具扩展能力。",
+      "globalDescription": "连接日常使用的 WorkBuddy 国际版账号，使用 Tingly Box 的路由与工具扩展能力。",
+      "scope": "此第三方接入使用 WorkBuddy 客户端接口。可用模型、额度及允许使用的客户端由 WorkBuddy 决定，登录成功不代表所有客户端均可调用。请在账号授权范围及 WorkBuddy 服务条款允许的范围内使用。"
+  },
   "provider": {
     "pageTitle": "凭证",
     "subtitleWithCount": "正在管理 {{count}} 个提供商和 API 密钥",
@@ -51,6 +68,46 @@ export default {
     }
   },
   "providerDialog": {
+    "editUx": {
+      "proxySettings": "代理",
+      "keyOptionalHint": "自部署服务无需认证时，API 密钥可留空。",
+      "keyEditHint": "当前密钥已掩码显示——点击眼睛图标可查看，输入即替换。服务无需认证时，请勾选「无需 API 密钥」。",
+      "oauthStyleLocked": "API 风格由 OAuth 授权决定，此处不可修改。",
+      "authentication": "认证",
+      "googleCompatible": "Google 兼容",
+      "googleHint": "用于原生 Google API 客户端",
+      "nameHint": "用于凭证列表和路由规则；留空将自动生成名称。",
+      "oauthNameRequired": "请输入提供商名称。",
+      "apiStyle": "API 风格",
+      "providerType": "提供商类型",
+      "userId": "用户 ID",
+      "accessToken": "访问令牌",
+      "refreshToken": "刷新令牌",
+      "expiresAt": "过期时间",
+      "expired": "已过期",
+      "readonly": "凭证由系统自动管理",
+      "extraData": "其他登录数据",
+      "description": "修改此提供商的名称、凭证和接口地址。",
+      "status": "提供商状态",
+      "activeHint": "可供路由规则使用。",
+      "inactiveHint": "暂不参与路由，启用后恢复。",
+      "testNeedsKey": "此测试需要 API 密钥，也可直接保存而不进行测试。",
+      "keyRequired": "请输入 API 密钥，或勾选「无需 API 密钥」。",
+      "urlError": "请至少启用一种协议，并为每种已启用协议填写有效的 HTTP 或 HTTPS URL。",
+      "saveFailed": "无法保存修改，请重试。",
+      "proxyHint": "可选的代理设置",
+      "testConnection": "测试连接",
+      "stopTest": "停止测试",
+      "saving": "保存中…",
+      "noKey": "无需 API 密钥",
+      "showKey": "显示密钥",
+      "hideKey": "隐藏密钥",
+      "openAIUrl": "OpenAI 基础 URL",
+      "anthropicUrl": "Anthropic 基础 URL",
+      "oauthTitle": "编辑 OAuth 提供商",
+      "oauthDetails": "登录详情",
+      "oauthHint": "账号信息与系统自动管理的凭证"
+    },
     "addTitle": "连接 AI",
     "addDescription": "选择提供商并输入您的 API 密钥以连接 AI 服务。支持多种协议的提供商可以启用多个协议。",
     "editTitle": "编辑 AI 配置",
@@ -82,8 +139,8 @@ export default {
     "apiKey": {
       "label": "API 密钥",
       "placeholderAdd": "您的 API 密钥",
-      "placeholderEdit": "留空以保留当前密钥",
-      "helperEdit": "留空以保留当前密钥"
+      "placeholderEdit": "输入以替换已保存的密钥",
+      "helperEdit": "输入以替换已保存的密钥"
     },
     "enabled": "已启用",
     "export": {
@@ -110,6 +167,8 @@ export default {
       "missingFields": "请填写所有必填字段（API 风格、名称、API 基础 URL、API 密钥）",
       "failed": "连接检查失败",
       "networkError": "无法连接。请检查您的网络和代理设置。",
+      "cancelled": "已取消连接测试",
+      "timedOut": "连接测试超时（30 秒），已自动停止",
       "failureHint": "如果您确定配置正确，仍可以通过'仍要添加'按钮添加此提供商。",
       "responseTime": "响应时间：{{time}}ms",
       "modelsAvailable": "可用 {{count}} 个模型",
@@ -142,11 +201,29 @@ export default {
       "balance": "余额",
       "leftOf": "剩余 {{value}} / {{limit}}",
       "cost": "费用",
-      "readFailed": "无法读取额度——可点下方「详情」查看原始响应",
+      "readFailed": "无法读取额度",
+      "retryAt": "下次自动重试：{{time}}",
       "noLimits": "上游未报告额度限制",
       "none": "暂无额度数据",
       "refresh": "刷新",
-      "rawResponse": "详情"
+      "rawResponse": "详情",
+      "redeem": {
+        "use": "使用",
+        "checkin": "签到",
+        "checkedIn": "签到成功",
+        "title": "使用「{{label}}」？",
+        "weekly": "将立即补满每周额度和 5 小时额度，下一个每周周期从今天开始计算。使用后无法撤销。",
+        "fiveHour": "将立即补满 5 小时额度。使用后无法撤销。",
+        "other": "将立即重置额度。使用后无法撤销。",
+        "confirm": "使用重置卡",
+        "confirming": "使用中…",
+        "spent": "已使用重置卡",
+        "rejected": "未使用：{{message}}",
+        "unconfirmed": "无法确认重置卡是否已使用。不会自动重试，请查看额度。",
+        "notFound": "这张重置卡已不可用",
+        "busy": "该供应商正在使用另一张卡",
+        "error": "无法使用重置卡"
+      }
     },
     "columns": {
       "name": "名称",
@@ -181,11 +258,28 @@ export default {
     }
   },
   "credentialPage": {
+    "sortBy": "排序方式",
+    "sortName": "按名称",
+    "sortProvider": "按 Provider",
+    "tableView": "表格视图",
+    "endpoint": "端点",
+    "twoEndpoints": "2 个端点",
+    "viewMode": "显示模式",
+    "listView": "列表视图",
+    "cardView": "卡片视图",
+    "status": "状态",
+    "expiresAt": "到期时间",
+    "baseUrl": "API 地址",
+    "never": "永不过期",
+    "expired": "已过期",
     "empty": "还没有凭证",
     "managing_other": "共 {{count}} 个凭证",
     "emptyTitle": "连接你的第一个 AI",
     "emptyDescription": "用你已有的订阅登录（Claude Code、Codex、Gemini CLI…），或粘贴 API Key（OpenAI、Anthropic、DeepSeek…）。所有凭证都会出现在这里，路由规则从中选择模型。",
     "sectionOAuth": "OAuth",
+    "oauthProtocolLabel": "协议",
+    "oauthProtocolDual": "原生同时服务 OpenAI 和 Anthropic 客户端,无需协议转换",
+    "oauthProtocolSingle": "原生服务 {{style}} 客户端,其他协议会实时转换",
     "sectionApiKeys": "API Key",
     "fallbackProviderName": "该服务商",
     "unknownError": "未知错误",
@@ -239,6 +333,12 @@ export default {
     "emptyTeam": "该 Team 还没有 Team 密钥。",
     "loadFailed": "加载 Team 密钥失败",
     "createDisabledTeam": "该 Team 已停用，请先启用再创建 Team 密钥。",
+    "overview": {
+      "count_other": "{{count}} 个 Key",
+      "expand": "展开全部 Key",
+      "collapse": "收起 Key",
+      "empty": "该 Team 还没有 Key，为每位要分发的人创建一个。"
+    },
     "table": {
       "name": "名称",
       "user": "用户",
@@ -269,7 +369,12 @@ export default {
     "enableTeam": "启用 Team",
     "disableTeam": "停用 Team",
     "deleteTeam": "删除 Team",
-    "deleteConfirm": "删除 {{team}}？请先移动或删除它的全部 Team 密钥。",
+    "duplicateTeam": "复制 Team",
+    "duplicateTitle": "复制 Team",
+    "duplicateDescription": "创建一个新 Team,沿用相同的模型路由。Team 密钥不会被复制,新 Team 没有任何密钥。{{team}} 保持不变。",
+    "duplicated": "Team 已复制",
+    "duplicateFailed": "复制 Team 失败",
+    "deleteConfirm": "删除 {{team}} 及其模型路由？请先移动或删除它的全部 Team 密钥。",
     "loadFailed": "加载 Team 失败",
     "saveFailed": "保存 Team 失败",
     "createSuccess": "Team 已创建",

@@ -19,6 +19,7 @@ interface GuideDrawerProps {
     onClose: () => void;
     actionLabel?: string;
     onAction?: () => void;
+    width?: number;
 }
 
 const GuideDrawer = ({
@@ -29,6 +30,7 @@ const GuideDrawer = ({
     onClose,
     actionLabel,
     onAction,
+    width = 440,
 }: GuideDrawerProps) => {
     const { t } = useTranslation();
 
@@ -42,10 +44,13 @@ const GuideDrawer = ({
             anchor="right"
             open={open}
             onClose={onClose}
+            // A guide can be opened from inside a dialog; keep it the top
+            // layer instead of sliding in underneath the dialog's backdrop.
+            sx={(theme) => ({ zIndex: theme.zIndex.modal + 1 })}
             slotProps={{
                 paper: {
                     sx: {
-                        width: { xs: '100%', sm: 440 },
+                        width: { xs: '100%', sm: width },
                         maxWidth: '100%',
                     },
                 },

@@ -6,6 +6,8 @@ package tools
 // config is built in internal/mcp/runtime/builtin_registry.go.
 
 const (
+	ServerWebtoolsSourceID    = "server-webtools"
+	ServerWebtoolsSourceName  = "Server Web Tools"
 	BuiltinWebtoolsSourceID   = "webtools"
 	BuiltinWebtoolsSourceName = "Built-in Web Tools"
 	BuiltinWebSearchToolName  = "mcp_web_search"

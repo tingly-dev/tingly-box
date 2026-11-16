@@ -101,6 +101,44 @@ describe('useResponsesToggle', () => {
         expect(onUpdateRecord).toHaveBeenCalledWith('flags', expect.objectContaining({openaiEndpointOverride: 'chat'}));
     });
 
+    it('forces the Anthropic style without probing and clears the OpenAI override', async () => {
+        const onUpdateRecord = vi.fn();
+        const {result} = renderHook(() => useResponsesToggle({
+            record: makeRecord({openaiEndpointOverride: 'responses'}),
+            primaryService: makeService(),
+            onUpdateRecord,
+        }));
+
+        await act(async () => {
+            await result.current.onSelect('anthropic');
+        });
+
+        expect(mockRunProbe).not.toHaveBeenCalled();
+        expect(onUpdateRecord).toHaveBeenCalledWith('flags', expect.objectContaining({
+            openaiEndpointOverride: 'auto',
+            anthropicEndpointOverride: 'anthropic',
+        }));
+    });
+
+    it('reads the forced Anthropic style and clears it when another endpoint is picked', async () => {
+        const onUpdateRecord = vi.fn();
+        const {result} = renderHook(() => useResponsesToggle({
+            record: makeRecord({anthropicEndpointOverride: 'anthropic'}),
+            primaryService: makeService(),
+            onUpdateRecord,
+        }));
+        expect(result.current.selection).toBe('anthropic');
+
+        await act(async () => {
+            await result.current.onSelect('auto');
+        });
+
+        expect(onUpdateRecord).toHaveBeenCalledWith('flags', expect.objectContaining({
+            openaiEndpointOverride: 'auto',
+            anthropicEndpointOverride: 'auto',
+        }));
+    });
+
     it('re-validates and reverts when the bound provider/model changes while enabled', async () => {
         mockRunProbe.mockResolvedValue({success: false, error: {message: 'no longer supported'}});
         const onUpdateRecord = vi.fn();

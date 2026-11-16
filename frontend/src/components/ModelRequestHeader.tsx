@@ -23,8 +23,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 import { notify } from '@/utils/notify';
+import { writeToClipboard } from '@/utils/clipboard';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
+import {CodexCompactChip} from '@/components/rule-card/CodexCompactChip';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
@@ -42,7 +45,7 @@ const strategyButtonSx = {
     height: 26,
     minWidth: 0,
     px: 1,
-    borderRadius: 1.5,
+    borderRadius: radius.card,
     borderColor: 'divider',
     fontSize: fontSizes.sm,
     fontWeight: 600,
@@ -108,7 +111,7 @@ const ActionsSection = styled(Box)(({ theme }) => ({
 
 const ModelNameText = styled(Typography)(({ theme }) => ({
     fontWeight: 600,
-    fontSize: '0.875rem',
+    fontSize: fontSizes.base,
     color: theme.palette.text.primary,
     letterSpacing: '-0.01em',
     fontFamily: fontMono,
@@ -136,6 +139,10 @@ export interface ModelRequestHeaderProps {
     endpointSelection?: OpenAIEndpointSelection;
     responsesProbing?: boolean;
     onEndpointSelect?: (selection: OpenAIEndpointSelection) => void;
+    // Codex only: the share of the context window at which Codex auto-compacts
+    // this rule's model (0 = follow Auto Config). Config-only, see CodexCompactChip.
+    onCompactChange?: (percent: number) => void;
+    compactPercent?: number;
     // False when none of the rule's services is OpenAI-compatible: the chip stays
     // (and works) but its tooltip says it has no effect there.
     endpointApplicable?: boolean;
@@ -162,6 +169,8 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     endpointSelection = 'auto',
     responsesProbing = false,
     onEndpointSelect,
+    onCompactChange,
+    compactPercent = 0,
     endpointApplicable = true,
     pluginsCount = 0,
     onPluginsClick,
@@ -196,9 +205,13 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
         }
     };
 
-    const handleCopy = () => {
-        void navigator.clipboard.writeText(modelName);
-        notify.success(`Model name "${modelName}" copied to clipboard`);
+    const handleCopy = async () => {
+        try {
+            await writeToClipboard(modelName);
+            notify.success(`Model name "${modelName}" copied to clipboard`);
+        } catch {
+            notify.error('Failed to copy to clipboard');
+        }
     };
 
     const isWildcard = isWildcardModelName(modelName);
@@ -221,7 +234,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                             '& .MuiInputBase-input': {
                                 color: 'text.primary',
                                 fontWeight: 600,
-                                fontSize: '0.875rem',
+                                fontSize: fontSizes.base,
                                 px: 0.5,
                             },
                             '& .MuiOutlinedInput-notchedOutline': {
@@ -235,13 +248,13 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     <Tooltip title={tempValue.trim() ? 'Save (Enter)' : 'Model name cannot be empty'}>
                         <span>
                             <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleSave(); }} disabled={!tempValue.trim()} sx={{ p: 0.5 }}>
-                                <CheckIcon sx={{ fontSize: '1rem' }} />
+                                <CheckIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </span>
                     </Tooltip>
                     <Tooltip title="Cancel (Esc)">
                         <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleCancel(); }} sx={{ p: 0.5 }}>
-                            <CloseIcon sx={{ fontSize: '1rem' }} />
+                            <CloseIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -311,7 +324,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 '&:hover': { opacity: 1 }
                             }}
                         >
-                            <EditIcon sx={{ fontSize: '0.95rem' }} />
+                            <EditIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -373,7 +386,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
 
                 {onEndpointSelect && (
                     <Box sx={{ml: 0.5}} onClick={(e) => e.stopPropagation()}>
-                        <Tooltip title={endpointApplicable ? 'Choose the upstream OpenAI endpoint for this rule' : t('ruleHeader.endpointNotApplicable')}>
+                        <Tooltip title={endpointApplicable ? 'Choose the upstream endpoint for this rule' : t('ruleHeader.endpointNotApplicable')}>
                             <span>
                                 <Button
                                     size="small"
@@ -381,13 +394,13 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                     color={endpointSelection === 'auto' ? 'inherit' : 'primary'}
                                     endIcon={responsesProbing ? <CircularProgress size={12} /> : <ExpandMoreIcon sx={{fontSize: 14}} />}
                                     disabled={!active || responsesProbing}
-                                    aria-label={`OpenAI endpoint: ${endpointSelection}`}
+                                    aria-label={`Upstream endpoint: ${endpointSelection}`}
                                     aria-haspopup="menu"
                                     aria-expanded={Boolean(endpointMenuAnchor)}
                                     onClick={(e) => setEndpointMenuAnchor(e.currentTarget)}
                                     sx={endpointSelection === 'auto' ? strategyButtonSx : highlightedStrategyButtonSx}
                                 >
-                                    Endpoint: {endpointSelection === 'auto' ? 'Auto' : endpointSelection === 'chat' ? 'Chat' : 'Responses'}
+                                    Endpoint: {endpointSelection === 'auto' ? 'Auto' : endpointSelection === 'chat' ? 'Chat' : endpointSelection === 'anthropic' ? 'Anthropic' : 'Responses'}
                                 </Button>
                             </span>
                         </Tooltip>
@@ -402,6 +415,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 ['auto', 'Auto', 'Use the model Catalog, then the provider setting; default to Chat. When both are supported, follow the client request.'],
                                 ['chat', 'Chat', 'Always send Chat Completions to the upstream provider.'],
                                 ['responses', 'Responses', 'Always send Responses to the upstream provider. Support is checked before saving.'],
+                                ['anthropic', 'Anthropic', 'Always send Anthropic Messages to the upstream provider, converting OpenAI clients. Providers without an Anthropic endpoint fall back to Auto.'],
                             ] as const).map(([value, label, description]) => (
                                 <MenuItem
                                     key={value}
@@ -421,6 +435,17 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                             ))}
                         </Menu>
                     </Box>
+                )}
+
+                {onCompactChange && (
+                    <CodexCompactChip
+                        percent={compactPercent}
+                        context1M={context1M}
+                        disabled={!active}
+                        onChange={onCompactChange}
+                        buttonSx={strategyButtonSx}
+                        highlightedButtonSx={highlightedStrategyButtonSx}
+                    />
                 )}
 
                 {pluginsCount > 0 && onPluginsClick && (
@@ -469,7 +494,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 cursor: 'pointer',
                                 transition: 'transform 0.2s',
                                 transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                fontSize: '1.1rem',
+                                fontSize: fontSizes.lead,
                                 color: 'text.secondary',
                                 '&:hover': { color: 'text.primary' },
                             }}

@@ -18,13 +18,15 @@ import {
     ToggleButton,
     CircularProgress,
     useTheme,
+    alpha,
 } from '@mui/material';
 import { ProviderLabel } from '@/components/ProviderLogo';
 import { WaveSine as StreamIcon } from '@/components/icons';
-import { TOKEN_COLORS, formatNumber, hasCacheWrites } from './chartStyles';
+import { formatNumber, hasCacheWrites } from './chartStyles';
 import api from '@/services/api';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { getStatusColor } from '@/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,13 +66,10 @@ const fmtLatency = (ms: number) => {
     return `${ms}ms`;
 };
 
-const getTokensPerSecond = (record: UsageRecord) => {
-    if (!record.streamed) return 0;
-    if ((record.tokens_per_second ?? 0) > 0) return record.tokens_per_second!;
-    const decodeMs = record.latency_ms - (record.ttft_ms ?? 0);
-    if (record.output_tokens <= 1 || (record.ttft_ms ?? 0) <= 0 || decodeMs <= 0) return 0;
-    return (record.output_tokens - 1) * 1000 / decodeMs;
-};
+// The backend owns TPS (it skips decode windows too short to be reliable), so
+// no fallback computation here.
+const getTokensPerSecond = (record: UsageRecord) =>
+    record.streamed ? (record.tokens_per_second ?? 0) : 0;
 
 const getTPSFormula = (record: UsageRecord, t: TFunction) => {
     const decodeMs = record.latency_ms - (record.ttft_ms ?? 0);
@@ -83,10 +82,13 @@ const fmtTime = (ts: string) =>
 
 // ─── Request Table ────────────────────────────────────────────────────────────
 
-const getLatencyColor = (ms: number, theme: any) => {
+// Colour marks a slow first token only; a normal value stays body text, so the
+// eye lands on the rows that need it. (Total latency grows with the answer's
+// length, so it is not judged.)
+const getTtftColor = (ms: number, theme: any) => {
     if (ms > 2000) return theme.palette.error.main;
     if (ms > 1000) return theme.palette.warning.main;
-    return theme.palette.success.main;
+    return 'text.primary';
 };
 
 interface TableSectionProps {
@@ -107,10 +109,10 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
     const showCacheWrite = hasCacheWrites(records);
 
     return (
-        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden', backgroundColor: 'background.paper', boxShadow: 'none', width: '100%', minWidth: 0 }}>
             {/* Header */}
             <Box sx={{ px: 2.5, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {t('dashboard.requestsView.title', { defaultValue: 'Requests' })}
                     <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
                         {!loading && t('dashboard.requestsView.total', { total: total.toLocaleString() })}
@@ -129,13 +131,13 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
             {/* Table */}
             <TableContainer sx={{ maxHeight: 420, maxWidth: '100%', overflow: 'auto', position: 'relative' }}>
                 {loading && (
-                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.6)' }}>
+                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, backgroundColor: alpha(theme.palette.background.paper, 0.6) }}>
                         <CircularProgress size={28} />
                     </Box>
                 )}
                 <Table stickyHeader size="small" sx={{ tableLayout: 'auto' }}>
                     <TableHead>
-                        <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 600, fontSize: fontSizes.xs, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary', py: 1, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', whiteSpace: 'nowrap' } }}>
+                        <TableRow>
                             <TableCell>{t('dashboard.requestsView.colTime', { defaultValue: 'Time' })}</TableCell>
                             <TableCell>{t('dashboard.requestsView.colModel', { defaultValue: 'Model' })}</TableCell>
                             <TableCell>{t('dashboard.requestsView.colScenario', { defaultValue: 'Scenario' })}</TableCell>
@@ -168,7 +170,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Time */}
                                 <TableCell>
                                     <Tooltip title={new Date(r.timestamp).toLocaleString()} placement="right">
-                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.secondary', cursor: 'default' }}>
+                                        <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.secondary', cursor: 'default' }}>
                                             {fmtTime(r.timestamp)}
                                         </Typography>
                                     </Tooltip>
@@ -225,12 +227,12 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                     </TableCell>
                                 )}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: TOKEN_COLORS.input.main }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'text.primary' }}>
                                         {fmtTokens(r.input_tokens)}
                                     </Typography>
                                 </TableCell>
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: TOKEN_COLORS.output.main }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'text.primary' }}>
                                         {fmtTokens(r.output_tokens)}
                                     </Typography>
                                 </TableCell>
@@ -245,14 +247,14 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
 
                                 {/* Latency */}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: r.latency_ms > 0 ? getLatencyColor(r.latency_ms, theme) : 'text.disabled' }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: r.latency_ms > 0 ? 'text.primary' : 'text.disabled' }}>
                                         {r.latency_ms > 0 ? fmtLatency(r.latency_ms) : '-'}
                                     </Typography>
                                 </TableCell>
 
                                 {/* TTFT */}
                                 <TableCell align="right">
-                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: (r.ttft_ms ?? 0) > 0 ? getLatencyColor(r.ttft_ms!, theme) : 'text.disabled' }}>
+                                    <Typography sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: (r.ttft_ms ?? 0) > 0 ? getTtftColor(r.ttft_ms!, theme) : 'text.disabled' }}>
                                         {(r.ttft_ms ?? 0) > 0 ? fmtLatency(r.ttft_ms!) : '-'}
                                     </Typography>
                                 </TableCell>
@@ -269,10 +271,10 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 {/* Status */}
                                 <TableCell align="center">
                                     {r.status === 'success' ? (
-                                        <Chip label={t('dashboard.requestsView.ok', { defaultValue: 'OK' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 700, backgroundColor: getStatusColor(theme, 'success'), color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
+                                        <Chip label={t('dashboard.requestsView.ok', { defaultValue: 'OK' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 600, backgroundColor: getStatusColor(theme, 'success'), color: 'common.white', '& .MuiChip-label': { px: 0.75 } }} />
                                     ) : (
                                         <Tooltip title={r.error_code || r.status} placement="top">
-                                            <Chip label={t('dashboard.requestsView.err', { defaultValue: 'ERR' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 700, backgroundColor: getStatusColor(theme, 'error'), color: '#fff', '& .MuiChip-label': { px: 0.75 } }} />
+                                            <Chip label={t('dashboard.requestsView.err', { defaultValue: 'ERR' })} size="small" sx={{ height: 18, fontSize: fontSizes.micro, fontWeight: 600, backgroundColor: getStatusColor(theme, 'error'), color: 'common.white', '& .MuiChip-label': { px: 0.75 } }} />
                                         </Tooltip>
                                     )}
                                 </TableCell>
@@ -282,7 +284,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                     {r.streamed && (
                                         <Tooltip title={t('dashboard.requestsView.streamed', { defaultValue: 'Streamed' })}>
                                             <Box sx={{ display: 'inline-flex', color: 'primary.main' }}>
-                                                <StreamIcon sx={{ fontSize: '0.95rem' }} />
+                                                <StreamIcon sx={{ fontSize: 16 }} />
                                             </Box>
                                         </Tooltip>
                                     )}
@@ -319,26 +321,19 @@ export interface RecordsQueryParams {
 }
 
 interface RequestsViewProps {
-    /** Most recent records in range (capped sample) — feeds the table directly
-     *  when it covers the whole range. */
-    records: UsageRecord[];
-    loading: boolean;
-    /** Real total in range from the server; records may be capped below it. */
-    totalCount?: number;
-    /** Query the sample was fetched with; used to page the rest server-side. */
+    /** Time window + dashboard filters the table pages through. */
     queryParams?: RecordsQueryParams | null;
 }
 
-export default function RequestsView({ records, loading, totalCount, queryParams }: RequestsViewProps) {
+export default function RequestsView({ queryParams }: RequestsViewProps) {
     const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(50);
 
-    // When the sample holds every record in range, filter/paginate it locally
-    // (no extra requests). Otherwise the table switches to server-side paging
-    // so every record stays reachable instead of only the most recent slice.
-    const sampleComplete = totalCount == null || records.length >= totalCount;
-
+    // The table asks the server for exactly the page on screen. It used to
+    // fetch a 500-row sample first and page it locally, which sent ten pages'
+    // worth of rows on every visit (and then asked again for page one whenever
+    // the range held more than 500).
     const [serverRows, setServerRows] = useState<UsageRecord[]>([]);
     const [serverTotal, setServerTotal] = useState(0);
     const [serverLoading, setServerLoading] = useState(false);
@@ -354,7 +349,7 @@ export default function RequestsView({ records, loading, totalCount, queryParams
     }, [resetKey]);
 
     useEffect(() => {
-        if (sampleComplete || !queryParams) return;
+        if (!queryParams) return;
         const seq = ++serverSeq.current;
         setServerLoading(true);
         (async () => {
@@ -386,27 +381,17 @@ export default function RequestsView({ records, loading, totalCount, queryParams
                 }
             }
         })();
-    }, [sampleComplete, queryParams, statusFilter, page, rowsPerPage]);
-
-    const filtered = statusFilter === 'all'
-        ? records
-        : records.filter(r => statusFilter === 'success' ? r.status === 'success' : r.status !== 'success');
-
-    const paged = filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
-
-    const tableRecords = sampleComplete ? paged : serverRows;
-    const tableTotal = sampleComplete ? filtered.length : serverTotal;
-    const tableLoading = sampleComplete ? loading && records.length === 0 : serverLoading;
+    }, [queryParams, statusFilter, page, rowsPerPage]);
 
     return (
         <Box>
             <RequestTable
-                records={tableRecords}
-                total={tableTotal}
+                records={serverRows}
+                total={serverTotal}
                 page={page}
                 rowsPerPage={rowsPerPage}
                 statusFilter={statusFilter}
-                loading={tableLoading}
+                loading={serverLoading}
                 onStatusFilterChange={s => { setStatusFilter(s); setPage(0); }}
                 onPageChange={setPage}
                 onRowsPerPageChange={r => { setRowsPerPage(r); setPage(0); }}

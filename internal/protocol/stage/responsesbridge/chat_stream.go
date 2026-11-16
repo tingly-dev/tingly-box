@@ -11,17 +11,18 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	protocolstream "github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-func newChatResponsesStream(target stage.EventStream, sourceModel string) (stage.EventStream, error) {
+func newChatResponsesStream(target stage.EventStream, sourceModel string, namespaces toolnamespace.Index) (stage.EventStream, error) {
 	if target == nil {
 		return nil, fmt.Errorf("convert Chat stream to OpenAI Responses: target stream is nil")
 	}
 	iterator := &openAIChatStreamIterator{target: target}
 	return &chatResponsesStream{
 		iterator:  iterator,
-		converter: protocolstream.NewChatToResponsesConverter(iterator, sourceModel),
+		converter: protocolstream.NewChatToResponsesConverter(iterator, sourceModel, namespaces),
 	}, nil
 }
 

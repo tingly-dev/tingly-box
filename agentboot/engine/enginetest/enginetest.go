@@ -39,6 +39,13 @@ func (a *Agent) Service() *agentboot.AgentService {
 	return svc
 }
 
+// CompactPrompt makes the agent compactable: Engine.Compact runs a turn whose
+// prompt starts with "/compact", and the script answers it with Compacted or
+// CompactRefused.
+func (a *Agent) CompactPrompt(instructions string) string {
+	return (&claude.Agent{}).CompactPrompt(instructions)
+}
+
 // Launches returns the options of every turn started so far, in order.
 func (a *Agent) Launches() []agentboot.ExecutionOptions {
 	a.mu.Lock()
@@ -116,6 +123,23 @@ func (t *Turn) Say(text string, inputTokens, outputTokens int64) {
 	}})
 }
 
+// Compacted reports a finished compaction, as the CLI does for /compact.
+func (t *Turn) Compacted(res agentboot.CompactResult) {
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactDone, Result: res})
+}
+
+// CompactRefused reports a compaction the agent declined.
+func (t *Turn) CompactRefused(reason string) {
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactFailed, Reason: reason})
+}
+
+// Use emits a tool call, as Claude Code reports one it makes.
+func (t *Turn) Use(id, tool string, input map[string]any) {
+	t.send(&claude.ToolUseMessage{Type: "tool_use", Name: tool, Input: input, ToolUseID: id})
+}
+
 // ErrNoAnswer is returned by Approve and Ask when the turn ended first.
 var ErrNoAnswer = errors.New("enginetest: the turn ended before an answer")
 
@@ -133,6 +157,18 @@ func (t *Turn) Approve(id, tool string, input map[string]any) (agentboot.Approva
 // Ask asks the user a question and waits for the answer.
 func (t *Turn) Ask(id, question string) (agentboot.AskResponse, error) {
 	t.send(agentboot.AskRequestEvent{ID: id, AgentType: agentboot.AgentTypeClaude, ToolName: "AskUserQuestion", Message: question})
+	r, err := t.await()
+	if err != nil {
+		return agentboot.AskResponse{}, err
+	}
+	resp, _ := r.(agentboot.AskResponse)
+	return resp, nil
+}
+
+// AskQuestions asks AskUserQuestion's structured questions (input carries
+// "questions") and waits for the answer.
+func (t *Turn) AskQuestions(id string, input map[string]any) (agentboot.AskResponse, error) {
+	t.send(agentboot.AskRequestEvent{ID: id, AgentType: agentboot.AgentTypeClaude, ToolName: "AskUserQuestion", Input: input})
 	r, err := t.await()
 	if err != nil {
 		return agentboot.AskResponse{}, err

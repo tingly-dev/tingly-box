@@ -30,16 +30,10 @@ const webSearchMaxAttempts = 3
 
 var webSearchRetryBaseWait = 500 * time.Millisecond
 
-// Serve starts the builtin MCP server on stdio.
-// This is the main entry point for the builtin MCP server.
-func Serve() error {
-	// Create MCP server
-	mcpServer := server.NewMCPServer(
-		"tingly-box-builtin",
-		"1.0.0",
-		server.WithToolCapabilities(true),
-	)
-
+// ToolDefinitions returns the same schemas used by the stdio server, without
+// starting a process or requiring credentials. Disabled Server Tools use these
+// definitions so their configuration remains visible.
+func ToolDefinitions() ([]mcp.Tool, error) {
 	// Register web search tool
 	webSearchTool := mcp.Tool{
 		Name:        mcptools.BuiltinWebSearchToolName,
@@ -67,10 +61,8 @@ func Serve() error {
 		},
 		"required": []string{"query"},
 	}); err != nil {
-		return fmt.Errorf("failed to set web search schema: %w", err)
+		return nil, fmt.Errorf("failed to set web search schema: %w", err)
 	}
-
-	mcpServer.AddTool(webSearchTool, handleWebSearch)
 
 	// Register web fetch tool
 	webFetchTool := mcp.Tool{
@@ -92,10 +84,27 @@ func Serve() error {
 		},
 		"required": []string{"url", "prompt"},
 	}); err != nil {
-		return fmt.Errorf("failed to set web fetch schema: %w", err)
+		return nil, fmt.Errorf("failed to set web fetch schema: %w", err)
 	}
 
-	mcpServer.AddTool(webFetchTool, handleWebFetch)
+	return []mcp.Tool{webSearchTool, webFetchTool}, nil
+}
+
+// Serve starts the builtin MCP server on stdio.
+func Serve() error {
+	definitions, err := ToolDefinitions()
+	if err != nil {
+		return err
+	}
+	mcpServer := server.NewMCPServer("tingly-box-builtin", "1.0.0", server.WithToolCapabilities(true))
+	for _, definition := range definitions {
+		switch definition.Name {
+		case mcptools.BuiltinWebSearchToolName:
+			mcpServer.AddTool(definition, handleWebSearch)
+		case mcptools.BuiltinWebFetchToolName:
+			mcpServer.AddTool(definition, handleWebFetch)
+		}
+	}
 
 	// Serve stdio (blocking call)
 	if err := server.ServeStdio(mcpServer); err != nil {

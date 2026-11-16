@@ -91,6 +91,9 @@ func anthropicBaseURL(apiBase string) string {
 // rewritten base URL (e.g. vmodel) call this directly.
 func newAnthropicClientWithTransport(provider *typ.Provider, baseURL string, transport http.RoundTripper, extraOptions ...anthropicOption.RequestOption) (*AnthropicClient, error) {
 	options := []anthropicOption.RequestOption{
+		// Provider credentials come only from the provider record; the gateway's
+		// own ANTHROPIC_* environment must never be sent upstream.
+		anthropicOption.WithoutEnvironmentDefaults(),
 		anthropicOption.WithBaseURL(anthropicBaseURL(baseURL)),
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}

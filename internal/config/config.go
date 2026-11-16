@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/tingly-dev/tingly-box/internal/catalog"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -59,6 +60,11 @@ type Config struct {
 	ServerPort  int                      `json:"-"`
 	ServerHost  string                   `json:"-"` // Server host address (e.g., "localhost", "0.0.0.0", "192.168.1.100")
 	JWTSecret   string                   `json:"jwt_secret"`
+
+	// ProjectsDir is the Projects data directory chosen with --projects-dir,
+	// remembered so a later start or restart without the flag keeps using it.
+	// Empty means "<config dir>-project".
+	ProjectsDir string `json:"projects_dir,omitempty"`
 
 	// Server settings
 	DefaultMaxTokens int  `json:"default_max_tokens"` // Default max_tokens for anthropic API requests
@@ -114,6 +120,8 @@ type Config struct {
 	ConfigDir  string `yaml:"-" json:"-"`
 
 	modelManager *catalog.ModelListManager
+	// modelFetches coalesces concurrent upstream model-list fetches per provider.
+	modelFetches singleflight.Group
 	storeManager *db.StoreManager // Unified store manager for all database stores
 
 	// Store references for internal Config methods (RefreshStatsFromStore, etc.)
@@ -439,6 +447,8 @@ func NewConfigWithDir(configDir string, opts ...ConfigOption) (*Config, error) {
 
 // load loads the global configuration from file
 func (c *Config) load() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	// Store the config file path before unmarshaling
 	configFile := c.ConfigFile
 
@@ -474,6 +484,13 @@ func (c *Config) load() error {
 
 // Save saves the global configuration to file
 func (c *Config) Save() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.saveLocked()
+}
+
+// saveLocked persists the config while c.mu is held.
+func (c *Config) saveLocked() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}

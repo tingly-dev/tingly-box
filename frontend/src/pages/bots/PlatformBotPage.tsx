@@ -1,9 +1,9 @@
-import { BotTable, BotConfigDialog, BotAccessDialog } from '@/components/bot';
+import { useEntityLabels } from '@/components/entity/useEntityLabels';
+import { BotTable, BotConfigDialog } from '@/components/bot';
 import EmptyState from '@/components/EmptyState';
 import { PageLayout } from '@/components/PageLayout';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
-import type { BotSettings } from '@/types/bot';
 import { useBotList } from '@/hooks/useBotList';
 import { useBotToggle } from '@/hooks/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
@@ -23,8 +23,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
     const { t } = useTranslation();
     const [searchParams, setSearchParams] = useSearchParams();
 
-	const [accessBot,setAccessBot]=useState<BotSettings|null>(null);
-
     // Add/Edit dialog state — the dialog itself is the shared BotConfigDialog.
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
@@ -41,6 +39,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
     // Bot list + restart/delete via the shared useBotList hook (same ops
     // across all bot pages). `spinnerOnRefresh` keeps this page's behavior of
     // re-showing the loading spinner on every reload, not just the first.
+    const entities = useEntityLabels();
     const {
         bots,
         loading: botLoading,
@@ -87,7 +86,7 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
     }, [searchParams, setSearchParams, dialogOpen, openAddDialog]);
 
     // Toggle uses the shared useBotToggle hook (same op across all bot pages).
-    const {toggle: handleBotToggle, isToggling} = useBotToggle({onDone: loadBotSettings});
+    const {toggle: handleBotToggle, isToggling} = useBotToggle({onDone: loadBotSettings, describe: (uuid) => { const b = bots.find((x) => x.uuid === uuid); return b ? entities.botText(b) : uuid; }});
 
     return (
         <PageLayout
@@ -132,7 +131,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                         onRestart={(uuid) => handleBotRestart(uuid)}
                         isToggling={isToggling}
                         isRestarting={isRestarting}
-						onManageAccess={(bot)=>setAccessBot(bot)}
                     />
                 )}
             </UnifiedCard>
@@ -154,7 +152,6 @@ const PlatformBotPage = ({ platformId, platformName, platformGuide }: PlatformBo
                 onSaved={loadBotSettings}
                 notify={showNotification}
             />
-            <BotAccessDialog open={Boolean(accessBot)} bot={accessBot} onClose={()=>setAccessBot(null)} onChanged={loadBotSettings}/>
         </PageLayout>
     );
 };

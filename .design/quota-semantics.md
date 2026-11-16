@@ -54,14 +54,15 @@ statusline 将可计量窗口写成 `Quota: … left`，余额窗口单独写成
 
 | 上游 | 给什么 | 不给什么 |
 |---|---|---|
-| Anthropic | 5h / 7d 两个窗口的利用率百分比；溢价额度（**利用率可为 null**） | 绝对量 |
+| Anthropic | 5h / 7d 两个窗口的利用率百分比；溢价额度（**利用率可为 null**）。只认 OAuth（订阅） | 绝对量；**API key 没有余额端点**（Admin API 只有用量/花费报表） |
 | Codex | primary / secondary 窗口的 `used_percent` + `limit_window_seconds`（**free 套餐的 primary 是 604800s，即一周**）；模型专属限额；code review 限额；重置券；余额（**只给余额，不给原始总额**） | — |
 | Gemini | 每模型 `remainingFraction` + 日重置时间 | 账户级汇总 |
 | Z.ai / GLM | 编码单位制（3=时 5=月 6=周）的 token 限额，或字符串单位制（**不含时长**）；MCP 限额；每模型消耗明细（**是占消耗的比例，不是占额度的**） | — |
 | MiniMax | 每模型两个区间（自己的 interval + 共享周），**counts 常为 0/0**，此时只有 `*_remaining_percent`；套餐捆绑视频/语音/图片/音乐 | — |
-| Kimi Code | 周额度 + N 个 limit（**部分不给时长**）；booster 钱包 | — |
+| Kimi Code | 周额度 + N 个 limit（**部分不给时长**）；`usages` 里的月额度（`limit_month_total` / `limit_month_code`，**只给 `used_ratio` 0–1**，`limit_5h` 与 `limits` 重复）；booster 钱包 | 月额度的绝对量 |
+| DeepSeek | 每币种余额（`/user/balance`，**欠费时为负数**） | 上限 |
 | Kimi K2 | `consumed` / `remaining` | 原始总额（只能合成） |
-| OpenRouter | key 终身限额（可为 null）；日/周/月花费（**月花费永远无上限**——key limit 管终身不管当月） | — |
+| OpenRouter | 账户 credits（`/api/v1/credits`：累计充值、累计花费）；key 终身限额（可为 null）；日/周/月花费（**月花费永远无上限**——key limit 管终身不管当月） | 账户余额对普通 key 不保证（文档称仅 management key，普通 key 实测也有返回） |
 | OpenCode | Go 订阅三个窗口（5h 滚动 / 周 / 月）的百分比 + 重置时间 + `status` | 限额绝对值、窗口长度、**按量付费余额（无公开端点）**、免费额度（按 IP 计） |
 | OpenAI | 花费时序（`/v1/usage` 常 404） | 上限 |
 | Copilot / Cursor / VertexAI | 无配额 API | 一切 |
@@ -107,7 +108,7 @@ ResetsAt   什么时候回满。nil = 不会自己回来（要充钱）
 | | 会重置吗 | 耗尽意味着 | 例子 |
 |---|---|---|---|
 | **额度** `limit` | 会 | **等一会** | Anthropic 5h/7d、Codex 周窗口、MiniMax 区间/周 |
-| **资源** `resource` | 不会 | **得充钱** | OpenRouter key 余额、KimiK2 credits、booster、重置券 |
+| **资源** `resource` | 不会 | **得充钱** | OpenRouter 账户余额、KimiK2 credits、booster、重置券 |
 
 区别只有一条：**耗尽后会不会自愈**。资源天然没有 `ResetsAt`，不需要更多枚举。
 
@@ -141,10 +142,12 @@ Codex code review、Z.ai MCP、MiniMax 的视频/语音/图片/音乐额度都�
 
 「读不到额度」由 `Pct()` 返回 `ok=false` 表达——没有窗口自然没有 countable 的，
 **不造 "Quota unavailable" 占位行**（每个界面多一行说不出任何可操作信息的噪声）。
-原因记在 `LastError`，要看的界面（CLI 的 `Status: Error:`、前端原始响应入口）本来就读它。
+原因记在 `LastError`，要看的界面（CLI 的 `Status: Error:`、凭据页额度列的悬停提示）直接显示它——读失败时没有原始响应，原因是唯一能说明该修什么的东西。
+
+只认 OAuth 的 fetcher（`RequiresAuth() == oauth`，如 Anthropic）遇到同 host 的 API key 不发请求，按「不支持」处理：拿 key 去打订阅端点只会存下一个 401，界面就把好好的 provider 显示成坏的。
 
 但**有部分信息**的窗口要留：溢价额度（开了但上游不肯说用量）、无上限的月度花费（$8.10）、
-只报余额的 Codex credits——显示自己的数值，不画进度条、不报百分数。
+只报余额的 Codex credits——是虚拟积分（`unit: credits`），不是 USD；保留上游数值，不作货币换算。它与一次性的 reset credit 重置券不同；显示自己的数值，不画进度条、不报百分数。
 
 ### 3.7 刻意不做的
 
@@ -224,9 +227,10 @@ return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
 | gemini | 平均 → 最紧 bucket + 模型名标签；空 bucket → `MarkUnreadable`（保留 RawResponse 与 5min TTL） |
 | zai / glm | 模型明细改按**占额度**算，占消耗的比例只进 Description；MCP → `feature` breakdown（明细保留）；编码单位 → 周期，字符串单位 → `custom` 不编数 |
 | minimax | 只有文本模型答账户级，视频/语音/图片/音乐 → `feature`（判据 §3.5）；每模型两个窗口（自己的 interval + 共享周）；counts 0/0 时读 `*_remaining_percent`；两者皆无 → 不产出该窗口 |
-| kimi_code | booster → `resource`；weekly 补 7d；无时长 limit 保持 `custom` |
+| kimi_code | booster → `resource`；weekly 补 7d；无时长 limit 保持 `custom`；`usages` 的月额度 → `monthly` 百分比窗口（0-100 标度），周期已被 `limits`/`usage` 覆盖的条目跳过 |
+| deepseek | 余额 → `balance` + `Unknown`；负数照实保留（欠费），不当格式错误 |
 | kimik2 | credits → `resource` |
-| openrouter | key 余额 → `resource`；月度花费两个分支都标 `Unlimited`（key limit 管终身不管当月）；去掉重复的第二个 monthly 窗口 |
+| openrouter | 余额改读账户 credits（`/api/v1/credits`，拿不到就不出窗口）→ `balance` + `Unknown`，只报金额不报百分比（两项都是累计值，花费/充值不是余量，同 Codex credits）；key 上限不再出窗口（原先 `key_limit` 被当成余额显示），Cost 也只留 key 的累计花费、不带上限；月度花费两个分支都标 `Unlimited`（key limit 管终身不管当月）；去掉重复的第二个 monthly 窗口 |
 | opencode | 三个窗口都是账户级 gate（网关任一打满即拒），交给 `Tightest()`；只有百分比 → 0-100 标度；滚动窗口长度上游不给，按其超限文案的 "5 hour" 取 300min；无 Go 订阅的 403 `EntitlementError` → `MarkUnreadable`（好 key，不是错误，更不是 0%）。详见 `.design/opencode-quota.md` |
 | openai | 有花费无上限 → `Unknown` 窗口（数值可见）；404 → 只记 `LastError` |
 | copilot / cursor / vertex_ai | 只记 `LastError`，不产出窗口 |
@@ -289,7 +293,7 @@ return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
                      溢价额度：不可知（上游不肯说）
   MiniMax            区间(5h) 60% ←最紧 / 周 12%        60%    18:00
                      ·video 100%（feature，不替账户回答）
-  OpenRouter         余额 $8.10/$20 = 40% ←最紧         40%    nil（要充钱）
+  OpenRouter         余额 $11.90（只报金额）            不可知  —
                      月度花费：无上限（不算百分比）
   Copilot            无配额 API                         不可知  —
 ```

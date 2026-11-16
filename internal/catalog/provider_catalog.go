@@ -897,6 +897,25 @@ func (tm *ProviderCatalogManager) GetMaxTokensForModelByProvider(provider *typ.P
 	return constant.DefaultMaxTokens
 }
 
+// GetModelInfoForProvider returns the catalog entry for model on the
+// template matched to provider (by APIBase / OAuth issuer / cloud identity,
+// never by the user-defined provider name).
+func (tm *ProviderCatalogManager) GetModelInfoForProvider(provider *typ.Provider, model string) (ModelInfo, bool) {
+	if tm == nil || provider == nil || model == "" {
+		return ModelInfo{}, false
+	}
+	tmpl := tm.findTemplateByProvider(provider)
+	if tmpl == nil {
+		return ModelInfo{}, false
+	}
+	for _, m := range tmpl.Models {
+		if m.ID == model {
+			return m, true
+		}
+	}
+	return ModelInfo{}, false
+}
+
 // GetOpenAIEndpointOverrideForModel looks up ModelInfo.OpenAIEndpoints for
 // this model on this provider's template and returns the mode it declares.
 // ai.EndpointModeUnknown means no declaration — resolve exactly as if this

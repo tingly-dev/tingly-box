@@ -296,22 +296,19 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		}
 	}
 
-	// Handle credits (balance is now a pointer). Upstream reports what is left
-	// and never what was bought, so there is no percentage to be had: putting
-	// the balance in Limit made it render as "$0.00 / $12.40", a budget with
-	// nothing spent, and it would keep reading as nothing spent however much
-	// the balance drained.
+	// Ordinary credits are virtual points, not a currency amount or reset
+	// vouchers. Upstream reports only the remaining balance, so there is no
+	// total or percentage to infer.
 	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
 		balance := float64(*apiResp.Credits.Balance)
 		usage.AddWindow("credits", &quota.UsageWindow{
-			Type:         quota.WindowTypeBalance,
-			Kind:         quota.WindowKindResource,
-			Available:    &balance,
-			Unknown:      true,
-			Unit:         quota.UsageUnitCurrency,
-			CurrencyCode: "USD",
-			Label:        "Credits Balance",
-			Description:  fmt.Sprintf("$%.2f remaining", balance),
+			Type:        quota.WindowTypeBalance,
+			Kind:        quota.WindowKindResource,
+			Available:   &balance,
+			Unknown:     true,
+			Unit:        quota.UsageUnitCredits,
+			Label:       "Credits Balance",
+			Description: fmt.Sprintf("%s credits left", strconv.FormatFloat(balance, 'f', -1, 64)),
 		})
 	}
 

@@ -39,7 +39,7 @@ export interface NavItemBase {
      * Optional override for "is this item active": receives the current
      * pathname, returns whether this item should highlight. Defaults to an
      * exact match on `path`. Use this for an item whose route has a dynamic
-     * segment or sub-pages (e.g. `/desk/...`) so the row stays highlighted —
+     * segment or sub-pages (e.g. `/projects/...`) so the row stays highlighted —
      * and the parent activity stays selected — across the whole sub-tree.
      */
     match?: (pathname: string) => boolean;
@@ -55,8 +55,25 @@ export interface ActivityItem {
     key: string;
     icon: ReactNode;
     label: string;
+    /** A shorter name for the 72px-wide rail, where long translations are cut; `label` stays the tooltip and the sidebar title. */
+    railLabel?: string;
     path?: string;
     children?: NavItem[];
     // Default path to use when there's no saved path in memory
     defaultPath?: string;
+    /**
+     * Not a rail icon: the activity is opened from elsewhere (System, from the
+     * gear at the foot of the rail) but still owns its sidebar and lights up
+     * its pages' routes.
+     */
+    railHidden?: boolean;
+    /** Something here needs the user: a dot on the rail icon, with this as its hover text. */
+    attention?: string;
+    /**
+     * Renders the sidebar body in place of the `children` rows, for an
+     * activity whose sidebar lists things rather than pages (Projects lists
+     * projects and working folders). `children` still decide which routes
+     * light this activity up. `onNavigate` closes a drawer or flyout.
+     */
+    sidebar?: (onNavigate: () => void) => ReactNode;
 }

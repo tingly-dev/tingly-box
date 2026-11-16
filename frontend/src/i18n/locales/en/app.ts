@@ -1,5 +1,51 @@
 // App shell and shared copy: navigation, system settings, help, login, onboarding
 export default {
+  "logViewer": {
+    "views": "Log views",
+    "tabs": {
+      "requests": "Requests",
+      "usage": "Usage",
+      "system": "System"
+    },
+    "search": "Search requests",
+    "errorsOnly": "Errors only",
+    "load": "Load",
+    "latest_one": "Latest {{count}}",
+    "latest_other": "Latest {{count}}",
+    "refreshing": "Refreshing…",
+    "count_one": "{{count}} request",
+    "count_other": "{{count}} requests",
+    "countFiltered": "{{shown}} of {{total}} requests",
+    "searchLogs": "Search logs",
+    "allLevels": "All",
+    "entries_one": "{{count}} entry",
+    "entries_other": "{{count}} entries",
+    "entriesFiltered": "{{shown}} of {{total}} entries",
+    "refreshLogs": "Refresh logs",
+    "autoRefresh": "Auto-refresh",
+    "refreshNow": "Refresh now",
+    "refreshRequests": "Refresh requests",
+    "columns": {
+      "time": "Time",
+      "agent": "Agent",
+      "model": "Model",
+      "provider": "Provider",
+      "status": "Status",
+      "latency": "Latency"
+    },
+    "loading": "Loading…",
+    "noMatch": "No requests match these filters.",
+    "empty": "No model requests in recent retained history.",
+    "emptyAgent": "No requests from this agent yet. Once it sends one, it shows up here.",
+    "loadFailed": "Failed to load requests",
+    "detailGone": "Request details are no longer available in retained history.",
+    "detailFailed": "Failed to load request detail",
+    "error": "Error",
+    "retryHint": "Use refresh to retry.",
+    "loadingJourney": "Loading journey...",
+    "usageHint": "Other days, charts and performance are in the Dashboard.",
+    "openDashboard": "Open in Dashboard"
+  },
   "common": {
     "back": "Back",
     "add": "Add",
@@ -7,6 +53,7 @@ export default {
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
+    "duplicate": "Duplicate",
     "confirm": "Confirm",
     "loading": "Loading...",
     "enabled": "Enabled",
@@ -16,6 +63,8 @@ export default {
     "close": "Close",
     "done": "Done",
     "applying": "Applying...",
+    "advanced": "Advanced",
+    "advancedCustomized": "{{count}} customised",
     "copy": "Copy",
     "copied": "Copied",
     "copyModelName": "Copy model name",
@@ -36,11 +85,40 @@ export default {
     "clear": "Clear selection",
     "dismiss": "Dismiss",
     "moveDown": "Move down",
+    "pinToTop": "Pin to top",
     "moveUp": "Move up",
     "saved": "Saved"
   },
+  "mobile": {
+    "tabBar": "Main navigation",
+    "shell": {
+      "title": "Interface",
+      "desktop": "Desktop",
+      "mobile": "Phone",
+      "auto": "Auto",
+      "hint": "Phone shows the phone layout on this device; Desktop shows the full interface. Remembered per browser."
+    },
+    "subPages": {
+      "switch": "Switch page in {{title}}"
+    },
+    "more": {
+      "title": "More",
+      "tab": "More",
+      "manage": "Manage",
+      "system": "System",
+      "preferences": "Theme, language and feedback",
+      "interface": "Interface",
+      "useDesktop": "Use the desktop UI",
+      "useDesktopHint": "Switch back to the full interface"
+    }
+  },
   "layout": {
-    "desk": "Desk",
+    "workspace": "Workspace",
+    "workspaceRail": "Workspace",
+    "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
+    "workspaceGate": { "title": "Enable Workspace", "text": "Enable the Workspace power-up to use projects, workdirs and IM chats.", "enable": "Enable Workspace", "error": "Could not enable Workspace. Please try again." },
+    "projects": "Projects",
+    "projectsWaiting": "Claude is waiting on you",
     "appTitle": "Tingly Box",
     "slogan": "Your Intelligence, Orchestrated.",
     "version": "version<br/>{{version}}",
@@ -55,6 +133,7 @@ export default {
       "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
       "usePi": "Pi",
+      "useWorkBuddy": "WorkBuddy",
       "useDsh": "DeepSeek",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
@@ -75,11 +154,6 @@ export default {
       "newProfile": "New Profile",
       "newTeam": "New Team",
       "profileName": "Profile name",
-      "mode": "Mode",
-      "modeUnified": "Unified: Single model for all",
-      "modeSeparate": "Separate: Individual models",
-      "separate": "Separate",
-      "unified": "Unified",
       "createProfileTooltip": "Create a new Claude Code profile with custom settings",
       "createTeamTooltip": "Create an isolated Team workspace",
       "sloganTooltip": "For all Solo Builders, Dev Teams and Agents.",
@@ -88,6 +162,7 @@ export default {
       "expand": "Expand sidebar"
     },
     // One-time callouts pointing at a control (components/CoachMark).
+    "featureSwitch": { "disable": "Turn off {{name}}", "disabledTitle": "{{name}} is off", "disabledText": "You can turn it back on in Preferences → Power-ups.", "teamTitle": "Team is on", "teamText": "Team is enabled by default. Use this button to turn it off." },
     "coachMarks": {
       "gotIt": "Got it",
       "agentVisibility": {
@@ -96,7 +171,7 @@ export default {
       },
       "powerUps": {
         "title": "Power-ups moved here",
-        "text": "Team, Image, Remote, Bench and the other optional items are now switched on and off from this menu, under Power-ups."
+        "text": "Team, Image, Projects, Bench and the other optional items are now switched on and off from this menu, under Power-ups."
       }
     },
     "activityBar": {
@@ -110,7 +185,6 @@ export default {
       "light": "Light",
       "dark": "Dark",
       "system": "System",
-      "sunlit": "Sunlit",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "Click",
@@ -141,11 +215,13 @@ export default {
     "today": "Today",
     "yesterday": "Yesterday",
     "days": "Days",
-    "remote": "Remote",
+    "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
+    "imBots": "IM Bots",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {
@@ -175,7 +251,6 @@ export default {
     "experimental": "Experimental",
     "develop": "Develop",
     "logs": "Logs",
-    "userRequest": "User Request",
     "skills": "Skills",
     "addProfile": "New profile",
     "addTeam": "Add Team",
@@ -185,6 +260,7 @@ export default {
     "help": "Tips & Help",
     "helpShort": "Help",
     "powerUps": "Power-ups",
+    "powerUpsRail": "Power-ups",
     "tools": "Tools",
     "servertool": "Servertool",
     "botsRunning": "{{active}} of {{total}} bots running"
@@ -283,17 +359,15 @@ export default {
       "saveFailed": "Failed to update language settings"
     },
     "experimentalFeatures": {
-      "desk": "Desk",
-      "enableDesk": "Run Claude Code on this machine from a browser tab, in a folder you choose.",
-      "deskEnabledInfo": "Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.",
+      "projects": "Projects",
+      "enableProjects": "Use Claude Code from the web and your IM chats: run it in a folder you choose, or hand a project its work and a coordinator runs each task as a thread in its own git worktree.",
+      "projectsEnabledInfo": "Anyone who can sign in to this tingly-box, or who may use Remote Control through one of its bots, can now run Claude Code on this machine, in the folders and repositories they choose, and approve the tool calls it makes.",
       "title": "Experimental Features",
       "description": "These experimental features apply globally to all scenarios. Individual scenarios can override these settings.",
       "skills": "Skills",
-      "userPrompts": "User prompts",
       "guardrails": "Guardrails",
       "mcp": "MCP",
       "bench": "Bench",
-      "enableUserPrompts": "Manage reusable instructions for user requests",
       "enableIdeSkills": "Manage code snippets and skills from your IDE",
       "enableGuardrails": "Block risky tool calls and filter sensitive outputs",
       "enableMCP": "MCP (Model Context Protocol) tools such as web search and web fetch",
@@ -333,6 +407,10 @@ export default {
   "help": {
     "title": "Tips & Help",
     "description": "A few easy-to-miss but useful things.",
+    "feedback": {
+      "description": "Report a problem or share an idea on GitHub.",
+      "action": "Open GitHub Issues"
+    },
     "shortcut": {
       "title": "Desktop Shortcut",
       "description": "One click to restart Tingly Box and open the web UI. Never auto-updates or auto-restarts on its own — creating it is the only thing this does.",

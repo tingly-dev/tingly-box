@@ -17,8 +17,8 @@
     "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。",
     "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
-  "version": "2.5.0",
-  "last_updated": "2026-10-08T00:00:00Z",
+  "version": "2.7.0",
+  "last_updated": "2026-11-12T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -40,6 +40,8 @@
       "api_style": "anthropic",
       "icon": "aws",
       "models": [
+        { "id": "global.anthropic.claude-haiku-5-5", "sources": ["https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html"] },
+        {"id": "global.anthropic.claude-fable-5-2", "sources": ["https://platform.claude.com/docs/en/models/overview"]},
         { "id": "anthropic.claude-opus-5-5" },
         { "id": "anthropic.claude-sonnet-5-5" },
         { "id": "anthropic.claude-fable-5-1" },
@@ -79,6 +81,7 @@
       "api_style": "anthropic",
       "icon": "vertexai",
       "models": [
+        {"id": "claude-fable-5-2", "context": 1000000, "max_output": 128000, "sources": ["https://platform.claude.com/docs/en/models/overview"]},
         { "id": "claude-opus-5-5" },
         { "id": "claude-sonnet-5-5" },
         { "id": "claude-fable-5-1" },
@@ -117,6 +120,8 @@
       "api_style": "google",
       "icon": "vertexai",
       "models": [
+        {"id": "gemini-4-carbon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
+        {"id": "gemini-4-argon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
         { "id": "gemini-3-flash" },
         { "id": "gemini-3.5-flash" },
         { "id": "gemini-2.5-pro" },
@@ -144,6 +149,8 @@
       "api_style": "openai",
       "icon": "azure",
       "models": [
+        {"id": "gpt-6.1-sol", "context": 1050000, "max_output": 128000, "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]},
+        {"id": "gpt-6.1-terra", "context": 1050000, "max_output": 128000, "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]},
         {
           "id": "gpt-6-astra",
           "context": 1050000,
@@ -288,6 +295,7 @@
       "base_url_openai": "https://api.openai.com/v1",
       "base_url_anthropic": null,
       "models": [
+        {"id": "gpt-6.1-terra", "context": 1050000, "max_output": 128000, "sources": ["https://developers.openai.com/api/docs/models/gpt-6.1-terra"]},
         {
           "id": "gpt-6-astra",
           "context": 1050000,
@@ -499,6 +507,7 @@
       "base_url_openai": null,
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
+        {"id": "claude-fable-5-2", "context": 1000000, "max_output": 128000, "sources": ["https://platform.claude.com/docs/en/models/overview"]},
         {
           "id": "claude-haiku-5-5",
           "context": 1000000,
@@ -822,6 +831,20 @@
       "base_url_anthropic": null,
       "models": [
         {
+          "id": "gpt-6.1-terra",
+          "context": 500000,
+          "note": "Codex 模型；默认上下文 500000，最大上下文 872000（依据 Codex 模型目录）",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
+        },
+        {
+          "id": "gpt-6.1-terra:fast",
+          "context": 500000,
+          "note": "Codex 模型 · Fast 模式，请求 OpenAI 优先算力通道（Codex 模型目录标注 1.5x speed）；默认上下文 500000，最大上下文 872000",
+          "openai_endpoints": ["responses"],
+          "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
+        },
+        {
           "id": "gpt-6.1-sol",
           "context": 272000,
           "max_output": 128000,
@@ -835,7 +858,7 @@
           "context": 272000,
           "max_output": 128000,
           "created": "2026-09-29",
-          "note": "接近 gpt-6-astra 性能的模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "note": "接近 gpt-6-astra 性能的模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持（Codex 模型目录 priority 档位标注 2x speed, increased usage）；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"],
           "sources": ["https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"]
         },
@@ -844,7 +867,7 @@
           "context": 272000,
           "max_output": 128000,
           "created": "2026-09-22",
-          "note": "推荐用于复杂编码和长程 Agent 工作流；按账户套餐、灰度进度和工作区设置开放；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "note": "上一代主力模型（Codex 模型目录描述为 Previous generation workhorse model，最新主力为 gpt-6.1-sol），适合复杂编码和长程 Agent 工作流；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
@@ -866,7 +889,7 @@
           "context": 272000,
           "max_output": 128000,
           "created": "2026-09-22",
-          "note": "推荐用于专注、高吞吐量的编码任务；按账户套餐、灰度进度和工作区设置开放；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
+          "note": "快速且经济，适合专注、高吞吐量的较简单编码任务；Free / Go 套餐也可选用；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"],
           "sources": [
             "https://learn.chatgpt.com/docs/models",
@@ -965,35 +988,17 @@
           "created": "2026-07-09",
           "note": "轻量模型 · Fast 模式，请求 OpenAI 优先算力通道，速度更快但消耗更高，仅 Codex 订阅支持；Codex 默认上下文 272000；开启 1M 开关可扩至 872000（依据 openai/codex models.json 的 context_window / max_context_window）",
           "openai_endpoints": ["responses"]
-        },
-        {
-          "id": "gpt-5.5",
-          "context": 272000,
-          "deprecated": "shutdown scheduled 2026-10-14 from ChatGPT/ChatGPT Work/Codex on all plans (does not apply to the OpenAI API); switch to gpt-6-sol or gpt-5.6-sol",
-          "note": "旧版编码模型（Codex 模型目录标注 Legacy）；ChatGPT/Codex 内将于 2026-10-14 退役，不影响 OpenAI API",
-          "openai_endpoints": ["responses"],
-          "sources": [
-            "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
-            "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
-          ]
-        },
-        {
-          "id": "gpt-5.3-codex-spark",
-          "context": 128000,
-          "note": "纯文本研究预览模型，优化近实时编码迭代",
-          "deprecated": "shutdown 2026-09-14 per Codex CLI changelog; switch to one of the recommended models",
-          "openai_endpoints": ["responses"],
-          "sources": ["https://learn.chatgpt.com/docs/changelog?type=codex-cli"]
         }
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "codex",
-      "icon": "opencode",
+      "icon": "codex",
       "openai_endpoint_mode": "responses",
-      "last_updated": "2026-10-08",
+      "last_updated": "2026-10-27",
       "sources": [
         "https://learn.chatgpt.com/docs/models",
         "https://learn.chatgpt.com/docs/changelog?type=codex-cli",
+        "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
         "https://openai.com/index/gpt-6-astra/",
         "https://github.com/openai/codex/blob/main/codex-rs/models-manager/models.json"
       ]
@@ -1016,6 +1021,8 @@
       "base_url_openai": "https://generativelanguage.googleapis.com/v1beta/openai",
       "base_url_anthropic": null,
       "models": [
+        {"id": "gemini-4-carbon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
+        {"id": "gemini-4-argon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
         {
           "id": "gemini-3.8-flash",
           "context": 1024000,
@@ -1431,6 +1438,9 @@
       "base_url_openai": "https://api.mistral.ai/v1",
       "base_url_anthropic": null,
       "models": [
+        {"id": "deepseek-v4-1-flash-1017", "context": 1000000, "max_output": 128000, "sources": ["https://docs.mistral.ai/models/deepseek-v4-flash-1017"]},
+        {"id": "zai-glm-5-3-flash", "context": 1000000, "max_output": 128000, "sources": ["https://docs.mistral.ai/models/zai-glm-5-3-flash"]},
+        {"id": "mistral-large-4", "context": 1000000, "sources": ["https://docs.mistral.ai/models/mistral-large-4-0"]},
         {
           "id": "mistral-large-2512",
           "context": 256000,
@@ -1525,6 +1535,8 @@
       "base_url_openai": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://dashscope.aliyuncs.com/apps/anthropic",
       "models": [
+        {"id": "antdigital/Ling-3.1-flash", "context": 1000000, "sources": ["https://help.aliyun.com/zh/model-studio/newly-released-models"]},
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://help.aliyun.com/zh/model-studio/kimi-k3-1-pro"]},
         {
           "id": "qwen-max",
           "context": 32000,
@@ -1557,6 +1569,7 @@
         {
           "id": "qwen3.7-max",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-05",
           "legacy": true,
           "sources": ["https://help.aliyun.com/zh/model-studio/text-generation-model"]
@@ -1564,12 +1577,14 @@
         {
           "id": "qwen3.7-plus",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-05",
           "note": "multimodal, vision+video, GUI-agent grounding"
         },
         {
           "id": "qwen3.7-flash",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-07",
           "sources": [
             "https://help.aliyun.com/zh/model-studio/text-generation-model",
@@ -1579,6 +1594,7 @@
         {
           "id": "qwen3.8-max",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://help.aliyun.com/zh/model-studio/text-generation-model",
@@ -1588,6 +1604,7 @@
         {
           "id": "qwen3.8-flash",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://help.aliyun.com/zh/model-studio/text-generation-model",
@@ -1597,6 +1614,7 @@
         {
           "id": "qwen3.8-max-0902",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-09",
           "note": "snapshot of qwen3.8-max (alias qwen3.8-max-2026-09-02)",
           "sources": [
@@ -1635,6 +1653,7 @@
       "base_url_openai": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://dashscope-intl.aliyuncs.com/apps/anthropic",
       "models": [
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://help.aliyun.com/zh/model-studio/kimi-k3-1-pro"]},
         {
           "id": "qwen-max",
           "context": 128000,
@@ -1667,6 +1686,7 @@
         {
           "id": "qwen3.7-max",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-05",
           "legacy": true,
           "sources": ["https://www.alibabacloud.com/help/en/model-studio/text-generation-model"]
@@ -1674,12 +1694,14 @@
         {
           "id": "qwen3.7-plus",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-05",
           "note": "multimodal, vision+video, GUI-agent grounding"
         },
         {
           "id": "qwen3.7-flash",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-07",
           "sources": [
             "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
@@ -1689,6 +1711,7 @@
         {
           "id": "qwen3.8-max",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
@@ -1698,6 +1721,7 @@
         {
           "id": "qwen3.8-flash",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-08",
           "sources": [
             "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
@@ -1707,6 +1731,7 @@
         {
           "id": "qwen3.8-max-0902",
           "context": 1000000,
+          "max_output": 128000,
           "created": "2026-09",
           "note": "snapshot of qwen3.8-max (alias qwen3.8-max-2026-09-02)",
           "sources": [
@@ -1925,29 +1950,86 @@
       "base_url_openai": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
       "models": [
-        { "id": "auto", "note": "platform routing model: picks an underlying model per request" },
-        { "id": "qwen3.8-max", "context": 1000000 },
-        { "id": "qwen3.8-flash", "context": 1000000 },
-        { "id": "qwen3.7-max", "context": 1000000 },
-        { "id": "qwen3.7-plus", "context": 1000000 },
-        { "id": "qwen3.6-flash" },
-        { "id": "deepseek-v4.1-flash" },
-        { "id": "deepseek-v4-pro" },
-        { "id": "deepseek-v4-pro-0813" },
-        { "id": "deepseek-v4-flash-0731" },
-        { "id": "glm-5.3" },
-        { "id": "glm-5.2" }
+        {
+          "id": "auto",
+          "note": "platform routing model: picks an underlying model per request"
+        },
+        {
+          "id": "qwen4-max-preview",
+          "context": 1000000,
+              "note": "Preview ends 2026-11-25 24:00 UTC+8; official maximum 393216 tokens shared by thinking and answer",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
+          ]
+        },
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "decision-model-preview",
+          "note": "Limited-time preview"
+        }
       ],
       "supports_models_endpoint": false,
       "icon": "qwen",
-      "last_updated": "2026-09-30",
+      "last_updated": "2026-11-12",
       "sources": [
         "https://help.aliyun.com/zh/model-studio/token-plan-overview",
         "https://help.aliyun.com/zh/model-studio/token-plan-personal-overview",
         "https://help.aliyun.com/zh/model-studio/token-plan-team-overview",
         "https://help.aliyun.com/en/model-studio/token-plan-team-quickstart",
         "https://help.aliyun.com/en/model-studio/base-url",
-        "https://help.aliyun.com/zh/model-studio/text-generation-model"
+        "https://help.aliyun.com/zh/model-studio/text-generation-model",
+        "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
       ]
     },
     "dashscope-intl-token": {
@@ -1968,28 +2050,601 @@
       "base_url_openai": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
       "base_url_anthropic": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic",
       "models": [
-        { "id": "auto", "note": "platform routing model: picks an underlying model per request" },
-        { "id": "qwen3.8-max", "context": 1000000 },
-        { "id": "qwen3.8-flash", "context": 1000000 },
-        { "id": "qwen3.7-max", "context": 1000000 },
-        { "id": "qwen3.7-plus", "context": 1000000 },
-        { "id": "qwen3.6-flash" },
-        { "id": "deepseek-v4.1-flash" },
-        { "id": "deepseek-v4-pro" },
-        { "id": "deepseek-v4-pro-0813" },
-        { "id": "deepseek-v4-flash-0731" },
-        { "id": "glm-5.3" },
-        { "id": "glm-5.2" }
+        {
+          "id": "auto",
+          "note": "platform routing model: picks an underlying model per request"
+        },
+        {
+          "id": "qwen4-max-preview",
+          "context": 1000000,
+              "note": "Preview ends 2026-11-25 24:00 UTC+8; official maximum 393216 tokens shared by thinking and answer",
+          "sources": [
+            "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
+          ]
+        },
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.2"
+        }
       ],
       "supports_models_endpoint": false,
       "icon": "qwen",
-      "last_updated": "2026-09-30",
+      "last_updated": "2026-11-12",
       "sources": [
         "https://www.alibabacloud.com/help/en/model-studio/token-plan-overview",
         "https://www.alibabacloud.com/help/en/model-studio/token-plan-personal-overview",
         "https://www.alibabacloud.com/help/en/model-studio/base-url",
-        "https://www.alibabacloud.com/help/en/model-studio/text-generation-model"
+        "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
+        "https://help.aliyun.com/zh/model-studio/qwen4-max-preview"
       ]
+    },
+    "qianwenaiapi": {
+      "id": "qianwenaiapi",
+      "name": "Qwen AI Platform (CN)",
+      "alias": "Qwen AI Platform (CN) | 千问AI平台（中国，按量付费）",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "maas.qianwenaiapi.com",
+      "vendor_family": "alibaba",
+      "region": "cn",
+      "plan": "standard",
+      "website": "https://platform.qianwenai.com/",
+      "description": "Qwen AI Platform China pay-as-you-go API. Uses general sk-ws- keys (legacy sk- keys), not Token Plan sk-sp- subscription keys. Supports OpenAI Chat Completions, Responses and Anthropic Messages. Separate from Alibaba Cloud DashScope and from this platform's Token Plan endpoint.",
+      "type": "official",
+      "api_doc": "https://platform.qianwenai.com/docs/api-reference/chat/anthropic",
+      "model_doc": "https://platform.qianwenai.com/docs/developer-guides/getting-started/text-generation-models",
+      "pricing_doc": "https://platform.qianwenai.com/pricing/api",
+      "base_url_openai": "https://maas.qianwenaiapi.com/compatible-mode/v1",
+      "base_url_anthropic": "https://maas.qianwenaiapi.com/apps/anthropic",
+      "openai_endpoint_mode": "both",
+      "models": [
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-2.4t-a95b",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-06-08",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-05-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus-2026-05-26",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash-2026-07-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus-2026-04-02",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash-2026-04-16",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-04-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-02-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash-2026-02-23",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3-coder-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen-plus",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-plus-latest",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash-2025-07-28",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen3.6-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-397b-a17b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-122b-a10b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-35b-a3b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.8-27b"
+        },
+        {
+          "id": "qwen3-vl-plus"
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-flash-0731",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "kimi-k3",
+          "context": 1000000,
+          "max_output": 1000000
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 256000,
+          "max_output": 16000
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 256000,
+          "max_output": 96000
+        },
+        {
+          "id": "kimi-k2.5",
+          "context": 256000
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.2",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.1",
+          "context": 198000,
+          "max_output": 128000
+        },
+        {
+          "id": "glm-5",
+          "context": 198000
+        },
+        {
+          "id": "MiniMax-M2.5",
+          "context": 200000,
+          "max_output": 32000,
+          "note": "Output budget is shared by chain of thought and final output."
+        }
+      ],
+      "supports_models_endpoint": false,
+      "auth_type": "key",
+      "icon": "qwen",
+      "last_updated": "2026-10-29",
+      "sources": [
+        "https://platform.qianwenai.com/docs/developer-guides/getting-started/introduction",
+        "https://platform.qianwenai.com/docs/api-reference/preparation/api-key",
+        "https://platform.qianwenai.com/docs/api-reference/chat/anthropic",
+        "https://platform.qianwenai.com/docs/api-reference/chat/openai-chat",
+        "https://platform.qianwenai.com/docs/api-reference/chat/openai-responses",
+        "https://platform.qianwenai.com/docs/developer-guides/getting-started/text-generation-models",
+        "https://platform.qianwenai.com/docs/developer-guides/getting-started/pricing",
+        "https://platform.qianwenai.com/pricing/api",
+        "https://platform.qianwenai.com/docs/developer-guides/clients-and-developer-tools/deepseek-harness",
+        "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/"
+      ],
+      "note": "Models are the documented Anthropic-compatible set (also usable through OpenAI Chat); the broader platform offers additional models through other APIs. Responses feature support varies by model. Anthropic authentication accepts x-api-key or Authorization: Bearer. No GET /models discovery; configure model IDs manually. Token Plan uses https://token-plan.maas.qianwenaiapi.com with its own sk-sp- keys; international QwenCloud uses maas.qwencloudapi.com. Neither replaces the existing DashScope templates. Limits use the catalog's decimal K/M convention; unknown limits are omitted. Documentation verified; no authenticated inference call performed."
+    },
+    "qwencloud": {
+      "id": "qwencloud",
+      "name": "QwenCloud (International, Singapore)",
+      "alias": "QwenCloud (International, Singapore) | 千问国际版（新加坡，按量付费）",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "ap-southeast-1.maas.qwencloudapi.com",
+      "vendor_family": "alibaba",
+      "region": "intl",
+      "plan": "standard",
+      "website": "https://www.qwencloud.com/",
+      "description": "QwenCloud pay-as-you-go API using the Singapore endpoint. Uses regional sk-ws- keys (legacy sk- keys); API keys from China Qwen AI Platform, other QwenCloud regions and Token Plan are separate. Supports OpenAI Chat Completions, Responses and Anthropic Messages.",
+      "type": "official",
+      "api_doc": "https://docs.qwencloud.com/api-reference/chat/anthropic",
+      "model_doc": "https://docs.qwencloud.com/developer-guides/getting-started/text-generation-models",
+      "pricing_doc": "https://docs.qwencloud.com/developer-guides/getting-started/model-prices",
+      "base_url_openai": "https://ap-southeast-1.maas.qwencloudapi.com/compatible-mode/v1",
+      "base_url_anthropic": "https://ap-southeast-1.maas.qwencloudapi.com/apps/anthropic",
+      "openai_endpoint_mode": "both",
+      "models": [
+        {
+          "id": "qwen3.8-max",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-max-0902",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-flash",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.8-2.4t-a95b",
+          "context": 1000000,
+          "max_output": 128000
+        },
+        {
+          "id": "qwen3.7-max",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-06-08",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-max-2026-05-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-plus-2026-05-26",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.7-flash-2026-07-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-plus-2026-04-02",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.6-flash-2026-04-16",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-04-20",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-plus-2026-02-15",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-flash-2026-02-23",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3-coder-flash",
+          "context": 1000000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen-plus",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-plus-latest",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen-flash-2025-07-28",
+          "context": 1000000,
+          "max_output": 32000
+        },
+        {
+          "id": "qwen3.6-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-397b-a17b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-122b-a10b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-27b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.5-35b-a3b",
+          "context": 256000,
+          "max_output": 64000
+        },
+        {
+          "id": "qwen3.8-27b"
+        },
+        {
+          "id": "qwen3-vl-plus"
+        },
+        {
+          "id": "deepseek-v4.1-flash",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "deepseek-v4-flash-0731",
+          "context": 1000000,
+          "max_output": 384000,
+          "note": "Documented 384k budget is shared by thinking and final output."
+        },
+        {
+          "id": "kimi-k3",
+          "context": 1000000,
+          "max_output": 1000000
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "context": 256000,
+          "max_output": 16000
+        },
+        {
+          "id": "kimi-k2.5",
+          "context": 256000
+        },
+        {
+          "id": "glm-5.3",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.2",
+          "context": 1000000,
+          "max_output": 131000
+        },
+        {
+          "id": "glm-5.1",
+          "context": 198000,
+          "max_output": 128000
+        }
+      ],
+      "supports_models_endpoint": false,
+      "auth_type": "key",
+      "icon": "qwen",
+      "last_updated": "2026-10-29",
+      "sources": [
+        "https://docs.qwencloud.com/developer-guides/getting-started/regions",
+        "https://docs.qwencloud.com/api-reference/preparation/api-key",
+        "https://docs.qwencloud.com/api-reference/chat/anthropic",
+        "https://docs.qwencloud.com/api-reference/chat/openai-responses",
+        "https://docs.qwencloud.com/developer-guides/getting-started/text-generation-models",
+        "https://docs.qwencloud.com/developer-guides/getting-started/model-prices",
+        "https://docs.qwencloud.com/token-plan/personal/token-plan-personal-quickstart"
+      ],
+      "note": "Singapore template. maas.qwencloudapi.com is an equivalent legacy Singapore host. Other pay-as-you-go regions use cn-beijing, eu-central-1, cn-hongkong, ap-northeast-1 or us-east-1 in place of ap-southeast-1 and require keys created in that region; model availability and deployment scopes differ. Models are curated from the documented Anthropic-compatible set; glm-5 and MiniMax-M2.5 are Beijing-only and excluded, and kimi-k2.6 is not listed for this API. Check regional model pricing and console availability. Token Plan is Singapore-only at token-plan.maas.qwencloudapi.com with separate sk-sp- keys. Anthropic authentication accepts x-api-key or Authorization: Bearer; no /v1/models discovery. Responses features vary by model. Limits follow the catalog decimal K/M convention. Documentation verified; no authenticated inference call performed."
     },
     "qwen-code": {
       "id": "qwen-code",
@@ -2137,6 +2792,7 @@
       "base_url_openai": "https://api.minimaxi.com/v1",
       "base_url_anthropic": "https://api.minimaxi.com/anthropic",
       "models": [
+        {"id": "MiniMax-M3.1-Flash", "context": 1000000, "sources": ["https://platform.minimax.cn/docs/guides/models-intro"]},
         {
           "id": "MiniMax-M2",
           "context": 200000,
@@ -2253,6 +2909,7 @@
       "base_url_openai": "https://api.minimax.io/v1",
       "base_url_anthropic": "https://api.minimax.io/anthropic",
       "models": [
+        {"id": "MiniMax-M3.1-Flash", "context": 1000000, "sources": ["https://platform.minimax.io/docs/guides/models-intro"]},
         {
           "id": "MiniMax-M2",
           "context": 200000,
@@ -2676,6 +3333,8 @@
       "base_url_openai": "https://api.moonshot.ai/v1",
       "base_url_anthropic": "https://api.moonshot.ai/anthropic",
       "models": [
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://platform.kimi.ai/docs/models"]},
+        {"id": "kimi-k3.1-pro-highspeed", "context": 1000000, "sources": ["https://platform.kimi.ai/docs/models"]},
         {
           "id": "moonshot-v1-8k",
           "context": 8000,
@@ -2767,6 +3426,8 @@
       "base_url_openai": "https://api.moonshot.cn/v1",
       "base_url_anthropic": "https://api.moonshot.cn/anthropic",
       "models": [
+        {"id": "kimi-k3.1-pro", "context": 1000000, "sources": ["https://platform.kimi.com/docs/models"]},
+        {"id": "kimi-k3.1-pro-highspeed", "context": 1000000, "sources": ["https://platform.kimi.com/docs/models"]},
         {
           "id": "moonshot-v1-8k",
           "context": 8000,
@@ -2857,6 +3518,8 @@
       "base_url_openai": "https://api.kimi.com/coding/v1",
       "base_url_anthropic": "https://api.kimi.com/coding/",
       "models": [
+        {"id": "k3.1-pro", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
+        {"id": "k3.1-pro-highspeed", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
         {
           "id": "kimi-for-coding",
           "context": 1024000,
@@ -2912,6 +3575,8 @@
       "base_url_openai": "https://api.kimi.ai/coding/v1",
       "base_url_anthropic": "https://api.kimi.ai/coding/",
       "models": [
+        {"id": "k3.1-pro", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
+        {"id": "k3.1-pro-highspeed", "sources": ["https://www.kimi.com/code/docs/en/kimi-code/models"]},
         {
           "id": "kimi-for-coding",
           "context": 1024000,
@@ -2948,6 +3613,79 @@
         "https://www.kimi.com/code/docs/en/kimi-code/models"
       ]
     },
+    "volces-com-agent": {
+      "id": "volces-com-agent",
+      "name": "Volcengine Ark Agent Plan (CN)",
+      "alias": "Volcengine Agent Plan | 火山方舟 Agent Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "ark.cn-beijing.volces.com",
+      "vendor_family": "bytedance",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "description": "Agent Plan personal subscription uses a dedicated key; text models are for interactive AI tools and availability varies by subscription tier.",
+      "type": "official",
+      "api_doc": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "model_doc": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "pricing_doc": "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh",
+      "base_url_openai": "https://ark.cn-beijing.volces.com/api/plan/v3",
+      "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/plan",
+      "models": [
+        {
+          "id": "ark-code-latest"
+        },
+        {
+          "id": "doubao-seed-2.0-mini"
+        },
+        {
+          "id": "doubao-seed-2.1-lite"
+        },
+        {
+          "id": "doubao-seed-2.1-pro"
+        },
+        {
+          "id": "doubao-seed-evolving"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "deepseek-v4.1-flash-economy"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-flash"
+        },
+        {
+          "id": "kimi-k3"
+        },
+        {
+          "id": "kimi-k3.1-pro"
+        },
+        {
+          "id": "kimi-k2.8-preview"
+        },
+        {
+          "id": "glm-latest"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "doubao",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://docs.volcengine.com/docs/ark/agent-plan-personal-plan-overview?lang=zh"
+      ],
+      "openai_endpoint_mode": "both"
+    },
     "volces-com": {
       "id": "volces-com",
       "name": "Volcengine Ark (CN)",
@@ -2967,6 +3705,10 @@
       "base_url_openai": "https://ark.cn-beijing.volces.com/api/v3",
       "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/v3",
       "models": [
+        {"id": "kimi-k3-1-pro-261024", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
+        {"id": "deepseek-v4-1-flash-261017", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
+        {"id": "deepseek-v4-1-flash-economy-261017", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
+        {"id": "glm-5-2-260617", "sources": ["https://docs.volcengine.com/docs/ark/model-list?lang=zh"]},
         {
           "id": "doubao-seed-evolving",
           "context": 1024000,
@@ -3071,6 +3813,8 @@
       "base_url_openai": "https://ark.cn-beijing.volces.com/api/coding/v3",
       "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/coding",
       "models": [
+        {"id": "kimi-k3.1-pro", "sources": ["https://docs.volcengine.com/docs/ark/coding-plan-personal-model-release?lang=zh"]},
+        {"id": "deepseek-v4.1-flash-economy", "sources": ["https://docs.volcengine.com/docs/ark/coding-plan-personal-model-release?lang=zh"]},
         { "id": "ark-code-latest" },
         {
           "id": "doubao-seed-evolving",
@@ -3286,6 +4030,132 @@
         "https://www.volcengine.com/docs/82379/1350667"
       ]
     },
+    "baidubce-com-token-personal": {
+      "id": "baidubce-com-token-personal",
+      "name": "Baidu Qianfan Token Plan (Personal)",
+      "alias": "Baidu Token Plan Personal | 百度千帆 Token Plan 个人版",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "qianfan.baidubce.com",
+      "vendor_family": "baidu",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "description": "Baidu Qianfan Token Plan Personal requires a dedicated plan key; interactive coding and agent tools only. Model availability depends on the subscription.",
+      "type": "official",
+      "api_doc": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "model_doc": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "pricing_doc": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "base_url_openai": "https://qianfan.baidubce.com/v2/tokenplan/personal",
+      "base_url_anthropic": "https://qianfan.baidubce.com/anthropic/tokenplan/personal",
+      "models": [
+        {
+          "id": "qianfan-code-latest"
+        },
+        {
+          "id": "ernie-5.5-flash-preview"
+        },
+        {
+          "id": "ernie-light-dt-1.0"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-pro-0813"
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "glm-5.1"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "baidu",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6"
+      ]
+    },
+    "baidubce-com-token-team": {
+      "id": "baidubce-com-token-team",
+      "name": "Baidu Qianfan Token Plan (Team)",
+      "alias": "Baidu Token Plan Team | 百度千帆 Token Plan 企业版",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "qianfan.baidubce.com",
+      "vendor_family": "baidu",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "description": "Baidu Qianfan Token Plan Team requires a dedicated plan key; interactive coding and agent tools only. Model availability depends on the subscription.",
+      "type": "official",
+      "api_doc": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "model_doc": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "pricing_doc": "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2",
+      "base_url_openai": "https://qianfan.baidubce.com/v2/tokenplan/team",
+      "base_url_anthropic": "https://qianfan.baidubce.com/anthropic/tokenplan/team",
+      "models": [
+        {
+          "id": "ernie-5.5-flash-preview"
+        },
+        {
+          "id": "ernie-light-dt-1.0"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017"
+        },
+        {
+          "id": "deepseek-v4.1-flash"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-pro-0813"
+        },
+        {
+          "id": "deepseek-v4-flash-0731"
+        },
+        {
+          "id": "glm-5.3"
+        },
+        {
+          "id": "glm-5.3-flash"
+        },
+        {
+          "id": "glm-5.2"
+        },
+        {
+          "id": "glm-5.1"
+        },
+        {
+          "id": "deepseek-v3.2"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "baidu",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.baidu.com/doc/qianfan/s/ymq8wwch2"
+      ]
+    },
     "baidubce-com": {
       "id": "baidubce-com",
       "name": "Baidu Qianfan (CN)",
@@ -3368,6 +4238,171 @@
       "last_updated": "2026-09-29",
       "sources": [
         "https://cloud.baidu.com/doc/qianfan/s/imlg0beiu"
+      ]
+    },
+    "tencent-com-token": {
+      "id": "tencent-com-token",
+      "name": "Tencent TokenHub Token Plan",
+      "alias": "Tencent Token Plan | 腾讯云 Token Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "tokenhub.tencentmaas.com",
+      "vendor_family": "tencent",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.tencent.com/document/product/1823",
+      "description": "Tencent TokenHub personal General and Hy Token Plans share endpoints and API key. Hy plan supports hy4, hy4-preview and hy3 aliases only; the remaining listed models require General plan. Interactive AI tools only.",
+      "type": "official",
+      "api_doc": "https://cloud.tencent.com/document/product/1823/130060",
+      "model_doc": "https://cloud.tencent.com/document/product/1823/130060",
+      "pricing_doc": "https://cloud.tencent.com/document/product/1823/130060",
+      "base_url_openai": "https://tokenhub.tencentmaas.com/plan/v3",
+      "base_url_anthropic": "https://tokenhub.tencentmaas.com/plan/anthropic",
+      "models": [
+        {
+          "id": "tc-code-latest",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "hy4"
+        },
+        {
+          "id": "hy4-preview"
+        },
+        {
+          "id": "minimax-m3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "minimax-m-3-0",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5.3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5-3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5.3-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "kimi-k3",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "mimo-v2.6-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5.2",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "glm-5-2",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "minimax-m2.7",
+          "note": "General Token Plan only; scheduled for retirement 2026-11-17"
+        },
+        {
+          "id": "minimax-m-2-7",
+          "note": "General Token Plan only; scheduled for retirement 2026-11-17"
+        },
+        {
+          "id": "deepseek-v4-flash-202605",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash-0731",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek-v4-pro-202606",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-pro-0813",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "deepseek/deepseek-v4-pro",
+          "note": "General Token Plan only"
+        },
+        {
+          "id": "hy3",
+          "note": "Hy Token Plan only; hy3-preview routes to hy3"
+        },
+        {
+          "id": "hy3-preview",
+          "note": "Hy Token Plan only; hy3-preview routes to hy3"
+        },
+        {
+          "id": "hy3-202608",
+          "note": "Hy Token Plan only; hy3-preview routes to hy3"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "tencent",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.tencent.com/document/product/1823/130060"
+      ],
+      "openai_endpoint_mode": "both"
+    },
+    "tencent-com-coding": {
+      "id": "tencent-com-coding",
+      "name": "Tencent TokenHub Coding Plan",
+      "alias": "Tencent Coding Plan | 腾讯云 Coding Plan",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.lkeap.cloud.tencent.com",
+      "vendor_family": "tencent",
+      "region": "cn",
+      "plan": "coding",
+      "website": "https://cloud.tencent.com/document/product/1823",
+      "description": "Tencent TokenHub Coding Plan uses a dedicated subscription key and endpoints; interactive coding tools only.",
+      "type": "official",
+      "api_doc": "https://cloud.tencent.com/document/product/1823/130092",
+      "model_doc": "https://cloud.tencent.com/document/product/1823/130092",
+      "pricing_doc": "https://cloud.tencent.com/document/product/1823/130092",
+      "base_url_openai": "https://api.lkeap.cloud.tencent.com/coding/v3",
+      "base_url_anthropic": "https://api.lkeap.cloud.tencent.com/coding/anthropic",
+      "models": [
+        {
+          "id": "tc-code-latest",
+          "note": "Auto routing"
+        }
+      ],
+      "supports_models_endpoint": false,
+      "icon": "tencent",
+      "last_updated": "2026-11-12",
+      "sources": [
+        "https://cloud.tencent.com/document/product/1823/130092"
       ]
     },
     "tencent-com": {
@@ -4169,6 +5204,16 @@
       "base_url_openai": "https://api.together.xyz/v1",
       "base_url_anthropic": "https://api.together.xyz/",
       "models": [
+        {"id": "deepseek-ai/DeepSeek-V4.1-Flash-1017", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "meta-models/Muse-Glimmer-30B", "context": 128000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "meta-models/Muse-Spark-Open-816B-A42B", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "MiniMaxAI/MiniMax-M3.1-Flash", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "moonshotai/Kimi-K3.1-Pro", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL", "context": 256000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "Qwen/Qwen3.7-Max", "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "Qwen/Qwen3.7-Plus", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "Qwen/Qwen3.8-Flash", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
+        {"id": "zai-org/GLM-5.3-Flash", "context": 1000000, "sources": ["https://docs.together.ai/docs/serverless/models"]},
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
           "context": 128000
@@ -4458,7 +5503,7 @@
           "sources": ["https://docs.cohere.com/docs/models"]
         },
         {
-          "id": "north-mini-code-1-0",
+          "id": "north-mini-code-1.0",
           "context": 256000,
           "max_output": 64000,
           "note": "30B/3B-active MoE agentic coding model (Apache 2.0)",
@@ -4468,7 +5513,7 @@
           ]
         },
         {
-          "id": "north-small-translate-1-0",
+          "id": "north-small-translate-1.0",
           "context": 16000,
           "max_output": 16000,
           "note": "218B/25B-active MoE translation model, free tier, non-commercial open weights",
@@ -4637,12 +5682,63 @@
       "supports_models_endpoint": true,
       "icon": "hyperbolic"
     },
+    "runcrate-ai": {
+      "id": "runcrate-ai",
+      "name": "Runcrate",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.runcrate.ai",
+      "vendor_family": "runcrate",
+      "region": "global",
+      "plan": "standard",
+      "website": "https://www.runcrate.ai",
+      "description": "Runcrate inference API for open models (OpenAI + Anthropic compatible)",
+      "type": "reseller",
+      "api_doc": "https://www.runcrate.ai/llms.txt",
+      "model_doc": "https://api.runcrate.ai/v1/models",
+      "pricing_doc": "https://www.runcrate.ai/inference/pricing",
+      "base_url_openai": "https://api.runcrate.ai/v1",
+      "base_url_anthropic": "https://api.runcrate.ai",
+      "models": [],
+      "supports_models_endpoint": true,
+      "last_updated": "2026-10-28",
+      "sources": [
+        "https://www.runcrate.ai/llms.txt",
+        "https://api.runcrate.ai/v1/models"
+      ]
+    },
+    "cloudgpu-app": {
+      "id": "cloudgpu-app",
+      "name": "CloudGPU",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "cloudgpu.app",
+      "vendor_family": "cloudgpu",
+      "region": "global",
+      "plan": "standard",
+      "website": "https://cloudgpu.app",
+      "description": "CloudGPU inference API (Chat Completions and Messages compatible)",
+      "type": "reseller",
+      "api_doc": "https://cloudgpu.app/api/docs",
+      "model_doc": "https://cloudgpu.app/v1/models",
+      "pricing_doc": "",
+      "base_url_openai": "https://cloudgpu.app/v1",
+      "base_url_anthropic": "https://cloudgpu.app",
+      "models": [],
+      "supports_models_endpoint": true,
+      "last_updated": "2026-11-02",
+      "sources": [
+        "https://cloudgpu.app/api/docs",
+        "https://cloudgpu.app/v1/models"
+      ]
+    },
     "vercel-ai-gateway": {
       "id": "vercel-ai-gateway",
       "name": "Vercel AI Gateway",
       "status": "active",
       "valid": true,
       "canonical_domain": "ai-gateway.vercel.sh",
+      "icon": "vercel",
       "vendor_family": "vercel",
       "region": "global",
       "plan": "standard",
@@ -4669,6 +5765,7 @@
       "status": "active",
       "valid": true,
       "canonical_domain": "gateway.ai.cloudflare.com",
+      "icon": "cloudflare",
       "vendor_family": "cloudflare",
       "region": "global",
       "plan": "standard",
@@ -4695,6 +5792,7 @@
       "status": "active",
       "valid": true,
       "canonical_domain": "api.typesafe.ai",
+      "icon": "typesafe",
       "vendor_family": "typesafe",
       "region": "global",
       "plan": "standard",
@@ -5086,7 +6184,7 @@
       "base_url_anthropic": "http://localhost:13305",
       "no_key_required": true,
       "supports_models_endpoint": true,
-      "icon": "amd",
+      "icon": "lemonade",
       "last_updated": "2026-09-04",
       "sources": [
         "https://github.com/lemonade-sdk/lemonade",
@@ -5095,6 +6193,53 @@
         "https://lemonade-server.ai/docs/integrations/claude-code/"
       ],
       "models": []
+    },
+    "llamacpp": {
+      "id": "llamacpp",
+      "name": "llama.cpp",
+      "status": "active",
+      "valid": true,
+      "vendor_family": "llamacpp",
+      "region": "self-hosted",
+      "plan": "standard",
+      "type": "self-hosted",
+      "description": "llama.cpp server for local GGUF models with OpenAI and Anthropic compatible APIs",
+      "website": "https://github.com/ggml-org/llama.cpp",
+      "base_url_openai": "http://localhost:9931/v1",
+      "base_url_anthropic": "http://localhost:9931",
+      "no_key_required": true,
+      "supports_models_endpoint": true,
+      "icon": "llamacpp",
+      "last_updated": "2026-10-31",
+      "sources": [
+        "https://github.com/ggml-org/llama.cpp/blob/8956c769e8ababd9fbd89c81764f241d5f515d68/tools/server/README.md"
+      ],
+      "models": [],
+      "note": "Current upstream CLI default is port 9931; older releases and Docker examples may use 8080. Anthropic tool use requires --jinja."
+    },
+    "omlx": {
+      "id": "omlx",
+      "name": "oMLX",
+      "status": "active",
+      "valid": true,
+      "vendor_family": "omlx",
+      "region": "self-hosted",
+      "plan": "standard",
+      "type": "self-hosted",
+      "description": "Local inference server for Apple Silicon with continuous batching and SSD-backed KV caching",
+      "website": "https://github.com/jundot/omlx",
+      "base_url_openai": "http://localhost:8000/v1",
+      "base_url_anthropic": "http://localhost:8000",
+      "no_key_required": true,
+      "supports_models_endpoint": true,
+      "icon": "omlx",
+      "last_updated": "2026-10-31",
+      "sources": [
+        "https://github.com/jundot/omlx/blob/5c6cbd6314cadba33f0db3f90f27dce6620831b4/README.md",
+        "https://github.com/jundot/omlx/blob/5c6cbd6314cadba33f0db3f90f27dce6620831b4/omlx/server.py"
+      ],
+      "models": [],
+      "note": "The default loopback server accepts keyless inference when no API key is configured; network binds require configured authentication."
     }
   }
 }

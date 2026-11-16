@@ -84,7 +84,7 @@ func TestAnthropicBetaToResponsesConverter_GoldenSequence(t *testing.T) {
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
 		newFakeAnthropicDecoder(events), nil,
 	)
-	conv := newAnthropicBetaToResponsesConverter(stream, "claude-3-5-sonnet-20241022")
+	conv := newAnthropicBetaToResponsesConverter(stream, "claude-3-5-sonnet-20241022", nil)
 
 	var got []wire.ResponsesEvent
 	for {
@@ -216,7 +216,7 @@ func TestAnthropicBetaToResponsesConverter_PreservesInterleavedTextBlocks(t *tes
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](
 		newFakeAnthropicDecoder(events), nil,
 	)
-	conv := newAnthropicBetaToResponsesConverter(stream, "claude-test")
+	conv := newAnthropicBetaToResponsesConverter(stream, "claude-test", nil)
 
 	var added []wire.ResponsesOutputItemAddedEvent
 	var done []wire.ResponsesOutputItemDoneEvent
@@ -254,4 +254,61 @@ func TestAnthropicBetaToResponsesConverter_PreservesInterleavedTextBlocks(t *tes
 	assert.Equal(t, "after", completed.Response.Output[2].Content[0].Text)
 	assert.Equal(t, added[0].Item.ID, completed.Response.Output[0].ID)
 	assert.Equal(t, added[2].Item.ID, completed.Response.Output[2].ID)
+}
+
+// The message item's response.output_item.added must serialize "content":[],
+// or Codex drops every output_text delta that follows (#1922). A function_call
+// item stays without content.
+func TestAnthropicBetaToResponsesConverter_OutputItemAddedWire(t *testing.T) {
+	marshal := func(v map[string]any) string {
+		b, _ := json.Marshal(v)
+		return string(b)
+	}
+	events := []string{
+		marshal(map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id": "msg_wire", "type": "message", "role": "assistant", "content": []any{},
+				"model": "claude-3-5-sonnet-20241022", "usage": map[string]any{"input_tokens": 1, "output_tokens": 0},
+			},
+		}),
+		marshal(map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "text", "text": ""}}),
+		marshal(map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": "hello"}}),
+		marshal(map[string]any{"type": "content_block_stop", "index": 0}),
+		marshal(map[string]any{
+			"type": "content_block_start", "index": 1,
+			"content_block": map[string]any{"type": "tool_use", "id": "tool_1", "name": "get_weather", "input": map[string]any{}},
+		}),
+		marshal(map[string]any{"type": "content_block_stop", "index": 1}),
+		marshal(map[string]any{"type": "message_stop"}),
+	}
+	conv := newAnthropicBetaToResponsesConverter(
+		anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](newFakeAnthropicDecoder(events), nil),
+		"claude-3-5-sonnet-20241022",
+		nil,
+	)
+
+	var added []map[string]json.RawMessage
+	for {
+		evt, done, err := conv.Next()
+		require.NoError(t, err)
+		if done {
+			break
+		}
+		if e, ok := evt.(wire.ResponsesOutputItemAddedEvent); ok {
+			b, err := json.Marshal(e)
+			require.NoError(t, err)
+			var raw struct {
+				Item map[string]json.RawMessage `json:"item"`
+			}
+			require.NoError(t, json.Unmarshal(b, &raw))
+			added = append(added, raw.Item)
+		}
+	}
+
+	require.Len(t, added, 2)
+	assert.JSONEq(t, `"message"`, string(added[0]["type"]))
+	assert.JSONEq(t, `[]`, string(added[0]["content"]), "message item must carry content")
+	assert.JSONEq(t, `"function_call"`, string(added[1]["type"]))
+	assert.NotContains(t, added[1], "content")
 }

@@ -13,7 +13,8 @@ import (
 )
 
 // OpenRouterFetcher retrieves OpenRouter quota data.
-// Uses: GET https://openrouter.ai/api/v1/key (key info with usage)
+// Uses: GET https://openrouter.ai/api/v1/key (key info with usage) and
+// GET https://openrouter.ai/api/v1/credits (the account's credits, the balance).
 type OpenRouterFetcher struct{}
 
 func NewOpenRouterFetcher() *OpenRouterFetcher {
@@ -54,6 +55,16 @@ type openrouterKeyResponse struct {
 	} `json:"data"`
 }
 
+// openrouterCreditsResponse from GET /api/v1/credits: all-time totals for the
+// account behind the key. The docs reserve the endpoint for management keys,
+// but inference keys have been answered too, so it is read best-effort.
+type openrouterCreditsResponse struct {
+	Data struct {
+		TotalCredits float64 `json:"total_credits"` // purchased
+		TotalUsage   float64 `json:"total_usage"`   // spent
+	} `json:"data"`
+}
+
 func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
@@ -62,32 +73,36 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 	// ("https://openrouter.ai/api/v1", or "…/api" for the Anthropic style);
 	// the key endpoint is addressed from the root, so the prefix comes off
 	// before the full path goes on.
-	url := apiRoot(provider.APIBase, "https://openrouter.ai", "/api/v1", "/api") + "/api/v1/key"
+	root := apiRoot(provider.APIBase, "https://openrouter.ai", "/api/v1", "/api")
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	keyBody, err := openrouterGet(ctx, client, root+"/api/v1/key", token)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, err
 	}
 	var keyResp openrouterKeyResponse
-	if err := json.Unmarshal(bodyBytes, &keyResp); err != nil {
+	if err := json.Unmarshal(keyBody, &keyResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	// No answer (403 for a key without management rights, or any failure)
+	// leaves the balance out rather than failing the key's figures.
+	var credits *openrouterCreditsResponse
+	creditsBody, err := openrouterGet(ctx, client, root+"/api/v1/credits", token)
+	if err == nil {
+		var decoded openrouterCreditsResponse
+		if json.Unmarshal(creditsBody, &decoded) == nil {
+			credits = &decoded
+		} else {
+			creditsBody = nil
+		}
+	}
+
+	rawResponse, err := json.Marshal(struct {
+		Key     json.RawMessage `json:"key"`
+		Credits json.RawMessage `json:"credits"`
+	}{keyBody, creditsBody})
+	if err != nil {
+		return nil, fmt.Errorf("encode raw response: %w", err)
 	}
 
 	data := keyResp.Data
@@ -99,7 +114,7 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		ProviderType: quota.ProviderTypeOpenRouter,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
-		RawResponse:  json.RawMessage(bodyBytes),
+		RawResponse:  json.RawMessage(rawResponse),
 	}
 
 	// Account info
@@ -112,26 +127,21 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 		Tier: tier,
 	}
 
-	// A key limit is a prepaid credit pool: spending it down is permanent
-	// until the key is topped up, so it is a resource rather than an
-	// allowance that comes back on its own.
-	if data.Limit != nil && *data.Limit > 0 {
-		used := data.Usage
-		limit := *data.Limit
-		available := limit - used
-		if available < 0 {
-			available = 0
-		}
-		usage.AddWindow("key_limit", &quota.UsageWindow{
+	// The account's credits are the money requests are paid from: what was
+	// bought minus what was spent. Both totals are all-time, so spent/purchased
+	// is not a runway figure; like Codex's credits, the balance is an amount
+	// without a percentage. Below zero (OpenRouter then answers 402 even for
+	// free models) it reads as nothing left.
+	if credits != nil {
+		available := max(credits.Data.TotalCredits-credits.Data.TotalUsage, 0)
+		usage.AddWindow("balance", &quota.UsageWindow{
 			Type:         quota.WindowTypeBalance,
-			Kind:         quota.WindowKindResource,
-			Used:         used,
-			Limit:        limit,
 			Available:    &available,
+			Unknown:      true,
 			Unit:         quota.UsageUnitCurrency,
 			CurrencyCode: "USD",
-			Label:        "Key Limit",
-			Description:  fmt.Sprintf("Balance: $%.2f / $%.2f", available, limit),
+			Label:        "Balance",
+			Description:  fmt.Sprintf("$%.2f remaining", available),
 		})
 	}
 
@@ -154,15 +164,39 @@ func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*
 	}
 	usage.AddWindow("monthly", monthly)
 
-	// Cost
+	// Cost: the key's all-time spend. The key's cap stays out: shown as
+	// "left of" it reads as money, which it is not.
 	usage.Cost = &quota.UsageCost{
 		Used:         data.Usage,
 		CurrencyCode: "USD",
 		Label:        "Total Usage",
 	}
-	if data.Limit != nil {
-		usage.Cost.Limit = *data.Limit
-	}
 
 	return usage, nil
+}
+
+// openrouterGet sends an authenticated GET and returns the body of a 200.
+func openrouterGet(ctx context.Context, client *http.Client, url, token string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	return body, nil
 }

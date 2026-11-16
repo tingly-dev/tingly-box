@@ -94,7 +94,11 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioCustom, ScenarioClaudeDesktop, ScenarioSmartGuide:
+	// ScenarioImagePrompt: the chat model of the Image rail's prompt tools,
+	// Image to Prompt and Idea to Prompt (.design/image-to-prompt.md,
+	// .design/idea-to-prompt.md), its own scenario so the rules their
+	// pickers create stay out of openai's.
+	case ScenarioCustom, ScenarioClaudeDesktop, ScenarioSmartGuide, ScenarioImagePrompt:
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},
@@ -113,7 +117,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioCodex, ScenarioOpenCode, ScenarioPi, ScenarioXcode, ScenarioVSCode, ScenarioCursor:
+	case ScenarioCodex, ScenarioOpenCode, ScenarioPi, ScenarioWorkBuddy, ScenarioXcode, ScenarioVSCode, ScenarioCursor:
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},

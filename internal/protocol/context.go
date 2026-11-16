@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
 // HandleContext provides dependencies for handle functions.
@@ -36,6 +38,11 @@ type HandleContext struct {
 	// and sets it here, so the stream handler depends on this scalar rather than
 	// the request.
 	EstimatedInputTokens int
+
+	// Namespaces maps the flattened tool names of a Responses request's
+	// `namespace` tools back to namespace and name, so a Responses client gets
+	// its namespaced function calls restored. Nil when the request had none.
+	Namespaces toolnamespace.Index
 }
 
 // NewHandleContext creates a new HandleContext with required dependencies.

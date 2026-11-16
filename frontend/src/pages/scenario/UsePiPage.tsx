@@ -12,14 +12,11 @@ const pi: AgentPageDescriptor = {
         kind: 'guide',
         renderDialog: (slot) => <PiConfigModal open={slot.dialogOpen} onClose={slot.closeDialog} />,
     },
-    quickStart: {
+    install: {
         installDescriptionKey: 'scenarioPage.pi.installDescription',
         installActions: (t) => [
             { label: t('scenarioPage.pi.viewRepo'), href: PI_REPO_URL, variant: 'outlined', external: true },
         ],
-        applyStepLabelKey: 'scenarioPage.pi.applyStepLabel',
-        applyStepDescriptionKey: 'scenarioPage.pi.applyStepDescription',
-        openDialogLabelKey: 'scenarioPage.pi.openGuide',
     },
 };
 

@@ -33,3 +33,25 @@ func TestClaudeCodeTiersFromEnv_Fable(t *testing.T) {
 		t.Fatalf("env = %+v, want %v", got, want)
 	}
 }
+
+func TestClaudeCodeTiersFromEnv_NoDefaultModelFallsBackToSonnet(t *testing.T) {
+	tiers := ClaudeCodeTiersFromEnv(map[string]string{
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "cc", "ANTHROPIC_DEFAULT_OPUS_MODEL": "cc",
+	})
+	if !tiers.Unified || len(tiers.Tiers) != 1 || tiers.Tiers[0].Model != "cc" {
+		t.Fatalf("tiers = %+v, want one unified tier on cc", tiers)
+	}
+}
+
+func TestOmitFollowedDefaultModel(t *testing.T) {
+	followed := map[string]string{"ANTHROPIC_MODEL": "cc", "ANTHROPIC_DEFAULT_SONNET_MODEL": "cc"}
+	OmitFollowedDefaultModel(followed)
+	if _, ok := followed["ANTHROPIC_MODEL"]; ok {
+		t.Error("ANTHROPIC_MODEL kept although the sonnet slot follows it")
+	}
+	split := map[string]string{"ANTHROPIC_MODEL": "cc", "ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet"}
+	OmitFollowedDefaultModel(split)
+	if split["ANTHROPIC_MODEL"] != "cc" {
+		t.Error("ANTHROPIC_MODEL dropped although the sonnet slot has its own model")
+	}
+}

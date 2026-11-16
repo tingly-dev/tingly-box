@@ -1,19 +1,9 @@
-import {ArrowBack, Close} from '@/components/icons';
 import {
     Alert,
     Box,
     Button,
     Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    FormControlLabel,
-    IconButton,
     Stack,
-    Switch,
-    TextField,
     Typography,
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -25,10 +15,13 @@ import KeyNameField from '@/components/provider-form-dialog/KeyNameField';
 import ProtocolSlot, {type ProtocolSlotData, type ProtocolKind} from '@/components/provider-form-dialog/ProtocolSlot';
 import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
 import VerificationResultPanel from '@/components/provider-form-dialog/VerificationResultPanel';
-import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
+import {type VerificationResult, runProviderProbe, beginProbeRun, type ProbeRun} from '@/components/provider-form-dialog/probe';
+import {PlayerStop} from '@/components/icons';
 import ProviderIcon from '@/components/ProviderIcon';
-import RegionBadge from '@/components/RegionBadge';
+import {isHttpUrl} from '@/components/provider-form-dialog/validation';
 import ProviderExportButton from '@/components/ProviderExportButton';
+import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from '@/components/provider-form-dialog/ProviderFormLayout';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -54,6 +47,7 @@ interface PresetProviderFormDialogProps {
     open: boolean;
     onClose: () => void;
     onSubmit: (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => void | Promise<void>;
+    existingToken?: string;
     onForceAdd?: () => void;
     onBack?: () => void;
     data: EnhancedProviderFormData;
@@ -87,13 +81,19 @@ const ProviderFormDialog = ({
     isFirstProvider = false,
     optionalEditableToken = false,
     onNotification,
+    existingToken = '',
 }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
     const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
     const defaultSubmitText = mode === 'add' ? t('providerDialog.addButton') : t('common.saveChanges');
 
+    const formRef = useRef<HTMLFormElement>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     // ── Local state ───────────────────────────────────────────────
     const [verifying, setVerifying] = useState(false);
+    // In-flight "Test Connection" run; holds the AbortController the Stop
+    // button (and dialog close) uses to cancel it.
+    const verifyRunRef = useRef<ProbeRun | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
     const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
@@ -118,7 +118,7 @@ const ProviderFormDialog = ({
     useEffect(() => {
         api.getConfig().then((result) => {
             setGlobalProxyUrl(result?.data?.http_transport?.global_proxy_url ?? '');
-        });
+        }).catch(() => { /* Quick proxy lookup is optional. */ });
     }, []);
 
     // ── URL → provider suggestions ──────────────────────────────────
@@ -172,11 +172,19 @@ const ProviderFormDialog = ({
 
     // ── Init/reset on open ────────────────────────────────────────
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            // Closing mid-test cancels the probe instead of leaving it running.
+            verifyRunRef.current?.cancel();
+            return;
+        }
 
         setVerificationResult(null);
         setBaseUrlError(false);
-        setShowNameField(false);
+        setShowNameField(mode === 'edit');
+        setNoApiKey(data.noKeyRequired || false);
+        setSubmitError(null);
+        setNameIsAutoFilled(mode === 'add');
+        setSelectedProvider(null);
 
         const hasDualOpenAI = !!data.apiBaseOpenAI;
         const hasDualAnthropic = !!data.apiBaseAnthropic;
@@ -294,7 +302,7 @@ const ProviderFormDialog = ({
         const next = {...slotOpenAI, url};
         setSlotOpenAI(next);
         setVerificationResult(null);
-        if (url.trim()) setBaseUrlError(false);
+
         if (selectedProvider && url !== selectedProvider.baseUrlOpenAI) {
             setSelectedProvider(null);
         }
@@ -303,7 +311,7 @@ const ProviderFormDialog = ({
         const next = {...slotAnthropic, url};
         setSlotAnthropic(next);
         setVerificationResult(null);
-        if (url.trim()) setBaseUrlError(false);
+
         if (selectedProvider && url !== selectedProvider.baseUrlAnthropic) {
             setSelectedProvider(null);
         }
@@ -328,33 +336,47 @@ const ProviderFormDialog = ({
     // ── Name helpers ──────────────────────────────────────────────
     const computeAutoName = useCallback((): string => {
         if (selectedProvider) return selectedProvider.alias || selectedProvider.name;
-        const raw = slotOpenAI.url || slotAnthropic.url || '';
+        const raw = slotOpenAI.enabled ? slotOpenAI.url : slotAnthropic.url;
         try {
             const host = new URL(raw).hostname;
             if (host) return host;
         } catch { /* not a URL */ }
         return t('providerDialog.keyName.fallback', {defaultValue: 'Custom Provider'});
-    }, [selectedProvider, slotOpenAI.url, slotAnthropic.url, t]);
+    }, [selectedProvider, slotOpenAI.enabled, slotOpenAI.url, slotAnthropic.url, t]);
 
     const ensureName = (): string => {
-        if (data.name && data.name.trim()) return data.name;
+        if (data.name && data.name.trim()) return data.name.trim();
         const auto = computeAutoName();
         onChangeRef.current('name', auto);
         return auto;
+    };
+
+    const validateEndpoints = () => {
+        const slots = [slotOpenAI, slotAnthropic];
+        const valid = slots.some(slot => slot.enabled) && slots.every(slot => !slot.enabled || isHttpUrl(slot.url));
+        setBaseUrlError(!valid);
+        if (!valid) setTimeout(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"]')?.focus(), 0);
+        return valid;
     };
 
     // ── Verification ──────────────────────────────────────────────
     const handleVerify = async () => {
         setVerificationResult(null);
 
-        if (noApiKey) return true;
+        if (verifying || submitting || !validateEndpoints()) return false;
+        if (noApiKey && !optionalEditableToken) {
+            setVerificationResult({success: false, message: t('providerDialog.editUx.testNeedsKey')});
+            return false;
+        }
 
         const probeMessages = {
             failed: t('providerDialog.verification.failed'),
             networkError: t('providerDialog.verification.networkError'),
+            cancelled: t('providerDialog.verification.cancelled'),
+            timedOut: t('providerDialog.verification.timedOut'),
         };
         const effectiveName = ensureName();
-        const token = data.token;
+        const token = data.token.trim() || existingToken;
 
         if (!effectiveName || !token) {
             setVerificationResult({success: false, message: t('providerDialog.verification.missingFields')});
@@ -379,60 +401,81 @@ const ProviderFormDialog = ({
         }
 
         setVerifying(true);
+        const run = beginProbeRun();
+        verifyRunRef.current = run;
 
-        if (probes.length === 1) {
-            const p = probes[0];
-            const result = await runProviderProbe(
-                {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
-                probeMessages,
+        try {
+            if (probes.length === 1) {
+                const p = probes[0];
+                const result = await runProviderProbe(
+                    {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
+                    probeMessages,
+                    run,
+                );
+                setVerificationResult(result);
+                return result.success;
+            }
+
+            // Dual-protocol probe: run both, report per-side. One shared run
+            // signal cancels both requests together.
+            const results = await Promise.all(
+                probes.map(p => runProviderProbe(
+                    {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
+                    probeMessages,
+                    run,
+                ))
             );
-            setVerificationResult(result);
+            const success = results.every(r => r.success);
+            const sideLine = (label: string, r: VerificationResult) =>
+                `${r.success ? '✓' : '✗'} ${label}: ${r.message}`;
+            // Stopped/timed-out mid-run: report the cancellation rather than
+            // dressing it up as a failed endpoint verdict.
+            const cancelledSummary = results.find(r => r.cancelled);
+            setVerificationResult({
+                success,
+                cancelled: !!cancelledSummary,
+                message: cancelledSummary
+                    ? cancelledSummary.message
+                    : success
+                        ? 'Both endpoints verified'
+                        : results.every(r => !r.success)
+                            ? 'Both endpoints failed'
+                            : `${results[0].success ? 'Anthropic' : 'OpenAI'} endpoint failed`,
+                details: probes.map((p, i) => sideLine(p.style === 'openai' ? 'OpenAI' : 'Anthropic', results[i])).join(' • '),
+            });
+            return success;
+        } finally {
+            run.dispose();
+            if (verifyRunRef.current === run) verifyRunRef.current = null;
             setVerifying(false);
-            return result.success;
         }
-
-        // Dual-protocol probe: run both, report per-side
-        const results = await Promise.all(
-            probes.map(p => runProviderProbe(
-                {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
-                probeMessages,
-            ))
-        );
-        const success = results.every(r => r.success);
-        const sideLine = (label: string, r: VerificationResult) =>
-            `${r.success ? '✓' : '✗'} ${label}: ${r.message}`;
-        setVerificationResult({
-            success,
-            message: success
-                ? 'Both endpoints verified'
-                : results.every(r => !r.success)
-                    ? 'Both endpoints failed'
-                    : `${results[0].success ? 'Anthropic' : 'OpenAI'} endpoint failed`,
-            details: probes.map((p, i) => sideLine(p.style === 'openai' ? 'OpenAI' : 'Anthropic', results[i])).join(' • '),
-        });
-        setVerifying(false);
-        return success;
     };
+
+    const handleCancelVerify = () => {
+        verifyRunRef.current?.cancel();
+    };
+
+    const allowEmptyKey = optionalEditableToken || (!selectedProvider && !data.selectedProviderId);
 
     // ── Submit ────────────────────────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validate: at least one protocol with a URL
-        const hasOpenAI = slotOpenAI.enabled && slotOpenAI.url.trim();
-        const hasAnthropic = slotAnthropic.enabled && slotAnthropic.url.trim();
-        if (!hasOpenAI && !hasAnthropic) {
-            setBaseUrlError(true);
+        if (verifying || submitting || !validateEndpoints()) return;
+        setSubmitError(null);
+        if (mode === 'add' && !allowEmptyKey && !noApiKey && !data.token.trim()) {
+            setSubmitError(t('providerDialog.editUx.keyRequired'));
             return;
         }
-
         // Commit final protocol URLs to parent
         commitProtocolState(slotOpenAI, slotAnthropic);
 
         const resolved: Partial<EnhancedProviderFormData> = {
             apiBaseOpenAI: slotOpenAI.enabled ? slotOpenAI.url.trim() : '',
             apiBaseAnthropic: slotAnthropic.enabled ? slotAnthropic.url.trim() : '',
-            apiBase: slotOpenAI.url.trim() || slotAnthropic.url.trim(),
+            apiBase: slotOpenAI.enabled ? slotOpenAI.url.trim() : slotAnthropic.url.trim(),
+            token: noApiKey && !optionalEditableToken ? '' : data.token.trim(),
+            noKeyRequired: optionalEditableToken ? !data.token.trim() : noApiKey || (!data.token.trim() && !existingToken),
             apiStyle: slotOpenAI.enabled ? 'openai' : 'anthropic',
             name: ensureName(),
             protocols: (() => {
@@ -446,6 +489,8 @@ const ProviderFormDialog = ({
         setSubmitting(true);
         try {
             await onSubmit(e, resolved);
+        } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : t('providerDialog.editUx.saveFailed'));
         } finally {
             setSubmitting(false);
         }
@@ -462,8 +507,7 @@ const ProviderFormDialog = ({
     };
 
     // ── Derived ───────────────────────────────────────────────────
-    const hasAnyProtocol = (slotOpenAI.enabled && slotOpenAI.url.trim()) ||
-                           (slotAnthropic.enabled && slotAnthropic.url.trim());
+
 
     // Persistent /v1 suffix hint: shown on the OpenAI slot when the user is
     // typing a free-form URL (no provider template) that doesn't already end
@@ -471,243 +515,191 @@ const ProviderFormDialog = ({
     const persistentV1Hint =
         !selectedProvider &&
         slotOpenAI.enabled &&
-        slotOpenAI.url.trim().length > 0 &&
+        isHttpUrl(slotOpenAI.url) &&
         !(/\/v1\/?$/.test(slotOpenAI.url));
     const handleApplyV1Suffix = () => {
-        const base = slotOpenAI.url.replace(/\/+$/, '');
-        const newUrl = `${base}/v1`;
+        if (!isHttpUrl(slotOpenAI.url)) return;
+        const url = new URL(slotOpenAI.url.trim());
+        url.pathname = `${url.pathname.replace(/\/+$/, '')}/v1`;
+        const newUrl = url.toString();
         updateOpenAIUrl(newUrl);
         commitProtocolState({...slotOpenAI, url: newUrl}, slotAnthropic);
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-            slotProps={{
-                paper: {sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column'}}
-            }}>
-            <DialogTitle sx={{flexShrink: 0}}>
-                <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-                    {title || defaultTitle}
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                        {mode === 'edit' && (
-                            <FormControlLabel
-                                sx={{ml: 0, mr: 0}}
-                                control={<Switch size="small" checked={data.enabled || false} onChange={(e) => onChange('enabled', e.target.checked)}/>}
-                                label={<Typography variant="body2" color="text.secondary">{t('providerDialog.enabled')}</Typography>}
+        <ProviderFormLayout open={open} title={title || defaultTitle}
+            description={mode === 'edit' ? t('providerDialog.editUx.description') : undefined}
+            busy={verifying || submitting} saving={submitting} onClose={onClose} onSubmit={handleSubmit} formRef={formRef}
+            submitText={submitText || defaultSubmitText} showCancel={mode === 'edit'}
+            onBack={onBack ? () => {onClose(); onBack();} : undefined}
+            exportAction={mode === 'edit' && data.uuid ? <ProviderExportButton providerUuid={data.uuid} onNotification={onNotification}/> : undefined}
+            secondaryAction={verifying ? (
+                // While the test runs, the slot turns into an actionable Stop
+                // button — no spinning state the user has to wait out.
+                <Button type="button" variant="outlined" size="small" color="warning"
+                    startIcon={<PlayerStop fontSize="small"/>} onClick={handleCancelVerify}>
+                    {t('providerDialog.editUx.stopTest')}
+                </Button>
+            ) : (
+                <Button type="button" variant="outlined" size="small" disabled={submitting} onClick={handleVerify}>
+                    {t('providerDialog.editUx.testConnection')}
+                </Button>
+            )}
+        >
+            {isFirstProvider && mode === 'add' && (
+                <Alert severity="info" sx={{mb: 1}}>
+                    <Typography variant="body2">
+                        <strong>Getting Started</strong><br/>
+                        Add your first API key to enable AI services. You can add more keys later.
+                    </Typography>
+                </Alert>
+            )}
+
+            {mode === 'edit' ? (
+                <ProviderIdentityFields name={data.name} autoName={computeAutoName()} onNameChange={value => onChange('name', value)}
+                    enabled={data.enabled ?? true} onEnabledChange={value => onChange('enabled', value)}/>
+            ) : (
+                <KeyNameField
+                    showField={showNameField}
+                    onShowField={() => {
+                        if (!data.name) onChangeRef.current('name', computeAutoName());
+                        setShowNameField(true);
+                    }}
+                    name={data.name}
+                    autoName={computeAutoName()}
+                    onNameChange={(value) => {
+                        onChange('name', value);
+                        setNameIsAutoFilled(false);
+                    }}
+                />
+            )}
+            <ProviderFormSection title={t('providerDialog.editUx.authentication')}>
+                {/* ── API Key ─────────────────────────── */}
+                <ApiKeyField
+                    mode={mode}
+                    required={mode === 'add' && !allowEmptyKey && !noApiKey}
+                    token={data.token}
+                    onTokenChange={(value) => { onChange('token', value); setVerificationResult(null); }}
+                    noApiKey={noApiKey}
+                    optionalEditable={optionalEditableToken}
+                    onNoApiKeyChange={(checked) => {
+                        setNoApiKey(checked);
+                        onChange('noKeyRequired', checked);
+                        setVerificationResult(null);
+                        if (checked && !optionalEditableToken) onChange('token', '');
+                    }}
+                />
+            </ProviderFormSection>
+            {/* ── Provider bar: selected + URL-matched suggestions ── */}
+            {mode === 'add' && (selectedProvider || urlCandidates.length > 0) && (
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        px: 1.5,
+                        py: 1,
+                        borderRadius: radius.row,
+                        bgcolor: 'action.hover',
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    {selectedProvider && (
+                        <Chip
+                            icon={<ProviderIcon identifier={selectedProvider.icon || selectedProvider.id} size={16}/>}
+                            label={selectedProvider.alias || selectedProvider.name}
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleSelectProvider(selectedProvider)}
+                            sx={{cursor: 'pointer'}}
+                        />
+                    )}
+                    {urlCandidates
+                        .filter(p => p.id !== selectedProvider?.id)
+                        .map(p => (
+                            <Chip
+                                key={p.id}
+                                icon={<ProviderIcon identifier={p.icon || p.id} size={14}/>}
+                                label={p.alias || p.name}
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleSelectProvider(p)}
+                                sx={{cursor: 'pointer'}}
                             />
-                        )}
-                        <IconButton aria-label="close" onClick={onClose} sx={{ml: 1}} size="small">
-                            <Close/>
-                        </IconButton>
-                    </Box>
+                        ))}
                 </Box>
-            </DialogTitle>
-            <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden'}}>
-                <DialogContent sx={{pt: 1, pb: 1, overflowY: 'auto', flex: 1}}>
-                    <Stack spacing={2.5}>
-                        {isFirstProvider && mode === 'add' && (
-                            <Alert severity="info" sx={{mb: 1}}>
-                                <Typography variant="body2">
-                                    <strong>Getting Started</strong><br/>
-                                    Add your first API key to enable AI services. You can add more keys later.
-                                </Typography>
-                            </Alert>
-                        )}
+            )}
 
-                        {/* ── Provider bar: selected + URL-matched suggestions ── */}
-                        {(selectedProvider || urlCandidates.length > 0) && (
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.75,
-                                    px: 1.5,
-                                    py: 1,
-                                    borderRadius: 1,
-                                    bgcolor: 'action.hover',
-                                    flexWrap: 'wrap',
-                                }}
-                            >
-                                {selectedProvider && (
-                                    <Chip
-                                        icon={<ProviderIcon identifier={selectedProvider.icon || selectedProvider.id} size={16}/>}
-                                        label={selectedProvider.alias || selectedProvider.name}
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={() => handleSelectProvider(selectedProvider)}
-                                        sx={{cursor: 'pointer'}}
-                                    />
-                                )}
-                                {urlCandidates
-                                    .filter(p => p.id !== selectedProvider?.id)
-                                    .map(p => (
-                                        <Chip
-                                            key={p.id}
-                                            icon={<ProviderIcon identifier={p.icon || p.id} size={14}/>}
-                                            label={p.alias || p.name}
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => handleSelectProvider(p)}
-                                            sx={{cursor: 'pointer'}}
-                                        />
-                                    ))}
-                            </Box>
-                        )}
+            {/* ── Protocol Slots ────────────────────── */}
+            <ProviderFormSection title={t('providerDialog.protocol.label')}>
+                <Stack spacing={2}>
+                    <ProtocolSlot
+                        kind="openai"
+                        slot={slotOpenAI}
+                        onToggle={() => toggleSlot('openai')}
+                        onUrlChange={updateOpenAIUrl}
+                        onUrlBlur={commitSlots}
+                        urlError={baseUrlError && !isHttpUrl(slotOpenAI.url)}
+                        v1Hint={{show: persistentV1Hint, onApply: handleApplyV1Suffix}}
+                        helperText={selectedProvider
+                            ? (slotOpenAI.enabled
+                                ? t('providerDialog.protocol.helperOpenAI', {defaultValue: 'Supports models from OpenAI, Google and many other OpenAI-compatible providers'})
+                                : undefined)
+                            : undefined}
+                    />
+                    <ProtocolSlot
+                        kind="anthropic"
+                        slot={slotAnthropic}
+                        onToggle={() => toggleSlot('anthropic')}
+                        onUrlChange={updateAnthropicUrl}
+                        onUrlBlur={commitSlots}
+                        urlError={baseUrlError && !isHttpUrl(slotAnthropic.url)}
+                        helperText={selectedProvider
+                            ? (slotAnthropic.enabled
+                                ? t('providerDialog.protocol.helperAnthropic', {defaultValue: 'For Anthropic-compatible AI providers, commonly used with Claude Code'})
+                                : undefined)
+                            : undefined}
+                    />
+                </Stack>
+            </ProviderFormSection>
 
-                        {/* ── Protocol Slots ────────────────────── */}
-                        <Box>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    fontWeight: 600,
-                                    color: "text.secondary",
-                                    display: 'block',
-                                    mb: 1.5
-                                }}>
-                                {t('providerDialog.protocol.label', {defaultValue: 'Protocols'})}
-                            </Typography>
-                            <Stack spacing={2}>
-                                <ProtocolSlot
-                                    kind="openai"
-                                    slot={slotOpenAI}
-                                    onToggle={() => toggleSlot('openai')}
-                                    onUrlChange={updateOpenAIUrl}
-                                    onUrlBlur={commitSlots}
-                                    urlError={baseUrlError && !slotOpenAI.url.trim() && !slotAnthropic.url.trim()}
-                                    v1Hint={{show: persistentV1Hint, onApply: handleApplyV1Suffix}}
-                                    helperText={selectedProvider
-                                        ? (slotOpenAI.enabled
-                                            ? t('providerDialog.protocol.helperOpenAI', {defaultValue: 'Supports models from OpenAI, Google and many other OpenAI-compatible providers'})
-                                            : undefined)
-                                        : undefined}
-                                />
-                                <ProtocolSlot
-                                    kind="anthropic"
-                                    slot={slotAnthropic}
-                                    onToggle={() => toggleSlot('anthropic')}
-                                    onUrlChange={updateAnthropicUrl}
-                                    onUrlBlur={commitSlots}
-                                    urlError={baseUrlError && !slotAnthropic.url.trim() && !slotOpenAI.url.trim()}
-                                    helperText={selectedProvider
-                                        ? (slotAnthropic.enabled
-                                            ? t('providerDialog.protocol.helperAnthropic', {defaultValue: 'For Anthropic-compatible AI providers, commonly used with Claude Code'})
-                                            : undefined)
-                                        : undefined}
-                                />
-                            </Stack>
-                        </Box>
+            {/* ── Verification result ─────────────── */}
+            {verificationResult && (
+                <VerificationResultPanel
+                    result={verificationResult}
+                    onClose={() => setVerificationResult(null)}
+                    v1Hint={{
+                        show: !verificationResult.success && !verificationResult.cancelled && slotOpenAI.enabled && !(/\/v1\/?$/.test(slotOpenAI.url)),
+                        onApply: () => {
+                            const base = slotOpenAI.url.replace(/\/+$/, '');
+                            const newUrl = `${base}/v1`;
+                            updateOpenAIUrl(newUrl);
+                            commitProtocolState({...slotOpenAI, url: newUrl}, slotAnthropic);
+                        },
+                    }}
+                />
+            )}
 
-                        {/* ── Name ────────────────────────────── */}
-                        <KeyNameField
-                            showField={showNameField}
-                            onShowField={() => {
-                                if (!data.name) onChangeRef.current('name', computeAutoName());
-                                setShowNameField(true);
-                            }}
-                            name={data.name}
-                            autoName={computeAutoName()}
-                            onNameChange={(value) => {
-                                onChange('name', value);
-                                setNameIsAutoFilled(false);
-                            }}
-                        />
-
-                        {/* ── API Key ─────────────────────────── */}
-                        <ApiKeyField
-                            mode={mode}
-                            token={data.token}
-                            onTokenChange={(value) => { onChange('token', value); setVerificationResult(null); }}
-                            noApiKey={noApiKey}
-                            optionalEditable={optionalEditableToken}
-                            onNoApiKeyChange={(checked) => {
-                                setNoApiKey(checked);
-                                onChange('noKeyRequired', checked);
-                                setVerificationResult(null);
-                                if (checked && !optionalEditableToken) onChange('token', '');
-                            }}
-                        />
-
-                        {/* ── Verification result ─────────────── */}
-                        {verificationResult && (
-                            <VerificationResultPanel
-                                result={verificationResult}
-                                onClose={() => setVerificationResult(null)}
-                                v1Hint={{
-                                    show: !verificationResult.success && slotOpenAI.enabled && !(/\/v1\/?$/.test(slotOpenAI.url)),
-                                    onApply: () => {
-                                        const base = slotOpenAI.url.replace(/\/+$/, '');
-                                        const newUrl = `${base}/v1`;
-                                        updateOpenAIUrl(newUrl);
-                                        commitProtocolState({...slotOpenAI, url: newUrl}, slotAnthropic);
-                                    },
-                                }}
-                            />
-                        )}
-
-                        {/* ── Proxy URL ──────────────────────── */}
-                        <ProxyUrlField
-                            mode={mode}
-                            proxyUrl={data.proxyUrl || ''}
-                            onProxyUrlChange={(value) => {
-                                onChange('proxyUrl', value);
-                                if (useGlobalProxy && value !== globalProxyUrl) {
-                                    setUseGlobalProxy(false);
-                                    localStorage.setItem('provider_use_global_proxy', 'false');
-                                }
-                            }}
-                            globalProxyUrl={globalProxyUrl}
-                            useGlobalProxy={useGlobalProxy}
-                            onUseGlobalProxyChange={handleUseGlobalProxyChange}
-                        />
-
-                    </Stack>
-                </DialogContent>
-                <DialogActions sx={{px: 3, pb: 2}}>
-                    {mode === 'edit' && data.uuid && (
-                        <Box sx={{mr: 'auto'}}>
-                            <ProviderExportButton
-                                providerUuid={data.uuid}
-                                onNotification={onNotification}
-                            />
-                        </Box>
-                    )}
-                    {onBack && (
-                        <Button
-                            type="button" variant="text" size="small"
-                            startIcon={<ArrowBack fontSize="small"/>}
-                            onClick={() => { onClose(); onBack(); }}
-                        >
-                            Back
-                        </Button>
-                    )}
-                    <Stack direction="row" spacing={1} sx={{ml: 'auto'}}>
-                        <Button
-                            type="button" variant="outlined" size="small"
-                            disabled={!hasAnyProtocol || verifying || submitting}
-                            onClick={handleVerify}
-                            title="Test connection using available endpoints"
-                            sx={(theme) => ({
-                                '&.Mui-disabled': {
-                                    color: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.68)' : theme.palette.text.secondary,
-                                },
-                            })}
-                        >
-                            {verifying ? <CircularProgress size={16} thickness={4}/> : 'Test Connection'}
-                        </Button>
-                        <Button
-                            type="submit" variant="contained" size="small"
-                            disabled={!hasAnyProtocol || verifying || submitting}
-                            sx={(theme) => ({
-                                minWidth: verifying || submitting ? '80px' : 'auto',
-                                '&.Mui-disabled': {color: theme.palette.primary.contrastText},
-                            })}
-                        >
-                            {submitting ? <CircularProgress size={20} thickness={4}/> : (submitText || defaultSubmitText)}
-                        </Button>
-                    </Stack>
-                </DialogActions>
-            </form>
-        </Dialog>
+            {baseUrlError && <Alert severity="error" tabIndex={-1}>{t('providerDialog.editUx.urlError')}</Alert>}
+            <ProviderFormSection title={t('providerDialog.editUx.proxySettings')}>
+                {/* ── Proxy URL ──────────────────────── */}
+                <ProxyUrlField
+                    mode={mode}
+                    proxyUrl={data.proxyUrl || ''}
+                    onProxyUrlChange={(value) => {
+                        onChange('proxyUrl', value);
+                        if (useGlobalProxy && value !== globalProxyUrl) {
+                            setUseGlobalProxy(false);
+                            localStorage.setItem('provider_use_global_proxy', 'false');
+                        }
+                    }}
+                    globalProxyUrl={globalProxyUrl}
+                    useGlobalProxy={useGlobalProxy}
+                    onUseGlobalProxyChange={handleUseGlobalProxyChange}
+                />
+            </ProviderFormSection>
+            {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}
+        </ProviderFormLayout>
     );
 };
 

@@ -10,7 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/config"
@@ -47,9 +48,9 @@ type Handler struct {
 // straight through to NewBotManager — see its doc comment for why this must
 // happen at construction time rather than via a later SetChannelRegistry
 // call.
-func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry) (*Handler, error) {
+func NewHandler(ctx context.Context, cfg *config.Config, channelRegistry *channel.Registry, consumerOpts ...chat.ConsumerOption) (*Handler, error) {
 	sm := cfg.StoreManager()
-	botMgr, err := NewBotManager(ctx, cfg, channelRegistry)
+	botMgr, err := NewBotManager(ctx, cfg, channelRegistry, consumerOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,20 +167,16 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 	}
 
 	settings := db.Settings{
-		Name:               strings.TrimSpace(req.Name),
-		Platform:           platform,
-		AuthType:           authType,
-		Auth:               authMap,
-		ProxyURL:           strings.TrimSpace(req.ProxyURL),
-		ChatIDLock:         strings.TrimSpace(req.ChatID),
-		BashAllowlist:      normalizeAllowlist(req.BashAllowlist),
-		DefaultCwd:         strings.TrimSpace(req.DefaultCwd),
-		DefaultAgent:       strings.TrimSpace(req.DefaultAgent),
-		Enabled:            req.Enabled,
-		SmartGuideProvider: strings.TrimSpace(req.SmartGuideProvider),
-		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
-		RequirePairing:     req.RequirePairing,
-		PersistentSession:  req.PersistentSession,
+		Name:           strings.TrimSpace(req.Name),
+		Platform:       platform,
+		AuthType:       authType,
+		Auth:           authMap,
+		ProxyURL:       strings.TrimSpace(req.ProxyURL),
+		ChatIDLock:     strings.TrimSpace(req.ChatID),
+		DefaultCwd:     strings.TrimSpace(req.DefaultCwd),
+		DefaultAgent:   strings.TrimSpace(req.DefaultAgent),
+		Enabled:        req.Enabled,
+		RequirePairing: req.RequirePairing,
 	}
 
 	created, err := h.store.CreateSettings(settings)
@@ -295,8 +292,9 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	}
 
 	// Only set fields if they are provided in the request
-	if req.Name != "" {
-		settings.Name = strings.TrimSpace(req.Name)
+	if req.Name != nil {
+		settings.Name = strings.TrimSpace(*req.Name)
+		settings.ClearName = settings.Name == ""
 	}
 
 	settings.Platform = platform
@@ -309,22 +307,6 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 
 	if req.ChatID != "" {
 		settings.ChatIDLock = strings.TrimSpace(req.ChatID)
-	}
-
-	if req.BashAllowlist != nil {
-		settings.BashAllowlist = normalizeAllowlist(req.BashAllowlist)
-	}
-
-	// Handle SmartGuide config (partial update)
-	if req.SmartGuideProvider != nil {
-		settings.SmartGuideProvider = strings.TrimSpace(*req.SmartGuideProvider)
-	} else {
-		settings.SmartGuideProvider = currentSettings.SmartGuideProvider
-	}
-	if req.SmartGuideModel != nil {
-		settings.SmartGuideModel = strings.TrimSpace(*req.SmartGuideModel)
-	} else {
-		settings.SmartGuideModel = currentSettings.SmartGuideModel
 	}
 
 	// Handle default_cwd config (partial update)
@@ -356,11 +338,6 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 		settings.RequirePairing = req.RequirePairing
 	}
 
-	// Handle persistent_session (partial update); nil → leave unchanged in DB.
-	if req.PersistentSession != nil {
-		settings.PersistentSession = req.PersistentSession
-	}
-
 	// Start from the current mount list so unrelated edits don't wipe it (the
 	// store writes the scenarios column unconditionally).
 	settings.Scenarios = currentSettings.Scenarios
@@ -371,24 +348,6 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	}
 
 	logrus.WithField("uuid", uuid).Info("ImBot settings updated")
-
-	// Update SmartGuide routing rule if provider/model configured
-	// This ensures the routing rule stays in sync with the configuration
-	if settings.SmartGuideProvider != "" && settings.SmartGuideModel != "" {
-		if err := h.config.EnsureSmartGuideRuleForBot(uuid, settings.Name, settings.SmartGuideProvider, settings.SmartGuideModel); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
-				"uuid":     uuid,
-				"provider": settings.SmartGuideProvider,
-				"model":    settings.SmartGuideModel,
-			}).Error("Failed to update SmartGuide routing rule")
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"uuid":     uuid,
-				"provider": settings.SmartGuideProvider,
-				"model":    settings.SmartGuideModel,
-			}).Info("SmartGuide routing rule updated")
-		}
-	}
 
 	// Reconcile from the explicit BotCapability source of truth.
 	if h.botMgr != nil {
@@ -402,14 +361,6 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 			if shouldRun {
 				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
 					logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after settings update")
-				}
-				// StopBot (the else branch) already evicts on its way out;
-				// here the bot keeps running, so turning persistent_session
-				// off needs its own eviction or the abandoned session stays
-				// resident racing the next, one-shot-mode message against
-				// the same on-disk session file.
-				if req.PersistentSession != nil && !*req.PersistentSession {
-					h.botMgr.EvictPersistentSessions(uuid)
 				}
 			} else {
 				if err := h.botMgr.StopBot(uuid); err != nil {
@@ -575,7 +526,6 @@ func (h *Handler) GetPlatformConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// Helper function to normalize allowlist
 // validateDefaultAgent checks a default_agent value: "" and "claude_code"
 // select the main scenario; "claude_code:<profileID>" must reference an
 // existing Claude Code profile. Anything else is rejected so a typo can't
@@ -598,23 +548,6 @@ func (h *Handler) validateDefaultAgent(value string) error {
 		return fmt.Errorf("claude code profile %q not found", profileID)
 	}
 	return nil
-}
-
-func normalizeAllowlist(values []string) []string {
-	seen := make(map[string]struct{})
-	var out []string
-	for _, entry := range values {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		if _, exists := seen[entry]; exists {
-			continue
-		}
-		seen[entry] = struct{}{}
-		out = append(out, entry)
-	}
-	return out
 }
 
 // ChatStore returns the chat store shared by every running bot. It is owned

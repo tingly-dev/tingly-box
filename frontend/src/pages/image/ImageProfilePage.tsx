@@ -26,6 +26,7 @@ const ImageProfilePage: React.FC = () => {
     useEffect(() => {
         void loadRules(scenario);
     }, [loadRules]);
+    const reloadRules = useCallback(() => loadRules(scenario), [loadRules]);
 
     // The sidebar's "New profile" lands here: create an empty one and move to
     // its page, title open for naming. No dialog in between.
@@ -43,7 +44,7 @@ const ImageProfilePage: React.FC = () => {
             prompts: [{ id: 'p1', name: '', text: '' }],
             activePromptId: 'p1',
             model: '',
-            size: '1024x1024',
+            size: 'auto',
             quality: 'auto',
             count: 1,
         });
@@ -83,6 +84,7 @@ const ImageProfilePage: React.FC = () => {
                 profile={profile}
                 rules={rules}
                 loadingRules={loadingRule}
+                onRulesReload={reloadRules}
                 showNotification={showNotification}
             />
         </Box>

@@ -10,7 +10,6 @@ type ProviderFormData = EnhancedProviderFormData;
 interface OAuthEditFormData {
     name: string;
     apiBase: string;
-    apiStyle: string;
     apiBaseOpenAI?: string;
     apiBaseAnthropic?: string;
     enabled: boolean;
@@ -32,6 +31,7 @@ const emptyProviderFormData: ProviderFormData = {
 };
 
 export function useProviderEditDialog({ onUpdated, showNotification }: UseProviderEditDialogOptions = {}) {
+    const [existingToken, setExistingToken] = useState('');
     const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>(emptyProviderFormData);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<Provider | null>(null);
@@ -65,6 +65,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
     const closeApiKeyDialog = useCallback(() => {
         setApiKeyDialogOpen(false);
         setProviderFormData(emptyProviderFormData);
+        setExistingToken('');
     }, []);
 
     const closeOAuthDetailDialog = useCallback(() => {
@@ -73,41 +74,49 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
     }, []);
 
     const editProvider = useCallback(async (uuid: string) => {
-        const result = await api.getProvider(uuid);
-        if (result.success) {
-            const provider = result.data as Provider;
-            if (provider.auth_type === 'oauth') {
-                setOAuthDetailProvider(provider);
-                setOAuthDetailDialogOpen(true);
-            } else if (isCloudAuthType(provider.auth_type)) {
-                // Cloud providers (Bedrock/Vertex/Azure) hold multi-field
-                // credentials the token-based form can neither show nor edit —
-                // opening it would present the wrong fields and risk a bad
-                // update. A dedicated cloud edit flow is a declared follow-up
-                // (.design/third-party-credentials.md §11); until then, be
-                // honest instead of opening a broken form.
-                showNotification?.(
-                    'Editing cloud credentials is not supported yet — delete the provider and re-add it to change them.',
-                    'error'
-                );
+        try {
+            const result = await api.getProvider(uuid);
+            if (result.success) {
+                const provider = result.data as Provider;
+                if (provider.auth_type === 'oauth') {
+                    setOAuthDetailProvider(provider);
+                    setOAuthDetailDialogOpen(true);
+                } else if (isCloudAuthType(provider.auth_type)) {
+                    // Cloud providers (Bedrock/Vertex/Azure) hold multi-field
+                    // credentials the token-based form can neither show nor edit —
+                    // opening it would present the wrong fields and risk a bad
+                    // update. A dedicated cloud edit flow is a declared follow-up
+                    // (.design/third-party-credentials.md §11); until then, be
+                    // honest instead of opening a broken form.
+                    showNotification?.(
+                        'Editing cloud credentials is not supported yet — delete the provider and re-add it to change them.',
+                        'error'
+                    );
+                } else {
+                    setExistingToken(provider.token || '');
+                    setProviderFormData({
+                        uuid: provider.uuid,
+                        name: provider.name,
+                        apiBase: provider.api_base,
+                        apiStyle: provider.api_style || 'openai',
+                        apiBaseOpenAI: provider.api_base_openai || '',
+                        apiBaseAnthropic: provider.api_base_anthropic || '',
+                        // Seed the field with the stored key (password-masked,
+                        // eye toggles it). Saving unchanged resends the same
+                        // value — a harmless no-op for the backend.
+                        token: provider.token || '',
+                        enabled: provider.enabled,
+                        noKeyRequired: provider.no_key_required || false,
+                        proxyUrl: provider.proxy_url || '',
+                        authType: provider.auth_type || 'api_key',
+                    } as any);
+                    setApiKeyDialogOpen(true);
+                }
             } else {
-                setProviderFormData({
-                    uuid: provider.uuid,
-                    name: provider.name,
-                    apiBase: provider.api_base,
-                    apiStyle: provider.api_style || 'openai',
-                    apiBaseOpenAI: provider.api_base_openai || '',
-                    apiBaseAnthropic: provider.api_base_anthropic || '',
-                    token: provider.token || '',
-                    enabled: provider.enabled,
-                    noKeyRequired: provider.no_key_required || false,
-                    proxyUrl: provider.proxy_url || '',
-                    authType: provider.auth_type || 'api_key',
-                } as any);
-                setApiKeyDialogOpen(true);
+                showNotification?.(`Failed to load provider details: ${result.error}`, 'error');
             }
-        } else {
-            showNotification?.(`Failed to load provider details: ${result.error}`, 'error');
+        } catch (error) {
+            showNotification?.(`Failed to load provider details: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
     }, [showNotification]);
 
@@ -119,9 +128,11 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
         if (result.success) {
             showNotification?.('Provider updated successfully!', 'success');
             closeApiKeyDialog();
-            await onUpdated?.(providerFormData.uuid);
+            try { await onUpdated?.(providerFormData.uuid); } catch (error) {
+                showNotification?.(`Refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            }
         } else {
-            showNotification?.(`Failed to update provider: ${result.error}`, 'error');
+            throw new Error(`Failed to update provider: ${result.error}`);
         }
     }, [buildEditProviderPayload, closeApiKeyDialog, onUpdated, providerFormData.uuid, showNotification]);
 
@@ -130,7 +141,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
         const result = await api.updateProvider(oauthDetailProvider.uuid, {
             name: data.name,
             api_base: data.apiBase,
-            api_style: data.apiStyle,
+            // OAuth credentials and API style are owned by the sign-in flow.
             // Only sent for dual providers; omitted otherwise so a single-URL
             // provider never accidentally gains dual URLs.
             ...(oauthDetailProvider.api_base_openai && oauthDetailProvider.api_base_anthropic
@@ -141,7 +152,9 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
         });
         if (!result.success) throw new Error(result.error || 'Failed to update provider');
         showNotification?.('Provider updated successfully!', 'success');
-        await onUpdated?.(oauthDetailProvider.uuid);
+        try { await onUpdated?.(oauthDetailProvider.uuid); } catch (error) {
+            showNotification?.(`Refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
     }, [oauthDetailProvider, onUpdated, showNotification]);
 
     const providerEditDialogs = useMemo(() => (
@@ -153,6 +166,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                 data={providerFormData}
                 onChange={handleProviderFormChange}
                 mode="edit"
+                existingToken={existingToken}
                 onNotification={showNotification}
             />
             <OAuthDetailDialog
@@ -163,7 +177,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                 onNotification={showNotification}
             />
         </>
-    ), [apiKeyDialogOpen, closeApiKeyDialog, closeOAuthDetailDialog, handleOAuthSubmit, handleProviderFormChange, handleProviderSubmit, oauthDetailDialogOpen, oauthDetailProvider, providerFormData, showNotification]);
+    ), [existingToken, apiKeyDialogOpen, closeApiKeyDialog, closeOAuthDetailDialog, handleOAuthSubmit, handleProviderFormChange, handleProviderSubmit, oauthDetailDialogOpen, oauthDetailProvider, providerFormData, showNotification]);
 
     return {
         editProvider,

@@ -1,0 +1,49 @@
+name: Announce npm publish
+description: >-
+  Tell the releaser that npm.yml is ready to run for a release tag, with the
+  recommended parameters, in the job summary. Nothing is dispatched or
+  published: the releaser starts npm.yml by hand, picks the parameters, and
+  approves the `production` environment.
+inputs:
+  tag:
+    description: Release tag
+    required: true
+  publish_cli:
+    description: Recommended - publish the tingly-box CLI packages
+    required: true
+  publish_gui:
+    description: Recommended - publish the tingly-box-gui packages
+    required: true
+  build_docker:
+    description: Recommended - build the npm Docker image
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Write publish instructions
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        PUBLISH_CLI: ${{ inputs.publish_cli }}
+        PUBLISH_GUI: ${{ inputs.publish_gui }}
+        BUILD_DOCKER: ${{ inputs.build_docker }}
+      run: |
+        # Same inference npm.yml's description documents: stable -> latest,
+        # pre-release (v1.2.3-rc1) -> rc.
+        if [[ "${TAG#v}" == *-* ]]; then NPM_TAG=rc; else NPM_TAG=latest; fi
+
+        {
+          echo "## 📦 npm publish awaits your decision"
+          echo ""
+          echo "Nothing was published or dispatched. To publish \`$TAG\`, run the"
+          echo "[NPX Package Publish workflow](https://github.com/$GITHUB_REPOSITORY/actions/workflows/npm.yml)"
+          echo "(Run workflow) and choose the parameters; the run then waits for approval of the \`production\` environment."
+          echo ""
+          echo "| Input | Suggested |"
+          echo "| --- | --- |"
+          echo "| tag | \`$TAG\` |"
+          echo "| npm_tag | \`$NPM_TAG\` |"
+          echo "| publish_cli | $PUBLISH_CLI |"
+          echo "| publish_gui | $PUBLISH_GUI |"
+          echo "| build_docker | $BUILD_DOCKER |"
+        } >> "$GITHUB_STEP_SUMMARY"

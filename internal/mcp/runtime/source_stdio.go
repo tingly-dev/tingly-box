@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -59,7 +60,13 @@ func NewStdioToolSource(sourceConfig typ.MCPSourceConfig, sc *sessionCache) (*St
 func (s *StdioToolSource) Connect(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.IsRetired() {
+		return &ConnectionError{Source: s.GetSourceID(), Reason: "source configuration was replaced"}
+	}
 
+	if s.session != nil && s.session.connected() {
+		return nil
+	}
 	s.setState(StateConnecting, nil)
 
 	logrus.Debugf("mcp: connecting stdio source=%s", s.GetSourceID())
@@ -111,9 +118,7 @@ func (s *StdioToolSource) waitForServerReady(ctx context.Context) error {
 		}
 
 		// Try to list tools as a readiness check
-		s.session.mu.RLock()
 		_, err := s.session.listTools(ctx)
-		s.session.mu.RUnlock()
 
 		if err == nil {
 			s.ready = true
@@ -157,6 +162,9 @@ func (s *StdioToolSource) Disconnect(ctx context.Context) error {
 		s.session = nil
 	}
 
+	s.readyMu.Lock()
+	s.ready = false
+	s.readyMu.Unlock()
 	s.setState(StateDisconnected, nil)
 	logrus.Debugf("mcp: stdio source=%s disconnected", s.GetSourceID())
 	return nil
@@ -177,7 +185,7 @@ func (s *StdioToolSource) ForceKill() {
 func (s *StdioToolSource) IsConnected() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.session != nil && s.session.session != nil
+	return s.session != nil && s.session.connected()
 }
 
 // IsConfigured returns whether this source has sufficient configuration to connect.
@@ -196,16 +204,12 @@ func (s *StdioToolSource) IsConfigured() bool {
 
 // ListTools returns all tools from the stdio MCP server.
 func (s *StdioToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error) {
-	if !s.IsConnected() {
-		return nil, &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
-	}
-
 	s.mu.RLock()
 	ss := s.session
 	s.mu.RUnlock()
-
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
+	if ss == nil || s.IsRetired() {
+		return nil, &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
+	}
 
 	tools, err := ss.listTools(ctx)
 	if err != nil {
@@ -215,9 +219,11 @@ func (s *StdioToolSource) ListTools(ctx context.Context) ([]ToolDefinition, erro
 	result := make([]ToolDefinition, len(tools))
 	for i, tool := range tools {
 		result[i] = ToolDefinition{
-			Name:        tool.Name,
-			Description: tool.Description,
-			InputSchema: tool.schema(),
+			Name:         tool.Name,
+			Description:  tool.Description,
+			InputSchema:  tool.schema(),
+			OutputSchema: tool.OutputSchema,
+			Annotations:  tool.Annotations,
 		}
 	}
 
@@ -226,22 +232,18 @@ func (s *StdioToolSource) ListTools(ctx context.Context) ([]ToolDefinition, erro
 }
 
 // CallTool executes a tool from the stdio MCP server.
-func (s *StdioToolSource) CallTool(ctx context.Context, toolName string, arguments string) (string, error) {
-	if !s.IsConnected() {
-		return "", &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
-	}
-
+func (s *StdioToolSource) CallTool(ctx context.Context, toolName string, arguments string) (coretool.ToolResult, error) {
 	s.mu.RLock()
 	ss := s.session
 	s.mu.RUnlock()
-
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
+	if ss == nil || s.IsRetired() {
+		return coretool.ToolResult{}, &ConnectionError{Source: s.GetSourceID(), Reason: "not connected"}
+	}
 
 	var argsMap map[string]interface{}
 	if strings.TrimSpace(arguments) != "" {
 		if err := json.Unmarshal([]byte(arguments), &argsMap); err != nil {
-			return "", &ToolExecutionError{ToolName: toolName, Message: "invalid arguments: " + err.Error()}
+			return coretool.ToolResult{}, &ToolExecutionError{ToolName: toolName, Message: "invalid arguments: " + err.Error()}
 		}
 	}
 
@@ -256,7 +258,7 @@ func (s *StdioToolSource) CallTool(ctx context.Context, toolName string, argumen
 			"tool":   toolName,
 			"error":  err.Error(),
 		}).Debug("mcp: stdio tool execution failed")
-		return "", err
+		return coretool.ToolResult{}, err
 	}
 
 	logrus.WithFields(logrus.Fields{

@@ -31,8 +31,8 @@ func WithVersion(version string) ServerOption {
 	}
 }
 
-// WithLaunchSource records how this process was itself invoked ("", "npx",
-// "npx-bundle" — see internal/shortcut's Source* constants), so the
+// WithLaunchSource records how this process was itself invoked ("", "binary",
+// "npx", "npm" — see internal/shortcut's Source* constants), so the
 // /api/v1/shortcut handler can build a shortcut that relaunches the same way,
 // without any detection or persistence (mirrors the CLI's own --source flag).
 func WithLaunchSource(source string) ServerOption {
@@ -65,6 +65,14 @@ func WithOpenBrowser(enabled bool) ServerOption {
 func WithRecordDir(dir string) ServerOption {
 	return func(s *Server) {
 		s.recordDir = dir
+	}
+}
+
+// WithProjectsDir sets the directory embedded Projects keeps its database and
+// thread worktrees in.
+func WithProjectsDir(dir string) ServerOption {
+	return func(s *Server) {
+		s.projectsDir = dir
 	}
 }
 

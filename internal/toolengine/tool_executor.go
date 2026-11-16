@@ -2,6 +2,7 @@ package toolengine
 
 import (
 	"context"
+	"encoding/json"
 
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
@@ -51,6 +52,12 @@ func (e *ServerToolExecutor) ExecuteToolWithContext(
 		ToolUseID: tool.ID(),
 		Contents:  toolResult.Contents,
 		IsError:   err != nil || toolResult.IsError,
+	}
+	if toolResult.StructuredContent != nil {
+		raw, marshalErr := json.Marshal(toolResult.StructuredContent)
+		if marshalErr == nil {
+			result.Contents = append(append([]coretool.ToolContent{}, result.Contents...), coretool.ToolContent{Type: coretool.ContentTypeText, Text: string(raw)})
+		}
 	}
 	return nextCtx, result, err
 }

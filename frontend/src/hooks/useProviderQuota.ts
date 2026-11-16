@@ -3,6 +3,12 @@ import { useNotify } from '@/hooks/useNotify';
 import { fetchUIAPI } from '@/services/api';
 import type { ProviderQuota } from '@/types/quota';
 
+/** How a reward spend ended; `error` is a failure before the server could say. */
+export interface RedeemOutcome {
+  status: 'spent' | 'rejected' | 'unconfirmed' | 'not_found' | 'busy' | 'unsupported' | 'error';
+  message?: string;
+}
+
 interface ProviderQuotaData {
   [providerUuid: string]: ProviderQuota;
 }
@@ -145,6 +151,29 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
     }
   }, [fetchQuota, notify, providerName]);
 
+  // Spend one reward (a reset card). Irreversible and sent once by the server,
+  // so this never retries; the usage it answers with replaces the old reading,
+  // which is how the card disappears and the windows refill on screen.
+  const redeemReward = useCallback(async (providerUuid: string, rewardId: string): Promise<RedeemOutcome> => {
+    const apply = (answer: { usage?: ProviderQuota } | undefined) => {
+      if (answer?.usage?.provider_uuid) {
+        setQuotaData(prev => ({ ...prev, [providerUuid]: answer.usage as ProviderQuota }));
+      }
+    };
+    try {
+      const answer = await fetchUIAPI(`/provider-quota/${providerUuid}/rewards/${encodeURIComponent(rewardId)}/use`, { method: 'POST' });
+      apply(answer);
+      return { status: answer.status, message: answer.message };
+    } catch (error) {
+      const body = (error as { body?: { status?: RedeemOutcome['status']; message?: string; usage?: ProviderQuota } })?.body;
+      if (body?.status) {
+        apply(body);
+        return { status: body.status, message: body.message };
+      }
+      return { status: 'error', message: error instanceof Error ? error.message : undefined };
+    }
+  }, []);
+
   // Fetch all quotas
   const fetchAllQuotas = useCallback(async () => {
     const uuids = providers.map(p => p.uuid);
@@ -184,6 +213,7 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
     errors,
     fetchQuota,
     refreshQuota,
+    redeemReward,
     fetchAllQuotas,
     refreshAllQuotas,
     batchFetchQuota,

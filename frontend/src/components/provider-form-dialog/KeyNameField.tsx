@@ -2,12 +2,14 @@ import {Edit} from '@/components/icons';
 import {Box, IconButton, TextField, Tooltip, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface KeyNameFieldProps {
     showField: boolean;
     onShowField: () => void;
     name: string;
     autoName: string;
+    helperText?: string;
     onNameChange: (value: string) => void;
 }
 
@@ -17,6 +19,7 @@ const KeyNameField: React.FC<KeyNameFieldProps> = ({
     name,
     autoName,
     onNameChange,
+    helperText,
 }) => {
     const {t} = useTranslation();
 
@@ -30,7 +33,7 @@ const KeyNameField: React.FC<KeyNameFieldProps> = ({
                 value={name}
                 onChange={(e) => onNameChange(e.target.value)}
                 placeholder={autoName}
-                helperText={t('providerDialog.keyName.helper', {
+                helperText={helperText ?? t('providerDialog.keyName.helper', {
                     defaultValue: 'Leave blank to use the auto-generated name. You can rename later.',
                 })}
             />
@@ -45,7 +48,7 @@ const KeyNameField: React.FC<KeyNameFieldProps> = ({
                 gap: 1,
                 px: 1.5,
                 py: 0.75,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 bgcolor: 'background.default',
                 border: 1,
                 borderColor: 'divider',

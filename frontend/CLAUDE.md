@@ -17,6 +17,10 @@ Every route element in `src/routes/appRoutes.tsx` (the route table `App.tsx` ren
 
 **`vite.config.wails.ts`'s `manualChunks`/`optimizeDeps` must stay in sync with `vite.config.ts`.** They're separate config files (Rollup can't share a function across two `defineConfig` calls), so a fix applied to one doesn't propagate to the other — this has drifted before (the wails config kept forcing `recharts`/`d3` into an eager `recharts-vendor` chunk after the web config was fixed to leave them lazy). When you change one file's chunking/`optimizeDeps` logic, apply the same change to the other, or explain in a comment why they intentionally differ.
 
+## Data loading
+
+Call the API through `api.*` / `controlApi` / `fetchUIAPI` (identical concurrent GETs are folded into one request there; a raw `fetch` is not), keep large libraries and locale bundles out of code reachable from `Layout`/`App`, and gate new pollers on `document.visibilityState`. Measure with `scripts/measure-data-loading.mjs`; numbers, the short-lived read cache and open candidates are in `.design/frontend-data-loading.md`.
+
 ## Reuse existing hooks instead of hand-rolling
 
 These get reinvented locally often enough that it's worth naming explicitly:
@@ -24,6 +28,12 @@ These get reinvented locally often enough that it's worth naming explicitly:
 - **Copy-to-clipboard feedback** (a "copied" flag that auto-resets after ~2s): use `hooks/useCopyFeedback.ts`, not a local `useState` + `setTimeout`. It also takes an optional `onCopied` callback for a toast, and a `reset()` for clearing the flag early (e.g. on dialog close).
 - **Toast/snackbar notifications**: use `useNotify()` (`hooks/useNotify.ts`) — it renders globally via `NotificationProvider`, so there's no local `Snackbar`/`Alert`/open-state to wire up. Don't add a component-local `Snackbar`.
 
+## Style literals
+
+Colours, text sizes, font weights and corner radii come from the theme in `@tingly/ui` (palette and tokens, typography variants or `fontSizes`, `radius`) — see `.design/visual-system.md` §2. `pnpm lint` runs `scripts/check-style-literals.mjs`. Colours (hex / `rgb()` / `rgba()`), literal `borderRadius` and font weights outside 400/500/600 are **strict**: any hit outside the theme fails, there is no baseline. A colour that really is fixed (a brand colour, a chart series, a scrim over an image) goes in a named module under `src/theme/` (`brand`, `dataviz`, `routeGraph`, `overlay`, `elevation`) or in `@tingly/ui`'s theme (`tone`, `overlay`, `elevation`); the canvas packages keep theirs in their own `src/colors.ts`; mock fixtures live in `src/mocks/`. `rem`/`px` font sizes are compared with a frozen baseline (`scripts/style-literals-baseline.json`), which holds one exception; run `node scripts/check-style-literals.mjs --update` after removing some so it tightens.
+
 ## Type checking
 
 `pnpm typecheck` runs in CI (`release-cli.yml`) as a non-blocking, `continue-on-error` step — the repo has pre-existing legacy type errors that aren't being fixed as part of unrelated changes, so this only warns instead of failing the build. Still run `pnpm typecheck` locally before opening a PR and fix anything your change introduces; don't rely on CI to catch it.
+
+`src/client/schema.d.ts` is generated and git-ignored. Run `pnpm gen:api` first in a fresh checkout or worktree: without it every API type is missing and `pnpm typecheck` reports ~140 bogus errors (implicit `any` in the MCP pages, quota types, bot types); with it the tree is clean.

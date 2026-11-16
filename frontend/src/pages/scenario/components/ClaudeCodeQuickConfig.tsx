@@ -15,11 +15,13 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
+import { AdvancedSection } from './config/AdvancedSection';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -91,10 +93,10 @@ export const CLAUDE_CONFIG_KEY_SX = {
     maxWidth: '100%',
     px: 0.75,
     py: 0.25,
-    borderRadius: 0.75,
+    borderRadius: radius.chip,
     bgcolor: 'action.hover',
     fontFamily: fontMono,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.micro,
     lineHeight: 1.5,
     color: 'text.secondary',
     whiteSpace: 'nowrap',
@@ -157,38 +159,38 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: '默认模型',
         purpose: '未指定具体场景时使用的兜底模型',
-        tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 通常映射到 tingly/cc 或 tingly/cc-default。',
-        placeholder: 'tingly/cc',
+        tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 通常映射到 cc。',
+        placeholder: 'cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
         label: 'Haiku 槽位',
         purpose: '轻量调用（如生成 commit message、文件摘要）使用的模型',
-        tooltip: 'Claude Code 内部对一些便宜的辅助调用走 haiku 槽位。tb 把它路由到 tingly/cc-haiku。',
-        placeholder: 'tingly/cc-haiku',
+        tooltip: 'Claude Code 内部对一些便宜的辅助调用走 haiku 槽位。tb 把它路由到 haiku。',
+        placeholder: 'haiku',
     },
     ANTHROPIC_DEFAULT_SONNET_MODEL: {
         label: 'Sonnet 槽位',
         purpose: '主力槽位 — 大部分对话和代码生成走这里',
         tooltip: 'Claude Code 的默认主力。除非显式选其他模型，正常会话都用 sonnet 槽位。',
-        placeholder: 'tingly/cc-sonnet',
+        placeholder: 'sonnet',
     },
     ANTHROPIC_DEFAULT_OPUS_MODEL: {
         label: 'Opus 槽位',
         purpose: '复杂推理（如 plan 模式、深度分析）使用的模型',
         tooltip: '相对昂贵但更强的推理模型。Claude Code 在显式调用 opus 时使用。',
-        placeholder: 'tingly/cc-opus',
+        placeholder: 'opus',
     },
     ANTHROPIC_DEFAULT_FABLE_MODEL: {
         label: 'Fable 槽位',
         purpose: '选择 fable 别名时使用的模型',
-        tooltip: 'Claude Code 的 fable 别名对应的模型。tb 把它路由到 tingly/cc-fable。',
-        placeholder: 'tingly/cc-fable',
+        tooltip: 'Claude Code 的 fable 别名对应的模型。tb 把它路由到 fable。',
+        placeholder: 'fable',
     },
     CLAUDE_CODE_SUBAGENT_MODEL: {
         label: '子 Agent 模型',
         purpose: '通过 Task 工具派生的子 Agent 使用的模型',
         tooltip: '子 Agent 用于并发研究、独立子任务。可以单独指定一个更便宜或更强的模型。',
-        placeholder: 'tingly/cc-subagent',
+        placeholder: 'subagent',
     },
     API_TIMEOUT_MS: {
         label: 'API 请求超时',
@@ -321,38 +323,38 @@ const FIELDS_TEXT_EN: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: 'Default model',
         purpose: 'Fallback model used when no specific slot applies',
-        tooltip: 'What Claude Code reaches for when no specialized routing matches. tb typically maps this to tingly/cc or tingly/cc-default.',
-        placeholder: 'tingly/cc',
+        tooltip: 'What Claude Code reaches for when no specialized routing matches. tb typically maps this to cc.',
+        placeholder: 'cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
         label: 'Haiku slot',
         purpose: 'Lightweight tasks like commit messages and summaries',
-        tooltip: 'Claude Code routes cheap auxiliary calls to the haiku slot. tb points it at tingly/cc-haiku.',
-        placeholder: 'tingly/cc-haiku',
+        tooltip: 'Claude Code routes cheap auxiliary calls to the haiku slot. tb points it at haiku.',
+        placeholder: 'haiku',
     },
     ANTHROPIC_DEFAULT_SONNET_MODEL: {
         label: 'Sonnet slot',
         purpose: 'Workhorse slot — most chat and code generation lands here',
         tooltip: "Claude Code's default. Unless you pick another model explicitly, normal sessions use the sonnet slot.",
-        placeholder: 'tingly/cc-sonnet',
+        placeholder: 'sonnet',
     },
     ANTHROPIC_DEFAULT_OPUS_MODEL: {
         label: 'Opus slot',
         purpose: 'Heavier reasoning (plan mode, deep analysis)',
         tooltip: 'More expensive but stronger model. Claude Code uses it when opus is explicitly requested.',
-        placeholder: 'tingly/cc-opus',
+        placeholder: 'opus',
     },
     ANTHROPIC_DEFAULT_FABLE_MODEL: {
         label: 'Fable slot',
         purpose: 'Model used when the fable alias is selected',
-        tooltip: 'The model behind the fable alias in Claude Code. tb points it at tingly/cc-fable.',
-        placeholder: 'tingly/cc-fable',
+        tooltip: 'The model behind the fable alias in Claude Code. tb points it at fable.',
+        placeholder: 'fable',
     },
     CLAUDE_CODE_SUBAGENT_MODEL: {
         label: 'Sub-agent model',
         purpose: 'Model used by sub-agents spawned via the Task tool',
         tooltip: 'Sub-agents handle parallel research and independent subtasks. You can give them a cheaper or stronger model.',
-        placeholder: 'tingly/cc-subagent',
+        placeholder: 'subagent',
     },
     API_TIMEOUT_MS: {
         label: 'API request timeout',
@@ -485,38 +487,38 @@ const FIELDS_TEXT_RU: FieldTextMap = {
     ANTHROPIC_MODEL: {
         label: 'Модель по умолчанию',
         purpose: 'Запасная модель, когда ни один специальный слот не подходит',
-        tooltip: 'К ней Claude Code обращается, если специализированная маршрутизация не сработала. В tb это обычно tingly/cc или tingly/cc-default.',
-        placeholder: 'tingly/cc',
+        tooltip: 'К ней Claude Code обращается, если специализированная маршрутизация не сработала. В tb это обычно cc или tingly/cc-default.',
+        placeholder: 'cc',
     },
     ANTHROPIC_DEFAULT_HAIKU_MODEL: {
         label: 'Слот Haiku',
         purpose: 'Лёгкие задачи: сообщения коммитов, краткие сводки',
-        tooltip: 'Claude Code направляет дешёвые вспомогательные вызовы в слот haiku. tb указывает на tingly/cc-haiku.',
-        placeholder: 'tingly/cc-haiku',
+        tooltip: 'Claude Code направляет дешёвые вспомогательные вызовы в слот haiku. tb указывает на haiku.',
+        placeholder: 'haiku',
     },
     ANTHROPIC_DEFAULT_SONNET_MODEL: {
         label: 'Слот Sonnet',
         purpose: 'Основной слот — сюда идёт большая часть диалога и генерации кода',
         tooltip: 'Значение Claude Code по умолчанию. Если явно не выбрана другая модель, обычные сессии используют слот sonnet.',
-        placeholder: 'tingly/cc-sonnet',
+        placeholder: 'sonnet',
     },
     ANTHROPIC_DEFAULT_OPUS_MODEL: {
         label: 'Слот Opus',
         purpose: 'Сложные рассуждения (режим планирования, глубокий анализ)',
         tooltip: 'Более дорогая, но более сильная модель. Claude Code использует её, когда opus запрошен явно.',
-        placeholder: 'tingly/cc-opus',
+        placeholder: 'opus',
     },
     ANTHROPIC_DEFAULT_FABLE_MODEL: {
         label: 'Слот Fable',
         purpose: 'Модель, используемая при выборе псевдонима fable',
-        tooltip: 'Модель, стоящая за псевдонимом fable в Claude Code. tb указывает на tingly/cc-fable.',
-        placeholder: 'tingly/cc-fable',
+        tooltip: 'Модель, стоящая за псевдонимом fable в Claude Code. tb указывает на fable.',
+        placeholder: 'fable',
     },
     CLAUDE_CODE_SUBAGENT_MODEL: {
         label: 'Модель субагента',
         purpose: 'Модель для субагентов, запускаемых инструментом Task',
         tooltip: 'Субагенты ведут параллельные исследования и независимые подзадачи. Им можно назначить более дешёвую или более сильную модель.',
-        placeholder: 'tingly/cc-subagent',
+        placeholder: 'subagent',
     },
     API_TIMEOUT_MS: {
         label: 'Таймаут API-запроса',
@@ -653,39 +655,51 @@ interface DefaultModeOptionText {
     description: string;
 }
 
-export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['acceptEdits', 'default', 'manual', 'plan', 'auto', 'delegate', 'dontAsk', 'bypassPermissions'];
+export const CLAUDE_CODE_DEFAULT_MODE_OPTIONS: ClaudeCodeDefaultMode[] = ['auto', 'acceptEdits', 'default', 'manual', 'plan', 'delegate', 'dontAsk', 'bypassPermissions'];
 
 // Mirrors agent.DefaultClaudeCodeShowThinkingSummaries in internal/agent/prefs.go.
 export const CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES = true;
 
+// Mirrors agent.DefaultClaudeCodeCoAuthoredBy: tb leaves Claude's
+// Co-Authored-By credit out of commits unless the user turns it on.
+export const CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY = false;
+
+// The settings.json keys one Co-Authored-By choice writes, mirroring
+// applyCoAuthoredBy in internal/config/apply_config_claude.go: the legacy
+// includeCoAuthoredBy for older Claude Code, and attribution (empty = hidden)
+// for newer ones. On leaves attribution out so Claude Code's credit returns.
+export const coAuthoredBySettings = (include: boolean): Record<string, unknown> => include
+    ? { includeCoAuthoredBy: true }
+    : { includeCoAuthoredBy: false, attribution: { commit: '', pr: '' } };
+
 const DEFAULT_MODE_TEXT_ZH: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
-    acceptEdits: { label: '接受编辑（推荐）', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
+    acceptEdits: { label: '接受编辑', description: '自动接受文件编辑，其他高风险操作仍按 Claude Code 规则处理。' },
     default: { label: '默认', description: '使用 Claude Code 官方默认权限行为。' },
     manual: { label: '手动确认', description: '工具权限请求需要交互确认。' },
     plan: { label: '计划模式', description: '默认进入 plan mode，先规划再执行。' },
-    auto: { label: '自动规则', description: '由 Claude Code 的规则分类器允许、软拒绝或硬拒绝工具调用。' },
+    auto: { label: '自动（推荐）', description: '由 Claude Code 的规则分类器允许、软拒绝或硬拒绝工具调用。' },
     delegate: { label: '委托', description: '把权限决策委托给 Claude Code 支持的外部流程。' },
     dontAsk: { label: '不询问', description: '避免交互式询问；适合无人值守场景。' },
     bypassPermissions: { label: '绕过权限', description: '跳过权限检查；仅在完全可信环境中使用。' },
 };
 
 const DEFAULT_MODE_TEXT_EN: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
-    acceptEdits: { label: 'Accept edits (recommended)', description: 'Automatically accepts file edits while leaving riskier actions to Claude Code rules.' },
+    acceptEdits: { label: 'Accept edits', description: 'Automatically accepts file edits while leaving riskier actions to Claude Code rules.' },
     default: { label: 'Default', description: 'Use Claude Code\'s built-in default permission behavior.' },
     manual: { label: 'Manual approval', description: 'Require interactive approval for tool permission requests.' },
     plan: { label: 'Plan mode', description: 'Start in plan mode by default before implementation.' },
-    auto: { label: 'Auto rules', description: 'Use Claude Code\'s rule classifier to allow, soft-deny, or hard-deny tool calls.' },
+    auto: { label: 'Auto (recommended)', description: 'Use Claude Code\'s rule classifier to allow, soft-deny, or hard-deny tool calls.' },
     delegate: { label: 'Delegate', description: 'Delegate permission decisions to Claude Code\'s supported external flow.' },
     dontAsk: { label: 'Don\'t ask', description: 'Avoid interactive prompts; useful for unattended setups.' },
     bypassPermissions: { label: 'Bypass permissions', description: 'Skip permission checks; use only in fully trusted environments.' },
 };
 
 const DEFAULT_MODE_TEXT_RU: Record<ClaudeCodeDefaultMode, DefaultModeOptionText> = {
-    acceptEdits: { label: 'Принимать правки (рекомендуется)', description: 'Правки файлов принимаются автоматически, более рискованные действия остаются на усмотрение правил Claude Code.' },
+    acceptEdits: { label: 'Принимать правки', description: 'Правки файлов принимаются автоматически, более рискованные действия остаются на усмотрение правил Claude Code.' },
     default: { label: 'По умолчанию', description: 'Встроенное поведение прав доступа Claude Code.' },
     manual: { label: 'Ручное подтверждение', description: 'Каждый запрос прав на инструмент требует интерактивного подтверждения.' },
     plan: { label: 'Режим планирования', description: 'Начинать в режиме планирования, до реализации.' },
-    auto: { label: 'Автоправила', description: 'Классификатор правил Claude Code сам разрешает, мягко или жёстко отклоняет вызовы инструментов.' },
+    auto: { label: 'Авто (рекомендуется)', description: 'Классификатор правил Claude Code сам разрешает, мягко или жёстко отклоняет вызовы инструментов.' },
     delegate: { label: 'Делегирование', description: 'Передать решения о правах внешнему процессу, поддерживаемому Claude Code.' },
     dontAsk: { label: 'Не спрашивать', description: 'Избегать интерактивных запросов; удобно для работы без присмотра.' },
     bypassPermissions: { label: 'Обходить проверку прав', description: 'Пропускать проверки прав; только в полностью доверенном окружении.' },
@@ -700,15 +714,15 @@ export const CLAUDE_CODE_DEFAULT_MODE_TEXT: Record<AppLanguage, Record<ClaudeCod
 const DEFAULT_MODE_SECTION_TEXT: Record<AppLanguage, SectionText> = {
     zh: {
         title: '默认权限模式',
-        hint: '写入 settings.json 的 permissions.defaultMode（同时兼容旧版 Claude Code 读取的顶层 defaultMode）；tb 推荐 acceptEdits。',
+        hint: '写入 settings.json 的 permissions.defaultMode（同时兼容旧版 Claude Code 读取的顶层 defaultMode）；tb 推荐 auto。',
     },
     en: {
         title: 'Default permission mode',
-        hint: 'Writes permissions.defaultMode in settings.json (also mirrored to the legacy top-level defaultMode for older Claude Code installs); tb recommends acceptEdits.',
+        hint: 'Writes permissions.defaultMode in settings.json (also mirrored to the legacy top-level defaultMode for older Claude Code installs); tb recommends auto.',
     },
     ru: {
         title: 'Режим прав по умолчанию',
-        hint: 'Записывает permissions.defaultMode в settings.json (дублируется в устаревший defaultMode верхнего уровня для старых версий Claude Code); tb рекомендует acceptEdits.',
+        hint: 'Записывает permissions.defaultMode в settings.json (дублируется в устаревший defaultMode верхнего уровня для старых версий Claude Code); tb рекомендует auto.',
     },
 };
 
@@ -737,6 +751,27 @@ const SHOW_THINKING_SUMMARIES_TEXT: Record<AppLanguage, ToggleSettingText> = {
         hint: 'Записывает showThinkingSummaries на верхнем уровне settings.json; это не переменная окружения.',
         label: 'Показывать сводки',
         tooltip: 'Когда включено, Claude Code показывает сводку рассуждений модели перед ответом. Выключение лишь скрывает сводку — на то, рассуждает ли модель, это не влияет.',
+    },
+};
+
+const CO_AUTHORED_BY_TEXT: Record<AppLanguage, ToggleSettingText> = {
+    zh: {
+        title: '提交署名',
+        hint: '同时写入 settings.json 的 includeCoAuthoredBy（旧版 Claude Code）和 attribution（新版）；tb 默认关闭。',
+        label: '在提交和 PR 中署名 Claude',
+        tooltip: '开启后 Claude Code 会在 git 提交里加 Co-Authored-By: Claude，并在 PR 描述里注明由 Claude Code 生成。关闭时 includeCoAuthoredBy 写 false，attribution 的 commit 和 pr 写为空。',
+    },
+    en: {
+        title: 'Commit attribution',
+        hint: 'Writes both includeCoAuthoredBy (older Claude Code) and attribution (newer) in settings.json; tb keeps it off by default.',
+        label: 'Credit Claude',
+        tooltip: 'When on, Claude Code adds a Co-Authored-By: Claude trailer to git commits and a "Generated with Claude Code" line to PR descriptions. When off, includeCoAuthoredBy is false and attribution.commit / attribution.pr are empty.',
+    },
+    ru: {
+        title: 'Авторство в коммитах',
+        hint: 'Записывает в settings.json и includeCoAuthoredBy (старые версии Claude Code), и attribution (новые); в tb по умолчанию выключено.',
+        label: 'Указывать Claude',
+        tooltip: 'Когда включено, Claude Code добавляет к git-коммитам строку Co-Authored-By: Claude, а к описанию PR — пометку «Generated with Claude Code». Когда выключено, includeCoAuthoredBy = false, а attribution.commit и attribution.pr пустые.',
     },
 };
 
@@ -832,16 +867,19 @@ const useLang = (): AppLanguage => {
 
 interface DerivePrefsInput {
     rules: any[];
-    mode: 'unified' | 'separate' | 'smart';
+    /** Slots with a rule of their own (the rest follow the default rule). */
+    slots?: string[];
 }
 
-export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
-    const unifiedRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:cc');
-    const modelForVariant = (variant: string, fallback: string): string => {
-        if (mode === 'unified') return unifiedRule?.request_model || fallback;
-        const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
-        return rule?.request_model || fallback;
-    };
+export const derivePrefsFromRules = ({ rules, slots = [] }: DerivePrefsInput): ClaudeCodePrefs => {
+    const defaultRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:cc');
+    // The active rule of a split slot (mirrors the backend's
+    // ClaudeCodeSlotModels), undefined when the slot follows the default rule.
+    const splitRule = (variant: string) => (slots.includes(variant)
+        ? rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}` && r.active !== false && r.request_model)
+        : undefined);
+    const modelForVariant = (variant: string): string =>
+        splitRule(variant)?.request_model || defaultRule?.request_model || 'cc';
 
     // Get the 1M context window flag from a specific rule. Rules here come
     // straight from the API (snake_case flags); accept the camelCase shape
@@ -851,29 +889,11 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         return rule.flags?.context_1m || rule.flags?.context1m || false;
     };
 
-    // Get the 1M state for a specific variant (only used in separate mode)
-    const getContext1MStateForVariant = (variant: string): boolean => {
-        if (mode === 'unified') {
-            return getContext1MStateForRule(unifiedRule);
-        }
-        // In separate mode, check the specific rule for this variant
-        const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
-        return getContext1MStateForRule(rule);
-    };
+    const getContext1MStateForVariant = (variant: string): boolean =>
+        getContext1MStateForRule(splitRule(variant) ?? defaultRule);
 
-    const context1MEnabled = mode === 'unified'
-        ? getContext1MStateForRule(unifiedRule)
-        : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
-
-
-    const isUnified = mode !== 'separate';
-    const defaultModel = isUnified ? 'tingly/cc' : 'tingly/cc-default';
-
-    // The fable tier arrived after separate mode shipped, so its rule may be
-    // missing or switched off; the bare name is not routable, so the slot
-    // follows the default tier (mirrors the backend's GenerateCCEnv).
-    const fableRule = rules.find((r: any) => r?.uuid === 'builtin:claude_code:fable');
-    const fableVariant = isUnified || (fableRule && fableRule.active !== false) ? 'fable' : 'default';
+    // Any slot's rule, split ones included (mirrors the backend's GenerateCCEnv).
+    const context1MEnabled = ['default', 'haiku', 'sonnet', 'opus', 'fable', 'subagent'].some(getContext1MStateForVariant);
 
     // Apply 1M suffix to models if their corresponding rule has context1m enabled
     const apply1MSuffix = (model: string, variant: string): string => {
@@ -882,12 +902,12 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     };
 
     return {
-        ANTHROPIC_MODEL: apply1MSuffix(modelForVariant('default', defaultModel), 'default'),
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'), 'haiku'),
-        ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'), 'sonnet'),
-        ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'), 'opus'),
-        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant(fableVariant, isUnified ? defaultModel : fableVariant === 'fable' ? 'tingly/cc-fable' : 'tingly/cc-default'), fableVariant),
-        CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'), 'subagent'),
+        ANTHROPIC_MODEL: apply1MSuffix(modelForVariant('default'), 'default'),
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku'), 'haiku'),
+        ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet'), 'sonnet'),
+        ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus'), 'opus'),
+        ANTHROPIC_DEFAULT_FABLE_MODEL: apply1MSuffix(modelForVariant('fable'), 'fable'),
+        CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent'), 'subagent'),
 
         API_TIMEOUT_MS: '3000000',
         CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
@@ -1012,7 +1032,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                                     color: "text.disabled"
                                 }}>{field.unit}</Typography></InputAdornment>
                                     : undefined,
-                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.lg },
+                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.md },
                             }
                         }}
                     />
@@ -1062,7 +1082,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
     const toggleExpanded = () => setExpanded(!expanded);
 
     return (
-        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden' }}>
             <Box
                 onClick={hasAdvancedFields ? toggleExpanded : undefined}
                 sx={{
@@ -1076,7 +1096,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
                 }}
             >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
                     <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{meta.hint}</Typography>
                 </Box>
                 {hasAdvancedFields && (
@@ -1137,9 +1157,9 @@ const SettingsRowSection: React.FC<{
     settingsKey: string;
     control: React.ReactNode;
 }> = ({ title, hint, label, tooltip, settingsKey, control }) => (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden' }}>
         <Box sx={{ px: 1.5, py: 1.15, bgcolor: 'action.hover' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{title}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.35 }}>{title}</Typography>
             <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{hint}</Typography>
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS, alignItems: 'center', columnGap: 2, rowGap: 1, px: 1.5, py: 1.1, minHeight: 56, borderTop: '1px solid', borderColor: 'divider' }}>
@@ -1263,9 +1283,38 @@ const ShowThinkingSummariesSection: React.FC<{
     );
 };
 
+// One switch for two keys: the badge names both, and Apply writes both
+// (coAuthoredBySettings / applyCoAuthoredBy).
+const CoAuthoredBySection: React.FC<{
+    lang: AppLanguage;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+}> = ({ lang, checked, onChange }) => {
+    const text = CO_AUTHORED_BY_TEXT[lang];
+
+    return (
+        <SettingsRowSection
+            title={text.title}
+            hint={text.hint}
+            label={text.label}
+            tooltip={text.tooltip}
+            settingsKey="attribution + includeCoAuthoredBy"
+            control={
+                <Switch
+                    size="small"
+                    checked={checked}
+                    onChange={(_, c) => onChange(c)}
+                />
+            }
+        />
+    );
+};
+
 interface QuickConfigPanelWithBehaviorProps extends QuickConfigPanelProps {
     showThinkingSummaries: boolean;
     setShowThinkingSummaries: (show: boolean) => void;
+    coAuthoredBy: boolean;
+    setCoAuthoredBy: (include: boolean) => void;
 }
 
 const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelWithBehaviorProps> = ({
@@ -1275,17 +1324,28 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelWithBehaviorProps> = ({
     setDefaultMode,
     showThinkingSummaries,
     setShowThinkingSummaries,
+    coAuthoredBy,
+    setCoAuthoredBy,
 }) => {
     const lang = useLang();
+    // Model slots are derived from routing rules, so only the settings a user
+    // typed in by hand count as "customised".
+    const customizedCount = CLAUDE_CODE_FIELD_STRUCT.filter(f =>
+        f.kind !== 'model' && String((prefs as Record<string, unknown>)[f.envName] ?? '') !== '').length;
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <DefaultModeSection lang={lang} defaultMode={defaultMode} setDefaultMode={setDefaultMode} />
             <ShowThinkingSummariesSection lang={lang} checked={showThinkingSummaries} onChange={setShowThinkingSummaries} />
-            <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
-            <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />
-            <Section group="switches" lang={lang} prefs={prefs} setPrefs={setPrefs} />
-            <Section group="network" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+            <CoAuthoredBySection lang={lang} checked={coAuthoredBy} onChange={setCoAuthoredBy} />
+            <AdvancedSection customizedCount={customizedCount}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                    <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                    <Section group="switches" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                    <Section group="network" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+                </Box>
+            </AdvancedSection>
         </Box>
     );
 };

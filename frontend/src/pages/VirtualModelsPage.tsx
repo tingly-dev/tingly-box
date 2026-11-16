@@ -46,14 +46,17 @@ const VirtualModelsPage = () => {
     };
 
     return (
-        <PageLayout loading={loading}>
+        <PageLayout
+            loading={loading}
+            // A page header like its sibling Credentials, with the table in a card below.
+            title={t('layout.virtualModels', { defaultValue: 'Virtual Models' })}
+            subtitle={t('layout.virtualModelsTooltip', {
+                defaultValue:
+                    'Built-in synthetic model providers for onboarding, demos, and dry-runs.',
+            })}
+        >
             <UnifiedCard
-                title={t('layout.virtualModels', { defaultValue: 'Virtual Models' })}
-                titleHeadingLevel={1}
-                subtitle={t('layout.virtualModelsTooltip', {
-                    defaultValue:
-                        'Built-in synthetic model providers for onboarding, demos, and dry-runs.',
-                })}
+                title={`${t('layout.virtualModels', { defaultValue: 'Virtual Models' })} (${vmodelProviders.length})`}
                 size="full"
             >
                 {vmodelProviders.length > 0 ? (

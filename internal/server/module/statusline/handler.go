@@ -42,9 +42,11 @@ var statusLineQuotaBlacklist = map[quota.ProviderType]bool{
 }
 
 // quotaForStatusLine returns the usage to show, or nil if the upstream is
-// blacklisted. Only the status line filters; Desk still shows relayed quota.
+// blacklisted. Only the status line filters; a folder session's line still shows relayed quota.
 func quotaForStatusLine(usage *quota.ProviderUsage) *quota.ProviderUsage {
-	if usage == nil || statusLineQuotaBlacklist[usage.ProviderType] {
+	// A usage carrying LastError is the last good reading kept past a failed
+	// refresh; the status line has no way to say it is stale, so it shows none.
+	if usage == nil || usage.LastError != "" || statusLineQuotaBlacklist[usage.ProviderType] {
 		return nil
 	}
 	return usage
@@ -478,7 +480,7 @@ type QuotaSegment struct {
 }
 
 // QuotaSegments lists a provider's windows that have something to show, in
-// the provider's order. The terminal status line and Desk both render from
+// the provider's order. The terminal status line and a folder session's line both render from
 // this, so the two never disagree.
 func QuotaSegments(usage *quota.ProviderUsage) []QuotaSegment {
 	if usage == nil {

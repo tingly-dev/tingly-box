@@ -9,7 +9,9 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // Experimental: image edit over the Responses hosted image_generation tool.
@@ -117,7 +119,11 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 		})
 	}
 
-	params := responses.ResponseNewParams{Model: req.Model}
+	// The ":fast" virtual suffix (priority service tier) is not supported for
+	// image generation, so strip it instead of letting applyCodexDefaultsToParams
+	// resolve it into ServiceTier=Priority.
+	params := responses.ResponseNewParams{Model: strings.TrimSuffix(req.Model, fastModelSuffix)}
+	applyCodexImageReasoning(&params, imagegen.ReasoningEffort(req))
 	params.Store = param.NewOpt(false)
 	params.Instructions = param.NewOpt(defaultInstructions)
 	params.ParallelToolCalls = param.NewOpt(false)
@@ -171,4 +177,16 @@ func buildImageEditResponsesRequest(req *openai.ImageEditParams) (responses.Resp
 	params.SetExtraFields(map[string]interface{}{"stream": true})
 
 	return params, nil
+}
+
+// Codex chooses a light reasoning default for image work. This is deliberately
+// local to the Responses adapter: native images/edits has no effort field and
+// ignores it, without switching endpoints just to satisfy an optional hint.
+func applyCodexImageReasoning(params *responses.ResponseNewParams, effort string) {
+	switch effort {
+	case "", "auto":
+		params.Reasoning.Effort = shared.ReasoningEffortLow
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
+		params.Reasoning.Effort = shared.ReasoningEffort(effort)
+	}
 }

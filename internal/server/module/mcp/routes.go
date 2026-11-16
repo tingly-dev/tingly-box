@@ -3,6 +3,7 @@ package mcp
 import (
 	"github.com/tingly-dev/tingly-box/internal/mcp/local"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -12,6 +13,19 @@ var _ module.Module = (*Handler)(nil)
 func (h *Handler) RegisterRoutes(rt *module.Routes) {
 	router := rt.V1
 	localHandler, transportHandler := h.GetLocalHandler(), h.GetTransportHandler()
+	router.POST("/mcp/sources", h.CreateSource, swagger.WithTags("mcp"), swagger.WithRequestModel(typ.MCPSourceConfig{}), swagger.WithResponseModel(MCPRuntimeConfigResponse{}))
+	router.PATCH("/mcp/sources/:source_id", h.PatchSource, swagger.WithTags("mcp"), swagger.WithRequestModel(typ.MCPSourceConfig{}), swagger.WithResponseModel(MCPRuntimeConfigResponse{}))
+	router.DELETE("/mcp/sources/:source_id", h.DeleteSource, swagger.WithTags("mcp"), swagger.WithResponseModel(MCPRuntimeConfigResponse{}))
+	router.POST("/mcp/sources/:source_id/check", h.CheckSource, swagger.WithTags("mcp"), swagger.WithResponseModel(MCPSourceStatusResponse{}))
+	router.POST("/mcp/sources/:source_id/reconnect", h.ReconnectSource, swagger.WithTags("mcp"), swagger.WithResponseModel(MCPSourceStatusResponse{}))
+	router.POST("/mcp/profiles/:profile_id/probe", h.ProbeClient, swagger.WithTags("mcp"), swagger.WithDescription("Check initialize, discovery and optional tool call through the actual local MCP gateway"), swagger.WithRequestModel(MCPClientProbeRequest{}), swagger.WithResponseModel(MCPClientProbeResponse{}))
+	router.GET("/mcp/routing", h.GetRouting, swagger.WithTags("mcp"), swagger.WithDescription("Effective ordinary-tool and server-tool routes, including discovery status"), swagger.WithResponseModel(MCPRoutingResponse{}))
+	router.GET("/mcp/catalog", h.GetCatalog, swagger.WithTags("mcp"), swagger.WithResponseModel(MCPCatalogResponse{}))
+	router.POST("/mcp/tools/call", h.CallTool, swagger.WithTags("mcp"), swagger.WithRequestModel(MCPToolCallRequest{}), swagger.WithResponseModel(MCPToolCallResponse{}))
+	router.GET("/mcp/profiles", h.ListProfiles, swagger.WithTags("mcp"), swagger.WithResponseModel(MCPProfilesResponse{}))
+	router.PUT("/mcp/profiles/:profile_id", h.SaveProfile, swagger.WithTags("mcp"), swagger.WithRequestModel(typ.MCPProfile{}), swagger.WithResponseModel(MCPRuntimeConfigResponse{}))
+	router.DELETE("/mcp/profiles/:profile_id", h.DeleteProfile, swagger.WithTags("mcp"), swagger.WithResponseModel(MCPRuntimeConfigResponse{}))
+
 	router.GET("/mcp/config", h.GetMCPRuntimeConfig,
 		swagger.WithDescription("Get global MCP runtime configuration"),
 		swagger.WithTags("mcp"),
@@ -90,6 +104,8 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 			swagger.WithDescription("MCP HTTP transport endpoint (GET compatibility)"),
 			swagger.WithTags("mcp-transport"),
 		)
+
+		router.DELETE("/mcp/:client_name", transportHandler.HandleMCP, swagger.WithTags("mcp-transport"))
 
 		router.GET("/mcp/:client_name/stream", transportHandler.HandleMCPStream,
 			swagger.WithDescription("MCP SSE transport endpoint"),

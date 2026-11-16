@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -75,6 +76,7 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		// can read it via CtxKeyRequestID — e.g. the access log
 		// fields below and stage_smart_routing's emitTrace.
 		c.Set(constant.CtxKeyRequestID, requestID)
+		c.Header("X-Request-Id", requestID)
 
 		// Also carry the id on the Go request context so code that only has
 		// context.Context (protocol converters, upstream client calls) can log
@@ -133,6 +135,14 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		// Add error message field if error occurred
 		if errorMsg != "" {
 			fields["error"] = errorMsg
+			errors := make([]map[string]interface{}, 0, len(c.Errors))
+			for _, err := range c.Errors {
+				errors = append(errors, map[string]interface{}{"message": err.Error(), "type": uint64(err.Type)})
+			}
+			fields["errors"] = errors
+			if recovered := c.GetInt(constant.CtxKeyRecoveredErrorCount); recovered > 0 {
+				fields["recovered_errors"] = recovered
+			}
 			if errorType != "" {
 				fields["error_type"] = errorType
 			}
@@ -146,6 +156,9 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 			fields["routed_model"] = am
 		}
 		if sc := c.GetString(constant.CtxKeyScenario); sc != "" {
+			fields["scenario"] = sc
+		} else if sc := c.Param("scenario"); sc != "" && strings.HasPrefix(c.Request.URL.Path, "/tingly/") {
+			// Auth/validation failures can finish before tracking is set.
 			fields["scenario"] = sc
 		}
 		if pv, exists := c.Get(constant.CtxKeyProvider); exists {
@@ -168,7 +181,16 @@ func (m *MemoryLog) Middleware() gin.HandlerFunc {
 		}
 
 		// Log with structured fields including error details
-		m.logger.WithFields(fields).Log(obs2.LevelForStatus(statusCode), fmt.Sprintf("%s %s %d %v %s %d",
+		level := obs2.LevelForStatus(statusCode)
+		if errorMsg != "" && statusCode < 400 {
+			// Streaming can fail after HTTP 200 has already been committed.
+			if len(c.Errors) > c.GetInt(constant.CtxKeyRecoveredErrorCount) {
+				level = logrus.ErrorLevel
+			} else {
+				level = logrus.WarnLevel
+			}
+		}
+		m.logger.WithFields(fields).Log(level, fmt.Sprintf("%s %s %d %v %s %d",
 			method,
 			path,
 			statusCode,
@@ -234,4 +256,16 @@ func (m *MemoryLog) Size() int {
 		return 0
 	}
 	return memorySink.Size()
+}
+
+// Capacity reports the real HTTP log ring capacity for the statistics API.
+func (m *MemoryLog) Capacity() int {
+	if m.multiLogger == nil {
+		return 0
+	}
+	sink := m.multiLogger.GetMemorySink(obs2.LogSourceHTTP)
+	if sink == nil {
+		return 0
+	}
+	return sink.Capacity()
 }

@@ -34,10 +34,10 @@ export type CapabilityName = 'notify' | 'remote_control';
 export type AccessEffect = 'allow' | 'deny';
 export interface BotCapability { bot_uuid: string; capability: CapabilityName; enabled: boolean; config?: Record<string, unknown>; }
 export interface AccessPermission { capability: CapabilityName; action: string; effect: AccessEffect; }
-export interface DirectChat { id: string; bot_uuid: string; platform: string; external_chat_id: string; peer_actor_id?: string; blocked: boolean; paired_at?: string; }
+export interface DirectChat { id: string; bot_uuid: string; platform: string; external_chat_id: string; alias?: string; name?: string; peer_actor_id?: string; blocked: boolean; paired_at?: string; }
 export interface DirectChatDetail { chat: DirectChat; permissions: AccessPermission[]; }
 export interface GroupActor { actor: {id:string; external_actor_id:string; display_name?:string}; label?:string; permissions:AccessPermission[]; }
-export interface BotGroup { id:string; bot_uuid:string; platform:string; external_group_id:string; name?:string; blocked:boolean; }
+export interface BotGroup { id:string; bot_uuid:string; platform:string; external_group_id:string; alias?:string; name?:string; blocked:boolean; }
 export interface BotGroupDetail { group:BotGroup; capabilities:Partial<Record<CapabilityName,AccessEffect>>; actors:GroupActor[]; }
 export interface AuthorizationDecision { allowed:boolean; reason:string; failed_gate?:string; facts:Record<string,unknown>; }
 
@@ -48,6 +48,8 @@ export interface NotifyTarget {
     id: string;
     kind: 'direct_chat' | 'group';
     external_id: string;
+    /** Operator-set label; wins over the platform-provided name. */
+    alias?: string;
     name?: string;
     platform?: string;
     is_paired?: boolean;
@@ -142,7 +144,7 @@ export function defaultAgentForCCProfile(profileId: string): string {
 }
 
 // REMOTE_AGENT_SCENARIO is the mount name for the remote-agent purpose
-// (control Claude Code / SmartGuide from chat). Mirrors the backend constant.
+// (use Claude Code from chat). Mirrors the backend constant.
 export const REMOTE_AGENT_SCENARIO = 'remote_agent';
 
 // PLATFORM_DEFAULT_REQUIRE_PAIRING lists the token-DM platforms that default to
@@ -192,15 +194,20 @@ export function chatCanControl(chat: DirectChatDetail): boolean {
         && remoteChatState(chat) === 'on';
 }
 
+// actorAllowed reports whether a Group member has an explicit allow row for a
+// remote_control action.
+export function actorAllowed(actor: GroupActor, action: string): boolean {
+    return actor.permissions.some((permission) =>
+        permission.capability === 'remote_control' && permission.action === action && permission.effect === 'allow');
+}
+
 // groupCanControl: someone in this Group can drive the bot right now — Remote
 // Control allowed on the group AND at least one actor granted both start and
 // approve. Remote allowed on a group with no such actor still lets nobody in.
 export function groupCanControl(detail: BotGroupDetail): boolean {
-    const allowed = (actor: GroupActor, action: string) => actor.permissions.some((permission) =>
-        permission.capability === 'remote_control' && permission.action === action && permission.effect === 'allow');
     return !detail.group.blocked
         && detail.capabilities.remote_control === 'allow'
-        && detail.actors.some((actor) => allowed(actor, 'remote_control.start') && allowed(actor, 'remote_control.approve'));
+        && detail.actors.some((actor) => actorAllowed(actor, 'remote_control.start') && actorAllowed(actor, 'remote_control.approve'));
 }
 
 // isRemoteAgentMounted reports whether the remote_agent purpose is mounted on a

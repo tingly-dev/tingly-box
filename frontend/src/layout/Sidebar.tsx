@@ -25,9 +25,11 @@ import { useTeamContext } from '@/contexts/TeamContext';
 import { teamPath } from '@/utils/team';
 import { useNotify } from '@/hooks/useNotify';
 import { useVersion } from '@/contexts/VersionContext';
-import { footerHeight, sidebarWidth } from './constants';
+import { displayVersion } from '@/utils/version';
+import { sidebarWidth } from './constants';
 import {
     NAV_ROW_SX,
+    navRowSelectedSx,
     navRowTextSlotProps,
     sidebarContainerSx,
     sidebarHeaderSx,
@@ -36,6 +38,7 @@ import {
 import type { NavItem } from './types';
 import { VersionDisplay } from '@/components/VersionDisplay';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 
 // Shared sizing for the sidebar's nav-style rows now lives in ./styles
@@ -44,6 +47,8 @@ import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 
 interface SidebarProps {
     sidebarItems: NavItem[];
+    /** A custom body in place of the rows (ActivityItem.sidebar). */
+    body?: (onNavigate: () => void) => React.ReactNode;
     activeActivityLabel: string;
     onClose: () => void;
     headerAction?: React.ReactNode;
@@ -54,7 +59,7 @@ interface SidebarProps {
     onTogglePinned?: (id: string) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLabel, onClose, headerAction, editing = false, onToggleHidden, onTogglePinned }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActivityLabel, onClose, headerAction, editing = false, onToggleHidden, onTogglePinned }) => {
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
@@ -65,7 +70,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
-    const [newProfileUnified, setNewProfileUnified] = useState(true);  // Default to unified
     const [isCreating, setIsCreating] = useState(false);
     const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
     const addProfileInputRef = useRef<HTMLInputElement>(null);
@@ -78,21 +82,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const handleAddProfileClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
         setAddProfileAnchorEl(e.currentTarget);
         setNewProfileName('');
-        setNewProfileUnified(true);  // Reset to unified when opening
         setTimeout(() => addProfileInputRef.current?.focus(), 100);
     }, []);
 
     const handleAddProfileClose = useCallback(() => {
         setAddProfileAnchorEl(null);
         setNewProfileName('');
-        setNewProfileUnified(true);  // Reset to unified when closing
     }, []);
 
     const handleCreateProfile = useCallback(async () => {
         if (!newProfileName.trim()) return;
         try {
             setIsCreating(true);
-            const result = await api.createProfile('claude_code', newProfileName.trim(), newProfileUnified);
+            const result = await api.createProfile('claude_code', newProfileName.trim());
             if (result.success) {
                 handleAddProfileClose();
                 refresh();
@@ -102,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
         } finally {
             setIsCreating(false);
         }
-    }, [newProfileName, newProfileUnified, refresh, handleAddProfileClose]);
+    }, [newProfileName, refresh, handleAddProfileClose]);
 
     const handleAddTeamClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
         setAddTeamAnchorEl(e.currentTarget);
@@ -144,6 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 {headerAction}
             </Box>
             {/* Nav Items */}
+            {body ? <Box sx={sidebarListScrollSx}>{body(onClose)}</Box> : (
             <List sx={sidebarListScrollSx}>
                 {sidebarItems.map((item, index) => {
                     if (item.type === 'divider') {
@@ -200,6 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                             ) : undefined}
                         >
                             <ListItemButton
+                                aria-current={active ? 'page' : undefined}
                                 {...(isAddAction
                                     ? { onClick: isAddProfile ? handleAddProfileClick : handleAddTeamClick }
                                     : { component: RouterLink, to: item.path, onClick: onClose }
@@ -208,23 +212,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                     ...NAV_ROW_SX,
                                     color: 'text.secondary',
                                     position: 'relative',
-                                    ...(active && {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                        '& img': { filter: 'none !important' },
-                                        '& .MuiListItemIcon-root > div': {
-                                            bgcolor: 'white',
-                                            borderRadius: 0.5,
-                                            p: 0.25,
-                                        },
-                                        '&:hover': { backgroundColor: 'primary.main' },
-                                        '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
-                                        '& .MuiListItemText-primary': { color: 'primary.contrastText' },
-                                    }),
-                                    '&:hover': {
-                                        backgroundColor: active ? 'primary.main' : 'action.hover',
-                                        color: active ? 'primary.contrastText' : 'text.primary',
-                                    },
+                                    '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
+                                    ...(active && navRowSelectedSx),
                                 }}
                             >
                                 {item.icon && (
@@ -247,7 +236,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                                 flexShrink: 0,
                                                 ml: 1,
                                                 fontVariantNumeric: 'tabular-nums',
-                                                color: active ? 'rgba(255,255,255,0.75)' : 'text.secondary',
+                                                color: active ? overlay.onDark.textSoft : 'text.secondary',
                                             }}
                                         >
                                             {item.count.value}
@@ -305,24 +294,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     );
                 })}
             </List>
-            {/* Footer: the running version and its update badge — app state,
-                one row. A dev build's long version ellipsizes, the badge stays.
-                The GitHub star link lives under the slogan below instead:
-                side by side it was pushed out, and stacked here it read as a
-                second status line. */}
-            <Box
-                sx={{
-                    py: 1.5, px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    height: footerHeight,
-                    minWidth: 0,
-                }}
-            >
-                <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
-            </Box>
+            )}
             {/* Add Profile Popover */}
             <Popover
                 open={Boolean(addProfileAnchorEl)}
@@ -343,32 +315,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
                     disabled={isCreating}
                 />
-                <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{t('layout.sidebar.mode')}</Typography>
-                        <Typography variant="caption" sx={{
-                            color: "text.secondary"
-                        }}>
-                            {newProfileUnified ? t('layout.sidebar.modeUnified') : t('layout.sidebar.modeSeparate')}
-                        </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} sx={{
-                        alignItems: "center"
-                    }}>
-                        <Typography variant="body2" sx={{
-                            color: "text.secondary"
-                        }}>{t('layout.sidebar.separate')}</Typography>
-                        <Switch
-                            size="small"
-                            checked={newProfileUnified}
-                            onChange={(e) => setNewProfileUnified(e.target.checked)}
-                            disabled={isCreating}
-                        />
-                        <Typography variant="body2" sx={{
-                            color: "text.secondary"
-                        }}>{t('layout.sidebar.unified')}</Typography>
-                    </Stack>
-                </Box>
                 <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                     <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>{t('common.cancel')}</Button>
                     <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>
@@ -406,24 +352,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     </Button>
                 </Box>
             </Popover>
-            {/* Footer bottom row: the slogan. Still footerHeight tall, so its
-                bottom lines up with the activity bar's footer. The GitHub star
-                lives in the activity bar, under Help. */}
-            <Box
-                sx={{
-                    height: footerHeight, py: 1, px: 2, borderTop: '1px solid', borderColor: 'divider',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-            >
-                <Typography
-                    variant="caption"
-                    component="div"
-                    sx={{ color: 'text.secondary', textAlign: 'center', fontStyle: 'italic' }}
-                >
-                    <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
-                        <Box component="span" sx={{ cursor: 'default' }}>{t('layout.slogan')}</Box>
-                    </Tooltip>
-                </Typography>
+            {/* App information stays at the bottom of the secondary navigation. */}
+            <Box sx={{ px: 2, pb: 2, pt: 1, flexShrink: 0, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5, minWidth: 0 }}>
+                    <VersionDisplay onClick={() => setUpdatePanelOpen(true)}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {displayVersion(currentVersion)}
+                        </Typography>
+                    </VersionDisplay>
+                </Box>
+                <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', textAlign: 'center', cursor: 'default' }}>
+                        {t('layout.slogan')}
+                    </Typography>
+                </Tooltip>
             </Box>
             {/* Update Panel Dialog */}
             <UpdatePanelDialog

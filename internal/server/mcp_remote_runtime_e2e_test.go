@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -82,20 +81,15 @@ func runMCPRemoteRuntimeE2E(t *testing.T, transport string) {
 	result, err := s.mcpRuntime.CallTool(ctx, normalizedName, `{"q":"hello"}`)
 	require.NoError(t, err)
 
-	var decoded struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(result.FirstText()), &decoded))
-	require.Len(t, decoded.Content, 1)
-	require.Equal(t, "text", decoded.Content[0].Type)
-	require.Equal(t, `{"ok":true,"q":"hello"}`, decoded.Content[0].Text)
+	require.Len(t, result.Contents, 1)
+	require.Equal(t, `{"ok":true,"q":"hello"}`, result.FirstText())
 
 	enabled := s.mcpRuntime.ListEnabledServerToolNames(ctx)
 	_, ok := enabled[normalizedName]
-	require.True(t, ok)
+	require.True(t, ok, "client tools remain known to the MCP declaration filter")
+	for _, injected := range s.mcpRuntime.ListServerToolsForInjection(ctx) {
+		require.NotEqual(t, normalizedName, injected.OfFunction.Function.Name, "client-only tools must not be injected into model calls")
+	}
 
 	s.mcpRuntime.Close()
 }

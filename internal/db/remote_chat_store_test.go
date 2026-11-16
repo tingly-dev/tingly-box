@@ -3,7 +3,7 @@ package db
 import (
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 func newChatStore(t *testing.T) *RemoteChatStore {
@@ -148,37 +148,6 @@ func TestUpdateChatMissingIsNoop(t *testing.T) {
 	}
 }
 
-// TestSetCurrentAgentCreatesChat covers the auto-create: handoff state must
-// persist on chats that were never bound or paired first.
-func TestSetCurrentAgentCreatesChat(t *testing.T) {
-	store := newChatStore(t)
-
-	if err := store.SetCurrentAgent("fresh-chat", "telegram", "claude"); err != nil {
-		t.Fatalf("set agent: %v", err)
-	}
-	got, err := store.GetCurrentAgent("fresh-chat")
-	if err != nil {
-		t.Fatalf("get agent: %v", err)
-	}
-	if got != "claude" {
-		t.Errorf("current agent = %q, want claude", got)
-	}
-}
-
-// TestGetCurrentAgentDefaults checks Smart Guide stays the entry point for an
-// unknown chat.
-func TestGetCurrentAgentDefaults(t *testing.T) {
-	store := newChatStore(t)
-
-	got, err := store.GetCurrentAgent("unknown")
-	if err != nil {
-		t.Fatalf("get agent: %v", err)
-	}
-	if got != DefaultChatAgent {
-		t.Errorf("current agent = %q, want %q", got, DefaultChatAgent)
-	}
-}
-
 // TestListChatsByOwnerFiltersUnbound checks the owner listing only surfaces
 // chats that actually have a project bound.
 func TestListChatsByOwnerFiltersUnbound(t *testing.T) {
@@ -253,6 +222,6 @@ func TestContextTokenRoundTrip(t *testing.T) {
 // ---------- project-history MRU ----------
 //
 // PushProjectHistory is now a method on *bot.Chat; its unit tests moved to
-// remote/control/bot/chat_test.go alongside the type. BindProject (below in
+// remote/bot/chat_test.go alongside the type. BindProject (below in
 // remote_chat_store.go) is the store-level caller exercised by the import
 // and binding tests above.

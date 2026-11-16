@@ -1,6 +1,7 @@
 import { Add } from '../icons';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { type ReactNode } from 'react';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface EmptyStateAction {
     label: ReactNode;
@@ -50,7 +51,7 @@ const EmptyState = ({
                         height: 56,
                         mx: 'auto',
                         mb: 2,
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                         bgcolor: 'action.hover',
                         color: 'primary.main',
                         display: 'flex',

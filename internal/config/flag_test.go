@@ -97,33 +97,33 @@ func TestProfileScenarioFlagWriteInheritsBaseConfig(t *testing.T) {
 	base := typ.ScenarioClaudeCode
 	profile := typ.RuleScenario("claude_code:p1")
 
-	// Base scenario is switched to separate mode.
-	if err := cfg.SetScenarioFlag(base, constant.FlagSeparate, true); err != nil {
-		t.Fatalf("SetScenarioFlag(base, separate) error: %v", err)
+	// Base scenario has skip_usage on.
+	if err := cfg.SetScenarioFlag(base, constant.FlagSkipUsage, true); err != nil {
+		t.Fatalf("SetScenarioFlag(base, skip_usage) error: %v", err)
 	}
 
 	// Sanity: before any profile-local write, the profile reads through to
 	// base via scenarioConfigLocked's fallback.
-	if v := cfg.GetScenarioFlag(profile, constant.FlagSeparate); !v {
-		t.Fatalf("expected profile to inherit base separate=true via fallback before any profile write, got false")
+	if v := cfg.GetScenarioFlag(profile, constant.FlagSkipUsage); !v {
+		t.Fatalf("expected profile to inherit base skip_usage=true via fallback before any profile write, got false")
 	}
 
-	// Writing an unrelated flag on the profile (e.g. toggling Skip Usage
+	// Writing an unrelated flag on the profile (e.g. toggling guardrails
 	// from the profile page's plugin panel) must not orphan the profile from
 	// the base scenario's already-set flags.
-	if err := cfg.SetScenarioFlag(profile, constant.FlagSkipUsage, true); err != nil {
-		t.Fatalf("SetScenarioFlag(profile, skip_usage) error: %v", err)
+	if err := cfg.SetScenarioFlag(profile, constant.ExtensionGuardrails, true); err != nil {
+		t.Fatalf("SetScenarioFlag(profile, guardrails) error: %v", err)
 	}
 
-	if v := cfg.GetScenarioFlag(profile, constant.FlagSeparate); !v {
-		t.Errorf("profile lost inherited separate=true after an unrelated profile-local flag write")
-	}
 	if v := cfg.GetScenarioFlag(profile, constant.FlagSkipUsage); !v {
-		t.Errorf("profile-local skip_usage write did not persist")
+		t.Errorf("profile lost inherited skip_usage=true after an unrelated profile-local flag write")
+	}
+	if v := cfg.GetScenarioFlag(profile, constant.ExtensionGuardrails); !v {
+		t.Errorf("profile-local guardrails write did not persist")
 	}
 	// Base scenario itself must be unaffected by the profile write.
-	if v := cfg.GetScenarioFlag(base, constant.FlagSkipUsage); v {
-		t.Errorf("skip_usage leaked into the base scenario config")
+	if v := cfg.GetScenarioFlag(base, constant.ExtensionGuardrails); v {
+		t.Errorf("guardrails leaked into the base scenario config")
 	}
 
 	// Same guarantee for the string-flag setter (e.g. thinking_effort set on
@@ -201,6 +201,31 @@ func TestSetScenarioFlag_UnknownFlagRejected(t *testing.T) {
 
 	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, "totally_made_up_flag", true); err == nil {
 		t.Fatalf("expected an error for an unregistered flag name, got nil")
+	}
+}
+
+func TestRetiredRecordingFlagPreservesLegacyConfig(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetScenarioExtensions(typ.ScenarioGlobal, map[string]interface{}{
+		"skill_user":               true,
+		constant.ExtensionSkillIDE: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, "skill_user", false); err == nil {
+		t.Fatal("retired recording toggle should no longer be settable")
+	}
+	if err := cfg.SetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionSkillIDE, false); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GetScenarioFlag(typ.ScenarioGlobal, constant.ExtensionSkillIDE) {
+		t.Fatal("Skills toggle should still be writable")
+	}
+	if value := cfg.GetScenarioConfig(typ.ScenarioGlobal).Extensions["skill_user"]; value != true {
+		t.Fatalf("cleanup must retain legacy configuration data, got %v", value)
 	}
 }
 

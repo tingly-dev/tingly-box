@@ -16,10 +16,11 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 
+	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
-	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
@@ -36,7 +37,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	scenarioType := typ.RuleScenario(scenario)
 
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
 				Type:    "invalid_request_error",
@@ -46,7 +47,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	}
 
 	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportImageGen) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("scenario %s does not support image generation", scenario),
 				Type:    "invalid_request_error",
@@ -57,7 +58,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to read request body: " + err.Error(),
 				Type:    "invalid_request_error",
@@ -67,8 +68,8 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	}
 
 	var req openai.ImageGenerateParams
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+	if err := parseImageGenerationRequest(bodyBytes, &req); err != nil {
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
 				Type:    "invalid_request_error",
@@ -78,7 +79,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	}
 
 	if string(req.Model) == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
 				Type:    "invalid_request_error",
@@ -88,7 +89,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	}
 
 	if req.Prompt == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Prompt is required",
 				Type:    "invalid_request_error",
@@ -102,7 +103,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	rule, err := ph.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -113,7 +114,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	provider, selectedService, err := ph.selectServiceForImageGeneration(c, scenarioType, rule)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -160,6 +161,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	ph.persistImageGeneration(&req, resp)
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// The SDK has no reasoning_effort field on Images params. Decode this gateway
+// extension explicitly and carry it unchanged to the selected backend.
+func parseImageGenerationRequest(body []byte, req *openai.ImageGenerateParams) error {
+	if err := json.Unmarshal(body, req); err != nil {
+		return err
+	}
+	var extension struct {
+		ReasoningEffort string `json:"reasoning_effort"`
+	}
+	if err := json.Unmarshal(body, &extension); err != nil {
+		return err
+	}
+	imagegen.SetReasoningEffort(req, extension.ReasoningEffort)
+	return nil
 }
 
 // persistImageGeneration saves generated images and their prompts under the

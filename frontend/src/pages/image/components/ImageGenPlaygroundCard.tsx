@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
     Box,
     Button,
     CircularProgress,
@@ -15,6 +14,7 @@ import {
     Menu,
     MenuItem,
     Select,
+    Skeleton,
     Stack,
     TextField,
     Tooltip,
@@ -25,12 +25,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { CopyIconButton } from '@/components/CopyIconButton';
-import { AutoAwesome, Close, DeleteOutline, Description, Edit, OpenInFull, tablerMui } from '@/components/icons';
-import { IconTextPlus } from '@tabler/icons-react';
+import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, Palette, tablerMui } from '@/components/icons';
+import { IconTextPlus, IconWriting } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
-import { fontMono } from '@/theme/fonts';
 import { api } from '@/services/api';
 import { downloadImage, slugify } from '@/utils/download';
 import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
@@ -43,6 +41,8 @@ import { useImageGenRefs } from './useImageGenRefs';
 import { useImageGenRuns } from './useImageGenRuns';
 import { useImageGenLightbox } from './useImageGenLightbox';
 import { downloadStem, formatBytes, runImage } from './imageGenSession';
+import ImageModelPicker from './ImageModelPicker';
+import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
 import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
@@ -53,13 +53,22 @@ import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
 import { deriveLabel } from '../profiles/promptLabel';
 import { dropProfileSession } from './useImageGenRuns';
 import AssetPickerDialog from '../library/AssetPickerDialog';
+import { readClipboardImages } from './clipboardImages';
 import { useSnippets } from '../library/assetStore';
 import type { ImageAsset } from '../library/assetTypes';
 import type { ReferenceImage } from './ImageGenReferenceImages';
+import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const TextPlus = tablerMui(IconTextPlus);
+const Writing = tablerMui(IconWriting);
+const IMAGE_SIZE_PRESETS = [
+    '256x256', '512x512', '1024x1024', '1024x1792',
+    '1792x1024', '1024x1536', '1536x1024', 'auto',
+];
 import type {
     GenerationRun,
+    ImageReasoningEffort,
     ImportedImage,
     Quality,
     SelectedImage,
@@ -107,11 +116,14 @@ const withText = (prompts: ProfilePrompt[], id: string, text: string) => (
 
 // Pause after the last keystroke before the prompt is saved into the profile.
 const PROMPT_SAVE_DELAY_MS = 600;
+const PROFILE_INTRO_SEEN_KEY = 'tingly.imageProfile.introSeen';
 const HISTORY_STRIP_VISIBLE = 6;
 
 interface ImageGenPlaygroundCardProps {
     rules: Rule[];
     loadingRules: boolean;
+    // Reloads the imagegen rules after the model picker adds one.
+    onRulesReload: () => Promise<void>;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
     // Set on a profile's page: the panel starts from the profile, and edits
     // to its references and settings save back to it.
@@ -121,17 +133,14 @@ interface ImageGenPlaygroundCardProps {
 const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     rules,
     loadingRules,
+    onRulesReload,
     showNotification,
     profile,
 }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const models = useMemo(() => {
-        const names = rules
-            .filter((rule) => rule.active !== false && rule.request_model?.trim())
-            .map((rule) => rule.request_model.trim());
-        return Array.from(new Set(names));
-    }, [rules]);
+    // The picker's order, so the default is the first pair it shows.
+    const models = useMemo(() => imageModelOptions(rules).map((option) => option.requestModel), [rules]);
 
     const [selectedModel, setSelectedModel] = useState(profile?.model ?? '');
     const model = models.includes(selectedModel) ? selectedModel : (models[0] ?? '');
@@ -141,16 +150,29 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [activePromptId, setActivePromptId] = useState(profile?.activePromptId ?? '');
     // The prompt text lives in its own store (usePromptStore.ts): keeping it in
     // this card's state would re-render the whole card on every keystroke.
+    const location = useLocation();
+    // A prompt handed over by another page (Image to Prompt's "Use in
+    // Playground") fills the free-text field; a profile keeps its own.
+    const handedPrompt = profile ? undefined : (location.state as { prompt?: string } | null)?.prompt;
     const promptStore = usePromptStore(
-        profile?.prompts.find((item) => item.id === profile.activePromptId)?.text ?? '',
+        profile?.prompts.find((item) => item.id === profile.activePromptId)?.text ?? handedPrompt ?? '',
     );
     const { set: setPrompt, get: getPrompt } = promptStore;
+    // Taken once: a reload should not put it back over what was typed since.
+    useEffect(() => {
+        if (handedPrompt !== undefined) navigate(location.pathname, { replace: true, state: null });
+    }, [handedPrompt, location.pathname, navigate]);
     const hasPrompt = usePromptFilled(promptStore);
     // The prompt in a dialog-sized editor: the panel's field is one column of a
     // fixed-height panel, which is the wrong place to read or rework a long one.
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
-    const [size, setSize] = useState(profile?.size ?? '1024x1024');
+    const [size, setSize] = useState(profile?.size ?? 'auto');
+    const [customSizeOpen, setCustomSizeOpen] = useState(false);
+    const [customWidth, setCustomWidth] = useState('');
+    const [customHeight, setCustomHeight] = useState('');
+    const [customSizeError, setCustomSizeError] = useState(false);
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
+    const [reasoningEffort, setReasoningEffort] = useState<ImageReasoningEffort>(profile?.reasoningEffort ?? 'auto');
     const [count, setCount] = useState(profile?.count ?? 1);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -169,6 +191,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         pendingCount,
         historyTrackRef,
         clearSession,
+        copyRunToProfile,
         runGeneration,
         handleCancelRun,
         handleRetry,
@@ -283,23 +306,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
             'info',
         );
-        try {
-            const items = await navigator.clipboard.read();
-            const files: File[] = [];
-            for (const item of items) {
-                const type = item.types.find((candidate) => candidate.startsWith('image/'));
-                if (!type) continue;
-                const blob = await item.getType(type);
-                files.push(new File([blob], `pasted-${Date.now()}.${type.split('/')[1] ?? 'png'}`, { type }));
-            }
-            if (files.length === 0) {
-                nothingPasted();
-                return;
-            }
-            await handleImportImages(files);
-        } catch {
+        const files = await readClipboardImages();
+        if (files.length === 0) {
             nothingPasted();
+            return;
         }
+        await handleImportImages(files);
     }, [handleImportImages, showNotification, t]);
 
     // A text file — .txt, .md, a JSON or YAML template — is a prompt kept
@@ -359,23 +371,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
             'info',
         );
-        try {
-            const items = await navigator.clipboard.read();
-            const files: File[] = [];
-            for (const item of items) {
-                const type = item.types.find((candidate) => candidate.startsWith('image/'));
-                if (!type) continue;
-                const blob = await item.getType(type);
-                files.push(new File([blob], `pasted-${Date.now()}.${type.split('/')[1] ?? 'png'}`, { type }));
-            }
-            if (files.length === 0) {
-                nothingPasted();
-                return;
-            }
-            await handleAddReferenceImages(files);
-        } catch {
+        const files = await readClipboardImages();
+        if (files.length === 0) {
             nothingPasted();
+            return;
         }
+        await handleAddReferenceImages(files);
     }, [handleAddReferenceImages, showNotification, t]);
 
     const handleOpenReference = useCallback((index: number) => {
@@ -404,10 +405,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            reasoningEffort,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, getPrompt, model, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, getPrompt, model, quality, reasoningEffort, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -429,6 +431,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
+            setReasoningEffort(run.reasoningEffort ?? 'auto');
             setCount(run.count ?? 1);
             setReferenceImages(sources.slice(0, MAX_EDIT_REFERENCE_IMAGES));
             controlsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -438,7 +441,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             if (run.model && !models.includes(run.model)) {
                 showNotification(
                     t('playground.reuse.modelMissing', {
-                        defaultValue: '{{model}} has no rule any more — pick a model before generating',
+                        defaultValue: '{{model}} is no longer available — pick a model before generating',
                         model: run.model,
                     }),
                     'warning',
@@ -573,9 +576,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model: selectedModel,
             size,
             quality,
+            reasoningEffort,
             count,
         });
-    }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
+    }, [activePromptId, count, profileId, profilePrompts, quality, reasoningEffort, referenceImages, selectedModel, size]);
 
     // Stable identities (they read through `latest`), so the memoised tab row
     // is not re-rendered by every keystroke in the prompt field.
@@ -612,7 +616,15 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         rename: (id: string, name: string) => setProfilePrompts((current) => current.map((item) => (item.id === id ? { ...item, name } : item))),
     }), [loadPrompt, syncedPrompts]);
 
-    const location = useLocation();
+    // A profile says once what it is, the first time someone lands on one.
+    const [profileIntroSeen, setProfileIntroSeen] = useState(() => {
+        try { return localStorage.getItem(PROFILE_INTRO_SEEN_KEY) === '1'; } catch { return false; }
+    });
+    const showProfileIntro = Boolean(profile) && !profileIntroSeen;
+    const dismissProfileIntro = () => {
+        setProfileIntroSeen(true);
+        try { localStorage.setItem(PROFILE_INTRO_SEEN_KEY, '1'); } catch { /* still hidden for this visit */ }
+    };
     const [renaming, setRenaming] = useState(Boolean((location.state as { rename?: boolean } | null)?.rename));
     const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
     const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
@@ -633,12 +645,39 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             refs: referenceImages,
             prompts: [{ id: 'p1', name: '', text: getPrompt().trim() }],
             activePromptId: 'p1',
-            model: selectedModel,
+            // What the panel is actually using: with nothing picked by hand
+            // `selectedModel` is empty and the profile would start without one.
+            model,
             size,
             quality,
+            reasoningEffort,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+    };
+
+    // The other way: keep a run that worked. Its request becomes the profile
+    // (references, prompt, model, settings — what "Edit this request" puts
+    // back), and the run itself goes along so the new page opens on it.
+    const handleSaveRunAsProfile = async (run: GenerationRun) => {
+        try {
+            const sources = await runSourcesToReferences(run);
+            const created = createImageProfile({
+                name: deriveLabel(run.prompt, 12) || t('imageProfile.untitled', { defaultValue: 'Untitled profile' }),
+                refs: sources.slice(0, MAX_EDIT_REFERENCE_IMAGES),
+                prompts: [{ id: 'p1', name: '', text: run.prompt.trim() }],
+                activePromptId: 'p1',
+                model: run.model,
+                size: run.size,
+                quality: run.quality,
+                reasoningEffort: run.reasoningEffort ?? 'auto',
+                count: run.count ?? 1,
+            });
+            copyRunToProfile(run, created.id);
+            navigate(`/image/profile/${created.id}`, { state: { rename: true } });
+        } catch {
+            showNotification(t('imageProfile.saveRunFailed', { defaultValue: 'Could not save this request as a profile' }), 'error');
+        }
     };
 
     // Library: picking kept images as references, and inserting snippets.
@@ -647,11 +686,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         setLibraryPickerOpen(false);
         const refs = await Promise.all(assets.map(async (asset): Promise<ReferenceImage> => {
             const blob = await fetchBlob(asset.src);
+            const file = new File([blob], asset.name, { type: blob.type || 'image/png' });
             return {
-                file: new File([blob], asset.name, { type: blob.type || 'image/png' }),
-                // The asset's own src, so the row (and a profile) points at the
-                // library image rather than a copy of it.
-                previewUrl: asset.src,
+                file,
+                previewUrl: URL.createObjectURL(file),
                 source: 'upload',
                 width: asset.width,
                 height: asset.height,
@@ -708,7 +746,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             }}
                             onFocus={(event) => event.target.select()}
                             slotProps={{ htmlInput: { 'aria-label': t('imageProfile.name', { defaultValue: 'Profile name' }) } }}
-                            sx={{ width: 320, '& input': { fontSize: '1.25rem', fontWeight: 600, py: 0.5 } }}
+                            sx={{ width: 320, '& input': { fontSize: fontSizes.heading, fontWeight: 600, py: 0.5 } }}
                         />
                     ) : (
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -721,36 +759,49 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </Stack>
                     )
                 ) : t('playground.imageTitle', { defaultValue: 'Image Playground' })}
-                rightAction={profile ? (
-                    <Tooltip title={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                        <IconButton onClick={() => setConfirmDeleteProfile(true)} aria-label={t('imageProfile.delete', { defaultValue: 'Delete profile' })}>
-                            <DeleteOutline />
-                        </IconButton>
-                    </Tooltip>
-                ) : (
-                    <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
-                        <span>
-                            <Button variant="outlined" size="small" onClick={handleSaveAsProfile} disabled={!canSaveAsProfile}>
-                                {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                rightAction={(
+                    // Same shape as the Agent pages' header: small outlined
+                    // buttons with an icon and a word, never a bare icon.
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                        {/* The way to the same models from code; the Image API
+                            page sits last in the sidebar since only someone
+                            wiring up a client needs it. */}
+                        <Tooltip title={t('playground.useFromAppHint', { defaultValue: 'Call these models from your own app through the Image API' })}>
+                            <Button variant="outlined" size="small" startIcon={<Cable />} onClick={() => navigate('/image/api')}>
+                                {t('playground.useFromApp', { defaultValue: 'Use from your app' })}
                             </Button>
-                        </span>
-                    </Tooltip>
+                        </Tooltip>
+                        {profile ? (
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                startIcon={<DeleteOutline />}
+                                onClick={() => setConfirmDeleteProfile(true)}
+                            >
+                                {t('imageProfile.delete', { defaultValue: 'Delete profile' })}
+                            </Button>
+                        ) : canSaveAsProfile && (
+                            // Only once there is something to keep: a grey
+                            // button that can't say why it is grey is noise.
+                            <Tooltip title={t('imageProfile.saveAsHint', { defaultValue: 'Keep these references, prompt and settings as a profile with its own page' })}>
+                                <Button variant="outlined" size="small" startIcon={<Palette />} onClick={handleSaveAsProfile}>
+                                    {t('imageProfile.saveAs', { defaultValue: 'Save as profile' })}
+                                </Button>
+                            </Tooltip>
+                        )}
+                    </Stack>
                 )}
-                subtitle={outputDir ? (
-                    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                // The output folder sits under the results it is about
+                // (ImageGenResultsPanel), not in the page's headline.
+                subtitle={showProfileIntro ? (
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', color: 'text.primary' }}>
                         <Box component="span">
-                            {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
+                            {t('imageProfile.intro', { defaultValue: 'A profile keeps its references, prompts and settings. Changes save as you go.' })}
                         </Box>
-                        <Box component="span" sx={{ fontFamily: fontMono, wordBreak: 'break-all' }}>
-                            {outputDir}
-                        </Box>
-                        <CopyIconButton
-                            value={outputDir}
-                            label={t('common.copy', { defaultValue: 'Copy' })}
-                            copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
-                            iconSize={14}
-                            sx={{ p: 0.25 }}
-                        />
+                        <Button size="small" onClick={dismissProfileIntro} sx={{ minWidth: 0, py: 0 }}>
+                            {t('imageProfile.introDismiss', { defaultValue: 'Got it' })}
+                        </Button>
                     </Stack>
                 ) : undefined}
             >
@@ -779,22 +830,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             height: { xs: 'auto', lg: desktopPanelHeight },
                         }}
                     >
-                        {noModels && !loadingRules && (
-                            <Alert
-                                severity="info"
-                                variant="outlined"
-                                action={(
-                                    <Button color="inherit" size="small" onClick={() => navigate('/image/api')}>
-                                        {t('playground.addImageModel', { defaultValue: 'Add a model' })}
-                                    </Button>
-                                )}
-                            >
-                                {t('playground.noImageModels', {
-                                    defaultValue: 'Add an image model rule on the Image API page to start generating images.',
-                                })}
-                            </Alert>
-                        )}
-
                         {/* Reference images are optional input, not a mode. Empty, the
                             row is a one-line invitation; with images it grows into a
                             thumbnail strip. Either way the request below adapts. */}
@@ -819,22 +854,19 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             onDragLeave={(index) => setDragOverReference((current) => (current === index ? null : current))}
                         />
 
-                        <FormControl size="small" fullWidth>
-                            <InputLabel id="image-model-label">
-                                {t('playground.model', { defaultValue: 'Model' })}
-                            </InputLabel>
-                            <Select
-                                labelId="image-model-label"
-                                label={t('playground.model', { defaultValue: 'Model' })}
+                        {/* While the rules load the picker would flash "Choose a
+                            model to start"; hold its place instead. */}
+                        {loadingRules ? (
+                            <Skeleton variant="rounded" height={40} />
+                        ) : (
+                            <ImageModelPicker
+                                rules={rules}
                                 value={model}
-                                onChange={(event) => setSelectedModel(event.target.value)}
-                                disabled={noModels}
-                            >
-                                {models.map((modelName) => (
-                                    <MenuItem key={modelName} value={modelName}>{modelName}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                onChange={setSelectedModel}
+                                onRulesReload={onRulesReload}
+                                showNotification={showNotification}
+                            />
+                        )}
 
                         {/* The field takes whatever height the column has left and
                             scrolls inside its own outline — a fixed row count in a
@@ -877,6 +909,23 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             sx={PROMPT_FIELD_SX}
                             actions={(
                                 <>
+                                    {/* Idea to Prompt hands its result back to the
+                                        Playground, not to a profile tab, so the
+                                        way there is offered outside profiles only. */}
+                                    {!profile && (
+                                        <Tooltip title={t('ideaPrompt.fromPlayground', { defaultValue: 'Write a full prompt from this' })}>
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    disabled={!hasPrompt}
+                                                    onClick={() => navigate('/image/idea-to-prompt', { state: { description: getPrompt() } satisfies IdeaHandoff })}
+                                                    aria-label={t('ideaPrompt.fromPlayground', { defaultValue: 'Write a full prompt from this' })}
+                                                >
+                                                    <Writing sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
+                                    )}
                                     <Tooltip title={t('imageLibrary.insertSnippet', { defaultValue: 'Insert a snippet' })}>
                                         <IconButton
                                             size="small"
@@ -914,7 +963,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 display: 'grid',
                                 gridTemplateColumns: {
                                     xs: 'repeat(2, minmax(0, 1fr))',
-                                    sm: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                    sm: 'repeat(3, minmax(0, 1fr)) 72px',
                                 },
                                 gap: 1.5,
                             }}
@@ -927,13 +976,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     labelId="image-size-label"
                                     label={t('playground.size', { defaultValue: 'Size' })}
                                     value={size}
-                                    onChange={(event) => setSize(event.target.value)}
+                                    onChange={(event) => {
+                                        if (event.target.value === '__custom__') {
+                                            const [width = '', height = ''] = size === 'auto' ? [] : size.split('x');
+                                            setCustomWidth(width);
+                                            setCustomHeight(height);
+                                            setCustomSizeError(false);
+                                            setCustomSizeOpen(true);
+                                        } else {
+                                            setSize(event.target.value);
+                                        }
+                                    }}
                                 >
-                                    <MenuItem value="256x256">256x256</MenuItem>
-                                    <MenuItem value="512x512">512x512</MenuItem>
-                                    <MenuItem value="1024x1024">1024x1024</MenuItem>
-                                    <MenuItem value="1024x1792">1024x1792</MenuItem>
-                                    <MenuItem value="1792x1024">1792x1024</MenuItem>
+                                    {IMAGE_SIZE_PRESETS.map((preset) => (
+                                        <MenuItem key={preset} value={preset}>{preset}</MenuItem>
+                                    ))}
+                                    {!IMAGE_SIZE_PRESETS.includes(size) && (
+                                        <MenuItem value={size}>{size}</MenuItem>
+                                    )}
+                                    <MenuItem value="__custom__">
+                                        {t('playground.customSize', { defaultValue: 'Custom…' })}
+                                    </MenuItem>
                                 </Select>
                             </FormControl>
                             <FormControl size="small">
@@ -953,6 +1016,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <MenuItem value="standard">standard</MenuItem>
                                 </Select>
                             </FormControl>
+                            <FormControl size="small">
+                                <InputLabel id="image-reasoning-effort-label">
+                                    {t('playground.reasoningEffort', { defaultValue: 'Thinking effort' })}
+                                </InputLabel>
+                                <Select
+                                    labelId="image-reasoning-effort-label"
+                                    label={t('playground.reasoningEffort', { defaultValue: 'Thinking effort' })}
+                                    value={reasoningEffort}
+                                    onChange={(event) => setReasoningEffort(event.target.value as ImageReasoningEffort)}
+                                >
+                                    <MenuItem value="auto">auto</MenuItem>
+                                    <MenuItem value="low">low</MenuItem>
+                                    <MenuItem value="medium">medium</MenuItem>
+                                    <MenuItem value="high">high</MenuItem>
+                                </Select>
+                            </FormControl>
                             <TextField
                                 size="small"
                                 type="number"
@@ -963,7 +1042,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     setCount(Number.isFinite(nextCount) && nextCount > 0 ? Math.min(nextCount, 10) : 1);
                                 }}
                                 slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                                sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
                             />
                         </Box>
 
@@ -978,11 +1056,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             startIcon={pendingCount > 0
                                 ? <CircularProgress size={18} color="inherit" />
                                 : <AutoAwesome />}
-                            sx={{
-                                '&.Mui-disabled': {
-                                    color: 'common.white',
-                                },
-                            }}
                         >
                             {pendingCount > 0
                                 ? t('playground.generateAnother', { defaultValue: 'Generate another · {{count}} running', count: pendingCount })
@@ -1009,6 +1082,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         importedCount={imported.length}
                         olderTimelineCount={olderTimelineCount}
                         desktopPanelHeight={desktopPanelHeight}
+                        outputDir={outputDir}
                         historyTrackRef={historyTrackRef}
                         onDropFiles={handleDroppedFiles}
                         onImportFiles={(files) => { void handleImportImages(files); }}
@@ -1020,6 +1094,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         onCancelRun={handleCancelRun}
                         onRetryRun={(run) => { void handleRetry(run); }}
                         onReuseRun={(run) => { void handleReuseRun(run); }}
+                        onSaveRunAsProfile={profile ? undefined : (run) => { void handleSaveRunAsProfile(run); }}
                         onOpenRunSource={handleOpenRunSource}
                         onOpenOutput={setSelectedImage}
                         onRemoveRun={handleRemoveRun}
@@ -1141,6 +1216,51 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onClose={() => setSliceTarget(null)}
                 showNotification={showNotification}
             />
+            <Dialog open={customSizeOpen} onClose={() => setCustomSizeOpen(false)} maxWidth="xs" fullWidth>
+                <Box component="form" noValidate onSubmit={(event) => {
+                    event.preventDefault();
+                    if (![customWidth, customHeight].every((part) => /^\d+$/.test(part) && Number.isSafeInteger(Number(part)) && Number(part) > 0)) {
+                        setCustomSizeError(true);
+                        return;
+                    }
+                    setSize(`${Number(customWidth)}x${Number(customHeight)}`);
+                    setCustomSizeOpen(false);
+                }}>
+                    <DialogTitle>{t('playground.customSizeTitle', { defaultValue: 'Custom size' })}</DialogTitle>
+                    <DialogContent>
+                        <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                type="number"
+                                label={t('playground.customWidth', { defaultValue: 'Width (px)' })}
+                                value={customWidth}
+                                onChange={(event) => { setCustomWidth(event.target.value); setCustomSizeError(false); }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                                error={customSizeError}
+                            />
+                            <TextField
+                                fullWidth
+                                type="number"
+                                label={t('playground.customHeight', { defaultValue: 'Height (px)' })}
+                                value={customHeight}
+                                onChange={(event) => { setCustomHeight(event.target.value); setCustomSizeError(false); }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                                error={customSizeError}
+                            />
+                        </Stack>
+                        {customSizeError && (
+                            <Typography color="error" variant="caption" role="alert" sx={{ display: 'block', mt: 1 }}>
+                                {t('playground.customSizeError', { defaultValue: 'Enter a positive whole number for width and height.' })}
+                            </Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setCustomSizeOpen(false)}>{t('common.cancel', { defaultValue: 'Cancel' })}</Button>
+                        <Button type="submit" variant="contained">{t('common.confirm', { defaultValue: 'Confirm' })}</Button>
+                    </DialogActions>
+                </Box>
+            </Dialog>
             <Dialog
                 open={promptEditorOpen}
                 onClose={() => setPromptEditorOpen(false)}
@@ -1148,7 +1268,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 fullWidth
             >
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
-                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: fontSizes.title }}>
                         {t('playground.promptEditorTitle', { defaultValue: 'Prompt' })}
                     </Typography>
                     <PromptEditorCopyButton store={promptStore} label={copyPromptLabel} copiedLabel={promptCopiedLabel} />

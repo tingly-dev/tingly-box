@@ -10,16 +10,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 )
 
 // Compile-time proof that this store backs the remote bot runtime's chat
-// persistence. Mirrors the assertion in remote_session_store.go.
+// persistence.
 var _ bot.ChatStoreInterface = (*RemoteChatStore)(nil)
-
-// DefaultChatAgent is the agent a chat is driven by until something hands it
-// off — Smart Guide is the entry point.
-const DefaultChatAgent = "tingly-box"
 
 // Sentinels for the remote chat store.
 var (
@@ -86,10 +82,7 @@ func toChatRecord(c *bot.Chat) *RemoteChatRecord {
 		PairedAt:       c.PairedAt,
 		IsWhitelisted:  c.IsWhitelisted,
 		WhitelistedBy:  c.WhitelistedBy,
-		BashCwd:        c.BashCwd,
 		ContextToken:   c.ContextToken,
-		CurrentAgent:   c.CurrentAgent,
-		Verbose:        c.Verbose,
 		Disabled:       c.Disabled,
 		DisabledAt:     c.DisabledAt,
 		CreatedAt:      c.CreatedAt,
@@ -110,10 +103,7 @@ func fromChatRecord(r *RemoteChatRecord) *bot.Chat {
 		PairedAt:       r.PairedAt,
 		IsWhitelisted:  r.IsWhitelisted,
 		WhitelistedBy:  r.WhitelistedBy,
-		BashCwd:        r.BashCwd,
 		ContextToken:   r.ContextToken,
-		CurrentAgent:   r.CurrentAgent,
-		Verbose:        r.Verbose,
 		Disabled:       r.Disabled,
 		DisabledAt:     r.DisabledAt,
 		CreatedAt:      r.CreatedAt,
@@ -131,9 +121,6 @@ func normalizeChat(chat *bot.Chat) error {
 		chat.CreatedAt = now
 	}
 	chat.UpdatedAt = now
-	if chat.CurrentAgent == "" {
-		chat.CurrentAgent = DefaultChatAgent
-	}
 	return nil
 }
 
@@ -196,24 +183,6 @@ func (s *RemoteChatStore) UpsertChat(chat *bot.Chat) error {
 	}
 	if err := normalizeChat(chat); err != nil {
 		return err
-	}
-	return upsertChatRecord(s.db, chat)
-}
-
-// ImportChat stores a chat exactly as given, without restamping UpdatedAt.
-//
-// Migration needs this for the same reason sessions do: UpdatedAt orders
-// ListChats, so stamping it on import would make every migrated chat look
-// equally and freshly active in the bot's chat list.
-func (s *RemoteChatStore) ImportChat(chat *bot.Chat) error {
-	if !s.ready() {
-		return ErrStoreClosed
-	}
-	if chat == nil || chat.ChatID == "" {
-		return ErrChatIDRequired
-	}
-	if chat.CurrentAgent == "" {
-		chat.CurrentAgent = DefaultChatAgent
 	}
 	return upsertChatRecord(s.db, chat)
 }
@@ -361,6 +330,16 @@ func (s *RemoteChatStore) BindProject(chatID, platform, projectPath, ownerID str
 	})
 }
 
+// RememberFolder pushes a folder onto the chat's MRU history, creating the
+// chat if needed, and leaves ProjectPath as it was.
+func (s *RemoteChatStore) RememberFolder(chatID, platform, folder, ownerID string) error {
+	return s.mutate(chatID, platform, func(chat *bot.Chat) {
+		chat.Platform = platform
+		chat.OwnerID = ownerID
+		chat.RememberFolder(folder)
+	})
+}
+
 // ListChatProjectPaths returns the per-chat MRU list of project paths (newest
 // first), falling back to [ProjectPath] for chats with no history yet.
 func (s *RemoteChatStore) ListChatProjectPaths(chatID string) ([]string, error) {
@@ -466,51 +445,6 @@ func (s *RemoteChatStore) IsWhitelisted(chatID string) bool {
 		return false
 	}
 	return chat.IsWhitelisted
-}
-
-// ---------- bash cwd ----------
-
-// SetBashCwd sets the bash working directory for a chat.
-func (s *RemoteChatStore) SetBashCwd(chatID, cwd string) error {
-	return s.UpdateChat(chatID, func(chat *bot.Chat) {
-		chat.BashCwd = cwd
-	})
-}
-
-// GetBashCwd retrieves the bash working directory for a chat.
-func (s *RemoteChatStore) GetBashCwd(chatID string) (string, bool, error) {
-	chat, err := s.GetChat(chatID)
-	if err != nil {
-		return "", false, err
-	}
-	if chat == nil || chat.BashCwd == "" {
-		return "", false, nil
-	}
-	return chat.BashCwd, true, nil
-}
-
-// ---------- current agent ----------
-
-// SetCurrentAgent sets the chat's current agent, creating the chat row if it
-// doesn't exist yet — without the auto-create, handoff state was silently
-// dropped for any chat that hadn't been bound or paired first.
-func (s *RemoteChatStore) SetCurrentAgent(chatID, platform, agentType string) error {
-	return s.mutate(chatID, platform, func(chat *bot.Chat) {
-		chat.CurrentAgent = agentType
-	})
-}
-
-// GetCurrentAgent retrieves the chat's current agent, defaulting to Smart
-// Guide as the entry point.
-func (s *RemoteChatStore) GetCurrentAgent(chatID string) (string, error) {
-	chat, err := s.GetChat(chatID)
-	if err != nil {
-		return DefaultChatAgent, err
-	}
-	if chat == nil || chat.CurrentAgent == "" {
-		return DefaultChatAgent, nil
-	}
-	return chat.CurrentAgent, nil
 }
 
 // ---------- pairing (TOFU) ----------

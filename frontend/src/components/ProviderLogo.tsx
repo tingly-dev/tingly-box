@@ -11,13 +11,15 @@ import { useProvidersByUuid } from '@/hooks/useProvidersByUuid';
  * speaks — two separate questions. Unrecognised providers get ProviderIcon's
  * neutral placeholder so names stay aligned down a column.
  */
-export default function ProviderLogo({ provider, size = 18, sx }: {
+export default function ProviderLogo({ provider, size = 18, sx, mono }: {
     provider: IconSource | undefined;
     size?: number;
+    /** Black-and-white mark instead of the brand colours. */
+    mono?: boolean;
     sx?: SxProps<Theme>;
 }) {
     const iconId = useProviderIconId();
-    return <ProviderIcon identifier={iconId(provider) ?? ''} size={size} sx={sx} />;
+    return <ProviderIcon identifier={iconId(provider) ?? ''} size={size} sx={sx} mono={mono} />;
 }
 
 /**
@@ -38,19 +40,20 @@ export function ProviderLogoByUuid({ uuid, ...rest }: { uuid: string | undefined
  * provider. The name is the caller's child, so each surface keeps its own
  * typography, tooltip and truncation (give a truncating name `minWidth: 0`).
  */
-export function ProviderLabel({ provider, uuid, leading, size = 18, gap = 1, sx, children }: {
+export function ProviderLabel({ provider, uuid, leading, size = 18, mono, gap = 1, sx, children }: {
     provider?: IconSource;
     uuid?: string;
     leading?: ReactNode;
     size?: number;
+    mono?: boolean;
     /** Space between logo and name, in theme spacing units. */
     gap?: number;
     sx?: SxProps<Theme>;
     children: ReactNode;
 }) {
     const logo = leading ?? (provider
-        ? <ProviderLogo provider={provider} size={size} />
-        : <ProviderLogoByUuid uuid={uuid} size={size} />);
+        ? <ProviderLogo provider={provider} size={size} mono={mono} />
+        : <ProviderLogoByUuid uuid={uuid} size={size} mono={mono} />);
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap, minWidth: 0, ...sx }}>
             {logo}

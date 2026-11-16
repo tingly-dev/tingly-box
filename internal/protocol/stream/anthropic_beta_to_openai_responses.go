@@ -27,7 +27,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		}
 	}()
 
-	conv := newAnthropicBetaToResponsesConverter(stream, responseModel)
+	conv := newAnthropicBetaToResponsesConverter(stream, responseModel, hc.Namespaces)
 
 	usage, err := RunConverter(hc, conv, responsesSSEWriter(c))
 

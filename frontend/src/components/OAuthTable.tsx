@@ -1,3 +1,4 @@
+import {CredentialCards} from "@/components/credential/CredentialCards";
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
 import {
@@ -5,8 +6,9 @@ import {
     exportProviderAsJsonlToClipboard,
 } from "@/components/rule-card/utils";
 import {QuotaCell} from "@/components/credential/QuotaCell";
+import type {RedeemOutcome} from "@/hooks/useProviderQuota";
 import {ProviderLabel} from "@/components/ProviderLogo";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import ConfirmPopover from "@/components/ConfirmPopover";
 import {
     ContentCopy,
     Delete,
@@ -26,7 +28,6 @@ import {
     IconButton,
     Menu,
     MenuItem,
-    Paper,
     Stack,
     Switch,
     Table,
@@ -44,9 +45,12 @@ import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import type {Provider} from "../types/provider";
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 interface OAuthTableProps {
     providers: Provider[];
+    view?: "table" | "list" | "card";
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
     onDelete?: (providerUuid: string) => void;
@@ -56,10 +60,11 @@ interface OAuthTableProps {
     providerQuotas?: { [uuid: string]: ProviderQuota };
     refreshingQuotas?: Set<string>;
     onQuotaRefresh?: (providerUuid: string) => void;
+    onQuotaRedeem?: (providerUuid: string, rewardId: string) => Promise<RedeemOutcome>;
 }
 
 interface RefreshModalState {
-    open: boolean;
+    anchorEl: HTMLElement | null;
     providerUuid: string;
     providerName: string;
 }
@@ -87,6 +92,7 @@ const columnsFor = (showQuota: boolean) => showQuota ? COLUMNS : COLUMNS.filter(
 
 const OAuthTable = ({
                         providers,
+                        view = "table",
                         onEdit,
                         onToggle,
                         onDelete,
@@ -96,6 +102,7 @@ const OAuthTable = ({
                         providerQuotas,
                         refreshingQuotas,
                         onQuotaRefresh,
+                        onQuotaRedeem,
                     }: OAuthTableProps) => {
     const {state: deleteModal, open: handleDeleteClick, close: handleCloseDeleteModal, confirm: handleConfirmDelete} =
         useDeleteConfirm(
@@ -104,7 +111,7 @@ const OAuthTable = ({
         );
 
     const [refreshModal, setRefreshModal] = useState<RefreshModalState>({
-        open: false,
+        anchorEl: null,
         providerUuid: "",
         providerName: "",
     });
@@ -120,17 +127,17 @@ const OAuthTable = ({
     const showQuota = Boolean(onQuotaRefresh);
     const columns = columnsFor(showQuota);
 
-    const handleRefreshClick = (providerUuid: string) => {
+    const handleRefreshClick = (providerUuid: string, anchorEl: HTMLElement | null) => {
         const provider = providers.find((p) => p.uuid === providerUuid);
         setRefreshModal({
-            open: true,
+            anchorEl,
             providerUuid,
             providerName: provider?.name || "Unknown Provider",
         });
     };
 
     const handleCloseRefreshModal = () => {
-        setRefreshModal({open: false, providerUuid: "", providerName: ""});
+        setRefreshModal({anchorEl: null, providerUuid: "", providerName: ""});
     };
 
     const handleConfirmRefresh = async () => {
@@ -215,26 +222,21 @@ const OAuthTable = ({
 
     return (
         <TableContainer
-            component={Paper}
-            elevation={0}
             sx={{
-                border: 1,
-                borderColor: "divider",
-                borderRadius: 2,
-                boxShadow: "none",
+                ...(view === "table" && tableFrameSx),
                 overflowX: "auto",
             }}
         >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
-            <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
-                    <TableRow sx={{bgcolor: "action.hover"}}>
+                    <TableRow>
                         {columns.map((col) => (
                             <TableCell
                                 key={col.label}
                                 align={col.align}
-                                sx={{fontWeight: 600, width: col.width, py: 1.25, ...col.sx}}
+                                sx={{width: col.width, ...col.sx}}
                             >
                                 {col.label}
                             </TableCell>
@@ -302,6 +304,7 @@ const OAuthTable = ({
                                                 quota={providerQuotas?.[provider.uuid]}
                                                 refreshing={refreshingQuotas?.has(provider.uuid) ?? false}
                                                 onRefresh={() => onQuotaRefresh?.(provider.uuid)}
+                                                onRedeem={onQuotaRedeem && (rewardId => onQuotaRedeem(provider.uuid, rewardId))}
                                             />
                                         </TableCell>
                                     )}
@@ -337,13 +340,14 @@ const OAuthTable = ({
                                         <Stack direction="row" spacing={1} sx={{
                                             alignItems: "center"
                                         }}>
+                                            {/* A healthy expiry is plain; only "soon" and "expired" take colour. */}
                                             <Schedule
                                                 fontSize="small"
-                                                color={getExpirationColor(expiresAt) as any}
+                                                color={(getExpirationColor(expiresAt) === "success" ? "action" : getExpirationColor(expiresAt)) as any}
                                             />
                                             <Typography
                                                 variant="body2"
-                                                color={(getExpirationColor(expiresAt) + ".main") as any}
+                                                color={getExpirationColor(expiresAt) === "error" ? "error.main" : "text.primary"}
                                             >
                                                 {formatExpiresAt(expiresAt)}
                                             </Typography>
@@ -375,7 +379,7 @@ const OAuthTable = ({
                                                 gap: 0.5,
                                                 border: 1,
                                                 borderColor: "divider",
-                                                borderRadius: 1.5,
+                                                borderRadius: radius.card,
                                                 p: 0.5,
                                                 width: "fit-content",
                                             }}
@@ -425,7 +429,7 @@ const OAuthTable = ({
                         );
                     })}
                 </TableBody>
-            </Table>
+            </Table>}
             {/* Overflow menu (shared) */}
             <Menu
                 anchorEl={moreMenu.anchorEl}
@@ -448,8 +452,9 @@ const OAuthTable = ({
                             <MenuItem
                                 key="refresh-token"
                                 onClick={() => {
+                                    const anchor = moreMenu.anchorEl;
                                     handleMoreClose();
-                                    handleRefreshClick(p.uuid);
+                                    handleRefreshClick(p.uuid, anchor);
                                 }}
                                 disabled={refreshing === p.uuid}
                             >
@@ -497,8 +502,9 @@ const OAuthTable = ({
                             <MenuItem
                                 key="delete"
                                 onClick={() => {
+                                    const anchor = moreMenu.anchorEl;
                                     handleMoreClose();
-                                    handleDeleteClick(p.uuid);
+                                    handleDeleteClick(p.uuid, anchor);
                                 }}
                                 sx={{color: "error.main"}}
                             >
@@ -509,20 +515,20 @@ const OAuthTable = ({
                 })()}
             </Menu>
             {/* Delete Confirmation */}
-            <ConfirmDialog
-                open={deleteModal.open}
+            <ConfirmPopover
+                anchorEl={deleteModal.anchorEl}
                 title="Delete OAuth Provider"
-                description={`Are you sure you want to delete the OAuth provider "${deleteModal.rowName}"? This action cannot be undone.`}
+                description={`Delete "${deleteModal.rowName}"? This cannot be undone.`}
                 confirmLabel="Delete"
                 confirmColor="error"
                 onClose={handleCloseDeleteModal}
                 onConfirm={handleConfirmDelete}
             />
             {/* Refresh Token Confirmation */}
-            <ConfirmDialog
-                open={refreshModal.open}
+            <ConfirmPopover
+                anchorEl={refreshModal.anchorEl}
                 title="Refresh OAuth Token"
-                description={`Are you sure you want to refresh the OAuth token for "${refreshModal.providerName}"? This will update the access token using the refresh token.`}
+                description={`Refresh the access token for "${refreshModal.providerName}" using its refresh token.`}
                 confirmLabel="Refresh"
                 confirmingLabel="Refreshing..."
                 confirmColor="info"

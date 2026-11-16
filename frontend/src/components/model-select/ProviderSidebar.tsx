@@ -6,6 +6,7 @@ import { AuthTypeBadge } from '../AuthTypeBadge';
 import { ApiStyleBadge } from '../ApiStyleBadge';
 import SearchField from '../SearchField';
 import { ProviderLabel } from '../ProviderLogo';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ProviderSidebarProps {
     groupedProviders: Array<{ authType: string; providers: Provider[] }>;
@@ -67,7 +68,7 @@ export function ProviderSidebar({
                     },
                     '&::-webkit-scrollbar-thumb': {
                         bgcolor: 'divider',
-                        borderRadius: 3,
+                        borderRadius: radius.pill,
                     },
                 }}
             >

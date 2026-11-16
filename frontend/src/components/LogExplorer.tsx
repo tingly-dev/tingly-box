@@ -1,6 +1,8 @@
 import { Box, Stack, Tab, Tabs } from '@mui/material';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import SystemLogViewer from '@/components/SystemLogViewer';
+import AgentUsagePanel from '@/components/dashboard/AgentUsagePanel';
 import AILogViewer, {
     type ModelRequestDetail,
     type ModelRequestSummary,
@@ -10,13 +12,16 @@ import { type TraceDetail } from '@/components/RequestJourney';
 import { getControlApiClient, getControlApiHeaders } from '@/services/openapi';
 
 interface LogExplorerProps {
-    // When set, the scenario filter is initialized to this value but can be changed/cleared by the user.
-    // Used by the per-scenario quick-open dialog to provide context without locking the view.
-    initialScenario?: string;
+    // One agent's Log (the dialog its page opens): its requests only, plus a
+    // Usage tab with today's numbers. Without it, every request (System → Logs).
+    scenario?: string;
 }
 
-const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
-    const [tab, setTab] = useState(0);
+type LogTab = 'requests' | 'usage' | 'system';
+
+const LogExplorer = ({ scenario }: LogExplorerProps) => {
+    const { t } = useTranslation();
+    const [tab, setTab] = useState<LogTab>('requests');
 
     const getRequests = useCallback(async (params?: RequestFilters) => {
         const [client, headers] = await Promise.all([getControlApiClient(), getControlApiHeaders()]);
@@ -80,7 +85,7 @@ const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
             <Tabs
                 value={tab}
                 onChange={(_, v) => setTab(v)}
-                aria-label="Log views"
+                aria-label={t('logViewer.views', { defaultValue: 'Log views' })}
                 sx={{
                     minHeight: 40,
                     borderBottom: 1,
@@ -95,19 +100,26 @@ const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
                     },
                 }}
             >
-                <Tab label="Requests" />
-                <Tab label="System" />
+                <Tab value="requests" label={t('logViewer.tabs.requests', { defaultValue: 'Requests' })} />
+                {scenario && <Tab value="usage" label={t('logViewer.tabs.usage', { defaultValue: 'Usage' })} />}
+                <Tab value="system" label={t('logViewer.tabs.system', { defaultValue: 'System' })} />
             </Tabs>
 
-            <Box sx={{ flex: 1, minHeight: 0, display: tab === 0 ? 'flex' : 'none', flexDirection: 'column' }}>
+            {/* Panes stay mounted (filters and expanded rows survive a tab switch). */}
+            <Box sx={{ flex: 1, minHeight: 0, pt: 1.5, display: tab === 'requests' ? 'flex' : 'none', flexDirection: 'column' }}>
                 <AILogViewer
                     getRequests={getRequests}
                     getRequestDetail={getRequestDetail}
                     getTrace={getTrace}
-                    initialScenario={initialScenario}
+                    scenario={scenario}
                 />
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0, display: tab === 1 ? 'flex' : 'none', flexDirection: 'column' }}>
+            {scenario && tab === 'usage' && (
+                <Box sx={{ flex: 1, minHeight: 0, pt: 2, overflow: 'auto' }}>
+                    <AgentUsagePanel scenario={scenario} />
+                </Box>
+            )}
+            <Box sx={{ flex: 1, minHeight: 0, pt: 1.5, display: tab === 'system' ? 'flex' : 'none', flexDirection: 'column' }}>
                 <SystemLogViewer getLogs={getSystemLogs} />
             </Box>
         </Stack>

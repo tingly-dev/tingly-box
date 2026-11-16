@@ -327,10 +327,7 @@ func (h *WeChatQRLoginHandler) saveCredentials(session *qrSession, status *weixi
 	if platform == "" {
 		platform = "weixin"
 	}
-	name := session.botName
-	if name == "" {
-		name = platform + " Bot"
-	}
+	name := session.botName // empty is fine: the bot takes its platform account name on connect
 	created, err := h.settingsStore.CreateSettings(db.Settings{
 		Name:     name,
 		Platform: platform,

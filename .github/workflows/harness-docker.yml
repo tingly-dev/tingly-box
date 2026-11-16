@@ -46,7 +46,7 @@ jobs:
         run: |
           .github/scripts/docker-smoke-test.sh \
             tingly-box-smoke:build \
-            /home/tingly/.tingly-box
+            /app/.tingly-box
 
   smoke-test-npm-image:
     name: Smoke test docker.npm.Dockerfile

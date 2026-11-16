@@ -47,7 +47,7 @@ func (w *UsageWindow) Countable() bool {
 //
 // With no kinds given, every countable window is eligible regardless of Kind
 // — the display question, "how much pressure is on this account, from
-// whatever source": a resource (OpenRouter's key balance, KimiK2's only
+// whatever source": a resource (Kimi's booster wallet, KimiK2's only
 // window) is meant to win here just as readily as a periodic allowance.
 // Pass WindowKindLimit to instead answer the automated-decision question,
 // "what will recover on its own" (smart-routing's service_quota is the
@@ -192,6 +192,13 @@ func Unreadable(providerUUID, providerName string, providerType ProviderType, re
 	}
 	usage.MarkUnreadable(reason, now)
 	return usage
+}
+
+// hasReading reports whether the usage carries anything a reader can show:
+// a window, a breakdown or a cost. An account alone is who the key belongs to,
+// not a reading.
+func (p *ProviderUsage) hasReading() bool {
+	return (len(p.Windows) > 0 || len(p.Breakdowns) > 0 || p.Cost != nil)
 }
 
 // MarkUnreadable records why a usage could not be read, leaving whatever the

@@ -64,32 +64,18 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
 			c.Scenarios[i] = config
-			c.syncClaudeCodeRuleModeLocked(config)
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
 	// Add new scenario config
 	c.Scenarios = append(c.Scenarios, config)
-	c.syncClaudeCodeRuleModeLocked(config)
-	return c.Save()
+	return c.saveLocked()
 }
 
-func (c *Config) syncClaudeCodeRuleModeLocked(config typ.ScenarioConfig) {
-	if config.Scenario != typ.ScenarioClaudeCode {
-		return
-	}
-
-	flags := config.GetDefaultFlags()
-	if flags.Separate {
-		c.setClaudeCodeModeRulesActiveLocked(false, true)
-		return
-	}
-	if flags.Unified {
-		c.setClaudeCodeModeRulesActiveLocked(true, false)
-	}
-}
-
+// setClaudeCodeModeRulesActiveLocked switches the main scenario's unified and
+// per-tier rules on or off together. Only the 20261022 migration still uses it;
+// slots are toggled one by one (cc_slots.go).
 func (c *Config) setClaudeCodeModeRulesActiveLocked(unifiedActive, separateActive bool) {
 	for i := range c.Rules {
 		rule := &c.Rules[i]
@@ -106,9 +92,15 @@ func (c *Config) setClaudeCodeModeRulesActiveLocked(unifiedActive, separateActiv
 	}
 }
 
+// GetScenarioFlag reads a scenario flag. For Claude Code the legacy "unified"
+// and "separate" flags are derived from the slots: separate means every slot
+// has a rule of its own.
 func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if scenario.Is(typ.ScenarioClaudeCode) && (flagName == constant.FlagUnified || flagName == constant.FlagSeparate) {
+		return (len(c.ccSlotsLocked(scenario)) == len(CCSlots)) == (flagName == constant.FlagSeparate)
+	}
 	config := c.scenarioConfigLocked(scenario)
 	if config == nil {
 		return false
@@ -128,6 +120,19 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		val, _ := config.Extensions[flagName].(bool)
 		return val
 	}
+}
+
+// HasScenarioFlag reports whether an extension flag was ever set for the
+// scenario, on or off (GetScenarioFlag reads an unset flag as off).
+func (c *Config) HasScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.scenarioConfigLocked(scenario)
+	if config == nil || config.Extensions == nil {
+		return false
+	}
+	_, ok := config.Extensions[flagName].(bool)
+	return ok
 }
 
 // findOrCreateScenarioConfigLocked returns the scenario config to mutate for a
@@ -164,6 +169,21 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Claude Code has no modes any more: the legacy flags are shortcuts for
+	// every slot having a rule of its own ("separate") or none ("unified").
+	if scenario.Is(typ.ScenarioClaudeCode) && (flagName == constant.FlagUnified || flagName == constant.FlagSeparate) {
+		if !value {
+			return nil
+		}
+		if err := c.checkCCSlotScenarioLocked(scenario); err != nil {
+			return err
+		}
+		if err := c.setAllCCSlotsLocked(scenario, flagName == constant.FlagSeparate); err != nil {
+			return err
+		}
+		return c.saveLocked()
+	}
+
 	// Find or create scenario config (seeded from base config for profiles)
 	config := c.findOrCreateScenarioConfigLocked(scenario)
 
@@ -171,16 +191,8 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 	switch flagName {
 	case constant.FlagUnified:
 		config.Flags.Unified = value
-		if scenario == typ.ScenarioClaudeCode && value {
-			config.Flags.Separate = false
-			c.setClaudeCodeModeRulesActiveLocked(true, false)
-		}
 	case constant.FlagSeparate:
 		config.Flags.Separate = value
-		if scenario == typ.ScenarioClaudeCode && value {
-			config.Flags.Unified = false
-			c.setClaudeCodeModeRulesActiveLocked(false, true)
-		}
 	case constant.FlagSkipUsage:
 		config.Flags.SkipUsage = value
 	default:
@@ -198,7 +210,7 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Extensions[flagName] = value
 	}
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetScenarioStringFlag returns a string flag value for a scenario
@@ -247,7 +259,7 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetScenarioIntFlag returns an integer flag value for a scenario.
@@ -283,7 +295,7 @@ func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, 
 	//   case FlagFoo:
 	//       config := c.findOrCreateScenarioConfigLocked(scenario)
 	//       config.Flags.Foo = value
-	//       return c.Save()
+	//       return c.saveLocked()
 	default:
 		return fmt.Errorf("unknown int flag name: %s", flagName)
 	}
@@ -337,7 +349,7 @@ func (c *Config) SetScenarioExtensions(scenario typ.RuleScenario, values map[str
 		}
 		config.Extensions[key] = value
 	}
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetScenarioRecordingMode returns the effective recording mode for a scenario

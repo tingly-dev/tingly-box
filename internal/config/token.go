@@ -30,7 +30,7 @@ func (c *Config) SetUserToken(token string) error {
 	defer c.mu.Unlock()
 
 	c.UserToken = token
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetUserToken returns the user token
@@ -55,7 +55,7 @@ func (c *Config) SetModelToken(token string) error {
 	defer c.mu.Unlock()
 
 	c.ModelToken = token
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetModelToken returns the model token
@@ -163,7 +163,7 @@ func (c *Config) SetMultiTenantEnabled(enabled bool) error {
 	defer c.mu.Unlock()
 
 	c.MultiTenantConfig.Enabled = enabled
-	return c.Save()
+	return c.saveLocked()
 }
 
 // SetMultiTenantConfig updates the entire multi-tenant configuration
@@ -172,5 +172,5 @@ func (c *Config) SetMultiTenantConfig(config MultiTenantConfig) error {
 	defer c.mu.Unlock()
 
 	c.MultiTenantConfig = config
-	return c.Save()
+	return c.saveLocked()
 }

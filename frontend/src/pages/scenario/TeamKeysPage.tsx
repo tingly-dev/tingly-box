@@ -81,9 +81,9 @@ const TeamKeysPage = () => {
                                         <Typography variant="caption" sx={{ fontFamily: fontMono, color: 'text.secondary' }}>
                                             {team.slug}
                                         </Typography>
-                                        <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.xs }} />
+                                        <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.micro }} />
                                         {!team.enabled && (
-                                            <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: fontSizes.xs }} />
+                                            <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: fontSizes.micro }} />
                                         )}
                                         <Box sx={{ flex: 1 }} />
                                         <Button component={Link} to={teamPath(team)} size="small">

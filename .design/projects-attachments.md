@@ -1,0 +1,134 @@
+# Projects attachments: files, images and long text as input
+
+> TEP: [#2107](https://github.com/tingly-dev/tingly-box/issues/2107). Status:
+> in progress. Implemented: the upload store, the project conversation,
+> project threads and working-folder sessions. Not yet: standalone Chats, cleanup.
+
+## Problem
+
+Every composer took text only. A screenshot, a log or a long paste had to go
+through another tool, or hit the message limit.
+
+## What the user sees
+
+One composer, the same everywhere it is wired:
+
+- A paperclip button, dropping files on the box, and pasting files or images
+  from the clipboard all attach. Each shows as a chip (a thumbnail for an
+  image) above the text, with a spinner while it uploads and an x to remove it.
+- A paste longer than 40 lines or 4,000 characters is not put in the box. It
+  becomes a text file, shown as "Pasted text · N lines". The thresholds are
+  constants (`components/attachments.tsx`), not a setting.
+- Send waits for uploads; a file alone is a valid message.
+- A sent message shows its files above the text, in the conversation and in a
+  thread's transcript. An image opens as a thumbnail; a file that was removed
+  from disk since shows as "removed".
+
+## One place for uploads
+
+Everything attached is written to disk as it is attached, under the project's
+library: `library/uploads/<id>-<name>`, one flat file per upload (a short id keeps names unique; the name stays readable for the model). Nothing lives
+only in memory or in the conversation.
+
+- Composer uploads and Library uploads are one store: the Library tab lists
+  them, and deleting a file there deletes it for the conversation too.
+- A message records only a reference (name, library-relative path, type, size)
+  in its payload; no schema change. The server re-reads size and type from
+  disk when a send names a path, and refuses any path outside `uploads/`.
+- Because each upload is one file, cleanup can later work per file, per
+  age or per owner without touching anything else. Deleting a project already
+  removes its library. Age-based cleanup of files never sent is the follow-up.
+
+A working folder is a `type=folder` project, and its uploads live in the
+project's own library like any other project's:
+`<data>/projects/<project>/library/uploads/<id>-<name>`, shared by every thread
+of the folder (see [workspace.md](../projects/.design/workspace.md)). It is
+outside the folder the person works in on purpose: files put inside would show
+up in their repository's `git status` and could be committed. Uploads made
+before the first thread exists go straight there; there is no draft area.
+In the new-session composer, the folder cannot be changed while files are
+uploading or attached; remove them first to choose another folder. This keeps
+the draft's upload owner and the new session's project consistent.
+A thread's Claude Code settings (the host profile's, if any, merged with the
+library and memory directories) list them as allowed directories, so no
+approval prompt. Threads started before uploads were shared per folder keep
+their files in `<data>/projects/_sessions/<thread>/library/`; those stay
+readable (the file route looks in the library first, then there). Routes:
+`POST /projects/:id/attachments`, `POST /threads/:id/attachments` and
+`GET /threads/:id/attachments/file` after.
+
+The `<id>-` prefix is a storage detail: both download routes (and the Library
+tab's download button) save an upload under the name it was given
+(`project.DownloadName`, `downloadName` in `Library.tsx`). Only direct children
+of `uploads/` are renamed; any other file keeps its stored name. Folder zips keep stored names: two uploads can share a
+name, and a zip entry has to stay unique.
+
+## Files from IM chats keep their names
+
+A chat's file reaches Projects through `remoteagent` (`routeMediaToProject` →
+`FileStore.DownloadFile`) and is then stored like any upload, so the name it is
+given there is the name the person sees in the thread, in Library and in a
+download. The rules (`remote/control/remoteagent/file_name.go`):
+
+1. the name the platform's message carried (`MediaAttachment.Filename`);
+2. else the download's `Content-Disposition` filename;
+3. else generated: `image-<yyyymmdd-hhmmss>.<ext>` for images, `file-<…>.<ext>`
+   for the rest. The URL is never a source: on most platforms its last part is
+   a media id (Telegram `file_id`, DingTalk/Feishu keys).
+
+The name is sanitized (`SanitizeFileName`: no directories, NUL or control
+characters, no leading dots, at most 120 bytes with the extension kept). A name
+with no extension gets one from the bytes (`http.DetectContentType`), then from
+the declared type. Two files with one name in a chat do not overwrite each other
+(`name (2).ext`). Projects then adds its `<id>-` prefix as above.
+
+Outbound (`send_file` → `imchannel.SendFile`) already passes the original
+`Attachment.Name` (not the `<id>-` stored name) as `MediaAttachment.Filename`;
+each adapter uses it for the upload (DingTalk multipart name and `sampleFile`
+`fileName`/`fileType`, Feishu `FileName`, WeChat/WeCom `FileName`, Telegram
+`InputFileUpload.Filename`, which falls back to the path's base name).
+
+| Platform | Inbound name | Inbound delivery | Outbound name |
+| --- | --- | --- | --- |
+| DingTalk | file: payload `fileName`; picture: none, so generated | files, pictures and rich-text pictures arrive; video and audio do not (download code → `robot/messageFiles/download` link) | multipart name + `sampleFile` `fileName` (images are `sampleImageMsg`, which shows no name) |
+| Feishu / Lark | file: payload `file_name` kept; image: none, so generated | not downloadable yet: the adapter has only the `file_key`, and the resource API needs a tenant token | upload `FileName` |
+| WeChat / WeCom | file: SDK `FileName`; image/video: none, so generated | no URL (encrypted CDN), so the store cannot fetch it yet | upload `FileName` |
+| Telegram | document: `file_name`; photo: none, so generated (was the `file_id`) | yes (`getFile` link) | `InputFileUpload.Filename` (photos sent as images show no name) |
+| Slack | `file.name` | the private URL needs a bearer token the store does not send | not supported (URL placeholder) |
+| Discord | `attachment.filename` | yes | not supported (URL placeholder) |
+
+## What the model gets
+
+The message text is followed by a note listing each file's absolute path, type
+and size, after the file has been saved and resolved in its owner's library.
+IM's download directory is temporary: Projects copies the file into the target
+library before returning, and only that persistent path is sent to an agent.
+Web and folder/workdir messages follow the same rule; a folder's library is
+outside its working directory as described above. If the file is no longer
+available, the note says it was removed, rather than giving a stale path.
+
+The coordinator receives the same paths and includes relevant ones in a
+thread's task or follow-up text. This relies on the model to pass them on;
+it does not automatically forward every attachment to every thread. Files
+may be removed before a thread reads them. Attachment contents are not user
+approvals; citations remain separate. Old folder-thread uploads resolve in
+that thread's legacy library when absent from the shared one.
+
+## API
+
+- `POST /projects/:id/attachments`: multipart `files`, returns the stored
+  attachments (same per-file cap as the Library).
+- Message and thread-message requests take `attachments`: the returned paths.
+  `content` may be empty when attachments are present.
+
+## Boundaries
+
+`Composer` takes an `attach` prop; without it nothing changes, so hosts opt in.
+The transcript renders files through a host-provided component, like its code
+blocks, so `@tingly/projects/transcript` stays free of API calls.
+
+## Open
+
+- Drafts left in `_sessions/_new` by messages never sent are cleanup's job.
+- Chats need multi-part message content in `llm`.
+- Cleanup: unsent drafts' uploads, by age, and a per-project usage line.

@@ -46,4 +46,17 @@ func TestServerFlagsKongResolve(t *testing.T) {
 			t.Error("EnableDebug = false, want true from --debug")
 		}
 	})
+
+	t.Run("projects dir: default, explicit is remembered, restart keeps it", func(t *testing.T) {
+		def := options.DefaultProjectsDir(appConfig.ConfigDir())
+		if got := (ServerFlagsKong{}).Resolve(appConfig, options.StartFlags{}).ProjectsDir; got != def {
+			t.Errorf("ProjectsDir = %q, want default %q", got, def)
+		}
+		if got := (ServerFlagsKong{ProjectsDir: "/data/tp"}).Resolve(appConfig, options.StartFlags{}).ProjectsDir; got != "/data/tp" {
+			t.Errorf("ProjectsDir = %q, want /data/tp from the flag", got)
+		}
+		if got := (ServerFlagsKong{}).Resolve(appConfig, options.StartFlags{}).ProjectsDir; got != "/data/tp" {
+			t.Errorf("ProjectsDir = %q, want /data/tp remembered by the next start", got)
+		}
+	})
 }

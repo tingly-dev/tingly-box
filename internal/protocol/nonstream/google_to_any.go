@@ -112,7 +112,11 @@ func MapGoogleFinishReasonToOpenAI(reason genai.FinishReason) string {
 		genai.FinishReasonBlocklist, genai.FinishReasonProhibitedContent, genai.FinishReasonSPII,
 		genai.FinishReasonMalformedFunctionCall, genai.FinishReasonUnexpectedToolCall,
 		genai.FinishReasonImageSafety, genai.FinishReasonImageProhibitedContent,
-		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage:
+		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage,
+		// FinishReasonContinuation is an intermediate hop marker the SDK clears
+		// before yielding a response when automatic continuation is enabled
+		// (the default since go-genai v1.74.0) — should never reach here.
+		genai.FinishReasonContinuation:
 		return "stop"
 	default:
 		return "stop"
@@ -206,7 +210,11 @@ func MapGoogleFinishReasonToAnthropic(reason genai.FinishReason) string {
 		genai.FinishReasonBlocklist, genai.FinishReasonProhibitedContent, genai.FinishReasonSPII,
 		genai.FinishReasonMalformedFunctionCall, genai.FinishReasonUnexpectedToolCall,
 		genai.FinishReasonImageSafety, genai.FinishReasonImageProhibitedContent,
-		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage:
+		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage,
+		// FinishReasonContinuation is an intermediate hop marker the SDK clears
+		// before yielding a response when automatic continuation is enabled
+		// (the default since go-genai v1.74.0) — should never reach here.
+		genai.FinishReasonContinuation:
 		return "end_turn"
 	default:
 		return "end_turn"
@@ -300,7 +308,11 @@ func MapGoogleFinishReasonToAnthropicBeta(reason genai.FinishReason) anthropic.B
 		genai.FinishReasonBlocklist, genai.FinishReasonProhibitedContent, genai.FinishReasonSPII,
 		genai.FinishReasonMalformedFunctionCall, genai.FinishReasonUnexpectedToolCall,
 		genai.FinishReasonImageSafety, genai.FinishReasonImageProhibitedContent,
-		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage:
+		genai.FinishReasonImageRecitation, genai.FinishReasonImageOther, genai.FinishReasonNoImage,
+		// FinishReasonContinuation is an intermediate hop marker the SDK clears
+		// before yielding a response when automatic continuation is enabled
+		// (the default since go-genai v1.74.0) — should never reach here.
+		genai.FinishReasonContinuation:
 		return anthropic.BetaStopReasonEndTurn
 	default:
 		return anthropic.BetaStopReasonEndTurn

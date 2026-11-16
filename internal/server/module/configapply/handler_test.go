@@ -50,6 +50,7 @@ func TestGetClaudeConfig_RestoresAppliedPreferences(t *testing.T) {
 		"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000"},
 		"defaultMode":"plan",
 		"showThinkingSummaries":false,
+		"includeCoAuthoredBy":true,
 		"statusLine":{"type":"command","command":"status.sh"}
 	}`), 0644))
 
@@ -69,6 +70,7 @@ func TestGetClaudeConfig_RestoresAppliedPreferences(t *testing.T) {
 	assert.Equal(t, "plan", response.DefaultMode)
 	assert.Equal(t, "64000", response.Preferences.ClaudeCodeMaxOutputTokens)
 	assert.False(t, response.ShowThinkingSummaries)
+	assert.True(t, response.CoAuthoredBy)
 }
 
 func TestGetCodexConfig_RestoresAppliedPreferences(t *testing.T) {
@@ -110,7 +112,7 @@ wire_api = "responses"
 	assert.Equal(t, "high", response.Preferences.ModelReasoningEffort)
 	assert.Equal(t, "detailed", response.Preferences.ModelReasoningSummary)
 	assert.Equal(t, "low", response.Preferences.ModelVerbosity)
-	assert.Equal(t, "true", response.Preferences.ModelSupportsReasoningSummaries)
+	assert.Equal(t, "true", response.Preferences.SupportsReasoningSummaries)
 }
 
 // A config.toml with no tingly footprint reads as not-applied: the form falls
@@ -585,4 +587,33 @@ func indexOf(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// The user's settings.json wins: only a real flip, or a file with no choice,
+// rewrites the Co-Authored-By keys.
+func TestCoAuthoredByToWrite(t *testing.T) {
+	on, off := true, false
+	cases := []struct {
+		name               string
+		requested, current *bool
+		wantInclude        bool
+		wantWrite          bool
+	}{
+		{"fresh file, no choice: tb default off", nil, nil, false, true},
+		{"fresh file, user turns on", &on, nil, true, true},
+		{"no choice keeps the file's on", nil, &on, false, false},
+		{"no choice keeps the file's off", nil, &off, false, false},
+		{"same as file: untouched", &off, &off, false, false},
+		{"flip on to off", &off, &on, false, true},
+		{"flip off to on", &on, &off, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			include, write := coAuthoredByToWrite(tc.requested, tc.current)
+			assert.Equal(t, tc.wantWrite, write)
+			if write {
+				assert.Equal(t, tc.wantInclude, include)
+			}
+		})
+	}
 }

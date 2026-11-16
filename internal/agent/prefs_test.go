@@ -37,7 +37,7 @@ func TestNormalizeClaudeCodeShowThinkingSummaries(t *testing.T) {
 func TestClaudeCodePrefs_ToEnv_OmitsEmpty(t *testing.T) {
 	// Sparse prefs: only one model + one limit, everything else empty.
 	p := ClaudeCodePrefs{
-		AnthropicModel: "tingly/cc",
+		AnthropicModel: "cc",
 		APITimeoutMs:   "60000",
 	}
 	env, err := p.ToEnv("http://localhost:12580", "tok")
@@ -45,7 +45,7 @@ func TestClaudeCodePrefs_ToEnv_OmitsEmpty(t *testing.T) {
 		t.Fatalf("ToEnv: %v", err)
 	}
 
-	mustEq(t, env, "ANTHROPIC_MODEL", "tingly/cc")
+	mustEq(t, env, "ANTHROPIC_MODEL", "cc")
 	mustEq(t, env, "API_TIMEOUT_MS", "60000")
 	mustEq(t, env, "ANTHROPIC_BASE_URL", "http://localhost:12580/tingly/claude_code")
 	mustEq(t, env, "ANTHROPIC_AUTH_TOKEN", "tok")
@@ -162,7 +162,7 @@ func TestClaudeCodePrefs_ToEnv_StripsTrailingSlashOnBaseURL(t *testing.T) {
 
 func TestClaudeCodePrefs_ToEnv_ExtraMerges(t *testing.T) {
 	p := ClaudeCodePrefs{
-		AnthropicModel: "tingly/cc",
+		AnthropicModel: "cc",
 		Extra: map[string]string{
 			"SOME_NEW_ENV":    "value",
 			"ANTHROPIC_MODEL": "override-via-extra",
@@ -192,10 +192,10 @@ func TestClaudeCodePrefs_ToEnv_OneMillionSuffixPassesThrough(t *testing.T) {
 	// 1M is part of the model string. ToEnv doesn't synthesize it — the
 	// caller (UI) is responsible for appending [1m] before sending prefs.
 	p := ClaudeCodePrefs{
-		AnthropicDefaultSonnetModel: "tingly/cc-sonnet[1m]",
+		AnthropicDefaultSonnetModel: "sonnet[1m]",
 	}
 	env, _ := p.ToEnv("http://localhost", "tok")
-	mustEq(t, env, "ANTHROPIC_DEFAULT_SONNET_MODEL", "tingly/cc-sonnet[1m]")
+	mustEq(t, env, "ANTHROPIC_DEFAULT_SONNET_MODEL", "sonnet[1m]")
 }
 
 // Round-trip: a prefs JSON payload written by the frontend (env-name keys)
@@ -296,45 +296,20 @@ func TestClaudeCodePrefs_AllTypedFieldsUseOmitempty(t *testing.T) {
 	}
 }
 
-// Unified default: every model slot points at the same canonical model,
+// Default: every model slot points at the same canonical model,
 // plus tb's privacy/timeout opinions.
-func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
-	env, err := DefaultClaudeCodePrefs(true).ToEnv("http://localhost:12580", "test-token")
+func TestDefaultClaudeCodePrefs(t *testing.T) {
+	env, err := DefaultClaudeCodePrefs().ToEnv("http://localhost:12580", "test-token")
 	if err != nil {
 		t.Fatalf("ToEnv: %v", err)
 	}
 	want := map[string]string{
-		"ANTHROPIC_MODEL":                          "tingly/cc",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":            "tingly/cc",
-		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc",
-		"API_TIMEOUT_MS":                           "3000000",
-		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
-		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "200000",
-		"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":          "80",
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
-		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
-		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
-	}
-	assertEnvMapsEqual(t, want, env)
-}
-
-// Separate default: each slot gets its own dedicated tingly/cc-* model so
-// users can route different Claude Code workloads to distinct rules.
-func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
-	env, _ := DefaultClaudeCodePrefs(false).ToEnv("http://localhost:12580", "test-token")
-	want := map[string]string{
-		"ANTHROPIC_MODEL":                          "tingly/cc-default",
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc-haiku",
-		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc-sonnet",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc-opus",
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":            "tingly/cc-fable",
-		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc-subagent",
+		"ANTHROPIC_MODEL":                          "cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "cc",
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":            "cc",
+		"CLAUDE_CODE_SUBAGENT_MODEL":               "cc",
 		"API_TIMEOUT_MS":                           "3000000",
 		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "200000",
@@ -351,14 +326,14 @@ func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
 
 func TestClaudeCodePrefs_JSONShapeUsesEnvNames(t *testing.T) {
 	b, _ := json.Marshal(ClaudeCodePrefs{
-		AnthropicDefaultHaikuModel: "tingly/cc-haiku",
+		AnthropicDefaultHaikuModel: "haiku",
 		DisableTelemetry:           "1",
 	})
 	var m map[string]string
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	mustEq(t, m, "ANTHROPIC_DEFAULT_HAIKU_MODEL", "tingly/cc-haiku")
+	mustEq(t, m, "ANTHROPIC_DEFAULT_HAIKU_MODEL", "haiku")
 	mustEq(t, m, "DISABLE_TELEMETRY", "1")
 	if _, ok := m["AnthropicDefaultHaikuModel"]; ok {
 		t.Error("Go field name leaked into JSON output")

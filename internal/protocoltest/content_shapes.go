@@ -718,6 +718,7 @@ func contentShapeCases() []contentShapeCase {
 	cases = append(cases, reasoningEffortToChatCases()...)
 	cases = append(cases, thinkingAcrossProtocolCases()...)
 	cases = append(cases, anthropicThinkingPassthroughCases()...)
+	cases = append(cases, namespaceToolCases()...)
 	return append(cases, outputLimitCases()...)
 }
 

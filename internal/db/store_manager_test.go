@@ -207,7 +207,7 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 	expectedStores := []string{
 		"stats", "usage", "provider",
 		"imbotSettings", "model", "team", "apiToken",
-		"remoteChats", "remoteSessions", "botAccess",
+		"remoteChats", "botAccess",
 	}
 	for _, name := range expectedStores {
 		if status.StoreStatus[name] != HealthStatusOK {

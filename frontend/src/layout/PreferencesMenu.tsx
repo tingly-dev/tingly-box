@@ -2,7 +2,7 @@
 // (a submenu), feedback and the version live together here instead of as four stacked rail buttons
 // (.design/ui-redesign.md §3.2 — they are set-once preferences, and the rail
 // ran out of room at 900px). The same controls stay on System › General.
-import { AppRegistration as IconApps, ChevronRight as IconChevronRight, MessageReport as IconMessageReport, OpenInNew as IconOpenInNew, Settings as IconSettings } from '@/components/icons';
+import { AppRegistration as IconApps, ChevronRight as IconChevronRight, MessageReport as IconMessageReport, OpenInNew as IconOpenInNew, Settings as IconSettings, TextSnippet as IconFileText } from '@/components/icons';
 import { displayVersion } from '@/utils/version';
 import { Box, Divider, MenuItem, MenuList, Popover, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,11 +12,12 @@ import { SUPPORTED_LANGUAGES, resolveLanguage } from '@/i18n';
 import type { ThemeMode } from '@/theme';
 import { getThemeOptions } from '@/theme/options';
 import { useThemeMode } from '../contexts/ThemeContext';
+import { setShellPref, shellChoices, shownChoice, useUiShell, type ShellPref } from '@/shell/uiShell';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { Z_INDEX } from '../constants/zIndex';
 import { PowerUpsMenu } from './PowerUpsMenu';
-
-const FEEDBACK_URL = 'https://github.com/tingly-dev/tingly-box/issues/new/choose';
+import { FEEDBACK_URL } from './links';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PreferencesMenuProps {
     anchorEl: HTMLElement | null;
@@ -33,6 +34,7 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
     const { t, i18n } = useTranslation();
     const { currentVersion } = useAppVersion();
     const { mode: themeMode, setTheme } = useThemeMode();
+    const { pref: shellPref } = useUiShell();
     const themeOptions = useMemo(() => getThemeOptions(t), [t]);
     const currentLanguage = resolveLanguage(i18n.language);
     const [powerUpsAnchorEl, setPowerUpsAnchorEl] = useState<HTMLElement | null>(null);
@@ -60,7 +62,7 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
             // The Power-ups submenu is portaled outside this popover; without
             // this the focus trap would pull focus back from its switches.
             disableEnforceFocus
-            slotProps={{ paper: { sx: { width: 300, ml: 1, borderRadius: 2 } } }}
+            slotProps={{ paper: { sx: { width: 300, ml: 1, borderRadius: radius.card } } }}
         >
             <Box sx={{ px: 2, pt: 1.75, pb: 1.25 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -108,6 +110,22 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
                         ))}
                     </ToggleButtonGroup>
                 </Box>
+                <Box>
+                    <SectionLabel>{t('mobile.shell.title')}</SectionLabel>
+                    <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={shownChoice(shellPref)}
+                        onChange={(_, choice: ShellPref | null) => choice && setShellPref(choice)}
+                        sx={{ flexWrap: 'wrap' }}
+                    >
+                        {shellChoices().map((choice) => (
+                            <ToggleButton key={choice} value={choice} sx={{ px: 1.25, py: 0.25, textTransform: 'none' }}>
+                                {t(`mobile.shell.${choice}`)}
+                            </ToggleButton>
+                        ))}
+                    </ToggleButtonGroup>
+                </Box>
             </Stack>
             <Divider />
             <MenuList dense sx={{ py: 0.5 }}>
@@ -131,6 +149,10 @@ export const PreferencesMenu: React.FC<PreferencesMenuProps> = ({ anchorEl, onCl
                 <MenuItem component={RouterLink} to="/system" onClick={onClose} sx={{ gap: 1.5 }}>
                     <IconSettings sx={{ fontSize: 18 }} />
                     <Typography variant="body2">{t('layout.activityBar.allSettings')}</Typography>
+                </MenuItem>
+                <MenuItem component={RouterLink} to="/system/logs" onClick={onClose} sx={{ gap: 1.5 }}>
+                    <IconFileText sx={{ fontSize: 18 }} />
+                    <Typography variant="body2">{t('layout.logs')}</Typography>
                 </MenuItem>
                 <MenuItem component="a" href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer" onClick={onClose} sx={{ gap: 1.5 }}>
                     <IconMessageReport sx={{ fontSize: 18 }} />

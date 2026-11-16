@@ -59,7 +59,6 @@ export default {
       "tierBalanced": "均衡",
       "dividerHelp": "编号越小的层级越优先。只有当该层级所有模型均不可用（熔断）时，流量才会降级到下一层级。同一层级内的模型之间负载均衡。",
       "tooltip": "T0 最先尝试，T1 为备用，依此类推。同一层级内的模型负载均衡。",
-      "addTierTooltip": "添加新的后备层级",
       "nodeTooltipPrimaryTitle": "T0 — 最高优先级",
       "nodeTooltipPrimaryBody": "每次请求优先尝试，同层级内模型负载均衡。",
       "nodeTooltipFallbackTitle": "T{{tier}} — 后备层级",
@@ -141,6 +140,17 @@ export default {
         "hoverHint": "悬停示意图中的节点可查看操作按钮",
         "toolbarLabel": "页面工具栏",
         "clickHere": "点这里",
+        "connectTitle": "接入 {{agent}}",
+        "connect": {
+          "website": "在 {{agent}} 官网查看其他安装方式",
+          "official": "官方源",
+          "mirror": "镜像源",
+          "install": { "title": "安装 {{agent}}", "content": "用下面的命令安装（连接区的 Install 行里也有），装好再回来。" },
+          "apply": { "title": "应用配置", "content": "页面头部的自动配置会把 Base URL 和密钥写进 {{agent}} 的配置文件。写入前会先备份原文件，其他设置原样保留。" },
+          "applyHint": "点页面右上角的自动配置。头部显示“配置已过期”就说明还没应用。",
+          "verify": { "title": "启动 {{agent}} 并确认", "content": "运行一次 {{agent}}。头部会显示最近一次请求，说明网关已连通，下面的规则正在转发。" },
+          "verifyHint": "启动后还没有请求？检查连接区的 Base URL 与 {{agent}} 实际使用的是否一致。"
+        },
         "steps": {
           "connectAI": {
             "title": "连接 AI 提供商",
@@ -152,10 +162,10 @@ export default {
           },
           "addModel": {
             "title": "添加第一个模型",
-            "content": "每条规则将一个请求模型映射到一个或多个模型。在空规则中点击「＋ 添加模型」，选择已连接的提供商和模型。需要为其他请求模型单独建规则？使用工具栏的「新建规则」。",
+            "content": "每条规则将一个请求模型映射到一个或多个模型。在空规则中点击「＋ 添加模型」，选择已连接的提供商和模型。想给这个 Agent 添加更多模型？使用工具栏的「新建模型」；打开其中的「多选」可一次添加多个，每个模型各建一条规则。",
             "annotation": {
               "addModel": "「＋ 添加模型」——选择提供商和模型",
-              "newRule": "「新建规则」新增一条请求模型映射"
+              "newRule": "「新建模型」添加模型，每个模型一条规则"
             }
           },
           "editModel": {
@@ -211,7 +221,9 @@ export default {
       }
     },
     "nodes": {
-      "addModel": "添加模型"
+      "addModel": "添加模型",
+      "loadBalance": "负载均衡",
+      "fallbackTier": "兜底层"
     },
     "guideDiagrams": {
       "empty": { "description": "示例规则" },
@@ -241,13 +253,23 @@ export default {
       "deleteService": "删除服务",
       "deleteSmartRule": "删除智能规则"
     },
+    "ruleConditions": {
+      "requestTitle": "Request",
+      "othersTitle": "Others",
+      "addCondition": "添加智能条件",
+      "closeConditions": "关闭智能条件",
+      "closeConditionsTooltip": "条件会保留；关闭期间所有请求直接走各层，再次添加即可恢复。"
+    },
     "tooltips": {
       "addProviderFirst": "添加提供商以启用请求转发",
       "addProviderSecond": "添加另一个提供商（有 2+ 个提供商时，将根据策略启用负载平衡）",
       "addProviderMore": "添加另一个提供商（请求将在所有提供商之间负载平衡）",
       "addFirstProvider": "添加您的第一个提供商",
       "addServiceFirst": "添加模型以启用请求转发",
-      "addServiceSecond": "添加另一个模型（将启用负载均衡）"
+      "loadBalance": "在这一层再加一个服务，和同层的服务分摊请求",
+      "fallbackTier": "加一层兜底：上面每一层都不可用时才会用到",
+      "addServiceToTier": "给这一层加一个服务",
+      "addServiceToCondition": "给命中这个条件的请求加一个服务"
     },
     "notifications": {
       "loadFailed": "加载数据失败",
@@ -280,13 +302,40 @@ export default {
       "unconditional": "无条件，跳过"
     }
   },
+  "ruleAutoSave": {
+    "saved": "配置已保存",
+    "failed": "保存失败：{{error}}",
+    "unknownError": "未知错误",
+    "error": "保存配置出错"
+  },
   "ruleHeader": {
     "plugins": "插件",
     "pluginsTooltip": "此规则已启用的插件",
     "endpointNotApplicable": "只对 OpenAI 兼容上游生效。此规则目前没有这类上游，所以选择暂时不起作用。",
     "managePlugins": "管理插件",
     "test": "测试",
-    "ruleActions": "规则操作"
+    "smartConditionOn": "关闭智能条件",
+    "smartConditionOff": "开启智能条件",
+    "smartConditionAdd": "添加智能条件",
+    "ruleActions": "规则操作",
+    "compact": {
+      "chip": "压缩：{{value}}",
+      "auto": "跟随默认",
+      "aria": "此模型的自动压缩：{{value}}",
+      "tooltip": "设置 Codex 在上下文用到多少时压缩这个模型的对话",
+      "title": "自动压缩触发点",
+      "description": "上下文用到窗口的这个比例时，Codex 会先压缩历史对话。只写入 Codex 配置，不影响请求转发。",
+      "following": "当前跟随 Auto Config（{{percent}}%）。拖动即只为这个模型单独设置。",
+      "window": "窗口",
+      "line": "压缩线",
+      "remain": "压缩时剩余",
+      "low": "压缩时仅剩约 {{remain}} tokens（建议不低于 {{min}}）。长工具输出可能撞上窗口上限，导致压缩失败。",
+      "limited": "受「可用窗口 {{effective}}%」限制，实际按 {{applied}}% 生效。要更晚压缩，请先在 Auto Config 调高可用窗口。",
+      "zoneLow": "{{from}}–{{to}}%：压缩时剩余太少",
+      "zoneCapped": "超过 {{effective}}% 按 {{effective}}% 生效（可用窗口）",
+      "needsApply": "改动需点 Auto Config 应用后生效。",
+      "reset": "恢复为 Auto Config 的值（{{percent}}%）"
+    }
   },
   "templateActions": {
     "troubleshoot": "错误检查",
@@ -296,8 +345,13 @@ export default {
     "collapseAllRules": "收起所有规则",
     "expandAllRules": "展开所有规则",
     "connectAI": "连接 AI",
-    "newRule": "新建规则",
-    "createNewRule": "创建新的路由规则",
+    "newRule": "新建模型",
+    "createNewRule": "为这个 Agent 添加模型，每个模型各建一条路由规则",
+    "selectedModels_other": "已选 {{count}} 个模型",
+    "multiSelectTitle": "为每个模型创建规则",
+    "selectMultiple": "多选",
+    "clearSelection": "清除",
+    "addModels_other": "添加 {{count}} 个模型",
     "howRoutingWorks": "路由原理",
     "sortOriginal": "原始顺序",
     "sortByName": "按名称（A→Z）",
@@ -310,8 +364,48 @@ export default {
       "description": "添加一个 API Key 提供商以开始路由请求",
       "action": "开始使用"
     },
-    "noRules": "还没有规则。点击「新建规则」添加一条。",
+    "noRules": "还没有规则。点击「新建模型」添加。",
+    "noRulesFixed": "还没有模型规则。",
     "copiedToClipboard": "{{label}} 已复制到剪贴板！"
+  },
+  "decisionTry": {
+    "title": "体验 Decisions",
+    "subtitle": "通过已配置的规则，尝试一个结构化问题。",
+    "noRules": "请先在下方添加并启用 Decisions 规则。",
+    "rule": "规则",
+    "model": "请求模型",
+    "concreteModel": "通配符规则需要填写具体模型名称。",
+    "input": "输入内容",
+    "type": "问题类型",
+    "choice": "选择一个选项",
+    "predicate": "是 / 否概率",
+    "score": "等级评分",
+    "question": "问题",
+    "options": "选项",
+    "levels": "等级，从低到高",
+    "onePerLine": "每行一个。",
+    "invalidOptions": "请输入 2–{{max}} 个不重复的值，每行一个。",
+    "run": "开始测试",
+    "running": "测试中…",
+    "failed": "决策请求失败。",
+    "missingAnswer": "响应未包含所请求的答案。",
+    "result": "结果",
+    "confidence": "置信度",
+    "differentRule": "请求匹配了其他规则，请检查路由配置。",
+    "raw": "原始响应",
+    "exampleInput": "我的账单中有一笔不明费用。",
+    "exampleQuestion": "应该由哪个团队处理？",
+    "exampleOptions": "账单\n技术",
+    "examplePredicate": "客户是否提到不明费用？",
+    "exampleScore": "这个请求有多紧急？",
+    "exampleLevels": "低\n中\n高",
+    "tokens": "Token：输入 {{input}} · 输出 {{output}}",
+    "runningHint": "正在等待模型返回决策…",
+    "emptyTitle": "结果将显示在这里",
+    "emptyBody": "可以直接运行示例，也可以修改输入和问题后再测试。",
+    "answer": "模型回答",
+    "probabilities": "各选项概率",
+    "stale": "输入已更改，当前显示的是上次结果。重新运行可更新。"
   },
   "decisionsGuide": {
     "title": "Decisions API 快速开始",
@@ -324,6 +418,8 @@ export default {
     "enabledBody": "模型名称已添加 [1m] 后缀，以支持扩展上下文。",
     "disabledBody": "已移除强制添加的 [1m] 模型后缀；客户端主动请求 1M 时仍会生效。",
     "requiresApplyHint": "请应用下方的配置并重启 {{client}} 以使更改生效。",
+    "appliedOn": "已开启 1M 上下文，{{client}} 配置已自动更新，重启 {{client}} 后生效。",
+    "appliedOff": "已关闭 1M 上下文，{{client}} 配置已自动更新，重启 {{client}} 后生效。",
     "restartOnlyHint": "请重启 {{client}} 并重新选择模型以使更改生效。"
   }
 };

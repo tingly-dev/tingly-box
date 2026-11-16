@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 )
 
 // ConvertOpenAIResponsesToChat converts OpenAI Responses API params to Chat Completions format.
@@ -146,7 +147,7 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			fnCall := item.OfFunctionCall
 			pendingCalls = append(pendingCalls, pendingToolCall{
 				CallID:    fnCall.CallID,
-				Name:      fnCall.Name,
+				Name:      toolnamespace.FlatName(fnCall.Namespace.Value, fnCall.Name),
 				Arguments: fnCall.Arguments,
 			})
 			continue
@@ -356,43 +357,39 @@ func ConvertResponsesToolsToChatTools(tools []responses.ToolUnionParam) []openai
 		return nil
 	}
 
-	result := make([]openai.ChatCompletionToolUnionParam, 0, len(tools))
+	functions := toolnamespace.Functions(tools)
+	result := make([]openai.ChatCompletionToolUnionParam, 0, len(functions))
 
-	for _, tool := range tools {
-		// Handle function tools
-		if !param.IsOmitted(tool.OfFunction) {
-			fn := tool.OfFunction
-
-			// Convert parameters map to proper format
-			var parameters map[string]interface{}
-			if fn.Parameters != nil {
-				parameters = fn.Parameters
-			} else {
-				// Create empty parameters object
-				parameters = map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
-				}
+	for _, fn := range functions {
+		// Convert parameters map to proper format
+		var parameters map[string]interface{}
+		if fn.Parameters != nil {
+			parameters = fn.Parameters
+		} else {
+			// Create empty parameters object
+			parameters = map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
 			}
-
-			functionDef := shared.FunctionDefinitionParam{
-				Name:        fn.Name,
-				Parameters:  parameters,
-				Description: param.Opt[string]{},
-			}
-
-			// Set description if present
-			if !param.IsOmitted(fn.Description) {
-				functionDef.Description = fn.Description
-			}
-
-			// Set strict mode if present
-			if !param.IsOmitted(fn.Strict) {
-				// Note: strict mode is set via ExtraFields if needed
-			}
-
-			result = append(result, openai.ChatCompletionFunctionTool(functionDef))
 		}
+
+		functionDef := shared.FunctionDefinitionParam{
+			Name:        fn.Name,
+			Parameters:  parameters,
+			Description: param.Opt[string]{},
+		}
+
+		// Set description if present
+		if !param.IsOmitted(fn.Description) {
+			functionDef.Description = fn.Description
+		}
+
+		// Set strict mode if present
+		if !param.IsOmitted(fn.Strict) {
+			// Note: strict mode is set via ExtraFields if needed
+		}
+
+		result = append(result, openai.ChatCompletionFunctionTool(functionDef))
 	}
 
 	return result

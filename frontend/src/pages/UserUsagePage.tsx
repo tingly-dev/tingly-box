@@ -5,14 +5,15 @@ import {
     Box,
     CircularProgress,
     Grid,
-    Paper,
     IconButton,
+    Paper,
     Skeleton,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
 } from '@mui/material';
 import { Refresh } from '@/components/icons';
+import { fontSizes } from '@/theme/fonts';
 import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import {
     formatNumber,
@@ -46,6 +47,7 @@ import {
     fetchAccountsForProvider,
 } from './userUsage/userUsageModel';
 import type { TimeRange, ViewMode, UserUsageRow, PrimaryColumn } from './userUsage/userUsageModel';
+import { radius } from '@tingly/ui/theme/radius';
 
 const UserUsageSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -84,8 +86,8 @@ export default function UserUsagePage() {
 
     // Each axis owns its own search/sort/pagination/selection/detail-load
     // lifecycle via the shared hook — see components/dashboard/RosterAxis.tsx.
-    // All three run unconditionally (fixed hook-call count), so all three
-    // rosters' detail queries are ready before the user ever toggles to them.
+    // All three run unconditionally (fixed hook-call count), but only the axis
+    // on screen loads its detail; the others load it when first shown.
     const accountAxis = useRosterAxis<UserUsageRow, AggregatedStat, TimeRange>({
         roster: rows,
         getKey: accountKey,
@@ -94,6 +96,7 @@ export default function UserUsagePage() {
         rowsPerPage,
         range,
         loadDetail: fetchModelsForAccount,
+        enabled: viewMode === 'account',
     });
     const modelAxis = useRosterAxis<AggregatedStat, AggregatedStat, TimeRange>({
         roster: modelRoster,
@@ -103,6 +106,7 @@ export default function UserUsagePage() {
         rowsPerPage,
         range,
         loadDetail: fetchAccountsForModel,
+        enabled: viewMode === 'model',
     });
     const providerAxis = useRosterAxis<AggregatedStat, AggregatedStat, TimeRange>({
         roster: providerRoster,
@@ -112,6 +116,7 @@ export default function UserUsagePage() {
         rowsPerPage,
         range,
         loadDetail: fetchAccountsForProvider,
+        enabled: viewMode === 'provider',
     });
     // Fields common to every axis (search/sort/page/handleSort/detailLoading)
     // are safe to read off this union without a three-way ternary at every
@@ -321,7 +326,33 @@ export default function UserUsagePage() {
             <Box component="h1" sx={visuallyHidden}>
                 {t('dashboard.userUsage.title', { defaultValue: 'Team usage' })}
             </Box>
-            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1.5 }}>
+            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: radius.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+                    <ToggleButtonGroup
+                            size="small"
+                            exclusive
+                            value={viewMode}
+                            onChange={(_, value: ViewMode | null) => value && setViewMode(value)}
+                            aria-label={t('dashboard.userUsage.viewMode', { defaultValue: 'View' })}
+                            sx={{
+                                '& .MuiToggleButton-root': {
+                                    px: 1.5,
+                                    py: 0.25,
+                                    fontSize: fontSizes.md,
+                                    textTransform: 'none',
+                                },
+                            }}
+                        >
+                            <ToggleButton value="account">
+                                {t('dashboard.userUsage.byAccount', { defaultValue: 'By account' })}
+                            </ToggleButton>
+                            <ToggleButton value="model">
+                                {t('dashboard.userUsage.byModel', { defaultValue: 'By model' })}
+                            </ToggleButton>
+                            <ToggleButton value="provider">
+                                {t('dashboard.userUsage.byProvider', { defaultValue: 'By provider' })}
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <ToggleButtonGroup
                             size="small"
                             exclusive
@@ -345,6 +376,7 @@ export default function UserUsagePage() {
                                 </IconButton>
                             </span>
                         </Tooltip>
+                </Box>
             </Paper>
 
             {error && <Alert severity="error">{error}</Alert>}

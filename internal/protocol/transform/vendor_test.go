@@ -189,7 +189,7 @@ func TestVendorTransform_AnthropicV1_ProviderMatching(t *testing.T) {
 				},
 			}
 
-			// device is required for metadata transform (panics without it)
+			// extra only feeds the identity rewrite, which a provider without OAuth does not get
 			extra := map[string]interface{}{"device": "test-device", "user_id": "test-account"}
 
 			ctx := &TransformContext{
@@ -266,7 +266,7 @@ func TestVendorTransform_AnthropicV1_SupportedModel_AdaptivePreserved(t *testing
 			}
 
 			ctx := &TransformContext{
-				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
@@ -322,7 +322,7 @@ func TestVendorTransform_AnthropicV1_UnsupportedModel_AdaptiveDisabled(t *testin
 			}
 
 			ctx := &TransformContext{
-				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
@@ -369,7 +369,7 @@ func TestVendorTransform_AnthropicV1_BillingHeaderPrepend(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
@@ -408,7 +408,7 @@ func TestVendorTransform_AnthropicV1_BillingHeaderReplace(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
@@ -442,7 +442,7 @@ func TestVendorTransform_AnthropicV1_NoSystemPrompt(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
@@ -529,7 +529,7 @@ func TestVendorTransform_AnthropicBeta_ProviderMatching(t *testing.T) {
 				OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 			})
 
-			// device is required for metadata transform (panics without it)
+			// extra only feeds the identity rewrite, which a provider without OAuth does not get
 			extra := map[string]interface{}{"device": "test-device", "user_id": "test-account"}
 
 			ctx := &TransformContext{
@@ -596,7 +596,7 @@ func TestVendorTransform_AnthropicBeta_SupportedModel_AdaptivePreserved(t *testi
 			})
 
 			ctx := &TransformContext{
-				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
@@ -643,7 +643,7 @@ func TestVendorTransform_AnthropicBeta_UnsupportedModel_AdaptiveDisabled(t *test
 			})
 
 			ctx := &TransformContext{
-				Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+				Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 				Request:  req,
 				Extra: map[string]interface{}{
 					"device":  "test-device-id",
@@ -681,7 +681,7 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderPrepend(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
@@ -716,7 +716,7 @@ func TestVendorTransform_AnthropicBeta_BillingHeaderReplace(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
@@ -748,7 +748,7 @@ func TestVendorTransform_AnthropicBeta_NoSystemPrompt(t *testing.T) {
 	}
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":  "device-id",
@@ -858,7 +858,7 @@ func TestVendorTransform_AnthropicBeta_FullChain(t *testing.T) {
 	})
 
 	ctx := &TransformContext{
-		Provider: &typ.Provider{APIBase: "api.anthropic.com"},
+		Provider: claudeCodeOAuthProvider("api.anthropic.com"),
 		Request:  req,
 		Extra: map[string]interface{}{
 			"device":   "my-device-abc",

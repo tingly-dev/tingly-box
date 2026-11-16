@@ -320,8 +320,14 @@ func convertGoogleContentToAnthropic(content *genai.Content) anthropic.MessagePa
 
 		// Handle function calls
 		if part.FunctionCall != nil {
+			// A call without args has a nil map, which would marshal as
+			// "input": null; Anthropic requires an object.
+			args := part.FunctionCall.Args
+			if args == nil {
+				args = map[string]any{}
+			}
 			blocks = append(blocks,
-				anthropic.NewToolUseBlock(part.FunctionCall.ID, part.FunctionCall.Args, part.FunctionCall.Name),
+				anthropic.NewToolUseBlock(part.FunctionCall.ID, args, part.FunctionCall.Name),
 			)
 		}
 

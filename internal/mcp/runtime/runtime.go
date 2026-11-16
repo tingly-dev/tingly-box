@@ -29,6 +29,7 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
+	sourceLocks       sync.Map
 	closed            bool // set once Close() begins; blocks creating new sources
 	virtualRegistry   *coretool.VirtualToolRegistry
 	sessionStore      *SessionStore
@@ -38,6 +39,8 @@ type Runtime struct {
 	enabledNamesCache   map[string]struct{}
 	enabledNamesExpires time.Time
 	enabledNamesMu      sync.RWMutex
+	remoteToolsCache    []openai.ChatCompletionToolUnionParam
+	remoteToolsExpires  time.Time
 
 	// envRefWarnedOnce ensures unresolved environment reference warnings
 	// are only logged once per runtime instance to avoid log spam.
@@ -61,6 +64,7 @@ func NewRuntime(getConfig configProvider) *Runtime {
 		sessionStore:      NewSessionStore(10 * time.Minute),
 	}
 	r.sweeper = r.sessionStore.StartSweeper(1 * time.Minute)
+	r.virtualRegistry.SetOwnershipResolver(r.IsGatewayToolName)
 	return r
 }
 
@@ -115,6 +119,9 @@ func (r *Runtime) Close() {
 
 	var wg sync.WaitGroup
 	for sourceID, source := range sources {
+		if retiring, ok := source.(interface{ Retire() }); ok {
+			retiring.Retire()
+		}
 		wg.Add(1)
 		go func(sourceID string, source ToolSource) {
 			defer wg.Done()
@@ -161,6 +168,8 @@ type mcpTool struct {
 	Description  string          `json:"description,omitempty"`
 	InputSchema  json.RawMessage `json:"inputSchema,omitempty"`
 	InputSchema2 json.RawMessage `json:"input_schema,omitempty"`
+	OutputSchema json.RawMessage
+	Annotations  json.RawMessage
 }
 
 func (t mcpTool) schema() json.RawMessage {
@@ -174,13 +183,52 @@ func (t mcpTool) schema() json.RawMessage {
 }
 
 // ListServerToolsForInjection returns MCP tools that should be injected into upstream model requests.
-// Injection is intentionally restricted to server-side virtual tools.
-// Client-facing non-virtual tools must be exposed through MCP transport endpoints instead.
+// Injection includes gateway-only Server Tools and connected MCP tools opted in
+// for gateway usage. The request path gates the latter with the MCP flag.
 func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.ChatCompletionToolUnionParam {
 	if r == nil {
 		return nil
 	}
-	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
+	return append(r.ListBuiltinServerToolsForInjection(ctx), r.remoteGatewayTools(ctx)...)
+}
+
+// HasBuiltinServerTools reports whether any Tingly Box Server Tool would be
+// offered to a model right now. It lets the request path serve Server Tools
+// without the experimental MCP flag, which only governs connected MCP tools.
+func (r *Runtime) HasBuiltinServerTools() bool {
+	if r == nil {
+		return false
+	}
+	if r.virtualRegistry != nil {
+		for _, vt := range r.virtualRegistry.ListVirtualTools() {
+			if r.isVirtualServerToolInjectable(vt) {
+				return true
+			}
+		}
+	}
+	cfg := r.getConfigOrDefault()
+	if cfg != nil {
+		for _, source := range cfg.Sources {
+			if source.ID != mcptools.ServerWebtoolsSourceID {
+				continue
+			}
+			for _, name := range mcptools.DefaultBuiltinWebtoolNames() {
+				if r.isBuiltinServerToolAvailable(source, name) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// ListBuiltinServerToolsForInjection returns only Tingly Box's own Server
+// Tools (Advisor, Search and Fetch), which need no user-connected MCP.
+func (r *Runtime) ListBuiltinServerToolsForInjection(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+	if r == nil {
+		return nil
+	}
+	out := make([]openai.ChatCompletionToolUnionParam, 0, 2)
 	if r.virtualRegistry != nil {
 		virtualTools := r.virtualRegistry.ListVirtualTools()
 		for _, vt := range virtualTools {
@@ -209,7 +257,68 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 			out = append(out, openai.ChatCompletionFunctionTool(def))
 		}
 	}
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return out
+	}
+	for _, source := range cfg.Sources {
+		if source.ID != mcptools.ServerWebtoolsSourceID || !typ.IsMCPSourceEnabled(source) {
+			continue
+		}
+		status, err := r.DiscoverSource(ctx, source.ID)
+		if err != nil {
+			continue
+		}
+		for _, tool := range status.Tools {
+			if !r.isBuiltinServerToolAvailable(source, tool.Name) {
+				continue
+			}
+			params := shared.FunctionParameters{}
+			if err := json.Unmarshal(tool.InputSchema, &params); err != nil {
+				continue
+			}
+			def := shared.FunctionDefinitionParam{Name: tool.NormalizedName, Parameters: params}
+			if tool.Description != "" {
+				def.Description = param.NewOpt(tool.Description)
+			}
+			out = append(out, openai.ChatCompletionFunctionTool(def))
+		}
+	}
 	return out
+}
+
+// remoteGatewayTools discovers gateway-eligible tools from external sources.
+// Discovery is a network round trip per source, so the result is cached.
+func (r *Runtime) remoteGatewayTools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+	r.enabledNamesMu.RLock()
+	if r.remoteToolsCache != nil && time.Now().Before(r.remoteToolsExpires) {
+		cached := r.remoteToolsCache
+		r.enabledNamesMu.RUnlock()
+		return cached
+	}
+	r.enabledNamesMu.RUnlock()
+	remote := make([]openai.ChatCompletionToolUnionParam, 0)
+	for _, status := range r.Catalog(ctx, "gateway") {
+		for _, tool := range status.Tools {
+			if !tool.Enabled || !tool.Usage.Gateway || tool.Implementation == typ.ToolImplementationVirtual || status.SourceID == mcptools.ServerWebtoolsSourceID {
+				continue
+			}
+			params := shared.FunctionParameters{"type": "object", "properties": map[string]any{}}
+			if len(tool.InputSchema) > 0 {
+				_ = json.Unmarshal(tool.InputSchema, &params)
+			}
+			def := shared.FunctionDefinitionParam{Name: tool.NormalizedName, Parameters: params}
+			if tool.Description != "" {
+				def.Description = param.NewOpt(tool.Description)
+			}
+			remote = append(remote, openai.ChatCompletionFunctionTool(def))
+		}
+	}
+	r.enabledNamesMu.Lock()
+	r.remoteToolsCache = remote
+	r.remoteToolsExpires = time.Now().Add(remoteToolsCacheTTL)
+	r.enabledNamesMu.Unlock()
+	return remote
 }
 
 func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
@@ -233,8 +342,13 @@ func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
 			if !IsServerVisibleSource(source) {
 				return false
 			}
-			allowAll, allowSet := buildAllowList(source.Tools)
-			return allowAll || allowSet[vt.Name]
+			// On by default, but without a consultation provider a call can only
+			// fail, so the tool is offered once one is chosen.
+			if source.Advisor == nil || source.Advisor.ProviderUUID == "" {
+				return false
+			}
+			enabled, usage := EffectiveToolPolicy(source, vt.Name)
+			return enabled && usage.Gateway
 		}
 		return false
 	}
@@ -263,12 +377,33 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	if r == nil {
 		return coretool.ToolResult{}, fmt.Errorf("MCP runtime not initialized")
 	}
+	ctx, cancel := r.requestContext(ctx)
+	defer cancel()
 	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
 		return coretool.ToolResult{}, &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
+	if sourceID == mcptools.ServerWebtoolsSourceID && !r.IsBuiltinServerToolAvailable(sourceID, toolName) {
+		return coretool.ToolResult{}, fmt.Errorf("Server Tool %s is disabled or not configured; Search requires SERPER_API_KEY", normalizedName)
+	}
+
+	if cfg := r.GetConfig(); cfg != nil {
+		policyID := sourceID
+		if sourceID == "builtin" && toolName == "advisor" {
+			policyID = "advisor"
+		}
+		for _, configured := range cfg.Sources {
+			if configured.ID == policyID {
+				enabled, _ := EffectiveToolPolicy(configured, toolName)
+				if !enabled {
+					return coretool.ToolResult{}, fmt.Errorf("tool %s is disabled by policy", normalizedName)
+				}
+				break
+			}
+		}
+	}
 	if sourceID == "builtin" && r.virtualRegistry != nil {
 		if tool, ok := r.virtualRegistry.Get(toolName); ok {
 			return r.callVirtualTool(ctx, tool, arguments)
@@ -300,13 +435,13 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 		}
 	}
 
-	// Call the tool — remote sources still return string; wrap into ToolResult.
+	// Call the source and retain the complete MCP result.
 	result, err := source.CallTool(ctx, toolName, arguments)
 	if err != nil {
 		return coretool.ToolResult{}, err
 	}
 
-	return coretool.TextToolResult(result), nil
+	return result, nil
 }
 
 // callVirtualTool executes an in-process virtual tool with panic recovery.
@@ -348,119 +483,16 @@ func (r *Runtime) isSourceEnabled(sourceID string) bool {
 	return false
 }
 
-// invalidateSource removes a source from the cache and disconnects it
-func (r *Runtime) invalidateSource(ctx context.Context, sourceID string) {
-	r.sourcesMu.Lock()
-	defer r.sourcesMu.Unlock()
-
-	if source, exists := r.activeSources[sourceID]; exists {
-		// Disconnect the source
-		if err := source.Disconnect(ctx); err != nil {
-			logrus.WithField("source", sourceID).WithError(err).
-				Warn("mcp: failed to disconnect source during invalidation")
-		}
-		delete(r.activeSources, sourceID)
-		logrus.WithField("source", sourceID).Debug("mcp: invalidated cached source")
-	}
-}
-
-// getOrCreateSource gets an existing tool source or creates a new one.
-func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolSource, error) {
-	// Fast path: check cache
-	r.sourcesMu.RLock()
-	source := r.activeSources[sourceID]
-	r.sourcesMu.RUnlock()
-
-	if source != nil {
-		// Check if source is still enabled in current config
-		if !r.isSourceEnabled(sourceID) {
-			// Source is disabled, remove from cache and return error
-			r.invalidateSource(ctx, sourceID)
-			return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
-		}
-		return source, nil
-	}
-
-	// Slow path: create new source
-	r.sourcesMu.Lock()
-	defer r.sourcesMu.Unlock()
-
-	if r.closed {
-		return nil, &sessionError{sourceID: sourceID, msg: "mcp runtime is shutting down"}
-	}
-
-	// Double-check
-	source = r.activeSources[sourceID]
-	if source != nil {
-		// Check if source is still enabled in current config
-		if !r.isSourceEnabled(sourceID) {
-			// Source is disabled, remove from cache and return error
-			if err := source.Disconnect(ctx); err != nil {
-				logrus.WithField("source", sourceID).WithError(err).
-					Warn("mcp: failed to disconnect source")
-			}
-			delete(r.activeSources, sourceID)
-			return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
-		}
-		return source, nil
-	}
-
-	// Find source config
-	cfg := r.getConfigOrDefault()
-	if cfg == nil {
-		return nil, &sessionError{sourceID: sourceID, msg: "mcp runtime config is not set"}
-	}
-
-	var sourceConfig *typ.MCPSourceConfig
-	for i := range cfg.Sources {
-		if cfg.Sources[i].ID == sourceID {
-			sourceConfig = &cfg.Sources[i]
-			break
-		}
-	}
-
-	if sourceConfig == nil {
-		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " not found"}
-	}
-
-	// Virtual sources (e.g. advisor) are handled in-process; they are never backed by a subprocess or remote connection.
-	if sourceConfig.Advisor != nil {
-		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is a virtual tool (use virtual registry)"}
-	}
-
-	if !typ.IsMCPSourceEnabled(*sourceConfig) {
-		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
-	}
-	if missing := ValidateEnabledMCPSourceEnvRefs([]typ.MCPSourceConfig{*sourceConfig}); len(missing) > 0 {
-		first := missing[0]
-		return nil, &sessionError{
-			sourceID: sourceID,
-			msg:      "missing environment variable " + first.VarName + " for " + first.FieldPath,
-		}
-	}
-
-	// Create tool source using factory
-	newSource, err := r.toolSourceFactory.CreateToolSource(*sourceConfig)
-	if err != nil {
-		return nil, &sessionError{sourceID: sourceID, msg: "failed to create tool source: " + err.Error()}
-	}
-
-	// Cache the source
-	r.activeSources[sourceID] = newSource
-
-	logrus.WithField("source", sourceID).WithField("transport", newSource.GetType()).
-		Debug("mcp: created tool source")
-
-	return newSource, nil
-}
-
 // SourceTool represents a tool from a specific MCP source with its original name.
 type SourceTool struct {
-	SourceID    string
-	SourceName  string
-	Name        string
-	Description string
-	InputSchema json.RawMessage
+	NormalizedName string
+	OutputSchema   json.RawMessage
+	Annotations    json.RawMessage
+	SourceID       string
+	SourceName     string
+	Name           string
+	Description    string
+	InputSchema    json.RawMessage
 }
 
 // ListSourceTools returns all MCP tools grouped by source with their original names.
@@ -543,37 +575,15 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 //   - source must be client-visible
 //   - tool must come from non-virtual source (ListSourceTools contract)
 func (r *Runtime) ListClientSourceToolsForMCP(ctx context.Context) (map[string][]SourceTool, error) {
-	sourceTools, err := r.ListSourceTools(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(sourceTools) == 0 {
-		return sourceTools, nil
-	}
-
-	cfg := r.getConfigOrDefault()
-	if cfg == nil {
-		return map[string][]SourceTool{}, nil
-	}
-
-	clientSources := make(map[string]bool)
-	for _, source := range cfg.Sources {
-		if !typ.IsMCPSourceEnabled(source) {
-			continue
-		}
-		if IsClientVisibleSource(source) {
-			clientSources[source.ID] = true
+	out := make(map[string][]SourceTool)
+	for _, status := range r.Catalog(ctx, "client") {
+		for _, t := range status.Tools {
+			if t.Enabled && t.Usage.Client {
+				out[t.SourceID] = append(out[t.SourceID], SourceTool{SourceID: t.SourceID, Name: t.Name, Description: t.Description, InputSchema: t.InputSchema, OutputSchema: t.OutputSchema, Annotations: t.Annotations, NormalizedName: t.NormalizedName})
+			}
 		}
 	}
-
-	filtered := make(map[string][]SourceTool)
-	for sourceID, tools := range sourceTools {
-		if !clientSources[sourceID] {
-			continue
-		}
-		filtered[sourceID] = tools
-	}
-	return filtered, nil
+	return out, nil
 }
 
 func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
@@ -696,6 +706,10 @@ func (r *Runtime) HasServerTools() bool {
 
 const enabledNamesCacheTTL = 5 * time.Second
 
+// remoteToolsCacheTTL bounds how often model requests trigger upstream
+// tools/list round trips; config changes invalidate it immediately.
+const remoteToolsCacheTTL = 30 * time.Second
+
 func (r *Runtime) ListClientVisibleMCPToolNames(ctx context.Context) map[string]struct{} {
 	out := make(map[string]struct{})
 	if r == nil {
@@ -764,6 +778,32 @@ func (r *Runtime) ListCallableServerToolNames(ctx context.Context) map[string]st
 	return out
 }
 
+// IsBuiltinServerToolAvailable checks policy and per-tool readiness without
+// connecting a stdio process. A missing search key never disables Fetch.
+func (r *Runtime) IsBuiltinServerToolAvailable(sourceID, toolName string) bool {
+	if r == nil || sourceID != mcptools.ServerWebtoolsSourceID {
+		return false
+	}
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return false
+	}
+	for _, source := range cfg.Sources {
+		if source.ID == sourceID {
+			return r.isBuiltinServerToolAvailable(source, toolName)
+		}
+	}
+	return false
+}
+
+func (r *Runtime) isBuiltinServerToolAvailable(source typ.MCPSourceConfig, toolName string) bool {
+	if _, known := mcptools.WebtoolReadinessCheckers[toolName]; !known {
+		return false
+	}
+	enabled, usage := EffectiveToolPolicy(source, toolName)
+	return enabled && usage.Gateway && r.isSourceToolConfigured(source, toolName)
+}
+
 // IsClientToolAvailable reports whether a client-visible tool on the given source is
 // enabled and configured to handle requests.
 //
@@ -799,24 +839,22 @@ func (r *Runtime) IsClientToolAvailable(sourceID string, toolName string) bool {
 		if !found {
 			return false
 		}
-		// Source-level configuration check via ToolSource.IsConfigured().
-		// Expand env refs first so IsConfigured sees resolved values.
-		expandedSource := source
-		expandedSource.Env = make(map[string]string, len(source.Env))
-		maps.Copy(expandedSource.Env, source.Env)
-		expandSourceEnvInPlace(expandedSource.Env)
-		ts, err := r.toolSourceFactory.CreateToolSource(expandedSource)
-		if err != nil || !ts.IsConfigured() {
-			return false
-		}
-		// Tool-level readiness check (builtin sources only).
-		checker, ok := mcptools.WebtoolReadinessCheckers[toolName]
-		if !ok {
-			return true
-		}
-		return checker.IsReady(expandedSource.Env)
+		return r.isSourceToolConfigured(source, toolName)
 	}
 	return false
+}
+
+// isSourceToolConfigured shares environment resolution and transport/tool readiness
+// without changing each caller's source eligibility or policy checks.
+func (r *Runtime) isSourceToolConfigured(source typ.MCPSourceConfig, toolName string) bool {
+	source.Env = maps.Clone(source.Env)
+	expandSourceEnvInPlace(source.Env)
+	ts, err := r.toolSourceFactory.CreateToolSource(source)
+	if err != nil || !ts.IsConfigured() {
+		return false
+	}
+	checker, known := mcptools.WebtoolReadinessCheckers[toolName]
+	return !known || checker.IsReady(source.Env)
 }
 
 // expandSourceEnvInPlace expands ${VAR} references in an env map using os.Getenv as fallback.
@@ -844,16 +882,24 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 	}
 	r.enabledNamesMu.RUnlock()
 
-	r.enabledNamesMu.Lock()
-	defer r.enabledNamesMu.Unlock()
-	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
-		return r.enabledNamesCache
-	}
 	out := r.ListClientVisibleMCPToolNames(ctx)
 	for name := range r.ListCallableServerToolNames(ctx) {
 		out[name] = struct{}{}
 	}
+	r.enabledNamesMu.Lock()
+	defer r.enabledNamesMu.Unlock()
 	r.enabledNamesCache = out
 	r.enabledNamesExpires = time.Now().Add(enabledNamesCacheTTL)
 	return out
+}
+
+func (r *Runtime) requestContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := 30
+	if cfg := r.GetConfig(); cfg != nil {
+		timeout = cfg.RequestTimeout
+	}
+	return context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 }

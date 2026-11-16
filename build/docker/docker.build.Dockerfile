@@ -70,18 +70,19 @@ RUN apk --no-cache add ca-certificates su-exec tzdata
 
 # Create app user
 RUN addgroup -S tingly && \
-    adduser -S -G tingly tingly
+    adduser -S -G tingly -h /app tingly
 
 # Set the Current Working Directory
 WORKDIR /app
+ENV HOME=/app
 
 # Copy the binary from builder stage
 COPY --from=builder /app/tingly /usr/local/bin/tingly
 
 # Create the config/data directory (memory, logs and db all live under this
 # single tree, see internal/config/app_config.go) with proper permissions.
-RUN mkdir -p /home/tingly/.tingly-box && \
-    chown -R tingly:tingly /app /home/tingly
+RUN mkdir -p /app/.tingly-box && \
+    chown -R tingly:tingly /app
 
 # Entrypoint fixes up ownership of a bind-mounted data directory at runtime
 # (a freshly `mkdir`ed host directory is owned by the host user, not the
@@ -114,8 +115,8 @@ CMD ["sh", "-c", "echo '======================================' && \
      echo '  Web UI will be available at:' && \
      echo '  http://localhost:'${TINGLY_PORT}'/dashboard?user_auth_token=tingly-box-user-token' && \
      echo '======================================' && \
-     rm -f /home/tingly/.tingly-box/tingly-server.pid && \
+     rm -f /app/.tingly-box/tingly-server.pid && \
      exec tingly start --no-daemon --host ${TINGLY_HOST} --port ${TINGLY_PORT}"]
 
 # Volume for persistent data (memory, logs and db all live under this tree)
-VOLUME ["/home/tingly/.tingly-box"]
+VOLUME ["/app/.tingly-box"]

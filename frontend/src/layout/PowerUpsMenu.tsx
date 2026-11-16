@@ -13,9 +13,7 @@ import {
 } from '@mui/material';
 import {
     Bolt as IconBolt,
-    Code as IconCode,
-    Send as IconSend,
-    RemoteControl as IconRemote,
+    Folder as IconFolder,
     Shield as IconShield,
     TestPipe as IconTestPipe,
     Handyman as IconTools,
@@ -31,6 +29,8 @@ import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
 import { Z_INDEX } from '../constants/zIndex';
 import { fontSizes } from '@/theme/fonts';
+import { announceFeatureDisabled } from './featureNotice';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PowerUp {
     key: string;
@@ -73,7 +73,7 @@ interface PowerUpsMenuProps {
 export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, onNavigate, onMouseEnter, onMouseLeave }) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { skillUser, skillIde, enableGuardrails, enableMCP, enableBench, enableDesk, loading, refresh } = useFeatureFlags();
+    const { skillIde, enableGuardrails, enableMCP, enableBench, enableProjects, loading, refresh } = useFeatureFlags();
     const [updating, setUpdating] = useState<ExperimentalFeature>();
     const [failed, setFailed] = useState(false);
     const { isHidden, toggleHidden } = useHiddenScenarios();
@@ -100,23 +100,8 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                 onToggle: () => toggleHidden(id),
             }] : [];
         }),
-        // Remote leads: the established power-up (drive agents from IM). Not
-        // flag-gated — its switch hides/shows the rail item via the same
-        // hidden set as Team/Image; connected bots keep running.
-        {
-            key: 'remote',
-            icon: <IconRemote sx={iconSx} />,
-            name: t('layout.remote'),
-            description: t('scenarioOverview.powerUps.remoteDesc', { defaultValue: 'Drive your agents from IM — connect bots for remote control and notifications.' }),
-            path: '/bots/overview',
-            enabled: !isHidden('remote'),
-            onToggle: () => toggleHidden('remote'),
-            status: botTotals.total > 0
-                ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
-                : undefined,
-        },
         // VModel — the built-in synthetic providers (onboarding, demos,
-        // dry-runs). On by default: it only hides/shows the Credentials
+        // dry-runs). Off by default: it only hides/shows the Credentials
         // sidebar row, the providers themselves keep working.
         {
             key: 'vmodel',
@@ -138,15 +123,19 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             enabled: enableBench,
         },
         {
-            key: 'desk',
-            feature: 'desk' as const,
-            icon: <IconCode sx={iconSx} />,
-            name: t('system.experimentalFeatures.desk', { defaultValue: 'Desk' }),
-            description: t('system.experimentalFeatures.enableDesk', { defaultValue: 'Run Claude Code on this machine from a browser tab, in a folder you choose.' }),
-            path: '/desk',
+            key: 'projects',
+            feature: 'projects' as const,
+            icon: <IconFolder sx={iconSx} />,
+            name: t('layout.workspace', { defaultValue: 'Workspace' }),
+            description: t('system.experimentalFeatures.enableProjects'),
+            path: '/workspace',
             stage: 'beta' as const,
-            enabled: enableDesk,
-            enabledNotice: t('system.experimentalFeatures.deskEnabledInfo', { defaultValue: 'Anyone who can sign in to this tingly-box can now start Claude Code sessions on this machine and approve the tool calls they make.' }),
+            enabled: enableProjects,
+            enabledNotice: t('system.experimentalFeatures.projectsEnabledInfo'),
+            // The same switch turns on IM chats (the IM rail item).
+            status: botTotals.total > 0
+                ? t('bots.activeCount', { defaultValue: 'active {{active}} / {{total}}', active: botTotals.active, total: botTotals.total })
+                : undefined,
         },
         {
             key: 'mcp',
@@ -156,7 +145,6 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             description: t('system.experimentalFeatures.enableMCP'),
             path: '/mcp/sources',
             enabled: enableMCP,
-            stage: 'exp' as const,
         },
         {
             key: 'guardrails',
@@ -166,16 +154,6 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             description: t('system.experimentalFeatures.enableGuardrails'),
             path: '/guardrails',
             enabled: enableGuardrails,
-            stage: 'exp' as const,
-        },
-        {
-            key: 'skill_user',
-            feature: 'skill_user' as const,
-            icon: <IconSend sx={iconSx} />,
-            name: t('system.experimentalFeatures.userPrompts'),
-            description: t('system.experimentalFeatures.enableUserPrompts'),
-            path: '/prompt/user',
-            enabled: skillUser,
             stage: 'exp' as const,
         },
         {
@@ -191,13 +169,26 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
     ];
 
     const toggle = async (p: PowerUp) => {
-        if (p.onToggle) return p.onToggle();
+        if (p.onToggle) {
+            p.onToggle();
+            if (p.enabled && (p.key === 'team' || p.key === 'imagegen')) {
+                onClose();
+                onNavigate?.();
+                announceFeatureDisabled(p.name);
+            }
+            return;
+        }
         if (!p.feature) return;
         setFailed(false);
         setUpdating(p.feature);
         try {
             const result = await api.setScenarioFlag('_global', p.feature, !p.enabled);
             if (!result.success) throw new Error('Feature update was rejected');
+            if (p.feature === 'projects' && p.enabled) {
+                onClose();
+                onNavigate?.();
+                announceFeatureDisabled(p.name);
+            }
         } catch (error) {
             console.error(`Failed to set ${p.feature}:`, error);
             setFailed(true);
@@ -221,7 +212,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                 elevation={8}
                 onMouseEnter={onMouseEnter}
                 onMouseLeave={onMouseLeave}
-                sx={{ width: 380, maxHeight: '80vh', overflowY: 'auto', borderRadius: 2 }}
+                sx={{ width: 380, maxHeight: '80vh', overflowY: 'auto', borderRadius: radius.card }}
             >
             <Box sx={{ px: 2, pt: 1.5, pb: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -266,7 +257,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                                                 label={p.stage === 'exp'
                                                     ? t('scenarioOverview.powerUps.experimental')
                                                     : t('scenarioOverview.powerUps.beta')}
-                                                sx={{ height: 18, fontSize: fontSizes.xs }}
+                                                sx={{ height: 18, fontSize: fontSizes.micro }}
                                             />
                                         </Tooltip>
                                     )}

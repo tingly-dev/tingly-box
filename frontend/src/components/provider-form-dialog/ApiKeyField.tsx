@@ -6,6 +6,7 @@ import { fontSizes } from '@/theme/fonts';
 
 interface ApiKeyFieldProps {
     mode: 'add' | 'edit';
+    required?: boolean;
     token: string;
     onTokenChange: (value: string) => void;
     noApiKey: boolean;
@@ -23,6 +24,7 @@ interface ApiKeyFieldProps {
 const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     mode,
     token,
+    required = false,
     onTokenChange,
     noApiKey,
     onNoApiKeyChange,
@@ -33,14 +35,8 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     const [showApiKey, setShowApiKey] = useState(false);
 
     const isDisabled = noApiKey && !optionalEditable;
-    const label = noApiKey
-        ? optionalEditable ? 'API Key (Optional)' : 'API Key (Not Required)'
-        : t('providerDialog.apiKey.label');
-    const placeholder = optionalEditable && noApiKey
-        ? 'Leave blank if your local service has no auth configured'
-        : mode === 'add'
-            ? t('providerDialog.apiKey.placeholderAdd')
-            : t('providerDialog.apiKey.placeholderEdit');
+    const label = t('providerDialog.apiKey.label');
+    const placeholder = mode === 'add' ? t('providerDialog.apiKey.placeholderAdd') : t('providerDialog.apiKey.placeholderEdit');
 
     return (
         <Box>
@@ -51,9 +47,9 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                 type={showApiKey ? 'text' : 'password'}
                 value={token}
                 onChange={(e) => onTokenChange(e.target.value)}
-                required={!noApiKey}
+                required={required}
                 placeholder={placeholder}
-                helperText={mode === 'edit' && !optionalEditable && t('providerDialog.apiKey.helperEdit')}
+                helperText={t(mode === 'add' ? 'providerDialog.editUx.keyOptionalHint' : 'providerDialog.editUx.keyEditHint')}
                 disabled={isDisabled}
                 slotProps={{
                     input: {
@@ -69,6 +65,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                                     onClick={() => setShowApiKey(!showApiKey)}
                                     edge="end"
                                     disabled={isDisabled}
+                                    aria-label={t(showApiKey ? 'providerDialog.editUx.hideKey' : 'providerDialog.editUx.showKey')}
                                 >
                                     {showApiKey ? (
                                         <VisibilityOff fontSize="small"/>
@@ -96,7 +93,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                                 sx={{p: 0.5}}
                             />
                         }
-                        label="No API Key Required"
+                        label={t('providerDialog.editUx.noKey')}
                         labelPlacement="start"
                     />
                 </Box>

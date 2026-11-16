@@ -204,3 +204,13 @@ func TestCatalogCheckRejectsBadFile(t *testing.T) {
 		t.Fatal("expected failure for unknown dialect")
 	}
 }
+
+func TestMatrixResponseRetentionMode(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"matrix", "--mode=response_retention", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	if cli.Matrix.Mode != "response_retention" || !cli.Matrix.JsonOutput {
+		t.Fatalf("unexpected parsed flags: %+v", cli.Matrix)
+	}
+}

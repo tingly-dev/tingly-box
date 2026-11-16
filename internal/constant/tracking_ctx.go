@@ -17,6 +17,7 @@ const (
 	CtxKeyRemoteClientID            = "client_id"                   // string
 	CtxKeyRemoteClaims              = "claims"                      // *auth.Claims
 	CtxKeyRequestID                 = "request_id"                  // string
+	CtxKeyRecoveredErrorCount       = "recovered_error_count"       // int: errors from attempts superseded by a successful failover
 
 	// Request tracking metadata.
 	CtxKeyRule           = "tracking_rule"             // *typ.Rule

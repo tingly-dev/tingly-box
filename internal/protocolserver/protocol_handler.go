@@ -147,6 +147,14 @@ func (ph *ProtocolHandler) mcpEnabled() bool {
 	return MCPEnabled(ph.deps.Config)
 }
 
+// serverToolsEnabled reports whether the MCP request path runs: with the
+// experimental MCP flag on, or because a Tingly Box Server Tool (Advisor) is on
+// by itself. Server Tools need no MCP connection, so the flag, which governs
+// connected MCP tools, must not gate them.
+func (ph *ProtocolHandler) serverToolsEnabled() bool {
+	return ph.mcpEnabled() || (ph.deps.MCPRuntime != nil && ph.deps.MCPRuntime.HasBuiltinServerTools())
+}
+
 // mcpStripDisabledToolsEnabled returns whether dangerous disabled MCP strip
 // is enabled. Pure function of Config, mirrors root's (now-removed)
 // s.mcpStripDisabledToolsEnabled.

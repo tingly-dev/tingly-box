@@ -24,7 +24,7 @@ export default function RosterDetailHeader({
 }) {
     return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 1.5, minWidth: 0 }}>
-            <Typography variant="h6" noWrap sx={{ fontWeight: 650 }}>
+            <Typography variant="h6" noWrap sx={{ fontWeight: 600 }}>
                 {viewMode === 'account'
                     ? selectedUser!.display_name
                     : viewMode === 'model'

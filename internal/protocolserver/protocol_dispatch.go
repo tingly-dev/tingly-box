@@ -344,7 +344,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			// OpenAI passthrough: source and target are both OpenAI Chat format
 			disableStreamUsage := shouldStripChatUsage(reqCtx)
 
-			if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
+			if HasDeclaredMCPTools(req) && ph.serverToolsEnabled() {
 				ph.DispatchGenericOpenAIChatStream(c, reqCtx, rule, provider)
 				return
 			}
@@ -363,7 +363,7 @@ func (ph *ProtocolHandler) dispatchOpenAIChat(
 			// OpenAI passthrough: delegate to handleNonStreamingRequest for tool interceptor support
 			stripUsage := shouldStripChatUsage(reqCtx)
 
-			if HasDeclaredMCPTools(req) && ph.mcpEnabled() {
+			if HasDeclaredMCPTools(req) && ph.serverToolsEnabled() {
 				ph.DispatchGenericOpenAIChatNonStream(c, reqCtx, rule, provider)
 				return
 			}

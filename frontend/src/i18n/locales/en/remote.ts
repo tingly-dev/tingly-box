@@ -37,12 +37,8 @@ export default {
     "dialog": {
       "addSubtitle": "Choose a messaging platform and provide the credentials needed to connect it.",
       "addTitle": "Connect a bot",
-      "advancedAgentPolicy": "Advanced agent policy",
-      "advancedAgentPolicyHelper": "Limits what an authorized controller may execute; it does not grant access.",
       "alias": "Alias",
-      "aliasHelper": "Optional: a friendly name for this bot configuration.",
-      "bashAllowlist": "Bash Allowlist",
-      "bashAllowlistHelper": "Allowlisted /bash subcommands. Default: cd, ls, pwd.",
+      "aliasHelper": "Optional. Leave empty to use the bot's platform account name.",
       "cancel": "Cancel",
       "connect": "Connect bot",
       "editSubtitle": "Update this connection. Capabilities and people are managed from Access.",
@@ -170,23 +166,18 @@ export default {
         "step2Text": "Select \"Connect a bot\" and scan the QR code with Weixin to bind your account."
       }
     },
-    "modelDialog": {
-      "title": "Configure SmartGuide Model"
-    },
     "notify": {
       "botCreated": "Bot created successfully.",
-      "botDeleted": "Bot deleted successfully",
-      "botRestarted": "Bot restarted",
+      "botDeleted": "Deleted {{bot}}",
+      "botRestarted": "Restarted {{bot}}",
       "botUpdated": "Bot updated successfully.",
       "deleteFailed": "Failed to delete bot: {{error}}",
       "deleteFailedGeneric": "Failed to delete bot",
       "loadFailed": "Failed to load bot settings",
       "missingFields": "Missing required fields: {{fields}}",
-      "modelUpdateFailed": "Failed to update bot configuration",
-      "modelUpdated": "Bot model configuration updated",
       "qrBindRequired": "Please complete WeChat QR binding before saving",
-      "remoteAgentOff": "Remote Control disabled",
-      "remoteAgentOn": "Remote Control enabled",
+      "remoteAgentOff": "Remote Control disabled for {{bot}}",
+      "remoteAgentOn": "Remote Control enabled for {{bot}}",
       "restartFailed": "Failed to restart bot: {{error}}",
       "restartFailedGeneric": "Failed to restart bot",
       "saveFailed": "Failed to save bot settings",
@@ -195,7 +186,7 @@ export default {
       "unknownPlatform": "Unknown platform: {{platform}}"
     },
     "pairing": {
-      "copied": "Pairing command copied",
+      "copied": "Pairing command copied for {{bot}}",
       "copy": "Copy",
       "copyFailed": "Copy failed — check clipboard permissions",
       "expired": "expired",
@@ -206,7 +197,7 @@ export default {
       "reveal": "Reveal",
       "rotateFailed": "Rotate failed",
       "rotateTooltip": "Rotate (invalidates current code)",
-      "rotated": "Pairing code rotated"
+      "rotated": "Pairing code rotated for {{bot}}"
     },
     "platformSelector": {
       "empty": "No platforms available. Make sure the remote-control service is running.",
@@ -233,6 +224,7 @@ export default {
   },
   "remoteAgent": {
     "card": {
+      "claudeCode": "Claude Code",
       "manageAccess": "Manage access",
       "messageHint": "Nobody can control this bot yet. Message the bot directly, then grant Remote Control to that chat.",
       "pairHint": "Nobody can control this bot yet. Send this to the bot in a direct message:",
@@ -246,33 +238,29 @@ export default {
       "hideSettings": "Hide settings",
       "showSettings": "Settings",
       "statusError": "Couldn't check who can control",
-      "statusNoModel": "@tb has no model yet"
     },
     "ccProfile": {
       "default": "Default",
       "defaultSecondary": "Main claude_code scenario",
-      "dialogSubtitle": "Remote @cc sessions route through the selected profile — its rules, model mapping, and settings overrides.",
-      "dialogTitle": "Claude Code Profile for @cc",
+      "dialogSubtitle": "New sessions from this bot's chats run under this profile: its rules, model mapping and settings overrides.",
+      "dialogTitle": "Claude Code profile",
       "empty": "No Claude Code profiles yet. Create one on the Claude Code scenario page first.",
-      "persistentSession": "Keep the process warm between messages",
-      "persistentSessionCaption": "Experimental: skips process startup cost on every @cc message by reusing one Claude Code process across a chat's turns.",
       "separate": "separate",
       "unified": "unified",
       "chip": "Profile",
-      "defaultTooltip": "Uses the main claude_code scenario. Click to route @cc through a Claude Code profile.",
-      "missingTooltip": "Profile \"{{id}}\" no longer exists — @cc falls back to the default claude_code scenario. Click to pick another.",
+      "defaultTooltip": "Uses the main claude_code scenario. Click to pick a Claude Code profile instead.",
+      "missingTooltip": "Profile \"{{id}}\" no longer exists, so new sessions use the default claude_code scenario. Click to pick another.",
       "profileTooltip": "Claude Code profile",
       "scenario": "Scenario"
     },
     "notify": {
       "ccProfileUpdateFailed": "Failed to update Claude Code profile",
-      "ccProfileUpdated": "Claude Code profile updated",
-      "persistentSessionUpdateFailed": "Failed to update persistent-session setting"
+      "ccProfileUpdated": "{{bot}}: Claude Code profile updated",
     },
     "pageTitle": "Remote Control",
     "emptyTitle": "No bots yet",
-    "emptyDescription": "Connect a Telegram, Feishu, DingTalk or other chat bot, then drive Claude Code and SmartGuide from that chat.",
-    "pageSubtitle": "Who can control each bot, and where @tb and @cc messages go."
+    "emptyDescription": "Connect a Telegram, Feishu, DingTalk or other chat bot, then use Claude Code from that chat.",
+    "pageSubtitle": "Who can use Claude Code from each bot's chats, and the profile it runs under."
   },
   "bots": {
     "activeCount": "active {{active}} / {{total}}",
@@ -295,6 +283,7 @@ export default {
     "table": {
       "access": "Access",
       "actions": "Actions",
+      "bot": "Bot",
       "botId": "Bot UUID",
       "capabilities": "Capabilities",
       "chatIdCopied": "Chat ID copied",
@@ -315,19 +304,21 @@ export default {
       "uuidCopyFailed": "Copy failed — check clipboard permissions"
     },
     "toggle": {
-      "disabled": "Bot disabled",
-      "enabled": "Bot enabled",
+      "disabled": "Disabled {{bot}}",
+      "enabled": "Enabled {{bot}}",
       "failed": "Failed to toggle bot: {{error}}",
       "failedGeneric": "Failed to toggle bot"
     }
   },
   "botAccess": {
+    "alias": "Alias",
+    "aliasHint": "Leave empty to use the platform name or ID.",
     "actorId": "Platform actor ID",
     "actorIdHint": "Use the concrete user ID reported by the IM platform.",
     "actors_one": "{{count}} authorized actor",
     "actors_other": "{{count}} authorized actors",
     "addActor": "Add actor",
-    "addActorInfo": "This grants Start and Approve in this Group. Privileged access stays denied.",
+    "addActorInfo": "This grants Start and Approve in this Group. Turn on Any folder and files for them afterwards if they should also use /cd, /dir and /project here.",
     "addActorTitle": "Add authorized actor",
     "addController": "Add controller",
     "addMessage": "To add someone, they message the bot in a direct chat. The chat then shows up below.",
@@ -349,6 +340,10 @@ export default {
     "directChatsRemoteHint": "People who reached the bot in a direct message, and whether each can control it.",
     "displayName": "Display name (optional)",
     "fullAccess": "Full access",
+    "privileged": "Any folder and files",
+    "privilegedHint": "Lets this chat switch to any folder by path (/cd) and send files. Picking from your registered folders and projects (/dir, /project) works without it.",
+    "privilegedNeedsControl": "Choose Can control first.",
+    "privilegedGroupHint": "In a group, /cd, /dir and /project all need this, because everyone in the group shares one working folder.",
     "group": "Group",
     "groups": "Groups",
     "groupsHint": "Group capability access and authorized Actors are separate controls.",
@@ -364,14 +359,23 @@ export default {
     "remoteControl": "Remote Control",
     "titleAll": "{{name}} access",
     "titleRemote": "Who can control {{name}}",
+    "rename": "Rename",
     "unpairedChat": "Unpaired chat",
     "unpairedHint": "Pair first — an unpaired chat can't be given control."
   },
+  "entity": {
+    "copied": "Copied!",
+    "copyId": "Copy ID",
+    "deleted": "(deleted)",
+    "group": "{{platform}} group",
+    "noAlias": "No alias set"
+  },
   "notify": {
     "chat": {
-      "copied": "Target UUID copied",
+      "copied": "Target UUID copied: {{chat}}",
       "copyFailed": "Copy failed — check clipboard permissions",
-      "deleted": "Chat deleted"
+      "deleted": "Deleted {{chat}}",
+      "internalUuid": "Internal target UUID"
     },
     "emptyDescription": "Connect a bot on the Bots page first, then come back here to send it notifications.",
     "emptyTitle": "No bots connected yet",
@@ -404,19 +408,39 @@ export default {
     },
     "guide": {
       "action": "API guide",
-      "auth": {
-        "body": "Any integration can drive a bot’s chat. Auth reuses your existing operator user token (the same one this web UI uses) as a Bearer header — no new credential to mint. Interactive prompts (/interact) and one-way notifications (/notify) are separate URLs, so the request shape is the mode.",
-        "title": "1. Authenticate with your user token"
+      "back": "Back to bot",
+      "description": "Pick a target, copy a ready-to-run request, or send a test",
+      "enable": {
+        "noBots": "No bot is connected yet. Connect one on the Bots page first.",
+        "off": "Notify is off. Turn it on with the switch on the bot card, then come back to this guide.",
+        "on": "Notify is on for {{bots}}.",
+        "title": "Turn Notify on"
       },
-      "chatid": {
-        "body": "Each Chat node on this page shows the real platform Chat ID for recognition; its tooltip also shows the stable internal Target UUID required by the API. Use the copy action beside the node, or send a test directly from the probe bench.",
-        "title": "3. Copy the target UUID from Delivery targets"
+      "fields": {
+        "body": "The message text. Markdown is supported.",
+        "heading": "Request fields",
+        "id": "Internal id of the delivery target — filled in from the target you picked.",
+        "kind": "direct_chat or group — filled in from the target you picked.",
+        "level": "Severity hint: info, warn or error.",
+        "optional": "optional",
+        "required": "required",
+        "responses": "200 delivered · 400 invalid body · 404 bot not running or target not reachable · 500 delivery failed",
+        "title": "Short headline shown above the message."
       },
-      "description": "Authentication, request examples, and target IDs",
       "send": {
-        "body": "POST to /api/v1/bots/{bot}/notify with the bot UUID in the path. A 200 means delivered.",
-        "json": "Request body:",
-        "title": "2. Send a one-way notification"
+        "auth": "Authenticate with your user token — the one this web UI uses — as a Bearer header. The samples read it from ${{env}}.",
+        "delivered": "Delivered · {{latency}}",
+        "failed": "Failed: {{error}}",
+        "test": "Send test",
+        "testHint": "Sends exactly the request above, with this web UI’s token.",
+        "title": "Send it"
+      },
+      "target": {
+        "empty": "No chats yet. Send any message to the bot on its platform and it appears here.",
+        "label": "Delivery target",
+        "notAllowed": "not allowed yet",
+        "notAllowedHint": "This target can’t receive notifications yet. Use “Allow Notify & Test” on the bot card first.",
+        "title": "Pick where to deliver"
       },
       "title": "IM Notify API Guide"
     },
@@ -426,10 +450,10 @@ export default {
     },
     "subtitle": "Authorize a target, send through the production path, and see whether delivery worked.",
     "target": {
-      "blocked": "Target blocked",
+      "blocked": "Blocked {{chat}}",
       "direct": "Direct",
       "group": "Group",
-      "unblocked": "Target unblocked"
+      "unblocked": "Unblocked {{chat}}"
     },
     "test": {
       "bodyField": "Body (markdown)",
@@ -438,8 +462,8 @@ export default {
       "pickKnownChat": "Select a discovered chat first",
       "resetMarkdown": "Reset to markdown sample",
       "send": "Send",
-      "sendFailed": "Send failed: {{error}}",
-      "sent": "Notification sent",
+      "sendFailed": "Send to {{chat}} failed: {{error}}",
+      "sent": "Notification sent to {{chat}}",
       "target": "Target",
       "targetPlaceholder": "No authorized targets yet",
       "title": "Send a test notification",

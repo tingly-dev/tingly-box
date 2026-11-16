@@ -1,7 +1,7 @@
 // The Agent page's status line (under the title): "is it connected, and is it
 // being used" at a glance, plus a quiet note when the client's config file has
 // drifted from this page. Text only — every button lives in the page header
-// (one row), including the looks-in (AgentLooksIn). See
+// (one row), including the looks-in (AgentLogButton). See
 // .design/agent-page-redesign.md §3.2 for the config state.
 import { Box, Button, Tooltip, Typography } from '@mui/material';
 import { useMemo } from 'react';
@@ -121,29 +121,18 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
     );
 };
 
-/** The three looks-in, as header buttons next to the page's other actions. */
-export const AgentLooksIn: React.FC<{
-    onOpenRequests: () => void;
-    onOpenUsage: () => void;
-    onOpenLog: () => void;
-}> = ({ onOpenRequests, onOpenUsage, onOpenLog }) => {
+/**
+ * The one look-in, as a header button next to the page's other actions: the
+ * agent's Log, whose tabs hold its requests, today's usage and the system log.
+ */
+export const AgentLogButton: React.FC<{ onOpenLog: () => void }> = ({ onOpenLog }) => {
     const { t } = useTranslation();
     return (
-        <>
-            <Button variant="outlined" size="small" onClick={onOpenRequests}>
-                {t('agentStatus.requests')}
+        <Tooltip title={t('agentStatus.logTooltip')} describeChild>
+            <Button variant="outlined" size="small" onClick={onOpenLog}>
+                {t('agentStatus.log')}
             </Button>
-            <Tooltip title={t('agentStatus.usageTooltip')} describeChild>
-                <Button variant="outlined" size="small" onClick={onOpenUsage}>
-                    {t('agentStatus.usage')}
-                </Button>
-            </Tooltip>
-            <Tooltip title={t('agentStatus.logTooltip')} describeChild>
-                <Button variant="outlined" size="small" onClick={onOpenLog}>
-                    {t('agentStatus.log')}
-                </Button>
-            </Tooltip>
-        </>
+        </Tooltip>
     );
 };
 

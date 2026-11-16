@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
 import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
+import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
+import type { Endpoint, GenerationRun, ImageReasoningEffort, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 
@@ -13,28 +14,36 @@ const IMAGE_SCENARIO = 'imagegen';
 // This deliberately stays in memory: base64 images can quickly exceed sessionStorage quotas.
 let imageGenSessionRuns: GenerationRun[] = [];
 let imageGenSessionImports: ImportedImage[] = [];
+// Every mounted panel listens: a request outlives the page that sent it, so
+// its result must reach whichever panel is mounted when it lands, not the
+// instance that fired it (whose setState is gone with its page).
+const sessionListeners = new Set<() => void>();
+// False until the stored session is in (or memory already holds the newer
+// one): saving before that would overwrite it with an empty list.
+let sessionHydrated = false;
+const subscribeSession = (listener: () => void) => {
+    sessionListeners.add(listener);
+    return () => { sessionListeners.delete(listener); };
+};
+// The durable copy is written here, not by a mounted panel, so a run that
+// finishes while the person is on another page is kept too.
+const commitSession = () => {
+    sessionListeners.forEach((listener) => listener());
+    if (sessionHydrated) void savePlaygroundSession({ runs: imageGenSessionRuns, imports: imageGenSessionImports });
+};
 
 export interface GenerationRequest {
     prompt: string;
     model: string;
     size: string;
     quality: Quality;
+    reasoningEffort?: ImageReasoningEffort;
     count: number;
     sources: { file: File; previewUrl: string; mask?: ReferenceMask }[];
     // Set when re-running a failed run: its card flips back to pending
     // instead of a second card appearing.
     runId?: string;
 }
-
-// Reads a File into a base64 data URL, the same representation already used
-// for generated images (`data:image/png;base64,...`) so reference thumbnails
-// and outputs render through one code path.
-const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-});
 
 type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 
@@ -43,7 +52,7 @@ type UseImageGenRunsNotification = (message: string, severity: 'success' | 'info
 export const dropProfileSession = (profileId: string) => {
     imageGenSessionRuns = imageGenSessionRuns.filter((run) => run.profileId !== profileId);
     imageGenSessionImports = imageGenSessionImports.filter((item) => item.profileId !== profileId);
-    void savePlaygroundSession({ runs: imageGenSessionRuns, imports: imageGenSessionImports });
+    commitSession();
 };
 
 // The session half of the playground: the run/import history that survives
@@ -56,8 +65,8 @@ export const dropProfileSession = (profileId: string) => {
 // so a profile's page shows that profile's work and nothing else.
 export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, profileId?: string) => {
     const { t } = useTranslation();
-    const [allRuns, setRuns] = useState<GenerationRun[]>(() => imageGenSessionRuns);
-    const [allImported, setImported] = useState<ImportedImage[]>(() => imageGenSessionImports);
+    const allRuns = useSyncExternalStore(subscribeSession, () => imageGenSessionRuns);
+    const allImported = useSyncExternalStore(subscribeSession, () => imageGenSessionImports);
     const runs = useMemo(() => allRuns.filter((run) => run.profileId === profileId), [allRuns, profileId]);
     const imported = useMemo(() => allImported.filter((item) => item.profileId === profileId), [allImported, profileId]);
     const historyTrackRef = useRef<HTMLDivElement>(null);
@@ -72,12 +81,12 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
     // and a caller that has to remember both in the right order eventually won't.
     const updateRuns = useCallback((updater: (currentRuns: GenerationRun[]) => GenerationRun[]) => {
         imageGenSessionRuns = updater(imageGenSessionRuns);
-        setRuns(imageGenSessionRuns);
+        commitSession();
     }, []);
 
     const updateImports = useCallback((updater: (currentImports: ImportedImage[]) => ImportedImage[]) => {
         imageGenSessionImports = updater(imageGenSessionImports);
-        setImported(imageGenSessionImports);
+        commitSession();
     }, []);
 
     // The session outlives a reload: whatever the last visit left in
@@ -86,15 +95,15 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
     // change is written back. A run that was still pending when the page went
     // away can never complete, so it comes back as failed rather than as a
     // spinner that spins forever.
-    const [sessionRestored, setSessionRestored] = useState(false);
     useEffect(() => {
         let cancelled = false;
-        if (imageGenSessionRuns.length > 0 || imageGenSessionImports.length > 0) {
-            setSessionRestored(true);
+        if (sessionHydrated || imageGenSessionRuns.length > 0 || imageGenSessionImports.length > 0) {
+            sessionHydrated = true;
             return undefined;
         }
         void loadPlaygroundSession<GenerationRun, ImportedImage>().then(({ runs: savedRuns, imports: savedImports }) => {
             if (cancelled) return;
+            reviveSessionBlobs(savedRuns, savedImports);
             if (savedRuns.length > 0) {
                 updateRuns((current) => (current.length > 0 ? current : savedRuns.map((run) => (run.status === 'pending'
                     ? { ...run, status: 'failed', error: t('playground.interruptedByReload', { defaultValue: 'Interrupted by a page reload' }) }
@@ -103,15 +112,10 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             if (savedImports.length > 0) {
                 updateImports((current) => (current.length > 0 ? current : savedImports));
             }
-            setSessionRestored(true);
+            sessionHydrated = true;
         });
         return () => { cancelled = true; };
     }, [t, updateImports, updateRuns]);
-
-    useEffect(() => {
-        if (!sessionRestored) return;
-        void savePlaygroundSession({ runs: allRuns, imports: allImported });
-    }, [allImported, allRuns, sessionRestored]);
 
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
@@ -140,9 +144,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             model: request.model,
             size: request.size,
             quality: request.quality,
+            reasoningEffort: request.reasoningEffort ?? 'auto',
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
+            sourceBlobs: endpoint === 'edits' ? request.sources.map((ref) => ref.file) : undefined,
             mask: request.sources[0]?.mask,
             status: 'pending',
         };
@@ -157,8 +163,12 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             // The mask belongs to the first reference because that is the one
             // the API applies it to; nothing here chooses which image it is.
             const mask = request.sources[0]?.mask?.file;
+            // Images SDK types do not declare this gateway extension. Spread
+            // it into either encoding; the serving backend owns its meaning.
+            const effortParams = { reasoning_effort: request.reasoningEffort ?? 'auto' };
             const response = endpoint === 'edits'
                 ? await client.images.edit({
+                    ...effortParams,
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
                     ...(mask ? { mask } : {}),
                     model: request.model,
@@ -168,13 +178,14 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     quality: request.quality as any,
                 }, { signal: controller.signal })
                 : await client.images.generate({
+                    ...effortParams,
                     model: request.model,
                     prompt: request.prompt,
                     n: request.count,
                     size: request.size as any,
                     quality: request.quality,
                 }, { signal: controller.signal });
-            const images = response.data ?? [];
+            const images = (response.data ?? []).map(toSessionImage);
             updateRuns((currentRuns) => currentRuns.map((run) => (
                 run.id === runId ? { ...run, images, status: 'completed', error: undefined } : run
             )));
@@ -204,17 +215,18 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         inFlightRef.current.get(id)?.abort();
     }, []);
 
-    // A run's references only survive as data URLs, so they are read back into
-    // files here — the shape both retry (same request again) and re-entry (same
+    // A run's references survive as blob URLs (or, in old sessions, data URLs), so
+    // they are read back into files here — the shape both retry (same request again) and re-entry (same
     // request, editable) need. The bytes and the pixel size come from two
-    // independent decodes of the same data URL, so they are awaited together
+    // independent decodes of the same image, so they are awaited together
     // rather than one after the other.
     const runSourcesToReferences = useCallback((run: GenerationRun): Promise<ReferenceImage[]> => Promise.all(
         (run.sourceImages ?? []).map(async (src, index): Promise<ReferenceImage> => {
             const [blob, size] = await Promise.all([fetchBlob(src), readImageSize(src)]);
+            const file = new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' });
             return {
-                file: new File([blob], `reference-${index + 1}.png`, { type: blob.type || 'image/png' }),
-                previewUrl: src,
+                file,
+                previewUrl: URL.createObjectURL(file),
                 source: 'upload',
                 ...(size ?? {}),
                 // The mask comes back with the image it was painted on, so a
@@ -234,6 +246,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                reasoningEffort: run.reasoningEffort ?? 'auto',
                 count: run.count ?? 1,
                 sources,
                 runId: run.id,
@@ -250,10 +263,11 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         const incoming = Array.from(files).filter((file) => file.type.startsWith('image/'));
         if (incoming.length === 0) return;
         const items = await Promise.all(incoming.map(async (file): Promise<ImportedImage> => {
-            const src = await fileToDataUrl(file);
+            const src = URL.createObjectURL(file);
             return {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 src,
+                blob: file,
                 name: file.name,
                 bytes: file.size,
                 createdAt: Date.now(),
@@ -272,6 +286,14 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         updateImports((current) => current.filter((item) => item.id !== id));
     }, [updateImports]);
 
+    // Puts a copy of a run into another surface's history — the run a profile
+    // was saved from, so the profile's page opens on the result that made it
+    // worth keeping. The images are shared, not duplicated in memory.
+    const copyRunToProfile = useCallback((run: GenerationRun, targetProfileId: string) => {
+        const copy: GenerationRun = { ...run, id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, profileId: targetProfileId };
+        updateRuns((current) => [...current, copy]);
+    }, [updateRuns]);
+
     // Empties this surface's history only — clearing a profile's page must
     // not take the default Playground's (or another profile's) work with it.
     const clearSession = useCallback(() => {
@@ -287,6 +309,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
         historyTrackRef,
         inFlightRef,
         clearSession,
+        copyRunToProfile,
         runGeneration,
         handleCancelRun,
         handleRetry,

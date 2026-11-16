@@ -26,9 +26,13 @@ func newFakeSession(status agentboot.SessionState) *fakeSession {
 	return &fakeSession{status: status}
 }
 
-func (f *fakeSession) Send(context.Context, string) error     { return nil }
-func (f *fakeSession) Interrupt(context.Context) error        { return nil }
-func (f *fakeSession) StopTask(context.Context, string) error { return nil }
+func (f *fakeSession) Send(context.Context, string) error                  { return nil }
+func (f *fakeSession) Interrupt(context.Context) error                     { return nil }
+func (f *fakeSession) StopTask(context.Context, string) error              { return nil }
+func (f *fakeSession) Inject(context.Context, string) error                { return nil }
+func (f *fakeSession) SetModel(context.Context, string) error              { return nil }
+func (f *fakeSession) SetPermissionMode(context.Context, string) error     { return nil }
+func (f *fakeSession) ApplySettings(context.Context, map[string]any) error { return nil }
 func (f *fakeSession) Events() <-chan agentboot.StreamEvent {
 	return nil
 }
@@ -58,6 +62,21 @@ func (f *fakeSession) closedCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.closeCalls
+}
+
+type failingCloseSession struct{ *fakeSession }
+
+func (f *failingCloseSession) Close(context.Context) error { return context.DeadlineExceeded }
+
+func TestPoolRetainsSessionWhenCloseFails(t *testing.T) {
+	p := pool.New(pool.Config{})
+	s := &failingCloseSession{newFakeSession(agentboot.SessionStateIdle)}
+	require.NoError(t, p.Open(context.Background(), "a", s))
+	require.ErrorIs(t, p.CloseAndRemove(context.Background(), "a"), context.DeadlineExceeded)
+	got, ok := p.Acquire("a")
+	require.True(t, ok)
+	require.Same(t, s, got)
+	require.ErrorIs(t, p.CloseAndRemove(context.Background(), "a"), context.DeadlineExceeded)
 }
 
 func TestPool_OpenAcquire(t *testing.T) {

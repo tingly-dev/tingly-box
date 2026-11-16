@@ -30,7 +30,7 @@ import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData'
  * };
  * ```
  *
- * @param scenario - The scenario identifier (e.g., "custom", "openai", "anthropic", "codex", "vscode", "xcode", "opencode", "pi")
+ * @param scenario - The scenario identifier (e.g., "custom", "openai", "anthropic", "codex", "vscode", "xcode", "opencode", "pi", "workbuddy")
  * @param options - `{ skipRules: true }` opts out of the automatic rules load (see above)
  * @returns All the data and handlers needed by TemplatePage and scenario pages
  *

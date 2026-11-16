@@ -43,6 +43,7 @@ import {
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import { fontSizes } from '@/theme/fonts';
 import { alpha } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PositionMeta {
     value: SmartOp['position'];
@@ -458,7 +459,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                         p: 1.5,
                                         border: '1px solid',
                                         borderColor: posOps.length > 0 ? 'primary.light' : 'divider',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         bgcolor: posOps.length > 0 ? 'action.hover' : 'transparent',
                                         transition: 'border-color 0.15s, background-color 0.15s',
                                     }}
@@ -507,7 +508,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                         sx={{
                                                             p: 1.25,
                                                             bgcolor: 'background.paper',
-                                                            borderRadius: 1,
+                                                            borderRadius: radius.row,
                                                             border: '1px solid',
                                                             borderColor: pulseOpUuid === op.uuid ? 'primary.main' : valid ? 'divider' : 'warning.light',
                                                             boxShadow: (theme) => pulseOpUuid === op.uuid ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}` : 'none',

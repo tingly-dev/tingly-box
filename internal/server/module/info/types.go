@@ -25,7 +25,7 @@ type ConfigInfoResponse struct {
 type VersionInfo struct {
 	Version string `json:"version" example:"1.0.0"`
 	// LaunchSource is how this process was itself invoked ("binary", "npx",
-	// "npm", "npx-bundle", "npm-bundle"; "" if unknown). The frontend uses it
+	// "npm"; "" if unknown). The frontend uses it
 	// to default multi-method pickers (update instructions, quick-start
 	// commands) to whichever method matches how the user is already running
 	// Tingly Box. See .design/shortcut.md.

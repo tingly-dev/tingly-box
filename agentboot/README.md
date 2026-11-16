@@ -50,6 +50,9 @@ treat this as the change-review checklist, not an aspiration.
   `.design/claude-code-session.md`), `RunTurnWithPrompter`, `TurnCompleteEvent`,
   `SessionStateEvent` + its `SessionState*` constants, and the `pool` package
   (`pool.New`, `pool.Config`) for capacity/idle-managed multi-turn sessions.
+  Live changes to a running session — `Inject` (add a message to the turn in
+  flight), `SetModel`, `SetPermissionMode`, `ApprovalResponse.AddDirectories` —
+  are described in `.design/agentboot-live-control.md`.
 
 Changing or removing anything in this list is a breaking change for
 tingly-box and should be reviewed as one. Anything reachable only through

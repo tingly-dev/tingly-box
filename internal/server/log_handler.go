@@ -83,40 +83,45 @@ func (h *WebHandler) GetLogs(c *gin.Context) {
 	levelStr := c.Query("level")
 	sinceStr := c.Query("since")
 
-	var entries []*logrus.Entry
-
-	// Filter by level if specified
+	var level *logrus.Level
 	if levelStr != "" {
-		level, err := logrus.ParseLevel(levelStr)
+		parsed, err := logrus.ParseLevel(levelStr)
 		if err != nil {
 			apierr.Message(c, http.StatusBadRequest, "Invalid log level")
 			return
 		}
-		entries = h.deps.MemoryLogMW.GetEntriesByLevel(level)
-	} else if sinceStr != "" {
-		// Filter by time if specified
-		since, err := time.Parse(time.RFC3339, sinceStr)
+		level = &parsed
+	}
+	var since time.Time
+	if sinceStr != "" {
+		var err error
+		since, err = time.Parse(time.RFC3339, sinceStr)
 		if err != nil {
 			apierr.Message(c, http.StatusBadRequest, "Invalid since timestamp, use RFC3339 format")
 			return
 		}
-		entries = h.deps.MemoryLogMW.GetEntriesSince(since)
-	} else {
-		// Get latest entries
-		entries = h.deps.MemoryLogMW.GetLatestEntries(limit)
 	}
 
-	// Convert entries and apply limit
-	result := make([]LogEntry, 0, len(entries))
-	for i, entry := range entries {
-		if i >= limit {
-			break
+	entries := h.deps.MemoryLogMW.GetEntries()
+	result := make([]LogEntry, 0)
+	total := 0
+	for i := len(entries) - 1; i >= 0; i-- {
+		entry := entries[i]
+		if level != nil && entry.Level != *level {
+			continue
+		}
+		if !since.IsZero() && !entry.Time.After(since) {
+			continue
+		}
+		total++
+		if len(result) >= limit {
+			continue
 		}
 		result = append(result, convertLogrusEntry(entry))
 	}
 
 	c.JSON(http.StatusOK, LogsResponse{
-		Total: len(result),
+		Total: total,
 		Logs:  result,
 	})
 }
@@ -153,7 +158,7 @@ func (h *WebHandler) GetLogStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"total":        len(entries),
 		"level_counts": levelCounts,
-		"capacity":     500, // maxEntries configured in NewServer
+		"capacity":     h.deps.MemoryLogMW.Capacity(),
 	})
 }
 
@@ -222,7 +227,7 @@ func (h *WebHandler) GetSystemLogStats(c *gin.Context) {
 	logPath := h.deps.MultiLogger.GetJSONLogPath()
 
 	// Read all logs to calculate stats (with a reasonable limit, system source only)
-	entries, err := h.deps.MultiLogger.ReadJSONLogs(500)
+	entries, err := h.deps.MultiLogger.ReadJSONLogsBySource(500, obs.LogSourceSystem, obs.LogSourceAction, obs.LogSourceUnknown, obs.LogSourceHTTP)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs for stats: %v", err)
 		apierr.Message(c, http.StatusInternalServerError, "Failed to read system logs")

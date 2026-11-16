@@ -176,8 +176,10 @@ Facts that constrain our output (JSON Schema draft-07):
 - `model_reasoning_effort` is schema-typed as any non-empty string
   (`ReasoningEffort`, `minLength: 1`) — values are model-advertised, so our
   whitelist stays a superset rather than a fixed enum.
-- Still valid (contrary to some doc summaries): top-level `profiles`,
-  `model_supports_reasoning_summaries`, `model_catalog_json`.
+- Still valid (contrary to some doc summaries): top-level `profiles` and
+  `model_catalog_json`. `model_supports_reasoning_summaries` was **removed**
+  from the schema; the toggle moved to the catalog entry's
+  `supports_reasoning_summaries` (see `codex-config.md`).
 
 To re-check after a Codex release:
 `curl -sL https://developers.openai.com/codex/config-schema.json | jq '.properties | keys'`

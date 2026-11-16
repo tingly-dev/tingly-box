@@ -252,6 +252,7 @@ func (l *appLauncher) Start(appManager *app.AppManager, flags command.ServerFlag
 		server.WithOpenBrowser(opts.EnableOpenBrowser),
 		server.WithHost(opts.Host),
 		server.WithRecordDir(opts.RecordDir),
+		server.WithProjectsDir(opts.ProjectsDir),
 	)
 
 	// Create Wails app with ServerManager embedded

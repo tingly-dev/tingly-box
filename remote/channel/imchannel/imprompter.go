@@ -12,7 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
-	"github.com/tingly-dev/tingly-box/remote/control/ask"
+	"github.com/tingly-dev/tingly-box/remote/ask"
 )
 
 // IMPrompter implements ask.Prompter using IM (Telegram, etc.) for user interaction
@@ -598,7 +598,7 @@ func (p *IMPrompter) IsWhitelisted(toolName string) bool {
 }
 
 // normalizeQuestionList re-exports ask.NormalizeQuestions for the local tests.
-// The shared implementation lives in remote/control/ask/normalize.go so the same
+// The shared implementation lives in remote/ask/normalize.go so the same
 // coercion logic is used by every prompter (IM, stdin, tool_handlers).
 func normalizeQuestionList(v any) []map[string]any { return ask.NormalizeQuestions(v) }
 

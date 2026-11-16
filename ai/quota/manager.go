@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,9 @@ type Manager struct {
 	providerMgr ProviderManager
 	logger      *logrus.Logger
 	refresher   *Refresher
+	backoff     *backoffBook
+	redeeming   redeemGuard
+	autoClaimed autoClaimLog
 }
 
 // ProviderManager provides access to configured providers.
@@ -47,6 +51,7 @@ func NewManager(config *Config, store Store, providerMgr ProviderManager, logger
 		registry:    NewRegistry(),
 		providerMgr: providerMgr,
 		logger:      logger,
+		backoff:     newBackoffBook(),
 	}
 
 	// Create the background refresher.
@@ -64,8 +69,21 @@ func (m *Manager) RegisterFetcher(fetcher Fetcher) error {
 	return nil
 }
 
-// Refresh refreshes quota data for every enabled provider.
+// Refresh refreshes quota data for every enabled provider. It is a request
+// from a person (or the CLI), so it asks every provider whatever their failure
+// backoff says; the background refresher uses RefreshDue.
 func (m *Manager) Refresh(ctx context.Context) ([]*ProviderUsage, error) {
+	return m.refresh(ctx, false)
+}
+
+// RefreshDue refreshes the enabled providers whose failure backoff has run
+// out. It is the background refresher's entry point: a provider that keeps
+// failing is asked less and less often.
+func (m *Manager) RefreshDue(ctx context.Context) ([]*ProviderUsage, error) {
+	return m.refresh(ctx, true)
+}
+
+func (m *Manager) refresh(ctx context.Context, auto bool) ([]*ProviderUsage, error) {
 	providers := m.providerMgr.ListProviders()
 	if len(providers) == 0 {
 		return []*ProviderUsage{}, nil
@@ -73,9 +91,20 @@ func (m *Manager) Refresh(ctx context.Context) ([]*ProviderUsage, error) {
 
 	enabled := make([]*typ.Provider, 0, len(providers))
 	for _, provider := range providers {
-		if m.isProviderEnabled(provider) {
-			enabled = append(enabled, provider)
+		if !m.isProviderEnabled(provider) {
+			continue
 		}
+		if auto {
+			if until, ok := m.backoff.due(provider.UUID, m.config.RefreshInterval/4); !ok {
+				m.logger.WithFields(logrus.Fields{
+					"provider_uuid": provider.UUID,
+					"provider_name": provider.Name,
+					"retry_at":      until,
+				}).Debug("skipping quota fetch: backing off after repeated failures")
+				continue
+			}
+		}
+		enabled = append(enabled, provider)
 	}
 	if len(enabled) == 0 {
 		return []*ProviderUsage{}, nil
@@ -90,7 +119,7 @@ func (m *Manager) Refresh(ctx context.Context) ([]*ProviderUsage, error) {
 		go func() {
 			defer wg.Done()
 			for provider := range jobs {
-				usage, err := m.fetchProviderQuota(ctx, provider)
+				usage, err := m.fetchProviderQuota(ctx, provider, auto)
 				if errors.Is(err, ErrProviderUnsupported) {
 					continue
 				}
@@ -132,7 +161,7 @@ func (m *Manager) RefreshProvider(ctx context.Context, providerUUID string) (*Pr
 		return nil, fmt.Errorf("provider not found: %w", err)
 	}
 
-	return m.fetchProviderQuota(ctx, provider)
+	return m.fetchProviderQuota(ctx, provider, false)
 }
 
 // GetQuota returns the latest quota data stored in the database. It never
@@ -154,12 +183,35 @@ func (m *Manager) RefreshProvider(ctx context.Context, providerUUID string) (*Pr
 // here (as this used to do, via fmt.Errorf) silently broke that comparison
 // and turned every "no quota data" provider into a hard error upstream.
 func (m *Manager) GetQuota(ctx context.Context, providerUUID string) (*ProviderUsage, error) {
-	return m.store.Get(ctx, providerUUID)
+	usage, err := m.store.Get(ctx, providerUUID)
+	if err == nil {
+		m.annotateBackoff(usage)
+	}
+	return usage, err
 }
 
 // ListQuota returns quota data for all providers.
 func (m *Manager) ListQuota(ctx context.Context) ([]*ProviderUsage, error) {
-	return m.store.List(ctx)
+	usages, err := m.store.List(ctx)
+	if err == nil {
+		for _, usage := range usages {
+			m.annotateBackoff(usage)
+		}
+	}
+	return usages, err
+}
+
+// annotateBackoff tells a reader that automatic refreshes of this provider are
+// being held back, and until when. A window already past is not reported: the
+// next tick asks, so there is nothing left to wait for.
+func (m *Manager) annotateBackoff(usage *ProviderUsage) {
+	if usage == nil {
+		return
+	}
+	usage.Backoff = nil
+	if failures, next, ok := m.backoff.window(usage.ProviderUUID); ok && next.After(m.backoff.now()) {
+		usage.Backoff = &UsageBackoff{Failures: failures, NextAttemptAt: next}
+	}
 }
 
 // QuotaHistory returns stored snapshots without contacting upstream providers.
@@ -203,7 +255,7 @@ func (m *Manager) Summary(ctx context.Context) (*Summary, error) {
 		// this catches the one that will run out first rather than whichever
 		// window happens to come first, and skips providers whose usage is
 		// unknown instead of reading them as unused.
-		if pct, ok := usage.Pct(); ok && pct >= warningUsedPercent {
+		if pct, ok := usage.Pct(); ok && usage.LastError == "" && pct >= warningUsedPercent {
 			summary.WarningProviders++
 		}
 	}
@@ -254,14 +306,18 @@ func (m *Manager) IsProviderSupported(providerUUID string) bool {
 	if err != nil || provider == nil {
 		return false
 	}
-	providerType := inferProviderType(provider)
-	_, ok := m.registry.Get(providerType)
-	return ok
+	f, ok := m.registry.Get(inferProviderType(provider))
+	if !ok {
+		return false
+	}
+	return f.RequiresAuth() != typ.AuthTypeOAuth || provider.AuthType == typ.AuthTypeOAuth
 }
 
 // fetchProviderQuota fetches and stores quota data for one provider.
 // It always returns ProviderUsage, either successful or containing error details.
-func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider) (*ProviderUsage, error) {
+// auto says the background refresher asked, which is what lets a failure
+// widen the provider's backoff window; a manual refresh never does.
+func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider, auto bool) (*ProviderUsage, error) {
 	providerType := inferProviderType(provider)
 	now := time.Now()
 
@@ -285,6 +341,14 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 		_ = m.store.Delete(ctx, provider.UUID)
 		return nil, ErrProviderUnsupported
 	}
+	// An OAuth-only usage endpoint has nothing to say about an API key on the
+	// same host (an Anthropic API key is not a Claude subscription), and asking
+	// anyway stores a 401 that the UI shows as a broken provider.
+	if f.RequiresAuth() == typ.AuthTypeOAuth && provider.AuthType != typ.AuthTypeOAuth {
+		log.Debug("skipping quota fetch: this provider type only reports usage for OAuth credentials")
+		_ = m.store.Delete(ctx, provider.UUID)
+		return nil, ErrProviderUnsupported
+	}
 	log = log.WithField("fetcher", f.Name())
 
 	// Validate the provider configuration.
@@ -292,8 +356,7 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 		log.WithError(err).Warn("quota fetch skipped: provider failed validation")
 		usage := m.unreadable(provider, providerType, now,
 			fmt.Sprintf("validation failed: %v", err))
-		_ = m.store.Save(ctx, usage)
-		return usage, nil
+		return m.saveUsage(ctx, log, provider.UUID, usage, auto), nil
 	}
 
 	// Fetch quota data.
@@ -317,12 +380,37 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 		log.WithFields(fields).Debug("quota fetched")
 	}
 
-	// Persist the result.
+	return m.saveUsage(ctx, log, provider.UUID, usage, auto), nil
+}
+
+// saveUsage persists a fetch result, settles the provider's backoff window by
+// it, and returns what is now stored.
+//
+// A failure is not stored over the last reading: the store keeps the readings
+// and only swaps in the error (see GormStore.Save), so what comes back for a
+// failed fetch is the stored record — the last successful reading, FetchedAt
+// still that success's time, LastError saying the latest attempt failed.
+func (m *Manager) saveUsage(ctx context.Context, log *logrus.Entry, uuid string, usage *ProviderUsage, auto bool) *ProviderUsage {
 	if saveErr := m.store.Save(ctx, usage); saveErr != nil {
 		log.WithError(saveErr).Error("failed to save quota")
 	}
 
-	return usage, nil
+	if usage.LastError == "" {
+		m.backoff.succeeded(uuid)
+		return usage
+	}
+	// Only an automatic refresh widens the window, and a cancelled context is
+	// the server stopping, not the upstream refusing.
+	if auto && ctx.Err() == nil {
+		m.backoff.failed(uuid, m.config.RefreshInterval, cmp.Or(m.config.MaxBackoff, defaultMaxBackoff))
+	}
+	if !usage.hasReading() {
+		if stored, err := m.store.Get(ctx, uuid); err == nil && stored.hasReading() {
+			usage = stored
+		}
+	}
+	m.annotateBackoff(usage)
+	return usage
 }
 
 // unreadable records a provider whose quota could not be read.
@@ -346,8 +434,10 @@ func inferProviderType(provider *typ.Provider) ProviderType {
 		return ProviderTypeCursor
 	case typ.IssuerCodex:
 		return ProviderTypeCodex
-	case typ.IssuerKimiCode:
+	case typ.IssuerKimiCode, typ.IssuerKimiCodeIntl:
 		return ProviderTypeKimiCode
+	case typ.IssuerWorkBuddy, typ.IssuerWorkBuddyCN:
+		return ProviderTypeWorkBuddy
 	}
 
 	// Another tingly-box. Checked before the host rules: an edge reaches its

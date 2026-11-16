@@ -42,6 +42,7 @@ import {
     defaultMessage,
     ruleProtocolForScenario,
 } from './ResultSections';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -330,7 +331,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                         flexShrink: 0,
                         border: '1px solid',
                         borderColor: 'divider',
-                        borderRadius: 1.5,
+                        borderRadius: radius.card,
                         p: 1.5,
                         // Stay in view while long results scroll past; scroll
                         // internally only when the window is shorter than the rail.
@@ -359,7 +360,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
 
                 {/* Results column: the subject — what came back and how it went. */}
                 <Box sx={{ flex: 1, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column' }}>
-                    {isLoading && <LinearProgress sx={{ height: 6, borderRadius: 3, mt: 1.5 }} />}
+                    {isLoading && <LinearProgress sx={{ height: 6, borderRadius: radius.pill, mt: 1.5 }} />}
 
                     {!isLoading && !result && (
                         <Box
@@ -372,7 +373,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                                 alignItems: 'center',
                                 border: '1px dashed',
                                 borderColor: 'divider',
-                                borderRadius: 2,
+                                borderRadius: radius.card,
                                 px: 3,
                                 py: 6,
                                 textAlign: 'center',
@@ -421,7 +422,7 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
                 {/* cURL spans the full dialog width — its lines are long, and it
                  *  belongs to the whole panel (config + target), not the results. */}
                 <CollapsibleSection title={t('probe.curl')} defaultExpanded={false}>
-                    {curlLoading && <LinearProgress sx={{ height: 4, borderRadius: 2 }} />}
+                    {curlLoading && <LinearProgress sx={{ height: 4, borderRadius: radius.pill }} />}
                     {!curlLoading && curl?.data?.command && (
                         <Box>
                             <CopyBlock text={curl.data.command} maxHeight="45vh" fontSize="0.72rem" />

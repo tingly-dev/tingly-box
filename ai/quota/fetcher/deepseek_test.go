@@ -137,3 +137,19 @@ func TestDeepSeekFetcherReportsUpstreamError(t *testing.T) {
 		t.Error("Fetch() error exposes API key")
 	}
 }
+
+func TestDeepSeekFetcherKeepsNegativeBalance(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"is_available":false,"balance_infos":[{"currency":"CNY","total_balance":"-0.14","granted_balance":"0.00","topped_up_balance":"-0.14"}]}`))
+	}))
+	defer server.Close()
+
+	usage, err := (&DeepSeekFetcher{baseURL: server.URL}).Fetch(context.Background(),
+		&ai.Provider{UUID: "u", Name: "DeepSeek", Token: "secret"})
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+	if len(usage.Windows) != 1 || usage.Windows[0].Available == nil || *usage.Windows[0].Available != -0.14 {
+		t.Fatalf("Windows = %+v, want one CNY balance of -0.14", usage.Windows)
+	}
+}

@@ -19,6 +19,20 @@ var claudeCodeTierEnvKeys = map[string]string{
 	"fable":  "ANTHROPIC_DEFAULT_FABLE_MODEL",
 }
 
+// OmitFollowedDefaultModel drops ANTHROPIC_MODEL from a Claude Code env when
+// the sonnet slot asks for the same model. Claude Code's /model picker only
+// ticks "Default" when no model is set; with ANTHROPIC_MODEL=cc it ticks the
+// first tier that resolves to cc (Sonnet) instead. Without ANTHROPIC_MODEL the
+// default model is the sonnet tier, which is the same model, so nothing is
+// lost. A split sonnet slot keeps ANTHROPIC_MODEL: Default must stay the main
+// rule there, and the picker shows it as the custom model.
+func OmitFollowedDefaultModel(env map[string]string) {
+	def := env["ANTHROPIC_MODEL"]
+	if def != "" && def == env[claudeCodeTierEnvKeys["sonnet"]] {
+		delete(env, "ANTHROPIC_MODEL")
+	}
+}
+
 // ClaudeCodeTier is one model Claude Code can be asked for: the alias passed
 // as --model ("" for the default) and the gateway model id it requests.
 type ClaudeCodeTier struct {
@@ -41,7 +55,12 @@ func ClaudeCodeTiersFromEnv(env map[string]string) ClaudeCodeTiers {
 	model := func(alias string) string {
 		return strings.TrimSuffix(env[claudeCodeTierEnvKeys[alias]], serverconfig.Context1MSuffix)
 	}
+	// No ANTHROPIC_MODEL (see OmitFollowedDefaultModel): Claude Code's default
+	// model is the sonnet tier.
 	def := model("")
+	if def == "" {
+		def = model("sonnet")
+	}
 	out := ClaudeCodeTiers{Unified: true, Tiers: []ClaudeCodeTier{{Alias: "", Model: def}}}
 	for _, alias := range ClaudeCodeTierAliases {
 		m := model(alias)

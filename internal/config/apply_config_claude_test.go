@@ -549,3 +549,72 @@ func TestApplyClaudeSettingsToPath_DefaultBackupBehavior(t *testing.T) {
 		t.Errorf("Expected backup file to exist at %s by default", result.BackupPath)
 	}
 }
+
+// One Co-Authored-By choice writes both keys Claude Code reads: the legacy
+// includeCoAuthoredBy and the newer attribution object.
+func TestBuildClaudeSettings_CoAuthoredBy(t *testing.T) {
+	build := func(t *testing.T, base string, include bool) map[string]interface{} {
+		t.Helper()
+		out, err := BuildClaudeSettings([]byte(base), map[string]string{}, WithCoAuthoredBy(include))
+		if err != nil {
+			t.Fatalf("BuildClaudeSettings: %v", err)
+		}
+		var settings map[string]interface{}
+		if err := json.Unmarshal(out, &settings); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return settings
+	}
+
+	t.Run("off blanks both credits", func(t *testing.T) {
+		settings := build(t, `{}`, false)
+		if settings["includeCoAuthoredBy"] != false {
+			t.Fatalf("includeCoAuthoredBy = %v, want false", settings["includeCoAuthoredBy"])
+		}
+		attribution, _ := settings["attribution"].(map[string]interface{})
+		if attribution["commit"] != "" || attribution["pr"] != "" {
+			t.Fatalf("attribution = %v, want empty commit and pr", settings["attribution"])
+		}
+	})
+
+	t.Run("on drops an attribution that only hid the credit", func(t *testing.T) {
+		settings := build(t, `{"includeCoAuthoredBy":false,"attribution":{"commit":"","pr":""}}`, true)
+		if settings["includeCoAuthoredBy"] != true {
+			t.Fatalf("includeCoAuthoredBy = %v, want true", settings["includeCoAuthoredBy"])
+		}
+		if _, present := settings["attribution"]; present {
+			t.Fatalf("attribution should be removed, got %v", settings["attribution"])
+		}
+	})
+
+	t.Run("on keeps the user's own attribution text", func(t *testing.T) {
+		settings := build(t, `{"attribution":{"commit":"Made with Claude","pr":""}}`, true)
+		attribution, _ := settings["attribution"].(map[string]interface{})
+		if attribution["commit"] != "Made with Claude" {
+			t.Fatalf("attribution = %v, want the user's text kept", settings["attribution"])
+		}
+	})
+
+	t.Run("on restores commit credit and keeps custom PR text", func(t *testing.T) {
+		settings := build(t, `{"attribution":{"commit":"","pr":"Reviewed by me"}}`, true)
+		attribution, _ := settings["attribution"].(map[string]interface{})
+		if _, present := attribution["commit"]; present || attribution["pr"] != "Reviewed by me" {
+			t.Fatalf("attribution = %v, want commit dropped and pr kept", settings["attribution"])
+		}
+	})
+
+	t.Run("unset leaves both keys alone", func(t *testing.T) {
+		out, err := BuildClaudeSettings([]byte(`{}`), map[string]string{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var settings map[string]interface{}
+		_ = json.Unmarshal(out, &settings)
+		if _, present := settings["includeCoAuthoredBy"]; present {
+			t.Fatalf("includeCoAuthoredBy should be omitted, got %v", settings["includeCoAuthoredBy"])
+		}
+		if _, present := settings["attribution"]; present {
+			t.Fatalf("attribution should be omitted, got %v", settings["attribution"])
+		}
+	})
+}

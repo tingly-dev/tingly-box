@@ -37,7 +37,7 @@ function failDownload(url, reason, hints) {
 	process.exit(1);
 }
 
-export async function downloadAndExtractZip(url, extractDir, { hints = [] } = {}) {
+export async function downloadAndExtractZip(url, extractDir, { hints = [], quietExtraction = false } = {}) {
 	console.log(`🔄 Downloading ZIP from ${url}...`);
 
 	// Fetch with redirect following and optional proxy support
@@ -74,23 +74,27 @@ export async function downloadAndExtractZip(url, extractDir, { hints = [] } = {}
 
 	// Collect the entire ZIP into a buffer
 	const chunks = [];
-	for await (const chunk of nodeStream) {
-		chunks.push(chunk);
-		downloadedSize += chunk.length;
-		if (totalSize) {
-			const progress = ((downloadedSize / totalSize) * 100).toFixed(1);
-			process.stdout.write(`\r⏱️ Downloading: ${progress}% (${formatBytes(downloadedSize)}/${formatBytes(totalSize)})`);
-		} else {
-			process.stdout.write(`\r⏱️ Downloaded: ${formatBytes(downloadedSize)}`);
+	try {
+		for await (const chunk of nodeStream) {
+			chunks.push(chunk);
+			downloadedSize += chunk.length;
+			if (process.stdout.isTTY) {
+				const progress = totalSize ? `${((downloadedSize / totalSize) * 100).toFixed(1)}% (${formatBytes(downloadedSize)}/${formatBytes(totalSize)})` : formatBytes(downloadedSize);
+				process.stdout.write(`\r⏱️  Downloading: ${progress}`);
+			}
 		}
+	} catch (error) {
+		if (process.stdout.isTTY) process.stdout.write("\n");
+		failDownload(url, error.cause?.message || error.message, hints);
 	}
+	if (process.stdout.isTTY) process.stdout.write("\n");
 	const zipBuffer = Buffer.concat(chunks);
-	await extractZipBuffer(zipBuffer, extractDir);
+	await extractZipBuffer(zipBuffer, extractDir, { quiet: quietExtraction });
 }
 
 // Extract a release zip that is already on disk (the platform package's
 // bin/<zip>) into extractDir.
-export async function extractZipFile(zipPath, extractDir) {
+export async function extractZipFile(zipPath, extractDir, options = {}) {
 	let zipBuffer;
 	try {
 		zipBuffer = readFileSync(zipPath);
@@ -98,15 +102,15 @@ export async function extractZipFile(zipPath, extractDir) {
 		console.error(`\n❌ Failed to read ${zipPath}: ${error.message}`);
 		process.exit(1);
 	}
-	await extractZipBuffer(zipBuffer, extractDir);
+	await extractZipBuffer(zipBuffer, extractDir, options);
 }
 
 // Extract every file of a zip buffer into extractDir, keeping unix modes
 // (binaries stay executable). Exits the process on failure.
-export async function extractZipBuffer(zipBuffer, extractDir) {
+export async function extractZipBuffer(zipBuffer, extractDir, { quiet = false } = {}) {
 	// Extract ZIP from buffer using unzipper
 	try {
-		console.log(`\n📦 Extracting ZIP to ${extractDir}...`);
+		if (!quiet) console.log(`\n📦 Extracting ZIP to ${extractDir}...`);
 
 		const directory = await unzipper.Open.buffer(zipBuffer);
 
@@ -131,7 +135,7 @@ export async function extractZipBuffer(zipBuffer, extractDir) {
 			pathParts.pop(); // Remove the filename
 			const fileDir = pathParts.length > 0 ? join(extractDir, ...pathParts) : extractDir;
 
-			console.log(`📄 Extracting: ${file.path} -> ${filePath}`);
+			if (!quiet) console.log(`📄 Extracting: ${file.path} -> ${filePath}`);
 
 			// Ensure parent directory exists
 			if (fileDir !== extractDir && !existsSync(fileDir)) {
@@ -162,7 +166,7 @@ export async function extractZipBuffer(zipBuffer, extractDir) {
 			}
 		}
 
-		console.log(`✅ Extracted ZIP to ${extractDir}`);
+		if (!quiet) console.log(`✅ Extracted ZIP to ${extractDir}`);
 	} catch (error) {
 		console.error(`\n❌ Failed to extract ZIP: ${error.message}`);
 		console.error(`Stack: ${error.stack}`);

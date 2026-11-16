@@ -28,6 +28,102 @@ The Responses-side contract itself lives in `protocol-responses.md`.
     (openai/codex #42088, #45318, #45450, #45914).
 - Codex compacts history, so item positions are not stable across turns.
 
+### Opaque reasoning history and remote compaction
+
+Codex's `ResponseItem::Reasoning` permits an absent `id`, whereas the Go SDK
+models the field as a required string and marshals absence as `"id":""`.
+At the Codex provider boundary, an encrypted reasoning item must survive ID
+sanitization: omit an invalid ID with `param.Omit` in the typed pass, and delete
+only the ID in the JSON pass. Preserve the ciphertext, summary, existing SDK extra
+fields, and item ordering. Reasoning without ciphertext retains the existing malformed-ID
+handling. Do not invent IDs or decode, summarize, or remove opaque history.
+
+The ID-preservation fix is a request-fidelity fix, not a demonstrated cause of
+the protection error. The audited Codex request formatter clones history without
+unconditionally clearing reasoning IDs, so a normal request containing valid
+reasoning IDs does not exercise the bug.
+
+### Native Responses compaction contract
+
+The first compaction compatibility increment covers Codex OAuth and native
+Responses upstreams on ordinary `POST /responses`:
+
+- Forward `context_management`, including its compaction threshold, and
+  Codex's `compaction_trigger` without interpreting them as summary requests.
+- Keep native `compaction` items and their opaque `encrypted_content` in
+  request history and in streaming/non-streaming output.
+- Forward progress, output-item and completion events in upstream order,
+  retaining extra event/output fields. Codex JSON responses are assembled from
+  the upstream SSE completion as usual.
+- Replay the returned native state to the same compatible backend on the next
+  request. Upstream failures remain failures; no replacement summary is created.
+
+These paths already use the SDK's native types and raw response/event JSON.
+Regression tests cover the client, request parser and authenticated gateway.
+This increment adds no summary codec, cross-protocol adapter, standalone compact
+route or V2 configuration default. Live provider acceptance remains unverified.
+
+### Compaction branch audit: Codex CLI 0.163.0
+
+Audited upstream tag `rust-v0.163.0`, commit
+`83086188ae0614bd882818ff1aa23f3194962012` (published 2026-10-15).
+Desktop applications can bundle a different core version.
+
+- `model-provider/src/capabilities.rs` defaults native OpenAI and Azure Responses
+  providers to remote V2, and other configured providers to local compaction.
+  `is_openai()` compares the provider name exactly with `OpenAI`; requiring
+  OpenAI auth does not select the native provider's compaction capabilities.
+- TB's generated provider is named `OpenAI using Tingly Box` and has no explicit
+  compaction capability override. Its ordinary non-Azure gateway URL therefore
+  selects local compaction unless the effective config is changed separately.
+- `core/src/session/turn.rs::run_auto_compact` chooses the branch. Both branches
+  use `POST /responses` in this release. Local compaction asks the model for a
+  textual summary; remote V2 appends `compaction_trigger` and expects a completed
+  response containing exactly one `compaction` output item.
+- `core/src/compact.rs` keeps the history but builds a Prompt with default empty
+  tools. V2 instead uses the current tool router's declarations, unless Lite
+  declarations already live in `additional_tools` history. Hosted search history
+  without a matching declaration is therefore a concrete compatibility boundary
+  to test. This source comparison does not prove that this shape causes OpenAI's
+  protection failure; the local reconstruction test injects the failure.
+- Responses Lite still uses `/responses`; `client.rs` switches its header and
+  tool representation. It is not a separate `/responses/lite` URL in this release.
+- V2 foreground stream retries are capped at two per transport. Switching from
+  WebSocket to HTTPS is a transport fallback, not a switch to local compaction.
+  Local compaction has its own retry loop (default provider stream budget: five).
+  Failed pre-sampling compaction stops the current turn after preserving input.
+- The old `features.remote_compaction_v2` switch is removed and ignored. The
+  supported custom-provider override is
+  `[model_providers.tingly-box.capabilities] remote_compaction = "v2"`.
+  Use it only when every routed backend supports V2, not for mixed chat/Anthropic
+  backends. TB's current Quick Config rebuilds its managed provider stanza, so
+  reapplying Quick Config also replaces a manually added capability override.
+
+The standalone `POST /responses/compact` JSON endpoint remains a supported public
+OpenAI contract and is separate from either audited CLI branch. Native gateway
+support is separate work. Its availability does not establish
+the cause of an upstream protection error during a different compaction mode.
+
+The exact prefix `received error while streaming:` is emitted by TB's vendored
+Go SDK when it detects an SSE payload's `error` object. It can be reproduced
+with an upstream HTTP **200** and that in-stream payload; it does not establish
+an upstream HTTP 502. TB may then return a JSON failure before downstream SSE
+starts, or an SSE error after streaming has started. The client-visible JSON
+and the upstream HTTP status are different observations.
+
+Upstream sources (paths relative to `codex-rs/`):
+[capability selection](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/model-provider/src/capabilities.rs#L30),
+[local request builder](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/compact.rs#L288),
+[V2 request builder](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/compact_remote_v2_attempt.rs#L167),
+[Responses endpoint](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-api/src/endpoint/responses.rs#L133).
+
+`response protection is unavailable` is also reported with direct ChatGPT
+authentication (openai/codex #52016). An upstream message identifies where an
+error was produced, not whether the gateway contributed to its trigger. The
+encrypted-history regression tests prove local request fidelity only, not that
+this upstream failure is repaired. Keep HTTP errors and in-stream errors visible;
+do not replace protection failures with successful or fabricated compaction.
+
 ## 2. Downgrading to Chat Completions or Anthropic
 
 Chat Completions (DeepSeek, OpenAI chat) and Anthropic Messages enforce a

@@ -123,6 +123,7 @@ export default {
         "cacheRead": "读取",
         "cacheWrite": "写入"
       },
+      "byRequestHourlyOnly": "按请求只列出今天和昨天的请求。",
       "viewModes": {
         "summary": "概览",
         "byRequest": "按请求",

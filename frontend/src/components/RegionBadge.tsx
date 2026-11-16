@@ -39,7 +39,7 @@ const sizeStyles: Record<'small' | 'medium', { height: number; fontSize: string 
   },
   medium: {
     height: 22,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.micro,
   },
 };
 

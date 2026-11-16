@@ -9,8 +9,8 @@
 //
 //	Request
 //	  │
-//	  ├─ gin.Recovery   — panic → 500, prevents process crash
 //	  ├─ MemoryLog      — structured HTTP access log + in-memory ring buffer
+//	  ├─ Recovery       — panic → structured error + 500
 //	  └─ CORS           — Access-Control-* headers
 //
 // Auth, rate limiting, gzip, and IO-timeout clearing are NOT global — each is

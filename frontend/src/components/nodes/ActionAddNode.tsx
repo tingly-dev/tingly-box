@@ -1,5 +1,6 @@
 import {
     Add as AddIcon,
+    Close as CloseIcon,
 } from '@/components/icons';
 import {
     Box,
@@ -10,7 +11,7 @@ import { styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
-import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, ROUTE_GRAPH_QUIET_CLASS, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
 import { fontSizes } from '@/theme/fonts';
 
 const { node } = { node: SMALL_NODE_STYLES };
@@ -46,19 +47,20 @@ export const useAddModelSpotlight = (active: boolean): boolean => {
 
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight',
-})<{ active: boolean; warning?: boolean; spotlight?: boolean }>(({ active, warning, spotlight, theme }) => ({
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight' && prop !== 'wide' && prop !== 'widthOverride',
+})<{ active: boolean; warning?: boolean; spotlight?: boolean; wide?: boolean; widthOverride?: number }>(({ active, warning, spotlight, wide, widthOverride, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     padding: node.padding,
     borderRadius: theme.shape.borderRadius,
-    border: '2px dashed',
+    border: '1px dashed',
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
-    width: node.width,
-    height: node.height,
+    width: wide ? (widthOverride ?? SMART_NODE_STYLES.width) : node.width,
+    height: wide ? 34 : node.height,
+    boxSizing: 'border-box',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     cursor: active ? 'pointer' : 'default',
     opacity: active ? 1 : 0.5,
@@ -76,7 +78,21 @@ export interface AddProviderNodeProps {
     active: boolean;
     warning?: boolean;
     onAdd: () => void;
-    tooltip?: string;
+    tooltip?: React.ReactNode;
+    /** Names something other than a model (e.g. "Add condition"). Draws the
+     * node as a one-line bar as wide as a condition node. */
+    label?: string;
+    /** Label variant only: a close (x) instead of a plus, for a node that turns something off. */
+    icon?: 'add' | 'close';
+    /** Label variant only: node width, default as wide as a condition node. */
+    width?: number;
+    /** Node variant only: the words under the plus, when the node adds
+     * something more specific than a model (e.g. "Load balance"). */
+    caption?: string;
+    /** Folds out of the layout until the rule is hovered or focused
+     * (ROUTE_GRAPH_QUIET_CLASS). Off for a node that is the only thing in its
+     * place, e.g. an empty tier, or one inside an already-folding quiet row. */
+    quiet?: boolean;
 }
 
 export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
@@ -84,30 +100,46 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     warning = false,
     onAdd,
     tooltip,
+    label,
+    icon = 'add',
+    width,
+    caption,
+    quiet = true,
 }) => {
     const { t } = useTranslation();
     // Pulse when guidance (Quick Start → "Select a Model") points the user here.
-    const spotlight = useAddModelSpotlight(active);
+    const spotlight = useAddModelSpotlight(active && !label);
 
     return (
-        <NodeTooltip title={tooltip ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })} placement="top">
+        <NodeTooltip title={tooltip ?? label ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })} placement="top">
             <StyledAddProviderNode
+                // A warning (nothing to route yet) or a spotlight must be seen at rest.
+                className={quiet && !warning && !spotlight ? ROUTE_GRAPH_QUIET_CLASS : undefined}
                 active={active}
                 warning={warning}
                 spotlight={spotlight}
+                wide={!!label}
+                widthOverride={width}
                 onClick={active ? onAdd : undefined}
             >
-                <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
+                {/* Quiet until hovered, so once shown the words need not be dimmed too. */}
+                {label ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.primary' }}>
+                        {icon === 'close' ? <CloseIcon sx={{ fontSize: 16 }} /> : <AddIcon sx={{ fontSize: 16 }} />}
+                        <Typography variant="caption" sx={{ color: 'inherit', fontSize: fontSizes.micro, lineHeight: 1 }}>{label}</Typography>
+                    </Box>
+                ) : (<>
+                <AddIcon sx={{ fontSize: 24, color: 'text.primary' }} />
                 <Typography
                     variant="caption"
                     sx={{
-                        color: "text.secondary",
+                        color: "text.primary",
                         textAlign: "center",
                         fontSize: fontSizes.micro,
                         lineHeight: 1.1
                     }}>
-                    {t('rule.nodes.addModel', { defaultValue: 'Add model' })}
-                </Typography>
+                    {caption ?? t('rule.nodes.addModel', { defaultValue: 'Add model' })}
+                </Typography></>)}
             </StyledAddProviderNode>
         </NodeTooltip>
     );

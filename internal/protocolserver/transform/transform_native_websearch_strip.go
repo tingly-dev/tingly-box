@@ -30,8 +30,8 @@ func (t *NativeWebSearchStripTransform) Apply(ctx *protocoltransform.TransformCo
 		return nil
 	}
 
-	stripSearch := t.runtime.IsClientToolAvailable(mcptools.BuiltinWebtoolsSourceID, mcptools.BuiltinWebSearchToolName)
-	stripFetch := t.runtime.IsClientToolAvailable(mcptools.BuiltinWebtoolsSourceID, mcptools.BuiltinWebFetchToolName)
+	injected, _ := ctx.Extra[injectedServerToolsKey].([]string)
+	stripSearch, stripFetch := replacementsPresent(injected, true, true)
 
 	if !stripSearch && !stripFetch {
 		return nil
@@ -39,14 +39,48 @@ func (t *NativeWebSearchStripTransform) Apply(ctx *protocoltransform.TransformCo
 
 	switch req := ctx.Request.(type) {
 	case *openai.ChatCompletionNewParams:
+		stripSearch, stripFetch = replacementsPresent(extractOpenAIToolNames(req.Tools), stripSearch, stripFetch)
+		if choice := req.ToolChoice.OfFunctionToolChoice; choice != nil {
+			stripSearch, stripFetch = retainSelectedNative(choice.Function.Name, stripSearch, stripFetch)
+		}
 		req.Tools = stripOpenAIWebTools(req.Tools, stripSearch, stripFetch)
 	case *anthropic.MessageNewParams:
+		stripSearch, stripFetch = replacementsPresent(extractAnthropicV1ToolNames(req.Tools), stripSearch, stripFetch)
+		if choice := req.ToolChoice.OfTool; choice != nil {
+			stripSearch, stripFetch = retainSelectedNative(choice.Name, stripSearch, stripFetch)
+		}
 		req.Tools = stripAnthropicV1WebTools(req.Tools, stripSearch, stripFetch)
 	case *anthropic.BetaMessageNewParams:
+		stripSearch, stripFetch = replacementsPresent(extractAnthropicBetaToolNames(req.Tools), stripSearch, stripFetch)
+		if choice := req.ToolChoice.OfTool; choice != nil {
+			stripSearch, stripFetch = retainSelectedNative(choice.Name, stripSearch, stripFetch)
+		}
 		req.Tools = stripAnthropicBetaWebTools(req.Tools, stripSearch, stripFetch)
 	}
 
 	return nil
+}
+
+// Require both this request's injection marker and the resulting definition.
+func replacementsPresent(names []string, search, fetch bool) (bool, bool) {
+	hasSearch, hasFetch := false, false
+	for _, name := range names {
+		hasSearch = hasSearch || name == runtime.NormalizeToolName(mcptools.ServerWebtoolsSourceID, mcptools.BuiltinWebSearchToolName)
+		hasFetch = hasFetch || name == runtime.NormalizeToolName(mcptools.ServerWebtoolsSourceID, mcptools.BuiltinWebFetchToolName)
+	}
+	return search && hasSearch, fetch && hasFetch
+}
+
+// An explicit native choice must remain valid. Retain that native definition
+// rather than silently changing the user's selected tool.
+func retainSelectedNative(name string, search, fetch bool) (bool, bool) {
+	if isNativeWebToolName(name, true, false) {
+		search = false
+	}
+	if isNativeWebToolName(name, false, true) {
+		fetch = false
+	}
+	return search, fetch
 }
 
 // isNativeWebToolName returns true for the bare names used by OpenAI-style native web tools.

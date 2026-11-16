@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
@@ -13,16 +14,22 @@ import (
 
 func TestOpenRouterFetcher_Fetch(t *testing.T) {
 	const response = `{"data":{"label":"sk-or-v1-test","is_free_tier":false,"limit":100,"usage":35.5,"usage_daily":1.2,"usage_weekly":12.3,"usage_monthly":30,"byok_usage":0,"byok_usage_daily":0,"creator_user_id":"user_test123"}}`
+	const creditsResponse = `{"data":{"total_credits":120,"total_usage":35.5}}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/key" {
-			t.Errorf("expected path /api/v1/key, got %s", r.URL.Path)
-		}
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("expected Bearer test-key, got %s", r.Header.Get("Authorization"))
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(response))
+		switch r.URL.Path {
+		case "/api/v1/key":
+			_, _ = w.Write([]byte(response))
+		case "/api/v1/credits":
+			_, _ = w.Write([]byte(creditsResponse))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
 	}))
 	defer server.Close()
 
@@ -45,30 +52,39 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 	if usage.ProviderType != quota.ProviderTypeOpenRouter {
 		t.Errorf("ProviderType = %q, want openrouter", usage.ProviderType)
 	}
-	if string(usage.RawResponse) != response {
-		t.Errorf("RawResponse = %q, want %q", usage.RawResponse, response)
+	var raw struct {
+		Key     json.RawMessage `json:"key"`
+		Credits json.RawMessage `json:"credits"`
+	}
+	if err := json.Unmarshal(usage.RawResponse, &raw); err != nil {
+		t.Fatalf("RawResponse is not JSON: %v", err)
+	}
+	if string(raw.Key) != response || string(raw.Credits) != creditsResponse {
+		t.Errorf("RawResponse = %s, want both upstream bodies verbatim", usage.RawResponse)
 	}
 
-	// Key limit window
-	if len(usage.Windows) < 2 {
-		t.Fatalf("expected at least 2 windows, got %d", len(usage.Windows))
+	// Balance window: the account's credits
+	balance := findWindow(t, usage, "balance")
+	if balance.Type != quota.WindowTypeBalance {
+		t.Errorf("Balance.Type = %q, want balance", balance.Type)
 	}
-	keyLimit := usage.Windows[0]
-	if keyLimit.Type != quota.WindowTypeBalance {
-		t.Errorf("KeyLimit.Type = %q, want balance", keyLimit.Type)
+	if balance.Unit != quota.UsageUnitCurrency || balance.CurrencyCode != "USD" {
+		t.Errorf("Balance unit = %q %q, want currency USD", balance.Unit, balance.CurrencyCode)
 	}
-	if keyLimit.Used != 35.50 {
-		t.Errorf("KeyLimit.Used = %f, want 35.50", keyLimit.Used)
+	if balance.Available == nil || *balance.Available != 84.5 {
+		t.Errorf("Balance.Available = %v, want 84.5", balance.Available)
 	}
-	if keyLimit.Limit != 100.0 {
-		t.Errorf("KeyLimit.Limit = %f, want 100.0", keyLimit.Limit)
+	if !balance.Unknown || balance.Countable() {
+		t.Error("all-time spent/purchased is not a runway figure; the balance must carry no percentage")
 	}
-	if keyLimit.Unit != quota.UsageUnitCurrency {
-		t.Errorf("KeyLimit.Unit = %q, want currency", keyLimit.Unit)
+
+	// The key's spending cap is not money and gets no window
+	if len(usage.Windows) != 2 {
+		t.Errorf("expected only the balance and monthly windows, got %d", len(usage.Windows))
 	}
 
 	// Monthly window
-	monthly := usage.Windows[1]
+	monthly := findWindow(t, usage, "monthly")
 	if monthly.Type != quota.WindowTypeMonthly {
 		t.Errorf("Monthly.Type = %q, want monthly", monthly.Type)
 	}
@@ -83,8 +99,8 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 	if usage.Cost.Used != 35.50 {
 		t.Errorf("Cost.Used = %f, want 35.50", usage.Cost.Used)
 	}
-	if usage.Cost.Limit != 100.0 {
-		t.Errorf("Cost.Limit = %f, want 100.0", usage.Cost.Limit)
+	if usage.Cost.Limit != 0 {
+		t.Errorf("Cost.Limit = %f, want 0: the key cap is not money", usage.Cost.Limit)
 	}
 
 	// Account
@@ -100,39 +116,10 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 }
 
 func TestOpenRouterFetcher_FreeTier(t *testing.T) {
+	usage := openrouterUsage(t, `{"data":{"label":"sk-or-v1-free","is_free_tier":true,"limit":null,`+
+		`"usage":0,"usage_daily":0,"usage_weekly":0,"usage_monthly":0,"creator_user_id":"user_free"}}`)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]interface{}{
-			"data": map[string]interface{}{
-				"label":           "sk-or-v1-free",
-				"is_free_tier":    true,
-				"limit":           nil,
-				"usage":           0,
-				"usage_daily":     0,
-				"usage_weekly":    0,
-				"usage_monthly":   0,
-				"creator_user_id": "user_free",
-			},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	fetcher := &OpenRouterFetcher{}
-	provider := &ai.Provider{
-		UUID:    "test-uuid",
-		Name:    "OpenRouter",
-		Token:   "test-key",
-		APIBase: server.URL,
-	}
-
-	usage, err := fetcher.Fetch(context.Background(), provider)
-	if err != nil {
-		t.Fatalf("Fetch() error: %v", err)
-	}
-
-	// No limit → first window shows monthly usage
+	// No limit and no credits answer → first window shows monthly usage
 	if len(usage.Windows) == 0 {
 		t.Fatal("expected quota windows")
 	}
@@ -187,11 +174,31 @@ func TestOpenRouterFetcher_Validate(t *testing.T) {
 	}
 }
 
+// openrouterUsage fetches with /api/v1/credits answering 403, which the docs
+// give for a key without management rights.
 func openrouterUsage(t *testing.T, response string) *quota.ProviderUsage {
+	t.Helper()
+	return openrouterUsageWithCredits(t, response, "")
+}
+
+// openrouterUsageWithCredits serves response from /api/v1/key and credits
+// from /api/v1/credits; an empty credits answers 403.
+func openrouterUsageWithCredits(t *testing.T, response, credits string) *quota.ProviderUsage {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(response))
+		switch {
+		case r.URL.Path == "/api/v1/key":
+			_, _ = w.Write([]byte(response))
+		case r.URL.Path == "/api/v1/credits" && credits != "":
+			_, _ = w.Write([]byte(credits))
+		case r.URL.Path == "/api/v1/credits":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"code":403,"message":"Only management keys can perform this operation"}}`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
 	}))
 	t.Cleanup(server.Close)
 
@@ -203,28 +210,101 @@ func openrouterUsage(t *testing.T, response string) *quota.ProviderUsage {
 	return usage
 }
 
-func TestOpenRouterKeyLimitIsAResource(t *testing.T) {
+// A /credits answer that cannot be read (an error status, or a page that is
+// not JSON) leaves the balance out; the key's figures still come through.
+func TestOpenRouterUnreadableCreditsLeaveTheBalanceOut(t *testing.T) {
+	for name, reply := range map[string]func(http.ResponseWriter){
+		"server error": func(w http.ResponseWriter) { w.WriteHeader(http.StatusInternalServerError) },
+		"not JSON":     func(w http.ResponseWriter) { _, _ = w.Write([]byte("<html>busy</html>")) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/credits" {
+					reply(w)
+					return
+				}
+				_, _ = w.Write([]byte(`{"data":{"limit":null,"usage":1,"usage_monthly":1,"creator_user_id":"u1"}}`))
+			}))
+			defer server.Close()
+
+			usage, err := (&OpenRouterFetcher{}).Fetch(context.Background(),
+				&ai.Provider{UUID: "u", Name: "OpenRouter", Token: "k", APIBase: server.URL})
+			if err != nil {
+				t.Fatalf("Fetch() error: %v", err)
+			}
+			for _, w := range usage.Windows {
+				if w.Key == "balance" {
+					t.Error("unreadable credits must not produce a balance")
+				}
+			}
+			var raw struct {
+				Credits json.RawMessage `json:"credits"`
+			}
+			if err := json.Unmarshal(usage.RawResponse, &raw); err != nil || string(raw.Credits) != "null" {
+				t.Errorf("raw credits = %s (%v), want null", raw.Credits, err)
+			}
+		})
+	}
+}
+
+// The key's spending cap used to be shown as the balance. It is not money, so
+// it gets no window; with no credits answer there is no balance either.
+func TestOpenRouterKeyLimitIsNotShownAsBalance(t *testing.T) {
 	usage := openrouterUsage(t,
 		`{"data":{"limit":20,"usage":8.1,"usage_monthly":8.1,"creator_user_id":"u1"}}`)
 
 	checkInvariants(t, usage)
 
-	keyLimit := findWindow(t, usage, "key_limit")
-	if keyLimit.Kind != quota.WindowKindResource {
-		t.Errorf("key_limit Kind = %q, want resource", keyLimit.Kind)
+	for _, w := range usage.Windows {
+		if w.Key == "key_limit" || w.Type == quota.WindowTypeBalance {
+			t.Errorf("window %q (%s) is shown; the key cap must not appear", w.Key, w.Type)
+		}
 	}
-	if keyLimit.Available == nil || *keyLimit.Available != 11.9 {
-		t.Errorf("key_limit Available = %v, want 11.9", keyLimit.Available)
+}
+
+// The reported case: a $50 cap on the key showed as "Balance: $50.00 / $50.00"
+// on an account that never bought credits and is slightly below zero.
+func TestOpenRouterBalanceIsTheAccountsCredits(t *testing.T) {
+	usage := openrouterUsageWithCredits(t,
+		`{"data":{"limit":50,"limit_remaining":50,"usage":0,"is_free_tier":true,"creator_user_id":"u1"}}`,
+		`{"data":{"total_credits":0,"total_usage":0.007911}}`)
+
+	checkInvariants(t, usage)
+
+	balance := findWindow(t, usage, "balance")
+	if balance.Type != quota.WindowTypeBalance || balance.Kind != quota.WindowKindResource {
+		t.Errorf("balance Type/Kind = %q/%q, want balance/resource", balance.Type, balance.Kind)
 	}
-	if keyLimit.CurrencyCode != "USD" {
-		t.Errorf("key_limit CurrencyCode = %q, want USD", keyLimit.CurrencyCode)
+	if balance.Available == nil || *balance.Available != 0 {
+		t.Errorf("balance Available = %v, want 0 (clamped)", balance.Available)
 	}
-	if pct, ok := usage.Pct(); !ok || pct < 40.4 || pct > 40.6 {
-		t.Fatalf("Pct() = %v, %v; want ~40.5, true", pct, ok)
+	if balance.Countable() {
+		t.Error("the balance is an amount, never a share")
 	}
-	// Credits are topped up, not reset, so waiting brings nothing back.
-	if usage.RecoversAt() != nil {
-		t.Error("RecoversAt() should be nil when the binding entry is a credit pool")
+	if balance.Description != "$0.00 remaining" {
+		t.Errorf("balance Description = %q, want only the balance: $0.00 remaining", balance.Description)
+	}
+	if len(usage.Windows) != 2 {
+		t.Errorf("expected only the balance and monthly windows, got %d", len(usage.Windows))
+	}
+}
+
+// After several top-ups the all-time totals read 89% spent while $110 is left.
+// That ratio must not become the provider's figure: it would raise the 80%
+// warning and colour the ring red on an account with money in it.
+func TestOpenRouterBalanceAfterTopUpsIsNotNearlyExhausted(t *testing.T) {
+	usage := openrouterUsageWithCredits(t,
+		`{"data":{"limit":null,"usage":890,"creator_user_id":"u1"}}`,
+		`{"data":{"total_credits":1000,"total_usage":890}}`)
+
+	checkInvariants(t, usage)
+
+	balance := findWindow(t, usage, "balance")
+	if balance.Available == nil || *balance.Available != 110 {
+		t.Errorf("balance Available = %v, want 110", balance.Available)
+	}
+	if pct, ok := usage.Pct(); ok {
+		t.Errorf("Pct() = %v, %v; want no figure: neither the balance nor uncapped spend has a cap", pct, ok)
 	}
 }
 
@@ -260,11 +340,8 @@ func TestOpenRouterMonthlySpendNeverPosesAsACap(t *testing.T) {
 	if monthly.Countable() {
 		t.Error("monthly spend has no cap; it must not contribute a usage figure")
 	}
-	if got := usage.Tightest().Key; got != "key_limit" {
-		t.Errorf("Tightest() = %q; want key_limit, the window that actually has a cap", got)
-	}
-	if usage.Windows[0].Key != "key_limit" {
-		t.Errorf("first window = %q; want key_limit ahead of the uncapped one", usage.Windows[0].Key)
+	if tight := usage.Tightest(); tight != nil {
+		t.Errorf("Tightest() = %q; want none, nothing here has a cap", tight.Key)
 	}
 }
 
@@ -276,9 +353,9 @@ func TestOpenRouterFetcherDoesNotDoubleAPIPrefix(t *testing.T) {
 
 	for _, suffix := range []string{"", "/", "/api/v1", "/api/v1/", "/api"} {
 		t.Run("base"+suffix, func(t *testing.T) {
-			var gotPath string
+			var gotPaths []string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotPath = r.URL.Path
+				gotPaths = append(gotPaths, r.URL.Path)
 				_, _ = w.Write([]byte(response))
 			}))
 			defer server.Close()
@@ -289,8 +366,8 @@ func TestOpenRouterFetcherDoesNotDoubleAPIPrefix(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Fetch() error: %v", err)
 			}
-			if gotPath != "/api/v1/key" {
-				t.Errorf("path = %q, want /api/v1/key", gotPath)
+			if strings.Join(gotPaths, " ") != "/api/v1/key /api/v1/credits" {
+				t.Errorf("paths = %q, want /api/v1/key then /api/v1/credits", gotPaths)
 			}
 		})
 	}

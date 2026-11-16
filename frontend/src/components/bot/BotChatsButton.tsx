@@ -16,6 +16,7 @@ import Popover from '@mui/material/Popover';
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
+import { writeToClipboard } from '@/utils/clipboard';
 
 // BotChatsButton surfaces the chat ids a bot can reach, so an operator can
 // copy the channel-native chat_id that POST /api/v1/bots/:bot/{notify,interact}
@@ -64,7 +65,7 @@ const BotChatsButton: React.FC<BotChatsButtonProps> = ({botUUID, platform, pairi
 
     const handleCopy = useCallback(async (chatID: string) => {
         try {
-            await navigator.clipboard.writeText(chatID);
+            await writeToClipboard(chatID);
             notify.success(t('bots.table.chatIdCopied', {defaultValue: 'Chat ID copied'}));
         } catch {
             notify.error(t('bots.table.chatIdCopyFailed', {defaultValue: 'Copy failed — check clipboard permissions'}));

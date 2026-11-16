@@ -1,37 +1,31 @@
-import { useCallback, useRef, useState } from 'react';
-import { Box, Button, Card, Stack, Tooltip } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Box, Button, Stack, Tooltip } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import ChoiceToggle from '@/components/ChoiceToggle';
 import ConfigRow from '@/components/ConfigRow';
 import PageHeader from '@/components/PageHeader';
-import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
-import PluginFeatures from '@/components/PluginFeatures';
 import type { EnvironmentMode } from '@/components/EnvironmentModeSwitcher';
 import { transformUrlByMode } from '@/utils/tokenUtils';
 import { type ClientConfigTool, useClientConfigStatus } from '@/hooks/useClientConfigStatus';
-import { useProviderDialog } from '@/hooks/useProviderDialog';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import { type SlotMode, useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
+import { useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
 import { useAgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
+import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
+import { AgentInstallRow } from './components/AgentInstallRow';
 import AgentAccessSection, { useAccessExpanded } from './components/AgentAccessSection';
-import AgentActivityDialog from './components/AgentActivityDialog';
-import AgentStatusRow, { AgentLooksIn } from './components/AgentStatusRow';
-import AgentSetupCard, {
-    type AgentApplyResult,
-    type AgentInstallAction,
-    hasModelOnAnyRule,
-    resetSetupProgress,
-    scrollToModelsCard,
-} from './components/AgentSetupCard';
-import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader } from './components/ScenarioCardHeader';
+import AgentStatusRow, { AgentLogButton } from './components/AgentStatusRow';
+import { type AgentApplyResult, type AgentInstallAction, hasModelOnAnyRule } from './components/agentSetup';
+import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader, agentPageHeaderSx } from './components/ScenarioCardHeader';
+import PluginFeatures from '@/components/PluginFeatures';
+import { usePluginsActive } from '@/hooks/usePluginsActive';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
+import ClaudeCodeUseProfile from './components/ClaudeCodeUseProfile';
 import TemplatePage from './components/TemplatePage.tsx';
 
 /**
@@ -51,27 +45,33 @@ export type AgentSetup =
         apply: (t: TFunction, ctx: AgentApplyContext) => Promise<AgentApplyResult>;
         /** Quick Start's second apply button, which also installs the status line (Claude Code). */
         applyWithStatusLine?: (t: TFunction, ctx: AgentApplyContext) => Promise<AgentApplyResult>;
+        /**
+         * Re-apply the client's config for a rule's 1M toggle, keeping what was
+         * applied before. Present: the toggle takes effect directly with a toast.
+         * Absent: the toggle opens the setup dialog.
+         */
+        applyContext1M?: (t: TFunction, ctx: AgentApplyContext, change: { enabled: boolean; ruleUuid?: string }) => Promise<AgentApplyResult>;
         renderDialog: (slot: AgentPageSlot) => React.ReactNode;
     };
 
 /** What a one-click apply derives its settings from. */
 export interface AgentApplyContext {
     rules: any[];
-    /** Set for agents with slot routing. */
-    slotMode?: SlotMode;
+    /** Slot routing: slots with a rule of their own. */
+    slots?: string[];
 }
 
-/** The Quick Start card: install → configure → pick a model. */
-export interface AgentQuickStart {
+/** How the agent is installed, shown as the connection section's Install row. */
+export interface AgentInstall {
     /** Shown as a copyable command; empty when installing is not a command. */
     installCommand?: string;
     installMirrorCommand?: string;
     installDescriptionKey?: string;
     installActions?: (t: TFunction) => AgentInstallAction[];
-    applyStepLabelKey?: string;
-    applyStepDescriptionKey?: string;
-    /** Label of the step's button that opens the setup dialog. */
-    openDialogLabelKey?: string;
+    /** The Quick Start button opens the agent's own connect guide (install → connect → apply → verify) before the routing steps. */
+    connectGuide?: boolean;
+    /** The agent's own site, linked from the connect guide's install step for other ways to install. */
+    siteUrl?: string;
 }
 
 /** A link next to the header's config button (e.g. DSH's local Web UI). */
@@ -83,13 +83,15 @@ export interface AgentHeaderLink {
 /**
  * Everything that differs between agent pages, as data. One `AgentPage`
  * renders any of them: header (name, config status, links, config button) →
- * connection rows → Quick Start → routing rules → setup dialog.
+ * connection rows → routing rules → setup dialog.
  */
 export interface AgentPageDescriptor {
     scenario: string;
     /** Product name; not translated. */
     title: string;
     tooltipKey?: string;
+    /** Extra control next to the title (e.g. Claude Code's "Duplicate as profile"). */
+    titleAddon?: React.ReactNode;
     connection?: {
         /** Title of the connection rows when it differs from `title`. */
         titleKey?: string;
@@ -99,19 +101,25 @@ export interface AgentPageDescriptor {
     };
     /** The gateway can read this client's config back: show whether it is applied. */
     clientConfigTool?: ClientConfigTool;
-    /** Rules offer the 1M-context toggle; toggling opens the setup dialog. */
+    /** Rules offer the 1M-context toggle; toggling re-applies the config (`setup.applyContext1M`) or opens the setup dialog. */
     context1M?: boolean;
     setup: AgentSetup;
-    quickStart?: AgentQuickStart;
+    install?: AgentInstall;
     headerLinks?: AgentHeaderLink[];
     /** Title of the routing rules card when it is not the default. */
     rulesTitleKey?: string;
+	/** Optional scenario-specific content shown immediately above routing rules. */
+	renderBeforeRules?: (slot: AgentPageSlot) => React.ReactNode;
+    /** Optional scenario-specific content shown immediately below routing rules. */
+    renderAfterRules?: (slot: AgentPageSlot) => React.ReactNode;
     /**
      * Fixed model slots (Claude Code): a Unified / Separate switch in the
      * header decides which rules are shown; rules can't be added, removed or
      * switched off, since each one backs a slot.
      */
     slotRouting?: { unifiedRuleUuid: string };
+    /** Offer the "Use profile" row on the default config (Claude Code's main scenario only). */
+    useProfileRow?: boolean;
 }
 
 /** What an agent's setup dialog gets from the page. */
@@ -122,7 +130,7 @@ export interface AgentPageSlot {
     showNotification: ReturnType<typeof useScenarioPageInternal>['showNotification'];
     rules: any[];
     loadRules: (scenario: string) => Promise<void>;
-    slotMode?: SlotMode;
+    slots?: string[];
     dialogOpen: boolean;
     /** Close the setup dialog and drop a pending 1M-context change. */
     closeDialog: () => void;
@@ -134,6 +142,8 @@ export interface AgentPageSlot {
     apply: () => Promise<AgentApplyResult>;
     /** Run another apply (e.g. a dialog's, with its own settings) under the same loading state. */
     runApply: (apply: () => Promise<AgentApplyResult>) => Promise<AgentApplyResult>;
+    /** After a dialog's apply succeeds: close the dialog and toast which files were written. */
+    closeApplied: (result: AgentApplyResult) => void;
     isApplyLoading: boolean;
 }
 
@@ -150,11 +160,11 @@ const ToggleRow: React.FC<{ label: string; children: React.ReactNode }> = ({ lab
 
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();
-    const { scenario, setup, quickStart, headerLinks, slotRouting, connection } = agent;
+    const { scenario, setup, install, headerLinks, slotRouting, connection } = agent;
 
     // Rules: the scenario's own, or — with slot routing — the set for the current mode.
     const slots = useSlotRouting(scenario, slotRouting?.unifiedRuleUuid ?? '', !!slotRouting);
-    const slotMode = slotRouting ? slots.mode : undefined;
+    const slotList = slotRouting ? slots.slots : undefined;
     const internal = useScenarioPageInternal(scenario, { skipRules: !!slotRouting });
     const { notification, showNotification, copyToClipboard, baseUrl, loadRules } = internal;
     const rules = slotRouting ? slots.rules : internal.rules;
@@ -162,35 +172,26 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
-    // Whether every Quick Start step is done; null until the card has worked it out.
-    const [setupDone, setSetupDone] = useState<boolean | null>(null);
-    // Requests (a dialog) and Usage (the Dashboard, filtered to this agent) are looks-in
-    // from the status row.
-    const [requestsOpen, setRequestsOpen] = useState(false);
+    // The agent's Log (requests, today's usage, system log) is the one look-in.
     const [logOpen, setLogOpen] = useState(false);
-    const navigate = useNavigate();
     const observation = useAgentObservation(scenario);
-    // A finished Quick Start leaves the page; its button in the status row brings it back
-    // (and resets it). `reopened` keeps it on show until it is finished again.
-    const [quickStartReopened, setQuickStartReopened] = useState(false);
-    const [quickStartResetKey, setQuickStartResetKey] = useState(0);
-    const wasAllDone = useRef<boolean | null>(null);
-    const onSetupDoneChange = useCallback((done: boolean) => {
-        // Finished again after a reopen: it hides itself once more.
-        if (wasAllDone.current === false && done) setQuickStartReopened(false);
-        wasAllDone.current = done;
-        setSetupDone(done);
-    }, []);
-    const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotMode]);
+    const [guideOpen, setGuideOpen] = useState(false);
+    const { status: clientConfigStatus } = useClientConfigStatus(agent.clientConfigTool ?? null, [rules, dialogOpen, slotList]);
+    const configApplied = clientConfigStatus?.state === 'applied';
     const context1M = useContext1MToggle(() => setDialogOpen(true));
-    // Unified Connect AI add flow (picker + form/OAuth/paste/import dialogs), offered by Quick Start.
-    // A new provider refreshes the page's list in place: Quick Start's first
-    // step ticks over and the flow carries on to "pick a model" instead of
-    // the page reloading under the user.
-    const connectAI = useProviderDialog(showNotification, {
-        onProviderAdded: () => { void internal.loadProviders(); },
-    });
-
+    // Auto-config agents apply a 1M toggle straight away: no dialog, a toast says so.
+    const handleContext1MToggle = async (enabled: boolean, ruleUuid?: string) => {
+        if (setup.kind !== 'auto' || !setup.applyContext1M) {
+            context1M.handleContext1MToggle(enabled, ruleUuid);
+            return;
+        }
+        const result = await runApply(() => setup.applyContext1M!(t, { rules, slots: slotList }, { enabled, ruleUuid }));
+        if (result.success) {
+            showNotification(t(enabled ? 'context1M.appliedOn' : 'context1M.appliedOff', { client: agent.title }), 'success');
+        } else if (result.error) {
+            showNotification(result.error, 'error');
+        }
+    };
     const runApply = async (apply: () => Promise<AgentApplyResult>) => {
         setIsApplyLoading(true);
         try {
@@ -199,7 +200,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
             setIsApplyLoading(false);
         }
     };
-    const applyContext: AgentApplyContext = { rules, slotMode };
+    const applyContext: AgentApplyContext = { rules, slots: slotList };
+    const closeDialog = () => {
+        setDialogOpen(false);
+        context1M.clearPendingContext1MChange();
+    };
 
     const slot: AgentPageSlot = {
         scenario,
@@ -208,43 +213,43 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
         showNotification,
         rules,
         loadRules,
-        slotMode,
+        slots: slotList,
         dialogOpen,
-        closeDialog: () => {
-            setDialogOpen(false);
-            context1M.clearPendingContext1MChange();
-        },
+        closeDialog,
         pendingContext1MChange: context1M.pendingContext1MChange,
         pendingContext1MRuleUuid: context1M.pendingContext1MRuleUuid,
         apply: () => (setup.kind === 'auto'
             ? runApply(() => setup.apply(t, applyContext))
             : Promise.resolve({ success: false })),
         runApply,
+        closeApplied: (result) => {
+            const files = result.files ?? [];
+            let message = files.length > 0
+                ? t('agentSetup.apply.written', { files: files.join(', ') })
+                : t('agentSetup.apply.success');
+            if ((result.backupPaths?.length ?? 0) > 0) {
+                message += ` (${t('agentSetup.apply.backupSaved', { paths: result.backupPaths!.join(', ') })})`;
+            }
+            showNotification(message, 'success');
+            closeDialog();
+        },
         isApplyLoading,
     };
     const openDialog = () => setDialogOpen(true);
 
-    // Until progress is known, an agent that already routes a model counts as done.
-    const setupFinished = setupDone ?? hasModelOnAnyRule(rules);
-    const quickStartHidden = !quickStart || (setupFinished && !quickStartReopened);
-    const slotModeLabel = t('scenarioPage.slotMode', { defaultValue: 'Model mode' });
-    const restartQuickStart = () => {
-        resetSetupProgress(scenario);
-        wasAllDone.current = null;
-        setQuickStartReopened(true);
-        setQuickStartResetKey((k) => k + 1); // remount: the card re-reads its (now empty) progress
-    };
-    // "Connected" is the signal Quick Start already uses (every step done); pages
-    // without a Quick Start have no steps, so for them it is "has sent a request".
-    const connected = quickStart ? setupFinished : !!observation.data?.lastRequestAt;
+    // Connected once the config is applied, a request came through, or a model is routed.
+    const connected = configApplied || !!observation.data?.lastRequestAt || hasModelOnAnyRule(rules);
     // The connection section: open until connected, or while the client's config is
     // out of date; the user's own open / close (kept locally) wins over that.
     const [envMode, setEnvMode] = useState<EnvironmentMode>('local');
+    // Whether any plugin is on, read independently of the connection card's
+    // fold state, so the folded card can surface the row only when it matters.
+    const pluginsActive = usePluginsActive(scenario);
+    const pluginsRow = <PluginFeatures scenario={scenario} />;
     const accessUrl = transformUrlByMode(`${baseUrl}/tingly/${scenario}`, envMode);
     const access = useAccessExpanded(scenario, !connected || clientConfigStatus?.state === 'outdated');
 
-    const configApplied = clientConfigStatus?.state === 'applied';
-    // Looks-in (Requests / Usage / Log) lead; the key actions (Quick Start,
+    // The Log look-in leads; the key actions (Quick Start,
     // header links, Auto Config / Setup Guide) follow, with the config button
     // always filled and rightmost so the next step is where the eye lands.
     const configButton = setup.kind !== 'none' && (
@@ -254,19 +259,11 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     );
     const headerActions = (
         <>
-            <AgentLooksIn
-                onOpenRequests={() => setRequestsOpen(true)}
-                onOpenLog={() => setLogOpen(true)}
-                // The Dashboard already opens filtered to one agent (?scenario=).
-                onOpenUsage={() => navigate(`/dashboard/today?scenario=${encodeURIComponent(scenario)}`)}
-            />
-            {quickStart && quickStartHidden && (
-                // A finished Quick Start leaves the page; this brings it back (reset).
-                <Tooltip title={t('agentSetup.restartTooltip', { defaultValue: 'Run Quick Start again' })}>
-                    <Button onClick={restartQuickStart} variant="outlined" size="small">
-                        {t('agentSetup.quickStart')}
-                    </Button>
-                </Tooltip>
+            <AgentLogButton onOpenLog={() => setLogOpen(true)} />
+            {install && (
+                <Button onClick={() => setGuideOpen(true)} variant="outlined" size="small">
+                    {t('agentSetup.quickStart')}
+                </Button>
             )}
             {headerLinks?.map(link => (
                 <Tooltip key={link.href} title={link.href}>
@@ -287,6 +284,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         <ScenarioCardHeader
                             title={agent.title}
                             tooltipKey={agent.tooltipKey}
+                            addon={agent.titleAddon}
                         />
                     }
                     meta={(
@@ -297,23 +295,23 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         />
                     )}
                     actions={headerActions}
-                    // Title, status and actions share a row only where they fit; below that
-                    // the actions drop under the title instead of wrapping it.
-                    sx={{
-                        pb: 0,
-                        borderBottom: 0,
-                        flexDirection: { xs: 'column', md: 'row' },
-                        alignItems: { xs: 'flex-start', md: 'center' },
-                        '& h1': { whiteSpace: 'nowrap' },
-                        // The buttons stay on one row (the primary one never drops to a line of its
-                        // own); the status text wraps under the title instead.
-                        '& > :last-child': { flexWrap: { md: 'nowrap' }, flexShrink: { md: 0 } },
-                    }}
+                    sx={agentPageHeaderSx()}
                 />
                 {/* Connection: always here, between the status row and the rules; open
                     until the agent is connected (or while its config is out of date),
-                    then folded to just the URL. Page-level Plugins are their own card. */}
-                <AgentAccessSection expanded={access.expanded} onToggle={access.toggle} url={accessUrl}>
+                    then folded to just the URL. Slots and plugins are part of the
+                    connection; folded, they surface only when they deviate from the
+                    default (a plugin on). Slots stay in the expanded card. */}
+                <AgentAccessSection
+                    expanded={access.expanded}
+                    onToggle={access.toggle}
+                    url={accessUrl}
+                    foldedExtras={(
+                        <>
+                            {pluginsActive && pluginsRow}
+                        </>
+                    )}
+                >
                     <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                         <ProviderConfigCard
                             title={connection?.titleKey ? t(connection.titleKey) : agent.title}
@@ -328,62 +326,28 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             showApiKeyRow={connection?.apiKeyRow}
                             showBaseUrlRow={connection?.baseUrlRow}
                         />
-                        {slotRouting && (
-                            <Box sx={{ px: 2, py: 0.5 }}>
-                                <ToggleRow label={slotModeLabel}>
-                                    <ChoiceToggle<SlotMode>
-                                        value={slots.mode}
-                                        options={slots.modeOptions}
-                                        onChange={slots.requestMode}
-                                        optionWidth={112}
-                                        flush
-                                        ariaLabel={slotModeLabel}
-                                    />
-                                </ToggleRow>
-                            </Box>
+                        {install && (
+                            <AgentInstallRow
+                                command={install.installCommand}
+                                mirrorCommand={install.installMirrorCommand}
+                                actions={install.installActions?.(t)}
+                                onCopy={copyToClipboard}
+                            />
                         )}
+                        {/* Slots and plugins live in the connection card: they are
+                            per-connection settings, set alongside the URL. Rows
+                            use pt:1 so the gaps match the card's edge rhythm. */}
+                        {slotRouting && agent.useProfileRow && (
+                            <ClaudeCodeUseProfile onChanged={slots.reload} />
+                        )}
+                        {slotRouting && (
+                            <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
+                        )}
+                        <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
                     </Box>
                 </AgentAccessSection>
 
-                {/* Page-level plugins (Thinking, Vision Proxy, Record): their own card,
-                    always shown, whether the connection above is folded or not. */}
-                <Card sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', boxShadow: 'none', backgroundColor: 'background.paper' }}>
-                    {/* Same height and left inset as the folded connection card above. */}
-                    <Box sx={{ px: 2, py: 0.5, minHeight: 58, display: 'flex', alignItems: 'center', '& > *': { flex: 1, minWidth: 0 } }}>
-                        <PluginFeatures scenario={scenario} />
-                    </Box>
-                </Card>
-
-                {quickStart && (
-                    // Embedded where it always was, above the rules; gone once done.
-                    <AgentSetupCard
-                        key={quickStartResetKey}
-                        hidden={quickStartHidden}
-                        onDismiss={() => setQuickStartReopened(false)}
-                        onAllDoneChange={onSetupDoneChange}
-                        agentKey={scenario}
-                        agentName={agent.title}
-                        installCommand={quickStart.installCommand ?? ''}
-                        installMirrorCommand={quickStart.installMirrorCommand}
-                        installStepDescription={quickStart.installDescriptionKey && t(quickStart.installDescriptionKey)}
-                        installActions={quickStart.installActions?.(t)}
-                        onApply={setup.kind === 'auto' ? slot.apply : undefined}
-                        onApplyWithStatusLine={setup.kind === 'auto' && setup.applyWithStatusLine
-                            ? () => runApply(() => setup.applyWithStatusLine!(t, applyContext))
-                            : undefined}
-                        isApplyLoading={isApplyLoading}
-                        onViewConfig={openDialog}
-                        applyStepLabel={quickStart.applyStepLabelKey && t(quickStart.applyStepLabelKey)}
-                        applyStepDescription={quickStart.applyStepDescriptionKey && t(quickStart.applyStepDescriptionKey)}
-                        viewConfigButtonLabel={quickStart.openDialogLabelKey && t(quickStart.openDialogLabelKey)}
-                        hasModelSelected={hasModelOnAnyRule(rules)}
-                        onSelectModel={scrollToModelsCard}
-                        onConnectProvider={connectAI.handleConnectAIClick}
-                        providers={internal.providers}
-                        providersLoading={internal.loading}
-                        configApplied={configApplied}
-                    />
-                )}
+                {agent.renderBeforeRules?.(slot)}
                 <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's
@@ -394,7 +358,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     // and the setup dialog (slot.rules) read the same state.
                     rules={rules}
                     {...(slotRouting
-                        // Each slot rule backs a model slot: it can't be added, removed or switched off.
+                        // Each slot rule backs a model slot: it can't be added, removed,
+                        // switched off or reordered — the slot precedence is product-defined.
                         ? { onRulesChange: slots.setRules, allowAddRule: false, allowToggleRule: false, allowDeleteRule: false }
                         : {
                             loadRules,
@@ -402,18 +367,28 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             onRuleDelete: internal.handleRuleDelete,
                             newlyCreatedRuleUuids: internal.newlyCreatedRuleUuids,
                             allowDeleteRule: true,
+                            allowReorder: true,
                         })}
                     {...(agent.rulesTitleKey ? { title: t(agent.rulesTitleKey) } : {})}
                     collapsible={true}
                     hideTroubleshoot
-                    {...(agent.context1M ? { onContext1MToggle: context1M.handleContext1MToggle } : {})}
+                    {...(agent.context1M ? { onContext1MToggle: handleContext1MToggle } : {})}
                 />
 
+                {agent.renderAfterRules?.(slot)}
                 <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
-                <AgentActivityDialog scenario={scenario} open={requestsOpen} onClose={() => setRequestsOpen(false)} />
-                {slotRouting && slots.modeDialog}
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
-                {quickStart && <ConnectAIDialogs flow={connectAI} />}
+                <EntryGuideDialog
+                    open={guideOpen}
+                    onClose={() => setGuideOpen(false)}
+                    mode="direct"
+                    agent={install?.connectGuide ? {
+                        name: agent.title,
+                        installCommand: install.installCommand,
+                        installMirrorCommand: install.installMirrorCommand,
+                        siteUrl: install.siteUrl,
+                    } : undefined}
+                />
             </Stack>
         </PageLayout>
     );

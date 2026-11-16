@@ -50,7 +50,7 @@ func TestResolveProviderModels_Codex_TemplateFallback(t *testing.T) {
 	got, err := cfg.ResolveProviderModels(true, false, p.UUID)
 	require.NoError(t, err)
 	assert.Equal(t, ModelListSourceTemplate, got.Source)
-	assert.Contains(t, got.Models, "gpt-5.5")
+	assert.Contains(t, got.Models, "gpt-6-sol")
 }
 
 // A non-empty DB cache is served verbatim (source=db) and the upstream API is
@@ -80,7 +80,23 @@ func TestResolveProviderModels_ForceRefresh_BypassesCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ModelListSourceTemplate, got.Source)
 	assert.NotContains(t, got.Models, "stale-cached")
-	assert.Contains(t, got.Models, "gpt-5.5")
+	assert.Contains(t, got.Models, "gpt-6-sol")
+}
+
+func TestResolveProviderModels_UnsupportedWithoutTemplateKeepsStale(t *testing.T) {
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	p := codexResolveProvider()
+	require.NoError(t, cfg.AddProvider(p))
+	require.NoError(t, cfg.GetModelManager().SaveModels(p, []string{"last-known"}, db.ModelSourceAPI))
+
+	refreshed, err := cfg.ResolveProviderModels(true, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, ModelListSourceCache, refreshed.Source)
+	assert.Equal(t, []string{"last-known"}, refreshed.Models)
+	reopened, err := cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, refreshed.Models, reopened.Models)
 }
 
 // A provider that does not exist yields an error (used by the refresh path to
@@ -125,6 +141,25 @@ func TestResolveProviderModels_ClaudeCode_BannedByDefault(t *testing.T) {
 	lastErr, exists := cfg.GetModelManager().GetFetchFailure(p.UUID)
 	require.True(t, exists, "expected a recorded fetch failure for the banned Claude Code fetch")
 	assert.Contains(t, lastErr, "Claude Code upstream")
+}
+
+// The policy-blocked Claude Code fetch is not an authoritative model list.
+// Refresh and the following read must both keep the last real upstream list.
+func TestResolveProviderModels_ClaudeCode_RefreshAndReadKeepStale(t *testing.T) {
+	cfg := newResolveTestConfig(t)
+	p := claudeCodeResolveProvider()
+	require.NoError(t, cfg.AddProvider(p))
+	require.NoError(t, cfg.GetModelManager().SaveModels(p, []string{"upstream-model"}, db.ModelSourceAPI))
+
+	refreshed, err := cfg.ResolveProviderModels(true, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, ModelListSourceCache, refreshed.Source)
+	assert.Equal(t, []string{"upstream-model"}, refreshed.Models)
+
+	reopened, err := cfg.ResolveProviderModels(false, false, p.UUID)
+	require.NoError(t, err)
+	assert.Equal(t, refreshed.Source, reopened.Source)
+	assert.Equal(t, refreshed.Models, reopened.Models)
 }
 
 // With force_upstream, the normal Claude Code guard is bypassed and the real

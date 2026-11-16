@@ -41,6 +41,8 @@ on:
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
       - 'internal/catalog/**'
+      - 'internal/mcp/**'
+      - 'internal/tool/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
@@ -53,7 +55,7 @@ on:
       # The harness itself
       - 'cli/harness/**'
       - 'tests/clients/**'
-      - 'scripts/harness-baseline.sh'
+      - 'tests/harness-baseline.sh'
       - '.github/workflows/harness-matrix.yml'
       - '.github/workflows/harness-template.yml'
   # Run after every merge to main. We react to PR-close events instead of a
@@ -75,6 +77,8 @@ on:
       - 'internal/forwarding/**'
       - 'internal/toolengine/**'
       - 'internal/catalog/**'
+      - 'internal/mcp/**'
+      - 'internal/tool/**'
       - 'internal/guardrails/**'
       - 'internal/server/*.go'        # top-level handlers only, not module/ (management APIs)
       - 'vmodel/**'
@@ -87,7 +91,7 @@ on:
       # The harness itself
       - 'cli/harness/**'
       - 'tests/clients/**'
-      - 'scripts/harness-baseline.sh'
+      - 'tests/harness-baseline.sh'
       - '.github/workflows/harness-matrix.yml'
       - '.github/workflows/harness-template.yml'
   workflow_dispatch:

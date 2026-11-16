@@ -26,3 +26,14 @@ export const formatTimestamp = (timestamp: string): string => {
         return timestamp;
     }
 };
+
+// Log rows: today's entries show only the time ("3:09:59 AM"), older ones add
+// a short date ("Oct 23, 3:09:59 AM"). Falls back to the raw input when it
+// can't be parsed.
+export const formatLogTime = (timestamp: string, now: Date = new Date()): string => {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return timestamp;
+    const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    if (date.toDateString() === now.toDateString()) return time;
+    return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
+};

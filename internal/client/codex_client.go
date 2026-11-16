@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // guard
@@ -206,7 +207,7 @@ func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 
 // sanitizeResponseInputIDs sanitizes item IDs in ResponseNewParams.Input for Codex.
 // ChatGPT Codex rejects empty/invalid item ids, so we strip malformed values
-// and drop reasoning items whose required plain-string ID cannot be omitted.
+// and preserve opaque reasoning history even when the SDK's required ID is absent.
 func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
 	if req.Input.OfInputItemList == nil {
 		return
@@ -264,14 +265,27 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 		sanitizeOptID(&item.OfCompaction.ID)
 	}
 
-	// Required plain-string ids: cannot be omitted, drop the item if invalid.
+	// Codex's reasoning id is optional even though the SDK models it as a
+	// required string. Never discard opaque replay state merely because that
+	// SDK field is missing or malformed. Omit only the ID, retaining any extra
+	// fields the client sent along with the ciphertext.
 	if item.OfReasoning != nil {
 		item.OfReasoning.ID = strings.TrimSpace(item.OfReasoning.ID)
 		if item.OfReasoning.ID == "" || !isValidCodexID(item.OfReasoning.ID) {
-			logrus.Debugf("[Codex] Dropping reasoning input item with invalid id: %q", item.OfReasoning.ID)
-			return false
+			if item.OfReasoning.EncryptedContent.Value != "" {
+				extra := make(map[string]any, len(item.OfReasoning.ExtraFields())+1)
+				for k, v := range item.OfReasoning.ExtraFields() {
+					extra[k] = v
+				}
+				extra["id"] = param.Omit
+				item.OfReasoning.SetExtraFields(extra)
+			} else {
+				logrus.Debugf("[Codex] Dropping reasoning input item with invalid id: %q", item.OfReasoning.ID)
+				return false
+			}
 		}
 	}
+	// Other required plain-string ids retain the existing malformed-ID policy.
 	if item.OfFileSearchCall != nil && !isValidCodexIDStrict(item.OfFileSearchCall.ID) {
 		logrus.Debugf("[Codex] Dropping file_search_call input item with invalid id: %q", item.OfFileSearchCall.ID)
 		return false
@@ -382,10 +396,14 @@ func (c *CodexClient) ListModels(ctx context.Context) (*ModelListResult, error) 
 // buildImageGenerationResponsesRequest transforms ImageGenerateParams into
 // a Responses API request with the image_generation tool.
 func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
-	// Build the Responses API request with Codex-specific defaults
+	// Build the Responses API request with Codex-specific defaults.
+	// The ":fast" virtual suffix (priority service tier) is not supported for
+	// image generation, so strip it instead of letting applyCodexDefaultsToParams
+	// resolve it into ServiceTier=Priority.
 	params := responses.ResponseNewParams{
-		Model: req.Model,
+		Model: strings.TrimSuffix(req.Model, fastModelSuffix),
 	}
+	applyCodexImageReasoning(&params, imagegen.ReasoningEffort(&req))
 
 	// Set default values directly on the struct
 	params.Store = param.NewOpt(false)
@@ -467,10 +485,14 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	var imageCallID string
 	var failure codexImageFailure
 
+streamLoop:
 	for stream.Next() {
 		event := stream.Current()
 
 		switch event.Type {
+		case "response.completed":
+			// The response is complete even if the server leaves the SSE connection open.
+			break streamLoop
 		case "response.image_generation_call.partial_image":
 			partialEvent := event.AsResponseImageGenerationCallPartialImage()
 			if partialEvent.PartialImageB64 != "" {

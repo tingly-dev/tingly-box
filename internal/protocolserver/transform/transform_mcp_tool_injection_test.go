@@ -21,6 +21,7 @@ func TestMCPToolInjectionTransform_AdvisorNativeGuard(t *testing.T) {
 			Transport: "advisor",
 			Enabled:   typ.BoolPtr(true),
 			Tools:     []string{"advisor"},
+			Advisor:   &typ.AdvisorConfig{ProviderUUID: "p"},
 		}},
 	}
 	rt := runtime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })

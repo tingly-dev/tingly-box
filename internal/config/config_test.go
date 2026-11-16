@@ -16,7 +16,7 @@ func TestCreateProfile_FillsFirstGap(t *testing.T) {
 	scenario := typ.RuleScenario("claude_code")
 
 	// Create p1, p2, p3
-	p1, err := cfg.CreateProfile(scenario, "profile-1", true)
+	p1, err := cfg.CreateProfile(scenario, "profile-1")
 	if err != nil {
 		t.Fatalf("CreateProfile p1 failed: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestCreateProfile_FillsFirstGap(t *testing.T) {
 		t.Errorf("expected p1.ID = 'p1', got %q", p1.ID)
 	}
 
-	p2, err := cfg.CreateProfile(scenario, "profile-2", true)
+	p2, err := cfg.CreateProfile(scenario, "profile-2")
 	if err != nil {
 		t.Fatalf("CreateProfile p2 failed: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestCreateProfile_FillsFirstGap(t *testing.T) {
 		t.Errorf("expected p2.ID = 'p2', got %q", p2.ID)
 	}
 
-	p3, err := cfg.CreateProfile(scenario, "profile-3", true)
+	p3, err := cfg.CreateProfile(scenario, "profile-3")
 	if err != nil {
 		t.Fatalf("CreateProfile p3 failed: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestCreateProfile_FillsFirstGap(t *testing.T) {
 	}
 
 	// Create a new profile — should reuse p2 (first gap), not p4
-	pNew, err := cfg.CreateProfile(scenario, "profile-new", true)
+	pNew, err := cfg.CreateProfile(scenario, "profile-new")
 	if err != nil {
 		t.Fatalf("CreateProfile after delete failed: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCreateProfile_SequentialWhenNoGaps(t *testing.T) {
 
 	for i := 1; i <= 3; i++ {
 		name := fmt.Sprintf("profile-%d", i)
-		p, err := cfg.CreateProfile(scenario, name, true)
+		p, err := cfg.CreateProfile(scenario, name)
 		if err != nil {
 			t.Fatalf("CreateProfile %d failed: %v", i, err)
 		}
@@ -84,11 +84,11 @@ func TestCreateProfile_DuplicateNameError(t *testing.T) {
 
 	scenario := typ.RuleScenario("claude_code")
 
-	if _, err := cfg.CreateProfile(scenario, "same-name", true); err != nil {
+	if _, err := cfg.CreateProfile(scenario, "same-name"); err != nil {
 		t.Fatalf("first CreateProfile failed: %v", err)
 	}
 
-	_, err = cfg.CreateProfile(scenario, "same-name", true)
+	_, err = cfg.CreateProfile(scenario, "same-name")
 	if err == nil {
 		t.Fatal("expected error for duplicate profile name, got nil")
 	}
@@ -105,7 +105,7 @@ func TestCreateProfile_FillsMultipleGaps(t *testing.T) {
 	// Create p1, p2, p3, p4, p5
 	for i := 1; i <= 5; i++ {
 		name := fmt.Sprintf("profile-%d", i)
-		if _, err := cfg.CreateProfile(scenario, name, true); err != nil {
+		if _, err := cfg.CreateProfile(scenario, name); err != nil {
 			t.Fatalf("CreateProfile %d failed: %v", i, err)
 		}
 	}
@@ -119,7 +119,7 @@ func TestCreateProfile_FillsMultipleGaps(t *testing.T) {
 	}
 
 	// First new profile should fill p2 (smallest gap)
-	pA, err := cfg.CreateProfile(scenario, "profile-a", true)
+	pA, err := cfg.CreateProfile(scenario, "profile-a")
 	if err != nil {
 		t.Fatalf("CreateProfile a failed: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCreateProfile_FillsMultipleGaps(t *testing.T) {
 	}
 
 	// Second new profile should fill p4 (next smallest gap)
-	pB, err := cfg.CreateProfile(scenario, "profile-b", true)
+	pB, err := cfg.CreateProfile(scenario, "profile-b")
 	if err != nil {
 		t.Fatalf("CreateProfile b failed: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestCreateProfile_FillsMultipleGaps(t *testing.T) {
 	}
 
 	// Third new profile should get p6 (no more gaps)
-	pC, err := cfg.CreateProfile(scenario, "profile-c", true)
+	pC, err := cfg.CreateProfile(scenario, "profile-c")
 	if err != nil {
 		t.Fatalf("CreateProfile c failed: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestCreateProfile_EmptyProfilesStartsAtP1(t *testing.T) {
 
 	scenario := typ.RuleScenario("claude_code")
 
-	p, err := cfg.CreateProfile(scenario, "first", true)
+	p, err := cfg.CreateProfile(scenario, "first")
 	if err != nil {
 		t.Fatalf("CreateProfile failed: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestUpdateClaudeCodeProfileConfig_PersistsCopiesAndClears(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work", false)
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestResolveProfileAlias(t *testing.T) {
 	}
 	scenario := typ.RuleScenario("claude_code")
 
-	p1, err := cfg.CreateProfile(scenario, "mine", true)
+	p1, err := cfg.CreateProfile(scenario, "mine")
 	if err != nil {
 		t.Fatalf("CreateProfile failed: %v", err)
 	}
@@ -337,13 +337,13 @@ func TestCreateProfile_RejectsNonURLFriendlyName(t *testing.T) {
 	scenario := typ.RuleScenario("claude_code")
 
 	for _, bad := range []string{"my profile", "a:b", "a/b", "", " mine", "default", "DEFAULT", "p1", "p07"} {
-		if _, err := cfg.CreateProfile(scenario, bad, true); err == nil {
+		if _, err := cfg.CreateProfile(scenario, bad); err == nil {
 			t.Errorf("CreateProfile(%q) = nil error, want rejection", bad)
 		}
 	}
 
 	// A valid name still works; renaming it to a new bad name is rejected.
-	p, err := cfg.CreateProfile(scenario, "mine", true)
+	p, err := cfg.CreateProfile(scenario, "mine")
 	if err != nil {
 		t.Fatalf("CreateProfile(\"mine\") failed: %v", err)
 	}

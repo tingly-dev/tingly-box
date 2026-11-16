@@ -1,4 +1,5 @@
 import {
+    Alert,
     Box,
     Chip,
     FormControlLabel,
@@ -15,17 +16,21 @@ import {
     Collapse,
     TableSortLabel,
     Tooltip,
+    TextField,
+    MenuItem,
 } from '@mui/material';
 import { Fragment, useMemo, useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KeyboardArrowDown as KeyboardArrowDownIcon } from '@/components/icons';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
-import { formatTimestamp } from '@/utils/datetime';
+import { formatLogTime } from '@/utils/datetime';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { alpha, useTheme } from '@mui/material/styles';
 import { getStatusColor, logLevelTone, httpStatusTone } from '@/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface SystemLogEntry {
     time: string;
@@ -48,32 +53,39 @@ type SortField = 'time' | 'level' | 'status' | 'message';
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
 const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
-    const [logs, setLogs] = useState<SystemLogEntry[]>([]);
+    const { t } = useTranslation();
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     // Multi-select level filter: empty set = show all
     const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
-    const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [search, setSearch] = useState('');
+    const [limit, setLimit] = useState(200);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const tableContainerRef = useRef<HTMLDivElement>(null);
+    const listSequence = useRef(0);
     // Sorting is client-side only — never triggers a refetch.
     const { sortField, sortOrder, handleSort } = useTableSort<SortField>('time');
 
     const loadLogs = async () => {
+        const sequence = ++listSequence.current;
         setLoading(true);
+        setError(null);
         try {
-            const response = await getLogs({ limit: 200 });
+            const response = await getLogs({ limit });
+            if (sequence !== listSequence.current) return;
             if (response && response.logs) {
                 setAllLogs(response.logs);
             }
         } catch (error) {
-            console.error('Failed to load system logs:', error);
+            if (sequence === listSequence.current) setError(error instanceof Error ? error.message : 'Failed to load system logs');
         } finally {
-            setLoading(false);
+            if (sequence === listSequence.current) setLoading(false);
         }
     };
 
-    const toggleRow = (index: number) => {
+    const toggleRow = (index: string) => {
         const newExpanded = new Set(expandedRows);
         if (newExpanded.has(index)) {
             newExpanded.delete(index);
@@ -97,28 +109,22 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
     const getLevelColor = (level: string): string => getStatusColor(theme, logLevelTone(level));
     const getStatusCodeColor = (statusCode?: number): string => getStatusColor(theme, httpStatusTone(statusCode));
 
-    // Client-side filter by level
-    useEffect(() => {
-        let next = allLogs;
-        if (selectedLevels.size > 0) {
-            next = next.filter(log => {
-                const l = log.level?.toLowerCase() ?? '';
-                // match "warn" tag against "warn" or "warning"
-                return [...selectedLevels].some(sel =>
-                    l === sel || (sel === 'warn' && l === 'warning')
-                );
-            });
-        }
-        setLogs(next);
-    }, [selectedLevels, allLogs]);
+    const logs = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        return allLogs.filter(log => {
+            const level = log.level?.toLowerCase() ?? '';
+            return (!query || JSON.stringify(log).toLowerCase().includes(query)) &&
+                (selectedLevels.size === 0 || selectedLevels.has(level === 'warning' ? 'warn' : level));
+        });
+    }, [allLogs, selectedLevels, search]);
 
     // Fetch only on mount / refresh — sorting is derived client-side below.
     useEffect(() => {
         loadLogs();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [limit]);
 
-    useAutoRefresh(autoRefresh, loadLogs);
+    useAutoRefresh(autoRefresh, loadLogs, [limit]);
 
     // Client-side sort — re-sorts the already-fetched rows instead of
     // refetching from the network on every sort change.
@@ -147,64 +153,25 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
 
     return (
         <Stack spacing={1.5} sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {/* Toolbar */}
-            <Stack
-                direction="row"
-                spacing={1.5}
-                useFlexGap
-                sx={{
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    flexShrink: 0,
-                    minHeight: 40,
-                    py: 0.75,
-                    alignContent: 'center'
-                }}>
-                <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                        alignItems: "center",
-                        minHeight: 30
-                    }}>
-                    <FormControlLabel
-                        control={(
-                            <Switch
-                                size="small"
-                                checked={autoRefresh}
-                                onChange={(_, checked) => setAutoRefresh(checked)}
-                            />
-                        )}
-                        label={<Typography variant="body2">Auto-refresh</Typography>}
-                        sx={{ m: 0, mr: 0.25 }}
-                    />
-                    <Tooltip title="Refresh now" arrow>
-                        <span>
-                            <IconButton
-                                size="small"
-                                aria-label="Refresh logs"
-                                onClick={loadLogs}
-                                disabled={loading}
-                            >
-                                <RefreshIcon fontSize="small" />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                    <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ whiteSpace: 'nowrap' }}
+            {/* Filters on the left, liveness on the right: the same toolbar as the requests log. */}
+            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+                <TextField
+                    size="small"
+                    placeholder={t('logViewer.searchLogs', { defaultValue: 'Search logs' })}
+                    value={search}
+                    onChange={event => setSearch(event.target.value)}
+                    slotProps={{ htmlInput: { 'aria-label': t('logViewer.searchLogs', { defaultValue: 'Search logs' }) } }}
+                    sx={{ width: 240 }}
+                />
+                <TextField
+                        select
+                        size="small"
+                        value={limit}
+                        onChange={event => setLimit(Number(event.target.value))}
+                        slotProps={{ htmlInput: { 'aria-label': t('logViewer.load', { defaultValue: 'Load' }) } }}
                     >
-                        {loading
-                            ? 'Refreshing…'
-                            : selectedLevels.size > 0
-                                ? `${logs.length} of ${allLogs.length} entries`
-                                : `${allLogs.length} entries`}
-                    </Typography>
-                </Stack>
-
-                <Box sx={{ flex: 1 }} />
-
+                        {[200, 500, 1000].map(value => <MenuItem key={value} value={value}>{t('logViewer.latest', { count: value, defaultValue: 'Latest {{count}}' })}</MenuItem>)}
+                </TextField>
                 <Stack
                     direction="row"
                     spacing={0.5}
@@ -217,7 +184,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     }}
                 >
                     <Chip
-                        label="All"
+                        label={t('logViewer.allLevels', { defaultValue: 'All' })}
                         size="small"
                         clickable
                         color={selectedLevels.size === 0 ? 'primary' : 'default'}
@@ -225,7 +192,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         onClick={() => setSelectedLevels(new Set())}
                         sx={{
                             fontWeight: 600,
-                            fontSize: fontSizes.xs,
+                            fontSize: fontSizes.micro,
                             height: 24,
                         }}
                     />
@@ -243,8 +210,8 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     color: active ? 'white' : 'text.secondary',
                                     border: active ? `1px solid ${getLevelColor(level)}` : '1px solid',
                                     borderColor: active ? getLevelColor(level) : 'divider',
-                                    fontWeight: 'bold',
-                                    fontSize: fontSizes.xs,
+                                    fontWeight: 600,
+                                    fontSize: fontSizes.micro,
                                     height: 24,
                                     '&:hover': {
                                         backgroundColor: active
@@ -258,8 +225,34 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         );
                     })}
                 </Stack>
+                <Box sx={{ flex: 1 }} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                    {loading
+                        ? t('logViewer.refreshing', { defaultValue: 'Refreshing…' })
+                        : selectedLevels.size > 0 || search.trim()
+                            ? t('logViewer.entriesFiltered', { shown: logs.length, total: allLogs.length, defaultValue: '{{shown}} of {{total}} entries' })
+                            : t('logViewer.entries', { count: allLogs.length, defaultValue: '{{count}} entries' })}
+                </Typography>
+                <FormControlLabel
+                    control={<Switch size="small" checked={autoRefresh} onChange={(_, checked) => setAutoRefresh(checked)} />}
+                    label={<Typography variant="body2">{t('logViewer.autoRefresh', { defaultValue: 'Auto-refresh' })}</Typography>}
+                    sx={{ m: 0 }}
+                />
+                <Tooltip title={t('logViewer.refreshNow', { defaultValue: 'Refresh now' })} arrow>
+                    <span>
+                        <IconButton
+                            size="small"
+                            aria-label={t('logViewer.refreshLogs', { defaultValue: 'Refresh logs' })}
+                            onClick={loadLogs}
+                            disabled={loading}
+                        >
+                            <RefreshIcon fontSize="small" />
+                        </IconButton>
+                    </span>
+                </Tooltip>
             </Stack>
             {/* Logs Table — fills remaining space */}
+            {error && <Alert severity="error">{error}</Alert>}
             <Box
                 ref={tableContainerRef}
                 sx={{
@@ -267,7 +260,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     overflow: 'auto',
                     minHeight: 0,
                     backgroundColor: 'background.paper',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     border: 1,
                     borderColor: 'divider',
                 }}
@@ -327,16 +320,18 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            sortedLogs.map((log, index) => (
-                                <Fragment key={index}>
+                            sortedLogs.map((log) => {
+                                const key = JSON.stringify(log);
+                                return (
+                                <Fragment key={key}>
                                     <TableRow
                                         hover
                                         sx={{ cursor: 'pointer' }}
-                                        onClick={() => toggleRow(index)}
+                                        onClick={() => toggleRow(key)}
                                     >
                                         <TableCell padding="checkbox">
                                             <IconButton size="small">
-                                                {expandedRows.has(index) ? (
+                                                {expandedRows.has(key) ? (
                                                     <KeyboardArrowUpIcon />
                                                 ) : (
                                                     <KeyboardArrowDownIcon />
@@ -344,7 +339,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                             </IconButton>
                                         </TableCell>
                                         <TableCell sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
-                                            {formatTimestamp(log.time)}
+                                            {formatLogTime(log.time)}
                                         </TableCell>
                                         <TableCell>
                                             <Chip
@@ -353,9 +348,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                 sx={{
                                                     backgroundColor: getLevelColor(log.level),
                                                     color: 'white',
-                                                    fontSize: fontSizes.xs,
+                                                    fontSize: fontSizes.micro,
                                                     height: 20,
-                                                    fontWeight: 'bold',
+                                                    fontWeight: 600,
                                                 }}
                                             />
                                         </TableCell>
@@ -367,9 +362,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                     sx={{
                                                         backgroundColor: getStatusCodeColor(log.fields.status as number),
                                                         color: 'white',
-                                                        fontSize: fontSizes.xs,
+                                                        fontSize: fontSizes.micro,
                                                         height: 20,
-                                                        fontWeight: 'bold',
+                                                        fontWeight: 600,
                                                     }}
                                                 />
                                             ) : (
@@ -382,22 +377,23 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     </TableRow>
                                     <TableRow>
                                         <TableCell colSpan={5} sx={{ pb: 0, pt: 0, border: 'none' }}>
-                                            <Collapse in={expandedRows.has(index)} timeout="auto" unmountOnExit>
-                                                <Box sx={{ p: 2, backgroundColor: 'rgba(0,0,0,0.03)' }}>
+                                            <Collapse in={expandedRows.has(key)} timeout="auto" unmountOnExit>
+                                                <Box sx={{ p: 2, backgroundColor: 'action.hover' }}>
+                                                    <Typography component="pre" sx={{ m: 0, mb: 1, fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{log.message}</Typography>
                                                     {log.fields && Object.keys(log.fields).length > 0 ? (
                                                         <Stack spacing={1}>
                                                             {log.fields.error && (
-                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
+                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: radius.row }}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 'bold', wordBreak: 'break-all' }}
+                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 600, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                                                                     >
                                                                         ERROR: {typeof log.fields.error === 'object' && log.fields.error !== null ? JSON.stringify(log.fields.error) : String(log.fields.error)}
                                                                     </Typography>
                                                                     {log.fields.error_type && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'error.contrastText', opacity: 0.8 }}
+                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'error.contrastText', opacity: 0.8 }}
                                                                         >
                                                                             Type: {typeof log.fields.error_type === 'object' && log.fields.error_type !== null ? JSON.stringify(log.fields.error_type) : String(log.fields.error_type)}
                                                                         </Typography>
@@ -408,8 +404,8 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                                 .filter(([key]) => key !== 'error' && key !== 'error_type')
                                                                 .map(([key, value]) => (
                                                                     <Box key={key}>
-                                                                        <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.sm }}>
-                                                                            <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
+                                                                        <Typography variant="body2" sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                                                                            <strong>{key}:</strong> {typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}
                                                                         </Typography>
                                                                     </Box>
                                                                 ))}
@@ -426,7 +422,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                         </TableCell>
                                     </TableRow>
                                 </Fragment>
-                            ))
+                            ); })
                         )}
                     </TableBody>
                 </Table>

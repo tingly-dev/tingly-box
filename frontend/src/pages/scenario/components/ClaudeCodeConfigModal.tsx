@@ -10,13 +10,14 @@ import CodeBlock from '@/components/CodeBlock';
 import { shouldIgnoreDialogClose } from '@/components/dialogClose';
 import { ManualFileSection, type ManualFileTab } from './config/ManualFileSection';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
-import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
+import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY, CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, coAuthoredBySettings, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
-import type { AgentApplyResult } from './AgentSetupCard';
+import type { AgentApplyResult } from './agentSetup';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
 import { fontMono, fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Raw statusline script URLs in the tingly-box repo — the installers must
 // download from the same source the JSON tab links below (they used to point
@@ -24,12 +25,12 @@ import { fontMono, fontSizes } from '@/theme/fonts';
 const STATUSLINE_SCRIPT_URL = 'https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.sh';
 const STATUSLINE_SCRIPT_PS1_URL = 'https://raw.githubusercontent.com/tingly-dev/tingly-box/refs/heads/main/internal/script/tingly-statusline.ps1';
 
-type ConfigMode = 'unified' | 'separate' | 'smart';
 
 interface ClaudeCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
-    configMode: ConfigMode;
+    /** Unified mode: slots with a rule of their own. */
+    slots?: string[];
     baseUrl: string;
     rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
@@ -37,7 +38,10 @@ interface ClaudeCodeConfigModalProps {
     // this callback is what writes them to ~/.claude/settings.json. The
     // returned AgentApplyResult is rendered in-modal so the user sees
     // which files were touched and where the backup landed.
-    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean, defaultMode: ClaudeCodeDefaultMode, showThinkingSummaries: boolean) => Promise<AgentApplyResult>;
+    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean, defaultMode: ClaudeCodeDefaultMode, showThinkingSummaries: boolean, coAuthoredBy: boolean) => Promise<AgentApplyResult>;
+    // A successful apply is handed here (the page closes the modal and toasts
+    // the files); without it, success is shown in-modal like a failure.
+    onApplied?: (result: AgentApplyResult) => void;
     isApplyLoading?: boolean;
     // Pending 1M context change (scoped to the toggled rule) to preview in the modal
     pendingContext1MChange?: { enabled: boolean; ruleUuid?: string } | null;
@@ -121,11 +125,12 @@ console.log("Config written to", targetPath);`;
 const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
-    configMode,
+    slots,
     baseUrl,
     rules,
     copyToClipboard,
     onApplyWithPrefs,
+    onApplied,
     isApplyLoading = false,
     pendingContext1MChange,
 }) => {
@@ -136,21 +141,23 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
     const [installStatusLine, setInstallStatusLine] = React.useState(true);
-    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('acceptEdits');
+    const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('auto');
     const [showThinkingSummaries, setShowThinkingSummaries] = React.useState(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
+    const [coAuthoredBy, setCoAuthoredBy] = React.useState(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
     const [isConfigLoading, setIsConfigLoading] = React.useState(false);
 
     // Prefs is the single source of truth for both tabs. On open, restore the
     // values previously applied to ~/.claude/settings.json; first-time users
     // still start from routing-aware recommendations.
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>(() =>
-        derivePrefsFromRules({ rules, mode: configMode })
+        derivePrefsFromRules({ rules, slots })
     );
     React.useEffect(() => {
         if (!open) {
-            setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
-            setDefaultMode('acceptEdits');
+            setPrefs(derivePrefsFromRules({ rules, slots }));
+            setDefaultMode('auto');
             setShowThinkingSummaries(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
+            setCoAuthoredBy(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
             setInstallStatusLine(true);
             setApplyResult(null);
             setIsConfigLoading(false);
@@ -176,7 +183,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                 },
             };
         });
-        const generated = derivePrefsFromRules({ rules: tempRules, mode: configMode });
+        const generated = derivePrefsFromRules({ rules: tempRules, slots });
 
         let active = true;
         setIsConfigLoading(true);
@@ -187,13 +194,15 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
                     generated,
                     applied: result.preferences || {},
                 }));
-                setDefaultMode((result.defaultMode || 'acceptEdits') as ClaudeCodeDefaultMode);
+                setDefaultMode((result.defaultMode || 'auto') as ClaudeCodeDefaultMode);
                 setShowThinkingSummaries(result.showThinkingSummaries ?? CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
+                setCoAuthoredBy(result.coAuthoredBy ?? CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
                 setInstallStatusLine(!!result.installStatusLine);
             } else {
                 setPrefs(generated);
-                setDefaultMode('acceptEdits');
+                setDefaultMode('auto');
                 setShowThinkingSummaries(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
+                setCoAuthoredBy(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
                 setInstallStatusLine(true);
                 if (result?.success === false) {
                     setApplyResult({ success: false, error: result.error || 'Failed to load the applied Claude Code configuration' });
@@ -206,7 +215,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         return () => {
             active = false;
         };
-    }, [pendingContext1MChange, rules, configMode, open]);
+    }, [pendingContext1MChange, rules, slots, open]);
 
     // Editing prefs after a previous Apply invalidates the success state —
     // hide the old alert so the user can tell their next Apply hasn't run yet.
@@ -225,6 +234,11 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         setApplyResult(null);
     }, []);
 
+    const setCoAuthoredByAndClearResult = React.useCallback((next: boolean) => {
+        setCoAuthoredBy(next);
+        setApplyResult(null);
+    }, []);
+
     const claudeJsonConfig = { hasCompletedOnboarding: true };
 
     // Env map for both the manual tab (display/copy) and the preview dialog.
@@ -235,8 +249,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     );
 
     const settingsConfig = React.useMemo(
-        () => ({ env: envConfig, defaultMode, showThinkingSummaries }),
-        [envConfig, defaultMode, showThinkingSummaries],
+        () => ({ env: envConfig, defaultMode, showThinkingSummaries, ...coAuthoredBySettings(coAuthoredBy) }),
+        [envConfig, defaultMode, showThinkingSummaries, coAuthoredBy],
     );
 
     const generateSettingsConfig = React.useCallback(() => {
@@ -348,15 +362,20 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
     const handleApply = async (installStatusLine: boolean) => {
         if (!onApplyWithPrefs) return;
-        const result = await onApplyWithPrefs(prefs, installStatusLine, defaultMode, showThinkingSummaries);
+        const result = await onApplyWithPrefs(prefs, installStatusLine, defaultMode, showThinkingSummaries, coAuthoredBy);
+        if (result.success && onApplied) {
+            onApplied(result);
+            return;
+        }
         setApplyResult(result);
     };
 
     const handleResetDefaults = React.useCallback(() => {
-        setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }));
-        setDefaultModeAndClearResult('acceptEdits');
+        setPrefsAndClearResult(derivePrefsFromRules({ rules, slots }));
+        setDefaultModeAndClearResult('auto');
         setShowThinkingSummariesAndClearResult(CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES);
-    }, [configMode, rules, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
+        setCoAuthoredByAndClearResult(CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY);
+    }, [rules, slots, setCoAuthoredByAndClearResult, setDefaultModeAndClearResult, setPrefsAndClearResult, setShowThinkingSummariesAndClearResult]);
 
     const canApply = !!onApplyWithPrefs;
 
@@ -456,7 +475,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 maxWidth="lg"
                 fullWidth
                 slotProps={{
-                    paper: { sx: { borderRadius: 3, maxHeight: '90vh' } }
+                    paper: { sx: { borderRadius: radius.card, maxHeight: '90vh' } }
                 }}
             >
                 <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
@@ -557,6 +576,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             setDefaultMode={setDefaultModeAndClearResult}
                             showThinkingSummaries={showThinkingSummaries}
                             setShowThinkingSummaries={setShowThinkingSummariesAndClearResult}
+                            coAuthoredBy={coAuthoredBy}
+                            setCoAuthoredBy={setCoAuthoredByAndClearResult}
                         />
                     )}
 
@@ -704,7 +725,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 maxWidth="md"
                 fullWidth
                 slotProps={{
-                    paper: { sx: { borderRadius: 3 } }
+                    paper: { sx: { borderRadius: radius.card } }
                 }}
             >
                 <DialogTitle>

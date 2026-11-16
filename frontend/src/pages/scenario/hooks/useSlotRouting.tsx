@@ -1,153 +1,174 @@
 import { useEffect, useState } from 'react';
-import {
-    Button,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Typography,
-} from '@mui/material';
+import { Box, Button, Chip, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import ConfigRow from '@/components/ConfigRow';
 import { api } from '@/services/api';
 import { notify } from '@/utils/notify';
 
-/**
- * How a fixed-slot client's model slots map to rules:
- * - `unified`: every slot goes through one built-in rule;
- * - `separate`: each slot has its own rule.
- */
-export type SlotMode = 'unified' | 'separate';
+/** Claude Code's model slots and the env var each fills; default is the main rule. */
+export const CLAUDE_CODE_SLOTS = [
+    { slot: 'default', env: 'ANTHROPIC_MODEL' },
+    { slot: 'haiku', env: 'ANTHROPIC_DEFAULT_HAIKU_MODEL' },
+    { slot: 'sonnet', env: 'ANTHROPIC_DEFAULT_SONNET_MODEL' },
+    { slot: 'opus', env: 'ANTHROPIC_DEFAULT_OPUS_MODEL' },
+    { slot: 'fable', env: 'ANTHROPIC_DEFAULT_FABLE_MODEL' },
+    { slot: 'subagent', env: 'CLAUDE_CODE_SUBAGENT_MODEL' },
+] as const;
+
+/** A slot's own rule (`builtin:<scenario>:<slot>`). */
+export const slotRuleUuid = (scenario: string, slot: string) => `builtin:${scenario}:${slot}`;
+
+const OWN_SLOTS = CLAUDE_CODE_SLOTS.filter(s => s.slot !== 'default').map(s => s.slot);
 
 export interface SlotRouting {
-    mode: SlotMode;
-    /** The rules for the current mode. */
+    /** The default rule plus the rules of the slots that have one of their own. */
     rules: any[];
     setRules: (rules: any[]) => void;
     loading: boolean;
-    /** Unified / Separate, as options for a choice control. */
-    modeOptions: { value: SlotMode; label: string; tooltip: string }[];
-    /** Ask to change the mode; the user confirms in `modeDialog` first. */
-    requestMode: (mode: SlotMode) => void;
-    /** The confirmation dialog for a mode change. */
-    modeDialog: React.ReactNode;
+    /** The slots that have a rule of their own (the rest follow the default). */
+    slots: string[];
+    /** The Slots row: default always on, one switch per other slot, and split/merge all. */
+    slotsRow: React.ReactNode;
+    /** Re-read the rules and slots from the backend, e.g. after the default was switched to a profile. */
+    reload: () => Promise<void>;
 }
 
 /**
- * Routing for clients with fixed model slots (Claude Code): the mode lives in
- * the scenario's flags, and the rules shown depend on it — the one unified
- * rule, or every other rule of the scenario. `enabled: false` keeps the hook
- * inert for agents without slots (hooks can't be called conditionally).
+ * Routing for clients with fixed model slots (Claude Code). A slot either
+ * follows the default rule or has a rule of its own, switched from the Slots
+ * row; the rules shown are the default rule plus the split slots' rules.
+ * `enabled: false` keeps the hook inert for agents without slots (hooks can't
+ * be called conditionally).
  */
-export const useSlotRouting = (scenario: string, unifiedRuleUuid: string, enabled: boolean): SlotRouting => {
+export const useSlotRouting = (
+    scenario: string,
+    unifiedRuleUuid: string,
+    enabled: boolean,
+): SlotRouting => {
     const { t } = useTranslation();
-    const modes: { value: SlotMode; label: string; description: string }[] = [
-        { value: 'unified', label: t('claudeCode.configModes.unified.label'), description: t('claudeCode.configModes.unified.description') },
-        { value: 'separate', label: t('claudeCode.configModes.separate.label'), description: t('claudeCode.configModes.separate.description') },
-    ];
-    const modeLabel = (mode: SlotMode | null) => modes.find(m => m.value === mode)?.label ?? mode ?? '';
-
-    const [mode, setMode] = useState<SlotMode>('unified');
-    const [pendingMode, setPendingMode] = useState<SlotMode | null>(null);
-    // Separate from pendingMode so the dialog's text stays put while it fades out.
-    const [dialogOpen, setDialogOpen] = useState(false);
     const [rules, setRules] = useState<any[]>([]);
     const [loading, setLoading] = useState(enabled);
-
-    useEffect(() => {
-        if (!enabled) return;
-        api.getScenarioConfig(scenario).then((result) => {
-            if (result.success && result.data && result.data.flags) {
-                setMode(result.data.flags.separate ? 'separate' : 'unified');
-            }
-        }).catch((error) => {
-            console.error('Failed to load scenario config:', error);
-        });
-    }, [scenario, enabled]);
+    const [slots, setSlots] = useState<string[]>([]);
+    const [busySlot, setBusySlot] = useState<string | null>(null);
 
     useEffect(() => {
         if (!enabled) return;
         let isMounted = true;
         setLoading(true);
-        const load = mode === 'unified'
-            ? api.getRule(unifiedRuleUuid).then((result) => (result.success ? [result.data] : []))
-            // Separate mode shows every rule but the unified one.
-            : api.getRules(scenario).then((result) =>
-                (result.success ? result.data : []).filter((r: any) => r.uuid !== unifiedRuleUuid));
-        load.then((next) => {
+        const load: Promise<[any[], string[]]> = Promise.all([api.getRules(scenario), api.getClaudeCodeSlots(scenario)]).then(([ruleResult, slotResult]) => {
+            const all: any[] = ruleResult?.success ? ruleResult.data || [] : [];
+            const split: string[] = slotResult?.success ? slotResult.data?.slots || [] : [];
+            // The default rule first, then the rules of the split slots.
+            const wanted = [unifiedRuleUuid, ...split.map(slot => slotRuleUuid(scenario, slot))];
+            return [wanted.map(uuid => all.find(r => r.uuid === uuid)).filter(Boolean), split];
+        });
+        load.then(([next, split]) => {
+            // A slower response for a previous scenario must not win.
             if (!isMounted) return;
             setRules(next);
-            setLoading(false);
+            setSlots(split);
+        }).catch((error) => {
+            console.error('Failed to load Claude Code rules:', error);
+        }).finally(() => {
+            if (isMounted) setLoading(false);
         });
         return () => { isMounted = false; };
-    }, [scenario, unifiedRuleUuid, mode, enabled]);
+    }, [scenario, unifiedRuleUuid, enabled]);
 
-    const confirmModeChange = async () => {
-        if (!pendingMode) return;
-        const next = pendingMode;
-        setDialogOpen(false);
+    // Re-read rules and slots in place, without flipping `loading`.
+    const reload = async () => {
+        const [ruleResult, slotResult] = await Promise.all([api.getRules(scenario), api.getClaudeCodeSlots(scenario)]);
+        const all: any[] = ruleResult?.success ? ruleResult.data || [] : [];
+        const split: string[] = slotResult?.success ? slotResult.data?.slots || [] : [];
+        setSlots(split);
+        setRules([unifiedRuleUuid, ...split.map(slot => slotRuleUuid(scenario, slot))]
+            .map(uuid => all.find(r => r.uuid === uuid)).filter(Boolean));
+    };
+
+    // Apply a slot switch from the response in place: a reload would flip
+    // `loading` and blank the page.
+    const toggleSlot = async (slot: string) => {
+        const enable = !slots.includes(slot);
+        setBusySlot(slot);
         try {
-            // GET-merge: SetScenarioConfig replaces the record wholesale,
-            // so a partial payload silently wipes extensions (e.g. vision_proxy_service).
-            const current = (await api.getScenarioConfig(scenario))?.data || {};
-            const result = await api.setScenarioConfig(scenario, {
-                ...current,
-                scenario,
-                flags: {
-                    ...(current.flags || {}),
-                    unified: next === 'unified',
-                    separate: next === 'separate',
-                    smart: false,
-                },
-            });
-            if (result.success) {
-                setMode(next);
-                notify.show('success', t('claudeCode.modeChange.success', { mode: modeLabel(next) }), { duration: 6000 });
-            } else {
-                notify.show('error', t('claudeCode.modeChange.failed'), { duration: 6000 });
+            const result = await api.setClaudeCodeSlot(scenario, slot, enable);
+            if (!result?.success) {
+                notify.show('error', `${t('claudeCode.slots.failed')}: ${result?.error || ''}`, { duration: 6000 });
+                return;
             }
+            const split: string[] = result.data?.slots ?? [];
+            const rule = result.data?.rule;
+            setSlots(split);
+            setRules(prev => {
+                const rest = prev.filter(r => r.uuid !== slotRuleUuid(scenario, slot));
+                if (!enable || !rule?.uuid) return rest;
+                // Keep slot order: the unified rule, then the split slots.
+                const order = [unifiedRuleUuid, ...split.map(s => slotRuleUuid(scenario, s))];
+                return [...rest, rule].sort((a, b) => order.indexOf(a.uuid) - order.indexOf(b.uuid));
+            });
         } catch (error) {
-            console.error('Failed to save scenario config:', error);
-            notify.show('error', t('claudeCode.modeChange.failed'), { duration: 6000 });
+            notify.show('error', `${t('claudeCode.slots.failed')}: ${String(error)}`, { duration: 6000 });
         } finally {
-            setPendingMode(null);
+            setBusySlot(null);
         }
     };
 
-    const cancelModeChange = () => {
-        setDialogOpen(false);
-        setPendingMode(null);
+    // Split every slot off the default, or fold them all back into it.
+    const setAll = async (enable: boolean) => {
+        setBusySlot('*');
+        try {
+            const missing = OWN_SLOTS.filter(slot => slots.includes(slot) !== enable);
+            for (const slot of missing) {
+                const result = await api.setClaudeCodeSlot(scenario, slot, enable);
+                if (!result?.success) {
+                    notify.show('error', `${t('claudeCode.slots.failed')}: ${result?.error || ''}`, { duration: 6000 });
+                    break;
+                }
+            }
+            await reload();
+        } catch (error) {
+            notify.show('error', `${t('claudeCode.slots.failed')}: ${String(error)}`, { duration: 6000 });
+        } finally {
+            setBusySlot(null);
+        }
     };
 
-    // Unified / Separate as plain options + a request function, so the page can lay
-    // the choice out like its other rows; a change still asks for confirmation.
-    const modeOptions = modes.map((m) => ({ value: m.value, label: m.label, tooltip: m.description }));
-    const requestMode = (value: SlotMode) => {
-        if (value === mode) return;
-        setPendingMode(value);
-        setDialogOpen(true);
-    };
+    const slotsRow = enabled ? (
+        <ConfigRow
+            tabs={[{
+                key: 'slots',
+                label: t('claudeCode.slots.label'),
+                content: (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                        {CLAUDE_CODE_SLOTS.map(({ slot, env }) => {
+                            // The default slot is the unified rule itself: always on, not a switch.
+                            const isDefault = slot === 'default';
+                            const on = isDefault || slots.includes(slot);
+                            const hint = isDefault ? 'claudeCode.slots.defaultRule' : on ? 'claudeCode.slots.ownRule' : 'claudeCode.slots.mainRule';
+                            return (
+                                <Tooltip key={slot} arrow title={`${env} — ${t(hint)}`}>
+                                    <Chip
+                                        size="small"
+                                        label={slot}
+                                        color={on ? 'primary' : 'default'}
+                                        variant={on ? 'filled' : 'outlined'}
+                                        disabled={!isDefault && busySlot !== null}
+                                        onClick={isDefault ? undefined : () => void toggleSlot(slot)}
+                                    />
+                                </Tooltip>
+                            );
+                        })}
+                        <Button size="small" sx={{ minWidth: 0, py: 0, textTransform: 'none' }} disabled={busySlot !== null}
+                            onClick={() => void setAll(slots.length < OWN_SLOTS.length)}>
+                            {t(slots.length < OWN_SLOTS.length ? 'claudeCode.slots.splitAll' : 'claudeCode.slots.mergeAll')}
+                        </Button>
+                    </Box>
+                ),
+            }]}
+            activeTab="slots"
+            onTabChange={() => {}}
+        />
+    ) : null;
 
-    const modeDialog = (
-        <Dialog open={dialogOpen} onClose={cancelModeChange} maxWidth="sm" fullWidth>
-            <DialogTitle>{t('claudeCode.modeChange.title')}</DialogTitle>
-            <DialogContent>
-                <Typography variant="body1" sx={{ mb: 1 }}>
-                    {t('claudeCode.modeChange.body', { from: modeLabel(mode), to: modeLabel(pendingMode) })}
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {t('claudeCode.modeChange.hint')}
-                </Typography>
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                <Button onClick={cancelModeChange} color="inherit" size="small">
-                    {t('claudeCode.modeChange.cancel')}
-                </Button>
-                <Button onClick={confirmModeChange} variant="contained" size="small">
-                    {t('claudeCode.modeChange.confirm')}
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
-
-    return { mode, rules, setRules, loading, modeOptions, requestMode, modeDialog };
+    return { rules, setRules, loading, slots, slotsRow, reload };
 };

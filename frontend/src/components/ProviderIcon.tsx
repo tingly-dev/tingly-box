@@ -12,6 +12,7 @@ import {
     Kimi,
     OpenRouter,
     ClaudeCode,
+    Claude,
     OpenCode,
     Google,
     Groq,
@@ -30,6 +31,9 @@ import {
     Xiaomimimo,
     Baidu,
     Tencent,
+    WorkBuddy,
+    Qoder,
+    ZCode,
     IflytekCloud,
     Baichuan,
     Yi,
@@ -40,14 +44,32 @@ import {
     VertexAI,
     Codex,
     TinglyBox,
+    Ollama,
+    LMStudio,
+    LocalAI,
+    Jan,
+    Vllm,
+    SGLang,
+    Amd,
+    Lemonade,
+    Vercel,
+    Cloudflare,
+    TypeSafe,
+    Runcrate,
+    CloudGPU,
+    LlamaCpp,
+    Omlx,
 } from './BrandIcons';
 import type {SxProps, Theme} from '@mui/material';
 import {Box} from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface BrandIconProps {
     size?: number;
     sx?: SxProps<Theme>;
     style?: React.CSSProperties;
+    grayscale?: boolean;
+    mono?: boolean;
 }
 
 // Icon mapping table: maps icon identifier from provider templates to React components
@@ -66,11 +88,33 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'kimi': Kimi,
     'openrouter': OpenRouter,
     'claudecode': ClaudeCode,
+    'claude': Claude,
     'opencode': OpenCode,
     'codex': Codex,
     'tinglybox': TinglyBox,
+    'zcode': ZCode,
+    'workbuddy': WorkBuddy,
+    'qoder': Qoder,
+
+    // Local inference servers
+    'ollama': Ollama,
+    'lm-studio': LMStudio,
+    'lmstudio': LMStudio,
+    'localai': LocalAI,
+    'jan': Jan,
+    'vllm': Vllm,
+    'sglang': SGLang,
+    'amd': Amd,
+    'lemonade': Lemonade,
+    'llamacpp': LlamaCpp,
+    'llama.cpp': LlamaCpp,
+    'llama-cpp': LlamaCpp,
+    'omlx': Omlx,
 
     // Additional providers
+    'vercel': Vercel,
+    'cloudflare': Cloudflare,
+    'typesafe': TypeSafe,
     'groq': Groq,
     'together': Together,
     'fireworks': Fireworks,
@@ -100,6 +144,19 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'doubao': Doubao,
 
     // Aliases (for backward compatibility and alternative names)
+    'chatgpt': Codex,
+    'vercel-ai-gateway': Vercel,
+    'cloudflare-ai-gateway': Cloudflare,
+    'typesafe-ai': TypeSafe,
+    'runcrate-ai': Runcrate,
+    'cloudgpu-app': CloudGPU,
+    'claude_code': ClaudeCode,
+    'claude-code': ClaudeCode,
+    'kimi_code': Kimi,
+    'kimi_code_intl': Kimi,
+    'qwen_code': Qwen,
+    'zcode_cn': ZCode,
+    'workbuddy_cn': WorkBuddy,
     'zai': Zhipu,
     'bigmodel': Zhipu,
     'z-ai': Zhipu,
@@ -162,7 +219,7 @@ const FallbackIcon: React.FC<BrandIconProps> = ({size = 20, sx, style}) => {
                 justifyContent: 'center',
                 flexShrink: 0,
                 bgcolor: 'action.hover',
-                borderRadius: 1,
+                borderRadius: radius.row,
                 ...sx,
             }}
             style={style}
@@ -180,7 +237,7 @@ const FallbackIcon: React.FC<BrandIconProps> = ({size = 20, sx, style}) => {
 };
 
 // Provider icon component that looks up the icon from the mapping table
-const ProviderIcon = ({identifier, size = 20, sx, style}: {identifier: string} & BrandIconProps) => {
+const ProviderIcon = ({identifier, size = 20, sx, style, mono}: {identifier: string} & BrandIconProps) => {
     const iconKey = identifier.toLowerCase();
     const IconComponent = iconMap[iconKey];
 
@@ -188,7 +245,7 @@ const ProviderIcon = ({identifier, size = 20, sx, style}: {identifier: string} &
         return <FallbackIcon size={size} sx={sx} style={style} />;
     }
 
-    return <IconComponent size={size} sx={sx} style={style} />;
+    return <IconComponent size={size} sx={sx} style={style} grayscale={false} mono={mono} />;
 };
 
 export default ProviderIcon;

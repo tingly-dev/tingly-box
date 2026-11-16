@@ -26,8 +26,8 @@ name: Release GUI
 # The GUI half of a release, independent of the CLI (release-cli.yml) and run in
 # parallel with it by release.yml. Build the packages, make sure the GitHub release exists
 # (whichever pipeline finishes first creates it), attach the packages, add the
-# desktop-app section to the notes, dispatch the GUI-only npm publish (pending its
-# `production` approval) and verify the result (verify-release-gui.yml).
+# desktop-app section to the notes, announce the GUI-only npm publish (npm.yml is
+# run by hand) and verify the result (verify-release-gui.yml).
 #
 # The web UI is not built here: every package embeds the same production build
 # (`frontend-dist`, build-frontend.yml), dropped into frontend/dist with
@@ -60,7 +60,7 @@ on:
 env:
   GO_VERSION: '1.26'
   # Keep in lockstep with gui/wails3/go.mod and Taskfile.wails.yml's wails:check.
-  WAILS_VERSION: v3.0.0-beta.26
+  WAILS_VERSION: v3.0.0
 
 permissions:
   contents: read
@@ -233,7 +233,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
     steps:
       # For the local ensure-release action only.
       - name: Checkout code
@@ -304,8 +303,10 @@ jobs:
           } > desktop-notes.md
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file desktop-notes.md
 
-      - name: Dispatch GUI npm publish
-        uses: ./.github/actions/dispatch-npm
+      # When orchestrated, release.yml announces one combined CLI + GUI publish.
+      - name: Announce GUI npm publish
+        if: ${{ !inputs.orchestrated }}
+        uses: ./.github/actions/announce-npm
         with:
           tag: ${{ inputs.release_tag }}
           publish_cli: false

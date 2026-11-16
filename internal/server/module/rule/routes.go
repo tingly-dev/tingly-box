@@ -54,4 +54,12 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithTags("rules"),
 		swagger.WithResponseModel(FlagRegistryResponse{}),
 	)
+
+	// POST /rules/reorder - Apply a new list order to one scenario's rules
+	router.POST("/rules/reorder", h.ReorderRules,
+		swagger.WithDescription("Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs"),
+		swagger.WithTags("rules"),
+		swagger.WithRequestModel(ReorderRulesRequest{}),
+		swagger.WithResponseModel(RulesResponse{}),
+	)
 }

@@ -92,7 +92,7 @@ func (ph *ProtocolHandler) serveAnthropicOnOpenAI(c *gin.Context, plan *attemptP
 // offerServerTools runs the MCP transforms (tool injection, native web
 // search strip, strip guard) on a Beta request when MCP is on.
 func (ph *ProtocolHandler) offerServerTools(source *transform.TransformContext, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessageNewParams, error) {
-	if !ph.mcpEnabled() {
+	if !ph.serverToolsEnabled() {
 		return req, nil
 	}
 	tctx := *source

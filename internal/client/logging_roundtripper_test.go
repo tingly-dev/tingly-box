@@ -122,6 +122,26 @@ func TestLoggingRoundTripper_ProviderProxyTakesPrecedence(t *testing.T) {
 	}
 }
 
+func TestLoggingRoundTripper_VModelDoesNotReportEnvProxy(t *testing.T) {
+	t.Setenv("HTTPS_PROXY", "http://env-proxy.example.com:8080")
+	hook := &captureFieldsHook{}
+	previous := logrus.StandardLogger().ReplaceHooks(logrus.LevelHooks{})
+	t.Cleanup(func() { logrus.StandardLogger().ReplaceHooks(previous) })
+	logrus.AddHook(hook)
+	fn := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: http.NoBody}, nil
+	})
+	lrt := wrapWithLogging(&fn, &typ.Provider{Name: "vmodel", AuthType: typ.AuthTypeVirtual})
+	req, _ := http.NewRequest("GET", "https://openai/v1/models", nil)
+	_, err := lrt.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hook.entries[len(hook.entries)-1]["proxy"]; got != "in-process" {
+		t.Fatalf("vmodel proxy = %v, want in-process", got)
+	}
+}
+
 // TestLoggingRoundTripper_TransportFailureAddsFailReason verifies that a
 // transport-level failure (here: DNS) gets a categorized `fail_reason` log
 // field alongside the raw error, instead of only the opaque error string.

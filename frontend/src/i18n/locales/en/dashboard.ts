@@ -128,6 +128,7 @@ export default {
         "cacheRead": "read",
         "cacheWrite": "written"
       },
+      "byRequestHourlyOnly": "Single requests are listed for today and yesterday.",
       "viewModes": {
         "summary": "Summary",
         "byRequest": "By Request",

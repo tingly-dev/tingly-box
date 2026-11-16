@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -217,7 +218,7 @@ func TestProviderModels_Anthropic_Official(t *testing.T) {
 				},
 			}
 
-			ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+			ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 			result, err := chain.Execute(ctx)
 			require.NoError(t, err)
@@ -273,7 +274,7 @@ func TestProviderModels_Anthropic_Beta(t *testing.T) {
 				OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{},
 			})
 
-			ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+			ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 			result, err := chain.Execute(ctx)
 			require.NoError(t, err)
@@ -359,7 +360,7 @@ func TestProviderModels_CrossProtocol_OpenAI_To_Anthropic(t *testing.T) {
 		},
 	}
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -541,7 +542,7 @@ func TestProviderModels_MultiTurnConversation(t *testing.T) {
 		},
 	}
 
-	ctx := newFullChainContext(req, "api.anthropic.com", anthropicExtra())
+	ctx := newFullChainContextWithClaudeCodeOAuth(req, "api.anthropic.com", anthropicExtra())
 
 	result, err := chain.Execute(ctx)
 	require.NoError(t, err)
@@ -999,6 +1000,28 @@ func newFullChainContext(request interface{}, providerURL string, extra map[stri
 		TransformSteps:  []string{},
 		Extra:           extra,
 	}
+}
+
+// claudeCodeOAuthProvider is a Claude Code OAuth provider at apiBase: the only
+// kind of provider the identity rewrite (billing header + metadata) runs for.
+func claudeCodeOAuthProvider(apiBase string) *typ.Provider {
+	return &typ.Provider{
+		APIBase:  apiBase,
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
+			Issuer:      ai.IssuerClaudeCode,
+			AccessToken: "sk-ant-oat01-x",
+		},
+	}
+}
+
+// newFullChainContextWithClaudeCodeOAuth is newFullChainContext with a Claude
+// Code OAuth provider, the only kind the identity rewrite (billing header +
+// metadata) runs for.
+func newFullChainContextWithClaudeCodeOAuth(request interface{}, providerURL string, extra map[string]interface{}) *transform.TransformContext {
+	ctx := newFullChainContext(request, providerURL, extra)
+	ctx.Provider = claudeCodeOAuthProvider(providerURL)
+	return ctx
 }
 
 // anthropicExtra returns the minimum extra map required by Anthropic vendor transforms.

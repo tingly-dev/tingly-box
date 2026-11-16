@@ -49,3 +49,19 @@ func TestRecoverLoopEmitsPanicErrorNotDisconnect(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 }
+
+func TestBaseBotAccountName(t *testing.T) {
+	b := NewBaseBot(&Config{})
+	b.SetAccountName("   ")
+	if got := b.Status().AccountName; got != "" {
+		t.Fatalf("blank account name must be ignored, got %q", got)
+	}
+	b.SetAccountName(" @ops_bot ")
+	if got := b.Status().AccountName; got != "@ops_bot" {
+		t.Fatalf("got %q", got)
+	}
+	b.SetAccountName("")
+	if got := b.Status().AccountName; got != "@ops_bot" {
+		t.Fatalf("empty must not wipe, got %q", got)
+	}
+}

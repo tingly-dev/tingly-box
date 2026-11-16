@@ -63,6 +63,12 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(DshConfigResponse{}),
 	)
 
+	router.GET("/config/workbuddy/status", h.GetWorkBuddyConfigStatus,
+		swagger.WithDescription("Whether the installed WorkBuddy editions' models.json (~/.workbuddy, ~/.workbuddy-ai) have tingly-box models matching the WorkBuddy rules Auto Config would write now"),
+		swagger.WithTags("config"),
+		swagger.WithResponseModel(ClientConfigStatusResponse{}),
+	)
+
 	// Config apply endpoints - requires authentication (applied by caller)
 	router.POST("/config/apply/claude", h.ApplyClaudeConfig,
 		swagger.WithDescription("Generate and apply Claude Code configuration from system state"),
@@ -91,11 +97,23 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(ApplyDshConfigResponse{}),
 	)
 
+	router.POST("/config/apply/workbuddy", h.ApplyWorkBuddyConfigFromState,
+		swagger.WithDescription("Merge the WorkBuddy scenario's models into the models.json of every installed WorkBuddy edition (~/.workbuddy, ~/.workbuddy-ai)"),
+		swagger.WithTags("config"),
+		swagger.WithResponseModel(ApplyWorkBuddyConfigResponse{}),
+	)
+
 	// Config preview endpoint - returns config for display without applying
 	router.GET("/config/preview/opencode", h.GetOpenCodeConfigPreview,
 		swagger.WithDescription("Generate OpenCode configuration preview from system state"),
 		swagger.WithTags("config"),
 		swagger.WithResponseModel(OpenCodeConfigPreviewResponse{}),
+	)
+
+	router.GET("/config/preview/workbuddy", h.GetWorkBuddyConfigPreview,
+		swagger.WithDescription("Preview the models.json entries WorkBuddy Auto Config would write"),
+		swagger.WithTags("config"),
+		swagger.WithResponseModel(WorkBuddyConfigPreviewResponse{}),
 	)
 
 	router.POST("/config/preview/codex", h.GetCodexConfigPreview,
@@ -127,6 +145,12 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 
 	router.POST("/config/restore/codex", h.RestoreCodexConfig,
 		swagger.WithDescription("Restore Codex configuration from the most recent backup"),
+		swagger.WithTags("config"),
+		swagger.WithResponseModel(RestoreConfigResponse{}),
+	)
+
+	router.POST("/config/restore/workbuddy", h.RestoreWorkBuddyConfig,
+		swagger.WithDescription("Restore the installed WorkBuddy editions' models.json from their most recent backups"),
 		swagger.WithTags("config"),
 		swagger.WithResponseModel(RestoreConfigResponse{}),
 	)

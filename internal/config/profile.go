@@ -82,55 +82,46 @@ func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, pr
 			profiles[i].ClaudeCode = cloneClaudeCodeProfileConfig(profileConfig)
 		}
 		c.Profiles[string(baseScenario)] = profiles
-		return c.Save()
+		return c.saveLocked()
 	}
 	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
 }
 
 // newCCProfileRules builds fresh rules for a claude_code profile.
-// unified=true → one rule "cc"; unified=false → five rules (default/haiku/sonnet/opus/subagent).
+// A new profile starts with the default slot rule "cc"; slot rules are added when a slot is split.
 // Rules are empty (no services, no smart routing) for users to configure.
 // UUIDs follow the modern built-in convention "builtin:<scenario>:<model>"
 // (e.g. "builtin:claude_code:p1:haiku"), so profile rules stay addressable by
 // a deterministic identity just like the main scenario's built-ins.
-func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
-	newRule := func(requestModel, description string) typ.Rule {
-		return typ.Rule{
-			UUID:         BuiltinRuleUUID(profiledScenario, requestModel),
-			Scenario:     profiledScenario,
-			RequestModel: requestModel,
-			Description:  description,
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticRandom,
-				Params: typ.DefaultRandomParams(),
-			},
-			// Claude Code profiles inherit the built-in CC defaults: normalize the
-			// mid-conversation system role (ClaudeCodeCompat) so third-party
-			// providers accept the request, and strip the billing header
-			// (CleanHeader) so it never leaks to external providers.
-			Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
-			Active: true,
-		}
-	}
-
-	if unified {
-		return []typ.Rule{
-			newRule("cc", "Claude Code profile - unified mode"),
-		}
-	}
+func newCCProfileRules(profiledScenario typ.RuleScenario) []typ.Rule {
 	return []typ.Rule{
-		newRule("default", "Claude Code profile - default model"),
-		newRule("haiku", "Claude Code profile - haiku model"),
-		newRule("sonnet", "Claude Code profile - sonnet model"),
-		newRule("opus", "Claude Code profile - opus model"),
-		newRule("subagent", "Claude Code profile - subagent model"),
-		newRule("fable", "Claude Code profile - fable model"),
+		newCCProfileRule(profiledScenario, "cc", "Claude Code profile - default model"),
+	}
+}
+
+// newCCProfileRule builds one empty, active claude_code profile rule.
+func newCCProfileRule(profiledScenario typ.RuleScenario, requestModel, description string) typ.Rule {
+	return typ.Rule{
+		UUID:         BuiltinRuleUUID(profiledScenario, requestModel),
+		Scenario:     profiledScenario,
+		RequestModel: requestModel,
+		Description:  description,
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
+		},
+		// Claude Code profiles inherit the built-in CC defaults: normalize the
+		// mid-conversation system role (ClaudeCodeCompat) so third-party
+		// providers accept the request, and strip the billing header
+		// (CleanHeader) so it never leaks to external providers.
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
+		Active: true,
 	}
 }
 
 // CreateProfile adds a new profile to a base scenario. Returns the created ProfileMeta.
-// The unified parameter determines whether to use unified mode (single model) or separate mode (individual models).
-func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unified bool) (typ.ProfileMeta, error) {
+// A Claude Code profile starts with its default slot rule; slots are split later.
+func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.ProfileMeta, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -165,21 +156,20 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	meta := typ.ProfileMeta{
 		ID:      typ.NextFreeNumberedID("p", existingIDs),
 		Name:    name,
-		Unified: unified,
+		Unified: true,
 	}
 
 	c.Profiles[base] = append(c.Profiles[base], meta)
 
-	// Create fresh profile rules from the DefaultRules templates. For claude_code:
-	// unified mode → one "cc" rule; separate mode → five individual model rules.
-	// Rules start with empty Services/SmartRouting so the user configures the
-	// upstream providers for the new profile explicitly.
+	// A claude_code profile starts with its default slot rule, with empty
+	// Services/SmartRouting so the user configures the upstream providers
+	// explicitly.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	if baseScenario == typ.ScenarioClaudeCode {
-		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, unified)...)
+		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario)...)
 	}
 
-	return meta, c.Save()
+	return meta, c.saveLocked()
 }
 
 // UpdateProfile updates the name of an existing profile.
@@ -231,7 +221,7 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 	// Accepting a unified flag change here would silently diverge the stored
 	// metadata from the actual rules, which are not rebuilt by this function.
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // DeleteProfile removes a profile by ID and cleans up all associated rules.
@@ -278,7 +268,7 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 		return sc.Scenario == profiledScenario
 	})
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // ResolveProfileNameOrID resolves a profile identifier to a profile ID.

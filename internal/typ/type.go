@@ -64,17 +64,19 @@ const (
 	ScenarioCodex         RuleScenario = "codex"
 	ScenarioClaudeCode    RuleScenario = "claude_code"
 	ScenarioOpenCode      RuleScenario = "opencode"
-	ScenarioPi            RuleScenario = "pi"  // Pi agent (https://github.com/earendil-works/pi)
-	ScenarioDsh           RuleScenario = "dsh" // DeepSeek Harness (https://github.com/deepseek-ai/deepseek-harness)
+	ScenarioPi            RuleScenario = "pi"        // Pi agent (https://github.com/earendil-works/pi)
+	ScenarioWorkBuddy     RuleScenario = "workbuddy" // Tencent WorkBuddy desktop agent, via its custom-model (OpenAI-compatible) setting
+	ScenarioDsh           RuleScenario = "dsh"       // DeepSeek Harness (https://github.com/deepseek-ai/deepseek-harness)
 	ScenarioXcode         RuleScenario = "xcode"
 	ScenarioVSCode        RuleScenario = "vscode"
 	ScenarioCursor        RuleScenario = "cursor"
 	ScenarioClaudeDesktop RuleScenario = "claude_desktop"
 	ScenarioSmartGuide    RuleScenario = "_smart_guide"
-	ScenarioGlobal        RuleScenario = "_global"   // Global flags that apply to all scenarios
-	ScenarioEmbed         RuleScenario = "embed"     // Embedding application scenario; only serves /embeddings
-	ScenarioImageGen      RuleScenario = "imagegen"  // Image generation scenario; only serves /images/generations
-	ScenarioDecisions     RuleScenario = "decisions" // Decisions application scenario; only serves /decisions
+	ScenarioGlobal        RuleScenario = "_global"     // Global flags that apply to all scenarios
+	ScenarioEmbed         RuleScenario = "embed"       // Embedding application scenario; only serves /embeddings
+	ScenarioImageGen      RuleScenario = "imagegen"    // Image generation scenario; only serves /images/generations
+	ScenarioImagePrompt   RuleScenario = "imageprompt" // Image to Prompt / Idea to Prompt pages: a chat model over /chat/completions
+	ScenarioDecisions     RuleScenario = "decisions"   // Decisions application scenario; only serves /decisions
 )
 
 func BuiltinScenarios() []RuleScenario {
@@ -87,6 +89,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioClaudeCode,
 		ScenarioOpenCode,
 		ScenarioPi,
+		ScenarioWorkBuddy,
 		ScenarioDsh,
 		ScenarioXcode,
 		ScenarioVSCode,
@@ -96,6 +99,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioGlobal,
 		ScenarioEmbed,
 		ScenarioImageGen,
+		ScenarioImagePrompt,
 		ScenarioDecisions,
 	}
 }
@@ -238,6 +242,9 @@ type RuleFlags struct {
 	// budget_tokens for Anthropic (budget as fallback for budget-only models).
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
+	// DisableThinkingBudget removes thinking.budget_tokens on Anthropic-compatible requests.
+	DisableThinkingBudget bool `json:"disable_thinking_budget,omitempty" yaml:"disable_thinking_budget,omitempty"`
+
 	// CleanHeader strips x-anthropic-billing-header blocks from system messages.
 	// Auto-enabled for billing scenarios (claude_code, claude_desktop) during protocol
 	// transformation. Can be manually set to force enable/disable.
@@ -275,6 +282,14 @@ type RuleFlags struct {
 	// anthropic-beta header. The model name sent to Anthropic is unchanged —
 	// only the beta header changes behavior.
 	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
+
+	// CodexCompactPercent overrides, for this rule's model only, the share of
+	// the context window at which Codex auto-compacts (50-100; 0 = follow the
+	// shared Auto Config default). Config-only: it is written into the
+	// generated Codex model catalog and never reaches the request pipeline,
+	// so it is deliberately not in RuleFlagRegistry (the rule header's
+	// Compact chip is its editor).
+	CodexCompactPercent int `json:"codex_compact_percent,omitempty" yaml:"codex_compact_percent,omitempty"`
 
 	// ExtraHeaders are appended to the outbound upstream request for requests
 	// matched by this rule. Applied on api_key providers only (vendor/OAuth
@@ -500,25 +515,30 @@ const (
 type MCPRuntimeConfig struct {
 	Mode                  MCPMode           `json:"mode,omitempty"` // deprecated: kept only for backward compatibility
 	Sources               []MCPSourceConfig `json:"sources,omitempty"`
+	Profiles              []MCPProfile      `json:"profiles,omitempty"`
 	RequestTimeout        int               `json:"request_timeout,omitempty"`          // seconds, default: 30
 	StripDisabledMCPTools bool              `json:"strip_disabled_mcp_tools,omitempty"` // dangerous: strip disabled MCP declarations/tool_calls
 }
 
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
-	ID         string            `json:"id,omitempty"`         // unique source id for normalized tool names
-	Name       string            `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
-	Enabled    *bool             `json:"enabled,omitempty"`    // nil means enabled (backward-compatible default)
-	Transport  string            `json:"transport,omitempty"`  // "http", "stdio", or "sse"
-	Endpoint   string            `json:"endpoint,omitempty"`   // endpoint URL for HTTP/SSE transport
-	Headers    map[string]string `json:"headers,omitempty"`    // static headers for MCP calls
-	Tools      []string          `json:"tools,omitempty"`      // allow list, empty means all
-	Command    string            `json:"command,omitempty"`    // command for stdio transport
-	Args       []string          `json:"args,omitempty"`       // args for stdio command
-	Cwd        string            `json:"cwd,omitempty"`        // working directory for stdio command
-	Env        map[string]string `json:"env,omitempty"`        // extra env vars for stdio command
-	ProxyURL   string            `json:"proxy_url,omitempty"`  // HTTP proxy URL for outgoing requests
-	Visibility ToolVisibility    `json:"visibility,omitempty"` // "client" or "server"
+	Origin       string                   `json:"origin,omitempty"`     // builtin or external; omitted preserves legacy detection
+	ID           string                   `json:"id,omitempty"`         // unique source id for normalized tool names
+	Name         string                   `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
+	Enabled      *bool                    `json:"enabled,omitempty"`    // nil means enabled (backward-compatible default)
+	Transport    string                   `json:"transport,omitempty"`  // "http", "stdio", or "sse"
+	Endpoint     string                   `json:"endpoint,omitempty"`   // endpoint URL for HTTP/SSE transport
+	Headers      map[string]string        `json:"headers,omitempty"`    // static headers for MCP calls
+	Tools        []string                 `json:"tools,omitempty"`      // allow list, empty means all
+	Command      string                   `json:"command,omitempty"`    // command for stdio transport
+	Args         []string                 `json:"args,omitempty"`       // args for stdio command
+	Cwd          string                   `json:"cwd,omitempty"`        // working directory for stdio command
+	Env          map[string]string        `json:"env,omitempty"`        // extra env vars for stdio command
+	ProxyURL     string                   `json:"proxy_url,omitempty"`  // HTTP proxy URL for outgoing requests
+	Visibility   ToolVisibility           `json:"visibility,omitempty"` // "client" or "server"
+	Usage        *MCPToolUsage            `json:"usage,omitempty"`      // independent client and gateway exposure
+	ToolPolicies map[string]MCPToolPolicy `json:"tool_policies,omitempty"`
+	Preset       string                   `json:"preset,omitempty"` // "github": fixed curated subset of the official GitHub MCP server
 
 	// Local mode specific fields
 	ConnectionType      MCPConnectionType `json:"connection_type,omitempty"`       // stdio/http/sse

@@ -7,6 +7,8 @@ export interface NewModelsSectionProps {
     provider: Provider;
     newModels: string[];
     selectedModel?: string;
+    // Overrides selectedModel when several models can be selected at once.
+    isModelSelected?: (model: string) => boolean;
     onModelSelect: (model: string) => void;
     onDismiss: () => void;
     columns: number;
@@ -16,6 +18,7 @@ export function NewModelsSection({
     provider,
     newModels,
     selectedModel,
+    isModelSelected,
     onModelSelect,
     onDismiss,
     columns,
@@ -44,7 +47,7 @@ export function NewModelsSection({
                     <ModelCard
                         key={`${provider.uuid}:${model}`}
                         model={model}
-                        isSelected={selectedModel === model}
+                        isSelected={isModelSelected ? isModelSelected(model) : selectedModel === model}
                         onClick={() => onModelSelect(model)}
                         variant="standard"
                         showNewBadge

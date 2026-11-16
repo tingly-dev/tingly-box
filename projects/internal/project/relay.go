@@ -1,0 +1,634 @@
+package project
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
+)
+
+// Relay sends a thread's finished replies and folded thread reports to the
+// chats bound to that thread (a worker's or folder thread's own turn end
+// included), and requests to its lineage and project-bound chats. Prompts are
+// restated when answered. Messages go out one at a time, in the order
+// they finished. Each includes where it comes from: `[project name]` for a
+// project conversation, `[#N title]` for any other thread. A chat that turned
+// on /verbose also hears each step of its own thread's turns (Step).
+type Relay struct {
+	store       *db.Store
+	sink        agent.Outbox
+	OnFileError func(threadID, platform, chatID, name string, err error)
+
+	mu      sync.Mutex
+	queue   []relayJob
+	running bool
+	// sent are the prompts with buttons out in chats, by request id, until
+	// it settles.
+	sent map[string][]sentPrompt
+	// awaiting are the requests each chat was asked and that are not
+	// settled, oldest first, by chatKey: the chat's next message answers
+	// the first.
+	awaiting map[string][]pendingRequest
+	// steps holds, by thread, what the thread said last in its turn: a step
+	// once a tool call follows it, the reply (sent by ThreadReply) if not.
+	steps map[string]string
+}
+
+// pendingRequest is a request a chat was asked.
+type pendingRequest struct{ threadID, requestID string }
+
+func chatKey(platform, chatID string) string { return platform + "\x00" + chatID }
+
+// sentPrompt is a prompt a chat was sent, to restate when it settles.
+type sentPrompt struct {
+	platform, chatID, ref, text string
+	// bot is the bot the chat's binding names; a prompt sent as plain text
+	// (empty ref) is answered through it as a new line.
+	bot string
+}
+
+type relayJob struct {
+	// threadIDs are the threads whose chats hear it.
+	threadIDs []string
+	// tag is the prefix ("#2 Fix login"); empty names the project of the
+	// first thread instead.
+	tag  string
+	text string
+	// request, when set, is the request text asks; chats answer it by
+	// replying. prompt, when set, is that request with buttons, for the
+	// chats that can show them.
+	request *pendingRequest
+	prompt  *agent.Prompt
+	// requestProjectID widens only thread requests to project-bound chats.
+	requestProjectID string
+	// verbose sends it only to the chats that asked for each step.
+	verbose bool
+	// quote, set on a decision card, names the question a chat that got it as
+	// plain text is told about again once it is settled, since the text has no
+	// message to rewrite.
+	quote string
+	// settle, when set, is a request id: the prompts sent for it are
+	// restated with text added, and nothing new is sent.
+	settle string
+	file   *relayFile
+}
+
+type relayFile struct{ path, name, mediaType string }
+
+// File publishes to chats focused on the thread or one of its ancestors.
+func (r *Relay) File(t db.Thread, path string, a Attachment, caption string) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	lineage, err := r.store.Lineage(t.ID)
+	if err != nil {
+		return
+	}
+	ids := make([]string, len(lineage))
+	for i, ancestor := range lineage {
+		ids[i] = ancestor.ID
+	}
+	r.enqueueJob(relayJob{threadIDs: ids, tag: threadTag(t.Seq, t.Title), text: caption, file: &relayFile{path: path, name: a.Name, mediaType: a.Type}})
+}
+
+// NewRelay builds the relay; sink may be nil, which makes every call a no-op.
+func NewRelay(store *db.Store, sink agent.Outbox) *Relay {
+	return &Relay{store: store, sink: sink, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}, steps: map[string]string{}}
+}
+
+// Message relays a finished event of a main thread. User events, which the
+// chat or the web already shows, and kinds without text for a chat are skipped.
+func (r *Relay) Message(e db.ThreadEvent) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	var tag, text string
+	switch e.Kind {
+	case db.EvAssistant:
+		text = strings.TrimSpace(e.Content)
+	case db.EvError:
+		if c := strings.TrimSpace(e.Content); c != "" {
+			text = "Error: " + c
+		}
+	case db.EvThreadUpdate:
+		tag, text = foldThreadUpdate(e)
+	case db.EvDecision:
+		r.decision(e)
+		return
+	}
+	if text != "" {
+		r.enqueue([]string{e.ThreadID}, tag, text)
+	}
+}
+
+// decision asks the chats bound to the conversation to pick an option of a
+// decision card: with a button per option where the chat can show them,
+// otherwise as numbered text to answer by replying. The card's id is the
+// request id, so the answer goes through AnswerFromChannel and the chat's
+// next message, like any request.
+func (r *Relay) decision(e db.ThreadEvent) {
+	var d Decision
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen != nil || len(d.Options) == 0 {
+		return
+	}
+	choices := make([]agent.Choice, len(d.Options))
+	for i, o := range d.Options {
+		label := o.Label
+		if i == d.Recommended {
+			label += " (recommended)"
+		}
+		choices[i] = agent.Choice{Value: choiceValue(i), Label: label}
+	}
+	r.enqueueJob(relayJob{
+		threadIDs: []string{e.ThreadID},
+		text:      d.chatText() + "\n" + d.replyHint(),
+		quote:     "Re: " + oneLine(d.Question),
+		request:   &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
+		prompt:    &agent.Prompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
+	})
+}
+
+// Decided restates the decision card in the chats it was shown to, with the
+// option chosen and where, so none offers buttons for it any more, and stops
+// taking the chats' next message as its answer.
+func (r *Relay) Decided(e db.ThreadEvent, src Source) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	var d Decision
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen == nil || *d.Chosen >= len(d.Options) {
+		return
+	}
+	r.forget(e.ID)
+	where := " on the web"
+	if src.Kind == db.SourceIM {
+		where = " in a chat"
+	}
+	r.enqueueJob(relayJob{settle: e.ID, text: join("Answered"+where, d.Options[*d.Chosen].Label)})
+}
+
+// ThreadReply relays the end of a turn of a non-main thread (a worker or a
+// folder thread) to the chats bound to that very thread. Chats bound to its
+// parent already hear it as the coordinator's thread report, so only this
+// thread's own chats are addressed.
+func (r *Relay) ThreadReply(rep Report) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	r.mu.Lock()
+	delete(r.steps, rep.Thread.ID)
+	r.mu.Unlock()
+	text := strings.TrimSpace(rep.Text)
+	if text == "" {
+		return
+	}
+	if rep.Kind == ReportFailed {
+		text = "Error: " + text
+	}
+	r.enqueue([]string{rep.Thread.ID}, threadTag(rep.Thread.Seq, rep.Thread.Title), text)
+}
+
+// Step relays a step of a thread's turn to the chats bound to that thread
+// that asked for every step (/verbose on): each tool call, with what the
+// thread said before it. Text a tool call does not follow is the turn's
+// reply, which ThreadReply sends to every chat.
+func (r *Relay) Step(t db.Thread, e db.ThreadEvent) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	r.mu.Lock()
+	said := r.steps[t.ID]
+	switch e.Kind {
+	case db.EvAssistant:
+		r.steps[t.ID] = strings.TrimSpace(e.Content)
+	case db.EvToolUse:
+		delete(r.steps, t.ID)
+	}
+	r.mu.Unlock()
+	if e.Kind != db.EvToolUse {
+		return
+	}
+	var input map[string]any
+	_ = json.Unmarshal([]byte(e.Payload), &input)
+	text := "→ " + describeTool(e.Content, input)
+	if said != "" {
+		text = said + "\n" + text
+	}
+	r.enqueueJob(relayJob{threadIDs: []string{t.ID}, tag: threadTag(t.Seq, t.Title), text: text, verbose: true})
+}
+
+// NeedsUser asks the chats of a thread, its ancestors, and its project to answer
+// the approval or question by replying (an approval also has buttons where the
+// chat can show them).
+func (r *Relay) NeedsUser(t db.Thread, request db.ThreadEvent) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	lineage, err := r.store.Lineage(t.ID)
+	if err != nil || len(lineage) == 0 {
+		return
+	}
+	ids := make([]string, len(lineage))
+	for i, a := range lineage {
+		ids[i] = a.ID
+	}
+	job := relayJob{threadIDs: ids, tag: threadTag(t.Seq, t.Title), requestProjectID: t.ProjectID}
+	var p requestPayload
+	_ = json.Unmarshal([]byte(request.Payload), &p)
+	if p.RequestID == "" {
+		// Nothing a chat could answer.
+		job.text = join("Needs you", oneLine(request.Content)) + ". Open Projects in the web UI to answer."
+		r.enqueueJob(job)
+		return
+	}
+	job.text = requestText(request, p)
+	job.request = &pendingRequest{threadID: t.ID, requestID: p.RequestID}
+	if request.Kind == db.EvApproval {
+		job.prompt = &agent.Prompt{ThreadID: t.ID, RequestID: p.RequestID, Text: approvalBody(request, p), Choices: []agent.Choice{
+			{Value: ChoiceAllow, Label: "Allow"},
+			{Value: ChoiceAllowThread, Label: allowThreadLabel(p.Tool)},
+			{Value: ChoiceDeny, Label: "Deny"},
+		}}
+	}
+	r.enqueueJob(job)
+}
+
+// allowThreadLabel is the button that remembers an approval for the thread: a
+// Bash approval is remembered for that command only (allowKey).
+func allowThreadLabel(tool string) string {
+	if tool == "Bash" {
+		return "Allow this command for this thread"
+	}
+	return "Allow for this thread"
+}
+
+// Settled restates the prompts a request was sent as with how it ended, so a
+// chat never offers buttons for something already answered elsewhere, and
+// stops taking the chats' next messages as its answer.
+func (r *Relay) Settled(t db.Thread, request db.ThreadEvent) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	var p requestPayload
+	_ = json.Unmarshal([]byte(request.Payload), &p)
+	if p.RequestID == "" {
+		return
+	}
+	r.forget(p.RequestID)
+	r.enqueueJob(relayJob{settle: p.RequestID, text: settledLine(p)})
+}
+
+// awaitingAll returns every request a chat was asked that is not settled,
+// oldest first.
+func (r *Relay) awaitingAll(platform, chatID string) []pendingRequest {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]pendingRequest(nil), r.awaiting[chatKey(platform, chatID)]...)
+}
+
+// tell sends text to one chat, as the bot its binding names.
+func (r *Relay) tell(botUUID, platform, chatID, text string) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+	defer cancel()
+	if err := r.sink.Text(ctx, agent.ChatRef{Platform: platform, ChatID: chatID, BotUUID: botUUID}, text); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{"platform": platform, "chat_id": chatID}).Warn("projects: send to IM chat")
+	}
+}
+
+// forget drops a settled request from every chat that was asked it.
+func (r *Relay) forget(requestID string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k, reqs := range r.awaiting {
+		kept := reqs[:0]
+		for _, q := range reqs {
+			if q.requestID != requestID {
+				kept = append(kept, q)
+			}
+		}
+		if len(kept) == 0 {
+			delete(r.awaiting, k)
+		} else {
+			r.awaiting[k] = kept
+		}
+	}
+}
+
+// settledLine says how a request ended, and where it was answered.
+func settledLine(p requestPayload) string {
+	where := " on the web"
+	if p.Via == db.SourceIM {
+		where = " in a chat"
+	}
+	switch p.State {
+	case "allowed":
+		if p.Scope == "thread" {
+			return "Allowed for this thread" + where + "."
+		}
+		return "Allowed" + where + "."
+	case "denied":
+		return "Denied" + where + "."
+	case "answered":
+		if p.Auto {
+			return join("Answered with its suggestion", oneLine(p.Answer))
+		}
+		return join("Answered"+where, oneLine(p.Answer))
+	default:
+		return "No longer waiting: the turn ended."
+	}
+}
+
+// threadTag names a thread in a chat: "#2 Fix login", the same number the web
+// shows. A thread without a number (a main thread) is named by its title.
+func threadTag(seq int, title string) string {
+	title = strings.TrimSpace(title)
+	switch {
+	case seq > 0 && title != "":
+		return fmt.Sprintf("#%d %s", seq, title)
+	case seq > 0:
+		return fmt.Sprintf("#%d", seq)
+	case title != "":
+		return title
+	}
+	return "Thread"
+}
+
+// foldThreadUpdate is a thread's report as the one line a chat gets, and the
+// tag of the thread it is about.
+func foldThreadUpdate(m db.ThreadEvent) (tag, text string) {
+	var p struct {
+		Seq   int    `json:"seq"`
+		Title string `json:"title"`
+		Kind  string `json:"kind"`
+	}
+	_ = json.Unmarshal([]byte(m.Payload), &p)
+	body := oneLine(m.Content)
+	tag = threadTag(p.Seq, p.Title)
+	switch p.Kind {
+	case ReportFailed:
+		return tag, join("Failed", body)
+	case ReportNeedsInput:
+		if p.Seq > 0 {
+			return tag, join("Needs you", body) + fmt.Sprintf(". Reply with @%d and your answer.", p.Seq)
+		}
+		return tag, join("Needs you", body) + ". Open Projects in the web UI to answer."
+	default:
+		return tag, join("Finished", body)
+	}
+}
+
+func join(head, body string) string {
+	if body == "" {
+		return head
+	}
+	return head + ": " + body
+}
+
+// oneLine is the first non-empty line of s, cut to relayLineMax runes.
+func oneLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if r := []rune(line); len(r) > relayLineMax {
+			line = string(r[:relayLineMax]) + "..."
+		}
+		return line
+	}
+	return ""
+}
+
+func (r *Relay) enqueue(threadIDs []string, tag, text string) {
+	r.enqueueJob(relayJob{threadIDs: threadIDs, tag: tag, text: text})
+}
+
+func (r *Relay) enqueueJob(job relayJob) {
+	r.mu.Lock()
+	r.queue = append(r.queue, job)
+	start := !r.running
+	r.running = true
+	r.mu.Unlock()
+	if start {
+		go r.drain()
+	}
+}
+
+func (r *Relay) drain() {
+	for {
+		r.mu.Lock()
+		if len(r.queue) == 0 {
+			r.running = false
+			r.mu.Unlock()
+			return
+		}
+		job := r.queue[0]
+		r.queue = r.queue[1:]
+		r.mu.Unlock()
+		r.deliver(job)
+	}
+}
+
+// deliver sends one message to every chat bound to the job's threads,
+// prefixed with where it comes from so a chat never forgets where it is.
+func (r *Relay) deliver(job relayJob) {
+	if job.settle != "" {
+		r.restate(job.settle, job.text)
+		return
+	}
+	bindings, err := r.store.ListChannelBindingsOf(job.threadIDs)
+	if err != nil {
+		return
+	}
+	if job.requestProjectID != "" && job.request != nil {
+		candidates, err := r.store.ListChannelBindings(db.BindingFilter{ProjectID: job.requestProjectID})
+		if err != nil {
+			return
+		}
+		seen := make(map[string]bool, len(bindings))
+		for _, b := range bindings {
+			seen[chatKey(b.Platform, b.ChatID)] = true
+		}
+		for _, b := range candidates {
+			key := chatKey(b.Platform, b.ChatID)
+			if !seen[key] {
+				bindings = append(bindings, b)
+				seen[key] = true
+			}
+		}
+	}
+	if job.verbose {
+		bindings = verboseOnly(bindings)
+	}
+	if len(bindings) == 0 {
+		return
+	}
+	tag := job.tag
+	if tag == "" {
+		first, err := r.store.GetThread(job.threadIDs[0])
+		if err != nil {
+			return
+		}
+		p, err := r.store.GetProject(first.ProjectID)
+		if err != nil {
+			return
+		}
+		tag = p.Name
+	}
+	for _, b := range bindings {
+		text := job.text + "\n\n[" + tag + "]"
+		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		to := agent.ChatRef{Platform: b.Platform, ChatID: b.ChatID, BotUUID: b.BotUUID}
+		if job.file != nil {
+			err := r.sink.File(ctx, to, agent.OutFile{Path: job.file.path, Name: job.file.name, MediaType: job.file.mediaType, Caption: text})
+			if err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID}).Warn("projects: send file to IM chat")
+				if r.OnFileError != nil {
+					r.OnFileError(job.threadIDs[0], b.Platform, b.ChatID, job.file.name, err)
+				}
+			}
+			cancel()
+			continue
+		}
+		if job.request != nil {
+			current, err := r.store.GetChannelBinding(b.Platform, b.ChatID)
+			if err != nil || mayAnswer(r.store, current, job.request.threadID) != nil {
+				cancel()
+				continue
+			}
+			b = *current
+			to.BotUUID = b.BotUUID
+			r.await(b, *job.request)
+		}
+		promptSent, promptFailed := false, false
+		if job.prompt != nil {
+			promptSent, promptFailed = r.sendPrompt(ctx, b, "["+tag+"] ", *job.prompt)
+		}
+		if promptFailed && job.request != nil {
+			r.unawait(b, *job.request)
+		}
+		if !promptSent && !promptFailed {
+			delivered := true
+			var err error
+			if sender, ok := r.sink.(agent.RequestTextOutbox); ok && job.request != nil {
+				delivered, err = sender.RequestText(ctx, to, text)
+			} else {
+				err = r.sink.Text(ctx, to, text)
+			}
+			if err != nil || !delivered {
+				if job.request != nil {
+					r.unawait(b, *job.request)
+				}
+				if err != nil {
+					logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": b.ThreadID}).Warn("projects: send to IM chat")
+				}
+			} else if job.request != nil && job.quote != "" {
+				r.mu.Lock()
+				r.sent[job.request.requestID] = append(r.sent[job.request.requestID], sentPrompt{platform: b.Platform, chatID: b.ChatID, text: "[" + tag + "] " + job.quote, bot: b.BotUUID})
+				r.mu.Unlock()
+			}
+		}
+		cancel()
+	}
+}
+
+func verboseOnly(bindings []db.ChannelBinding) []db.ChannelBinding {
+	var out []db.ChannelBinding
+	for _, b := range bindings {
+		if b.Verbose {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// await records that a chat was asked a request, before the chat can see it,
+// so that its reply is taken as the answer.
+func (r *Relay) await(b db.ChannelBinding, q pendingRequest) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	k := chatKey(b.Platform, b.ChatID)
+	r.awaiting[k] = append(r.awaiting[k], q)
+}
+
+func (r *Relay) unawait(b db.ChannelBinding, q pendingRequest) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	k := chatKey(b.Platform, b.ChatID)
+	reqs := r.awaiting[k]
+	kept := reqs[:0]
+	for _, pending := range reqs {
+		if pending != q {
+			kept = append(kept, pending)
+		}
+	}
+	if len(kept) == 0 {
+		delete(r.awaiting, k)
+	} else {
+		r.awaiting[k] = kept
+	}
+}
+
+// sendPrompt sends a request's buttons to a chat and remembers the message
+// for restate. It reports whether it was sent or failed; neither means the
+// platform has no buttons and the caller should send text instead.
+func (r *Relay) sendPrompt(ctx context.Context, b db.ChannelBinding, prefix string, p agent.Prompt) (sent, failed bool) {
+	p.Text = prefix + p.Text
+	ref, err := r.sink.Prompt(ctx, agent.ChatRef{Platform: b.Platform, ChatID: b.ChatID, BotUUID: b.BotUUID}, p)
+	if err != nil {
+		if errors.Is(err, agent.ErrNoButtons) {
+			return false, false
+		}
+		// The chat is unreachable now; the text line would fail as well.
+		logrus.WithError(err).WithFields(logrus.Fields{"platform": b.Platform, "chat_id": b.ChatID, "thread_id": p.ThreadID}).Warn("projects: send a prompt to IM chat")
+		return false, true
+	}
+	if ref == "" {
+		return false, true
+	}
+	r.mu.Lock()
+	r.sent[p.RequestID] = append(r.sent[p.RequestID], sentPrompt{platform: b.Platform, chatID: b.ChatID, ref: ref, text: p.Text})
+	r.mu.Unlock()
+	return true, false
+}
+
+// restate rewrites every prompt sent for a request with how it ended and
+// takes the buttons away.
+func (r *Relay) restate(requestID, outcome string) {
+	// The request may have been asked again after it was forgotten, by a
+	// delivery that was still queued; it is settled now.
+	r.forget(requestID)
+	r.mu.Lock()
+	sent := r.sent[requestID]
+	delete(r.sent, requestID)
+	r.mu.Unlock()
+	for _, sp := range sent {
+		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
+		if sp.ref == "" {
+			// The chat got the question as plain text: say which question
+			// this answers, since a bare number or label does not.
+			r.tell(sp.bot, sp.platform, sp.chatID, sp.text+"\n"+outcome)
+			cancel()
+			continue
+		}
+		if err := r.sink.Restate(ctx, agent.ChatRef{Platform: sp.platform, ChatID: sp.chatID}, sp.ref, sp.text+"\n\n"+outcome); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{"platform": sp.platform, "chat_id": sp.chatID}).Warn("projects: restate a prompt in IM chat")
+		}
+		cancel()
+	}
+}

@@ -37,6 +37,12 @@ type ProviderModelRecord struct {
 	LastError *string `gorm:"column:last_error;type:text"`
 	// LastErrorAt is when LastError was captured.
 	LastErrorAt *time.Time `gorm:"column:last_error_at"`
+	// Invalidated marks the cached list as no longer fresh after a manual
+	// refresh, even when that refresh failed: the next read re-queries
+	// upstream instead of serving the pre-refresh list for the rest of its
+	// TTL. Models is kept as the stale fallback; the next successful save
+	// clears the flag.
+	Invalidated bool `gorm:"column:invalidated"`
 
 	CreatedAt time.Time `gorm:"column:created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
@@ -138,6 +144,7 @@ func (ms *ModelStore) saveModels(provider *typ.Provider, models []string, source
 			r.Models = models
 			r.Source = source
 			r.LastUpdated = now
+			r.Invalidated = false
 		}
 
 		if rawResponse != nil {
@@ -211,7 +218,7 @@ func (ms *ModelStore) GetModels(providerUUID string, ttl time.Duration) []string
 		return []string{}
 	}
 
-	if ttl > 0 && time.Since(record.LastUpdated) > ttl {
+	if ttl > 0 && (record.Invalidated || time.Since(record.LastUpdated) > ttl) {
 		return []string{}
 	}
 
@@ -219,6 +226,34 @@ func (ms *ModelStore) GetModels(providerUUID string, ttl time.Duration) []string
 		return []string{}
 	}
 	return record.Models
+}
+
+// InvalidateModels marks a provider's cached list as no longer fresh without
+// deleting it (see ProviderModelRecord.Invalidated). A provider with no
+// record is a no-op.
+func (ms *ModelStore) InvalidateModels(providerUUID string) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	return ms.db.Model(&ProviderModelRecord{}).
+		Where("provider_uuid = ?", providerUUID).
+		Update("invalidated", true).Error
+}
+
+// GetLastUpdatedAt returns when the provider's model list was last saved
+// successfully. ok is false when no list was ever saved.
+func (ms *ModelStore) GetLastUpdatedAt(providerUUID string) (time.Time, bool) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	var record ProviderModelRecord
+	if err := ms.db.Where("provider_uuid = ?", providerUUID).First(&record).Error; err != nil {
+		return time.Time{}, false
+	}
+	if record.LastUpdated.IsZero() {
+		return time.Time{}, false
+	}
+	return record.LastUpdated, true
 }
 
 // GetAllProviders returns all provider UUIDs that have models

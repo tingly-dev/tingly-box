@@ -13,7 +13,8 @@ export const SCENARIO_HEADER_CONTENT_MAX_WIDTH = 960;
 /**
  * UnifiedCard header title block shared by the agent pages and the pages
  * that keep their own structure (Team, Profile, Image API): the card title
- * plus an optional i18n-keyed info tooltip and an addon (config status).
+ * plus an optional i18n-keyed info tooltip and an addon (a config status or
+ * a small action such as "Duplicate as profile").
  */
 export const ScenarioCardHeader: React.FC<{ title: string; tooltipKey?: string; addon?: React.ReactNode }> = ({ title, tooltipKey, addon }) => {
     const { t } = useTranslation();
@@ -31,3 +32,20 @@ export const ScenarioCardHeader: React.FC<{ title: string; tooltipKey?: string; 
         </Box>
     );
 };
+
+/**
+ * The `PageHeader` layout every Agent-shaped page shares (Agent pages, a Claude
+ * Code profile, a Team, Image API): title, status and actions on one row where
+ * they fit; below `breakpoint` the actions drop under the title instead of
+ * wrapping it. The buttons never wrap among themselves (the primary one never
+ * lands on a line of its own); the status text wraps under the title instead.
+ * Pages with more buttons than an Agent page pass `lg`.
+ */
+export const agentPageHeaderSx = (breakpoint: 'md' | 'lg' = 'md') => ({
+    pb: 0,
+    borderBottom: 0,
+    flexDirection: { xs: 'column', [breakpoint]: 'row' },
+    alignItems: { xs: 'flex-start', [breakpoint]: 'center' },
+    '& h1': { whiteSpace: 'nowrap' },
+    '& > :last-child': { flexWrap: { [breakpoint]: 'nowrap' }, flexShrink: { [breakpoint]: 0 } },
+}) as const;

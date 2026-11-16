@@ -1,12 +1,15 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import type { ProviderQuota, QuotaWindow } from '@/types/quota';
+import type { ProviderQuota, QuotaWindow, UsageRedeem } from '@/types/quota';
 import { quotaToWindows } from '@/types/quota';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface ResourceEntry {
   key: string;
   label: string;
   window: QuotaWindow;
+  /** Set when the entry is a reward the user can spend (a reset card). */
+  redeem?: UsageRedeem;
 }
 
 export interface ResourceItem {
@@ -52,7 +55,7 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
     return Array.from(groups.entries()).map(([group, items]) => {
       const total = items.length;
       const entries: ResourceEntry[] = items.flatMap((bd: any) =>
-        bd.windows?.[0] ? [{ key: bd.key, label: bd.label || bd.key, window: bd.windows[0] as QuotaWindow }] : []);
+        bd.windows?.[0] ? [{ key: bd.key, label: bd.label || bd.key, window: bd.windows[0] as QuotaWindow, redeem: bd.redeem as UsageRedeem | undefined }] : []);
       const voucher = entries.length > 0 && entries.every(e => isVoucher(e.window));
       const available = voucher ? entries.filter(e => e.window.used < e.window.limit).length : 0;
       const label = group
@@ -61,7 +64,7 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
         .join(' ');
 
       const tooltipContent = (
-        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5, maxWidth: 250 }}>
+        <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: radius.row, p: 1.5, maxWidth: 250 }}>
           <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
             {label} ({total})
           </Typography>

@@ -84,6 +84,18 @@ func TestSanitizeCodexInputIDsJSON_NoInputArray(t *testing.T) {
 	assert.Equal(t, body, out, "non-array input must be passed through")
 }
 
+func TestSanitizeCodexInputIDsJSON_PreservesEncryptedReasoning(t *testing.T) {
+	for _, id := range []string{"", `,"id":""`, `,"id":"rs/bad"`, `,"id":null`} {
+		body := `{"input":[{"type":"reasoning","summary":[],"encrypted_content":"opaque-reasoning"` + id + `},{"type":"compaction_trigger"}]}`
+		out := sanitizeCodexInputIDsJSON(body)
+		input := gjson.Get(out, "input").Array()
+		require.Len(t, input, 2)
+		require.Equal(t, "opaque-reasoning", input[0].Get("encrypted_content").String())
+		require.False(t, input[0].Get("id").Exists())
+		require.Equal(t, "compaction_trigger", input[1].Get("type").String())
+	}
+}
+
 func TestSanitizeCodexInputIDsJSON_WhitespaceOnlyID(t *testing.T) {
 	body := `{"input":[{"type":"function_call_output","id":"   ","call_id":"c1","output":"ok"}]}`
 

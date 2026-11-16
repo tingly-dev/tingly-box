@@ -11,9 +11,7 @@
 // can end — reproducing the shape of subprocess a real, misbehaving MCP
 // server could leave behind.
 //
-// It registers zero tools; the SDK server already answers "tools/list"
-// with an empty list, which is all StdioToolSource's readiness check needs
-// to consider the source connected.
+// It registers a deterministic echo tool for lifecycle and result tests.
 package main
 
 import (
@@ -35,6 +33,11 @@ func main() {
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "fakemcp", Version: "0.0.1"}, nil)
+
+	server.AddTool(&mcp.Tool{Name: "echo", InputSchema: map[string]any{"type": "object"}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		label := os.Getenv("FAKE_MCP_LABEL")
+		return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: label}}, StructuredContent: map[string]any{"label": label}}, nil
+	})
 
 	// Run returns once the client closes stdin (normal case) or the
 	// connection otherwise breaks.

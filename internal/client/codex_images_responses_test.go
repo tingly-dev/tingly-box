@@ -2,12 +2,16 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -121,4 +125,47 @@ func TestBuildImageEditResponsesRequest_NIgnored(t *testing.T) {
 	body, err := json.Marshal(params)
 	require.NoError(t, err)
 	assert.False(t, gjson.ParseBytes(body).Get("n").Exists())
+}
+
+// Masked edits use the same terminal response handling as image generation.
+func TestCodexMaskedEditReturnsOnCompleted(t *testing.T) {
+	t.Setenv(codexImageEditRouteEnv, "")
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	requests := make(chan []byte, 1)
+	transport := rtPtr(func(req *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		requests <- body
+		go func() {
+			_, _ = io.WriteString(writer, "data: "+doneFinal+"\n\ndata: {\"type\":\"response.completed\",\"sequence_number\":4}\n\n")
+		}()
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: reader, Request: req}, nil
+	})
+	c := &CodexClient{OpenAIClient: &OpenAIClient{client: openai.NewClient(
+		option.WithBaseURL("https://codex.test/backend-api/"), option.WithAPIKey("test"), option.WithMaxRetries(0),
+		option.WithHTTPClient(&http.Client{Transport: transport}),
+	)}}
+	req := openai.ImageEditParams{Prompt: "edit", Model: "gpt-image-2"}
+	req.Image.OfFile = openai.File(bytes.NewReader(testPNGBytes), "input.png", "image/png")
+	req.Mask = openai.File(bytes.NewReader(testPNGBytes), "mask.png", "image/png")
+	type outcome struct {
+		response *openai.ImagesResponse
+		err      error
+	}
+	done := make(chan outcome, 1)
+	go func() { response, err := c.ImagesEdit(context.Background(), req); done <- outcome{response, err} }()
+	select {
+	case result := <-done:
+		require.NoError(t, result.err)
+		require.Len(t, result.response.Data, 1)
+		assert.Equal(t, "FINAL", result.response.Data[0].B64JSON)
+		body := <-requests
+		assert.Equal(t, "edit", gjson.GetBytes(body, "tools.0.action").String())
+		assert.True(t, gjson.GetBytes(body, "tools.0.input_image_mask.image_url").Exists())
+	case <-time.After(time.Second):
+		t.Fatal("masked edit waited for the transport after response.completed")
+	}
 }

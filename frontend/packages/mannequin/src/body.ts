@@ -1,5 +1,6 @@
 import { figureUnit, bodyForwardOf, squareTo, type PoseFigure } from './skeleton';
 import { add3, lerp3, mul3, norm3, sub3, type Vec3 } from './vec3';
+import { FIGURE_SHADE_BODIES, SELECTED_BODY } from './colors';
 
 // --- the manikin -------------------------------------------------------------
 //
@@ -116,13 +117,9 @@ export const figureSolids = (figure: PoseFigure): Solid[] => {
 // frame — and the selected figure wears its own cool tint on top.
 export interface FigureTone { body: string }
 
-const FIGURE_SHADES: readonly FigureTone[] = [
-    { body: '#c3c7cc' },
-    { body: '#a4aab1' },
-    { body: '#d8dce1' },
-];
+const FIGURE_SHADES: readonly FigureTone[] = FIGURE_SHADE_BODIES.map((body) => ({ body }));
 
-const SELECTED_TONE: FigureTone = { body: '#b3bccf' };
+const SELECTED_TONE: FigureTone = { body: SELECTED_BODY };
 
 // Which tone the next figure should wear. Least-used rather than "one past
 // the count": after a delete, counting the list hands out a shade another

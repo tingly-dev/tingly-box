@@ -187,7 +187,7 @@ func TestQuickstartConfigureRules(t *testing.T) {
 	t.Run("Configure routing rules for provider", func(t *testing.T) {
 		cfg := appManager.GetGlobalConfig()
 
-		// Configure tingly/cc rule
+		// Configure cc rule
 		service := &loadbalance.Service{
 			Provider: provider.UUID,
 			Model:    model,
@@ -195,9 +195,9 @@ func TestQuickstartConfigureRules(t *testing.T) {
 			Active:   true,
 		}
 
-		rule := cfg.GetRuleByRequestModelAndScenario("tingly/cc", typ.ScenarioClaudeCode)
+		rule := cfg.GetRuleByRequestModelAndScenario("cc", typ.ScenarioClaudeCode)
 		if rule == nil {
-			t.Fatal("Expected tingly/cc rule to exist (it should be pre-configured)")
+			t.Fatal("Expected cc rule to exist (it should be pre-configured)")
 		}
 
 		// Update the rule
@@ -210,7 +210,7 @@ func TestQuickstartConfigureRules(t *testing.T) {
 		}
 
 		// Verify the rule was updated
-		updatedRule := cfg.GetRuleByRequestModelAndScenario("tingly/cc", typ.ScenarioClaudeCode)
+		updatedRule := cfg.GetRuleByRequestModelAndScenario("cc", typ.ScenarioClaudeCode)
 		if updatedRule == nil {
 			t.Fatal("Rule not found after update")
 		}

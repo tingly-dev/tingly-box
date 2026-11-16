@@ -15,7 +15,10 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono } from '@/theme/fonts';
+import { maskToken } from '@/utils/sharingKey';
+import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 export interface SharingKey {
     token_id: string;
@@ -27,12 +30,6 @@ export interface SharingKey {
     created_at: string;
     created_by?: string;
 }
-
-const maskToken = (token: string): string => {
-    if (!token) return '';
-    if (token.length <= 16) return `${token.slice(0, 8)}...${token.slice(-4)}`;
-    return `${token.slice(0, 12)}...${token.slice(-4)}`;
-};
 
 const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -64,7 +61,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     const colSpan = 7;
 
     return (
-        <TableContainer>
+        <TableContainer sx={tableFrameSx}>
             {/* Fixed layout + explicit widths so several tables stacked on one
                 page (one per Team) line their columns up; minWidth keeps the
                 columns readable and lets narrow screens scroll the table
@@ -80,21 +77,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                     <col style={{ width: 96 }} />
                 </colgroup>
                 <TableHead>
-                    <TableRow
-                        sx={{
-                            bgcolor: 'action.hover',
-                            '& th': {
-                                fontWeight: 700,
-                                fontSize: fontSizes.sm,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                color: 'text.secondary',
-                                borderBottom: '2px solid',
-                                borderColor: 'divider',
-                                py: 1.5,
-                            },
-                        }}
-                    >
+                    <TableRow>
                         <TableCell>{t('sharingKeys.table.name')}</TableCell>
                         <TableCell>{t('sharingKeys.table.user')}</TableCell>
                         <TableCell>{t('sharingKeys.table.token')}</TableCell>
@@ -192,7 +175,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         sx={{
                                             px: 1, py: 0.5,
                                             bgcolor: 'action.selected',
-                                            borderRadius: 1,
+                                            borderRadius: radius.row,
                                             border: '1px solid',
                                             borderColor: 'divider',
                                             display: 'flex',

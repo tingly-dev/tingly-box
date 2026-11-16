@@ -23,7 +23,7 @@ func toolContentsToAnthropicBeta(contents []coretool.ToolContent) []anthropic.Be
 			})
 		default:
 			out = append(out, anthropic.BetaToolResultBlockParamContentUnion{
-				OfText: &anthropic.BetaTextBlockParam{Text: c.Text},
+				OfText: &anthropic.BetaTextBlockParam{Text: c.ModelText()},
 			})
 		}
 	}

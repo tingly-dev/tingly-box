@@ -254,8 +254,7 @@ export function getCloudProviders(): UniqueProvider[] {
 }
 
 // Unified search function for provider templates.
-// Searches across all user-searchable fields so providers are discoverable
-// by their common names, even when the display alias differs.
+// Match provider identity and API hostnames, never endpoint paths or queries.
 export function searchProviders(providers: UniqueProvider[], query: string): UniqueProvider[] {
     const needle = query.trim().toLowerCase();
     if (!needle) {
@@ -263,19 +262,20 @@ export function searchProviders(providers: UniqueProvider[], query: string): Uni
     }
 
     return providers.filter(provider => {
-        const displayName = (provider.alias || provider.name).toLowerCase();
+        const hostname = (url: string | undefined) => {
+            if (!url) return '';
+            try {
+                return new URL(url).hostname;
+            } catch {
+                return '';
+            }
+        };
         const fields = [
-            displayName,
+            provider.alias || '',
             provider.id || '',
             provider.name || '',
-            provider.baseUrlOpenAI || '',
-            provider.baseUrlAnthropic || '',
-            provider.website || '',
-            // Additional discovery fields — users often search by these
-            provider.icon || '',
-            provider.type || '',
-            provider.description || '',
-            provider.authType || '',
+            hostname(provider.baseUrlOpenAI),
+            hostname(provider.baseUrlAnthropic),
         ];
         return fields.some(f => f.toLowerCase().includes(needle));
     });

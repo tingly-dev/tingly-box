@@ -5,6 +5,8 @@ import type { ComponentType } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { radius } from '@tingly/ui/theme/radius';
+import { platformBrandColors } from '@/theme/brand';
 
 export interface PlatformGuideConfig {
     id: string;
@@ -29,7 +31,7 @@ const buildFeishuFamilyGuide = (t: TFunction, opts: {
     manualLinkLabel: string;
 }) => (
     <Stack spacing={2}>
-        <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+        <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
             <Typography variant="body2" sx={{
                 color: "info.dark"
             }}>
@@ -125,10 +127,10 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: Telegram,
         status: 'available',
         path: '/bots/telegram',
-        color: '#0088cc',
+        color: platformBrandColors.telegram,
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -177,7 +179,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: Feishu,
         status: 'available',
         path: '/bots/feishu',
-        color: '#00d6b9',
+        color: platformBrandColors.feishu,
         guide: buildFeishuFamilyGuide(t, {
             tip: t('remoteControl.guides.feishu.tip', { defaultValue: 'Tip: Feishu uses WebSocket - no public IP needed. Configure traffic proxy as needed.' }),
             step1TextAfter: t('remoteControl.guides.feishu.step1TextAfter', { defaultValue: ', and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.' }),
@@ -193,7 +195,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: Lark,
         status: 'available',
         path: '/bots/lark',
-        color: '#00d6b9',
+        color: platformBrandColors.feishu,
         guide: buildFeishuFamilyGuide(t, {
             tip: t('remoteControl.guides.lark.tip', { defaultValue: 'Tip: Lark uses WebSocket - no public IP needed. Configure traffic proxy as needed.' }),
             step1TextAfter: t('remoteControl.guides.lark.step1TextAfter', { defaultValue: ', and scan the QR code with the Lark mobile app. The app, permissions and events are created automatically and the credentials are saved for you.' }),
@@ -209,10 +211,10 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: DingTalk,
         status: 'available',
         path: '/bots/dingtalk',
-        color: '#0089ff',
+        color: platformBrandColors.dingtalk,
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -265,10 +267,10 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: Weixin,
         status: 'available',
         path: '/bots/weixin',
-        color: '#07c160',
+        color: platformBrandColors.weixin,
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -310,10 +312,10 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: WeCom,
         status: 'available',
         path: '/bots/wecom',
-        color: '#10a800',
+        color: platformBrandColors.wecom,
         guide: (
             <Stack spacing={2}>
-                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'info.light' }}>
+                <Box sx={{ bgcolor: 'info.lighter', p: 1.5, borderRadius: radius.row, border: '1px solid', borderColor: 'info.light' }}>
                     <Typography variant="body2" sx={{
                         color: "info.dark"
                     }}>
@@ -383,7 +385,7 @@ const buildPlatformGuides = (t: TFunction): Record<string, PlatformGuideConfig> 
         BrandIcon: QQ,
         status: 'coming-soon',
         path: '/bots/qq',
-        color: '#888',
+        color: platformBrandColors.other,
         guide: buildComingSoonGuide(t, 'QQ'),
     },
 });

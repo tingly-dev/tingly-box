@@ -1,0 +1,27 @@
+// What a host app (Tingly Box) mounts to embed Projects. The host wraps the
+// pages in ProjectsHostProvider, which tells them where they are routed and
+// which fetch carries its authentication. Their strings are in the i18next
+// namespace `projects`: the host adds the bundles from
+// `@tingly/projects/locales/{en,zh,ru}` under that namespace before rendering.
+export { ProjectsHostProvider, type ImBot, type ImChat, type ImChatInfo, type ImHost, type ProjectsHost, type SessionLaunch, type SessionSlots } from './host/ProjectsHost';
+export type { Thread, ThreadEvent } from './client';
+export { default as ProjectsPage } from './pages/ProjectsPage';
+export { default as ProjectPage } from './pages/ProjectPage';
+export { default as WorkdirPage } from './pages/WorkdirPage';
+export { default as WorkspaceHomePage } from './pages/WorkspaceHomePage';
+export { default as ImSettingsPage } from './pages/ImSettingsPage';
+// The browser-notification engine's strings and routes, from the host surface.
+export { NotificationsBridge } from './notifications/NotificationsBridge';
+export {
+    ProjectsSidebar,
+    type ProjectsSidebarProps,
+    type ProjectsSidebarRow,
+    type ProjectsSidebarSection,
+} from './components/ProjectsSidebar';
+export { WorkspaceLayout, useWorkspacePane, type WorkspacePane } from './components/workspace/WorkspaceLayout';
+export { Composer, type ComposerProps } from './components/Composer';
+export { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from './components/composerPicker';
+export { StatusGroups, StatusHeading, type StatusGroup, type StatusRow } from './components/workspace/StatusGroups';
+export { timeAgo } from './utils/format';
+// For the cards a host adds to the thread rail (`SessionSlots.railCards`).
+export { Fact, RailCard } from './components/project/infoRail';

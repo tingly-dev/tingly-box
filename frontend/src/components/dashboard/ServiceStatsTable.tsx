@@ -9,8 +9,8 @@ import {
     TableRow,
     TablePagination,
     Box,
-    alpha,
     useTheme,
+    alpha,
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,8 +20,9 @@ import {
     UsageMetricValueCells,
 } from './UsageMetricCells';
 import { getUsageMetricColumns } from './usageMetricColumns';
-import { fontSizes } from '@/theme/fonts';
 import { ProviderLabel } from '@/components/ProviderLogo';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface AggregatedStat {
     key: string;
@@ -57,9 +58,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
     // Get theme-aware empty icon background
     const getEmptyIconBg = () => {
         const palette = theme.palette as any;
-        if (palette.isSunlit) return 'rgba(14, 165, 233, 0.1)';
-        if (palette.mode === 'dark') return 'rgba(148, 163, 184, 0.1)';
-        return 'rgba(100, 116, 139, 0.1)';
+        return alpha(palette.text.secondary, 0.1);
     };
 
     const handleChangePage = (_event: unknown, newPage: number) => {
@@ -81,7 +80,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
         <Paper
             elevation={0}
             sx={{
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 overflow: 'hidden',
@@ -99,30 +98,16 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                     alignItems: 'center',
                 }}
             >
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {t('dashboard.usageByModel.title', { defaultValue: 'Usage by Model' })}
                 </Typography>
             </Box>
             <TableContainer sx={{ maxHeight: 600 }}>
                 <Table stickyHeader>
                     <TableHead>
-                        <TableRow
-                            sx={{
-                                backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                                '& .MuiTableCell-root': {
-                                    fontWeight: 600,
-                                    fontSize: fontSizes.sm,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                    color: 'text.secondary',
-                                    py: 1.25,
-                                    borderBottom: '1px solid',
-                                    borderColor: 'divider',
-                                },
-                            }}
-                        >
-                            <TableCell sx={{ fontWeight: 600 }}>{t('dashboard.usageByModel.provider', { defaultValue: 'Provider' })}</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>{t('dashboard.usageByModel.model', { defaultValue: 'Model' })}</TableCell>
+                        <TableRow sx={{ '& .MuiTableCell-root': { px: 1.25 } }}>
+                            <TableCell>{t('dashboard.usageByModel.provider', { defaultValue: 'Provider' })}</TableCell>
+                            <TableCell>{t('dashboard.usageByModel.model', { defaultValue: 'Model' })}</TableCell>
                             <UsageMetricHeaderCells showCacheWrite={showCacheWrite} />
                         </TableRow>
                     </TableHead>
@@ -135,7 +120,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             sx={{
                                                 width: 48,
                                                 height: 48,
-                                                borderRadius: 2,
+                                                borderRadius: radius.card,
                                                 backgroundColor: getEmptyIconBg(),
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -183,6 +168,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             },
                                             '& .MuiTableCell-root': {
                                                 py: 1.25,
+                                                px: 1.25,
                                                 borderBottom: '1px solid',
                                                 borderColor: 'divider',
                                             },
@@ -197,6 +183,9 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                             <Typography
                                                 variant="body2"
                                                 sx={{
+                                                    // The model is what each row is about.
+                                                    color: 'text.primary',
+                                                    fontWeight: 500,
                                                     maxWidth: 200,
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',

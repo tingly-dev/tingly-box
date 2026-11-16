@@ -13,6 +13,7 @@ import {
 import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
 import { getFlagValue, headersValue, isFlagActive } from './flagHelpers';
 import { fontSizes } from '@/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const CARD_STYLES = {
     width: MODEL_NODE_STYLES.width,
@@ -106,7 +107,7 @@ export const RulePluginsList: React.FC<RulePluginsListProps> = ({ flags, enabled
                             cursor: 'pointer',
                             px: 0.75,
                             py: 0.35,
-                            borderRadius: 0.75,
+                            borderRadius: radius.chip,
                             border: '1px solid',
                             borderColor: 'transparent',
                             backgroundColor: 'action.hover',
@@ -158,7 +159,7 @@ export const RulePluginsList: React.FC<RulePluginsListProps> = ({ flags, enabled
                                 onClick={(e) => { e.stopPropagation(); onRemoveFlag(spec.key); }}
                                 sx={{ p: 0, ml: 'auto', flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
                             >
-                                <CloseIcon sx={{ fontSize: fontSizes.xs }} />
+                                <CloseIcon sx={{ fontSize: fontSizes.micro }} />
                             </IconButton>
                         )}
                     </Box>
@@ -195,7 +196,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                     mb: 0.75
                 }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: fontSizes.xs, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: fontSizes.micro, color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}
@@ -212,7 +213,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'text.disabled',
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         lineHeight: 1.25,
                         textAlign: 'center',
                         px: 1,
@@ -234,7 +235,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
                         '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
                         '&::-webkit-scrollbar-thumb': {
                             backgroundColor: (theme) => alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.34 : 0.24),
-                            borderRadius: 3,
+                            borderRadius: radius.pill,
                         },
                         '&::-webkit-scrollbar-thumb:hover': {
                             backgroundColor: (theme) => alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.5 : 0.36),

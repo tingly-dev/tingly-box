@@ -5,13 +5,18 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     Extension as PluginsIcon,
+    KeyboardArrowDown as MoveDownIcon,
+    KeyboardArrowUp as MoveUpIcon,
     MoreHoriz as MoreIcon,
+    Pin as PinToTopIcon,
     PlayArrow as ProbeIcon,
+    Decisions as SmartIcon,
 } from '@/components/icons';
 import { Box, IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProbeMenu } from './probe';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface GraphSettingsMenuProps {
     allowDeleteRule: boolean;
@@ -20,12 +25,21 @@ export interface GraphSettingsMenuProps {
     saving: boolean;
     onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
-    onDelete: () => void;
+    /** Receives the ⋯ button so the delete confirmation can open right there. */
+    onDelete: (anchorEl: HTMLElement | null) => void;
     onToggleActive: () => void;
     onEditFlags?: () => void;
     /** Opens the plugin catalog (add / remove); `pluginsCount` is shown beside it. */
     onOpenPlugins?: () => void;
     pluginsCount?: number;
+    /** Smart conditions on/off/add item; hidden when omitted. */
+    smartCondition?: { state: 'none' | 'on' | 'off'; onToggle: () => void };
+    /** Hard-ordering items (pin to top / move up / move down); hidden when omitted. */
+    reorder?: {
+        onMove: (direction: 'top' | 'up' | 'down') => void;
+        canMoveUp: boolean;
+        canMoveDown: boolean;
+    };
     // Probe props
     ruleUuid?: string;
     ruleName?: string;
@@ -45,6 +59,8 @@ export const GraphSettingsMenu = ({
     onEditFlags,
     onOpenPlugins,
     pluginsCount = 0,
+    smartCondition,
+    reorder,
     ruleUuid,
     ruleName,
     scenario,
@@ -80,8 +96,18 @@ export const GraphSettingsMenu = ({
                     <MenuItem onClick={() => { closeMenu(); onOpenPlugins(); }}>
                         <PluginsIcon fontSize="small" sx={{ mr: 1 }} />{t('ruleHeader.plugins')}
                         {pluginsCount > 0 && (
-                            <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: '0.8125rem' }}>{pluginsCount}</Box>
+                            <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: fontSizes.md }}>{pluginsCount}</Box>
                         )}
+                    </MenuItem>
+                )}
+
+                {smartCondition && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); smartCondition.onToggle(); }}
+                        disabled={saving}
+                    >
+                        <SmartIcon fontSize="small" sx={{ mr: 1 }} />
+                        {t({ none: 'ruleHeader.smartConditionAdd', on: 'ruleHeader.smartConditionOn', off: 'ruleHeader.smartConditionOff' }[smartCondition.state])}
                     </MenuItem>
                 )}
 
@@ -128,8 +154,33 @@ export const GraphSettingsMenu = ({
                     </MenuItem>
                 )}
 
+                {reorder && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); reorder.onMove('top'); }}
+                        disabled={!reorder.canMoveUp}
+                    >
+                        <PinToTopIcon fontSize="small" sx={{ mr: 1 }} />{t('common.pinToTop')}
+                    </MenuItem>
+                )}
+                {reorder && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); reorder.onMove('up'); }}
+                        disabled={!reorder.canMoveUp}
+                    >
+                        <MoveUpIcon fontSize="small" sx={{ mr: 1 }} />{t('common.moveUp')}
+                    </MenuItem>
+                )}
+                {reorder && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); reorder.onMove('down'); }}
+                        disabled={!reorder.canMoveDown}
+                    >
+                        <MoveDownIcon fontSize="small" sx={{ mr: 1 }} />{t('common.moveDown')}
+                    </MenuItem>
+                )}
+
                 {allowDeleteRule && (
-                    <MenuItem onClick={() => { closeMenu(); onDelete(); }} sx={{ color: 'error.main' }}>
+                    <MenuItem onClick={() => { const anchor = menuAnchorEl; closeMenu(); onDelete(anchor); }} sx={{ color: 'error.main' }}>
                         <DeleteIcon fontSize="small" sx={{ mr: 1 }} />Delete Rule
                     </MenuItem>
                 )}

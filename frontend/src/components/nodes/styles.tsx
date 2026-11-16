@@ -1,7 +1,10 @@
 import { Box } from '@mui/material';
 import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
 import { fontSizes } from '@/theme/fonts';
-import { routeGraphColors } from '@/theme/routeGraph';
+import { nodeScrollbar, routeGraphColors, routeGraphShadows } from '@/theme/routeGraph';
+
+const scrollbarOf = (theme: Theme) => nodeScrollbar[theme.palette.mode === 'dark' ? 'dark' : 'light'];
+import { radius } from '@tingly/ui/theme/radius';
 
 export const routeGraphActive = routeGraphColors.active;
 export const routeGraphActiveBg = routeGraphColors.activeBg;
@@ -43,7 +46,7 @@ export const PROVIDER_NODE_STYLES = {
 } as const;
 
 export const SMART_NODE_STYLES = {
-    width: 220,
+    width: 140,
     height: 72,
     padding: 5,
 } as const;
@@ -88,8 +91,8 @@ export const ConnectionLine = styled(Box)(() => ({
     display: 'flex',
     alignItems: 'center',
     color: 'text.secondary',
-    fontSize: '1.5rem',
-    '& svg': { fontSize: '2rem' },
+    fontSize: fontSizes.display,
+    '& svg': { fontSize: 32 },
 }));
 
 export const graphNodeHoverStyles = (theme: Theme) => {
@@ -109,12 +112,11 @@ export const graphNodeHoverStyles = (theme: Theme) => {
             ? [
                 `0 0 0 1px ${alpha(emphasisColor, 0.92)}`,
                 `0 0 0 5px ${alpha(emphasisColor, 0.34)}`,
-                '0 18px 38px rgba(0, 0, 0, 0.50)',
+                routeGraphShadows.nodeLiftDark,
             ].join(', ')
             : [
                 `0 0 0 4px ${alpha(routeGraphActive, 0.18)}`,
-                '0 14px 34px rgba(31, 41, 55, 0.14)',
-                '0 3px 10px rgba(31, 41, 55, 0.08)',
+                ...routeGraphShadows.nodeLift,
             ].join(', '),
         transform: 'translateY(-2px)',
     };
@@ -178,14 +180,14 @@ export const graphRowStyles = (theme: Theme) => ({
     paddingBottom: theme.spacing(0.5),
     scrollbarWidth: 'thin' as const,
     scrollbarColor:
-        (theme.palette.mode === 'dark' ? '#555' : '#ccc') + ' transparent',
+        `${scrollbarOf(theme).thumb} transparent`,
     '&::-webkit-scrollbar': { height: 6 },
     '&::-webkit-scrollbar-track': { background: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
-        backgroundColor: theme.palette.mode === 'dark' ? '#555' : '#ccc',
-        borderRadius: 3,
+        backgroundColor: scrollbarOf(theme).thumb,
+        borderRadius: radius.pill,
         '&:hover': {
-            backgroundColor: theme.palette.mode === 'dark' ? '#777' : '#999',
+            backgroundColor: scrollbarOf(theme).thumbHover,
         },
     },
 });
@@ -204,6 +206,78 @@ export const nodeSpotlightSx = (theme: Theme) => ({
     '--node-spotlight-ring': alpha(theme.palette.primary.main, 0.5),
     animation: `${spotlightPulse} 1.4s ease-out 3`,
 });
+
+// Add / turn-off controls in a rule's graph carry this class: they stay out of
+// sight and out of the layout until the rule is hovered or holds focus, so a
+// rule at rest shows only its routing and no reserved slots. Devices without
+// hover always show them.
+export const ROUTE_GRAPH_QUIET_CLASS = 'route-graph-quiet';
+
+// The same treatment for a whole optional row (e.g. the add-condition /
+// fallback-tier row): folds its height away instead of its width.
+export const ROUTE_GRAPH_QUIET_ROW_CLASS = 'route-graph-quiet-row';
+
+// Both classes expand in flow (never as an overlay), so nothing can be
+// occluded by the graph's scroll container.
+const quietTransition =
+    'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease, max-width 0.2s ease';
+
+// Expanded geometry, shared by hover, keyboard focus, and touch (no-hover
+// devices). Overflow is released when expanded: the fold's clip would
+// otherwise cut the node's hover lift (-2px) and its emphasis ring.
+const quietNodeExpanded = {
+    maxWidth: SMALL_NODE_STYLES.width,
+    opacity: 1,
+    pointerEvents: 'auto',
+    overflow: 'visible',
+} as const;
+
+// Generous headroom over the row's content (~42px) — the fold must never clip
+// the row it reveals.
+const QUIET_ROW_MAX_HEIGHT = 120;
+
+const quietRowExpanded = {
+    maxHeight: QUIET_ROW_MAX_HEIGHT,
+    opacity: 1,
+    pointerEvents: 'auto',
+    overflow: 'visible',
+} as const;
+
+export const routeGraphQuietSx = {
+    // Node variant: the trailing "Load balance" controls. Folds to zero width
+    // (max-width overrides the node's fixed width) — the row shrinks by the
+    // node's full 100px at rest. The transition list mirrors the node's own
+    // (this two-class selector outranks the node's single class) plus the fold.
+    [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: {
+        maxWidth: 0,
+        opacity: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        transition: quietTransition,
+    },
+    // Row variant: a row made only of optional controls. Folds to zero height;
+    // a wide-label node inside keeps its full width because only the row hides.
+    // Covers the row's own margin (spacing 0.5) once collapsed.
+    [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: {
+        maxHeight: 0,
+        opacity: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        transition: 'opacity 0.16s ease, max-height 0.2s ease',
+    },
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_CLASS}`]: quietNodeExpanded,
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: quietRowExpanded,
+    // Action-bar nodes inside a folding row stay put when hovered: the row
+    // already moves downward as it opens, and the nodes' own hover lift
+    // (translateY(-2px)) would read as a two-direction jump.
+    [`&:is(:hover, :focus-within) .${ROUTE_GRAPH_QUIET_ROW_CLASS} .MuiBox-root`]: {
+        transform: 'none',
+    },
+    '@media (hover: none)': {
+        [`& .${ROUTE_GRAPH_QUIET_CLASS}`]: quietNodeExpanded,
+        [`& .${ROUTE_GRAPH_QUIET_ROW_CLASS}`]: quietRowExpanded,
+    },
+} as const;
 
 // Service node container (formerly ProviderNodeContainer)
 export const ServiceNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
@@ -311,7 +385,7 @@ export const NODE_LAYER_STYLES = {
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',
-        borderRadius: 1.25,
+        borderRadius: radius.row,
         lineHeight: 1,
     } as const,
 };

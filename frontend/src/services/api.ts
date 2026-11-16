@@ -13,6 +13,7 @@ import {
     getControlApiClient as getClient,
     resetControlApiClient as resetClient,
 } from './openapi';
+import {coalescedFetch} from './coalescedFetch';
 import {systemApi} from './systemApi';
 import {rulesApi} from './rulesApi';
 import {scenarioApi} from './scenarioApi';
@@ -46,7 +47,7 @@ export async function fetchUIAPI(url: string, options: RequestInit = {}): Promis
 
     const token = getUserAuthToken();
 
-    const response = await fetch(fullUrl, {
+    const response = await coalescedFetch(fullUrl, {
         ...options,
         headers: {
             'Content-Type': 'application/json',
@@ -58,7 +59,10 @@ export async function fetchUIAPI(url: string, options: RequestInit = {}): Promis
     if (!response.ok) {
         // The status rides along so callers can tell "this provider has no
         // quota" (404) from a real failure, and stay quiet about the former.
-        throw Object.assign(new Error(`API error: ${response.status}`), {status: response.status});
+        // The body rides along too, for endpoints whose refusals carry a typed
+        // answer (spending a reward says whether it was spent, rejected or unknown).
+        const body = await response.json().catch(() => undefined);
+        throw Object.assign(new Error(`API error: ${response.status}`), {status: response.status, body});
     }
 
     return response.json();
@@ -91,6 +95,8 @@ export const api = {
     listBotCapabilities: botApi.listBotCapabilities,
     setBotCapability: botApi.setBotCapability,
     listBotDirectChats: botApi.listBotDirectChats,
+    setBotDirectChatAlias: botApi.setBotDirectChatAlias,
+    setBotGroupAlias: botApi.setBotGroupAlias,
     setBotDirectChatBlocked: botApi.setBotDirectChatBlocked,
     deleteBotDirectChat: botApi.deleteBotDirectChat,
     setBotDirectChatPermission: botApi.setBotDirectChatPermission,
@@ -100,6 +106,7 @@ export const api = {
     setBotGroupBlocked: botApi.setBotGroupBlocked,
     setBotGroupCapability: botApi.setBotGroupCapability,
     addBotGroupActor: botApi.addBotGroupActor,
+    setBotGroupActorPermission: botApi.setBotGroupActorPermission,
     listBotChats: botApi.listBotChats,
     notifyBot: botApi.notifyBot,
     interactBot: botApi.interactBot,

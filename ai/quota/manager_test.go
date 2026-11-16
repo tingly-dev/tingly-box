@@ -150,6 +150,24 @@ func TestInferProviderTypeKimiCodeOAuth(t *testing.T) {
 	}
 }
 
+// The CN WorkBuddy login serves inference from copilot.tencent.com, which the
+// host fallback would read as GitHub Copilot; the issuer must win.
+func TestInferProviderTypeWorkBuddyOAuth(t *testing.T) {
+	t.Parallel()
+
+	for _, issuer := range []typ.Issuer{typ.IssuerWorkBuddy, typ.IssuerWorkBuddyCN} {
+		site, _ := typ.WorkBuddySiteFor(issuer)
+		provider := &typ.Provider{
+			APIBase:     site.APIBase(),
+			AuthType:    typ.AuthTypeOAuth,
+			OAuthDetail: &typ.OAuthDetail{Issuer: issuer},
+		}
+		if got := inferProviderType(provider); got != ProviderTypeWorkBuddy {
+			t.Errorf("%s: inferProviderType() = %q, want %q", issuer, got, ProviderTypeWorkBuddy)
+		}
+	}
+}
+
 func BenchmarkInferProviderType(b *testing.B) {
 	provider := &typ.Provider{APIBase: "https://gateway.example.com/proxy/OPENROUTER.AI/api/v1"}
 	b.ReportAllocs()
@@ -278,5 +296,100 @@ func TestInferProviderTypeIgnoresPathAndLocalHosts(t *testing.T) {
 				t.Fatalf("inferProviderType(%q) = %q, want %q", tt.apiBase, got, tt.want)
 			}
 		})
+	}
+}
+
+type oauthOnlyTestFetcher struct{ calls atomic.Int32 }
+
+func (*oauthOnlyTestFetcher) Name() string                 { return "oauth-only-test" }
+func (*oauthOnlyTestFetcher) ProviderType() ProviderType   { return ProviderTypeAnthropic }
+func (*oauthOnlyTestFetcher) Validate(*typ.Provider) error { return nil }
+func (*oauthOnlyTestFetcher) RequiresAuth() typ.AuthType   { return typ.AuthTypeOAuth }
+func (f *oauthOnlyTestFetcher) Fetch(_ context.Context, provider *typ.Provider) (*ProviderUsage, error) {
+	f.calls.Add(1)
+	return &ProviderUsage{ProviderUUID: provider.UUID}, nil
+}
+
+// An Anthropic API key shares its host with Claude subscriptions, whose usage
+// endpoint is OAuth-only: the key is unsupported, not a failed read.
+func TestFetchSkipsAPIKeyForOAuthOnlyFetcher(t *testing.T) {
+	provider := &typ.Provider{UUID: "key", APIBase: "https://api.anthropic.com", AuthType: typ.AuthTypeAPIKey, Enabled: true}
+	fetcher := &oauthOnlyTestFetcher{}
+	manager := NewManager(DefaultConfig(), managerTestStore{}, managerTestProviderManager{[]*typ.Provider{provider}}, logrus.New())
+	if err := manager.RegisterFetcher(fetcher); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := manager.RefreshProvider(context.Background(), provider.UUID); !errors.Is(err, ErrProviderUnsupported) {
+		t.Fatalf("RefreshProvider() error = %v, want ErrProviderUnsupported", err)
+	}
+	if fetcher.calls.Load() != 0 {
+		t.Error("the OAuth usage endpoint was called with an API key")
+	}
+	if manager.IsProviderSupported(provider.UUID) {
+		t.Error("IsProviderSupported() = true for an API key on an OAuth-only fetcher")
+	}
+}
+
+type redeemTestFetcher struct {
+	concurrencyTestFetcher
+	started chan struct{}
+	release chan struct{}
+	err     error
+}
+
+func (f *redeemTestFetcher) Redeem(context.Context, *typ.Provider, string) (string, error) {
+	if f.started != nil {
+		close(f.started)
+		<-f.release
+	}
+	return "spent", f.err
+}
+
+func newRedeemManager(f Fetcher) (*Manager, *typ.Provider) {
+	provider := &typ.Provider{UUID: "p1", Name: "P", Token: "k", AuthType: typ.AuthTypeAPIKey, APIBase: "https://api.anthropic.com"}
+	m := NewManager(nil, managerTestStore{}, managerTestProviderManager{providers: []*typ.Provider{provider}}, logrus.New())
+	_ = m.RegisterFetcher(f)
+	return m, provider
+}
+
+func TestRedeem_ProviderWithoutRewardsIsUnsupported(t *testing.T) {
+	m, p := newRedeemManager(&concurrencyTestFetcher{})
+	if _, err := m.Redeem(context.Background(), p.UUID, "1"); !errors.Is(err, ErrRedeemUnsupported) {
+		t.Fatalf("err = %v, want ErrRedeemUnsupported", err)
+	}
+}
+
+func TestRedeem_ReadsQuotaBackAndKeepsUnconfirmedVisible(t *testing.T) {
+	m, p := newRedeemManager(&redeemTestFetcher{})
+	res, err := m.Redeem(context.Background(), p.UUID, "1")
+	if err != nil || res.Message != "spent" || res.Usage == nil {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+
+	m, p = newRedeemManager(&redeemTestFetcher{err: ErrRedeemUnconfirmed})
+	res, err = m.Redeem(context.Background(), p.UUID, "1")
+	if !errors.Is(err, ErrRedeemUnconfirmed) || res == nil || res.Usage == nil {
+		t.Fatalf("an unconfirmed spend must still return the refreshed usage: res=%+v err=%v", res, err)
+	}
+
+	m, p = newRedeemManager(&redeemTestFetcher{err: ErrRedeemRejected})
+	if res, err = m.Redeem(context.Background(), p.UUID, "1"); !errors.Is(err, ErrRedeemRejected) || res != nil {
+		t.Fatalf("a rejection returns no result: res=%+v err=%v", res, err)
+	}
+}
+
+func TestRedeem_SecondSpendForSameProviderIsBusy(t *testing.T) {
+	f := &redeemTestFetcher{started: make(chan struct{}), release: make(chan struct{})}
+	m, p := newRedeemManager(f)
+	done := make(chan error, 1)
+	go func() { _, err := m.Redeem(context.Background(), p.UUID, "1"); done <- err }()
+	<-f.started
+	if _, err := m.Redeem(context.Background(), p.UUID, "2"); !errors.Is(err, ErrRedeemBusy) {
+		t.Fatalf("err = %v, want ErrRedeemBusy", err)
+	}
+	close(f.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }

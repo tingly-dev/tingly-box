@@ -222,7 +222,8 @@ func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
 // sanitizeCodexInputIDsJSON walks the input array and removes invalid ids.
 // For types whose id is required, the entire item is dropped (the backend
 // would reject the request anyway). For types whose id is optional, only
-// the id field is removed.
+// the id field is removed. Encrypted reasoning is replay state: its ID may
+// be omitted on Codex even though the SDK schema marks it required.
 func sanitizeCodexInputIDsJSON(bodyStr string) string {
 	input := gjson.Get(bodyStr, "input")
 	if !input.IsArray() {
@@ -244,7 +245,7 @@ func sanitizeCodexInputIDsJSON(bodyStr string) string {
 
 		itemType := item.Get("type").String()
 		path := fmt.Sprintf("input.%d", i)
-		if codexInputItemIDRequired(itemType) {
+		if codexInputItemIDRequired(itemType) && !(itemType == "reasoning" && item.Get("encrypted_content").String() != "") {
 			logrus.Warnf("[Codex] Dropping input[%d] of type %q with invalid id %q", i, itemType, idStr)
 			if updated, err := sjson.Delete(bodyStr, path); err == nil {
 				bodyStr = updated

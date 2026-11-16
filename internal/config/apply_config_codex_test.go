@@ -539,10 +539,9 @@ func TestApplyCodexConfig_PrefsAppliedTopLevelAndPerProfile(t *testing.T) {
 	t.Setenv("HOME", tempDir)
 
 	prefs := &CodexPrefs{
-		ModelReasoningEffort:            "high",
-		ModelReasoningSummary:           "detailed",
-		ModelVerbosity:                  "low",
-		ModelSupportsReasoningSummaries: "true",
+		ModelReasoningEffort:  "high",
+		ModelReasoningSummary: "detailed",
+		ModelVerbosity:        "low",
 	}
 	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, prefs, true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
@@ -558,9 +557,6 @@ func TestApplyCodexConfig_PrefsAppliedTopLevelAndPerProfile(t *testing.T) {
 	}
 	if cfg["model_verbosity"] != "low" {
 		t.Errorf("top model_verbosity = %v, want low", cfg["model_verbosity"])
-	}
-	if cfg["model_supports_reasoning_summaries"] != true {
-		t.Errorf("top model_supports_reasoning_summaries = %v, want true", cfg["model_supports_reasoning_summaries"])
 	}
 	// Per-profile (self-contained)
 	profiles, _ := cfg["profiles"].(map[string]interface{})
@@ -578,8 +574,7 @@ func TestApplyCodexConfig_PrefsRejectInvalidEnumAndCannotClobberManaged(t *testi
 	t.Setenv("HOME", tempDir)
 
 	prefs := &CodexPrefs{
-		ModelReasoningEffort:            "bogus", // invalid enum -> dropped
-		ModelSupportsReasoningSummaries: "yes",   // not "true" -> dropped
+		ModelReasoningEffort: "bogus", // invalid enum -> dropped
 	}
 	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m1"}, prefs, true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
@@ -588,9 +583,6 @@ func TestApplyCodexConfig_PrefsRejectInvalidEnumAndCannotClobberManaged(t *testi
 	cfg := loadCodexConfigForTest(t, filepath.Join(tempDir, ".codex", "config.toml"))
 	if _, ok := cfg["model_reasoning_effort"]; ok {
 		t.Errorf("invalid enum should be dropped, got %v", cfg["model_reasoning_effort"])
-	}
-	if _, ok := cfg["model_supports_reasoning_summaries"]; ok {
-		t.Errorf("non-true bool should be dropped, got %v", cfg["model_supports_reasoning_summaries"])
 	}
 	// Managed fields remain controlled by tingly-box.
 	if cfg["model_provider"] != "tingly-box" {
@@ -619,14 +611,14 @@ func TestCodexPrefsFromConfig(t *testing.T) {
 	assert.Equal(t, "high", prefs.ModelReasoningEffort)
 	assert.Equal(t, "detailed", prefs.ModelReasoningSummary)
 	assert.Equal(t, "low", prefs.ModelVerbosity)
-	assert.Equal(t, "true", prefs.ModelSupportsReasoningSummaries)
+	assert.Equal(t, "true", prefs.SupportsReasoningSummaries) // legacy key still read
 }
 
 // Enum values outside the allowed set are dropped (forward-compatible,
 // injection-safe) — they do not surface as an invalid option in the form.
 func TestCodexPrefsFromConfig_DropsInvalidEnum(t *testing.T) {
 	cfg := map[string]interface{}{
-		"model_reasoning_effort":  "ultra", // not a valid effort
+		"model_reasoning_effort":  "bogus", // not a valid effort
 		"model_reasoning_summary": "concise",
 		"model_verbosity":         7, // wrong type
 		// false / non-"true" → empty (not opted in)
@@ -636,7 +628,16 @@ func TestCodexPrefsFromConfig_DropsInvalidEnum(t *testing.T) {
 	assert.Empty(t, prefs.ModelReasoningEffort)
 	assert.Equal(t, "concise", prefs.ModelReasoningSummary)
 	assert.Empty(t, prefs.ModelVerbosity)
-	assert.Empty(t, prefs.ModelSupportsReasoningSummaries)
+	assert.Empty(t, prefs.SupportsReasoningSummaries)
+}
+
+// max / ultra are advertised by current Codex models (models.json
+// supported_reasoning_levels), so they must round-trip through the prefs.
+func TestCodexPrefsFromConfig_AcceptsMaxUltraEffort(t *testing.T) {
+	for _, effort := range []string{"max", "ultra"} {
+		prefs := CodexPrefsFromConfig(map[string]interface{}{"model_reasoning_effort": effort})
+		assert.Equal(t, effort, prefs.ModelReasoningEffort)
+	}
 }
 
 func TestCodexPrefsFromConfig_Empty(t *testing.T) {
@@ -651,9 +652,8 @@ func TestCodexPrefs_RoundTrip(t *testing.T) {
 	cases := []*CodexPrefs{
 		{},
 		DefaultCodexPrefs(),
-		{ModelReasoningEffort: "high", ModelReasoningSummary: "detailed", ModelVerbosity: "low", ModelSupportsReasoningSummaries: "true"},
+		{ModelReasoningEffort: "high", ModelReasoningSummary: "detailed", ModelVerbosity: "low"},
 		{ModelReasoningEffort: "none", ModelReasoningSummary: "none"},
-		{ModelSupportsReasoningSummaries: "true"},
 	}
 	for i, original := range cases {
 		out := CodexPrefsFromConfig(original.toConfig())
@@ -862,4 +862,155 @@ func TestApplyCodexAuth_HybridWithTokens_WritesChatGPTLogin(t *testing.T) {
 	if tok["access_token"] != "acc" || tok["refresh_token"] != "ref" {
 		t.Errorf("tokens block wrong: %#v", tok)
 	}
+}
+
+// The catalog's headroom percentages are user-tunable via prefs; empty or
+// out-of-range values fall back to the defaults, and compaction is clamped to
+// the effective window.
+func TestRenderCodexModelCatalog_HeadroomFromPrefs(t *testing.T) {
+	render := func(p *CodexPrefs) (effective, compactLimit, window int) {
+		raw, err := RenderCodexModelCatalogWithPrefs([]string{"m"}, nil, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var c struct {
+			Models []struct {
+				ContextWindow int `json:"context_window"`
+				Compact       int `json:"auto_compact_token_limit"`
+				Effective     int `json:"effective_context_window_percent"`
+			} `json:"models"`
+		}
+		if err := json.Unmarshal(raw, &c); err != nil {
+			t.Fatal(err)
+		}
+		return c.Models[0].Effective, c.Models[0].Compact, c.Models[0].ContextWindow
+	}
+
+	eff, compact, win := render(nil)
+	assert.Equal(t, 82, eff)
+	assert.Equal(t, win*75/100, compact)
+
+	eff, compact, win = render(&CodexPrefs{EffectiveContextWindowPercent: "90", AutoCompactPercent: "70"})
+	assert.Equal(t, 90, eff)
+	assert.Equal(t, win*70/100, compact)
+
+	// out of range / non-numeric → defaults
+	eff, compact, win = render(&CodexPrefs{EffectiveContextWindowPercent: "5", AutoCompactPercent: "abc"})
+	assert.Equal(t, 82, eff)
+	assert.Equal(t, win*75/100, compact)
+
+	// compact above effective is clamped down to it
+	eff, compact, win = render(&CodexPrefs{EffectiveContextWindowPercent: "60", AutoCompactPercent: "95"})
+	assert.Equal(t, 60, eff)
+	assert.Equal(t, win*60/100, compact)
+}
+
+// A rule's codex_compact_percent overrides the shared default for that model
+// only; results stay inside the usable window.
+func TestRenderCodexModelCatalog_PerModelCompactPercent(t *testing.T) {
+	raw, err := RenderCodexModelCatalogWithPrefs(
+		[]string{"plain", "tuned", "high", "tooLow"},
+		map[string]int{"tuned": codex1MContextWindow},
+		&CodexPrefs{
+			EffectiveContextWindowPercent: "95",
+			ModelAutoCompactPercent:       map[string]int{"tuned": 60, "high": 100, "tooLow": 10},
+		})
+	require.NoError(t, err)
+	var c struct {
+		Models []struct {
+			Slug          string `json:"slug"`
+			ContextWindow int    `json:"context_window"`
+			Compact       int    `json:"auto_compact_token_limit"`
+		} `json:"models"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &c))
+	got := map[string]int{}
+	for _, m := range c.Models {
+		got[m.Slug] = m.Compact * 100 / m.ContextWindow
+	}
+	assert.Equal(t, 75, got["plain"], "no override follows the shared default")
+	assert.Equal(t, 60, got["tuned"])
+	assert.Equal(t, 95, got["high"], "capped at the usable window")
+	assert.Equal(t, 75, got["tooLow"], "out-of-range override is ignored")
+}
+
+func TestBuildCompactPercentsFromRules(t *testing.T) {
+	cfg := &Config{Rules: []typ.Rule{
+		{UUID: "a", Scenario: typ.ScenarioCodex, RequestModel: "m1", Active: true, Flags: typ.RuleFlags{CodexCompactPercent: 70}},
+		{UUID: "b", Scenario: typ.ScenarioCodex, RequestModel: "m2", Active: true},
+		{UUID: "c", Scenario: typ.ScenarioCodex, RequestModel: "m3", Active: false, Flags: typ.RuleFlags{CodexCompactPercent: 70}},
+		{UUID: "d", Scenario: typ.ScenarioClaudeCode, RequestModel: "m4", Active: true, Flags: typ.RuleFlags{CodexCompactPercent: 70}},
+	}}
+	assert.Equal(t, map[string]int{"m1": 70}, BuildCompactPercentsFromRules(cfg))
+}
+
+// With per-model overrides in the catalog, the shared default read back is the
+// most common value, not whichever model happens to come first.
+func TestReadCodexConfig_RestoresSharedCompactDefaultDespiteOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+	_, err := ApplyCodexConfig("http://h/tingly/codex", []string{"first", "b", "c"},
+		&CodexPrefs{AutoCompactPercent: "70", ModelAutoCompactPercent: map[string]int{"first": 55}}, true)
+	require.NoError(t, err)
+	prefs, _, _, err := ReadCodexConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "70", prefs.AutoCompactPercent)
+}
+
+// ReadCodexConfig restores non-default headroom percentages from the catalog.
+func TestReadCodexConfig_RestoresCatalogHeadroom(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+	_, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m"}, &CodexPrefs{EffectiveContextWindowPercent: "90", AutoCompactPercent: "70"}, true)
+	require.NoError(t, err)
+	prefs, _, _, err := ReadCodexConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "90", prefs.EffectiveContextWindowPercent)
+	assert.Equal(t, "70", prefs.AutoCompactPercent)
+
+	// defaults stay empty
+	_, err = ApplyCodexConfig("http://h/tingly/codex", []string{"m"}, DefaultCodexPrefs(), true)
+	require.NoError(t, err)
+	prefs, _, _, err = ReadCodexConfig()
+	require.NoError(t, err)
+	assert.Empty(t, prefs.EffectiveContextWindowPercent)
+	assert.Empty(t, prefs.AutoCompactPercent)
+}
+
+// Codex's config.toml schema no longer has model_supports_reasoning_summaries:
+// the toggle now lands on each catalog entry, and a legacy key left by older
+// versions is removed on the next apply.
+func TestApplyCodexConfig_SupportsSummariesMovesToCatalog(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+	codexDir := filepath.Join(tempDir, ".codex")
+	require.NoError(t, os.MkdirAll(codexDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("model_supports_reasoning_summaries = true\n"), 0644))
+
+	_, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m"}, &CodexPrefs{SupportsReasoningSummaries: "true"}, true)
+	require.NoError(t, err)
+
+	cfg := loadCodexConfigForTest(t, filepath.Join(codexDir, "config.toml"))
+	_, hasLegacy := cfg["model_supports_reasoning_summaries"]
+	assert.False(t, hasLegacy, "legacy config.toml key must be removed")
+	profiles, _ := cfg["profiles"].(map[string]interface{})
+	profile, _ := profiles["m"].(map[string]interface{})
+	_, profileHasLegacy := profile["model_supports_reasoning_summaries"]
+	assert.False(t, profileHasLegacy)
+
+	raw, err := os.ReadFile(filepath.Join(codexDir, "tingly-model-catalog.json"))
+	require.NoError(t, err)
+	var catalog struct {
+		Models []struct {
+			Supports bool `json:"supports_reasoning_summaries"`
+		} `json:"models"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &catalog))
+	require.Len(t, catalog.Models, 1)
+	assert.True(t, catalog.Models[0].Supports)
+
+	// Reads back from the catalog even without the legacy key.
+	prefs, _, _, err := ReadCodexConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "true", prefs.SupportsReasoningSummaries)
 }

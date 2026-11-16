@@ -95,11 +95,13 @@ func (r *Refresher) refresh(ctx context.Context) {
 	r.logger.Debug("running scheduled quota refresh")
 	r.compactHistory(ctx)
 
-	usages, err := r.manager.Refresh(ctx)
+	usages, err := r.manager.RefreshDue(ctx)
 	if err != nil {
 		r.logger.WithError(err).Error("scheduled refresh failed")
 		return
 	}
+
+	r.manager.AutoRedeem(ctx, usages)
 
 	successCount := 0
 	errorCount := 0

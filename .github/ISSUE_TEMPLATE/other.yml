@@ -1,0 +1,33 @@
+name: Other
+description: Anything that is not a feature, bug or feedback
+title: "[Other] "
+labels: ["other"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Tingly-Box is this about? It becomes an area/<name> label.
+      options:
+        - Gateway / Protocol Conversion
+        - Load Balancing & Failover
+        - Smart Routing & Rules
+        - Guard Rails
+        - Auth / OAuth
+        - Usage / Quota / Observability
+        - Agent Management
+        - Remote Control / Bot
+        - Projects
+        - UI / Frontend
+        - Performance
+        - Build / Install / Deployment
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What is on your mind?
+      description: A question, an idea for the project or something else.
+    validations:
+      required: true

@@ -11,24 +11,31 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Brush, Check, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt, tablerMui } from '@/components/icons';
-import { IconBookmarkPlus } from '@tabler/icons-react';
+import { IconBookmarkPlus, IconPhotoScan } from '@tabler/icons-react';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
 import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import { keepImage, useAssets } from '../library/assetStore';
 import { deriveLabel } from '../profiles/promptLabel';
+import { handOffPicture } from '../prompt/pictureHandoff';
+import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE } from './imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 // Kept shows as a check: Tabler's filled bookmark loses its fill through
 // tablerMui and would render as nothing.
 const BookmarkPlus = tablerMui(IconBookmarkPlus);
+const PhotoScan = tablerMui(IconPhotoScan);
 
 // Shared by the lightbox's overlay buttons — restyling the bar should be one edit.
 const overlayIconSx = {
     color: 'common.white',
-    bgcolor: 'rgba(255, 255, 255, 0.08)',
-    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.16)' },
+    bgcolor: overlay.onDark.fill,
+    '&:hover': { bgcolor: overlay.onDark.fillHover },
 } as const;
 
 interface ImageGenLightboxProps {
@@ -74,6 +81,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
     onUseAsReference,
 }) => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     // "Keep" puts any image on the panel — a result, an import, a reference —
     // into the library. The only way in: nothing is added behind the user's back.
     const assets = useAssets();
@@ -156,22 +164,17 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     // width with the artwork it sits over.
                                     width: { xs: 36, sm: 48 },
                                     height: { xs: 36, sm: 48 },
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     overflow: 'hidden',
                                     outline: active ? '2px solid' : '1px solid',
-                                    outlineColor: active ? 'primary.main' : 'rgba(255, 255, 255, 0.24)',
+                                    outlineColor: active ? 'primary.main' : overlay.onDark.line,
                                     outlineOffset: -1,
                                     opacity: active ? 1 : 0.72,
                                     transition: 'opacity 0.16s ease-out',
                                     '&:hover, &:focus-visible': { opacity: 1 },
                                 }}
                             >
-                                <Box
-                                    component="img"
-                                    src={frame.src}
-                                    alt=""
-                                    sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                />
+                                <ThumbImage src={frame.src} alt="" edge={THUMB_EDGE_BADGE} />
                             </ButtonBase>
                         </Tooltip>
                     );
@@ -205,7 +208,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
-                    bgcolor: 'rgba(15, 23, 42, 0.96)',
+                    bgcolor: overlay.backdrop,
                     color: 'common.white',
                 }}
             >
@@ -218,8 +221,8 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                 sx={{
                                     flexShrink: 0,
                                     px: 0.75,
-                                    borderRadius: 1,
-                                    bgcolor: 'rgba(255, 255, 255, 0.14)',
+                                    borderRadius: radius.row,
+                                    bgcolor: overlay.onDark.fillStrong,
                                     color: 'grey.200',
                                     fontWeight: 600,
                                 }}
@@ -263,7 +266,7 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     ...overlayIconSx,
                                     // Pressed reads as pressed: the button takes
                                     // the tint the overlay is drawn in.
-                                    ...(showMask ? { color: 'warning.light', bgcolor: 'rgba(255, 255, 255, 0.2)' } : {}),
+                                    ...(showMask ? { color: 'warning.light', bgcolor: overlay.onDark.fillActive } : {}),
                                 }}
                             >
                                 <Brush fontSize="small" />
@@ -305,10 +308,10 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                         <Tooltip title={keepLabel}>
                             <span>
                                 <IconButton
-                                    onClick={() => keepImage({
+                                    onClick={() => { void keepImage({
                                         src: selectedImage.src,
                                         name: selectedImage.label ?? `${deriveLabel(selectedImage.prompt, 12) || 'image'}-${selectedImage.index + 1}.png`,
-                                    })}
+                                    }); }}
                                     disabled={kept}
                                     aria-label={keepLabel}
                                     aria-pressed={kept}
@@ -317,6 +320,22 @@ const ImageGenLightbox: React.FC<ImageGenLightboxProps> = ({
                                     {kept ? <Check fontSize="small" /> : <BookmarkPlus fontSize="small" />}
                                 </IconButton>
                             </span>
+                        </Tooltip>
+                    )}
+                    {/* Any picture on the panel can become text: the Image to
+                        Prompt page opens with it loaded. */}
+                    {selectedImage && (
+                        <Tooltip title={t('imagePrompt.getPrompt', { defaultValue: 'Get a prompt from this image' })}>
+                            <IconButton
+                                onClick={() => {
+                                    handOffPicture(selectedImage.src, selectedImage.label ?? `image-${selectedImage.index + 1}.png`);
+                                    navigate('/image/to-prompt');
+                                }}
+                                aria-label={t('imagePrompt.getPrompt', { defaultValue: 'Get a prompt from this image' })}
+                                sx={overlayIconSx}
+                            >
+                                <PhotoScan fontSize="small" />
+                            </IconButton>
                         </Tooltip>
                     )}
                     <Tooltip title={t('playground.slice.action', { defaultValue: 'Split into tiles' })}>

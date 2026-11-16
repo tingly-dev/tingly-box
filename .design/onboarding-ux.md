@@ -17,14 +17,31 @@ undiscoverable for a first-time user who doesn't know to hover.
 
 **Fix (discoverability):** one persistent `?` affordance ("How routing works")
 at the **page level** — in the rule-list toolbar (`TemplatePageActions`, after
-`New Rule`), not per rule card. `TemplatePage` owns the `EntryGuideDialog` and
+`New Model`), not per rule card. `TemplatePage` owns the `EntryGuideDialog` and
 opens it in Direct mode. A single, page-scoped entry avoids repeating the icon
 on every card (principle #9, reduce noise) and doubles as a standing hint that
 the guide can be reopened there.
 
-- The graph's `EntryNode` keeps its contextual "View direct/smart guide →"
-  links (mode-specific, inline in the selector) — those are separate from the
-  toolbar entry.
+- A rule has no Direct/Smart switch: it is its entry row plus optional smart
+  conditions. Conditions are switched off, not deleted: `smartEnabled` is the
+  switch and the saved conditions are kept. The entry node says what reaches the
+  tiers: `Request` while there are no conditions, `Others` once there are (both
+  untranslated; "Default" read as a setting, not as traffic). The contextual
+  "View direct/smart guide →" links sit in hover tooltips: the entry node
+  (Direct guide), the "+ Add smart condition" node in the rule's last row (Smart guide,
+  the only place to reach it while there are no conditions) and the
+  standalone "Add smart condition" node. They are separate from the toolbar entry.
+  No hint line explains the order of conditions: the numbers and `Others` say it.
+- Dashed add / turn-off controls are quiet: hidden until the rule card is hovered
+  or focused (always shown on touch), so a card at rest shows only traffic. A
+  dashed control that is the only thing in its place (an empty tier or condition)
+  stays visible. The rows that hold only controls keep their height at rest: a
+  card that grows on hover pushes every card below it, which reads worse than a
+  blank row.
+- Turning conditions on and off is explicit in two places: the dashed "Turn off
+  smart condition" node next to "Add smart condition", and one state-dependent
+  item in the rule's ⋯ menu (add / turn off / turn on). Adding while off
+  restores the saved conditions instead of making a new one.
 
 **Fix (first-run):** the Direct guide auto-opens once per user (new *and*
 existing) the first time they land on a populated routing page, then records
@@ -42,7 +59,7 @@ a "Click here" tag — users can see exactly what to click.
 zero and covers the actions, not just the routing theory:
 
 1. **Connect an AI provider** — you need a credential first (Connect AI toolbar).
-2. **Add your first model** — `＋ Add model` in an empty rule; `New Rule` for more.
+2. **Add your first model** — `＋ Add model` in an empty rule; `New Model` for more (the toolbar button that creates rules: one model per click, or several with its Select multiple switch, one rule each; TEP-2128).
 3. **Change or remove a model** — click a service card to edit/swap, hover→trash.
 4. **Load balancing within a tier** — same-tier services share traffic.
 5. **Tier-based fallback chain** — T0 primary, cascade to T1/T2 on failure.

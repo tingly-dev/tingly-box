@@ -340,7 +340,8 @@ func (p *Provider) dualEligible() bool {
 // api.z.ai / open.bigmodel.cn accept on both /api/anthropic and
 // /api/coding/paas/v4; every other issuer's bearer is bound to one endpoint.
 func IssuerSupportsDual(issuer Issuer) bool {
-	return issuer == IssuerZCode || issuer == IssuerZCodeCN
+	anthropicBase, openaiBase := DualEndpoints(issuer)
+	return anthropicBase != "" && openaiBase != ""
 }
 
 // ResolveEndpoint returns the (baseURL, providerStyle) pair to use for an

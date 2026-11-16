@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -57,6 +58,10 @@ var migrationSteps = []migrationStep{
 	{"agent-scenario-to-custom", kindBaseline, "", migrateAgentScenarioToCustom},
 	{"ensure-current-builtin-rules", kindBaseline, "", ensureCurrentBuiltinRules},
 	{"20261004-claude-code-fable-rule", kindOnce, "2026-10-04", backfillFableRuleOnce},
+	{"20261022-claude-code-unified-slot-rules", kindOnce, "2026-10-22", resetUnifiedSlotRulesOnce},
+	{"20261023-claude-code-fold-separate", kindOnce, "2026-10-23", foldClaudeCodeSeparateOnce},
+	{"20261024-claude-code-short-request-models", kindOnce, "2026-10-24", shortenClaudeCodeRequestModelsOnce},
+	{"20261104-drop-orphan-team-scopes", kindOnce, "2026-11-04", dropOrphanTeamScopesOnce},
 	{"20260712-drop-unsupported-smart-routing", kindDated, "2026-07-12", migrate20260712},
 	{"20260606-xcode-skip-usage", kindOnce, "2026-06-06", defaultXcodeSkipUsageOnce},
 	{"20260610-builtin-rule-flags", kindOnce, "2026-06-10", defaultBuiltinRuleFlagsOnce},
@@ -785,7 +790,7 @@ func (c *Config) backfillFableRule() bool {
 		return false
 	}
 	for i := range c.Rules {
-		if c.Rules[i].Scenario == typ.ScenarioClaudeCode && c.Rules[i].RequestModel == fable.RequestModel {
+		if c.Rules[i].Scenario == typ.ScenarioClaudeCode && (c.Rules[i].RequestModel == fable.RequestModel || c.Rules[i].RequestModel == "tingly/cc-fable") {
 			return false
 		}
 	}
@@ -796,4 +801,105 @@ func (c *Config) backfillFableRule() bool {
 	c.Rules = append(c.Rules, fable)
 	logrus.Info("Added Claude Code fable built-in rule")
 	return true
+}
+
+// resetUnifiedSlotRulesOnce hands every slot back to the main rule when
+// claude_code is in unified mode. A switched-on slot rule means "this slot has
+// its own rule" from now on (cc_slots.go), but before that agent apply
+// switched every tier rule on regardless of mode, so those rules carry no
+// such intent.
+func resetUnifiedSlotRulesOnce(c *Config) bool {
+	const marker = "20261022"
+	if c.hasMigrationCompleted(marker) {
+		return false
+	}
+	if sc := c.scenarioConfigLocked(typ.ScenarioClaudeCode); sc == nil || !sc.GetDefaultFlags().Separate {
+		c.setClaudeCodeModeRulesActiveLocked(true, false)
+	}
+	c.markMigrationCompleted(marker)
+	return true
+}
+
+// foldClaudeCodeSeparateOnce retires Claude Code's separate mode (TEP-2197): a
+// separate scenario or profile becomes one whose slots all have a rule of their
+// own. Its slot rules stay on as they were; its "default" rule moves into the
+// default slot rule "cc", and the "default" rule goes away (a request for
+// tingly/cc-default keeps routing through the alias in MatchRuleByModelAndScenario).
+func foldClaudeCodeSeparateOnce(c *Config) bool {
+	const marker = "20261023"
+	if c.hasMigrationCompleted(marker) {
+		return false
+	}
+	separate := false
+	if sc := c.scenarioConfigLocked(typ.ScenarioClaudeCode); sc != nil {
+		separate = sc.GetDefaultFlags().Separate
+		sc.Flags.Unified, sc.Flags.Separate = false, false
+	}
+	c.foldCCDefaultRuleLocked(typ.ScenarioClaudeCode, separate)
+
+	profiles := c.Profiles[string(typ.ScenarioClaudeCode)]
+	for i := range profiles {
+		scenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profiles[i].ID)
+		c.foldCCDefaultRuleLocked(scenario, !profiles[i].Unified)
+		profiles[i].Unified = true
+	}
+	c.markMigrationCompleted(marker)
+	return true
+}
+
+// foldCCDefaultRuleLocked moves a scenario's separate-mode "default" rule into
+// its "cc" rule (when the scenario was separate and the default rule is
+// routed) and deletes the "default" rule.
+func (c *Config) foldCCDefaultRuleLocked(scenario typ.RuleScenario, wasSeparate bool) {
+	def := c.ccRuleLocked(scenario, "default")
+	if def == nil {
+		return
+	}
+	if wasSeparate && (len(def.Services) > 0 || def.SmartEnabled) {
+		cc := c.ccRuleLocked(scenario, "cc")
+		if cc == nil {
+			c.Rules = append(c.Rules, newCCProfileRule(scenario, "cc", "Claude Code profile - default model"))
+			def = c.ccRuleLocked(scenario, "default")
+			cc = c.ccRuleLocked(scenario, "cc")
+		}
+		copyCCRouting(cc, def)
+		cc.Active = true
+	}
+	defUUID := def.UUID
+	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool { return r.UUID == defUUID })
+}
+
+// shortenClaudeCodeRequestModelsOnce renames the main Claude Code rules from
+// "tingly/cc", "tingly/cc-sonnet", ... to the short names profiles already use
+// ("cc", "sonnet", ...). Only a rule still carrying its seeded name is renamed,
+// and never onto a name another rule of the scenario already answers to. Old
+// settings files keep routing through legacyCCRequestAlias.
+func shortenClaudeCodeRequestModelsOnce(c *Config) bool {
+	const marker = "20261024"
+	if c.hasMigrationCompleted(marker) {
+		return false
+	}
+	for slot, old := range map[string]string{
+		"cc": "tingly/cc", "haiku": "tingly/cc-haiku", "sonnet": "tingly/cc-sonnet",
+		"opus": "tingly/cc-opus", "subagent": "tingly/cc-subagent", "fable": "tingly/cc-fable",
+	} {
+		rule := c.ccRuleLocked(typ.ScenarioClaudeCode, slot)
+		if rule == nil || rule.RequestModel != old || c.ccNameTakenLocked(slot) {
+			continue
+		}
+		rule.RequestModel = slot
+	}
+	c.markMigrationCompleted(marker)
+	return true
+}
+
+// ccNameTakenLocked reports whether a main Claude Code rule already answers to
+// the request model name.
+func (c *Config) ccNameTakenLocked(name string) bool {
+	for _, r := range c.Rules {
+		if r.GetScenario() == typ.ScenarioClaudeCode && r.RequestModel == name {
+			return true
+		}
+	}
+	return false
 }

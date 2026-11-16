@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
@@ -81,6 +82,8 @@ type Bot struct {
 	adapter     *Adapter
 	eventCtx    context.Context
 	eventCancel context.CancelFunc
+	// names asks Feishu for the person / group names its events leave out.
+	names *nameDirectory
 }
 
 // buildIMService constructs the IM v1 service directly against a hand-built
@@ -149,12 +152,14 @@ func NewBot(config *core.Config, domain Domain) (*Bot, error) {
 
 	client, larkConfig := buildIMService(config.Auth.ClientID, config.Auth.ClientSecret, baseURL)
 
-	return &Bot{
+	b := &Bot{
 		BaseBot:    core.NewBaseBot(config),
 		client:     client,
 		larkConfig: larkConfig,
 		domain:     domain,
-	}, nil
+	}
+	b.names = newNameDirectory(larkNameFetcher{client: client, config: larkConfig}, func(format string, args ...any) { b.Logger().Warn(format, args...) })
+	return b, nil
 }
 
 // NewFeishuBot creates a Feishu bot (preserved for backward compatibility)
@@ -274,11 +279,43 @@ func (b *Bot) handleP2MessageReceiveV1(ctx context.Context, event *larkim.P2Mess
 
 	// Convert Lark event to core.Message
 	coreMsg := b.convertLarkMessageToCore(event)
+	b.addNames(ctx, coreMsg)
 
 	// Emit the message
 	b.EmitMessage(*coreMsg)
 
 	return nil
+}
+
+// addNames fills in who wrote the message and, in a group, what the group is
+// called. Events carry only ids; a name that cannot be had (no scope, API
+// error) stays empty and the chat is shown by its id.
+func (b *Bot) addNames(ctx context.Context, msg *core.Message) {
+	if b.names == nil || msg == nil {
+		return
+	}
+	var wg sync.WaitGroup
+	if msg.Sender.ID != "" && msg.Sender.DisplayName == "" {
+		idType := "open_id"
+		if userID, _ := msg.Metadata["sender_user_id"].(string); userID != "" {
+			idType = "user_id"
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			msg.Sender.DisplayName = b.names.UserName(ctx, idType, msg.Sender.ID)
+		}()
+	}
+	if chatType, _ := msg.Metadata["chat_type"].(core.ChatType); chatType != core.ChatTypeDirect && msg.Recipient.DisplayName == "" {
+		if chatID, _ := msg.Metadata["original_chat_id"].(string); chatID != "" {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				msg.Recipient.DisplayName = b.names.ChatName(ctx, chatID)
+			}()
+		}
+	}
+	wg.Wait()
 }
 
 // convertLarkMessageToCore converts a Lark P2MessageReceiveV1 event to core.Message
@@ -411,14 +448,14 @@ func (b *Bot) SendMessage(ctx context.Context, target string, opts *core.SendMes
 	// section is a future enhancement.
 	core.ResolveTextFromSegments(opts, core.GetPlatformCapabilities(core.PlatformFeishu).EffectiveThinkingRender())
 
-	// Handle text/card message
-	if opts.Text != "" {
-		return b.sendText(ctx, target, opts)
-	}
-
 	// Handle media
 	if len(opts.Media) > 0 {
 		return b.sendMedia(ctx, target, opts)
+	}
+
+	// Handle text/card message
+	if opts.Text != "" {
+		return b.sendText(ctx, target, opts)
 	}
 
 	return nil, core.NewBotError(core.ErrUnknown, "no content to send", false)
@@ -460,14 +497,21 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	var msgType string
 	var content string
 
-	if opts.ParseMode == core.ParseModeMarkdown {
-		// For Lark/Feishu, markdown in card needs to be wrapped in div element
-		// MessageCardLarkMd implements MessageCardText interface
+	if opts.ParseMode == core.ParseModeMarkdown && b.domain == DomainFeishu {
+		// Feishu's rich-text md node supports CommonMark and GFM, including
+		// tables, which the older interactive card markdown does not render.
+		msgType = "post"
+		body := map[string]any{"zh_cn": map[string]any{"content": [][]map[string]string{{{"tag": "md", "text": opts.Text}}}}}
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("build markdown message: %w", err)
+		}
+		content = string(encoded)
+	} else if opts.ParseMode == core.ParseModeMarkdown {
 		msgType = "interactive"
 		cardJson, err := larkcard.NewMessageCard().
 			Elements([]larkcard.MessageCardElement{
-				larkcard.NewMessageCardDiv().
-					Text(larkcard.NewMessageCardLarkMd().Content(opts.Text)),
+				larkcard.NewMessageCardMarkdown().Content(opts.Text),
 			}).
 			String()
 		if err != nil {
@@ -492,7 +536,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		Build()
 
 	b.Logger().Debug("Sending message request: target=%s, msgType=%s, receiveIdType=%s", target, msgType, getReceiveIdType(target))
-	resp, err := b.client.Message.Create(context.Background(), req)
+	resp, err := b.client.Message.Create(ctx, req)
 
 	if err != nil {
 		b.Logger().Error("Failed to send message: %v", err)
@@ -512,14 +556,6 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		MessageID: messageID,
 		Timestamp: 0,
 	}, nil
-}
-
-// sendMedia sends media
-func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	if len(opts.Media) == 0 {
-		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
-	}
-	return nil, core.NewMediaNotSupportedError(core.Platform(b.domain), opts.Media[0].Type)
 }
 
 // extractMessageIDFromResponse extracts the message ID from a Lark API response

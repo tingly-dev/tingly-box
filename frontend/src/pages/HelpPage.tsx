@@ -9,6 +9,7 @@ import { ProvidersCard } from '@/components/ProvidersCard.tsx';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
 import TeamGuideDialog from '@/components/TeamGuideDialog';
+import { FEEDBACK_URL } from '@/layout/links';
 
 // The Shortcut card spans full width like every other card; only its content
 // is capped, matching System settings cards. ProvidersCard is left uncapped —
@@ -20,7 +21,7 @@ const SHORTCUT_CONTENT_MAX_WIDTH = 720;
 // internally past this height instead of growing the page.
 const PROVIDERS_CONTENT_MAX_HEIGHT = 480;
 
-type HelpSectionId = 'shortcut' | 'providers' | 'routing' | 'team';
+type HelpSectionId = 'feedback' | 'shortcut' | 'providers' | 'routing' | 'team';
 
 /**
  * HelpPage — the lightbulb entry in the activity bar: a small set of
@@ -34,8 +35,8 @@ type HelpSectionId = 'shortcut' | 'providers' | 'routing' | 'team';
  * always visible, body behind a chevron. Cards here vary wildly in shape —
  * a two-line shortcut action next to a full provider catalog next to a set
  * of guide launchers — so keeping them all open at once made the page look
- * like several unrelated tools glued together. Providers is expanded by
- * default; every other section is a click away. Sections toggle
+ * like several unrelated tools glued together. All sections are collapsed
+ * by default. Sections toggle
  * independently — each is a standalone, re-entrant action, not a step in a
  * linear tour, so opening one doesn't imply closing another.
  *
@@ -47,7 +48,7 @@ const HelpPage = () => {
     const { t } = useTranslation();
     const showShortcut = shouldShowShortcutCard();
 
-    const [expanded, setExpanded] = useState<Set<HelpSectionId>>(new Set(['providers']));
+    const [expanded, setExpanded] = useState<Set<HelpSectionId>>(new Set());
     const toggle = (id: HelpSectionId) => setExpanded((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id); else next.add(id);
@@ -66,6 +67,18 @@ const HelpPage = () => {
     return (
         <PageLayout loading={false} title={t('help.title')} subtitle={t('help.description')}>
             <CardGrid>
+                <CollapsibleCard
+                    title={t('layout.activityBar.feedback')}
+                    description={t('help.feedback.description')}
+                    expanded={expanded.has('feedback')}
+                    onToggle={() => toggle('feedback')}
+                    contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                >
+                    <Button variant="outlined" size="small" href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
+                        {t('help.feedback.action')}
+                    </Button>
+                </CollapsibleCard>
+
                 {showShortcut && (
                     <CollapsibleCard
                         title={t('help.shortcut.title')}

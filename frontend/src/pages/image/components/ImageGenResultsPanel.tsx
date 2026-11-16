@@ -1,12 +1,15 @@
 import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons';
+import { CopyIconButton } from '@/components/CopyIconButton';
+import { fontMono } from '@/theme/fonts';
 import GenerationRunCard from './GenerationRunCard';
 import ImportedImageCard from './ImportedImageCard';
 import PanelAction from './PanelAction';
 import { STRIP_CARD_HEIGHT, WRAP_GRID_COLUMNS, WRAP_GRID_GAP } from './imageGenSession';
 import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
+import { radius } from '@tingly/ui/theme/radius';
 
 // One timeline for the results panel: images brought in to work on and
 // images the model produced, in the order they arrived. Two lists would
@@ -22,6 +25,9 @@ interface ImageGenResultsPanelProps {
     importedCount: number;
     olderTimelineCount: number;
     desktopPanelHeight: string | number;
+    // Where generated images are written on disk; shown under the results,
+    // next to the images it is about.
+    outputDir?: string;
     // Attached to the scrolling strip so the session hook can keep the newest
     // card in view as new ones arrive.
     historyTrackRef: React.RefObject<HTMLDivElement | null>;
@@ -35,6 +41,7 @@ interface ImageGenResultsPanelProps {
     onCancelRun: (id: string) => void;
     onRetryRun: (run: GenerationRun) => void;
     onReuseRun: (run: GenerationRun) => void;
+    onSaveRunAsProfile?: (run: GenerationRun) => void;
     onOpenRunSource: (run: GenerationRun, index: number) => void;
     onOpenOutput: (image: SelectedImage) => void;
     onRemoveRun: (id: string) => void;
@@ -52,6 +59,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
     importedCount,
     olderTimelineCount,
     desktopPanelHeight,
+    outputDir,
     historyTrackRef,
     onDropFiles,
     onImportFiles,
@@ -63,12 +71,58 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
     onCancelRun,
     onRetryRun,
     onReuseRun,
+    onSaveRunAsProfile,
     onOpenRunSource,
     onOpenOutput,
     onRemoveRun,
 }) => {
     const { t } = useTranslation();
+    // The run cards are memoised, so what they are handed must not change
+    // identity when the panel re-renders; these forward to the newest props.
+    const runHandlers = { onCancelRun, onRetryRun, onReuseRun, onSaveRunAsProfile, onOpenRunSource, onUseAsReference, onOpenOutput, onRemoveRun };
+    const latest = useRef(runHandlers);
+    latest.current = runHandlers;
+    const cardHandlers = useMemo(() => ({
+        onCancel: (id: string) => latest.current.onCancelRun(id),
+        onRetry: (run: GenerationRun) => latest.current.onRetryRun(run),
+        onReuse: (run: GenerationRun) => latest.current.onReuseRun(run),
+        onOpenSource: (run: GenerationRun, index: number) => latest.current.onOpenRunSource(run, index),
+        onUseAsReference: (src: string) => latest.current.onUseAsReference(src),
+        onOpenOutput: (image: SelectedImage) => latest.current.onOpenOutput(image),
+        onRemove: (id: string) => latest.current.onRemoveRun(id),
+        onSaveAsProfile: (run: GenerationRun) => latest.current.onSaveRunAsProfile?.(run),
+    }), []);
     const importFileInputRef = useRef<HTMLInputElement>(null);
+    // Its own words, not the reference row's "Browse" / "Paste": what lands
+    // here is worked on as it is (crop, slice, mask), not generated from.
+    const importLabel = t('playground.importFile', { defaultValue: 'Import' });
+    const importClipboardLabel = t('playground.importClipboard', { defaultValue: 'From clipboard' });
+    const outputDirLine = outputDir ? (
+        <Stack
+            direction="row"
+            spacing={0.5}
+            data-testid="imagegen-output-dir"
+            sx={{ alignItems: 'center', minWidth: 0, color: 'text.secondary' }}
+        >
+            <Typography variant="caption" sx={{ flexShrink: 0 }}>
+                {t('playground.outputDirLabel', { defaultValue: 'Generated images are saved to' })}:
+            </Typography>
+            <Typography
+                variant="caption"
+                sx={{ fontFamily: fontMono, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={outputDir}
+            >
+                {outputDir}
+            </Typography>
+            <CopyIconButton
+                value={outputDir}
+                label={t('common.copy', { defaultValue: 'Copy' })}
+                copiedLabel={t('common.copied', { defaultValue: 'Copied!' })}
+                iconSize={14}
+                sx={{ p: 0.25 }}
+            />
+        </Stack>
+    ) : null;
     return (
         <Box
             data-testid="imagegen-preview-panel"
@@ -85,7 +139,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                 height: { xs: 320, lg: desktopPanelHeight },
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 bgcolor: 'action.hover',
                 p: 2,
                 display: 'flex',
@@ -117,12 +171,12 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                     <Typography variant="subtitle2" sx={{
                         color: "text.secondary"
                     }}>
-                        {t('playground.previewEmpty', { defaultValue: 'Generated and imported images appear here' })}
+                        {t('playground.previewEmpty', { defaultValue: 'Generated images appear here' })}
                     </Typography>
                     <Typography variant="caption" sx={{
                         color: "text.disabled"
                     }}>
-                        {t('playground.previewHint', { defaultValue: 'Drop an image here to work on it without generating anything.' })}
+                        {t('playground.previewHint', { defaultValue: 'To crop, slice or mask an image without generating, import it here.' })}
                     </Typography>
                     <Stack direction="row" spacing={0.5} sx={{ pt: 0.5 }}>
                         <Button
@@ -132,7 +186,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             onClick={() => importFileInputRef.current?.click()}
                             sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
                         >
-                            {t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                            {importLabel}
                         </Button>
                         <Button
                             size="small"
@@ -141,9 +195,10 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             onClick={onImportFromClipboard}
                             sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
                         >
-                            {t('playground.referencePaste', { defaultValue: 'Paste' })}
+                            {importClipboardLabel}
                         </Button>
                     </Stack>
+                    {outputDirLine && <Box sx={{ pt: 2, maxWidth: '100%' }}>{outputDirLine}</Box>}
                 </Stack>
             ) : (
                 <Stack spacing={1.5} sx={{ width: '100%', minWidth: 0, height: '100%' }}>
@@ -184,12 +239,12 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                 testId="imagegen-open-gallery"
                             />
                             <PanelAction
-                                label={t('playground.referenceBrowse', { defaultValue: 'Browse' })}
+                                label={importLabel}
                                 icon={<FileUpload fontSize="small" />}
                                 onClick={() => importFileInputRef.current?.click()}
                             />
                             <PanelAction
-                                label={t('playground.referencePaste', { defaultValue: 'Paste' })}
+                                label={importClipboardLabel}
                                 icon={<ContentPaste fontSize="small" />}
                                 onClick={onImportFromClipboard}
                             />
@@ -225,7 +280,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             overflowAnchor: 'none',
                             scrollbarWidth: 'thin',
                             '&::-webkit-scrollbar': { height: 6 },
-                            '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
+                            '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: radius.pill },
                         }}
                     >
                         {olderTimelineCount > 0 && (
@@ -250,7 +305,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: { xs: 0.5, lg: 1 },
-                                    borderRadius: 1.5,
+                                    borderRadius: radius.card,
                                     border: '1px dashed',
                                     borderColor: 'divider',
                                     bgcolor: 'background.paper',
@@ -280,16 +335,12 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             <GenerationRunCard
                                 key={entry.run.id}
                                 run={entry.run}
-                                onCancel={onCancelRun}
-                                onRetry={onRetryRun}
-                                onReuse={onReuseRun}
-                                onOpenSource={onOpenRunSource}
-                                onUseAsReference={onUseAsReference}
-                                onOpenOutput={onOpenOutput}
-                                onRemove={onRemoveRun}
+                                {...cardHandlers}
+                                onSaveAsProfile={onSaveRunAsProfile ? cardHandlers.onSaveAsProfile : undefined}
                             />
                         )))}
                     </Box>
+                    {outputDirLine}
                 </Stack>
             )}
         </Box>

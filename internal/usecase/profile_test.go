@@ -33,12 +33,12 @@ func newTestProfileConfig(t *testing.T) (*serverconfig.Config, typ.ProfileMeta, 
 		t.Fatalf("AddProvider: %v", err)
 	}
 
-	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work", false)
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
 	if err != nil {
 		t.Fatalf("CreateProfile: %v", err)
 	}
 	profiledScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID)
-	rule := cfg.GetRuleByRequestModelAndScenario("default", profiledScenario)
+	rule := cfg.GetRuleByRequestModelAndScenario("cc", profiledScenario)
 	if rule == nil {
 		t.Fatal("expected seeded profile rule")
 	}
@@ -50,6 +50,10 @@ func newTestProfileConfig(t *testing.T) (*serverconfig.Config, typ.ProfileMeta, 
 	}}
 	if err := cfg.UpdateRule(rule.UUID, *rule); err != nil {
 		t.Fatalf("UpdateRule: %v", err)
+	}
+	// Split every slot so the profile has the default rule plus five slot rules.
+	if err := cfg.SetAllClaudeCodeSlots(profiledScenario, true); err != nil {
+		t.Fatalf("SetAllClaudeCodeSlots: %v", err)
 	}
 	return cfg, profile, provider.UUID
 }
@@ -85,7 +89,7 @@ func TestProfileUseCase_GetByIDOrName(t *testing.T) {
 				t.Fatalf("rules = %d, want 6", len(result.Rules))
 			}
 			// Assert the full ordering is non-decreasing by RequestModel, not
-			// just Rules[0]. "default" sorts first lexicographically anyway, so
+			// just Rules[0]. "cc" sorts first lexicographically anyway, so
 			// checking only the first element cannot catch a sort regression.
 			for i := 1; i < len(result.Rules); i++ {
 				if result.Rules[i-1].RequestModel > result.Rules[i].RequestModel {

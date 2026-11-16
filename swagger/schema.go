@@ -145,6 +145,10 @@ func (g *schemaGen) fieldSchema(field reflect.StructField, propName string) Sche
 	if format := field.Tag.Get("format"); format != "" {
 		propSchema.Format = format
 	}
+	// Opt in explicitly: an optional field is not necessarily nullable.
+	if field.Tag.Get("nullable") == "true" && g.refPrefix == getRefPrefix(VersionV3) {
+		propSchema.Nullable = true
+	}
 
 	if enumTag := field.Tag.Get("enum"); enumTag != "" {
 		enumValues := strings.Split(enumTag, ",")

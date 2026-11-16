@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -47,6 +48,8 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 
 	// Build base SDK options
 	options := []anthropicOption.RequestOption{
+		// The gateway's own ANTHROPIC_* environment must never be sent upstream.
+		anthropicOption.WithoutEnvironmentDefaults(),
 		anthropicOption.WithBaseURL(apiBase),
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors
 	}
@@ -73,13 +76,23 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	}
 	options = append(options, anthropicOption.WithRequestTimeout(timeout))
 
+	// Session-bound pool transport, like the other vendor OAuth clients: it
+	// honors provider.ProxyURL and does not inherit HTTP(S)_PROXY (the SDK's
+	// default client would). No ruleFlagTransport, so the Claude Code UA
+	// above stays decisive (.design/user-agent.md).
+	httpClient := &http.Client{
+		Transport: wrapWithLogging(createSessionBoundTransport(provider, sessionID), provider),
+	}
+	options = append(options, anthropicOption.WithHTTPClient(httpClient))
+
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)
 
 	// Wrap in AnthropicClient base
 	base := &AnthropicClient{
-		client:   anthropicClient,
-		provider: provider,
+		client:     anthropicClient,
+		provider:   provider,
+		httpClient: httpClient,
 	}
 
 	return &ClaudeClient{AnthropicClient: base, native: native}, nil

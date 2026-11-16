@@ -2,6 +2,7 @@ package protocolserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -65,13 +66,22 @@ func (ph *ProtocolHandler) tracingMiddleware(c *gin.Context) {
 		c.Set(constant.CtxKeyTraceID, sc.TraceID().String())
 	}
 
-	// Deferred, not called after c.Next(): a panicking handler unwinds
-	// straight through c.Next() to gin.Recovery (registered on the engine,
-	// outside this group), and a span that never ends is never exported —
-	// losing the trace of exactly the request worth inspecting. The recorded
-	// status may then predate Recovery's 500, since our defer runs first;
-	// the value of the span in that case is the stage breakdown, not the code.
-	defer finishRequestSpan(c, span)
+	// End and mark a panicking request before outer recovery writes its 500.
+	// Re-panic so the host recovery still owns HTTP/error-log behaviour.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err := fmt.Errorf("panic: %v", recovered)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			status := http.StatusInternalServerError
+			if c.Writer.Written() {
+				status = c.Writer.Status()
+			}
+			finishRequestSpan(c, span, status)
+			panic(recovered)
+		}
+		finishRequestSpan(c, span, c.Writer.Status())
+	}()
 
 	c.Next()
 }
@@ -96,7 +106,7 @@ func OperationFromContext(c *gin.Context) string {
 
 // finishRequestSpan renames and enriches the root span from the tracking
 // context populated during the request, sets the final status, and ends it.
-func finishRequestSpan(c *gin.Context, span trace.Span) {
+func finishRequestSpan(c *gin.Context, span trace.Span, status int) {
 	rule, provider, model, requestModel, _, streamed, _ := GetTrackingContext(c)
 	operation := OperationFromContext(c)
 	attrs := make([]attribute.KeyValue, 0, 10)
@@ -131,7 +141,6 @@ func finishRequestSpan(c *gin.Context, span trace.Span) {
 		attrs = append(attrs, pkgotel.AttrTinglyRequestID.String(requestID))
 	}
 
-	status := c.Writer.Status()
 	attrs = append(attrs, pkgotel.AttrHTTPResponseStatus.Int(status))
 
 	// canceled ≠ error (same rule as the metrics path, .design/otel.md §3):
@@ -140,6 +149,9 @@ func finishRequestSpan(c *gin.Context, span trace.Span) {
 	if status >= http.StatusBadRequest && c.Request.Context().Err() == nil {
 		span.SetStatus(codes.Error, http.StatusText(status))
 		attrs = append(attrs, pkgotel.AttrErrorType.String(httpStatusErrorType(status)))
+	} else if len(c.Errors) > c.GetInt(constant.CtxKeyRecoveredErrorCount) && c.Request.Context().Err() == nil {
+		span.SetStatus(codes.Error, c.Errors.Last().Error())
+		attrs = append(attrs, pkgotel.AttrErrorType.String("request_error"))
 	}
 
 	// One call rather than eight: each SetAttributes takes the span lock and
@@ -249,18 +261,26 @@ func (ph *ProtocolHandler) startFailoverAttemptSpan(ctx context.Context, attempt
 	return span
 }
 
-// endFailoverAttemptSpan closes an attempt span with its outcome: committed
-// means the response reached the wire (success); any other outcome carries
-// the buffered upstream status.
-func endFailoverAttemptSpan(span trace.Span, committed bool, status int) {
+// endFailoverAttemptSpan uses the attempt's outcome, independently of whether
+// the gate has flushed its bytes. A buffered HTTP 200 can already be success;
+// a committed stream can still have failed.
+func endFailoverAttemptSpan(span trace.Span, succeeded bool, status int) {
 	if span == nil {
 		return
 	}
-	if committed {
+	if status > 0 {
+		span.SetAttributes(pkgotel.AttrHTTPResponseStatus.Int(status))
+	}
+	if succeeded {
 		span.SetStatus(codes.Ok, "")
 	} else {
 		errType := httpStatusErrorType(status)
-		span.SetStatus(codes.Error, "upstream status "+errType)
+		message := "upstream status " + errType
+		if status >= 200 && status < 400 {
+			errType = "stream_error"
+			message = "response failed after HTTP " + strconv.Itoa(status)
+		}
+		span.SetStatus(codes.Error, message)
 		span.SetAttributes(
 			pkgotel.AttrHTTPResponseStatus.Int(status),
 			pkgotel.AttrErrorType.String(errType),

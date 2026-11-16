@@ -475,7 +475,7 @@ func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*Agen
 
 // executeClaudeTest executes claude CLI backed by an ephemeral gateway + virtual server.
 func executeClaudeTest(prompt string) (*AgentTestResult, error) {
-	const model = "tingly/cc"
+	const model = "cc"
 
 	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeClaudeCode)
 	if err != nil {
@@ -512,7 +512,7 @@ func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string) (*Agent
 	settingsPath := filepath.Join(settingsDir, "settings.json")
 	result.SettingsPath = settingsPath
 
-	claudeEnv, err := internalagent.DefaultClaudeCodePrefs(true).ToEnv(env.BaseURL(), env.ModelToken())
+	claudeEnv, err := internalagent.DefaultClaudeCodePrefs().ToEnv(env.BaseURL(), env.ModelToken())
 	if err != nil {
 		return nil, fmt.Errorf("build claude env: %w", err)
 	}

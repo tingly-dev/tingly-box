@@ -171,6 +171,16 @@ func (ph *ProtocolHandler) trackUsageFromContext(c *gin.Context, inputTokens, ou
 //   - err: Error if request failed, nil for success
 func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenUsage, err error) {
 	rule, provider, model, requestModel, scenario, streamed, startTime := GetTrackingContext(c)
+	// A committed SSE response keeps HTTP 200 even when consumption fails.
+	// Capture its terminal error independently of metrics/recording so the
+	// access log, request summary, and root span can observe the failure.
+	if streamed && err != nil && c.Writer.Written() && c.Writer.Status() < 400 && c.Request.Context().Err() == nil && !errors.Is(err, context.Canceled) {
+		logErr := protocol.LoggableUpstreamError(err)
+		c.Error(logErr).SetType(gin.ErrorTypePrivate)
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"stage": "stream_error", "model": model, "scenario": scenario,
+		}).WithError(logErr).Error("Model response stream failed")
+	}
 
 	logrus.WithFields(logrus.Fields{
 		"has_rule":     rule != nil,

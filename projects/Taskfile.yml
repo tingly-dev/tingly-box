@@ -1,0 +1,61 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  frontend:
+    desc: Build the web UI (@tingly/projects) into web/dist (embedded by go build)
+    dir: ../frontend
+    cmds:
+      - pnpm install --frozen-lockfile
+      - pnpm --filter @tingly/projects build
+      - find ../projects/web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
+      - cp -r packages/projects/dist/. ../projects/web/dist/
+
+  build:
+    desc: Build the single binary with the embedded web UI
+    deps: [frontend]
+    cmds:
+      - go build -o bin/tingly-project ./cmd/tingly-project
+
+  swagger:
+    aliases: [openapi]
+    desc: Regenerate openapi.json from the registered routes
+    cmds:
+      - go run ./cmd/tingly-project swagger
+
+  codegen:
+    desc: Regenerate openapi.json and the typed frontend client
+    cmds:
+      - task: swagger
+      - cd ../frontend/packages/projects && pnpm gen:api
+
+  dev:backend:
+    desc: Run the API server on :12590
+    cmds:
+      - go run ./cmd/tingly-project
+
+  dev:frontend:
+    desc: Run the Vite dev server (proxies /api to :12590)
+    dir: ../frontend/packages/projects
+    cmds:
+      - pnpm dev
+
+  boundary:
+    desc: Fail if this module depends on Tingly Box's root module (Tingly Box imports us, never the other way)
+    cmds:
+      - |
+        if go list -deps -f '{{"{{"}}with .Module{{"}}"}}{{"{{"}}.Path{{"}}"}}{{"{{"}}end{{"}}"}}' ./... | grep -qx 'github.com/tingly-dev/tingly-box'; then
+          echo "projects must not import github.com/tingly-dev/tingly-box (the root module); go through Host instead" >&2
+          exit 1
+        fi
+
+  test:
+    desc: Backend and frontend tests, typecheck and lint
+    cmds:
+      - task: boundary
+      - go vet ./...
+      - go test ./...
+      - cd ../frontend/packages/projects && pnpm typecheck && pnpm lint && pnpm test

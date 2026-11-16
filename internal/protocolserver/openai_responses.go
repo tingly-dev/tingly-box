@@ -22,7 +22,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	// Read raw body
 	bodyBytes, err := c.GetRawData()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to read request body: " + err.Error(),
 				Type:    "invalid_request_error",
@@ -34,7 +34,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	// Parse request (minimal parsing for validation)
 	var req = &protocol.ResponseCreateRequest{}
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
 				Type:    "invalid_request_error",
@@ -45,7 +45,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 
 	// Validate required fields
 	if param.IsOmitted(req.Model) || string(req.Model) == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Model is required",
 				Type:    "invalid_request_error",
@@ -57,7 +57,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	// Check if input is provided (either string or array)
 	inputValue := protocol.GetInputValue(req.Input)
 	if inputValue == nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Input is required",
 				Type:    "invalid_request_error",
@@ -75,7 +75,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 
 	scenarioType := typ.RuleScenario(scenario)
 	if !IsValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("invalid scenario: %s", scenario),
 				Type:    "invalid_request_error",
@@ -85,7 +85,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	}
 
 	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("scenario %s does not support OpenAI responses", scenario),
 				Type:    "invalid_request_error",
@@ -97,7 +97,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	// Check if this is the request model name first
 	rule, err = ph.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -109,7 +109,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	// Select service using routing pipeline
 	provider, selectedService, err = ph.selectService(c, scenarioType, rule, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: err.Error(),
 				Type:    "invalid_request_error",
@@ -131,7 +131,7 @@ func (ph *ProtocolHandler) HandleResponsesCreate(c *gin.Context) {
 	// Convert request to OpenAI SDK format first so fallback conversions can reuse it.
 	params, err := ph.convertToResponsesParams(bodyBytes, actualModel)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to convert request: " + err.Error(),
 				Type:    "invalid_request_error",
@@ -263,7 +263,7 @@ func (ph *ProtocolHandler) HandleResponsesGet(c *gin.Context) {
 	responseID := c.Param("id")
 
 	if responseID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
+		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Response ID is required",
 				Type:    "invalid_request_error",
@@ -274,7 +274,7 @@ func (ph *ProtocolHandler) HandleResponsesGet(c *gin.Context) {
 
 	// Phase 1: We don't store responses, so return not found
 	// In future phases, we would retrieve from storage
-	c.JSON(http.StatusNotFound, ErrorResponse{
+	writeErrorResponse(c, http.StatusNotFound, ErrorResponse{
 		Error: ErrorDetail{
 			Message: "Response retrieval is not supported in this version. Responses are not stored server-side.",
 			Type:    "invalid_request_error",

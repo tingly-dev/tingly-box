@@ -717,10 +717,10 @@ func TestProvider_IsDual(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "both dual URLs set, non-ZCode oauth issuer",
+			name: "both dual URLs set, single-endpoint oauth issuer",
 			provider: &Provider{
 				AuthType:         AuthTypeOAuth,
-				OAuthDetail:      &OAuthDetail{Issuer: IssuerKimiCode},
+				OAuthDetail:      &OAuthDetail{Issuer: IssuerCodex},
 				APIBaseOpenAI:    "https://oai.example.com/v1",
 				APIBaseAnthropic: "https://ant.example.com",
 			},
@@ -760,4 +760,31 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestIssuerSupportsDualFollowsDualEndpoints(t *testing.T) {
+	for _, issuer := range []Issuer{IssuerZCode, IssuerZCodeCN, IssuerKimiCode} {
+		if !IssuerSupportsDual(issuer) {
+			t.Errorf("%s should support dual", issuer)
+		}
+	}
+	for _, issuer := range []Issuer{IssuerClaudeCode, IssuerCodex, IssuerQwenCode} {
+		if IssuerSupportsDual(issuer) {
+			t.Errorf("%s is single-endpoint", issuer)
+		}
+	}
+}
+
+func TestDualEndpointsKimiPerPlatform(t *testing.T) {
+	a, o := DualEndpoints(IssuerKimiCode)
+	if a != "https://api.kimi.com/coding" || o != "https://api.kimi.com/coding/v1" {
+		t.Errorf("mainland = %q, %q", a, o)
+	}
+	a, o = DualEndpoints(IssuerKimiCodeIntl)
+	if a != "https://api.kimi.ai/coding" || o != "https://api.kimi.ai/coding/v1" {
+		t.Errorf("overseas = %q, %q", a, o)
+	}
+	if !IsKimiCodeIssuer(IssuerKimiCodeIntl) || IsKimiCodeIssuer(IssuerZCode) {
+		t.Error("IsKimiCodeIssuer wrong")
+	}
 }

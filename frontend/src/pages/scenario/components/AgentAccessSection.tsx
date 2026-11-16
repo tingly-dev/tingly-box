@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { fontMono } from '@/theme/fonts';
 import ConfigRow from '@/components/ConfigRow';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Room kept at the card's right edge for the fold chevron, in both states, so
 // the row's own actions (Local | Docker, copy) never run underneath it at narrow
@@ -48,6 +49,17 @@ export interface AgentAccessSectionProps {
     url: string;
     /** The open section: Base URL, API Key, model mode... */
     children: React.ReactNode;
+    /**
+     * Replaces the folded URL row's content — for pages whose folded line is
+     * not the Base URL (a profile page folds to its launch command).
+     */
+    foldedContent?: React.ReactNode;
+    /**
+     * Shown under the folded URL row — only for state that deviates from the
+     * default (a plugin switched on), so the folded card
+     * stays one quiet line until something actually differs.
+     */
+    foldedExtras?: React.ReactNode;
 }
 
 /**
@@ -56,7 +68,7 @@ export interface AgentAccessSectionProps {
  * line with the Base URL; the whole line opens it. The fold chevron sits at
  * the card's right edge, as on the rule cards.
  */
-export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded, onToggle, url, children }) => {
+export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded, onToggle, url, children, foldedContent, foldedExtras }) => {
     const { t } = useTranslation();
     const label = t(expanded ? 'agentAccess.collapse' : 'agentAccess.expand');
     // Folded and open are two different buttons, so toggling would drop keyboard
@@ -81,7 +93,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
             sx={{
                 transition: 'transform 0.2s',
                 transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                fontSize: '1.1rem',
+                fontSize: 18,
                 color: 'text.secondary',
                 flexShrink: 0,
             }}
@@ -91,7 +103,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
         <Card
             sx={{
                 position: 'relative',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 boxShadow: 'none',
@@ -107,7 +119,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
                         onClick={handleToggle}
                         aria-expanded
                         aria-label={label}
-                        sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: 1 }}
+                        sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: radius.row }}
                     >
                         {chevron}
                     </ButtonBase>
@@ -125,30 +137,44 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
                     aria-label={label}
                     sx={{ display: 'block', width: '100%', textAlign: 'left', '&:hover': { backgroundColor: 'action.hover' } }}
                 >
-                    <Box sx={{ pt: 1, pb: 1, pr: CHEVRON_GUTTER }}>
+                    {/* With extras below, the bottom padding moves to the extras
+                        wrapper so the URL→extras gap matches the card's own
+                        top/bottom rhythm (8 + 4 on each side of the row). */}
+                    <Box sx={{ pt: 1, pb: foldedExtras ? 0.5 : 1, pr: CHEVRON_GUTTER }}>
                         <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                             <Box sx={{ px: 2, py: 0.5 }}>
-                                <ConfigRow
-                                    tabs={[{
-                                        key: 'baseUrl',
-                                        label: 'Base URL',
-                                        content: (
-                                            <Typography
-                                                variant="subtitle2"
-                                                sx={{ fontFamily: fontMono, color: 'primary.main', boxSizing: 'border-box', display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 1 }}
-                                            >
-                                                {url}
-                                            </Typography>
-                                        ),
-                                    }]}
-                                    activeTab="baseUrl"
-                                    onTabChange={() => {}}
-                                />
+                                {foldedContent ?? (
+                                    <ConfigRow
+                                        tabs={[{
+                                            key: 'baseUrl',
+                                            label: 'Base URL',
+                                            content: (
+                                                <Typography
+                                                    variant="subtitle2"
+                                                    sx={{ fontFamily: fontMono, color: 'primary.main', boxSizing: 'border-box', display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', py: 1 }}
+                                                >
+                                                    {url}
+                                                </Typography>
+                                            ),
+                                        }]}
+                                        activeTab="baseUrl"
+                                        onTabChange={() => {}}
+                                    />
+                                )}
                             </Box>
                         </Box>
                     </Box>
                     <Box sx={{ position: 'absolute', top: 12, right: 22, p: 0.25, display: 'flex' }}>{chevron}</Box>
                 </ButtonBase>
+            )}
+            {!expanded && foldedExtras && (
+                // Same row wrappers as the folded URL row above — just without
+                // its ButtonBase, so the extras' own controls stay clickable.
+                <Box sx={{ pt: 0.5, pb: 1, pr: CHEVRON_GUTTER }}>
+                    <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
+                        <Box sx={{ px: 2, py: 0.5 }}>{foldedExtras}</Box>
+                    </Box>
+                </Box>
             )}
             <Collapse in={expanded} timeout={0} unmountOnExit>
                 <Box sx={{ pt: 1, pb: 1, pr: CHEVRON_GUTTER }}>{children}</Box>

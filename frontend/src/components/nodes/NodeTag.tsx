@@ -32,7 +32,7 @@ const NodeTag = ({label, tone = 'default', outlined = false, active = true}: Nod
                 : tone === 'warning' ? theme.palette.warning.main : getRouteGraphActiveColor(theme);
             return {
                 height: 22,
-                fontSize: fontSizes.xs,
+                fontSize: fontSizes.micro,
                 fontWeight: 500,
                 color: accent,
                 bgcolor: outlined ? 'transparent' : alpha(accent, theme.palette.mode === 'dark' ? 0.16 : 0.1),

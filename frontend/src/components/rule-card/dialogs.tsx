@@ -1,28 +1,29 @@
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, TextField, Typography } from '@mui/material';
 import type { ConfigRecord } from '@/components/RoutingGraphTypes';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmPopover from '@/components/ConfirmPopover';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ============================================================================
-// Delete Confirmation Dialog
+// Delete Confirmation Popover
 // ============================================================================
 
 export interface RuleCardDeleteDialogProps {
-    open: boolean;
+    anchorEl: HTMLElement | null;
     onClose: () => void;
     onConfirm: () => void;
 }
 
 /**
- * Dialog component for confirming rule deletion
+ * Confirms rule deletion, opening at the control that asked for it
  */
-export function RuleCardDeleteDialog({ open, onClose, onConfirm }: RuleCardDeleteDialogProps) {
+export function RuleCardDeleteDialog({ anchorEl, onClose, onConfirm }: RuleCardDeleteDialogProps) {
     return (
-        <ConfirmDialog
-            open={open}
+        <ConfirmPopover
+            anchorEl={anchorEl}
             onClose={onClose}
             onConfirm={onConfirm}
             title="Delete Routing Rule"
-            description="Are you sure you want to delete this routing rule? This action cannot be undone."
+            description="This cannot be undone."
             confirmLabel="Delete"
             confirmColor="error"
         />
@@ -63,7 +64,7 @@ export function RuleFlagEditDialog({ open, value, error, onChange, onClose, onSa
                         '& .MuiInputBase-root': {
                             border: '1px solid',
                             borderColor: 'divider',
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             padding: '10px 12px',
                         },
                         '& .MuiInputBase-input': {

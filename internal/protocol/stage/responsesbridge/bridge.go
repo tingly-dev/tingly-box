@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/toolnamespace"
 	protocolusage "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
@@ -66,6 +67,7 @@ func (b *anthropicBetaBridge) Open(_ context.Context, call stage.Call, operation
 		operation:   operation,
 		targetCall:  targetCall,
 		sourceModel: sourceModel,
+		namespaces:  toolnamespace.IndexOf(responsesRequest.Tools),
 	}, nil
 }
 
@@ -87,6 +89,7 @@ type anthropicBetaSession struct {
 	operation   stage.Operation
 	targetCall  stage.Call
 	sourceModel string
+	namespaces  toolnamespace.Index
 }
 
 func (s *anthropicBetaSession) TargetCall() stage.Call { return s.targetCall }
@@ -99,7 +102,7 @@ func (s *anthropicBetaSession) ConvertComplete(_ context.Context, response *stag
 	if err != nil {
 		return nil, err
 	}
-	converted := nonstream.ConvertAnthropicBetaToResponsesWire(message, s.sourceModel, string(message.Model))
+	converted := nonstream.ConvertAnthropicBetaToResponsesWire(message, s.sourceModel, string(message.Model), s.namespaces)
 	usage := protocolusage.FromAnthropicBetaMessage(message.Usage)
 	if !usage.HasUsage() {
 		usage = nil
@@ -128,5 +131,5 @@ func (s *anthropicBetaSession) ConvertStream(_ context.Context, target stage.Eve
 	if s.operation != stage.OperationStream {
 		return nil, fmt.Errorf("convert Anthropic Beta stream to OpenAI Responses: session was opened for %s", s.operation)
 	}
-	return newResponsesStream(target, s.sourceModel)
+	return newResponsesStream(target, s.sourceModel, s.namespaces)
 }

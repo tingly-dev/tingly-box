@@ -317,10 +317,7 @@ func (h *FeishuRegHandler) saveCredentials(sess *feishuRegSession, result *feish
 		return existing.UUID, nil
 	}
 
-	name := sess.botName
-	if name == "" {
-		name = platform + " Bot"
-	}
+	name := sess.botName // empty is fine: the bot is shown by its id until named
 	created, err := h.settingsStore.CreateSettings(db.Settings{
 		Name:     name,
 		Platform: platform,

@@ -52,8 +52,10 @@ Anthropic 按 `User-Agent` 里的 claude-cli 版本做门控，低于要求的�
   `applyNativeClaudeCodeIdentity*`（Legacy 路径一行未动）→ `NewClaudeClient` 按 `claudeCodeNativeVersion(ctx)` 叠加
   `claude_version.go` 的 header / beta / cch 覆盖层。
 - **只保留 Legacy + 最新版本**：被拒的旧版本没有保留价值，升版时原地升级原生 profile，不做版本间门控（§B6）。
-- 与 flag 无关的唯一改动：`transform/vendor.go::isClaudeCodeBackend`。Claude OAuth issuer 挂在非
+- 与 flag 无关的唯一改动：`transform/vendor.go::isClaudeCodeOAuth`（原 `isClaudeCodeBackend`）。Claude OAuth issuer 挂在非
   `api.anthropic.com` host 上时也做 identity 注入，此前这种配置会因缺 metadata 在 `Guard` 里 panic。
+  identity 注入只认 Claude Code OAuth：`api.anthropic.com` / `claude.ai` 上的其他凭证（如 API key）只做
+  `reconcileAnthropic{V1,Beta}Thinking`，不注入 billing header 和 metadata。
 
 ### B0.2 状态总表
 
@@ -479,7 +481,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | `cch` | `internal/client/claude_cch.go` | `xxhash64Zig`、`canonicalizeJSONEscapes`、`claudeCodeCCHPreimage`、`claudeCodeCCHIndex` |
 | count_tokens | `protocolserver/anthropic_count_tokens.go`（解析 flag，只在原生时传带 flag 的 context）；`claude_version.go::nativeCountTokensClient` | `filterClaudeCodeCountTokensBetas` |
 | 入站 hint 采集 | `protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints` |
-| billing header 与 metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头分派（Legacy 原样）；调用方 `transform/vendor.go::isClaudeCodeBackend` | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`billingHeaderPreservedFields`、`computeFingerprintJS`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
+| billing header 与 metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头分派（Legacy 原样）；调用方 `transform/vendor.go::isClaudeCodeOAuth` | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`billingHeaderPreservedFields`、`computeFingerprintJS`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
 | probe | `internal/probe/e2e_probe.go`（`targetIsClaudeCode` → preamble）；版本默认值的解析在 `rule_flags.go` | 见 `.design/probe.md` |
 | clean header | `protocolserver/transform/transform_clean_header.go`（未改） | — |
 

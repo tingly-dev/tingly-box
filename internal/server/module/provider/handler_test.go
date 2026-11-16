@@ -289,3 +289,35 @@ func TestImportProviders_MissingData(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }
+
+// Explicitly selecting no authentication differs from leaving an edit key blank.
+func TestUpdateProvider_NoKeyRequired(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, wantToken string
+		wantNoKey             bool
+	}{
+		{"blank edit preserves key", `{"name":"renamed"}`, "stored-key", false},
+		{"no auth clears key", `{"no_key_required":true}`, "", true},
+		{"replacement key", `{"token":"replacement-key","no_key_required":false}`, "replacement-key", false},
+		{"no auth overrides token", `{"token":"replacement-key","no_key_required":true}`, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+			require.NoError(t, err)
+			p := &typ.Provider{UUID: "no-auth-test", Name: "Local service", APIBase: "http://localhost:11434/v1", APIStyle: protocol.APIStyleOpenAI, AuthType: typ.AuthTypeAPIKey, Token: "stored-key", Enabled: true}
+			require.NoError(t, cfg.AddProvider(p))
+			gin.SetMode(gin.TestMode)
+			router := gin.New()
+			router.PUT("/providers/:uuid", NewHandler(cfg, nil).UpdateProvider)
+			req := httptest.NewRequest(http.MethodPut, "/providers/no-auth-test", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			updated, err := cfg.GetProviderByUUID(p.UUID)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantToken, updated.Token)
+			assert.Equal(t, tc.wantNoKey, updated.NoKeyRequired)
+		})
+	}
+}

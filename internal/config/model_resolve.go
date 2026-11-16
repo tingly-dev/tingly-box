@@ -35,13 +35,32 @@ type ResolvedModels struct {
 	Models      []string
 	Source      ModelListSource
 	LastUpdated string // formatted timestamp of the cached record; empty if unknown
+	// LastUpdatedAt is when the served list was last fetched from upstream;
+	// zero for vmodel/template lists. Callers derive cache expiry from it.
+	LastUpdatedAt time.Time
+	// Fetching is true when the upstream fetch is still running in the
+	// background and this list is only a stand-in (stale cache or template).
+	// Callers should let clients ask again soon.
+	Fetching bool
 }
+
+// modelListReadWait bounds how long a read-path resolve waits for a missing
+// upstream list. The fetch itself keeps going (up to modelListFetchTimeout) and
+// fills the cache, so a slow upstream costs the first reader a few seconds
+// instead of the whole fetch timeout.
+const (
+	modelListReadWait     = 5 * time.Second
+	modelListFetchTimeout = 30 * time.Second
+)
 
 // ResolveProviderModels returns the effective model list for a provider,
 // walking the full fallback chain in ONE place so every caller (HTTP read,
 // HTTP refresh, CLI, OAuth completion) sees identical behavior:
 //
-//	cache (DB) → VModel (virtual) → upstream API → embedded template
+//	cache (DB) → VModel (virtual) → upstream API → stale cache → embedded template
+//
+// If the endpoint is explicitly unsupported, its embedded template takes
+// precedence over an old upstream cache when available.
 //
 // When forceRefresh is false, a fresh-enough DB cache short-circuits the
 // chain; when true the cache is bypassed and upstream is re-queried (the
@@ -62,7 +81,11 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		if _, updated, exists := c.modelManager.GetProviderInfo(uid); exists {
 			lastUpdated = updated
 		}
-		return ResolvedModels{Models: models, Source: src, LastUpdated: lastUpdated}
+		var lastUpdatedAt time.Time
+		if src == ModelListSourceCache || src == ModelListSourceAPI {
+			lastUpdatedAt, _ = c.modelManager.GetLastUpdatedAt(uid)
+		}
+		return ResolvedModels{Models: models, Source: src, LastUpdated: lastUpdated, LastUpdatedAt: lastUpdatedAt}
 	}
 
 	// A forced upstream fetch re-queries the real upstream by definition, so it
@@ -77,6 +100,15 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		return ResolvedModels{}, fmt.Errorf("provider with UUID %s not found: %w", uid, provErr)
 	}
 
+	// A manual refresh invalidates the cache up front, so even if the
+	// upstream call below fails, later reads re-query upstream instead of
+	// serving the pre-refresh list until its TTL runs out.
+	if forceRefresh || forceUpstream {
+		if err := c.modelManager.InvalidateModels(uid); err != nil {
+			logrus.Warnf("Failed to invalidate model cache for %s: %v", provider.Name, err)
+		}
+	}
+
 	// Step 2: VModel static list. A forced upstream attempt skips this shortcut.
 	if !forceUpstream && provider.IsVirtual() {
 		var models []string
@@ -86,11 +118,52 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		return finalize(models, ModelListSourceVModel), nil
 	}
 
-	// Step 3: Upstream API (persisted on success).
-	if err := c.fetchAndSaveAPIModels(provider, forceUpstream); err == nil {
-		if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
-			return finalize(fresh, ModelListSourceAPI), nil
+	// Step 3: Upstream API (persisted on success). A manual refresh waits for
+	// the result; a plain read waits only modelListReadWait and then serves a
+	// stand-in while the fetch finishes in the background.
+	fetching := false
+	var fetchErr error
+	if forceRefresh || forceUpstream {
+		fetchErr = c.fetchAndSaveAPIModels(provider, forceUpstream)
+		if fetchErr == nil {
+			if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
+				return finalize(fresh, ModelListSourceAPI), nil
+			}
 		}
+	} else {
+		done := c.fetchModelsInBackground(provider)
+		select {
+		case err := <-done:
+			fetchErr = err
+			if err == nil {
+				if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
+					return finalize(fresh, ModelListSourceAPI), nil
+				}
+			}
+		case <-time.After(modelListReadWait):
+			fetching = true
+		}
+	}
+	withFetching := func(r ResolvedModels) ResolvedModels {
+		r.Fetching = fetching
+		return r
+	}
+
+	// An unsupported endpoint cannot refresh an old API list. Use the same
+	// embedded catalog on reads and manual refreshes when one is available.
+	// Transient failures still prefer the last successful upstream list.
+	var unsupported *client.ErrModelsEndpointNotSupported
+	if errors.As(fetchErr, &unsupported) && c.templateManager != nil {
+		if tmpl, err := c.templateManager.GetEmbeddedModelsForProvider(provider); err == nil && len(tmpl) > 0 {
+			return withFetching(finalize(tmpl, ModelListSourceTemplate)), nil
+		}
+	}
+
+	// Step 3b: on a temporary failure keep the last real list for both reads
+	// and refreshes. Otherwise refresh can show a template that disappears on
+	// the next read. The fetch failure is recorded separately for diagnostics.
+	if stale := c.modelManager.GetStaleModels(uid); len(stale) > 0 {
+		return withFetching(finalize(stale, ModelListSourceCache)), nil
 	}
 
 	// Step 4: Embedded template fallback (live, never persisted). It is a
@@ -98,11 +171,25 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 	// snapshot can still name models the upstream has retired.
 	if c.templateManager != nil {
 		if tmpl, err := c.templateManager.GetEmbeddedModelsForProvider(provider); err == nil && len(tmpl) > 0 {
-			return finalize(tmpl, ModelListSourceTemplate), nil
+			return withFetching(finalize(tmpl, ModelListSourceTemplate)), nil
 		}
 	}
 
-	return finalize(nil, ModelListSourceTemplate), nil
+	return withFetching(finalize(nil, ModelListSourceTemplate)), nil
+}
+
+// fetchModelsInBackground starts (or joins) the upstream fetch for a provider
+// and returns a channel that receives its result. The fetch runs detached from
+// any request, so a reader that stops waiting does not cancel it.
+func (c *Config) fetchModelsInBackground(provider *typ.Provider) <-chan error {
+	ch := make(chan error, 1)
+	go func() {
+		_, err, _ := c.modelFetches.Do(provider.UUID, func() (any, error) {
+			return nil, c.fetchAndSaveAPIModels(provider, false)
+		})
+		ch <- err
+	}()
+	return ch
 }
 
 // fetchAndSaveAPIModels queries the provider's upstream /models endpoint and,
@@ -110,7 +197,7 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 // when the endpoint is unsupported or the call fails; the caller falls back to
 // the template. It never persists template data.
 func (c *Config) fetchAndSaveAPIModels(provider *typ.Provider, forceUpstream bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), modelListFetchTimeout)
 	defer cancel()
 
 	lister, err := c.newModelLister(ctx, provider)

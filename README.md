@@ -30,6 +30,10 @@ Tingly Box **connects any agent to any model** — for you and your whole team, 
   * Shared team endpoint with centrally managed model rules
   * Dedicated keys per member, with data isolated per user
   * Per-member usage tracking
+* **Cache First**
+  * One of the best protocol implementation, support translate cross each others
+  * Care about the cache, efficient and cost-effective
+  * Edge-cloud relay for sustained performance.
 * **Power-ups**
   * Guardrails, MCP Gateway, and Usage Analytics
   * Image API — image generation and editing through the same gateway, with a built-in playground
@@ -130,7 +134,7 @@ mkdir tingly-data
 docker run -d \
   --name tingly-box \
   -p 12580:12580 \
-  -v `pwd`/tingly-data:/home/tingly/.tingly-box \
+  -v `pwd`/tingly-data:/app/.tingly-box \
   ghcr.io/tingly-dev/tingly-box
 ```
 
@@ -224,7 +228,7 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 **Quick Setup**
 
 1. Open Web UI like `http://localhost:12580`
-2. Navigate to **Remote** section
+2. Turn on **Projects** under **Power-ups** in the gear menu at the bottom of the left rail, then open **IM** in the rail
 3. Configure your preferred IM platform bot
 4. Start interacting with your agents remotely
 
@@ -451,16 +455,31 @@ task go:test        # Run Go unit tests
 
 </details>
 
-## Support
+## Sponsors
 
-|                                                              Telegram                                                              |                                                               Wechat                                                               |
-| :--------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------: |
-| <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
-|                                                   https://t.me/+V1sqeajw1pYwMzU1                                                   |                                                             tingly-box                                                             |
+If Tingly Box has been useful to you, consider supporting its development.
 
-## Early Contributors
+**Donations are optional.** A ⭐ on GitHub or a contribution is just as appreciated.
 
-Special badges are minted to recognize the contributions from following contributors:
+<div align="left">
+
+|   Sponsor   |                Details                |
+| :---------: | :-----------------------------------: |
+| 0xbeekeeper |             First Sponsor             |
+|  richardxx  | Long Term Claude Subscription Support |
+| huajiankan  |      Figma Subscription Support       |
+
+</div>
+
+<div align="left">
+
+| Github Sponsors                                             |                                                            WeChat                                                             |                                                          Alipay                                                           |
+| :---------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------: |
+| ❤️ [Github Sponsors](https://github.com/sponsors/tingly-dev) | <img src="https://github.com/tingly-dev/tingly-box/blob/main/docs/donation/wechat.jpg?raw=true" width="100" alt="WeChat Pay"> | <img src="https://github.com/tingly-dev/tingly-box/blob/main/docs/donation/alipay.jpg?raw=true" width="100" alt="Alipay"> |
+
+</div>
+
+## Contributors
 
 <br />
 
@@ -484,9 +503,14 @@ Special badges are minted to recognize the contributions from following contribu
   </tr>
 </table>
 
-## Contributors
-
 [![Contributors](https://contrib.rocks/image?repo=tingly-dev/tingly-box)](https://github.com/tingly-dev/tingly-box/graphs/contributors)
+
+## Tech Support
+
+|                                                              Telegram                                                              |                                                               Wechat                                                               |
+| :--------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------: |
+| <img width="100" height="100" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="100" height="100" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
+|                                                   https://t.me/+V1sqeajw1pYwMzU1                                                   |                                                             tingly-box                                                             |
 
 ## License
 
@@ -496,18 +520,3 @@ This project is available under:
 
 For commercial licensing inquiries, contact [box@tingly.dev](mailto:box@tingly.dev).
 
----
-
-## ❤️ Support Tingly Box
-
-If Tingly Box has been useful to you, consider supporting its development.
-
-**Donations are optional.** A ⭐ on GitHub or a contribution is just as appreciated.
-
-<div align="center">
-
-|                            WeChat Pay                             |                            Alipay                             |
-| :---------------------------------------------------------------: | :-----------------------------------------------------------: |
-| <img src="docs/donation/wechat.jpg" width="220" alt="WeChat Pay"> | <img src="docs/donation/alipay.jpg" width="220" alt="Alipay"> |
-
-</div>

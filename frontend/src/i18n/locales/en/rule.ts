@@ -59,7 +59,6 @@ export default {
       "tierBalanced": "Balanced",
       "dividerHelp": "Lower-numbered tiers are always tried first. Only when all models in a tier fail (circuit open) does traffic fall through to the next tier. Models within the same tier are load-balanced.",
       "tooltip": "T0 is tried first, T1 is the fallback, and so on. Models within the same tier are load-balanced.",
-      "addTierTooltip": "Add a new fallback tier",
       "nodeTooltipPrimaryTitle": "T0 — Highest priority",
       "nodeTooltipPrimaryBody": "Tried first on every request. Models here are load-balanced.",
       "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
@@ -141,6 +140,17 @@ export default {
         "hoverHint": "Hover over a node in the diagram to see its actions",
         "toolbarLabel": "Page toolbar",
         "clickHere": "Click here",
+        "connectTitle": "Connect {{agent}}",
+        "connect": {
+          "website": "Install from the {{agent}} website",
+          "official": "Official",
+          "mirror": "Mirror",
+          "install": { "title": "Install {{agent}}", "content": "Install it with the command below (it is also in the Install row of the connection section), then come back here." },
+          "apply": { "title": "Apply the config", "content": "Auto Config in the page header writes the Base URL and key into {{agent}}'s config file. The existing file is backed up first and your other settings are kept." },
+          "applyHint": "Click Auto Config at the top right of the page. Config out of date in the header means it still needs applying.",
+          "verify": { "title": "Start {{agent}} and check", "content": "Run {{agent}} once. The header then shows the last request, which means the gateway is connected and the rules below are routing it." },
+          "verifyHint": "No request yet after starting {{agent}}? Check that the Base URL in the connection section matches what {{agent}} uses."
+        },
         "steps": {
           "connectAI": {
             "title": "Connect an AI provider",
@@ -152,10 +162,10 @@ export default {
           },
           "addModel": {
             "title": "Add your first model",
-            "content": "Each rule maps a request model to one or more models. In an empty rule, click ＋ Add model to pick a connected provider and a model. Need a separate rule for a different request model? Use New Rule in the toolbar.",
+            "content": "Each rule maps a request model to one or more models. In an empty rule, click ＋ Add model to pick a connected provider and a model. Want more models on this agent? Use New Model in the toolbar; turn on Select multiple there to add several at once, one rule each.",
             "annotation": {
               "addModel": "＋ Add model — pick provider + model",
-              "newRule": "New Rule adds another request-model mapping"
+              "newRule": "New Model adds models, one rule each"
             }
           },
           "editModel": {
@@ -211,7 +221,9 @@ export default {
       }
     },
     "nodes": {
-      "addModel": "Add model"
+      "addModel": "Add model",
+      "loadBalance": "Load balance",
+      "fallbackTier": "Fallback tier"
     },
     "guideDiagrams": {
       "empty": { "description": "Example rule" },
@@ -241,13 +253,23 @@ export default {
       "deleteService": "Delete Service",
       "deleteSmartRule": "Delete Smart Rule"
     },
+    "ruleConditions": {
+      "requestTitle": "Request",
+      "othersTitle": "Others",
+      "addCondition": "Add smart condition",
+      "closeConditions": "Turn off smart condition",
+      "closeConditionsTooltip": "Conditions stay saved; while they are off every request goes straight to the tiers."
+    },
     "tooltips": {
       "addProviderFirst": "Add a provider to enable request forwarding",
       "addProviderSecond": "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)",
       "addProviderMore": "Add another provider (requests will be load balanced across all providers)",
       "addFirstProvider": "Add your first provider",
       "addServiceFirst": "Add a model to enable request forwarding",
-      "addServiceSecond": "Add another model (load balancing will be enabled)"
+      "loadBalance": "Add a service to this tier; it shares requests with the others in it",
+      "fallbackTier": "Add a tier below: used only when every tier above is unavailable",
+      "addServiceToTier": "Add a service to this tier",
+      "addServiceToCondition": "Add a service for requests that match this condition"
     },
     "notifications": {
       "loadFailed": "Failed to load data",
@@ -280,13 +302,40 @@ export default {
       "unconditional": "Unconditional, ignore"
     }
   },
+  "ruleAutoSave": {
+    "saved": "Configuration saved successfully",
+    "failed": "Failed to save: {{error}}",
+    "unknownError": "Unknown error",
+    "error": "Error saving configuration"
+  },
   "ruleHeader": {
     "plugins": "Plugins",
     "pluginsTooltip": "Plugins enabled on this rule",
     "endpointNotApplicable": "Only applies to OpenAI-compatible upstreams. This rule has none, so the choice has no effect for now.",
     "managePlugins": "Manage plugins",
     "test": "Test",
-    "ruleActions": "Rule actions"
+    "smartConditionOn": "Turn off smart condition",
+    "smartConditionOff": "Turn on smart condition",
+    "smartConditionAdd": "Add smart condition",
+    "ruleActions": "Rule actions",
+    "compact": {
+      "chip": "Compact: {{value}}",
+      "auto": "Auto",
+      "aria": "Auto-compact for this model: {{value}}",
+      "tooltip": "Choose when Codex compacts this model's context",
+      "title": "Auto-compact trigger",
+      "description": "Codex compacts the conversation once the context reaches this share of the window. It only goes into the Codex config; requests are not affected.",
+      "following": "Following Auto Config ({{percent}}%). Drag to set a value for this model only.",
+      "window": "Window",
+      "line": "Compacts at",
+      "remain": "Free when compacting",
+      "low": "Only about {{remain}} tokens will be free when compacting (at least {{min}} recommended). A long tool output could overflow the window and make compaction fail.",
+      "limited": "Capped by the usable window ({{effective}}%), so {{applied}}% is what takes effect. To compact later, raise Usable window in Auto Config.",
+      "zoneLow": "{{from}}–{{to}}%: too few tokens left when compacting",
+      "zoneCapped": "Above {{effective}}% counts as {{effective}}% (usable window)",
+      "needsApply": "Takes effect after Auto Config is applied.",
+      "reset": "Use Auto Config value ({{percent}}%)"
+    }
   },
   "templateActions": {
     "troubleshoot": "Troubleshoot",
@@ -296,8 +345,15 @@ export default {
     "collapseAllRules": "Collapse all rules",
     "expandAllRules": "Expand all rules",
     "connectAI": "Connect AI",
-    "newRule": "New Rule",
-    "createNewRule": "Create new routing rule",
+    "newRule": "New Model",
+    "createNewRule": "Add models to this agent; each one gets its own routing rule",
+    "selectedModels_one": "{{count}} model selected",
+    "selectedModels_other": "{{count}} models selected",
+    "multiSelectTitle": "Create a rule for each model",
+    "selectMultiple": "Select multiple",
+    "clearSelection": "Clear",
+    "addModels_one": "Add {{count}} model",
+    "addModels_other": "Add {{count}} models",
     "howRoutingWorks": "How routing works",
     "sortOriginal": "Original order",
     "sortByName": "Name (A→Z)",
@@ -310,8 +366,48 @@ export default {
       "description": "Add an API key provider to start routing requests",
       "action": "Get started"
     },
-    "noRules": "No rules yet. Click \"New Rule\" to add one.",
+    "noRules": "No rules yet. Click \"New Model\" to add one.",
+    "noRulesFixed": "No model rules yet.",
     "copiedToClipboard": "{{label}} copied to clipboard!"
+  },
+  "decisionTry": {
+    "title": "Try Decisions",
+    "subtitle": "Ask a structured question through a configured rule.",
+    "noRules": "Add and enable a Decisions rule below to try it.",
+    "rule": "Rule",
+    "model": "Request model",
+    "concreteModel": "Enter a concrete model for a wildcard rule.",
+    "input": "Input text",
+    "type": "Question type",
+    "choice": "Choose an option",
+    "predicate": "Yes / no probability",
+    "score": "Score on a scale",
+    "question": "Question",
+    "options": "Options",
+    "levels": "Levels, lowest to highest",
+    "onePerLine": "One per line.",
+    "invalidOptions": "Enter 2–{{max}} distinct values, one per line.",
+    "run": "Run decision",
+    "running": "Running…",
+    "failed": "Decision request failed.",
+    "missingAnswer": "The response did not include the requested answer.",
+    "result": "Result",
+    "confidence": "Confidence",
+    "differentRule": "The request matched a different rule. Review your routing configuration.",
+    "raw": "Raw response",
+    "exampleInput": "My invoice shows an unexpected charge.",
+    "exampleQuestion": "Which team should handle this?",
+    "exampleOptions": "billing\ntechnical",
+    "examplePredicate": "Does the customer report an unexpected charge?",
+    "exampleScore": "How urgent is this request?",
+    "exampleLevels": "low\nmedium\nhigh",
+    "tokens": "Tokens: {{input}} input · {{output}} output",
+    "runningHint": "Waiting for the model’s decision…",
+    "emptyTitle": "Your result will appear here",
+    "emptyBody": "Review the example or add your own text, then run a decision.",
+    "answer": "Model answer",
+    "probabilities": "OPTION PROBABILITIES",
+    "stale": "Inputs have changed since this result. Run again to update it."
   },
   "decisionsGuide": {
     "title": "Decisions API Quick Start",
@@ -324,6 +420,8 @@ export default {
     "enabledBody": "Model names have been updated with [1m] suffix for extended context support.",
     "disabledBody": "The forced [1m] model suffix has been removed. Client requests for 1M are still honored.",
     "requiresApplyHint": "Please apply the configuration below and restart {{client}} for changes to take effect.",
+    "appliedOn": "1M context on. {{client}}'s config is updated; restart {{client}} to take effect.",
+    "appliedOff": "1M context off. {{client}}'s config is updated; restart {{client}} to take effect.",
     "restartOnlyHint": "Please restart {{client}} and re-select the model for changes to take effect."
   }
 };

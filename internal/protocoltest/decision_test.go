@@ -29,6 +29,15 @@ func TestDecisions_GatewayToVModel(t *testing.T) {
 	// Gateway echoes the caller's model, not the routed vmodel id.
 	assert.Equal(t, model, gjson.GetBytes(body, "model").String())
 
+	// An OpenAI Decisions body is translated by the virtual service, and its
+	// answers retain OpenAI order and shape all the way back to the client.
+	status, body = env.SendDecision(t, `{"model":"`+model+`","input":"invoice wrong","questions":[{"type":"predicate","name":"urgent","instructions":"Urgent?"},{"type":"choice","name":"department","instructions":"Which team?","choices":[{"value":"billing","description":"Payments"},{"value":"bug","description":"Bugs"}]}]}`)
+	require.Equal(t, 200, status, "body: %s", body)
+	assert.Equal(t, model, gjson.GetBytes(body, "model").String())
+	assert.Equal(t, "predicate", gjson.GetBytes(body, "answers.0.type").String())
+	assert.Equal(t, 1.0, gjson.GetBytes(body, "answers.0.probability").Float())
+	assert.Equal(t, "billing", gjson.GetBytes(body, "answers.1.choice").String())
+
 	// An unanswerable request is the caller's error and keeps its status.
 	status, body = env.SendDecision(t, `{"model":"`+model+`","state":"x"}`)
 	assert.Equal(t, 400, status, "body: %s", body)

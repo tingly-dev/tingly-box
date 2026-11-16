@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -257,5 +259,28 @@ func TestBuiltinWebtoolsRemainClientVisibleOnly(t *testing.T) {
 	}
 	if _, ok := r.ListCallableServerToolNames(context.Background())[NormalizeToolName("webtools", "mcp_web_search")]; ok {
 		t.Fatal("websearch should not be callable through servertool executor")
+	}
+}
+
+func TestBuiltinServerToolsNeedAProviderNotTheMCPFlag(t *testing.T) {
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{
+		ID: "advisor", Name: "advisor", Transport: "advisor", Enabled: typ.BoolPtr(true),
+		Visibility: typ.ToolVisibilityServer, Tools: []string{"advisor"}, Advisor: &typ.AdvisorConfig{},
+	}}}
+	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	t.Cleanup(r.Close)
+	r.VirtualRegistry().Register(coretool.VirtualTool{
+		Name: "advisor", Description: "advisor", InputSchema: mcp.ToolInputSchema{Type: "object"}, Visibility: typ.ToolVisibilityServer,
+	})
+	if r.HasBuiltinServerTools() || len(r.ListBuiltinServerToolsForInjection(context.Background())) != 0 {
+		t.Fatal("Advisor without a consultation provider must not be offered to the model")
+	}
+	cfg.Sources[0].Advisor.ProviderUUID = "p"
+	if !r.HasBuiltinServerTools() || len(r.ListBuiltinServerToolsForInjection(context.Background())) != 1 {
+		t.Fatal("Advisor with a provider is offered without any MCP connection")
+	}
+	cfg.Sources[0].Enabled = typ.BoolPtr(false)
+	if r.HasBuiltinServerTools() {
+		t.Fatal("a switched-off Server Tool is not offered")
 	}
 }

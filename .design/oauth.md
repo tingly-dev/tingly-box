@@ -11,6 +11,8 @@ recovers them when they break.
   `xai`, `github`, `google`, `mock`, …). Validated by `ParseProviderType`
   (`ai/oauth/config.go`). The ZCode issuers (GLM Coding Plan) use a
   server-mediated poll flow and resolve a static plan key — see `zcode-oauth.md`.
+  The WorkBuddy issuers (`workbuddy`, `workbuddy_cn`) use the same poll flow but
+  yield an ordinary refreshable token — see `workbuddy-oauth.md`.
 - **Provider** — a stored credential + endpoint (`ai/provider.go`, `Provider` struct).
   An OAuth provider has `AuthType = oauth` and an `OAuthDetail` (`ai/provider.go`)
   holding the access/refresh tokens, `ExpiresAt`, `Issuer`, a per-credential
@@ -185,6 +187,7 @@ authorize(provider_uuid) ──▶ SessionState.TargetProviderUUID
 | `internal/server/module/oauth/routes.go` | route registration |
 | `internal/worker/tokenrefresh/refresher.go` | periodic background refresh; expiry/credential guards |
 | `ai/oauth/zcode.go` | ZCode (GLM Coding Plan) server-poll login + credential resolver; `zcode-oauth.md` |
+| `ai/oauth/workbuddy.go`, `serverpoll.go` | WorkBuddy server-poll login + refresh; the issuer-neutral server-poll entry point; `workbuddy-oauth.md` |
 | `internal/config/provider.go` | `AddProvider` / `UpdateProvider` / `DeleteProvider` + rule cleanup |
 | `frontend/src/components/OAuthDialog.tsx` | provider picker + direct/re-auth mode (`reauthProviderUuid`) |
 | `frontend/src/components/OAuthTable.tsx` | provider list, expiry display, Refresh / Reauthorize actions |

@@ -18,6 +18,11 @@ type ApplyClaudeConfigRequest struct {
 	// ShowThinkingSummaries controls the top-level showThinkingSummaries key in
 	// settings.json. nil falls back to agent.DefaultClaudeCodeShowThinkingSummaries.
 	ShowThinkingSummaries *bool `json:"showThinkingSummaries,omitempty"`
+	// CoAuthoredBy controls both includeCoAuthoredBy and attribution in
+	// settings.json. nil, or the value the file already has, leaves them as
+	// written; a file that says nothing gets agent.DefaultClaudeCodeCoAuthoredBy
+	// (off).
+	CoAuthoredBy *bool `json:"coAuthoredBy,omitempty"`
 }
 
 const DefaultClaudeCodeDefaultMode = agent.DefaultClaudeCodeDefaultMode
@@ -49,6 +54,7 @@ type ClaudeConfigResponse struct {
 	DefaultMode           string                `json:"defaultMode"`
 	InstallStatusLine     bool                  `json:"installStatusLine"`
 	ShowThinkingSummaries bool                  `json:"showThinkingSummaries"`
+	CoAuthoredBy          bool                  `json:"coAuthoredBy"`
 }
 
 // CodexConfigResponse returns the typed values currently persisted in the
@@ -157,6 +163,21 @@ type DshConfigPreviewResponse struct {
 	CredentialsYaml string   `json:"credentialsYaml"`
 	Models          []string `json:"models"`
 	Message         string   `json:"message,omitempty"`
+}
+
+// ApplyWorkBuddyConfigResponse is the response for ApplyWorkBuddyConfigFromState.
+type ApplyWorkBuddyConfigResponse struct {
+	config.WorkBuddyApplyResult
+}
+
+// WorkBuddyConfigPreviewResponse is the response for GetWorkBuddyConfigPreview.
+// ConfigJSON is the models.json content Auto Config would merge in, API key masked.
+type WorkBuddyConfigPreviewResponse struct {
+	Success    bool     `json:"success"`
+	ConfigJSON string   `json:"configJson"`
+	Path       string   `json:"path,omitempty"`
+	Models     []string `json:"models"`
+	Message    string   `json:"message,omitempty"`
 }
 
 // RestoreConfigResponse is the response for the restore endpoints. It mirrors

@@ -44,7 +44,11 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	// When no provider proxy is configured, resolve the env proxy at request
 	// time so HTTP_PROXY/HTTPS_PROXY vars are reflected accurately in logs.
 	proxy := t.proxy
-	if proxy == "direct" {
+	if t.provider != nil && t.provider.AuthType == typ.AuthTypeVirtual {
+		// Virtual models use the private in-memory transport. The process
+		// proxy environment is irrelevant to this call.
+		proxy = "in-process"
+	} else if proxy == "direct" {
 		if envProxy, err := http.ProxyFromEnvironment(req); err == nil && envProxy != nil {
 			proxy = redactProxy(envProxy.String())
 		}

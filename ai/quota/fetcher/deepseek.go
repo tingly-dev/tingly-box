@@ -139,8 +139,10 @@ func parseDeepSeekAmount(field, value string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid %s %q: %w", field, value, err)
 	}
-	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount < 0 {
-		return 0, fmt.Errorf("invalid %s %q: amount must be a finite non-negative number", field, value)
+	// Below zero is real: DeepSeek lets an account run slightly into debt
+	// ("-0.14") before it refuses requests, and that debt is the figure to show.
+	if math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return 0, fmt.Errorf("invalid %s %q: amount must be a finite number", field, value)
 	}
 	return amount, nil
 }

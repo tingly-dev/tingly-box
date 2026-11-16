@@ -51,9 +51,15 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		maps.Copy(preservedEnv, existingWebtools.Env)
 	}
 
-	// Ensure SERPER_API_KEY is always present (use ${SERPER_API_KEY} to reference system env)
-	if _, exists := preservedEnv["SERPER_API_KEY"]; !exists {
-		preservedEnv["SERPER_API_KEY"] = "${SERPER_API_KEY}"
+	// Search can inherit an available process key, but fetch needs no search key.
+	// Remove the legacy default reference when it has no value; otherwise strict
+	// source validation would block fetch and unrelated configuration saves.
+	if value, exists := preservedEnv["SERPER_API_KEY"]; !exists || isSelfRef(value, "SERPER_API_KEY") {
+		if os.Getenv("SERPER_API_KEY") != "" {
+			preservedEnv["SERPER_API_KEY"] = "${SERPER_API_KEY}"
+		} else {
+			delete(preservedEnv, "SERPER_API_KEY")
+		}
 	}
 
 	// Create webtools configuration
@@ -82,6 +88,13 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		Tools:      tools,
 		Env:        preservedEnv, // Preserve user's environment variables
 	}
+	if existingWebtools != nil {
+		if existingWebtools.Name != "" {
+			builtinWebtools.Name = existingWebtools.Name
+		}
+		builtinWebtools.Usage = existingWebtools.Usage
+		builtinWebtools.ToolPolicies = maps.Clone(existingWebtools.ToolPolicies)
+	}
 
 	// Update or append webtools configuration
 	if webtoolsIndex >= 0 {
@@ -92,8 +105,49 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		logrus.Info("mcp: registered builtin webtools configuration")
 	}
 
+	// Server replacements are a separate opt-in source. Do not copy MCP access
+	// choices or credentials into it: each surface owns its own configuration.
+	serverIndex := -1
+	for i := range cfg.Sources {
+		if cfg.Sources[i].ID == mcptools.ServerWebtoolsSourceID {
+			serverIndex = i
+			break
+		}
+	}
+	server := typ.MCPSourceConfig{
+		ID: mcptools.ServerWebtoolsSourceID, Name: mcptools.ServerWebtoolsSourceName,
+		Enabled: typ.BoolPtr(false), Tools: mcptools.DefaultBuiltinWebtoolNames(),
+		Env: map[string]string{}, ToolPolicies: map[string]typ.MCPToolPolicy{},
+	}
+	if serverIndex >= 0 {
+		server = cfg.Sources[serverIndex]
+	}
+	// Only transport wiring is managed by the application; preserve every user
+	// choice, including an explicitly empty allow list and disabled policies.
+	server.Transport = "stdio"
+	server.Command = currentExecPath
+	server.Args = []string{"mcp-builtin"}
+	server.Origin = "builtin"
+	server.Visibility = typ.ToolVisibilityServer
+	if server.Env == nil {
+		server.Env = map[string]string{}
+	}
+	if server.ToolPolicies == nil {
+		server.ToolPolicies = map[string]typ.MCPToolPolicy{}
+	}
+	for _, name := range mcptools.DefaultBuiltinWebtoolNames() {
+		if _, exists := server.ToolPolicies[name]; !exists && serverIndex < 0 {
+			server.ToolPolicies[name] = typ.MCPToolPolicy{Enabled: typ.BoolPtr(false)}
+		}
+	}
+	if serverIndex >= 0 {
+		cfg.Sources[serverIndex] = server
+	} else {
+		cfg.Sources = append(cfg.Sources, server)
+	}
+
 	// Create advisor configuration and register as virtual tool.
-	advisorEnabled := typ.BoolPtr(false) // default: disabled
+	advisorEnabled := typ.BoolPtr(true) // default: on; it is only offered once a consultation provider is set
 	advisorVisibility := typ.ToolVisibilityServer
 	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
 	advisorEnv := map[string]string{}
@@ -126,6 +180,13 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		Tools:      advisorTools,
 		Env:        advisorEnv,
 		Advisor:    advisorCfg,
+	}
+	if existingAdvisor != nil {
+		if existingAdvisor.Name != "" {
+			builtinAdvisor.Name = existingAdvisor.Name
+		}
+		builtinAdvisor.Usage = existingAdvisor.Usage
+		builtinAdvisor.ToolPolicies = maps.Clone(existingAdvisor.ToolPolicies)
 	}
 
 	// Update or append advisor configuration

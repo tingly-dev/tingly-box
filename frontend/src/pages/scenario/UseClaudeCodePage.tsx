@@ -1,9 +1,11 @@
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
-import type { AgentApplyResult } from './components/AgentSetupCard';
+import type { AgentApplyResult } from './components/agentSetup';
 import ClaudeCodeConfigModal from './components/ClaudeCodeConfigModal';
 import { type ClaudeCodeDefaultMode, derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
+import { restoreAppliedClaudeCodePrefs } from './components/claudeCodePrefsState';
+import DuplicateMainProfileButton from './components/DuplicateMainProfileButton';
 import { AgentPage, type AgentApplyContext, type AgentPageDescriptor, type AgentPageSlot } from './AgentPage';
 
 // Normalize the backend's ApplyConfigResponse into AgentApplyResult. The
@@ -13,11 +15,12 @@ const applyClaudeConfig = async (
     t: TFunction,
     prefs: Record<string, string>,
     installStatusLine: boolean,
-    defaultMode: ClaudeCodeDefaultMode = 'acceptEdits',
+    defaultMode: ClaudeCodeDefaultMode = 'auto',
     showThinkingSummaries: boolean = true,
+    coAuthoredBy?: boolean,
 ): Promise<AgentApplyResult> => {
     try {
-        const result = await api.applyClaudeConfig(prefs, installStatusLine, defaultMode, showThinkingSummaries);
+        const result = await api.applyClaudeConfig(prefs, installStatusLine, defaultMode, showThinkingSummaries, coAuthoredBy);
         if (result?.success) {
             const created = result.createdFiles || [];
             const updated = result.updatedFiles || [];
@@ -31,14 +34,47 @@ const applyClaudeConfig = async (
         }
         return { success: false, error: result?.message || t('agentSetup.apply.failed') };
     } catch (e: any) {
-        return { success: false, error: e?.message || t('claudeCode.modeChange.applyFailed') };
+        return { success: false, error: e?.message || t('claudeCode.applyFailed') };
     }
 };
 
 // One-click apply uses prefs derived from the current rules and slot mode —
 // the same defaults the dialog seeds with.
-const derivedPrefs = ({ rules, slotMode }: AgentApplyContext) =>
-    derivePrefsFromRules({ rules, mode: slotMode ?? 'unified' }) as Record<string, string>;
+const derivedPrefs = ({ rules, slots }: AgentApplyContext) =>
+    derivePrefsFromRules({ rules, slots }) as Record<string, string>;
+
+// A rule's 1M toggle re-applies the config the user already has: the model slots
+// and the auto-compact window follow the toggle, every other applied setting
+// (and the status line) stays. Nothing applied yet means nothing to update.
+const applyContext1M = async (
+    t: TFunction,
+    { rules }: AgentApplyContext,
+    change: { enabled: boolean; ruleUuid?: string },
+): Promise<AgentApplyResult> => {
+    try {
+        const applied = await api.getAppliedClaudeConfig();
+        if (!applied?.success) return { success: false, error: applied?.error || t('agentSetup.apply.failed') };
+        if (!applied.exists) return { success: false };
+        // The toggled flag may not have reached `rules` yet: overlay it.
+        const toggled = rules.map(rule =>
+            change.ruleUuid && rule.uuid !== change.ruleUuid
+                ? rule
+                : { ...rule, flags: { ...rule.flags, context1m: change.enabled } });
+        const prefs = restoreAppliedClaudeCodePrefs({
+            generated: derivePrefsFromRules({ rules: toggled }),
+            applied: applied.preferences || {},
+        });
+        return await applyClaudeConfig(
+            t,
+            prefs as Record<string, string>,
+            !!applied.installStatusLine,
+            (applied.defaultMode || 'auto') as ClaudeCodeDefaultMode,
+            applied.showThinkingSummaries ?? undefined,
+        );
+    } catch (e: any) {
+        return { success: false, error: e?.message || t('claudeCode.applyFailed') };
+    }
+};
 
 const ClaudeCodeSetupDialog: React.FC<{ slot: AgentPageSlot }> = ({ slot }) => {
     const { t } = useTranslation();
@@ -46,13 +82,14 @@ const ClaudeCodeSetupDialog: React.FC<{ slot: AgentPageSlot }> = ({ slot }) => {
         <ClaudeCodeConfigModal
             open={slot.dialogOpen}
             onClose={slot.closeDialog}
-            configMode={slot.slotMode ?? 'unified'}
+            slots={slot.slots}
             baseUrl={slot.baseUrl}
             rules={slot.rules}
             copyToClipboard={slot.copyToClipboard}
-            onApplyWithPrefs={(prefs, installStatusLine, defaultMode, showThinkingSummaries) =>
-                slot.runApply(() => applyClaudeConfig(t, prefs as Record<string, string>, installStatusLine, defaultMode, showThinkingSummaries))
+            onApplyWithPrefs={(prefs, installStatusLine, defaultMode, showThinkingSummaries, coAuthoredBy) =>
+                slot.runApply(() => applyClaudeConfig(t, prefs as Record<string, string>, installStatusLine, defaultMode, showThinkingSummaries, coAuthoredBy))
             }
+            onApplied={slot.closeApplied}
             isApplyLoading={slot.isApplyLoading}
             pendingContext1MChange={slot.pendingContext1MChange === null
                 ? null
@@ -65,17 +102,22 @@ const claudeCode: AgentPageDescriptor = {
     scenario: 'claude_code',
     title: 'Claude Code',
     tooltipKey: 'scenarioPage.tooltip.claude_code',
+    titleAddon: <DuplicateMainProfileButton />,
     connection: { compact: true, apiKeyRow: true, baseUrlRow: true },
     clientConfigTool: 'claude',
     context1M: true,
     slotRouting: { unifiedRuleUuid: 'builtin:claude_code:cc' },
+    useProfileRow: true,
     setup: {
         kind: 'auto',
         apply: (t, ctx) => applyClaudeConfig(t, derivedPrefs(ctx), false),
         applyWithStatusLine: (t, ctx) => applyClaudeConfig(t, derivedPrefs(ctx), true),
+        applyContext1M,
         renderDialog: (slot) => <ClaudeCodeSetupDialog slot={slot} />,
     },
-    quickStart: {
+    install: {
+        connectGuide: true,
+        siteUrl: 'https://code.claude.com/docs/en/overview',
         installCommand: 'npm install -g @anthropic-ai/claude-code',
         installMirrorCommand: 'npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com',
     },

@@ -11,6 +11,7 @@ import { createRoutesFromElements, matchRoutes, Navigate, type RouteObject } fro
 import { describe, expect, it } from 'vitest';
 import { appRoutes } from './appRoutes';
 import { SHELL_ROUTES } from './shellRoutes';
+import ExperimentalFeatureGate from '@/components/ExperimentalFeatureGate';
 // Read through Vite (?raw) rather than node:fs so the suite needs no
 // @types/node, same as i18n/locales/tKeyCoverage.test.ts.
 import appMenuGo from '../../../gui/wails3/appmenu.go?raw';
@@ -32,7 +33,7 @@ function resolvesToPage(path: string): boolean {
 // including ones wrapped in gates like <ExperimentalFeatureGate>.
 function navigateTargets(node: ReactNode, out: string[] = []): string[] {
     if (Array.isArray(node)) {
-        node.forEach(n => navigateTargets(n, out));
+        node.forEach((n) => navigateTargets(n, out));
     } else if (isValidElement<{ to?: unknown; children?: ReactNode }>(node)) {
         if (node.type === Navigate && typeof node.props.to === 'string') out.push(node.props.to);
         navigateTargets(node.props.children, out);
@@ -41,14 +42,14 @@ function navigateTargets(node: ReactNode, out: string[] = []): string[] {
 }
 
 function allNavigateTargets(rs: RouteObject[]): string[] {
-    return rs.flatMap(r => [...navigateTargets(r.element), ...allNavigateTargets(r.children ?? [])]);
+    return rs.flatMap((r) => [...navigateTargets(r.element), ...allNavigateTargets(r.children ?? [])]);
 }
 
 describe('route contract', () => {
     it('resolves the paths the Wails tray navigates to', () => {
-        const paths = [...routesGo.matchAll(/^\s*Route\w+\s*=\s*"([^"]+)"/gm)].map(m => m[1]);
+        const paths = [...routesGo.matchAll(/^\s*Route\w+\s*=\s*"([^"]+)"/gm)].map((m) => m[1]);
         expect(paths.length).toBeGreaterThan(0);
-        expect(paths.filter(p => !resolvesToPage(p))).toEqual([]);
+        expect(paths.filter((p) => !resolvesToPage(p))).toEqual([]);
     });
 
     it('keeps tray navigation on the shared route constants', () => {
@@ -62,13 +63,32 @@ describe('route contract', () => {
 
     it('resolves the paths the tray hub panel jumps to', () => {
         const paths = Object.values(SHELL_ROUTES);
-        expect(paths.filter(p => !resolvesToPage(p))).toEqual([]);
+        expect(paths.filter((p) => !resolvesToPage(p))).toEqual([]);
     });
 
     it('points every redirect at a real page', () => {
         const targets = allNavigateTargets(routes);
         expect(targets.length).toBeGreaterThan(0);
-        expect(targets.filter(t => !resolvesToPage(t))).toEqual([]);
+        expect(targets.filter((t) => !resolvesToPage(t))).toEqual([]);
+    });
+
+    it('has a Workspace home next to the Projects and Workdir pages', () => {
+        expect(['/workspace', '/projects', '/projects/folder', '/projects/some-id'].filter((p) => !resolvesToPage(p))).toEqual([]);
+        const home = matchRoutes(routes, '/workspace')!.at(-1)!.route;
+        const list = matchRoutes(routes, '/projects')!.at(-1)!.route;
+        expect(home).not.toBe(list);
+    });
+
+    it('sends legacy MCP links to the tools or profiles page', () => {
+        expect(
+            ['/mcp', '/mcp/routes', '/mcp/tools', '/mcp/profiles', '/mcp/profile/default', '/mcp/profile/new', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(
+                (path) => !resolvesToPage(path)
+            )
+        ).toEqual([]);
+        const target = (path: string) => navigateTargets(matchRoutes(routes, path)!.at(-1)!.route.element);
+        expect(target('/tools/servertool')).toEqual(['/mcp/server-tools']);
+        expect(target('/mcp/clients')).toEqual(['/mcp/profile/default']);
+        expect(target('/mcp')).toEqual(['/mcp/profile/default']);
     });
 
     it('falls through to the catch-all for unknown paths', () => {
@@ -76,5 +96,14 @@ describe('route contract', () => {
         // not actually detecting the catch-all.
         expect(resolvesToPage('/agent/claude-code')).toBe(false);
         expect(resolvesToPage('/agent/claude_code')).toBe(true);
+    });
+
+    it('keeps retired recording bookmarks reachable while preserving the Skills gate', () => {
+        expect(resolvesToPage('/prompt/user')).toBe(true);
+        const retired = matchRoutes(routes, '/prompt/user')!.at(-1)!.route.element;
+        expect(isValidElement(retired) && retired.type).not.toBe(ExperimentalFeatureGate);
+        const skills = matchRoutes(routes, '/prompt/skill')!.at(-1)!.route.element;
+        expect(isValidElement<{ feature: string }>(skills) && skills.type).toBe(ExperimentalFeatureGate);
+        expect(isValidElement<{ feature: string }>(skills) && skills.props.feature).toBe('skill_ide');
     });
 });

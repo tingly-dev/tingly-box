@@ -132,7 +132,6 @@ func agentApply(cfg *serverconfig.Config, info agent.AgentInfo) error {
 	// files only" mode), so we offer that here too.
 	req := &agent.ApplyAgentRequest{
 		AgentType: info.Type,
-		Unified:   true,
 		Yes:       true,
 	}
 
@@ -160,15 +159,6 @@ func agentApply(cfg *serverconfig.Config, info agent.AgentInfo) error {
 	}
 
 	if info.Type == agent.AgentTypeClaudeCode {
-		uni, err := Confirm("Use unified mode? (single config for all models)", ConfirmOptions{DefaultYes: true, CanGoBack: true})
-		if err != nil || uni.IsCancel() {
-			return nil
-		}
-		if uni.IsBack() {
-			return nil
-		}
-		req.Unified = uni.Value
-
 		sl, err := Confirm("Install Claude Code status line script?", ConfirmOptions{DefaultYes: false, CanGoBack: true})
 		if err != nil || sl.IsCancel() {
 			return nil

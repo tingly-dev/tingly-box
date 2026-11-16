@@ -1,18 +1,29 @@
 package engine
 
 import (
+	"cmp"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 )
 
 // maxToolOutput caps a tool result stored in the transcript; the full
 // output stays in Claude Code's own on-disk session file.
 const maxToolOutput = 4 * 1024
+
+// syntheticModel is the model Claude Code names on messages it writes itself
+// (the text a local command prints), as opposed to ones the model produced.
+const syntheticModel = "<synthetic>"
+
+// maxSeenAssistant bounds the replay check: a compaction keeps the tail of the
+// conversation, so only recent messages can come back.
+const maxSeenAssistant = 2000
 
 // converter turns agentboot's Claude messages into transcript entries. It
 // dedupes tool_use blocks, which can arrive both inside an assistant
@@ -31,13 +42,23 @@ type converter struct {
 	// taskType remembers each task's type for its later events.
 	taskType map[string]string
 
+	// seenAssistant holds the uuids of the latest assistant messages recorded
+	// (seenOrder, oldest first, bounds it): after a compaction the CLI emits
+	// the messages it kept again, unchanged.
+	seenAssistant map[string]bool
+	seenOrder     []string
+	// localText is set while the turn is a compaction the host asked for: the
+	// text Claude Code writes itself for it ("Not enough messages to
+	// compact.") is the compact entry's business, not a reply.
+	localText bool
+
 	model         string                     // requested model id, from the session init
 	calls         map[string]anthropic.Usage // per API call (message id): one call arrives as several assistant events
 	contextTokens int64                      // prompt size of the latest main-thread call
 }
 
 func newConverter() *converter {
-	return &converter{seenTools: map[string]bool{}, toolParent: map[string]string{}, taskTool: map[string]string{}, taskType: map[string]string{}, calls: map[string]anthropic.Usage{}}
+	return &converter{seenTools: map[string]bool{}, toolParent: map[string]string{}, taskTool: map[string]string{}, taskType: map[string]string{}, calls: map[string]anthropic.Usage{}, seenAssistant: map[string]bool{}}
 }
 
 // TurnUsage is the payload of a "usage" transcript entry: one per turn.
@@ -95,10 +116,14 @@ func (c *converter) messages(raw any) []Entry {
 			entries = append(entries, c.msg("task", "", m.ToolUseID, ev))
 		}
 		return entries
+	case agentboot.CompactEvent:
+		return []Entry{compactEntry(m)}
 	case *claude.ResultMessage:
 		var out []Entry
-		if m.IsError && m.Result != "" {
-			out = append(out, c.msg("error", m.Result, "", nil))
+		if m.IsError {
+			// Always recorded: a turn Claude starts itself relies on this line
+			// being there (see Engine.endUnsolicitedTurn).
+			out = append(out, c.msg("error", cmp.Or(m.Result, m.SubType, "the turn failed"), "", nil))
 		}
 		if u, ok := c.usage(m); ok {
 			payload, _ := json.Marshal(u)
@@ -112,6 +137,19 @@ func (c *converter) messages(raw any) []Entry {
 			}
 			return []Entry{c.msg("system", "claude code session "+m.SessionID, "", nil)}
 		}
+		if m.SubType == claude.SystemSubtypeAPIRetry {
+			// The CLI's own in-process API retry: surface it so users see
+			// the turn is alive and why it is pausing, instead of silence
+			// until the attempt lands.
+			text := fmt.Sprintf("api retry attempt %d", m.RetryAttempt())
+			if reason := m.RetryReason(); reason != "" {
+				text += " (" + reason + ")"
+			}
+			if delay := m.RetryDelayMS(); delay > 0 {
+				text += fmt.Sprintf(", next in %.1fs", float64(delay)/1000)
+			}
+			return []Entry{c.msg("system", text, "", nil)}
+		}
 		if t, ok := c.task(m); ok {
 			return []Entry{t}
 		}
@@ -122,16 +160,42 @@ func (c *converter) messages(raw any) []Entry {
 
 // usage totals the turn's API calls. It reports nothing for a turn that made
 // no call (one that failed before reaching the model).
+//
+// The result's own usage is the turn's total: the per-call figures on assistant
+// events are the message_start snapshot, so their output counts are not final.
+// The per-call tally is the fallback for a result without usage. The tally and
+// the context size are reset here, so a resident process's next turn counts
+// from zero; the result's modelUsage must not be summed, it is the process's
+// running total.
 func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
-	if len(c.calls) == 0 {
-		return TurnUsage{}, false
+	calls, contextTokens := c.calls, c.contextTokens
+	c.calls, c.contextTokens = map[string]anthropic.Usage{}, 0
+
+	total := res.Usage
+	reported := total.InputTokens+total.OutputTokens+total.CacheReadInputTokens+total.CacheCreationInputTokens > 0
+	if !reported {
+		spent := false
+		for _, call := range calls {
+			spent = spent || call.InputTokens+call.OutputTokens+call.CacheReadInputTokens+call.CacheCreationInputTokens > 0
+		}
+		if !spent {
+			return TurnUsage{}, false
+		}
 	}
-	u := TurnUsage{Model: c.model, ContextTokens: c.contextTokens, DurationMS: res.DurationMS}
-	for _, call := range c.calls {
-		u.InputTokens += call.InputTokens
-		u.OutputTokens += call.OutputTokens
-		u.CacheReadTokens += call.CacheReadInputTokens
-		u.CacheWriteTokens += call.CacheCreationInputTokens
+	u := TurnUsage{Model: c.model, ContextTokens: contextTokens, DurationMS: res.DurationMS}
+	if reported {
+		u.InputTokens, u.OutputTokens = int64(total.InputTokens), int64(total.OutputTokens)
+		u.CacheReadTokens, u.CacheWriteTokens = int64(total.CacheReadInputTokens), int64(total.CacheCreationInputTokens)
+	} else {
+		// No usage on the result (an error result): the per-call figures are
+		// message_start snapshots, so input, cache and context are right but
+		// output is an undercount.
+		for _, call := range calls {
+			u.InputTokens += call.InputTokens
+			u.OutputTokens += call.OutputTokens
+			u.CacheReadTokens += call.CacheReadInputTokens
+			u.CacheWriteTokens += call.CacheCreationInputTokens
+		}
 	}
 	// A resident process sends its init once, so later turns name the main
 	// model only through modelUsage: take the one that did the most work,
@@ -149,6 +213,19 @@ func (c *converter) usage(res *claude.ResultMessage) (TurnUsage, bool) {
 }
 
 func (c *converter) assistant(m *claude.AssistantMessage) []Entry {
+	if m.UUID != "" {
+		if c.seenAssistant[m.UUID] {
+			return nil
+		}
+		c.seenAssistant[m.UUID] = true
+		if c.seenOrder = append(c.seenOrder, m.UUID); len(c.seenOrder) > maxSeenAssistant {
+			delete(c.seenAssistant, c.seenOrder[0])
+			c.seenOrder = c.seenOrder[1:]
+		}
+	}
+	if c.localText && string(m.Message.Model) == syntheticModel {
+		return nil
+	}
 	if id := m.Message.ID; id != "" {
 		c.calls[id] = m.Message.Usage
 	}

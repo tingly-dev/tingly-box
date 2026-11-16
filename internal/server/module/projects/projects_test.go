@@ -1,0 +1,155 @@
+package projects
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/server/module"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+	projectsapp "github.com/tingly-dev/tingly-box/projects"
+	"github.com/tingly-dev/tingly-box/swagger"
+)
+
+func newConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	return cfg
+}
+
+// realTempDir is t.TempDir with its symlinks resolved, the way Projects
+// stores a folder (on macOS /var is a link to /private/var).
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	return dir
+}
+
+// Models offers the default tier first, then every other request model the
+// claude_code scenario routes, once each.
+func TestHostModels(t *testing.T) {
+	cfg := newConfig(t)
+	require.NoError(t, cfg.AddRule(typ.Rule{UUID: "p-test", Scenario: typ.ScenarioClaudeCode, RequestModel: "team-fast", Description: "Team fast", Active: true}))
+	require.NoError(t, cfg.AddRule(typ.Rule{UUID: "p-off", Scenario: typ.ScenarioClaudeCode, RequestModel: "switched-off", Active: false}))
+	h := NewHost(cfg)
+
+	models, err := h.Models(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, models)
+	assert.Equal(t, h.cc.ClaudeCodeDefaultModel(), models[0].ID)
+	ids := map[string]int{}
+	for _, m := range models {
+		ids[m.ID]++
+	}
+	assert.Equal(t, 1, ids["team-fast"])
+	assert.Zero(t, ids["switched-off"])
+	for id, n := range ids {
+		assert.Equal(t, 1, n, id)
+	}
+}
+
+func TestHostThreadEnvPointsAtTheGateway(t *testing.T) {
+	cfg := newConfig(t)
+	h := NewHost(cfg)
+	env, model := h.ThreadEnv(context.Background())
+	assert.Equal(t, h.cc.ClaudeCodeDefaultModel(), model)
+	joined := strings.Join(env, "\n")
+	assert.Contains(t, joined, "/tingly/claude_code")
+	assert.Contains(t, joined, cfg.GetModelToken())
+}
+
+type nopHost struct{}
+
+func (nopHost) Models(context.Context) ([]projectsapp.Model, error) { return nil, nil }
+func (nopHost) ThreadEnv(context.Context) ([]string, string)        { return nil, "" }
+
+// While the flag is off every Projects route is a 404 and nothing starts;
+// once it is on, requests go through and start the runtime.
+func TestGate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app, err := projectsapp.New(projectsapp.Options{Host: nopHost{}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = app.Close() })
+
+	on, starts := false, 0
+	engine := gin.New()
+	mgr := swagger.NewRouteManager(engine)
+	module.Mount(&module.Routes{Manager: mgr}, NewHandler(app, func() bool { return on }, func() { starts++ }))
+
+	get := func() *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil))
+		return w
+	}
+	w := get()
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.JSONEq(t, `{"error":"projects is disabled"}`, w.Body.String())
+	assert.Zero(t, starts)
+
+	on = true
+	assert.Equal(t, http.StatusOK, get().Code)
+	assert.Equal(t, 1, starts)
+}
+
+// A folder session continues in a terminal through tingly-box itself, so
+// the terminal routes the way the web turns did.
+func TestHostHandoffGoesThroughTinglyBox(t *testing.T) {
+	h := NewHost(newConfig(t))
+	assert.Equal(t, []string{selfExecutable(), "cc"}, h.HandoffLaunch(""))
+	assert.Equal(t, []string{selfExecutable(), "profile", "p1"}, h.HandoffLaunch("p1"))
+}
+
+func TestHostChecksModelTiers(t *testing.T) {
+	h := NewHost(newConfig(t))
+	ctx := context.Background()
+	require.NoError(t, h.CheckLaunch(ctx, "", ""))
+	assert.Error(t, h.CheckLaunch(ctx, "", "gpt-5"))
+	assert.Error(t, h.CheckLaunch(ctx, "no-such-profile", ""))
+}
+
+// The embedded browser can have a different origin (for example behind a
+// proxy or in the desktop shell), but must pass host authentication first.
+func TestDirectoryBrowserRequiresAuthenticationBehindProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	app, err := projectsapp.New(projectsapp.Options{Host: nopHost{}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = app.Close() })
+	engine := gin.New()
+	mgr := swagger.NewRouteManager(engine)
+	auth := func(c *gin.Context) {
+		if c.GetHeader("Authorization") != "Bearer valid" {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
+	}
+	module.Mount(&module.Routes{Manager: mgr, UserAuth: auth}, NewHandler(app, func() bool { return true }, nil))
+	for _, tc := range []struct {
+		token  string
+		status int
+	}{{"", 401}, {"Bearer valid", 200}} {
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:12580/api/v1/projects/directories", strings.NewReader(`{"path":"."}`))
+		req.Header.Set("Authorization", tc.token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://app.example")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		require.Equal(t, tc.status, w.Code)
+		if tc.status == 200 {
+			require.Contains(t, w.Body.String(), `"home"`)
+		}
+	}
+}

@@ -25,6 +25,23 @@ describe('page heading semantics', () => {
         ).toBeInTheDocument();
     });
 
+    it('allows an opt-in header layout without changing other card headers', () => {
+        render(
+            <>
+                <UnifiedCard title="Default" rightAction={<button>Default action</button>} />
+                <UnifiedCard
+                    title="Tools"
+                    rightAction={<button>Configure</button>}
+                    headerSx={[{ flexDirection: 'column' }, (theme) => ({ gap: theme.spacing(1) })]}
+                />
+            </>,
+        );
+        const defaultHeader = screen.getByRole('heading', { name: 'Default' }).parentElement!.parentElement!;
+        const toolsHeader = screen.getByRole('heading', { name: 'Tools' }).parentElement!.parentElement!;
+        expect(defaultHeader).not.toHaveStyle({ flexDirection: 'column' });
+        expect(toolsHeader).toHaveStyle({ flexDirection: 'column', gap: '8px' });
+    });
+
     it('supports a semantic h1 for composed card titles', () => {
         render(
             <UnifiedCard

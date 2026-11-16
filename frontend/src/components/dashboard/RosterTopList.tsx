@@ -4,6 +4,8 @@
 // information; no bar-track decoration.
 
 import { Box, Stack, Typography, alpha, useTheme } from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface ShareBarItem {
     key: string;
@@ -87,7 +89,7 @@ export default function RosterTopList({
                     gap: 1.25,
                     py: 0.875,
                     px: 1.25,
-                    borderRadius: 1.5,
+                    borderRadius: radius.card,
                     cursor: clickable ? 'pointer' : 'default',
                     position: 'relative',
                     transition: 'background-color 0.15s ease',
@@ -122,7 +124,7 @@ export default function RosterTopList({
                 </Typography>
                 {/* Share % only — the absolute token counts sit one glance away
                     in the adjacent table; repeating them here is noise. */}
-                <Typography variant="body2" sx={{ flexShrink: 0, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>
+                <Typography variant="body2" sx={{ flexShrink: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                     {row.share.toFixed(1)}%
                 </Typography>
             </Box>
@@ -136,7 +138,7 @@ export default function RosterTopList({
                 flexGrow: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 backgroundColor: 'background.paper',
@@ -154,7 +156,7 @@ export default function RosterTopList({
                 borderBottom: '1px solid',
                 borderColor: 'divider',
             }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: fontSizes.base }}>
                     {title}
                 </Typography>
             </Box>
