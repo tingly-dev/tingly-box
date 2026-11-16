@@ -127,6 +127,57 @@ func TestNeverExceedsCapUnderRace(t *testing.T) {
 	require.Equal(t, 0, r.Stat("acct:a").Inflight)
 }
 
+// Overlapping subject sets contended by many goroutines: every shared cap
+// holds at every instant, a refused acquire leaves nothing behind, and once
+// everything is released every counter is back at zero.
+func TestOverlappingSubjectsNeverExceedAnyCap(t *testing.T) {
+	r := NewRegistry()
+	caps := map[string]int{"acct:a": 3, "acct:b": 2, "svc:a": 2}
+	sets := [][]Subject{
+		{conc("acct:a", 3), conc("svc:a", 2)},
+		{conc("acct:a", 3)},
+		{conc("acct:b", 2), conc("svc:a", 2)},
+		{conc("acct:b", 2)},
+	}
+	var cur sync.Map // key -> *atomic.Int64
+	counter := func(k string) *atomic.Int64 {
+		v, _ := cur.LoadOrStore(k, new(atomic.Int64))
+		return v.(*atomic.Int64)
+	}
+	var violation atomic.Value
+	var granted atomic.Int64
+	var wg sync.WaitGroup
+	for i := 0; i < 400; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			set := sets[i%len(sets)]
+			p, _ := r.TryAcquire(set, false)
+			if p == nil {
+				return
+			}
+			granted.Add(1)
+			for _, s := range set {
+				if n := counter(s.Key).Add(1); n > int64(caps[s.Key]) {
+					violation.Store(s.Key)
+				}
+			}
+			time.Sleep(time.Millisecond)
+			for _, s := range set {
+				counter(s.Key).Add(-1)
+			}
+			p.Release()
+			p.Release() // idempotent
+		}(i)
+	}
+	wg.Wait()
+	require.Nil(t, violation.Load(), "a cap was exceeded")
+	require.Greater(t, granted.Load(), int64(0))
+	for k := range caps {
+		require.Equal(t, 0, r.Stat(k).Inflight, k)
+	}
+}
+
 func TestSlidingWindowRequests(t *testing.T) {
 	fc := useFakeClock(t)
 	r := NewRegistry()

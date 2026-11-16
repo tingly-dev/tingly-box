@@ -45,21 +45,20 @@ const (
 )
 
 func (r Reason) String() string {
+	return joinFlags(uint8(r), []string{"concurrency", "usage", "quota"})
+}
+
+// joinFlags names the set bits of a flag value (bit i = names[i]), joined by "+".
+func joinFlags(bits uint8, names []string) string {
 	var out string
-	add := func(s string) {
+	for i, n := range names {
+		if bits&(1<<i) == 0 {
+			continue
+		}
 		if out != "" {
 			out += "+"
 		}
-		out += s
-	}
-	if r&ReasonConcurrency != 0 {
-		add("concurrency")
-	}
-	if r&ReasonUsage != 0 {
-		add("usage")
-	}
-	if r&ReasonQuota != 0 {
-		add("quota")
+		out += n
 	}
 	return out
 }
@@ -224,51 +223,26 @@ func (r *Registry) Assess(subjects []Subject) Verdict {
 
 func (r *Registry) assessLocked(subjects []Subject, quota []quotaEntry, now time.Time) Verdict {
 	var v Verdict
-	for i, s := range subjects {
+	for i := range subjects {
+		s := &subjects[i]
 		l := &s.Limits
-		c := r.counters[s.Key]
-		ratio := 0.0
+		ld := r.loadLocked(s, now)
+		ratio := maxf(ld.conc, ld.usage)
 
-		if l.MaxConcurrent > 0 {
-			inflight := 0
-			if c != nil {
-				inflight = c.inflight
+		if ld.hasConc && ld.conc >= 1 {
+			v.State, v.Reasons = StateBlocked, v.Reasons|ReasonConcurrency
+			if v.RetryAfter < defaultRetryAfter {
+				v.RetryAfter = defaultRetryAfter
 			}
-			rt := float64(inflight) / float64(l.MaxConcurrent)
-			if inflight >= l.MaxConcurrent {
-				v.State, v.Reasons = StateBlocked, v.Reasons|ReasonConcurrency
-				if v.RetryAfter < defaultRetryAfter {
-					v.RetryAfter = defaultRetryAfter
+		}
+		if ld.hasUsage && ld.usage >= 1 {
+			v.State, v.Reasons = StateBlocked, v.Reasons|ReasonUsage
+			if ld.win != nil {
+				if ra := ld.win.freeIn(now); ra > v.RetryAfter {
+					v.RetryAfter = ra
 				}
 			}
-			ratio = maxf(ratio, rt)
 		}
-
-		if l.HasBudget() {
-			var reqs, toks int64
-			var w *window
-			if c != nil && c.win != nil && c.win.length == l.Window() {
-				w = c.win
-				reqs, toks = w.sums(now)
-			}
-			rt := 0.0
-			if l.MaxRequests > 0 {
-				rt = maxf(rt, float64(reqs)/float64(l.MaxRequests))
-			}
-			if l.MaxTokens > 0 {
-				rt = maxf(rt, float64(toks)/float64(l.MaxTokens))
-			}
-			if rt >= 1 {
-				v.State, v.Reasons = StateBlocked, v.Reasons|ReasonUsage
-				if w != nil {
-					if ra := w.freeIn(now); ra > v.RetryAfter {
-						v.RetryAfter = ra
-					}
-				}
-			}
-			ratio = maxf(ratio, rt)
-		}
-
 		if quota != nil && quota[i].ok && l.QuotaPercent > 0 {
 			rt := quota[i].pct / float64(l.QuotaPercent)
 			if rt >= 1 {
@@ -286,6 +260,41 @@ func (r *Registry) assessLocked(subjects []Subject, quota []quotaEntry, now time
 		v.Pressure = maxf(v.Pressure, ratio)
 	}
 	return v
+}
+
+// load is one subject's use of each limited dimension as a fraction of its hard
+// limit (1 = at the limit). has* is false when the subject does not limit that
+// dimension, so "unlimited" stays distinguishable from "idle".
+type load struct {
+	conc, usage       float64
+	hasConc, hasUsage bool
+	win               *window // the live window behind usage; nil when none yet
+}
+
+func (r *Registry) loadLocked(s *Subject, now time.Time) load {
+	var ld load
+	l := &s.Limits
+	c := r.counters[s.Key]
+	if l.MaxConcurrent > 0 {
+		ld.hasConc = true
+		if c != nil {
+			ld.conc = float64(c.inflight) / float64(l.MaxConcurrent)
+		}
+	}
+	if l.HasBudget() {
+		ld.hasUsage = true
+		if c != nil && c.win != nil && c.win.length == l.Window() {
+			ld.win = c.win
+			reqs, toks := ld.win.sums(now)
+			if l.MaxRequests > 0 {
+				ld.usage = float64(reqs) / float64(l.MaxRequests)
+			}
+			if l.MaxTokens > 0 {
+				ld.usage = maxf(ld.usage, float64(toks)/float64(l.MaxTokens))
+			}
+		}
+	}
+	return ld
 }
 
 func maxf(a, b float64) float64 {
@@ -479,29 +488,12 @@ func (r *Registry) Utilization(subjects []Subject) Utilization {
 	defer r.mu.Unlock()
 	now := clock.Now()
 	var u Utilization
-	for _, s := range subjects {
-		l := &s.Limits
-		c := r.counters[s.Key]
-		if l.MaxConcurrent > 0 {
-			inflight := 0
-			if c != nil {
-				inflight = c.inflight
-			}
-			u.HasConcurrency = true
-			u.Concurrency = maxf(u.Concurrency, 100*float64(inflight)/float64(l.MaxConcurrent))
-		}
-		if l.HasBudget() {
-			u.HasUsage = true
-			if c != nil && c.win != nil && c.win.length == l.Window() {
-				reqs, toks := c.win.sums(now)
-				if l.MaxRequests > 0 {
-					u.Usage = maxf(u.Usage, 100*float64(reqs)/float64(l.MaxRequests))
-				}
-				if l.MaxTokens > 0 {
-					u.Usage = maxf(u.Usage, 100*float64(toks)/float64(l.MaxTokens))
-				}
-			}
-		}
+	for i := range subjects {
+		ld := r.loadLocked(&subjects[i], now)
+		u.HasConcurrency = u.HasConcurrency || ld.hasConc
+		u.HasUsage = u.HasUsage || ld.hasUsage
+		u.Concurrency = maxf(u.Concurrency, 100*ld.conc)
+		u.Usage = maxf(u.Usage, 100*ld.usage)
 	}
 	return u
 }
