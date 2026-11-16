@@ -39,8 +39,10 @@ type Editor interface {
 // whatever encoding their API wants (and re-send them) without single-use
 // readers.
 type EditRequest struct {
-	Model  string
-	Prompt string
+	// ReasoningEffort is carried unchanged; unsupported adapters ignore it.
+	ReasoningEffort string
+	Model           string
+	Prompt          string
 	// Images are the reference images in request order; the mask, if any,
 	// applies to the first.
 	Images [][]byte
@@ -68,10 +70,11 @@ func EditRequestFromOpenAI(p *openai.ImageEditParams) (*EditRequest, error) {
 		return nil, fmt.Errorf("imagegen: nil edit request")
 	}
 	req := &EditRequest{
-		Model:          string(p.Model),
-		Prompt:         p.Prompt,
-		Size:           string(p.Size),
-		ResponseFormat: string(p.ResponseFormat),
+		Model:           string(p.Model),
+		ReasoningEffort: ReasoningEffort(p),
+		Prompt:          p.Prompt,
+		Size:            string(p.Size),
+		ResponseFormat:  string(p.ResponseFormat),
 	}
 	if p.N.Valid() {
 		req.N = int(p.N.Value)

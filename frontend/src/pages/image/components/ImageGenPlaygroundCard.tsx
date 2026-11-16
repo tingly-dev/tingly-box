@@ -63,6 +63,7 @@ const TextPlus = tablerMui(IconTextPlus);
 const Writing = tablerMui(IconWriting);
 import type {
     GenerationRun,
+    ImageReasoningEffort,
     ImportedImage,
     Quality,
     SelectedImage,
@@ -162,6 +163,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
     const [size, setSize] = useState(profile?.size ?? '1024x1024');
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
+    const [reasoningEffort, setReasoningEffort] = useState<ImageReasoningEffort>(profile?.reasoningEffort ?? 'auto');
     const [count, setCount] = useState(profile?.count ?? 1);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -394,10 +396,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            reasoningEffort,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, getPrompt, model, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, getPrompt, model, quality, reasoningEffort, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -419,6 +422,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
+            setReasoningEffort(run.reasoningEffort ?? 'auto');
             setCount(run.count ?? 1);
             setReferenceImages(sources.slice(0, MAX_EDIT_REFERENCE_IMAGES));
             controlsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -563,9 +567,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model: selectedModel,
             size,
             quality,
+            reasoningEffort,
             count,
         });
-    }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
+    }, [activePromptId, count, profileId, profilePrompts, quality, reasoningEffort, referenceImages, selectedModel, size]);
 
     // Stable identities (they read through `latest`), so the memoised tab row
     // is not re-rendered by every keystroke in the prompt field.
@@ -636,6 +641,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            reasoningEffort,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
@@ -655,6 +661,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                reasoningEffort: run.reasoningEffort ?? 'auto',
                 count: run.count ?? 1,
             });
             copyRunToProfile(run, created.id);
@@ -947,7 +954,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 display: 'grid',
                                 gridTemplateColumns: {
                                     xs: 'repeat(2, minmax(0, 1fr))',
-                                    sm: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                    sm: 'repeat(3, minmax(0, 1fr)) 72px',
                                 },
                                 gap: 1.5,
                             }}
@@ -986,6 +993,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <MenuItem value="standard">standard</MenuItem>
                                 </Select>
                             </FormControl>
+                            <FormControl size="small">
+                                <InputLabel id="image-reasoning-effort-label">
+                                    {t('playground.reasoningEffort', { defaultValue: 'Thinking effort' })}
+                                </InputLabel>
+                                <Select
+                                    labelId="image-reasoning-effort-label"
+                                    label={t('playground.reasoningEffort', { defaultValue: 'Thinking effort' })}
+                                    value={reasoningEffort}
+                                    onChange={(event) => setReasoningEffort(event.target.value as ImageReasoningEffort)}
+                                >
+                                    <MenuItem value="auto">auto</MenuItem>
+                                    <MenuItem value="low">low</MenuItem>
+                                    <MenuItem value="medium">medium</MenuItem>
+                                    <MenuItem value="high">high</MenuItem>
+                                </Select>
+                            </FormControl>
                             <TextField
                                 size="small"
                                 type="number"
@@ -996,7 +1019,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     setCount(Number.isFinite(nextCount) && nextCount > 0 ? Math.min(nextCount, 10) : 1);
                                 }}
                                 slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                                sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
                             />
                         </Box>
 

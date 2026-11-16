@@ -161,6 +161,7 @@ export default {
     "promptEditorDone": "Done",
     "size": "Size",
     "quality": "Quality",
+    "reasoningEffort": "Thinking effort",
     "count": "N",
     "generate": "Generate",
     "generateAnother": "Generate another · {{count}} running",

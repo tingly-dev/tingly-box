@@ -175,6 +175,7 @@ export default {
     "promptEditorDone": "Готово",
     "size": "Размер",
     "quality": "Качество",
+    "reasoningEffort": "Уровень размышления",
     "count": "N",
     "generate": "Сгенерировать",
     "generateAnother": "Сгенерировать ещё · выполняется: {{count}}",

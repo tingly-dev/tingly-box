@@ -1,5 +1,5 @@
 import type { ReferenceImage } from '../components/ImageGenReferenceImages';
-import type { Quality } from '../components/ImageGenPlayground.types';
+import type { ImageReasoningEffort, Quality } from '../components/ImageGenPlayground.types';
 
 // One of a profile's saved prompts. The profile page has a single prompt
 // field; these are what it switches between.
@@ -29,6 +29,7 @@ export interface ImageProfile {
     model: string;
     size: string;
     quality: Quality;
+    reasoningEffort?: ImageReasoningEffort;
     count: number;
     updatedAt: number;
 }

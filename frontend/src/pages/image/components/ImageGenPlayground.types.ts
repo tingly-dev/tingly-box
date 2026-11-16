@@ -24,6 +24,9 @@ export type Endpoint = 'generations' | 'edits';
 
 export type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 
+// A hint for the serving backend, independent of rendering quality.
+export type ImageReasoningEffort = 'auto' | 'low' | 'medium' | 'high';
+
 export interface ImageResult {
     url?: string;
     b64_json?: string;
@@ -61,6 +64,8 @@ export interface GenerationRun {
     model: string;
     size: string;
     quality: Quality;
+    // Optional for sessions saved before this setting existed.
+    reasoningEffort?: ImageReasoningEffort;
     images: ImageResult[];
     // Data URLs of the reference images a run was built from, kept for display
     // alongside the output — the "what did I ask for" half of the history card
