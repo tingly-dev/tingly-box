@@ -2,6 +2,39 @@
 
 This directory contains the Python-based test infrastructure for tingly-box.
 
+## Codex Responses completion proof
+
+`codex-responses-completion-proof.py` runs a real Codex CLI against the full
+gateway and the vmodel scenario server. It compares the current handler with
+the handler at an explicit pre-fix revision using a Go source overlay; all
+other code and SDK versions stay the same. Codex uses a fresh configuration
+directory and a synthetic local credential, without loading the user's config.
+
+```bash
+python3 tests/codex-responses-completion-proof.py \
+  --codex /path/to/codex \
+  --baseline 167d3867819e10da479460674bedf45120aa1e0a \
+  --output /tmp/codex-completion-proof
+```
+
+The five cases cover valid usage, absent usage, null usage, null detail
+counters, and a genuinely truncated stream. Assertions check exit status,
+answer content, completion/failure events, reconnects, and actual gateway and
+upstream Responses request counts. Chat fallback is forbidden. Add
+`--case null-usage --retries 5` to reproduce all five retries from the report.
+The output directory must be new. It retains both SSE boundaries, request
+fingerprints, raw Codex stdout/stderr, test logs, source snapshots, version and
+binary hashes, and SHA256SUMS; upstream fixtures must match byte for byte.
+
+The Go experiment is opt-in (`TINGLY_CODEX_BIN`); ordinary test runs skip it.
+The 2026-11-16 run with Codex CLI 0.159.0-alpha.3 includes
+[12 case results](evidence/codex-responses-completion.json) and the
+[complete proof archive](evidence/codex-responses-completion.zip).
+With five retries enabled, null usage failed after six requests before the fix
+and completed after one request with the fix. The truncated-stream control
+still failed in both versions. These prove the synthetic failure and fix, not
+the unobserved cause of any particular user's deployment.
+
 ## Quick Start
 
 ### Automated Test (Recommended)
