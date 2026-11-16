@@ -58,9 +58,8 @@ generation 我们继续沿用已验证的 Responses API(image_generation tool)
 `auto|low|medium|high`，默认 `auto`。JSON 生成、JSON 改图和 multipart
 改图只解析并传递原始选择，使用方式由实际后端适配器决定：Codex
 Responses 把 `auto`（含未传）映射为 `reasoning.effort: low`，显式档位
-按值传递；Codex 原生改图忽略该提示，不因此切换端点。公共 OpenAI
-的 GPT Image 请求将显式 low/medium/high 映射为 `complexity`，auto
-省略；其它兼容上游和暂未实现此能力的原生适配器忽略。该设置与
+按值传递；Codex 原生改图忽略该提示，不因此切换端点。其它后端
+暂不使用此提示，不凭域名或模型前缀推断支持情况。该设置与
 `quality` 独立，历史重试、请求回填、方案保存保留原始选择，旧记录
 缺字段时按 auto 恢复。
 

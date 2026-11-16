@@ -82,8 +82,6 @@ type Request struct {
 	Size string
 	// Quality is one of standard|hd|low|medium|high|auto (vendor-dependent).
 	Quality string
-	// ReasoningEffort carries the caller's choice; adapters may ignore it.
-	ReasoningEffort string
 	// Style is one of vivid|natural (OpenAI dall-e-3 only).
 	Style string
 	// ResponseFormat is "url" or "b64_json". Not every vendor honors both.
@@ -131,15 +129,14 @@ func RequestFromOpenAI(p *openai.ImageGenerateParams) *Request {
 		return nil
 	}
 	req := &Request{
-		Model:           string(p.Model),
-		Prompt:          p.Prompt,
-		Size:            string(p.Size),
-		Quality:         string(p.Quality),
-		ReasoningEffort: ReasoningEffort(p),
-		Style:           string(p.Style),
-		ResponseFormat:  string(p.ResponseFormat),
-		Background:      string(p.Background),
-		OutputFormat:    string(p.OutputFormat),
+		Model:          string(p.Model),
+		Prompt:         p.Prompt,
+		Size:           string(p.Size),
+		Quality:        string(p.Quality),
+		Style:          string(p.Style),
+		ResponseFormat: string(p.ResponseFormat),
+		Background:     string(p.Background),
+		OutputFormat:   string(p.OutputFormat),
 	}
 	if p.N.Valid() {
 		req.N = int(p.N.Value)
@@ -181,7 +178,6 @@ func (req *Request) ToOpenAIParams() openai.ImageGenerateParams {
 		Model:  openai.ImageModel(req.Model),
 		Prompt: req.Prompt,
 	}
-	SetReasoningEffort(&p, req.ReasoningEffort)
 	if req.N > 0 {
 		p.N = param.NewOpt(int64(req.N))
 	}

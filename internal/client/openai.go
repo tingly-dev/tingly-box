@@ -204,7 +204,7 @@ func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGener
 		}
 		return resp.ToOpenAI(), nil
 	default:
-		req.SetExtraFields(imagegen.OpenAIImageExtras(c.provider, string(req.Model), req.ExtraFields()))
+		imagegen.OmitReasoningEffort(&req)
 		return c.client.Images.Generate(ctx, req)
 	}
 }
@@ -236,7 +236,7 @@ func (c *OpenAIClient) ImagesEdit(ctx context.Context, req openai.ImageEditParam
 		}
 		return resp.ToOpenAI(), nil
 	default:
-		req.SetExtraFields(imagegen.OpenAIImageExtras(c.provider, string(req.Model), req.ExtraFields()))
+		imagegen.OmitReasoningEffort(&req)
 		return c.client.Images.Edit(ctx, req)
 	}
 }
