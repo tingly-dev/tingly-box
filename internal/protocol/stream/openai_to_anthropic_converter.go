@@ -2,12 +2,14 @@ package stream
 
 import (
 	"encoding/json"
+	"errors"
 	"maps"
 	"sort"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/ids"
 
 	"github.com/openai/openai-go/v3"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -133,6 +135,13 @@ func (c *openAIToAnthropicConverter) Next() (interface{}, bool, error) {
 	for {
 		if !c.stream.Next() {
 			streamErr := c.stream.Err()
+			// An explicit provider error is not a dirty socket teardown. Never turn
+			// a failed trailing usage/request event into message_stop success.
+			var apiErr *openai.Error
+			var sseErr *openaistream.StreamError
+			if errors.As(streamErr, &apiErr) || errors.As(streamErr, &sseErr) {
+				return nil, false, streamErr
+			}
 			if c.finishSeen && c.hookErr == nil {
 				// Upstream delivered finish_reason, so the turn is semantically
 				// complete. The SDK keeps reading past [DONE] to physical EOF,
