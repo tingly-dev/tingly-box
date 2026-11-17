@@ -6,10 +6,8 @@ or a list. `spec.New` compiles those definitions once for both HTTP serving
 and the existing scenario/matrix adapters.
 
 ```sh
-# A running tb instance receives temporary providers and scenario rules.
+# Start a standalone provider; no running tb instance is required.
 tb vmodel --config model.yaml
-# Direct provider only.
-tb vmodel --config model.yaml --standalone
 # The identical file supplies the upstream response and its assertions.
 go run ./cli/harness matrix --mode single --config model.yaml
 # --fixture remains an alias of --config in the matrix command.
@@ -112,7 +110,7 @@ tb vmodel --export catalog.yaml
 # Normalize old files into one canonical list without starting tb or a provider.
 tb vmodel --config old-model.json --config old-recording.yaml --export models.yaml
 # Load the exported inventory again.
-tb vmodel --config catalog.yaml --standalone
+tb vmodel --config catalog.yaml
 ```
 
 `DefaultDefinitions` covers every model shipped by the existing default

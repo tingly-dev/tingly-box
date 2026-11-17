@@ -101,14 +101,14 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             }] : [];
         }),
         // VModel — the built-in synthetic providers (onboarding, demos,
-        // dry-runs). The same switch shows the VModel scenario and Credentials
-        // sidebar row; existing providers and running services keep working.
+        // dry-runs). Off by default: it only hides/shows the Credentials
+        // sidebar row, the providers themselves keep working.
         {
             key: 'vmodel',
             icon: <IconFlask sx={iconSx} />,
             name: t('layout.virtualModels'),
             description: t('layout.virtualModelsTooltip'),
-            path: '/agent/vmodel',
+            path: '/credentials/virtual-models',
             enabled: !isHidden('vmodel'),
             onToggle: () => toggleHidden('vmodel'),
         },

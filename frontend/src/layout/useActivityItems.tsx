@@ -177,7 +177,6 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'custom', nav: { path: '/agent/custom', label: t('layout.nav.useCustom', { defaultValue: 'Custom' }), icon: <IconCustom sx={{ fontSize: 20 }} /> } },
         ]);
         const sdkTools = flagged([
-            { id: 'vmodel', nav: { path: '/agent/vmodel', label: t('layout.virtualModelsNavLabel', { defaultValue: 'VModel' }), icon: <IconFlask sx={{ fontSize: 20 }} /> } },
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconEmbedding sx={{ fontSize: 20 }} /> } },

@@ -124,9 +124,9 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioVModel, ScenarioDsh:
-		// VModel testing and DeepSeek Harness accept clients speaking either
-		// OpenAI or Anthropic and use the normal gateway conversion pipeline.
+	case ScenarioDsh:
+		// DeepSeek Harness: the provider layer is a plugin, so the emitted
+		// protocol is not fixed — accept both OpenAI and Anthropic transports.
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic},

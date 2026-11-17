@@ -9,7 +9,6 @@ import {
     Users as IconUsers,
     Decisions as IconDecisions,
     Embedding as IconEmbedding,
-    Science as IconFlask,
 } from '@/components/icons';
 import {
     Anthropic,
@@ -142,14 +141,6 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         hideable: true,
     },
     {
-        id: 'vmodel',
-        labelKey: 'layout.virtualModelsNavLabel',
-        descKey: 'layout.virtualModelsTooltip',
-        path: '/agent/vmodel',
-        icon: (size) => <IconFlask sx={{ fontSize: size }} />,
-        hideable: true,
-    },
-    {
         id: 'embed',
         labelKey: 'layout.nav.useEmbed',
         descKey: 'scenarioOverview.descriptions.embed',
@@ -211,9 +202,9 @@ const VISIBILITY_EVENT = 'scenario-visibility-change';
 // better, e.g. warn inline when baseUrl looks like localhost/a private IP.
 //
 // "vmodel" (the Virtual Models power-up) is off by default: the built-in
-// synthetic providers are for onboarding/demos/dry-runs and expose the
-// VModel scenario and Credentials sidebar row together. There is no defaults
-// version bump, so installs keep their existing visibility choice.
+// synthetic providers are for onboarding/demos/dry-runs and only add a
+// Credentials sidebar row. It is deliberately NOT behind a DEFAULTS_VERSION
+// bump, so installs that already have a stored choice keep it as they have it.
 const DEFAULT_HIDDEN = ['cursor', 'vmodel'];
 // Bump this whenever DEFAULT_HIDDEN gains a genuinely new entry, so existing
 // users pick up the new default without losing their own customisations.

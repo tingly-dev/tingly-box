@@ -36,17 +36,16 @@ type ProvidersResponse struct {
 
 // CreateProviderRequest represents the request to add a new provider.
 type CreateProviderRequest struct {
-	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty"`
-	Name               string `json:"name" binding:"required" description:"Provider name" example:"openai"`
-	APIBase            string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
-	APIStyle           string `json:"api_style" description:"API style" example:"openai"`
-	APIBaseOpenAI      string `json:"api_base_openai,omitempty" description:"Dual-mode OpenAI-compatible base URL (optional, api_key auth only)" example:"https://api.example.com/v1"`
-	APIBaseAnthropic   string `json:"api_base_anthropic,omitempty" description:"Dual-mode Anthropic-compatible base URL (optional, api_key auth only)" example:"https://api.example.com"`
-	Token              string `json:"token" description:"API token" example:"sk-..."`
-	NoKeyRequired      bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
-	Enabled            bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
-	ProxyURL           string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://localhost:7890"`
-	AuthType           string `json:"auth_type,omitempty" description:"Auth type: api_key, oauth, aws_sigv4, azure_key, or gcp_sa (default: api_key)" example:"api_key"`
+	Name             string `json:"name" binding:"required" description:"Provider name" example:"openai"`
+	APIBase          string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
+	APIStyle         string `json:"api_style" description:"API style" example:"openai"`
+	APIBaseOpenAI    string `json:"api_base_openai,omitempty" description:"Dual-mode OpenAI-compatible base URL (optional, api_key auth only)" example:"https://api.example.com/v1"`
+	APIBaseAnthropic string `json:"api_base_anthropic,omitempty" description:"Dual-mode Anthropic-compatible base URL (optional, api_key auth only)" example:"https://api.example.com"`
+	Token            string `json:"token" description:"API token" example:"sk-..."`
+	NoKeyRequired    bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
+	Enabled          bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
+	ProxyURL         string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://localhost:7890"`
+	AuthType         string `json:"auth_type,omitempty" description:"Auth type: api_key, oauth, aws_sigv4, azure_key, or gcp_sa (default: api_key)" example:"api_key"`
 	// Credential carries multi-field cloud credentials for auth types
 	// aws_sigv4 (AWS Bedrock), azure_key (Azure OpenAI), and gcp_sa (GCP Vertex).
 	// Ignored for api_key/oauth/vmodel. See ai.CredentialSchema for the field keys.
