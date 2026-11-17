@@ -4,6 +4,7 @@ import {
     ContentCopy as IconCopy,
     DeleteOutline as IconDeleteOutline,
     ExpandMore as ExpandMoreIcon,
+    Speed as IconLimits,
     Visibility as IconEye,
     VisibilityOff as IconEyeOff,
 } from '@/components/icons';
@@ -56,7 +57,7 @@ export interface TeamKeysOverviewProps {
     loading: boolean;
     expanded: boolean;
     onToggle: () => void;
-    /** From `useSharingKeyActions` — reveal / copy / enable / move / delete. */
+    /** From `useSharingKeyActions` — reveal / copy / enable / limits / move / delete. */
     actions: SharingKeyTableActions;
     onCreate: () => void;
 }
@@ -256,6 +257,19 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                         slotProps={{ input: { 'aria-label': `${key.display_name} ${t('sharingKeys.table.status')}` } }}
                                                     />
                                                 </Tooltip>
+                                                {actions.onLimits && (
+                                                    // Same control as the all-keys table: blue once this person has a limit.
+                                                    <Tooltip title={t('sharingKeys.table.limitsTooltip')}>
+                                                        <IconButton
+                                                            size="small"
+                                                            aria-label={t('sharingKeys.table.limitsTooltip')}
+                                                            color={actions.limitedUserIds?.has(key.user_id) ? 'primary' : 'default'}
+                                                            onClick={() => actions.onLimits?.(key)}
+                                                        >
+                                                            <IconLimits sx={{ fontSize: 16 }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
                                                 <Tooltip title={t('sharingKeys.table.moveTooltip')}>
                                                     <IconButton size="small" aria-label={t('sharingKeys.table.moveTooltip')} onClick={() => actions.onMove(key)}>
                                                         <IconMove sx={{ fontSize: 16 }} />
