@@ -282,22 +282,20 @@ jobs:
             printf '%s\n\n' "$CURRENT"
             echo "$START"
             cat <<'NOTES'
-          ## Desktop app (unsigned)
+          ## Desktop app
 
-          | Platform | Download |
-          | --- | --- |
-          | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` |
-          | Windows x64 | `tingly-box-gui-windows-amd64.zip` |
-          | Linux x64 — Ubuntu 24.04+ / Debian 13+ | `tingly-box-gui-linux-amd64.deb` |
-          | Linux x64 — Fedora 40+ | `tingly-box-gui-linux-amd64.rpm` |
-          | Linux x64 — Ubuntu 22.04+ / Debian 12+ / Fedora 36+ (bare binary) | `tingly-box-gui-linux-amd64.zip` |
-          | Linux arm64 — same distributions (bare binary) | `tingly-box-gui-linux-arm64.zip` |
+          Download the package for your platform from **Assets** below.
 
-          The desktop builds are not signed by Apple or Microsoft.
+          | Platform | Download | Install / Open |
+          | --- | --- | --- |
+          | macOS Apple Silicon | `tingly-box-gui-macos-arm64.zip` | Unzip and open `TinglyBox.app` |
+          | Windows x64 | `tingly-box-gui-windows-amd64.zip` | Unzip and run the app |
+          | Ubuntu 24.04+ / Debian 13+ (x64) | `tingly-box-gui-linux-amd64.deb` | `sudo apt install ./tingly-box-gui-linux-amd64.deb`, then open **Tingly Box** |
+          | Fedora 40+ (x64) | `tingly-box-gui-linux-amd64.rpm` | `sudo dnf install ./tingly-box-gui-linux-amd64.rpm`, then open **Tingly Box** |
+          | Linux x64 / arm64 (Ubuntu 22.04+ / Debian 12+ / Fedora 36+) | `tingly-box-gui-linux-amd64.zip` / `tingly-box-gui-linux-arm64.zip` | Install GTK 3 + WebKitGTK 4.1, unzip and run `tingly-box-gui`. GNOME tray icons need the AppIndicator extension. |
 
-          - **macOS**: easiest is `npx tingly-box-gui`, which skips Gatekeeper. For a browser download, unzip and open `TinglyBox.app`; when macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**, or run `xattr -dr com.apple.quarantine TinglyBox.app`.
-          - **Windows**: if SmartScreen appears, choose **More info → Run anyway**.
-          - **Linux**: `sudo apt install ./tingly-box-gui-linux-amd64.deb` or `sudo dnf install ./tingly-box-gui-linux-amd64.rpm` (pulls in GTK4 and WebKitGTK 6.0), then open **Tingly Box** from the app menu or run `tingly-box-gui`. On older distributions, or to try it without installing anything, run `npx tingly-box-gui` (or unzip the `.zip` for your architecture and run `tingly-box-gui`); that build needs GTK 3 and WebKitGTK 4.1 from your distribution. The tray icon needs a StatusNotifier host (KDE and most desktops have one; GNOME needs the AppIndicator extension).
+          macOS and Windows builds are unsigned. If blocked, use **Privacy & Security → Open Anyway** (macOS) or **More info → Run anyway** (Windows).
+
           NOTES
             echo "$END"
           } > desktop-notes.md
