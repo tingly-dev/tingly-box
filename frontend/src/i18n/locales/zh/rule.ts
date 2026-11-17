@@ -359,6 +359,17 @@ export default {
     "sortTooltipToOriginal": "当前按名称排序 — 点击恢复原始顺序"
   },
   "templatePage": {
+    "reorder": {
+      "handle": "拖动以调整 {{name}} 的顺序",
+      "instructions": "调整顺序：按空格键拿起规则，用方向键移动，再按空格键放下，或按 Esc 取消。",
+      "saveFailed": "新顺序保存失败：{{message}}",
+      "announce": {
+        "start": "已拿起 {{name}}，当前位置 {{position}} / {{total}}。",
+        "over": "{{name}} 移到了第 {{position}} / {{total}} 位。",
+        "end": "已将 {{name}} 放在第 {{position}} / {{total}} 位。",
+        "cancel": "已取消排序，{{name}} 保持原位。"
+      }
+    },
     "noProviders": {
       "title": "尚未配置提供商",
       "description": "添加一个 API Key 提供商以开始路由请求",

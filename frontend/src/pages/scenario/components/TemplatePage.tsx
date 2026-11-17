@@ -15,6 +15,9 @@ import type {TemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
 import {TitleIconButtons} from './TitleIconButtons';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
+import {SortableRuleList} from './SortableRuleList';
+import {pinToTop} from './ruleOrder';
+import {useCommitRuleOrder} from '@/pages/scenario/hooks/useCommitRuleOrder';
 import {useRuleSort} from '@/pages/scenario/hooks/useRuleSort';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
@@ -158,33 +161,14 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     // above stay anchored to the real, backend-ordered array.
     const {sortMode, toggleSortMode, sortedRules} = useRuleSort(rules);
 
-    // Hard ordering: move one rule (pin = jump to top, up/down = nudge one
-    // slot) and persist the whole new order. Optimistic locally, then the
-    // server round-trip; on failure the list reloads to the server truth.
-    // Only offered in the original order view — the name-sorted view is a
-    // lens, not the list, so moving within it would mislead.
-    const handleReorder = useCallback(async (ruleUuid: string, direction: 'top' | 'up' | 'down') => {
-        if (!scenario || !allowReorder || sortMode !== 'original') return;
-        const from = rules.findIndex(r => r.uuid === ruleUuid);
-        if (from < 0) return;
-        const next = [...rules];
-        const [moved] = next.splice(from, 1);
-        const to = direction === 'top' ? 0 : direction === 'up' ? Math.max(0, from - 1) : Math.min(next.length, from + 1);
-        next.splice(to, 0, moved);
-        if (direction === 'up' && to === from) return;
+    // Hard ordering (drag and drop, "Pin to top"): only offered in the original
+    // order view — the name-sorted view is a lens, not the list.
+    const commitOrder = useCommitRuleOrder({scenario, rules, onRulesChange, loadRules, showNotification});
 
-        onRulesChange(next);
-        try {
-            const result = await api.reorderRules(scenario, next.map(r => r.uuid));
-            if (!result?.success) {
-                throw new Error(result?.error || 'Unknown error');
-            }
-        } catch (error) {
-            console.error('Error reordering rules:', error);
-            showNotification(`Failed to reorder rules: ${(error as Error).message}`, 'error');
-            await loadRules?.(scenario);
-        }
-    }, [rules, scenario, allowReorder, sortMode, onRulesChange, loadRules, showNotification]);
+    const handlePinRule = useCallback((ruleUuid: string) => {
+        const next = pinToTop(rules.map(r => r.uuid), ruleUuid);
+        if (next) void commitOrder(next);
+    }, [rules, commitOrder]);
 
     // Routed through a ref so onCreateFromModels doesn't capture a stale createRules.
     const createRulesRef = useRef(createRules);
@@ -430,21 +414,22 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             {t(allowAddRule ? 'templatePage.noRules' : 'templatePage.noRulesFixed')}
                         </Box>
                     ) : (
-                        sortedRules.map((rule, index) => {
-                            const isNewRule = rule.uuid === newRuleUuid;
-                            // "Last rule" for the auto-scroll-to-new-rule anchor is
-                            // meaningless once the list is name-sorted — that ref is
-                            // only a fallback for the initial mount scroll position,
-                            // so only attach it in the original, insertion-ordered view.
-                            const isLastRule = sortMode === 'original' && index === sortedRules.length - 1;
-                            const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
-                            // Edge rules have nothing to move toward; a single-rule
-                            // list has no ordering to change at all.
+                        (() => {
+                            // The scroll anchor (new rule, else the last one) is only
+                            // meaningful in the original, insertion-ordered view — it is
+                            // just a fallback for the initial mount scroll position.
+                            const anchorUuid = newRuleUuid
+                                ?? (sortMode === 'original' ? sortedRules[sortedRules.length - 1]?.uuid : undefined);
                             const reorderEnabled = allowReorder && sortMode === 'original' && sortedRules.length > 1;
 
                             return (
-                                <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
-                                    {rule && rule.uuid && (
+                                <SortableRuleList
+                                    rules={sortedRules}
+                                    enabled={reorderEnabled}
+                                    anchorUuid={anchorUuid}
+                                    anchorRef={lastRuleRef}
+                                    onReorder={commitOrder}
+                                    renderRule={(rule, dragHandle) => rule && rule.uuid && (
                                         <RuleCard
                                             rule={rule}
                                             providers={providers}
@@ -461,18 +446,17 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             allowDeleteRule={allowDeleteRule}
                                             onRuleDelete={onRuleDelete}
                                             allowToggleRule={allowToggleRule}
-                                            allowReorder={reorderEnabled}
-                                            onMoveRule={handleReorder}
-                                            canMoveUp={reorderEnabled && index > 0}
-                                            canMoveDown={reorderEnabled && index < sortedRules.length - 1}
+                                            dragHandle={dragHandle}
+                                            onPinRule={reorderEnabled ? handlePinRule : undefined}
+                                            canPin={rule.uuid !== sortedRules[0]?.uuid}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                             onContext1MToggle={onContext1MToggle}
                                             quickProbeSignal={probeAllSignal}
                                         />
                                     )}
-                                </div>
+                                />
                             );
-                        })
+                        })()
                     )}
                 </Box>
                 </ProviderQuotaProvider>
