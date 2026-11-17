@@ -357,7 +357,7 @@ func streamingSkipReason(scenario Scenario, streaming bool) (string, bool) {
 // scenarioSupportsStreaming returns true if the scenario has streaming mock responses.
 func scenarioSupportsStreaming(s Scenario) bool {
 	for _, builder := range s.MockResponses {
-		if builder.Stream != nil {
+		if builder.Stream != nil || builder.StreamFor != nil || builder.RawStream != nil {
 			return true
 		}
 	}
@@ -366,6 +366,14 @@ func scenarioSupportsStreaming(s Scenario) bool {
 
 // scenarioRequiresStreaming returns true if the scenario has streaming-specific assertions.
 func scenarioRequiresStreaming(s Scenario) bool {
+	nonstream, streaming := false, false
+	for _, b := range s.MockResponses {
+		nonstream = nonstream || b.NonStream != nil || b.NonStreamFor != nil
+		streaming = streaming || b.Stream != nil || b.StreamFor != nil || b.RawStream != nil
+	}
+	if streaming && !nonstream {
+		return true
+	}
 	for _, a := range s.Assertions {
 		if strings.Contains(a.Name, "stream_event_count") ||
 			a.Name == "stream_error" || a.Name == "stream_not_completed" {
@@ -426,6 +434,29 @@ func (m *Matrix) skipReason(scenario Scenario, source, target protocol.APIType, 
 	}
 	if reason, skip := m.clientSkipReason(source, target, scenario.Name, streaming); skip {
 		return reason, true
+	}
+	var format ResponseFormat
+	switch target {
+	case protocol.TypeOpenAIChat:
+		format = FormatOpenAIChat
+	case protocol.TypeOpenAIResponses:
+		format = FormatOpenAIResponses
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		format = FormatAnthropic
+	case protocol.TypeGoogle:
+		format = FormatGoogle
+	}
+	if format != "" {
+		b, ok := scenario.MockResponses[format]
+		if !ok {
+			return "scenario has no recording for target protocol", true
+		}
+		if streaming && b.StreamHTTPError < 400 && b.Stream == nil && b.StreamFor == nil && b.RawStream == nil {
+			return "scenario has no streaming response for target protocol", true
+		}
+		if !streaming && b.NonStream == nil && b.NonStreamFor == nil {
+			return "scenario has no non-stream response for target protocol", true
+		}
 	}
 	return streamingSkipReason(scenario, streaming)
 }

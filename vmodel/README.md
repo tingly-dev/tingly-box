@@ -25,6 +25,7 @@ vmodel/
 ├── defaults_shared.go  // SharedDefaultMocks() + ExtendedErrorSpecs() — shared specs
 ├── error_injection.go  // ErrorInjection, ErrorInjectingModel, EmitGate
 ├── README.md
+├── spec/               // Unified definitions, catalog, loading, serving and test adapters
 ├── anthropic/          // Anthropic-protocol models + Registry alias
 ├── openai/             // OpenAI Chat-protocol models + Registry alias
 ├── decision/           // Decisions-endpoint models (options in, one answer out) + Registry alias
@@ -142,6 +143,46 @@ request type — `*protocol.AnthropicBetaMessagesRequest` — so the
 protocol-version distinction does not leak into the `VirtualModel` interface.
 
 ## Interfaces
+
+### JSON / YAML files
+
+All model kinds use `vmodel/spec.Definition` and `spec.Load`: ordinary mocks,
+recorded responses, sequences, decisions, transforms and named Go behavior.
+The service and matrix commands load the same file:
+
+```sh
+tb vmodel --config vmodel/testdata/unified.yaml
+go run ./cli/harness matrix --mode single --config vmodel/testdata/unified.yaml
+```
+
+The standalone VModel listener picks a free local port by default and reports
+its direct OpenAI/Anthropic/Google URLs. It runs without starting a tb gateway,
+opening its database, or registering providers/rules. Point an SDK directly at
+the printed protocol URL; any required API key can be a nonempty placeholder.
+`--json` emits one readiness record; `GET /healthz` reports service readiness.
+
+```yaml
+id: hello
+kind: mock
+mock:
+  content: Hello.
+  delay: 50ms
+expect:
+  http_status: 200
+  content_equals: Hello.
+```
+
+`tb vmodel --export catalog.yaml` exports the complete core inventory,
+including opt-in test fixtures, without starting a service. With `--config`,
+export normalizes just those inputs. Existing flat mock/sequence files and
+legacy `name`/`mock_responses` files remain accepted. `--fixture` remains a
+matrix alias for `--config`.
+
+See [the unified definition contract](spec/README.md) for all kinds,
+per-protocol recording payloads, exact `raw_body`/`raw_stream` preservation,
+native endpoint assertions, custom Go factories and migration boundaries.
+Old `LoadMockSpec` / `scenario.LoadFixture` APIs remain available to existing
+Go callers; new serving and test paths use the unified loader.
 
 ### Base (`interface.go`)
 

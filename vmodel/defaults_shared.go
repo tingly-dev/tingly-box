@@ -8,19 +8,16 @@ import "time"
 // converters / observers can be tested for completeness (cache and
 // reasoning tokens, not just plain prompt/completion).
 type MockUsage struct {
-	PromptTokens      int64 // input_tokens / prompt_tokens
-	CompletionTokens  int64 // output_tokens / completion_tokens
-	CachedInputTokens int64 // OpenAI prompt_tokens_details.cached_tokens / Anthropic cache_read_input_tokens
-	// CacheWriteTokens renders as Anthropic cache_creation_input_tokens or
-	// OpenAI prompt_tokens_details.cache_write_tokens (gpt-5.6+) — the same
-	// premium-rate write cost under two wire names.
-	CacheWriteTokens int64
-	ReasoningTokens  int64 // OpenAI completion_tokens_details.reasoning_tokens
+	PromptTokens      int64 `json:"prompt_tokens,omitempty" yaml:"prompt_tokens,omitempty"`             // input_tokens / prompt_tokens
+	CompletionTokens  int64 `json:"completion_tokens,omitempty" yaml:"completion_tokens,omitempty"`     // output_tokens / completion_tokens
+	CachedInputTokens int64 `json:"cached_input_tokens,omitempty" yaml:"cached_input_tokens,omitempty"` // cache_read_input_tokens / cached_tokens
+	// cache_creation_input_tokens / prompt_tokens_details.cache_write_tokens
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty" yaml:"cache_write_tokens,omitempty"`
+	ReasoningTokens  int64 `json:"reasoning_tokens,omitempty" yaml:"reasoning_tokens,omitempty"`
 }
 
-// SharedMockSpec describes a built-in mock that is identical across
-// protocols (anthropic + openai). Each protocol's RegisterDefaults converts
-// a SharedMockSpec into its own protocol-specific MockModelConfig.
+// SharedMockSpec is the shared configuration for Go-defined and file-loaded
+// mocks. Both protocol packages alias MockModelConfig to this type.
 //
 // Entries returned by SharedDefaultMocks are user-facing demo defaults:
 // they are mounted into the production /virtual/v1/* endpoint and visible
@@ -28,18 +25,22 @@ type MockUsage struct {
 // added here; tests should build their own GenericRegistry rather than
 // pollute the production defaults set.
 type SharedMockSpec struct {
-	ID       string
-	Name     string
-	Content  string          // static text response (ignored if ToolCall is set)
-	ToolCall *ToolCallConfig // if non-nil, this is a tool model
-	Delay    time.Duration
-	Usage    *MockUsage      // optional explicit usage to advertise in the stream
-	Error    *ErrorInjection // optional synthetic failure for error-injection mocks
-
-	// Error metadata (only meaningful when Error != nil)
-	ErrorCategory ErrorCategory // Category of error (rate_limit, upstream, etc.)
-	IsRetryable   bool          // Whether failover should retry this error
-	Severity      string        // "low", "medium", "high" - for filtering/sorting
+	ID           string           `json:"id" yaml:"id"`
+	Name         string           `json:"name,omitempty" yaml:"name,omitempty"`
+	Description  string           `json:"description,omitempty" yaml:"description,omitempty"`
+	Content      string           `json:"content,omitempty" yaml:"content,omitempty"`
+	ToolCalls    []ToolCallConfig `json:"tool_calls,omitempty" yaml:"tool_calls,omitempty"`
+	ToolCall     *ToolCallConfig  `json:"tool_call,omitempty" yaml:"tool_call,omitempty"`
+	Delay        time.Duration    `json:"delay,omitempty" yaml:"delay,omitempty"`
+	StreamChunks []string         `json:"stream_chunks,omitempty" yaml:"stream_chunks,omitempty"`
+	// Protocol-native completion reasons; empty values keep each protocol's defaults.
+	FinishReason  string          `json:"finish_reason,omitempty" yaml:"finish_reason,omitempty"`
+	StopReason    string          `json:"stop_reason,omitempty" yaml:"stop_reason,omitempty"`
+	Usage         *MockUsage      `json:"usage,omitempty" yaml:"usage,omitempty"`
+	Error         *ErrorInjection `json:"error,omitempty" yaml:"error,omitempty"`
+	ErrorCategory ErrorCategory   `json:"error_category,omitempty" yaml:"error_category,omitempty"`
+	IsRetryable   bool            `json:"is_retryable,omitempty" yaml:"is_retryable,omitempty"`
+	Severity      string          `json:"severity,omitempty" yaml:"severity,omitempty"`
 }
 
 // SharedDefaultMocks returns the mocks registered by BOTH the Anthropic and

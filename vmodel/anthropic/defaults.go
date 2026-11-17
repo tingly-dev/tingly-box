@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 	"github.com/tingly-dev/tingly-box/vmodel"
+	"github.com/tingly-dev/tingly-box/vmodel/smartcompact"
 )
 
 // RegisterDefaults registers the default Anthropic-protocol virtual models
@@ -22,14 +22,7 @@ func RegisterDefaults(r *Registry) {
 	}))
 
 	for _, spec := range vmodel.SharedDefaultMocks() {
-		_ = r.Register(NewMockModel(&MockModelConfig{
-			ID:       spec.ID,
-			Name:     spec.Name,
-			Content:  spec.Content,
-			ToolCall: spec.ToolCall,
-			Delay:    spec.Delay,
-			Error:    spec.Error,
-		}))
+		_ = r.Register(NewMockModel(&spec))
 	}
 
 	compactModels := []TransformModelConfig{
@@ -78,14 +71,7 @@ func RegisterDefaults(r *Registry) {
 // RegisterDefaults so production registries stay clean.
 func RegisterStreamTestMocks(r *Registry) {
 	for _, spec := range vmodel.StreamTestMockSpecs() {
-		_ = r.Register(NewMockModel(&MockModelConfig{
-			ID:       spec.ID,
-			Name:     spec.Name,
-			Content:  spec.Content,
-			ToolCall: spec.ToolCall,
-			Delay:    spec.Delay,
-			Usage:    spec.Usage,
-		}))
+		_ = r.Register(NewMockModel(&spec))
 	}
 }
 
@@ -95,11 +81,6 @@ func RegisterStreamTestMocks(r *Registry) {
 // and separate from RegisterDefaults.
 func RegisterExtendedErrorMocks(r *Registry) {
 	for _, spec := range vmodel.ExtendedErrorSpecs() {
-		_ = r.Register(NewMockModel(&MockModelConfig{
-			ID:      spec.ID,
-			Name:    spec.Name,
-			Content: spec.Content,
-			Error:   spec.Error,
-		}))
+		_ = r.Register(NewMockModel(&spec))
 	}
 }

@@ -1,0 +1,8 @@
+id: unified-decision
+kind: decision
+decision:
+  strategy: first
+expect:
+  http_status: 200
+  json_fields:
+    answers.pick.choice: a

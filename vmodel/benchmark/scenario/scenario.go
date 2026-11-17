@@ -39,6 +39,7 @@ const (
 type MockResponseBuilder struct {
 	NonStream func() (statusCode int, body []byte)
 	Stream    func() []string
+	RawStream func() []byte // exact SSE bytes, including frame separators and comments
 
 	// NonStreamFor / StreamFor, when set, take precedence over NonStream /
 	// Stream and receive the upstream request body. Multi-round fixtures use
