@@ -161,7 +161,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
 
     const handlePinRule = useCallback((ruleUuid: string) => {
         const next = pinToTop(rules.map(r => r.uuid), ruleUuid);
-        if (next) void commitOrder(next);
+        if (next) void commitOrder(next, ruleUuid);
     }, [rules, commitOrder]);
 
     // Routed through a ref so onCreateFromModels doesn't capture a stale createRules.

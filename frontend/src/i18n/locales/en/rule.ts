@@ -358,6 +358,8 @@ export default {
   },
   "templatePage": {
     "reorder": {
+      "saved": "Moved {{name}} to position {{position}} of {{total}}",
+      "savedPlain": "Rule order saved",
       "handle": "Drag to reorder {{name}}",
       "instructions": "To reorder, press space to pick up the rule, use the arrow keys to move it, then press space to drop it or escape to cancel.",
       "saveFailed": "Couldn't save the new order: {{message}}",

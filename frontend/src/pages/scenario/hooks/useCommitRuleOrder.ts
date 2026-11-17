@@ -19,7 +19,7 @@ interface Options {
 export function useCommitRuleOrder({ scenario, rules, onRulesChange, loadRules, showNotification }: Options) {
     const { t } = useTranslation();
 
-    return useCallback(async (orderedUuids: string[]) => {
+    return useCallback(async (orderedUuids: string[], movedUuid?: string) => {
         if (!scenario) return;
         const byUuid = new Map(rules.map(r => [r.uuid, r]));
         const next = orderedUuids.flatMap(uuid => byUuid.get(uuid) ?? []);
@@ -32,6 +32,17 @@ export function useCommitRuleOrder({ scenario, rules, onRulesChange, loadRules, 
             if (!result?.success) {
                 throw new Error(result?.error || 'Unknown error');
             }
+            const moved = movedUuid ? byUuid.get(movedUuid) : undefined;
+            showNotification(
+                moved
+                    ? t('templatePage.reorder.saved', {
+                        name: moved.request_model || moved.uuid,
+                        position: orderedUuids.indexOf(moved.uuid) + 1,
+                        total: orderedUuids.length,
+                    })
+                    : t('templatePage.reorder.savedPlain'),
+                'success',
+            );
         } catch (error) {
             console.error('Error reordering rules:', error);
             onRulesChange(rules);

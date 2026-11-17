@@ -63,7 +63,7 @@ describe('SortableRuleList', () => {
         await settle();
         await act(async () => { fireEvent.keyDown(document, { code: 'ArrowDown', key: 'ArrowDown' }); });
         await act(async () => { fireEvent.keyDown(document, { code: 'Space', key: ' ' }); });
-        expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c']);
+        expect(onReorder).toHaveBeenCalledWith(['b', 'a', 'c'], 'a');
     });
 
     it('announces the move for screen readers', async () => {

@@ -356,6 +356,8 @@ export default {
   },
   "templatePage": {
     "reorder": {
+      "saved": "已将 {{name}} 移到第 {{position}} / {{total}} 位",
+      "savedPlain": "规则顺序已保存",
       "handle": "拖动以调整 {{name}} 的顺序",
       "instructions": "调整顺序：按空格键拿起规则，用方向键移动，再按空格键放下，或按 Esc 取消。",
       "saveFailed": "新顺序保存失败：{{message}}",
