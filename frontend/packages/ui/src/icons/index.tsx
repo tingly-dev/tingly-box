@@ -102,6 +102,7 @@ import {
     IconSelector,
     IconGauge,
     IconPin,
+    IconGripVertical,
     IconPinFilled,
     IconActivity,
     IconTool,
@@ -240,6 +241,7 @@ export const FiberManualRecord = tablerMuiFilled(IconPointFilled);
 
 // --- Visibility / security ---------------------------------------------------
 export const Pin = tablerMui(IconPin);
+export const DragIndicator = tablerMui(IconGripVertical);
 export const PinFilled = tablerMuiFilled(IconPinFilled);
 export const Visibility = tablerMui(IconEye);
 export const VisibilityOutlined = tablerMui(IconEye);

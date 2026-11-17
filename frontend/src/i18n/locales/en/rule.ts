@@ -361,6 +361,17 @@ export default {
     "sortTooltipToOriginal": "Showing by name — click to restore original order"
   },
   "templatePage": {
+    "reorder": {
+      "handle": "Drag to reorder {{name}}",
+      "instructions": "To reorder, press space to pick up the rule, use the arrow keys to move it, then press space to drop it or escape to cancel.",
+      "saveFailed": "Couldn't save the new order: {{message}}",
+      "announce": {
+        "start": "Picked up {{name}}, position {{position}} of {{total}}.",
+        "over": "{{name}} is now over position {{position}} of {{total}}.",
+        "end": "Dropped {{name}} at position {{position}} of {{total}}.",
+        "cancel": "Reordering cancelled. {{name}} stays where it was."
+      }
+    },
     "noProviders": {
       "title": "No Providers Configured",
       "description": "Add an API key provider to start routing requests",

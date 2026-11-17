@@ -63,17 +63,11 @@ export interface RuleCardProps {
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
-    /**
-     * Hard ordering: offer 置顶 / move up / move down inside the "⋯" menu and
-     * hand moves to onMoveRule. The order is persisted via POST
-     * /rules/reorder and drives /v1/models listing, match priority and
-     * client config generation.
-     */
-    allowReorder?: boolean;
-    onMoveRule?: (ruleUuid: string, direction: 'top' | 'up' | 'down') => void;
-    /** Edge state of the rule in the list: disables pin/up at the top, down at the bottom. */
-    canMoveUp?: boolean;
-    canMoveDown?: boolean;
+    /** Drag handle (from the sortable list); shown first in the header actions. */
+    dragHandle?: React.ReactNode;
+    /** Offers "Pin to top" in the "⋯" menu; `canPin` is false for the first rule. */
+    onPinRule?: (ruleUuid: string) => void;
+    canPin?: boolean;
     onToggleExpanded?: () => void;
     onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
     /** Increment to trigger this rule's quick probe externally ("test all"). */
@@ -96,10 +90,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     allowDeleteRule = false,
     onRuleDelete,
     allowToggleRule = true,
-    allowReorder = false,
-    onMoveRule,
-    canMoveUp = false,
-    canMoveDown = false,
+    dragHandle,
+    onPinRule,
+    canPin = false,
     onToggleExpanded,
     onContext1MToggle,
     quickProbeSignal,
@@ -337,6 +330,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+            {dragHandle}
             {rule.uuid && (
                 <QuickProbeButton
                     ruleUuid={rule.uuid}
@@ -360,11 +354,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onEditFlags={handleOpenFlagEditor}
                 onOpenPlugins={() => openCatalog()}
                 pluginsCount={enabledPlugins.length}
-                reorder={allowReorder && onMoveRule ? {
-                    onMove: (direction) => onMoveRule(rule.uuid, direction),
-                    canMoveUp,
-                    canMoveDown,
-                } : undefined}
+                pin={onPinRule ? { onPin: () => onPinRule(rule.uuid), canPin } : undefined}
                 smartCondition={{
                     state: (configRecord.smartRouting?.length ?? 0) === 0 ? 'none' : configRecord.smartEnabled ? 'on' : 'off',
                     onToggle: () => ((configRecord.smartRouting?.length ?? 0) > 0 && !configRecord.smartEnabled) || configRecord.smartEnabled
