@@ -9,6 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
 )
 
 // MatrixCmd runs the protocol validation matrix tests.
@@ -21,6 +22,7 @@ import (
 //
 // --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
+	Fixtures   []string `kong:"name='fixture',help='Load a JSON/YAML scenario file (repeatable; replaces builtins; requires --mode=single)'"`
 	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
 	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
@@ -160,8 +162,38 @@ func (m *MatrixCmd) Run() error {
 		return err
 	}
 
+	var fixtures []protocoltest.Scenario
+	if len(m.Fixtures) > 0 {
+		if m.Mode != "single" {
+			return fmt.Errorf("--fixture requires --mode=single")
+		}
+		seen := make(map[string]bool)
+		for _, path := range m.Fixtures {
+			fixture, err := scenario.LoadFixture(path)
+			if err != nil {
+				return err
+			}
+			if seen[fixture.Name] {
+				return fmt.Errorf("duplicate fixture name %q", fixture.Name)
+			}
+			if len(fixture.Assertions) == 0 {
+				return fmt.Errorf("fixture %q requires at least one expect assertion for matrix tests", fixture.Name)
+			}
+			seen[fixture.Name] = true
+			fixtures = append(fixtures, fixture)
+		}
+		for _, name := range m.Scenarios {
+			if !seen[name] {
+				return fmt.Errorf("scenario %q not found in --fixture files", name)
+			}
+		}
+	}
+
 	// Build matrix with filters
 	matrix := protocoltest.DefaultMatrix()
+	if len(m.Fixtures) > 0 {
+		matrix.Scenarios = fixtures
+	}
 	if client != nil {
 		matrix = matrix.WithClient(client)
 	}
@@ -207,6 +239,9 @@ func (m *MatrixCmd) Run() error {
 		combined = append(combined, sec.exec(matrix)...)
 	}
 	results := filterResults(combined, m)
+	if len(m.Fixtures) > 0 && len(results) == 0 {
+		return fmt.Errorf("no fixture test cases matched the selected filters")
+	}
 
 	// Output results
 	if m.JsonOutput {

@@ -3,7 +3,6 @@ package openai
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
@@ -12,27 +11,8 @@ import (
 
 // MockModelConfig holds configuration for an OpenAI mock virtual model
 // (static or tool).
-type MockModelConfig struct {
-	ID           string
-	Name         string
-	Description  string
-	Content      string        // static: fixed response text
-	FinishReason string        // default: "stop" (or "tool_calls" if ToolCall is set)
-	Delay        time.Duration // simulated latency
-	StreamChunks []string      // optional custom stream chunks
-
-	// tool-type: if set, the response includes tool calls.
-	ToolCall *vmodel.ToolCallConfig
-
-	// Usage, when set, is emitted as a UsageEvent immediately before
-	// DoneEvent so streaming consumers can be exercised against a
-	// deterministic, fully-populated usage shape.
-	Usage *vmodel.MockUsage
-
-	// Error, when non-nil, makes this mock simulate a failure. See
-	// vmodel.ErrorInjection for the two supported stages.
-	Error *vmodel.ErrorInjection
-}
+// The shared config keeps file imports and Go-defined mocks identical.
+type MockModelConfig = vmodel.SharedMockSpec
 
 // MockModel is an OpenAI-Chat-only mock virtual model.
 type MockModel struct {

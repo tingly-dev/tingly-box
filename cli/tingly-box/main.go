@@ -38,6 +38,7 @@ type CLI struct {
 	Status  command.StatusCmdKong  `kong:"cmd,help='Show status'"`
 	Restart command.RestartCmdKong `kong:"cmd,help='Restart the server'"`
 	Open    command.OpenCmdKong    `kong:"cmd,help='Open web UI'"`
+	VModel  command.VModelCmdKong  `kong:"cmd,name='vmodel',help='Run virtual models and register them in the VModel test scenario'"`
 
 	// Create a double-click shortcut (desktop / start menu) to launch Tingly Box
 	Shortcut command.ShortcutCmdKong `kong:"cmd,help='Create a desktop/start-menu shortcut to launch Tingly Box'"`

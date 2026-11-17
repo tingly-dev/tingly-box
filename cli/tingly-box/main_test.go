@@ -34,6 +34,8 @@ func TestCommandsThatMustNotOpenTheDatabase(t *testing.T) {
 		{"version", []string{"version"}},
 		{"stop (not running)", []string{"stop"}},
 		{"log --once (not running)", []string{"log", "--once"}},
+		{"vmodel (invalid port)", []string{"vmodel", "--port=-1"}},
+		{"vmodel (tb not running)", []string{"vmodel"}},
 		// `open` on a running server is the interesting case, but it needs
 		// a live lock holder and a browser; its not-running branch starts
 		// the server, which legitimately opens the database.
@@ -121,6 +123,7 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"status", []string{"status", "--help"}},
 		{"restart", []string{"restart", "--help"}},
 		{"open", []string{"open", "--help"}},
+		{"vmodel", []string{"vmodel", "--help"}},
 		{"provider-add", []string{"provider", "add", "--help"}},
 		{"provider-list", []string{"provider", "list", "--help"}},
 		{"provider-delete", []string{"provider", "delete", "some-uuid", "--help"}},

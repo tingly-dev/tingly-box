@@ -3,7 +3,6 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 
@@ -14,26 +13,8 @@ import (
 
 // MockModelConfig holds configuration for an Anthropic mock virtual model
 // (static or tool).
-type MockModelConfig struct {
-	ID           string
-	Name         string
-	Description  string
-	Content      string        // static: fixed response text
-	StopReason   string        // default: "stop" (or "tool_use" if ToolCall is set)
-	Delay        time.Duration // simulated latency
-	StreamChunks []string      // optional custom stream chunks
-
-	// tool-type: if set, the response includes a tool_use block.
-	ToolCall *vmodel.ToolCallConfig
-
-	// Usage, when set, is emitted as a UsageEvent immediately before
-	// DoneEvent (rendered by virtualserver inside message_delta.usage).
-	Usage *vmodel.MockUsage
-
-	// Error, when non-nil, makes this mock simulate a failure. See
-	// vmodel.ErrorInjection for the two supported stages.
-	Error *vmodel.ErrorInjection
-}
+// The shared config keeps file imports and Go-defined mocks identical.
+type MockModelConfig = vmodel.SharedMockSpec
 
 // MockModel is an Anthropic-only mock virtual model. It returns a fixed
 // content block (or tool_use block) and supports streaming via per-chunk
