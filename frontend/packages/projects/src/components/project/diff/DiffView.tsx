@@ -6,7 +6,10 @@ import { radius } from '@tingly/ui/theme/radius';
 import { api, unwrap, type Diff, type DiffFile, type FileDiff } from '../../../client';
 import { ArrowForward, KeyboardArrowDown, KeyboardArrowUp, Search } from '../../icons';
 import { DiffFileList, splitPath } from './DiffFileList';
+import { DiffListSwitch, useDiffListMode } from './DiffListSwitch';
+import { DiffTreeList } from './DiffTreeList';
 import { DiffPatchView } from './DiffPatchView';
+import { buildTree, treeOrder } from './diffTree';
 import { filterFiles, firstReviewable, loadViewed, parsePatch, saveViewed, tooLargeToShow, viewedSignature, type ParsedPatch, type ViewedMap } from './diffModel';
 
 type Loaded =
@@ -38,14 +41,22 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
 
     const isViewed = useCallback((f: DiffFile) => viewed[f.path] === viewedSignature(f), [viewed]);
     const viewedSet = useMemo(() => new Set(files.filter(isViewed).map((f) => f.path)), [files, isViewed]);
-    const indexes = useMemo(
+    const [mode, setMode] = useDiffListMode();
+    // Built once per change set. In tree mode the files are walked in the
+    // tree's order, so j / k and the prefetch follow what is on screen.
+    const tree = useMemo(() => (mode === 'tree' ? buildTree(files) : null), [files, mode]);
+    const shown = useMemo(
         () => filterFiles(files, { query, hideGenerated, unviewedOnly }, isViewed),
         [files, query, hideGenerated, unviewedOnly, isViewed],
     );
-    const [selectedPath, setSelectedPath] = useState<string | null>(() => {
-        const i = firstReviewable(files, files.map((_, k) => k));
+    const indexes = useMemo(() => (tree ? treeOrder(tree, shown) : shown), [tree, shown]);
+    const [picked, setSelectedPath] = useState<string | null>(null);
+    const firstPath = useMemo(() => {
+        const all = files.map((_, k) => k);
+        const i = firstReviewable(files, tree ? treeOrder(tree, all) : all);
         return i >= 0 ? files[i].path : null;
-    });
+    }, [files, tree]);
+    const selectedPath = picked ?? firstPath;
     const selected = useMemo(() => files.find((f) => f.path === selectedPath) ?? null, [files, selectedPath]);
 
     const load = useCallback((file: DiffFile) => {
@@ -151,8 +162,11 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
                     <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>
                         {t('thread.files', { count: files.length })} · <Box component="span" sx={{ color: 'success.main' }}>+{fmt(diff.additions)}</Box> <Box component="span" sx={{ color: 'error.main' }}>−{fmt(diff.deletions)}</Box> · {t('thread.diff.progress', { viewed: viewedSet.size, total: files.length })}
                     </Typography>
-                    <TextField size="small" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('thread.diff.filterPlaceholder')}
-                        slotProps={{ htmlInput: { 'aria-label': t('thread.diff.filterPlaceholder') }, input: { startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> } }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <TextField size="small" sx={{ flex: 1, minWidth: 0 }} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('thread.diff.filterPlaceholder')}
+                            slotProps={{ htmlInput: { 'aria-label': t('thread.diff.filterPlaceholder') }, input: { startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> } }} />
+                        <DiffListSwitch mode={mode} onChange={setMode} />
+                    </Box>
                     {!!diff.files_omitted && <Typography sx={{ fontSize: fontSizes.sm, color: 'warning.main' }}>{t('thread.diff.omitted', { count: diff.files_omitted })}</Typography>}
                     <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
                         <Chip size="small" clickable variant={hideGenerated ? 'filled' : 'outlined'} color={hideGenerated ? 'primary' : 'default'} label={t('thread.diff.hideGenerated')} onClick={() => setHideGenerated((v) => !v)} />
@@ -161,8 +175,10 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
                 </Box>
                 {indexes.length === 0
                     ? <Typography sx={{ p: 2, fontSize: fontSizes.md, color: 'text.secondary' }}>{t('thread.diff.noMatch')}</Typography>
-                    : <DiffFileList files={files} indexes={indexes} selectedPath={selectedPath} viewedSet={viewedSet} onSelect={setSelectedPath} onToggleViewed={toggleViewed} />}
-                <Typography sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.5, fontSize: fontSizes.micro, color: 'text.secondary', borderTop: 1, borderColor: 'divider' }}>{t('thread.diff.keys')}</Typography>
+                    : tree
+                        ? <DiffTreeList files={files} tree={tree} shown={shown} selectedPath={selectedPath} viewedSet={viewedSet} filtering={query.trim() !== ''} onSelect={setSelectedPath} onToggleViewed={toggleViewed} />
+                        : <DiffFileList files={files} indexes={indexes} selectedPath={selectedPath} viewedSet={viewedSet} onSelect={setSelectedPath} onToggleViewed={toggleViewed} />}
+                <Typography sx={{ display: { xs: 'none', md: 'block' }, px: 1, py: 0.5, fontSize: fontSizes.micro, color: 'text.secondary', borderTop: 1, borderColor: 'divider' }}>{t(tree ? 'thread.diff.keysTree' : 'thread.diff.keys')}</Typography>
             </Box>
 
             <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

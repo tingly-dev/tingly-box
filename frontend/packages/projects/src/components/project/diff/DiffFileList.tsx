@@ -17,7 +17,7 @@ export function splitPath(path: string): { dir: string; name: string } {
 
 // Rows are plain elements styled by the scroller's one `sx`, so scrolling a
 // long list mounts cheap markup instead of a MUI component tree per row.
-const listSx = (t: Theme) => ({
+export const listSx = (t: Theme) => ({
     flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
     '& .f': { display: 'flex', alignItems: 'center', gap: t.spacing(0.75), height: FILE_ROW, padding: t.spacing(0, 1, 0, 1.25), cursor: 'pointer', minWidth: 0 },
     '& .f:hover': { backgroundColor: t.palette.action.hover },
