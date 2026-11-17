@@ -49,6 +49,8 @@ func TestForkCopiesAssetsButNotConversations(t *testing.T) {
 	write("outputs/draft/report.md", "the report")
 	require.NoError(t, os.MkdirAll(layout.TmpDir(p.ID, "old-thread"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(layout.TmpDir(p.ID, "old-thread"), "scratch.txt"), []byte("scratch"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(layout.CacheDir(p.ID), "go-mod"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(layout.CacheDir(p.ID), "go-mod", "cache.bin"), []byte("cache"), 0o644))
 	require.NoError(t, layout.WriteMemory(p.ID, "style.md", "Keep it short."))
 	require.NoError(t, layout.WriteMemory(p.ID, MemoryIndex, "# Project memory\n\n- [Style](style.md) — how to write\n"))
 
@@ -90,7 +92,7 @@ func TestForkCopiesAssetsButNotConversations(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, threads)
 
-	// The library came along, scratch space did not.
+	// The library came along, scratch space and caches did not.
 	for rel, want := range map[string]string{
 		"uploads/brief.md":        "# brief",
 		"outputs/draft/report.md": "the report",
@@ -104,6 +106,8 @@ func TestForkCopiesAssetsButNotConversations(t *testing.T) {
 	}
 	_, err = os.Stat(layout.TmpDir(fork.ID, "old-thread"))
 	require.True(t, os.IsNotExist(err), "scratch space must not be copied")
+	_, err = os.Stat(layout.CacheDir(fork.ID))
+	require.True(t, os.IsNotExist(err), "the shared cache must not be copied")
 
 	// Memory came along, index included.
 	got, err := layout.ReadMemory(fork.ID, "style.md")
@@ -125,7 +129,7 @@ func TestForkCopiesAssetsButNotConversations(t *testing.T) {
 	srcConvo, err := store.ListThreadEvents(mainThread(t, store, p.ID))
 	require.NoError(t, err)
 	require.Len(t, srcConvo, 1)
-	for _, rel := range []string{"uploads/brief.md", "outputs/draft/report.md", ".tmp/old-thread/scratch.txt"} {
+	for _, rel := range []string{"uploads/brief.md", "outputs/draft/report.md", ".tmp/old-thread/scratch.txt", ".cache/go-mod/cache.bin"} {
 		_, err := os.Stat(filepath.Join(layout.LibraryDir(p.ID), filepath.FromSlash(rel)))
 		require.NoError(t, err, rel)
 	}

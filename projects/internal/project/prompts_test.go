@@ -1,6 +1,7 @@
 package project
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -48,6 +49,9 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.Contains(t, s, "Memory is background")
 	assert.Contains(t, s, "wins; if the two conflict")
 	assert.Contains(t, s, "use make test")
+	assert.Contains(t, s, "Tool caches")
+	assert.Contains(t, s, "GOMODCACHE")
+	assert.Contains(t, s, filepath.Join(l.LibraryDir(p.ID), ".cache"), "the prompt names the shared cache")
 	assert.NotContains(t, s, "pull request", "a thread without a repository has no PR rule")
 
 	s = threadSystemPrompt(l, p, &db.Thread{Title: "Fix bug", Branch: "tb/fix", BaseBranch: "main", Cwd: "/w"})

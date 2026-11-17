@@ -34,4 +34,12 @@ func TestCoordinatorSharedFilesStayWithinProject(t *testing.T) {
 	content, err = c.sharedFile("one", "library", true)
 	require.NoError(t, err)
 	require.Contains(t, content[0].(*mcp.TextContent).Text, "input.txt")
+	// The shared tool cache is not project content: not listed, not readable.
+	require.NoError(t, os.MkdirAll(filepath.Join(layout.CacheDir("one"), "go-mod"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(layout.CacheDir("one"), "go-mod", "cache.bin"), []byte("cache"), 0o644))
+	content, err = c.sharedFile("one", "library", true)
+	require.NoError(t, err)
+	require.NotContains(t, content[0].(*mcp.TextContent).Text, cacheDirName)
+	_, err = c.sharedFile("one", "library/.cache/go-mod/cache.bin", false)
+	require.ErrorContains(t, err, "not project content")
 }

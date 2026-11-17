@@ -98,6 +98,7 @@
 ├── library/uploads/         上传（项目与文件夹项目一致）
 ├── library/outputs/<slug>/  无仓库线程的产出
 ├── library/.tmp/<thread-id>/ 线程的 TMPDIR（Library 页不显示，resolve 时清理；Library 树见 library-tree.md）
+├── library/.cache/          项目共享的工具缓存（GOMODCACHE/GOCACHE/npm/pip，见 thread-cleanup.md §3.10）
 └── threads/<id>.settings.json
 
 <repo>/.claude/worktrees/<slug>-<id6>/   新线程的 cwd（有仓库）
@@ -131,13 +132,17 @@ library 就是共享上传目录（`library/uploads/` 上传，`library/outputs/
 
 ### 线程临时目录（TMPDIR）
 
-每个线程的 `TMPDIR` / `TMP` / `TEMP` 指向共享 library 里自己的目录，不再用全局 `/tmp`：`<library>/.tmp/<thread-id>/`（`Layout.TmpDir`；`Threads.withTmpEnv` 在每次 turn 启动前建目录并写进 env，项目线程、profile 线程、文件夹线程都走这一处，profile 自带的 env 保留）。
+每个线程的 `TMPDIR` / `TMP` / `TEMP` 指向共享 library 里自己的目录，不再用全局 `/tmp`：`<library>/.tmp/<thread-id>/`（`Layout.TmpDir`；`Threads.withThreadEnv` 在每次 turn 启动前建目录并写进 env，项目线程、profile 线程、文件夹线程都走这一处，profile 自带的 env 保留）。
 
 - **为什么在 library 下**：library 已有 `Read`/`Edit` 授权和 auto 分类器条目（上节），`send_file` 也收 library 里的文件；临时文件落在这里就不需要拷贝，也就没有“从 /tmp 拷进 library 被拒”的问题。
 - **为什么用 `.tmp/<thread-id>/`，不用 `outputs/<slug>/tmp/`**：`ListLibrary` 跳过点开头的目录，草稿文件不会出现在 Library 页；thread id 唯一，而标题 slug 会重复。`outputs/<slug>/` 保持“要给用户看的产出”。
 - **提示词**：`ArtifactGuidance`（项目线程的系统提示词和 `send_file` 的工具描述，所以文件夹线程也看得到）告诉线程不要用 `/tmp`，草稿放 `TMPDIR`，要给用户看的放 `outputs/<slug>/`。
-- **清理**：线程被 Resolve 或合并（合并也会 resolve）时 `cleanTmp` 删除该目录；`send_file` 已经把文件复制进 `uploads/`，发出去的文件不受影响。Reopen 后下一个 turn 重建。Archive 不清理（可恢复）。
+- **清理**：线程被 Resolve、Archive 或 Delete 时 `cleanTmp` 删除该目录；`send_file` 已经把文件复制进 `uploads/`，发出去的文件不受影响。Reopen/Restore 后下一个 turn 重建。
 - **未解决**：从未 resolve 的线程留下的目录不会被回收（没有按时间的清理）；Claude Code 自己也读 `TMPDIR`，它的内部临时文件会落在同一目录，resolve 时一起清掉。
+
+### 共享工具缓存（`.cache`）
+
+同一次 turn 启动还把这四个变量指向 `<library>/.cache/` 下按工具分的子目录：`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR`。缓存按项目共享、显式设变量（agent 自建 isolated HOME 也照旧共享）、不进 Library 树/zip/fork、不随线程 Archive/Delete 删除；理由和度量见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10。
 
 `autoMemoryDirectory` 对所有项目线程设置（有仓库的也设），让一个项目只有一份记忆：Projects 自己的 `MEMORY.md` 机制与 Claude 的原生 auto memory 指向同一目录。
 

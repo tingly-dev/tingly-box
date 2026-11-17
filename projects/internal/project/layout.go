@@ -19,6 +19,7 @@ import (
 //	<root>/<project>/memory/MEMORY.md, memory/*.md
 //	<root>/<project>/library/...           uploads; threads write outputs/<thread>/
 //	<root>/<project>/library/.tmp/<thread>/ a thread's TMPDIR (hidden from the Library tab)
+//	<root>/<project>/library/.cache/        tool caches shared by the project's threads
 //	<root>/<project>/threads/<thread>/     each new thread's working directory (older ones keep theirs)
 //	<root>/<project>/threads/<thread>.settings.json
 type Layout struct {
@@ -55,6 +56,23 @@ func (l Layout) TmpDir(projectID, threadID string) string {
 // serves — origin "scratch" — so scratch files are not invisible; uploads
 // into it are still refused.
 const ScratchDir = ".tmp"
+
+// CacheDir is a project's shared tool cache: Go's module and build caches,
+// npm's and pip's, one subdirectory each (see Threads.withThreadEnv). Threads
+// of the project point their cache variables here, so a dependency downloaded
+// once serves every thread instead of being copied into each thread's scratch
+// or isolated HOME. It is a dot directory, beside the scratch subtree, so the
+// Library lists, serves, zips and forks none of it; unlike ScratchDir it is
+// not listed and not deleted with a thread: a cache belongs to the project.
+func (l Layout) CacheDir(projectID string) string {
+	return filepath.Join(l.LibraryDir(projectID), cacheDirName)
+}
+
+// CacheBytes is the size of the project's shared cache, for a Storage page;
+// 0 when the cache does not exist yet.
+func (l Layout) CacheBytes(projectID string) int64 { return dirSize(l.CacheDir(projectID)) }
+
+const cacheDirName = ".cache"
 
 // ThreadDir is a project thread's working directory: its worktree, or a
 // scratch directory when the project has no repository.

@@ -154,6 +154,28 @@ func requireTmpEnv(t *testing.T, env []string, dir string) {
 	assert.DirExists(t, dir)
 }
 
+// envValue returns key's value in an env slice, "" when it is absent.
+func envValue(env []string, key string) string {
+	for _, e := range env {
+		if v, ok := strings.CutPrefix(e, key+"="); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// requireCacheEnv checks a launch's tool caches point at the project's shared
+// cache, one subdirectory each.
+func requireCacheEnv(t *testing.T, env []string, l Layout, projectID string) {
+	t.Helper()
+	cache := l.CacheDir(projectID)
+	for _, c := range cacheDirs {
+		dir := envValue(env, c.Variable)
+		assert.Equal(t, filepath.Join(cache, c.Dir), dir, c.Variable)
+		assert.DirExists(t, dir)
+	}
+}
+
 func TestThreadsGetATempDirInTheLibraryInEveryMode(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
 	work := filepath.Join(t.TempDir(), "work.json")
@@ -169,6 +191,8 @@ func TestThreadsGetATempDirInTheLibraryInEveryMode(t *testing.T) {
 	dir := f.threads.layout.TmpDir(f.project.ID, th.ID)
 	assert.Equal(t, filepath.Join(library, ".tmp", th.ID), dir)
 	requireTmpEnv(t, f.agent.Launches()[0].Env, dir)
+	requireCacheEnv(t, f.agent.Launches()[0].Env, f.threads.layout, f.project.ID)
+	assert.Equal(t, filepath.Join(library, ".cache", "go-mod"), envValue(f.agent.Launches()[0].Env, "GOMODCACHE"))
 
 	// Project thread on a launch profile: the profile's env is kept.
 	f.project.ThreadProfile = "work"
@@ -178,12 +202,20 @@ func TestThreadsGetATempDirInTheLibraryInEveryMode(t *testing.T) {
 	f.report(t)
 	waitStatus(t, f.store, th2.ID, db.ThreadIdle)
 	requireTmpEnv(t, f.agent.Launches()[1].Env, f.threads.layout.TmpDir(f.project.ID, th2.ID))
+	requireCacheEnv(t, f.agent.Launches()[1].Env, f.threads.layout, f.project.ID)
+
+	// Two threads of one project share one cache; their scratch does not.
+	assert.Equal(t,
+		envValue(f.agent.Launches()[0].Env, "GOMODCACHE"),
+		envValue(f.agent.Launches()[1].Env, "GOMODCACHE"),
+		"threads of one project share the Go module cache")
 
 	// Folder thread.
 	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "folder"})
 	require.NoError(t, err)
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
 	requireTmpEnv(t, f.agent.Launches()[2].Env, f.threads.layout.TmpDir(s.ProjectID, s.ID))
+	requireCacheEnv(t, f.agent.Launches()[2].Env, f.threads.layout, s.ProjectID)
 
 	// Scratch files are listed in the Library tab with origin "scratch",
 	// send_file still reads them, and resolving the thread removes the directory.

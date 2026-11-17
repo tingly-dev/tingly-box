@@ -16,7 +16,7 @@ func seedLibrary(t *testing.T) (Layout, string) {
 	t.Helper()
 	l := Layout{Root: t.TempDir()}
 	lib := l.LibraryDir("p")
-	for _, f := range []string{"notes.md", "outputs/run-1/report.md", "outputs/run-1/data/rows.csv", "outputs/run-2/a.txt", "uploads/z.png", ".tmp/t1/scratch", ".hidden"} {
+	for _, f := range []string{"notes.md", "outputs/run-1/report.md", "outputs/run-1/data/rows.csv", "outputs/run-2/a.txt", "uploads/z.png", ".tmp/t1/scratch", ".hidden", ".cache/go-mod/cache.bin"} {
 		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(lib, f)), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(lib, f), []byte("x"), 0o644))
 	}
