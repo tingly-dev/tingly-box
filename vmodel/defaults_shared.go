@@ -25,13 +25,14 @@ type MockUsage struct {
 // added here; tests should build their own GenericRegistry rather than
 // pollute the production defaults set.
 type SharedMockSpec struct {
-	ID           string          `json:"id" yaml:"id"`
-	Name         string          `json:"name,omitempty" yaml:"name,omitempty"`
-	Description  string          `json:"description,omitempty" yaml:"description,omitempty"`
-	Content      string          `json:"content,omitempty" yaml:"content,omitempty"`
-	ToolCall     *ToolCallConfig `json:"tool_call,omitempty" yaml:"tool_call,omitempty"`
-	Delay        time.Duration   `json:"delay,omitempty" yaml:"delay,omitempty"`
-	StreamChunks []string        `json:"stream_chunks,omitempty" yaml:"stream_chunks,omitempty"`
+	ID           string           `json:"id" yaml:"id"`
+	Name         string           `json:"name,omitempty" yaml:"name,omitempty"`
+	Description  string           `json:"description,omitempty" yaml:"description,omitempty"`
+	Content      string           `json:"content,omitempty" yaml:"content,omitempty"`
+	ToolCalls    []ToolCallConfig `json:"tool_calls,omitempty" yaml:"tool_calls,omitempty"`
+	ToolCall     *ToolCallConfig  `json:"tool_call,omitempty" yaml:"tool_call,omitempty"`
+	Delay        time.Duration    `json:"delay,omitempty" yaml:"delay,omitempty"`
+	StreamChunks []string         `json:"stream_chunks,omitempty" yaml:"stream_chunks,omitempty"`
 	// Protocol-native completion reasons; empty values keep each protocol's defaults.
 	FinishReason  string          `json:"finish_reason,omitempty" yaml:"finish_reason,omitempty"`
 	StopReason    string          `json:"stop_reason,omitempty" yaml:"stop_reason,omitempty"`

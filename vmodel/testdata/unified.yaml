@@ -1,0 +1,10 @@
+id: unified-hello
+kind: mock
+mock:
+  content: Hello from one definition.
+  usage:
+    prompt_tokens: 10
+    completion_tokens: 8
+expect:
+  http_status: 200
+  content_equals: Hello from one definition.

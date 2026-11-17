@@ -11,6 +11,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
+	"github.com/tingly-dev/tingly-box/vmodel/spec"
 )
 
 func TestVModelGatewayIntegration(t *testing.T) {
@@ -99,5 +101,68 @@ func TestVModelGatewayIntegration(t *testing.T) {
 	}
 	if len(cfg.GetRequestConfigs()) != beforeRules || len(cfg.ListProviders()) != beforeProviders {
 		t.Fatal("partial registration was not rolled back")
+	}
+}
+
+func TestVModelNativeRecordingGateway(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cfg.CloseStores()
+	gatewayServer := server.NewServer(cfg, server.WithUI(true))
+	defer gatewayServer.CloseMCPRuntime()
+	defer gatewayServer.CloseVirtualModelServer()
+	gateway := httptest.NewServer(gatewayServer.GetRouter())
+	defer gateway.Close()
+	text := scenario.TextScenario()
+	var defs []spec.Definition
+	for _, p := range []struct {
+		id     string
+		format scenario.ResponseFormat
+	}{{"responses-only", scenario.FormatOpenAIResponses}, {"google-only", scenario.FormatGoogle}} {
+		status, body := text.MockResponses[p.format].NonStream()
+		defs = append(defs, spec.Definition{ID: p.id, Kind: spec.Recording, Responses: map[scenario.ResponseFormat]scenario.Response{p.format: {Status: status, Body: body}}})
+	}
+	r, err := spec.New(defs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstream := httptest.NewServer(r)
+	defer upstream.Close()
+	ready := vmodelReady{URL: upstream.URL, OpenAIBaseURL: upstream.URL + "/openai/v1", AnthropicBaseURL: upstream.URL + "/anthropic", GoogleBaseURL: upstream.URL, Models: r.IDs()}
+	g := &vmodelGateway{baseURL: gateway.URL, token: cfg.GetUserToken(), client: gateway.Client()}
+	cleanup, err := g.attach(context.Background(), &ready)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	for _, id := range r.IDs() {
+		rule := cfg.GetRuleByRequestModelAndScenario(id, typ.ScenarioVModel)
+		if rule == nil {
+			t.Fatalf("missing route for %s", id)
+		}
+		provider, err := cfg.GetProviderByUUID(rule.Services[0].Provider)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id == "responses-only" && provider.OpenAIEndpointMode != "responses" {
+			t.Fatalf("wrong endpoint mode: %s", provider.OpenAIEndpointMode)
+		}
+		req, err := http.NewRequest("POST", gateway.URL+"/tingly/vmodel/v1/chat/completions", strings.NewReader(`{"model":"`+id+`","messages":[{"role":"user","content":"hi"}]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+cfg.GetModelToken())
+		req.Header.Set("Content-Type", "application/json")
+		response, err := gateway.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != 200 || !strings.Contains(string(body), "Paris") {
+			t.Fatalf("%s: %d %s", id, response.StatusCode, body)
+		}
 	}
 }

@@ -25,6 +25,7 @@ vmodel/
 ├── defaults_shared.go  // SharedDefaultMocks() + ExtendedErrorSpecs() — shared specs
 ├── error_injection.go  // ErrorInjection, ErrorInjectingModel, EmitGate
 ├── README.md
+├── spec/               // Unified definitions, catalog, loading, serving and test adapters
 ├── anthropic/          // Anthropic-protocol models + Registry alias
 ├── openai/             // OpenAI Chat-protocol models + Registry alias
 ├── decision/           // Decisions-endpoint models (options in, one answer out) + Registry alias
@@ -145,148 +146,53 @@ protocol-version distinction does not leak into the `VirtualModel` interface.
 
 ### JSON / YAML files
 
-Start a provider directly from the tb CLI (foreground; Ctrl+C or SIGTERM
-stops it). By default it registers temporary providers and routing rules in
-the running tb instance selected by the global `--config-dir`:
+All model kinds use `vmodel/spec.Definition` and `spec.Load`: ordinary mocks,
+recorded responses, sequences, decisions, transforms and named Go behavior.
+The service and matrix commands load the same file:
 
 ```sh
 tb start
-tb vmodel
-tb vmodel --config vmodel/testdata/model.yaml --port 12581
-tb vmodel --config model-a.yaml --config model-b.json --port 0 --json
-tb vmodel --config model.yaml --standalone
+tb vmodel --config vmodel/testdata/unified.yaml
+go run ./cli/harness matrix --mode single --config vmodel/testdata/unified.yaml
 ```
 
-With no `--config`, it serves the built-in demo models. With config files, it
-serves only those models, registered for both OpenAI and Anthropic; duplicate
-IDs and invalid files fail before listening. These files use `SharedMockSpec`
-below (static/tool/error models), not the gateway's provider configuration or
-the recorded `Scenario` format. The CLI writes through the running server's
-authenticated management APIs; it never opens a second database connection.
-`--standalone` starts only the provider and needs no running tb instance.
+The VModel listener picks a free local port by default. It reports direct
+OpenAI/Anthropic/Google URLs and, after successful registration in tb, a
+`gateway_base_url` under `/tingly/vmodel`. Use that gateway URL with tb's model
+token for normal routing, rule flags, logging and usage. `--standalone` serves
+the direct endpoints without registering in tb or opening its database.
+`--json` emits one readiness record; `GET /healthz` reports service readiness.
 
-The injected rules appear in **Scenarios → VModel** (`/agent/vmodel`). The
-existing VModel power-up shows/hides both this scenario and the Virtual Models
-credentials entry; it keeps the user's saved visibility choice and does not
-stop running processes. Rules use the model IDs as request names, so an
-existing rule with the same name causes startup to fail without overwriting it.
-On startup failure, partial registration is rolled back. On normal shutdown,
-only the rules and providers created by this process are removed. A forced
-kill or an unavailable gateway can leave temporary entries for manual cleanup.
-
-To exercise tb's routing, rule flags, logs, usage and other normal features,
-send requests to the printed `gateway_base_url`, e.g.
-`http://127.0.0.1:12580/tingly/vmodel` on a gateway listening on 12580, using
-the gateway's model token. Append `/v1` for an OpenAI SDK base URL. The direct
-provider URLs below remain useful for isolated tests. The standalone listener
-port is independent of the gateway port and is automatically selected by default.
-
-The default listener is `127.0.0.1` on an automatically selected free port;
-`--host` changes the bind address and `--port` selects a fixed port. Startup
-prints the actual URLs and model IDs. `--json` emits one JSON readiness record with `url`, `openai_base_url`,
-`anthropic_base_url`, and `models`, plus `gateway_base_url` and `scenario` when
-registered with tb. Readiness is printed after registration succeeds.
-`GET /healthz` returns 200 while running.
-The standalone testing server has no authentication; clients that require an
-API key can use any nonempty placeholder.
-
-For a client or another tb instance, use the printed protocol base URL:
-
-| Client | Base URL with `--port 12581` | Model |
-| --- | --- | --- |
-| OpenAI Chat / Responses | `http://127.0.0.1:12581/openai/v1` | configured id, e.g. `file-hello` |
-| Anthropic Messages | `http://127.0.0.1:12581/anthropic` | the same configured id |
-
-The conventional `/v1/chat/completions`, `/v1/responses`, `/v1/messages`, and
-`/v1/models` entrypoints are available as well. When configuring a tb provider,
-select its matching API style, set this base URL and a placeholder key, and
-route the test model to the configured VModel id.
-
-File loading reuses the existing mock configs, scenario builders, registries,
-and assertions. It does not register fixtures in production defaults.
-
-For a static, tool, or error model, use the fields of `SharedMockSpec` with
-snake_case names (example: [`testdata/model.yaml`](testdata/model.yaml)):
+The injected rules appear in **Scenarios → VModel**. The existing VModel
+power-up controls both this page and the virtual-credentials navigation entry,
+keeping the user's saved visibility choice. Registration uses the running
+server's authenticated management APIs. Existing model-name collisions fail
+without overwriting rules, partial registration rolls back, and normal exit
+removes this process's temporary rules/providers. Forced termination or an
+unavailable gateway can leave entries for manual cleanup.
 
 ```yaml
-id: file-hello
-content: Hello from a file.
-delay: 50ms
-usage:
-  prompt_tokens: 10
-  completion_tokens: 8
-```
-
-```go
-spec, err := vmodel.LoadMockSpec("model.yaml") // JSON works identically
-if err != nil {
-    return err
-}
-// Both MockModelConfig names are aliases of SharedMockSpec.
-model := openai.NewMockModel(spec) // or anthropic.NewMockModel(spec)
-if err := reg.Register(model); err != nil {
-    return err
-}
-```
-
-`DecodeMockSpec(data)` is the equivalent byte-oriented entry point. `delay`
-accepts a duration string such as `"50ms"` in either format, or integer
-nanoseconds as emitted by `json.Marshal(spec)`. Omitted delay is zero; omitted
-name defaults to id. Protocol-native `finish_reason` / `stop_reason` retain
-their existing defaults. Error stage/mode values retain the existing Go enum
-values: stage 0 = pre-content, 1 = mid-stream; mode 0 = connection close,
-1 = error event, 2 = clean EOF. Sequence and transform configs keep their
-existing APIs; this loader covers static/tool/error mocks.
-
-For recorded responses, use the existing scenario shape with data in place
-of Go closures (example: [`testdata/recorded.yaml`](testdata/recorded.yaml)):
-
-```yaml
-name: recorded-hello
-mock_responses:
-  openai_chat:
-    status: 200
-    body:
-      choices:
-        - message: {role: assistant, content: Hello.}
-          finish_reason: stop
+id: hello
+kind: mock
+mock:
+  content: Hello.
+  delay: 50ms
 expect:
   http_status: 200
   content_equals: Hello.
 ```
 
-`scenario.LoadFixture(path)` / `scenario.DecodeFixture(data)` return an
-ordinary `scenario.Scenario`, usable by the existing benchmark server and
-`protocoltest`. Response keys are `openai_chat`, `openai_responses`,
-`anthropic`, and `google`. `body` is a JSON value; `raw_body` is an alternative
-string for exact bytes, including malformed JSON. `stream` holds the original
-SSE lines in `MockResponseBuilder.Stream` format, without adding completion
-events. `status` defaults to 200. For an HTTP error on a streaming request,
-set `stream_http_error` to the error status; omitted `status` then defaults to
-that same value. If both are present they must agree.
+`tb vmodel --export catalog.yaml` exports the complete core inventory,
+including opt-in test fixtures, without starting a service. With `--config`,
+export normalizes just those inputs. Existing flat mock/sequence files and
+legacy `name`/`mock_responses` files remain accepted. `--fixture` remains a
+matrix alias for `--config`.
 
-`expect` compiles to the existing content assertions; `structural` compiles
-to upstream-independent assertions. Available fields are `http_status`,
-`content_equals`, `content_contains`, `finish_reason`, `tool_call_count`,
-`content_non_empty`, and `stream_events`. Assertions are explicit: a recording
-does not automatically become an approved baseline. Request-dependent Go
-builders continue to work through the existing API.
-
-Run imported recordings through the existing gateway matrix:
-
-```sh
-go run ./cli/harness matrix --mode=single \
-  --fixture vmodel/testdata/recorded.yaml \
-  --source openai_chat --target openai_chat --json
-```
-
-`--fixture` is repeatable and replaces the built-in scenario selection for
-that run. It requires at least one `expect` assertion per file. Select targets
-for which the recording provides responses; use `--streaming` or
-`--non-streaming` when the fixture only supports that mode. Existing `--json`
-results and `--record-dir` evidence output are reused. Both loaders reject
-unknown fields, duplicate keys, and multiple documents, so misspelled config
-does not silently change behavior.
+See [the unified definition contract](spec/README.md) for all kinds,
+per-protocol recording payloads, exact `raw_body`/`raw_stream` preservation,
+native endpoint assertions, custom Go factories and migration boundaries.
+Old `LoadMockSpec` / `scenario.LoadFixture` APIs remain available to existing
+Go callers; new serving and test paths use the unified loader.
 
 ### Base (`interface.go`)
 

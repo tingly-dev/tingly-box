@@ -1,9 +1,13 @@
 package scenario
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/tidwall/gjson"
 	"os"
+	"reflect"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -45,6 +49,7 @@ type Response struct {
 	Status          int             `json:"status,omitempty"`
 	Body            json.RawMessage `json:"body,omitempty"`
 	RawBody         *string         `json:"raw_body,omitempty"`
+	RawStream       *string         `json:"raw_stream,omitempty"`
 	Stream          []string        `json:"stream,omitempty"`
 	StreamHTTPError int             `json:"stream_http_error,omitempty"`
 }
@@ -52,20 +57,67 @@ type Response struct {
 // Expect maps a small declarative vocabulary onto the existing check library.
 // Pointers distinguish an omitted assertion from an explicit empty/zero value.
 type Expect struct {
-	HTTPStatus      *int     `json:"http_status,omitempty"`
-	ContentEquals   *string  `json:"content_equals,omitempty"`
-	ContentContains *string  `json:"content_contains,omitempty"`
-	FinishReason    *string  `json:"finish_reason,omitempty"`
-	ToolCallCount   *int     `json:"tool_call_count,omitempty"`
-	ContentNonEmpty bool     `json:"content_non_empty,omitempty"`
-	StreamEvents    []string `json:"stream_events,omitempty"`
+	JSONFields      map[string]json.RawMessage `json:"json_fields,omitempty"`
+	BodyContains    *string                    `json:"body_contains,omitempty"`
+	HTTPStatus      *int                       `json:"http_status,omitempty"`
+	ContentEquals   *string                    `json:"content_equals,omitempty"`
+	ContentContains *string                    `json:"content_contains,omitempty"`
+	FinishReason    *string                    `json:"finish_reason,omitempty"`
+	ToolCallCount   *int                       `json:"tool_call_count,omitempty"`
+	ContentNonEmpty bool                       `json:"content_non_empty,omitempty"`
+	StreamEvents    []string                   `json:"stream_events,omitempty"`
 }
 
-func (e *Expect) assertions() []check.Assertion {
+func (e *Expect) Assertions() []check.Assertion {
 	if e == nil {
 		return nil
 	}
 	var out []check.Assertion
+	if e.BodyContains != nil {
+		want := *e.BodyContains
+		out = append(out, check.Assertion{Name: "body_contains", Check: func(r *check.RoundTripResult) error {
+			if !strings.Contains(string(r.RawBody), want) {
+				return fmt.Errorf("body does not contain %q", want)
+			}
+			return nil
+		}})
+	}
+	keys := make([]string, 0, len(e.JSONFields))
+	for path := range e.JSONFields {
+		keys = append(keys, path)
+	}
+	sort.Strings(keys)
+	for _, path := range keys {
+		expected := append(json.RawMessage(nil), e.JSONFields[path]...)
+		out = append(out, check.Assertion{Name: "json_field(" + path + ")", Check: func(r *check.RoundTripResult) error {
+			if !json.Valid(r.RawBody) {
+				return fmt.Errorf("response body is not JSON")
+			}
+			actual := gjson.GetBytes(r.RawBody, path)
+			if !actual.Exists() {
+				return fmt.Errorf("missing JSON field %s", path)
+			}
+			decode := func(raw []byte) (any, error) {
+				var value any
+				decoder := json.NewDecoder(bytes.NewReader(raw))
+				decoder.UseNumber()
+				err := decoder.Decode(&value)
+				return value, err
+			}
+			want, err := decode(expected)
+			if err != nil {
+				return err
+			}
+			got, err := decode([]byte(actual.Raw))
+			if err != nil {
+				return err
+			}
+			if !reflect.DeepEqual(want, got) {
+				return fmt.Errorf("JSON field %s: got %s, want %s", path, actual.Raw, expected)
+			}
+			return nil
+		}})
+	}
 	if e.HTTPStatus != nil {
 		out = append(out, check.AssertHTTPStatus(*e.HTTPStatus))
 	}
@@ -92,6 +144,7 @@ func (e *Expect) assertions() []check.Assertion {
 
 // LoadFixture loads JSON or YAML into the same Scenario used by the benchmark
 // and protocoltest registries. It does not modify any default registry.
+// Deprecated: use vmodel/spec.Load and Runtime.Scenario for unified definitions.
 func LoadFixture(path string) (Scenario, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -123,13 +176,13 @@ func (f Fixture) Build() (Scenario, error) {
 	}
 	s := Scenario{
 		Name: f.Name, Description: f.Description, Tags: append([]string(nil), f.Tags...),
-		Assertions: f.Expect.assertions(), Structural: f.Structural.assertions(),
+		Assertions: f.Expect.Assertions(), Structural: f.Structural.Assertions(),
 		SkipTransitive: f.SkipTransitive,
 		MockResponses:  make(map[ResponseFormat]MockResponseBuilder, len(f.MockResponses)),
 	}
 	for format, response := range f.MockResponses {
 		switch format {
-		case FormatOpenAIChat, FormatOpenAIResponses, FormatAnthropic, FormatGoogle:
+		case FormatOpenAIChat, FormatOpenAIResponses, FormatAnthropic, FormatGoogle, ResponseFormat("decisions"):
 		default:
 			return Scenario{}, fmt.Errorf("unknown mock_responses format %q", format)
 		}
@@ -168,7 +221,10 @@ func (r Response) builder() (MockResponseBuilder, error) {
 	if r.RawBody != nil {
 		body = []byte(*r.RawBody)
 	}
-	if body == nil && r.Stream == nil {
+	if r.RawStream != nil && r.Stream != nil {
+		return MockResponseBuilder{}, fmt.Errorf("stream and raw_stream are mutually exclusive")
+	}
+	if body == nil && r.Stream == nil && r.RawStream == nil {
 		return MockResponseBuilder{}, fmt.Errorf("body, raw_body, or stream is required")
 	}
 	if r.StreamHTTPError != 0 && body == nil {
@@ -181,7 +237,12 @@ func (r Response) builder() (MockResponseBuilder, error) {
 	}
 	// The matrix detects streaming support from this callback's presence.
 	// A pre-content HTTP failure supports streaming requests without SSE data.
-	if r.Stream != nil || r.StreamHTTPError != 0 {
+	if r.RawStream != nil {
+		raw := []byte(*r.RawStream)
+		b.RawStream = func() []byte { return append([]byte(nil), raw...) }
+		b.Stream = func() []string { return []string{string(raw)} }
+	}
+	if r.Stream != nil || (r.StreamHTTPError != 0 && r.RawStream == nil) {
 		lines := append([]string(nil), r.Stream...)
 		b.Stream = func() []string { return append([]string(nil), lines...) }
 	}

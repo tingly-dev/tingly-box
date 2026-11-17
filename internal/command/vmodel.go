@@ -10,29 +10,39 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sort"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/app"
-	"github.com/tingly-dev/tingly-box/vmodel"
-	"github.com/tingly-dev/tingly-box/vmodel/anthropic"
-	"github.com/tingly-dev/tingly-box/vmodel/openai"
-	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
+	"github.com/tingly-dev/tingly-box/vmodel/spec"
 )
 
 // VModelCmdKong starts an isolated provider without the gateway or its stores.
 type VModelCmdKong struct {
-	Config     []string `kong:"name='config',help='JSON/YAML mock model file (repeatable); omit to use builtin models'"`
+	Config     []string `kong:"name='config',help='JSON/YAML model definition or list (repeatable); omit to use builtin models'"`
 	Host       string   `kong:"name='host',default='127.0.0.1',help='Address to bind'"`
 	Port       int      `kong:"name='port',default='0',help='Port to listen on; defaults to a free port'"`
 	JSON       bool     `kong:"name='json',help='Print one JSON readiness record with URLs and model IDs'"`
+	Export     string   `kong:"name='export',help='Export definitions to a .json or .yaml file and exit; omit --config to export the full builtin catalog'"`
 	Standalone bool     `kong:"name='standalone',help='Run without registering providers and rules in the running tb instance'"`
 }
 
 func (c *VModelCmdKong) Run(appManager *app.AppManager) error {
+	if c.Export != "" {
+		defs, err := c.definitions(true)
+		if err != nil {
+			return err
+		}
+		data, err := spec.Export(defs, strings.TrimPrefix(filepath.Ext(c.Export), "."))
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(c.Export, data, 0600)
+	}
 	if c.Port < 0 || c.Port > 65535 {
 		return fmt.Errorf("port must be 0..65535")
 	}
@@ -55,54 +65,38 @@ type vmodelReady struct {
 	OpenAIBaseURL    string   `json:"openai_base_url"`
 	AnthropicBaseURL string   `json:"anthropic_base_url"`
 	Models           []string `json:"models"`
+	GoogleBaseURL    string   `json:"google_base_url,omitempty"`
 	GatewayBaseURL   string   `json:"gateway_base_url,omitempty"`
 	Scenario         string   `json:"scenario,omitempty"`
 }
 
-func (c *VModelCmdKong) handler() (http.Handler, []string, error) {
-	var svc *virtualserver.Service
+func (c *VModelCmdKong) definitions(all bool) ([]spec.Definition, error) {
 	if len(c.Config) == 0 {
-		svc = virtualserver.NewService()
-	} else {
-		svc = virtualserver.NewEmptyService()
-		for _, path := range c.Config {
-			spec, err := vmodel.LoadMockSpec(path)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := svc.GetOpenAIRegistry().Register(openai.NewMockModel(spec)); err != nil {
-				return nil, nil, fmt.Errorf("%s: %w", path, err)
-			}
-			if err := svc.GetAnthropicRegistry().Register(anthropic.NewMockModel(spec)); err != nil {
-				return nil, nil, fmt.Errorf("%s: %w", path, err)
-			}
+		if all {
+			return spec.AllDefinitions(), nil
 		}
+		return spec.DefaultDefinitions(), nil
 	}
-	router := gin.New()
-	router.Use(gin.Recovery())
-	router.NoRoute(svc.GetHandler().NotSupported)
-	svc.SetupOpenAIRoutes(router.Group("/openai"))
-	svc.SetupAnthropicRoutes(router.Group("/anthropic"))
-	// Conventional /v1 entrypoints also allow clients to use the bare URL.
-	svc.SetupOpenAIRoutes(router.Group(""))
-	router.POST("/v1/messages", svc.GetHandler().Messages)
-	router.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ready"}) })
-	seen := make(map[string]bool)
-	for _, m := range svc.GetOpenAIRegistry().ListModels() {
-		seen[m.ID] = true
+	var defs []spec.Definition
+	for _, path := range c.Config {
+		loaded, err := spec.Load(path)
+		if err != nil {
+			return nil, err
+		}
+		defs = append(defs, loaded...)
 	}
-	for _, m := range svc.GetAnthropicRegistry().ListModels() {
-		seen[m.ID] = true
+	return defs, nil
+}
+func (c *VModelCmdKong) handler() (http.Handler, []string, error) {
+	defs, err := c.definitions(false)
+	if err != nil {
+		return nil, nil, err
 	}
-	for _, m := range svc.GetDecisionRegistry().ListModels() {
-		seen[m.ID] = true
+	runtime, err := spec.New(defs)
+	if err != nil {
+		return nil, nil, err
 	}
-	ids := make([]string, 0, len(seen))
-	for id := range seen {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	return router, ids, nil
+	return runtime, runtime.IDs(), nil
 }
 
 func (c *VModelCmdKong) run(ctx context.Context, out io.Writer) error {
@@ -137,7 +131,7 @@ func (c *VModelCmdKong) runAttached(ctx context.Context, out io.Writer, attach v
 		}
 	}
 	base := "http://" + net.JoinHostPort(host, strconv.Itoa(address.Port))
-	ready := vmodelReady{URL: base, OpenAIBaseURL: base + "/openai/v1", AnthropicBaseURL: base + "/anthropic", Models: models}
+	ready := vmodelReady{URL: base, OpenAIBaseURL: base + "/openai/v1", AnthropicBaseURL: base + "/anthropic", Models: models, GoogleBaseURL: base}
 	if attach != nil {
 		cleanup, err := attach(ctx, &ready)
 		if err != nil {

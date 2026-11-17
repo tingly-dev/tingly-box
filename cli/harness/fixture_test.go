@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/alecthomas/kong"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,7 @@ func TestMatrixFixtureValidation(t *testing.T) {
 		want string
 	}{
 		{"mode", MatrixCmd{Mode: "default", Fixtures: []string{valid}}, "requires --mode=single"},
-		{"duplicate", MatrixCmd{Mode: "single", Fixtures: []string{valid, valid}}, "duplicate fixture name"},
+		{"duplicate", MatrixCmd{Mode: "single", Fixtures: []string{valid, valid}}, "duplicate definition id"},
 		{"assertions", MatrixCmd{Mode: "single", Fixtures: []string{noExpect}}, "at least one expect"},
 		{"filter", MatrixCmd{Mode: "single", Fixtures: []string{valid}, Scenarios: []string{"missing"}}, "not found"},
 	} {
@@ -33,5 +34,21 @@ func TestMatrixFixtureValidation(t *testing.T) {
 				t.Fatalf("got %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestUnifiedConfigAndFixtureAlias(t *testing.T) {
+	for _, flag := range []string{"--config", "--fixture"} {
+		var cli CLI
+		parser, err := kong.New(&cli)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := parser.Parse([]string{"matrix", "--mode", "single", flag, "model.yaml"}); err != nil {
+			t.Fatal(err)
+		}
+		if len(cli.Matrix.Fixtures) != 1 || cli.Matrix.Fixtures[0] != "model.yaml" {
+			t.Fatalf("lost %s alias", flag)
+		}
 	}
 }

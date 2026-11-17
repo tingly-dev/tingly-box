@@ -34,6 +34,7 @@ func DecodeConfig(data []byte, dst any) error {
 	}
 	jd := json.NewDecoder(bytes.NewReader(raw))
 	jd.DisallowUnknownFields()
+	jd.UseNumber()
 	if err := jd.Decode(dst); err != nil {
 		return fmt.Errorf("decode config: %w", err)
 	}
@@ -42,6 +43,7 @@ func DecodeConfig(data []byte, dst any) error {
 
 // LoadMockSpec loads a single static/tool/error model without registering it in
 // production defaults. Pass the result directly to either protocol's NewMockModel.
+// Deprecated: use vmodel/spec.Load for the common model and test file contract.
 func LoadMockSpec(path string) (*SharedMockSpec, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -91,8 +93,16 @@ func DecodeMockSpec(data []byte) (*SharedMockSpec, error) {
 	if spec.Delay < 0 {
 		return nil, fmt.Errorf("delay must not be negative")
 	}
-	if spec.ToolCall != nil && strings.TrimSpace(spec.ToolCall.Name) == "" {
-		return nil, fmt.Errorf("tool_call.name is required")
+	if spec.ToolCall != nil && len(spec.ToolCalls) > 0 {
+		return nil, fmt.Errorf("tool_call and tool_calls cannot both be set")
+	}
+	for i, call := range spec.Calls() {
+		if strings.TrimSpace(call.Name) == "" {
+			return nil, fmt.Errorf("tool_calls[%d].name is required", i)
+		}
+		if call.RawArguments != nil && (!json.Valid(call.RawArguments) || call.Arguments != nil) {
+			return nil, fmt.Errorf("tool_calls[%d]: raw_arguments must be JSON and cannot accompany arguments", i)
+		}
 	}
 	if e := spec.Error; e != nil {
 		if e.Stage != ErrorStagePreContent && e.Stage != ErrorStageMidStream {

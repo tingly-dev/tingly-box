@@ -170,6 +170,19 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 		return
 	}
 
+	if req.OpenAIEndpointMode != "" {
+		if req.APIStyle != "openai" {
+			badRequest(c, "openai_endpoint_mode requires openai api_style")
+			return
+		}
+		switch req.OpenAIEndpointMode {
+		case "chat", "responses", "both":
+		default:
+			badRequest(c, "invalid openai_endpoint_mode")
+			return
+		}
+	}
+
 	// Credential requirements differ by auth type: multi-field cloud creds
 	// (aws_sigv4/azure_key/gcp_sa) validate the bundle; every other type keeps
 	// the pre-existing rule — a token is required unless NoKeyRequired.
@@ -207,18 +220,19 @@ func (h *Handler) CreateProvider(c *gin.Context) {
 	}
 
 	p := &typ.Provider{
-		UUID:             uid.String(),
-		Name:             req.Name,
-		APIBase:          req.APIBase,
-		APIStyle:         protocol.APIStyle(req.APIStyle),
-		APIBaseOpenAI:    req.APIBaseOpenAI,
-		APIBaseAnthropic: req.APIBaseAnthropic,
-		Token:            req.Token,
-		NoKeyRequired:    req.NoKeyRequired,
-		Enabled:          true, // always make new provider enabled
-		ProxyURL:         req.ProxyURL,
-		AuthType:         authType,
-		Timeout:          constant.DefaultRequestTimeout,
+		UUID:               uid.String(),
+		Name:               req.Name,
+		APIBase:            req.APIBase,
+		OpenAIEndpointMode: ai.OpenAIEndpointMode(req.OpenAIEndpointMode),
+		APIStyle:           protocol.APIStyle(req.APIStyle),
+		APIBaseOpenAI:      req.APIBaseOpenAI,
+		APIBaseAnthropic:   req.APIBaseAnthropic,
+		Token:              req.Token,
+		NoKeyRequired:      req.NoKeyRequired,
+		Enabled:            true, // always make new provider enabled
+		ProxyURL:           req.ProxyURL,
+		AuthType:           authType,
+		Timeout:            constant.DefaultRequestTimeout,
 	}
 
 	// Attach the multi-field credential bundle and clear any stray token so the

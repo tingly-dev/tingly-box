@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
-	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
+	"github.com/tingly-dev/tingly-box/vmodel/spec"
 )
 
 // MatrixCmd runs the protocol validation matrix tests.
@@ -22,7 +23,7 @@ import (
 //
 // --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
-	Fixtures   []string `kong:"name='fixture',help='Load a JSON/YAML scenario file (repeatable; replaces builtins; requires --mode=single)'"`
+	Fixtures   []string `kong:"name='config',aliases='fixture',help='Load a JSON/YAML model definition or list (repeatable; replaces builtins; requires --mode=single)'"`
 	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
 	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
@@ -130,6 +131,9 @@ func (*MatrixCmd) Help() string {
 
 // Run executes the matrix tests with the parsed flags.
 func (m *MatrixCmd) Run() error {
+	// The harness owns the process mode. Definition compilation registers Gin
+	// routes before a gateway starts; debug route dumps would corrupt --json.
+	gin.SetMode(gin.ReleaseMode)
 	verbose := m.Verbose
 
 	// Set log level based on verbose flag
@@ -165,16 +169,28 @@ func (m *MatrixCmd) Run() error {
 	var fixtures []protocoltest.Scenario
 	if len(m.Fixtures) > 0 {
 		if m.Mode != "single" {
-			return fmt.Errorf("--fixture requires --mode=single")
+			return fmt.Errorf("--config/--fixture requires --mode=single")
 		}
 		seen := make(map[string]bool)
+		var definitions []spec.Definition
 		for _, path := range m.Fixtures {
-			fixture, err := scenario.LoadFixture(path)
+			loaded, err := spec.Load(path)
 			if err != nil {
 				return err
 			}
-			if seen[fixture.Name] {
-				return fmt.Errorf("duplicate fixture name %q", fixture.Name)
+			definitions = append(definitions, loaded...)
+		}
+		runtime, err := spec.New(definitions)
+		if err != nil {
+			return err
+		}
+		for _, id := range runtime.IDs() {
+			if len(m.Scenarios) > 0 && !slices.Contains(m.Scenarios, id) {
+				continue
+			}
+			fixture, err := runtime.Scenario(id)
+			if err != nil {
+				return err
 			}
 			if len(fixture.Assertions) == 0 {
 				return fmt.Errorf("fixture %q requires at least one expect assertion for matrix tests", fixture.Name)
@@ -184,7 +200,7 @@ func (m *MatrixCmd) Run() error {
 		}
 		for _, name := range m.Scenarios {
 			if !seen[name] {
-				return fmt.Errorf("scenario %q not found in --fixture files", name)
+				return fmt.Errorf("scenario %q not found in --config files", name)
 			}
 		}
 	}

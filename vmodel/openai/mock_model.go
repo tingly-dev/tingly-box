@@ -2,7 +2,7 @@ package openai
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
@@ -27,7 +27,7 @@ var _ VirtualModel = (*MockModel)(nil)
 // (or "tool_calls" if ToolCall is set).
 func NewMockModel(cfg *MockModelConfig) *MockModel {
 	if cfg.FinishReason == "" {
-		if cfg.ToolCall != nil {
+		if len(cfg.Calls()) > 0 {
 			cfg.FinishReason = "tool_calls"
 		} else {
 			cfg.FinishReason = "stop"
@@ -38,7 +38,7 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 		description = vmodel.DefaultMockDescription
 	}
 	typ := vmodel.VirtualModelTypeStatic
-	if cfg.ToolCall != nil {
+	if len(cfg.Calls()) > 0 {
 		typ = vmodel.VirtualModelTypeTool
 	}
 	return &MockModel{
@@ -65,7 +65,7 @@ func (m *MockModel) streamChunks() []string {
 
 // HandleOpenAIChat returns fixed content from config in OpenAI Chat format.
 func (m *MockModel) HandleOpenAIChat(_ *protocol.OpenAIChatCompletionRequest) (VModelResponse, error) {
-	if m.cfg.ToolCall != nil {
+	if len(m.cfg.Calls()) > 0 {
 		return m.toolResponse(), nil
 	}
 	return VModelResponse{
@@ -75,16 +75,23 @@ func (m *MockModel) HandleOpenAIChat(_ *protocol.OpenAIChatCompletionRequest) (V
 }
 
 func (m *MockModel) toolResponse() VModelResponse {
-	tc := m.cfg.ToolCall
-	argsJSON, _ := json.Marshal(tc.Arguments)
-	return VModelResponse{
-		ToolCalls: []VToolCall{{
-			ID:        "toolu_virtual",
-			Name:      tc.Name,
-			Arguments: string(argsJSON),
-		}},
-		FinishReason: "tool_calls",
+	calls := m.cfg.Calls()
+	out := make([]VToolCall, 0, len(calls))
+	for i, tc := range calls {
+		id := tc.ID
+		if id == "" {
+			id = "toolu_virtual"
+			if len(calls) > 1 {
+				id = fmt.Sprintf("toolu_virtual_%d", i)
+			}
+		}
+		out = append(out, VToolCall{ID: id, Name: tc.Name, Arguments: string(vmodel.ToolArguments(tc))})
 	}
+	content := m.cfg.Content
+	if m.cfg.ToolCall != nil {
+		content = ""
+	} // Legacy singular tool mocks ignored Content.
+	return VModelResponse{Content: content, ToolCalls: out, FinishReason: m.cfg.FinishReason}
 }
 
 // HandleOpenAIChatStream streams fixed content using configured chunks with simulated delay.
@@ -110,3 +117,6 @@ func (m *MockModel) HandleOpenAIChatStream(ctx context.Context, req *protocol.Op
 	emit(DoneEvent{FinishReason: resp.FinishReason})
 	return nil
 }
+
+// Spec returns the model configuration for lossless catalog export.
+func (m *MockModel) Spec() vmodel.SharedMockSpec { return *m.cfg }

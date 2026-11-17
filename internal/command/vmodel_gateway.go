@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -111,7 +112,11 @@ func (g *vmodelGateway) attach(ctx context.Context, ready *vmodelReady) (func() 
 	fail := func(err error) (func() error, error) { return nil, errors.Join(err, cleanup()) }
 	selected := make(map[string]string)
 	instance := uuid.NewString()
-	for _, source := range []struct{ style, base string }{{"openai", ready.OpenAIBaseURL}, {"anthropic", ready.AnthropicBaseURL + "/v1"}} {
+	sources := []struct{ style, base, mode string }{{"openai", ready.OpenAIBaseURL, "both"}, {"openai", ready.OpenAIBaseURL, "chat"}, {"openai", ready.OpenAIBaseURL, "responses"}, {"anthropic", ready.AnthropicBaseURL + "/v1", ""}}
+	if ready.GoogleBaseURL != "" {
+		sources = append(sources, struct{ style, base, mode string }{"google", ready.GoogleBaseURL + "/v1beta", ""})
+	}
+	for _, source := range sources {
 		// Read the actual per-protocol list instead of assuming every builtin
 		// speaks both protocols. Shared models prefer the OpenAI provider.
 		req, err := http.NewRequestWithContext(ctx, "GET", source.base+"/models", nil)
@@ -124,8 +129,12 @@ func (g *vmodelGateway) attach(ctx context.Context, ready *vmodelReady) (func() 
 		}
 		var list struct {
 			Data []struct {
-				ID string `json:"id"`
+				ID        string   `json:"id"`
+				Protocols []string `json:"protocols"`
 			} `json:"data"`
+			Models []struct {
+				Name string `json:"name"`
+			} `json:"models"`
 		}
 		err = json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list)
 		resp.Body.Close()
@@ -137,8 +146,42 @@ func (g *vmodelGateway) attach(ctx context.Context, ready *vmodelReady) (func() 
 		}
 		var ids []string
 		for _, model := range list.Data {
+			if source.style == "openai" {
+				mode := "both"
+				if len(model.Protocols) > 0 {
+					chat, responses := false, false
+					for _, p := range model.Protocols {
+						if p == "openai_chat" {
+							chat = true
+						}
+						if p == "openai_responses" {
+							responses = true
+						}
+					}
+					if chat && !responses {
+						mode = "chat"
+					}
+					if !chat && responses {
+						mode = "responses"
+					}
+					if !chat && !responses {
+						mode = "chat"
+					}
+				}
+				if mode != source.mode {
+					continue
+				}
+			}
 			if _, ok := selected[model.ID]; !ok {
 				ids = append(ids, model.ID)
+			}
+		}
+		if source.style == "google" {
+			for _, m := range list.Models {
+				id := strings.TrimPrefix(m.Name, "models/")
+				if _, ok := selected[id]; !ok {
+					ids = append(ids, id)
+				}
 			}
 		}
 		if len(ids) == 0 {
@@ -148,12 +191,15 @@ func (g *vmodelGateway) attach(ctx context.Context, ready *vmodelReady) (func() 
 		if source.style == "anthropic" {
 			base = ready.AnthropicBaseURL
 		}
+		if source.style == "google" {
+			base = ready.GoogleBaseURL
+		}
 		var provider struct {
 			UUID string `json:"uuid"`
 		}
 		if err := g.api(ctx, "POST", "/api/v2/providers", map[string]any{
 			"name": "VModel " + source.style + " " + instance, "api_base": base,
-			"api_style": source.style, "auth_type": "api_key", "no_key_required": true, "enabled": true,
+			"api_style": source.style, "auth_type": "api_key", "token": "vmodel-local", "no_key_required": false, "enabled": true, "openai_endpoint_mode": source.mode,
 		}, &provider); err != nil {
 			return fail(err)
 		}

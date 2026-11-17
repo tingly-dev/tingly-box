@@ -3,6 +3,7 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 
@@ -31,7 +32,7 @@ var _ VirtualModel = (*MockModel)(nil)
 // (or "tool_use" if ToolCall is set).
 func NewMockModel(cfg *MockModelConfig) *MockModel {
 	if cfg.StopReason == "" {
-		if cfg.ToolCall != nil {
+		if len(cfg.Calls()) > 0 {
 			cfg.StopReason = "tool_use"
 		} else {
 			cfg.StopReason = "stop"
@@ -42,7 +43,7 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 		description = vmodel.DefaultMockDescription
 	}
 	typ := vmodel.VirtualModelTypeStatic
-	if cfg.ToolCall != nil {
+	if len(cfg.Calls()) > 0 {
 		typ = vmodel.VirtualModelTypeTool
 	}
 	return &MockModel{
@@ -69,7 +70,7 @@ func (m *MockModel) streamChunks() []string {
 
 // HandleAnthropic returns fixed content from config in Anthropic format.
 func (m *MockModel) HandleAnthropic(_ *protocol.AnthropicBetaMessagesRequest) (VModelResponse, error) {
-	if m.cfg.ToolCall != nil {
+	if len(m.cfg.Calls()) > 0 {
 		return m.toolResponse(), nil
 	}
 	return m.staticResponse(), nil
@@ -85,21 +86,23 @@ func (m *MockModel) staticResponse() VModelResponse {
 }
 
 func (m *MockModel) toolResponse() VModelResponse {
-	tc := m.cfg.ToolCall
-	displayText := vmodel.ToolCallDisplayContent(tc.Arguments)
-	inputJSON, _ := json.Marshal(tc.Arguments)
-
-	return VModelResponse{
-		Content: []sdk.BetaContentBlockParamUnion{
-			{OfText: &sdk.BetaTextBlockParam{Text: displayText}},
-			{OfToolUse: &sdk.BetaToolUseBlockParam{
-				ID:    "toolu_virtual",
-				Name:  tc.Name,
-				Input: json.RawMessage(inputJSON),
-			}},
-		},
-		StopReason: "tool_use",
+	calls := m.cfg.Calls()
+	text := m.cfg.Content
+	if (text == "" || m.cfg.ToolCall != nil) && len(calls) == 1 {
+		text = vmodel.ToolCallDisplayContent(calls[0].Arguments)
 	}
+	content := []sdk.BetaContentBlockParamUnion{{OfText: &sdk.BetaTextBlockParam{Text: text}}}
+	for i, tc := range calls {
+		id := tc.ID
+		if id == "" {
+			id = "toolu_virtual"
+			if len(calls) > 1 {
+				id = fmt.Sprintf("toolu_virtual_%d", i)
+			}
+		}
+		content = append(content, sdk.BetaContentBlockParamUnion{OfToolUse: &sdk.BetaToolUseBlockParam{ID: id, Name: tc.Name, Input: vmodel.ToolArguments(tc)}})
+	}
+	return VModelResponse{Content: content, StopReason: sdk.BetaStopReason(m.cfg.StopReason)}
 }
 
 // HandleAnthropicStream streams fixed content using configured chunks with simulated delay.
@@ -135,3 +138,6 @@ func (m *MockModel) HandleAnthropicStream(ctx context.Context, req *protocol.Ant
 	emit(DoneEvent{StopReason: string(resp.StopReason)})
 	return nil
 }
+
+// Spec returns the model configuration for lossless catalog export.
+func (m *MockModel) Spec() vmodel.SharedMockSpec { return *m.cfg }
