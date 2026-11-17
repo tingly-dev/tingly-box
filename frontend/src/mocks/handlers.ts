@@ -509,11 +509,16 @@ const mockVirtualProviders = [
     },
 ]
 
+// Account limits (routing limits) shown in the provider edit dialog.
+const mockProviderLimits: Record<string, object> = {
+    'mock-provider-anthropic': { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
+}
+
 const getMockProviders = () => [
     ...mockStandardProviderCatalog.map(({ provider }) => provider),
     ...mockOAuthProviderCatalog.map(({ provider }) => provider),
     ...mockVirtualProviders,
-]
+].map((provider) => (mockProviderLimits[provider.uuid] ? { ...provider, limits: mockProviderLimits[provider.uuid] } : provider))
 
 const getMockProviderModels = (uuid: string): string[] => {
     const standardProvider = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
@@ -685,7 +690,7 @@ const mockV1Rules: Record<string, any[]> = {
             flags: { claude_code_compat: true, clean_header: true, skip_usage: true, session_affinity: 3600 },
             // Default providers in 3 tiers: T0 primary, T1 secondary, T2 budget
             services: [
-                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0, limits: { max_concurrent: 2, max_requests: 200, window_seconds: 3600, soft_percent: 75 } },
                 { uuid: 'svc-cc-t0-b', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true, tier: 0 },
                 { uuid: 'svc-cc-t1-a', provider: 'mock-provider-gemini', model: 'gemini-3.5-flash', weight: 1, active: true, tier: 1 },
                 { uuid: 'svc-cc-t2-a', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true, tier: 2 },
@@ -2022,6 +2027,11 @@ let mockTeams = [
     { id: defaultMockTeamID, name: 'Default', slug: 'default', enabled: true, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
     { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
 ]
+let mockLimitPolicies: Array<{ kind: string; ref: string; limits: Record<string, number>; overflow?: string; queue_timeout_seconds?: number }> = [
+    { kind: 'team', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, overflow: 'queue' },
+    { kind: 'team_member', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, overflow: 'queue', queue_timeout_seconds: 20 },
+    { kind: 'user', ref: 'user-design', limits: { max_concurrent: 1, max_requests: 200, window_seconds: 3600 }, overflow: 'reject' },
+]
 let mockSharingKeys = [
     { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
     { token_id: 'tb-share-platform00000000000000000000000001', user_id: 'user-platform', team_id: '00000000-0000-0000-0000-000000000002', display_name: 'Platform CI', enabled: true, created_at: '2026-07-12T00:00:00Z' },
@@ -2482,6 +2492,43 @@ export const handlers = [
         return HttpResponse.json({
             success: true,
             data: getMockProviderCatalogs(),
+        })
+    }),
+
+    // Person / team / model limit policies (routing limits)
+    http.get('/api/v1/limit-policies', ({ request }) => {
+        const q = new URL(request.url).searchParams
+        const data = mockLimitPolicies.filter((p) => (!q.get('kind') || p.kind === q.get('kind')) && (!q.get('ref') || p.ref === q.get('ref')))
+        return HttpResponse.json({ success: true, data })
+    }),
+
+    http.put('/api/v1/limit-policies/:kind/:ref', async ({ params, request }) => {
+        const body = await request.json() as any
+        const empty = !body.limits || Object.values(body.limits).every((v) => !v)
+        mockLimitPolicies = mockLimitPolicies.filter((p) => !(p.kind === params.kind && p.ref === params.ref))
+        if (empty) return HttpResponse.json({ success: true, exists: false })
+        const policy = { kind: params.kind as string, ref: params.ref as string, limits: body.limits, overflow: body.overflow, queue_timeout_seconds: body.queue_timeout_seconds }
+        mockLimitPolicies = [...mockLimitPolicies, policy]
+        return HttpResponse.json({ success: true, exists: true, data: policy })
+    }),
+
+    // Live account/service limit state (routing limits)
+    http.get('/api/v1/limits/status', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { scope: 'team', key: 'team:00000000-0000-0000-0000-000000000002', ref: '00000000-0000-0000-0000-000000000002', label: 'Platform',
+                  limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, inflight: 3, requests: 212, tokens: 3900000, pressure: 0.78, state: 'ok' },
+                { scope: 'user', key: 'user:user-platform', ref: 'user-platform', label: 'Platform CI', inherited_from: 'team_member',
+                  limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, inflight: 2, requests: 96, tokens: 910000, pressure: 1, state: 'blocked' },
+                { scope: 'account', key: 'acct:mock-provider-anthropic', provider_uuid: 'mock-provider-anthropic', provider_name: 'Anthropic',
+                  limits: { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
+                  inflight: 3, requests: 41, tokens: 1700000, pressure: 0.85, state: 'hot' },
+                { scope: 'service', key: 'svc:builtin:claude_code:cc/mock-provider-anthropic/claude-sonnet-5', provider_uuid: 'mock-provider-anthropic',
+                  provider_name: 'Anthropic', rule_uuid: 'builtin:claude_code:cc', scenario: 'claude_code', request_model: 'claude-sonnet-5', model: 'claude-sonnet-5',
+                  limits: { max_concurrent: 2, max_requests: 200, window_seconds: 3600, soft_percent: 75 },
+                  inflight: 1, requests: 64, tokens: 0, pressure: 0.5, state: 'ok' },
+            ],
         })
     }),
 

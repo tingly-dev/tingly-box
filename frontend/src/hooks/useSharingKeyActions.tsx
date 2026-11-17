@@ -10,7 +10,7 @@ import {
     Stack,
     TextField,
 } from '@mui/material';
-import { useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
@@ -20,10 +20,11 @@ import type { SharingKey } from '@/components/SharingKeysTable';
 import type { Team } from '@/types/team';
 import TeamKeyScopeAlert from '@/components/TeamKeyScopeAlert';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import PolicyLimitsDialog from '@/components/limits/PolicyLimitsDialog';
 
 export type SharingKeyTableActions = Pick<
     ComponentProps<typeof SharingKeysTable>,
-    'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove'
+    'visibleTokens' | 'onToggleVisibility' | 'onCopy' | 'onToggleEnabled' | 'onDelete' | 'onMove' | 'onLimits' | 'limitedUserIds'
 >;
 
 interface UseSharingKeyActionsOptions {
@@ -54,6 +55,22 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
     const [tokenToMove, setTokenToMove] = useState<SharingKey | null>(null);
     const [moveTargetTeamID, setMoveTargetTeamID] = useState('');
     const [movingToken, setMovingToken] = useState(false);
+    // Per-person limits: which keys (by user_id) have a policy, and the key being edited.
+    const [limitedUserIds, setLimitedUserIds] = useState<ReadonlySet<string>>(new Set());
+    const [keyForLimits, setKeyForLimits] = useState<SharingKey | null>(null);
+    const [limitsOpen, setLimitsOpen] = useState(false);
+
+    const loadLimitedUsers = useCallback(async () => {
+        try {
+            const res = await api.getLimitPolicies({ kind: 'user' });
+            if (res?.success) setLimitedUserIds(new Set((res.data ?? []).map((p: { ref: string }) => p.ref)));
+        } catch {
+            // the badge is a nicety; the table works without it
+        }
+    }, []);
+    useEffect(() => {
+        void loadLimitedUsers();
+    }, [loadLimitedUsers]);
 
     const openCreate = (team: Team) => {
         setNewTokenName('');
@@ -140,6 +157,11 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
             setTokenToMove(key);
             setMoveTargetTeamID('');
         },
+        onLimits: (key) => {
+            setKeyForLimits(key);
+            setLimitsOpen(true);
+        },
+        limitedUserIds,
     };
 
     const eligibleMoveTargets = teams.filter(
@@ -217,6 +239,15 @@ export function useSharingKeyActions({ teams, onChanged }: UseSharingKeyActionsO
                     </Stack>
                 }
                 description={t('sharingKeys.deleteConfirm', { name: tokenToDelete?.display_name })}
+            />
+            <PolicyLimitsDialog
+                open={limitsOpen}
+                onClose={() => setLimitsOpen(false)}
+                kind="user"
+                refId={keyForLimits?.user_id}
+                title={t('limits.person.title', { name: keyForLimits?.display_name })}
+                hint={t('limits.person.hint')}
+                onSaved={() => void loadLimitedUsers()}
             />
         </>
     );

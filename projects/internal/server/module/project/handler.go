@@ -293,14 +293,14 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(OKResponse{}))
 
 	api.GET("/projects/:id/library", h.listLibrary, tag,
-		swagger.WithDescription("List library files (uploads and thread outputs)"),
+		swagger.WithDescription("List library files (uploads, thread outputs, and the threads' scratch under .tmp/)"),
 		swagger.WithResponseModel(LibraryResponse{}))
 	api.GET("/projects/:id/library/tree", h.libraryTree, tag,
-		swagger.WithDescription("List one directory level of the library (folders first); expand a folder by asking for its path"),
+		swagger.WithDescription("List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too"),
 		swagger.WithQuery("path", "string", "Library-relative directory; empty is the library root"),
 		swagger.WithResponseModel(LibraryTreeResponse{}))
 	api.GET("/projects/:id/library/archive", h.archiveLibrary, tag,
-		swagger.WithDescription("Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out."),
+		swagger.WithDescription("Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out."),
 		swagger.WithQuery("path", "string", "Library-relative folder; empty is the library root"))
 	api.POST("/projects/:id/library", h.uploadLibrary, tag,
 		swagger.WithDescription("Upload files (multipart field \"files\") to the library"),
@@ -902,6 +902,20 @@ func (h *Handler) libraryTree(c *gin.Context) {
 	case err != nil:
 		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// A scratch folder is named after its thread id; show the thread's title,
+	// keeping Path (what downloads and deletes address) the real one.
+	if rel == "" || rel == rt.ScratchDir {
+		for i := range entries {
+			e := &entries[i]
+			id, ok := strings.CutPrefix(e.Path, rt.ScratchDir+"/")
+			if e.Kind != "dir" || !ok || strings.Contains(id, "/") {
+				continue
+			}
+			if t, err := h.svc.Store.GetThread(id); err == nil && t.Title != "" {
+				e.Name = t.Title
+			}
+		}
 	}
 	c.JSON(http.StatusOK, LibraryTreeResponse{Dir: h.svc.Layout.LibraryDir(p.ID), Path: strings.Trim(rel, "/"), Entries: entries})
 }

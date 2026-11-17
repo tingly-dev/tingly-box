@@ -355,12 +355,21 @@ export default {
     "addModels_one": "Add {{count}} model",
     "addModels_other": "Add {{count}} models",
     "howRoutingWorks": "How routing works",
-    "sortOriginal": "Original order",
-    "sortByName": "Name (A→Z)",
-    "sortTooltipToName": "Showing original order — click to sort by name",
-    "sortTooltipToOriginal": "Showing by name — click to restore original order"
   },
   "templatePage": {
+    "reorder": {
+      "saved": "Moved {{name}} to position {{position}} of {{total}}",
+      "savedPlain": "Rule order saved",
+      "handle": "Drag to reorder {{name}}",
+      "instructions": "To reorder, press space to pick up the rule, use the arrow keys to move it, then press space to drop it or escape to cancel.",
+      "saveFailed": "Couldn't save the new order: {{message}}",
+      "announce": {
+        "start": "Picked up {{name}}, position {{position}} of {{total}}.",
+        "over": "{{name}} is now over position {{position}} of {{total}}.",
+        "end": "Dropped {{name}} at position {{position}} of {{total}}.",
+        "cancel": "Reordering cancelled. {{name}} stays where it was."
+      }
+    },
     "noProviders": {
       "title": "No Providers Configured",
       "description": "Add an API key provider to start routing requests",

@@ -36,13 +36,28 @@ func TestListLibraryDirOneLevelFoldersFirst(t *testing.T) {
 
 	root, err := l.ListLibraryDir("p", "")
 	require.NoError(t, err)
-	// One level only; folders first; dot entries (.tmp, .hidden) are hidden.
-	assert.Equal(t, []string{"outputs", "uploads", "notes.md"}, names(root))
+	// One level only; folders first; dot entries are hidden except the
+	// scratch subtree (.tmp), which is listed like any other folder.
+	assert.Equal(t, []string{".tmp", "outputs", "uploads", "notes.md"}, names(root))
 	assert.Equal(t, "dir", root[0].Kind)
-	assert.Equal(t, "outputs", root[0].Path)
-	assert.Equal(t, "file", root[2].Kind)
-	assert.Equal(t, int64(1), root[2].Size)
-	assert.Equal(t, "upload", root[2].Origin)
+	assert.Equal(t, ".tmp", root[0].Path)
+	assert.Equal(t, "scratch", root[0].Origin)
+	assert.Equal(t, "dir", root[1].Kind)
+	assert.Equal(t, "outputs", root[1].Path)
+	assert.Equal(t, "file", root[3].Kind)
+	assert.Equal(t, int64(1), root[3].Size)
+	assert.Equal(t, "upload", root[3].Origin)
+
+	scratch, err := l.ListLibraryDir("p", ".tmp")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"t1"}, names(scratch))
+	assert.Equal(t, ".tmp/t1", scratch[0].Path)
+	assert.Equal(t, "scratch", scratch[0].Origin)
+	inside, err := l.ListLibraryDir("p", ".tmp/t1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"scratch"}, names(inside))
+	assert.Equal(t, ".tmp/t1/scratch", inside[0].Path)
+	assert.Equal(t, "scratch", inside[0].Origin)
 
 	sub, err := l.ListLibraryDir("p", "outputs/run-1")
 	require.NoError(t, err)
@@ -60,10 +75,15 @@ func TestListLibraryDirRefusesAnythingOutsideTheLibrary(t *testing.T) {
 	require.NoError(t, os.Symlink(filepath.Join(lib, "notes.md"), filepath.Join(lib, "alias.md")))
 	require.NoError(t, os.Symlink(filepath.Join(lib, "outputs"), filepath.Join(lib, "out-alias")))
 
-	for _, rel := range []string{"out-alias", "out-alias/run-2", "..", "../p", "outputs/../..", "/etc", "outputs/../../..", ".tmp", ".tmp/t1", ".hidden", "outputs/.x", "link", "notes.md", "nope"} {
+	for _, rel := range []string{"out-alias", "out-alias/run-2", "..", "../p", "outputs/../..", "/etc", "outputs/../../..", ".hidden", "outputs/.x", "link", "notes.md", "nope"} {
 		_, err := l.ListLibraryDir("p", rel)
 		assert.Error(t, err, rel)
 	}
+	// The scratch subtree itself is reachable, deeper hidden names are not.
+	_, err := l.ListLibraryDir("p", ".tmp")
+	assert.NoError(t, err)
+	_, err = l.ListLibraryDir("p", ".tmp/.h")
+	assert.Error(t, err)
 
 	// Symlinks are not listed, so the tree never leads outside the library.
 	root, err := l.ListLibraryDir("p", "")
@@ -118,14 +138,18 @@ func TestOpenLibraryFileServesOnlyRegularFilesInsideTheLibrary(t *testing.T) {
 	}
 
 	// Escapes, hidden entries and any symlink (the file itself or an ancestor,
-	// absolute, relative, or pointing back into the library) are invalid.
+	// absolute, relative, or pointing back into the library) are invalid. The
+	// scratch subtree is the one hidden path that is served.
+	got, err := openRel(l, ".tmp/t1/scratch")
+	require.NoError(t, err)
+	assert.Equal(t, "x", got)
 	for _, rel := range []string{"..", "../p/notes.md", "outputs/../../p/notes.md", "outputs/../notes.md", "./notes.md", "outputs//run-2/a.txt",
-		".hidden", ".tmp/t1/scratch", "outputs/.x", "linkdir/secret", "secret-link", "relative-escape", "alias.md", "rel-alias.md", "out-alias/run-2/a.txt",
+		".hidden", ".tmp/.h", "outputs/.x", "linkdir/secret", "secret-link", "relative-escape", "alias.md", "rel-alias.md", "out-alias/run-2/a.txt",
 		"outputs/run-1/../../../x", "\u0000", "notes.md\u0000", "no\u0000tes.md"} {
 		_, _, err := l.OpenLibraryFile("p", rel)
 		require.Error(t, err, rel)
 	}
-	for _, rel := range []string{"..", "outputs/../notes.md", ".tmp/t1/scratch", "linkdir/secret", "secret-link", "alias.md", "out-alias/run-2/a.txt"} {
+	for _, rel := range []string{"..", "outputs/../notes.md", ".tmp/.h", "linkdir/secret", "secret-link", "alias.md", "out-alias/run-2/a.txt"} {
 		_, _, err := l.OpenLibraryFile("p", rel)
 		assert.ErrorIs(t, err, ErrInvalidLibraryPath, rel)
 	}
@@ -141,7 +165,7 @@ func TestOpenLibraryFileServesOnlyRegularFilesInsideTheLibrary(t *testing.T) {
 			assert.Error(t, err, rel)
 		}
 	}
-	_, _, err := l.OpenLibraryFile("p", "")
+	_, _, err = l.OpenLibraryFile("p", "")
 	assert.ErrorIs(t, err, ErrInvalidLibraryPath)
 	// Backslashes are ordinary name characters here (Windows turns them into separators, so ".." stays refused there too).
 	for _, rel := range []string{"..\\notes.md", "..\\..\\etc\\passwd"} {
@@ -206,14 +230,16 @@ func TestRemoveLibraryFileAppliesTheSameChecks(t *testing.T) {
 	require.NoError(t, os.Symlink(outside, filepath.Join(lib, "linkdir")))
 	require.NoError(t, os.Symlink(filepath.Join(outside, "secret"), filepath.Join(lib, "secret-link")))
 
-	for _, rel := range []string{"..", ".tmp/t1/scratch", ".hidden", "linkdir/secret", "secret-link", "outputs/../../x"} {
+	for _, rel := range []string{"..", ".hidden", "linkdir/secret", "secret-link", "outputs/../../x"} {
 		assert.ErrorIs(t, l.RemoveLibraryFile("p", rel), ErrInvalidLibraryPath, rel)
 	}
 	for _, rel := range []string{"outputs", "nope"} {
 		assert.ErrorIs(t, l.RemoveLibraryFile("p", rel), os.ErrNotExist, rel)
 	}
+	// Scratch is deletable, like anything else that is listed.
+	assert.NoError(t, l.RemoveLibraryFile("p", ".tmp/t1/scratch"))
+	assert.NoFileExists(t, filepath.Join(lib, ".tmp/t1/scratch"))
 	assert.FileExists(t, filepath.Join(outside, "secret"))
-	assert.FileExists(t, filepath.Join(lib, ".tmp/t1/scratch"))
 	assert.DirExists(t, filepath.Join(lib, "outputs"))
 
 	require.NoError(t, l.RemoveLibraryFile("p", "notes.md"))
@@ -238,7 +264,7 @@ func TestWriteLibraryFileNeverWritesThroughALinkOrOutside(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidLibraryPath)
 	_, err = l.WriteLibraryFile("p", "inner.md", strings.NewReader("pwn"), false)
 	assert.ErrorIs(t, err, ErrInvalidLibraryPath)
-	for _, rel := range []string{"../x", ".env", "a/../../x", ""} {
+	for _, rel := range []string{"../x", ".env", ".tmp/x", ".tmp/t1/scratch", "a/../../x", ""} {
 		_, err = l.WriteLibraryFile("p", rel, strings.NewReader("pwn"), false)
 		assert.ErrorIs(t, err, ErrInvalidLibraryPath, rel)
 	}

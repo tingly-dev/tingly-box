@@ -49,6 +49,23 @@ const renderOverview = (keys: SharingKey[], expanded: boolean, extra: Partial<Re
     );
 
 describe('TeamKeysOverview', () => {
+    it('open: each key has the same Limits control as the all-keys table, blue when that person has a limit', () => {
+        const onLimits = vi.fn();
+        const actions = { ...makeActions(), onLimits, limitedUserIds: new Set(['user-2']) };
+        renderOverview([makeKey(1), makeKey(2)], true, { actions });
+        const rows = screen.getAllByRole('listitem');
+        const buttons = rows.map((row) => within(row).getByRole('button', { name: 'sharingKeys.table.limitsTooltip' }));
+        expect(buttons[0].className).not.toContain('colorPrimary');
+        expect(buttons[1].className).toContain('colorPrimary');
+        fireEvent.click(buttons[1]);
+        expect(onLimits).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'user-2' }));
+    });
+
+    it('open: no Limits control when the surface does not offer limits', () => {
+        renderOverview([makeKey(1)], true);
+        expect(screen.queryByRole('button', { name: 'sharingKeys.table.limitsTooltip' })).toBeNull();
+    });
+
     it('folded: one line with the key count, no keys or actions', () => {
         const onToggle = vi.fn();
         renderOverview([makeKey(1), makeKey(2), makeKey(3, false), makeKey(4), makeKey(5)], false, { onToggle });

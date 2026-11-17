@@ -360,6 +360,7 @@ export default {
       "active": "Активен",
       "inactive": "Отключён",
       "moveTooltip": "Переместить в другую команду",
+      "limitsTooltip": "Лимиты для этого человека",
       "deleteTooltip": "Удалить ключ"
     }
   },

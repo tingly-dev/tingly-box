@@ -2,6 +2,7 @@ import OAuthDetailDialog from '@/components/OAuthDetailDialog';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog';
 import { isCloudAuthType } from '@/components/cloud/cloudCredentialSchema';
 import { api } from '@/services/api';
+import { compactLimits, type Limits } from '@/components/limits/LimitsEditor';
 import type { Provider } from '@/types/provider';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
 
@@ -14,6 +15,7 @@ interface OAuthEditFormData {
     apiBaseAnthropic?: string;
     enabled: boolean;
     proxyUrl?: string;
+    limits?: Limits;
 }
 
 interface UseProviderEditDialogOptions {
@@ -59,6 +61,8 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
             proxy_url: fd.proxyUrl ?? '',
             api_base_openai: fd.apiBaseOpenAI ?? '',
             api_base_anthropic: fd.apiBaseAnthropic ?? '',
+            // Omitted (undefined) leaves limits unchanged; `{}` clears them.
+            limits: fd.limits ? compactLimits(fd.limits) : undefined,
         };
     }, [providerFormData]);
 
@@ -108,6 +112,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                         enabled: provider.enabled,
                         noKeyRequired: provider.no_key_required || false,
                         proxyUrl: provider.proxy_url || '',
+                        limits: provider.limits,
                         authType: provider.auth_type || 'api_key',
                     } as any);
                     setApiKeyDialogOpen(true);
@@ -149,6 +154,7 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                 : {}),
             enabled: data.enabled,
             proxy_url: data.proxyUrl ?? '',
+            limits: data.limits ? compactLimits(data.limits) : undefined,
         });
         if (!result.success) throw new Error(result.error || 'Failed to update provider');
         showNotification?.('Provider updated successfully!', 'success');

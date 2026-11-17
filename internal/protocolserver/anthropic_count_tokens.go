@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
@@ -78,14 +79,12 @@ func (ph *ProtocolHandler) AnthropicCountTokens(c *gin.Context) {
 		return
 	}
 
+	// count_tokens is a cheap helper call clients fire constantly; it must not
+	// eat the caller's person/team request or concurrency budget.
+	c.Set(constant.CtxKeyLimitActorDone, true)
 	provider, selectedService, err := ph.selectService(c, scenarioType, rule, nil)
 	if err != nil {
-		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		writeSelectionError(c, err)
 		return
 	}
 

@@ -3903,6 +3903,163 @@
         }
       }
     },
+    "/api/v1/limit-policies": {
+      "get": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "List person / team / model limit policies (optional kind and ref filters)",
+        "description": "List person / team / model limit policies (optional kind and ref filters)",
+        "operationId": "apiV1Limit-policiesGet",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Query parameter kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "description": "Query parameter ref",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitPoliciesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/limit-policies/{kind}/{ref}": {
+      "put": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Create or replace a limit policy for a person (kind user, ref = sharing key user_id), a whole team (team), each member of a team (team_member) or an upstream model (model). An empty limits object deletes it",
+        "description": "Create or replace a limit policy for a person (kind user, ref = sharing key user_id), a whole team (team), each member of a team (team_member) or an upstream model (model). An empty limits object deletes it",
+        "operationId": "apiV1Limit-policiesKindRefPut",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Path parameter 'kind'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Path parameter 'ref'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LimitPolicyUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Delete a limit policy",
+        "description": "Delete a limit policy",
+        "operationId": "apiV1Limit-policiesKindRefDelete",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Path parameter 'kind'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Path parameter 'ref'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/limits/status": {
+      "get": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Live state (in-flight, usage window, pressure) of every account and rule service that has limits configured",
+        "description": "Live state (in-flight, usage window, pressure) of every account and rule service that has limits configured",
+        "operationId": "apiV1LimitsStatusGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/log": {
       "get": {
         "tags": [
@@ -5777,8 +5934,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List library files (uploads and thread outputs)",
-        "description": "List library files (uploads and thread outputs)",
+        "summary": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
+        "description": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
         "operationId": "apiV1ProjectsIdLibraryGet",
         "parameters": [
           {
@@ -5841,8 +5998,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
-        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
         "operationId": "apiV1ProjectsIdLibraryArchiveGet",
         "parameters": [
           {
@@ -5965,8 +6122,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path",
-        "description": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
         "operationId": "apiV1ProjectsIdLibraryTreeGet",
         "parameters": [
           {
@@ -16340,6 +16497,272 @@
           "success"
         ]
       },
+      "LimitPoliciesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/LimitPolicy"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "LimitPolicy": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "overflow": {
+            "type": "string",
+            "description": "Field overflow"
+          },
+          "queue_timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field queue_timeout_seconds"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Field ref"
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "limits"
+        ]
+      },
+      "LimitPolicyQuery": {
+        "type": "object",
+        "properties": {
+          "Kind": {
+            "type": "string",
+            "description": "user | team | team_member | model"
+          },
+          "Ref": {
+            "type": "string",
+            "description": "user_id, team id or model name"
+          }
+        },
+        "required": [
+          "Kind",
+          "Ref"
+        ]
+      },
+      "LimitPolicyResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LimitPolicy"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "false after a delete or when the saved policy held no limit"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "exists"
+        ]
+      },
+      "LimitPolicyUpsertRequest": {
+        "type": "object",
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "overflow": {
+            "type": "string",
+            "description": "user/team/team_member: queue (default) | reject"
+          },
+          "queue_timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field queue_timeout_seconds"
+          }
+        },
+        "required": [
+          "limits"
+        ]
+      },
+      "LimitStatusEntry": {
+        "type": "object",
+        "properties": {
+          "inflight": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field inflight"
+          },
+          "inherited_from": {
+            "type": "string",
+            "description": "team_member when a per-member template governs this person"
+          },
+          "key": {
+            "type": "string",
+            "description": "Field key"
+          },
+          "label": {
+            "type": "string",
+            "description": "human-readable name (key display name, team name, provider name)"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "overflow": {
+            "type": "string",
+            "description": "actor scopes: queue | reject"
+          },
+          "pressure": {
+            "type": "number",
+            "format": "double",
+            "description": "largest used/limit ratio; 1 = at the hard limit"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          },
+          "provider_uuid": {
+            "type": "string",
+            "description": "Field provider_uuid"
+          },
+          "queue_timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field queue_timeout_seconds"
+          },
+          "ref": {
+            "type": "string",
+            "description": "policy ref for user/team/model scopes (user_id, team id, model name)"
+          },
+          "request_model": {
+            "type": "string",
+            "description": "Field request_model"
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "requests admitted in the current usage window"
+          },
+          "rule_uuid": {
+            "type": "string",
+            "description": "Field rule_uuid"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "scope": {
+            "type": "string",
+            "description": "account | service | model | user | team",
+            "example": "account"
+          },
+          "state": {
+            "type": "string",
+            "description": "ok | hot | blocked",
+            "example": "ok"
+          },
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "tokens recorded in the current usage window"
+          }
+        },
+        "required": [
+          "scope",
+          "key",
+          "limits",
+          "inflight",
+          "requests",
+          "tokens",
+          "pressure",
+          "state"
+        ]
+      },
+      "Limits": {
+        "type": "object",
+        "properties": {
+          "max_concurrent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_concurrent"
+          },
+          "max_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_requests"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_tokens"
+          },
+          "quota_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field quota_percent"
+          },
+          "soft_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field soft_percent"
+          },
+          "window_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field window_seconds"
+          }
+        }
+      },
+      "LimitsStatusResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/LimitStatusEntry"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
       "LinkCheck": {
         "type": "object",
         "properties": {
@@ -19446,6 +19869,9 @@
             "description": "Field enabled",
             "example": true
           },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
           "name": {
             "type": "string",
             "description": "Field name",
@@ -20498,6 +20924,15 @@
               "type": "string"
             }
           },
+          "limit_overflow": {
+            "type": "string",
+            "description": "Field limit_overflow"
+          },
+          "limit_queue_timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field limit_queue_timeout"
+          },
           "openai_endpoint_override": {
             "type": "string",
             "description": "Field openai_endpoint_override"
@@ -21043,6 +21478,9 @@
           "active": {
             "type": "boolean",
             "description": "Field active"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
           },
           "model": {
             "type": "string",
@@ -23242,6 +23680,9 @@
             "type": "boolean",
             "description": "New enabled status"
           },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
           "name": {
             "type": "string",
             "description": "New provider name"
@@ -24989,6 +25430,10 @@
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "limits",
+      "description": "Operations related to limits"
     },
     {
       "name": "logs",

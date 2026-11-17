@@ -112,6 +112,7 @@ func (ph *ProtocolHandler) trackUsageFromContext(c *gin.Context, inputTokens, ou
 
 	// 1. Update in-memory service stats with comprehensive metrics
 	service := ph.updateServiceStats(rule, provider, model, metrics)
+	ph.recordLimitUsage(c, rule, provider, model, int64(metrics.InputTokens)+int64(metrics.OutputTokens))
 
 	// 2. Record to OTel (primary path for metrics)
 	if ph.deps.TokenTracker != nil {
@@ -245,6 +246,7 @@ func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *proto
 
 	// 1. Update in-memory service stats with comprehensive metrics
 	service := ph.updateServiceStats(rule, provider, model, metrics)
+	ph.recordLimitUsage(c, rule, provider, model, int64(metrics.InputTokens)+int64(metrics.OutputTokens))
 
 	// 2. Record to OTel with comprehensive usage data
 	if ph.deps.TokenTracker != nil {
@@ -548,4 +550,39 @@ func (ph *ProtocolHandler) ReportHealthStatus(provider *typ.Provider, model stri
 		"service_id": serviceID,
 		"error":      errStr,
 	}).Debug("[health] generic failure left to the circuit breaker")
+}
+
+// recordLimitUsage feeds a finished request's tokens into the usage windows of
+// the account / service / model limits that applied to it and of the caller's
+// person / team limits (no-op without limits).
+func (ph *ProtocolHandler) recordLimitUsage(c *gin.Context, rule *typ.Rule, provider *typ.Provider, model string, tokens int64) {
+	if rule == nil || provider == nil || ph.deps.RoutingSelector == nil {
+		return
+	}
+	guard := ph.deps.RoutingSelector.Limits()
+	if guard == nil {
+		return
+	}
+	guard.RecordActorTokens(c, tokens) // the caller's person / team windows
+	if svc := findRuleService(rule, provider.UUID, model); svc != nil {
+		guard.RecordTokens(rule.UUID, svc, tokens)
+	}
+}
+
+// findRuleService locates the service (base pool first, then smart-routing
+// partitions) a request was served by.
+func findRuleService(rule *typ.Rule, providerUUID, model string) *loadbalance.Service {
+	for _, svc := range rule.Services {
+		if svc != nil && svc.Provider == providerUUID && svc.Model == model {
+			return svc
+		}
+	}
+	for _, sr := range rule.SmartRouting {
+		for _, svc := range sr.Services {
+			if svc != nil && svc.Provider == providerUUID && svc.Model == model {
+				return svc
+			}
+		}
+	}
+	return nil
 }

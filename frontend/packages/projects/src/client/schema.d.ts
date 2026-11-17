@@ -460,8 +460,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List library files (uploads and thread outputs)
-         * @description List library files (uploads and thread outputs)
+         * List library files (uploads, thread outputs, and the threads' scratch under .tmp/)
+         * @description List library files (uploads, thread outputs, and the threads' scratch under .tmp/)
          */
         get: operations["apiV1ProjectsIdLibraryGet"];
         put?: never;
@@ -484,8 +484,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.
-         * @description Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.
+         * Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.
+         * @description Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.
          */
         get: operations["apiV1ProjectsIdLibraryArchiveGet"];
         put?: never;
@@ -528,8 +528,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List one directory level of the library (folders first); expand a folder by asking for its path
-         * @description List one directory level of the library (folders first); expand a folder by asking for its path
+         * List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too
+         * @description List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too
          */
         get: operations["apiV1ProjectsIdLibraryTreeGet"];
         put?: never;

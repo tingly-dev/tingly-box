@@ -74,7 +74,7 @@ func BuiltinRoutingScenarios() []*DuoRoutingScenario {
 	}
 }
 
-var fullSelectionPipeline = []string{"health", "smart_routing", "affinity", "load_balancer"}
+var fullSelectionPipeline = []string{"health", "smart_routing", "limits", "affinity", "load_balancer"}
 
 func routingPipelineHealthBeforeSmart() *DuoRoutingScenario {
 	return &DuoRoutingScenario{
@@ -185,7 +185,7 @@ func routingPipelineAffinityBeforeLoadBalancer() *DuoRoutingScenario {
 				Name: "affinity-short-circuit", Session: session, Body: DuoRoutingBody{UserText: "ROUTE-STICKY second"},
 				Expect: DuoRoutingExpect{
 					Svc: "a", Outcome: "matched", Matched: "sticky partition",
-					Source: "affinity", Stages: []string{"health", "smart_routing", "affinity"},
+					Source: "affinity", Stages: []string{"health", "smart_routing", "limits", "affinity"},
 				},
 			},
 		},
@@ -475,7 +475,7 @@ func routingPipelineSmartBeforeAffinity() *DuoRoutingScenario {
 				Name: "big-2", Session: session, Body: big,
 				Expect: DuoRoutingExpect{
 					Svc: "a", Outcome: "matched", Matched: "big",
-					Source: "affinity", Stages: []string{"health", "smart_routing", "affinity"},
+					Source: "affinity", Stages: []string{"health", "smart_routing", "limits", "affinity"},
 				},
 			},
 		},

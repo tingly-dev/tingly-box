@@ -11,9 +11,11 @@ vi.mock('../../client', () => ({
     unwrap: (p: Promise<unknown>) => p,
 }));
 
-const e = (path: string, kind: 'dir' | 'file', size = 0) => ({ name: path.split('/').pop(), path, kind, size, updated_at: '2026-10-22T00:00:00Z', origin: path.startsWith('outputs') ? 'output' : 'upload' });
+const e = (path: string, kind: 'dir' | 'file', size = 0) => ({ name: path.split('/').pop(), path, kind, size, updated_at: '2026-10-22T00:00:00Z', origin: path.startsWith('outputs') ? 'output' : path.startsWith('.tmp') ? 'scratch' : 'upload' });
 const tree: Record<string, unknown[]> = {
-    '': [e('outputs', 'dir'), e('notes.md', 'file', 2048)],
+    '': [e('.tmp', 'dir'), e('outputs', 'dir'), e('notes.md', 'file', 2048)],
+    '.tmp': [{ name: 'Fix the thing', path: '.tmp/t1', kind: 'dir', size: 0, updated_at: '2026-10-22T00:00:00Z', origin: 'scratch' }],
+    '.tmp/t1': [e('.tmp/t1/scratch.md', 'file', 3)],
     outputs: [e('outputs/run', 'dir'), e('outputs/a.txt', 'file', 10)],
     'outputs/run': [e('outputs/run/report.md', 'file', 5)],
 };
@@ -126,4 +128,17 @@ it('saves an upload under the name it was given, without the stored id', () => {
     expect(downloadName('uploads/notes.md')).toBe('notes.md');
     expect(downloadName('outputs/0123456789ab-x.txt')).toBe('0123456789ab-x.txt');
     expect(downloadName('notes.md')).toBe('notes.md');
+});
+
+it('lists the threads scratch under .tmp, labelled as scratch', async () => {
+    render(<Library projectId="p1" refreshKey={0} />);
+    await screen.findByText('.tmp');
+    // The .tmp folder row itself says what it is.
+    expect(screen.getByText('library.scratch')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('treeitem', { name: '.tmp' }));
+    // The server already names the folder after the thread; it opens like any other.
+    await screen.findByText('Fix the thing');
+    fireEvent.click(screen.getByRole('treeitem', { name: 'Fix the thing' }));
+    await screen.findByText('scratch.md');
+    expect(requestedPaths()).toEqual(['', '.tmp', '.tmp/t1']);
 });

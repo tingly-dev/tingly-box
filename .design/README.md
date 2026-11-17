@@ -87,6 +87,7 @@
 | [opencode-session.md](./opencode-session.md) | OpenCode Zen session header | 设计说明；局部实施状态见正文 |
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |
 | [quota-semantics.md](./quota-semantics.md) | Quota 语义归一 | 设计说明；局部实施状态见正文 |
+| [routing-limits.md](./routing-limits.md) | 路由限额算子：账号/规则/模型并发上限 + 滑动窗口用量/额度，及按人员（Sharing Key）、Team 整体、Team 成员默认的限额（Team 友好） | 已实现；研究见 `.research/routing-concurrency-usage-operators.md` |
 | [quota-relay.md](./quota-relay.md) | Quota 中继：端侧看到中央的 quota | 设计说明；局部实施状态见正文 |
 | [quota-backoff.md](./quota-backoff.md) | Quota 请求失败退避 | 已实现 |
 | [team.md](./team.md) | Team and Sharing Key Authorization | 设计说明；局部实施状态见正文 |
@@ -117,6 +118,7 @@
 | [projects-im.md](./projects-im.md) | IM 聊天并入 Projects：chat 绑定到线程、IM 里审批、点名线程（TEP-2143；旧路径保留的决定见下一行） | 部分实施 |
 | [remote-into-projects.md](./remote-into-projects.md) | Remote 的聊天控制（`@cc`、`@tb`、`/cd` 等）逐项迁到 Projects 的文件夹或项目，Remote 只留接入层 | 已实施；`@tb`/`@cc` 已下线 |
 | [projects-sessions.md](./projects-sessions.md) | Projects 的统一模型：一切会话都是 Thread（项目对话、线程、文件夹会话、IM 聊天同构），Claude 调研、命名收拾、迁移与交付 | 提案 |
+| [thread-cleanup.md](./thread-cleanup.md) | Projects 线程清理与 worktree 回收：Archive（释放 worktree、保留分支、可 Restore）、Delete、安全检查、批量清理与自动策略；含本机积压实测 | 提案，等待决定；未实施 |
 | [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；`@tb` 已下线（remote-into-projects.md） |

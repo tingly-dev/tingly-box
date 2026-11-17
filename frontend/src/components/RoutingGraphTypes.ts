@@ -2,6 +2,8 @@
  * Shared types for RuleGraphV2 and TabTemplatePage
  */
 
+import type { Limits } from './limits/LimitsEditor';
+
 export interface ConfigProvider {
     uuid: string;
     provider: string;
@@ -14,11 +16,14 @@ export interface ConfigProvider {
     // 0 / undefined = unset, sinks to the bottom tier. Setting this on any
     // service flips the rule's load-balancing tactic to "tier" (direct + fallback).
     tier?: number;
+    // This rule's share of the account: concurrency / usage caps
+    // (backend loadbalance.Service.Limits; see .design/routing-limits.md).
+    limits?: Limits;
 }
 
 export interface SmartOp {
     uuid: string;
-    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'token' | 'service_ttft' | 'service_capacity' | 'service_quota' | 'agent.claude_code' | 'time';
+    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'token' | 'service_ttft' | 'service_capacity' | 'service_quota' | 'service_concurrency' | 'service_usage' | 'agent.claude_code' | 'time';
     operation: string;
     value: string;
     meta?: {

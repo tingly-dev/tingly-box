@@ -192,6 +192,7 @@ export default function RosterTable({
                                                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                                                     <Typography
                                                         variant="body1"
+                                                        title={row.display_name}
                                                         noWrap
                                                         sx={{ color: 'text.primary', fontWeight: 600 }}
                                                     >

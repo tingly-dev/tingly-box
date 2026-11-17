@@ -10,7 +10,11 @@ import {
     IconBellOff,
     IconCircleDashed,
     IconCircleDot,
+    IconFileArrowRight,
     IconFileDiff,
+    IconFileMinus,
+    IconFilePencil,
+    IconFilePlus,
     IconFileUpload,
     IconFolder,
     IconFolderOff,
@@ -29,6 +33,7 @@ import {
     IconLayoutSidebarRight,
     IconLayoutSidebarRightCollapse,
     IconLayoutSidebarRightExpand,
+    IconListTree,
     IconLoader2,
     IconMessage,
     IconMessageCircleQuestion,
@@ -88,3 +93,10 @@ export const FloatWindow = tablerMui(IconPictureInPictureOn);
 export const Minimize = tablerMui(IconMinus);
 export const LayoutIcon = tablerMui(IconLayout2);
 export const Kanban = tablerMui(IconLayoutKanban);
+
+// The tree view of a change, and a changed file by how it changed.
+export const ViewTree = tablerMui(IconListTree);
+export const FileAdded = tablerMui(IconFilePlus);
+export const FileModified = tablerMui(IconFilePencil);
+export const FileDeleted = tablerMui(IconFileMinus);
+export const FileRenamed = tablerMui(IconFileArrowRight);

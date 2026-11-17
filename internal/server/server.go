@@ -182,6 +182,10 @@ type Server struct {
 	remoteCoderCancel context.CancelFunc
 	remoteCoderMu     sync.Mutex
 
+	// account concurrency/usage limits (nil-safe); see .design/routing-limits.md
+	limitsGuard   *routing.LimitsGuard
+	limitPolicies *db.LimitPolicyStore // person / team / model policies (nil = scopes off)
+
 	// lifecycle management for long-lived background components created during setup
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -349,6 +353,8 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// log source viewable from the frontend system log page.
 	serviceSelector := routing.NewServiceSelectorWithLogger(cfg, affinityStore, loadBalancer, server.multiLogger)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
+	limitsGuard := initLimits(ctx, cfg, serviceSelector)
+	server.limitsGuard = limitsGuard
 
 	// Initialize load balancer API
 	loadBalancerAPI := NewLoadBalancerAPI(loadBalancer, cfg)
@@ -476,7 +482,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		// selector constructor above — quota init can fail independently and
 		// the op is optional (passes through with no provider wired).
 		serviceSelector.SetQuotaProvider(quotaMgr)
+		wireLimitsQuota(limitsGuard, quotaMgr)
 	}
+	warmStartLimits(limitsGuard, cfg, server.UsageStore())
+	server.limitPolicies = initLimitPolicies(limitsGuard, cfg, server.UsageStore())
 
 	// Construct the WebUI Management API's control handler. This MUST be the
 	// last step before setupMiddleware/setupRoutes — every field it reads

@@ -6,13 +6,16 @@ import { ExpandMore } from '@/components/icons';
 interface AdvancedSectionProps {
     /** Number of settings currently differing from their defaults. */
     customizedCount?: number;
+    /** Mount the content only while open (for content that fetches or polls). Default: kept mounted. */
+    unmountWhenClosed?: boolean;
     children: React.ReactNode;
 }
 
-// Collapsed-by-default disclosure for the settings most users never touch.
+// Collapsed-by-default disclosure for the settings most users never touch (shared by
+// the agent config panels and the provider edit dialogs).
 // Saved customisations stay visible through the "N customised" badge rather
 // than by forcing the section open.
-export const AdvancedSection: React.FC<AdvancedSectionProps> = ({ customizedCount = 0, children }) => {
+export const AdvancedSection: React.FC<AdvancedSectionProps> = ({ customizedCount = 0, unmountWhenClosed = false, children }) => {
     const { t } = useTranslation();
     const [open, setOpen] = React.useState(false);
 
@@ -37,7 +40,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({ customizedCoun
                     </Typography>
                 )}
             </Box>
-            <Collapse in={open} timeout={200} unmountOnExit={false}>{children}</Collapse>
+            <Collapse in={open} timeout={200} unmountOnExit={unmountWhenClosed}>{children}</Collapse>
         </Box>
     );
 };

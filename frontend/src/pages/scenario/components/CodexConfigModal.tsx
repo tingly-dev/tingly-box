@@ -5,7 +5,7 @@ import { InfoOutlined, RestartAlt } from '@/components/icons';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs, mergeSavedCodexPrefs } from './CodexQuickConfig';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { ConfigModalShell, QuickApplyActions } from './config/ConfigModalShell';
-import { AdvancedSection } from './config/AdvancedSection';
+import { AdvancedSection } from '@/components/AdvancedSection';
 import { ManualFileSection } from './config/ManualFileSection';
 import { writeFileScripts } from './config/writeFileScripts';
 import { useAppliedPrefs } from './config/useAppliedPrefs';

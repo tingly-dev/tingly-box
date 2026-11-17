@@ -24,7 +24,7 @@ export interface TemplatePageProps {
     allowToggleRule?: boolean;
     allowAddRule?: boolean;
     /**
-     * Hard ordering: show pin/move controls on each rule card. The order is
+     * Hard ordering: drag handles on each rule card plus "Pin to top" in its menu. The order is
      * persisted via POST /rules/reorder and drives /v1/models listing, match
      * priority and client config generation. Slot pages (claude_code) keep it
      * off — their order is the product-defined slot precedence.

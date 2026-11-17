@@ -268,6 +268,17 @@ type RuleFlags struct {
 	// init seeds + migration; any other rule is off unless explicitly set.
 	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
 
+	// LimitOverflow decides what happens when every candidate of this rule is
+	// at its concurrency/usage limit (ai.Limits on providers/services):
+	// "queue" (default) waits up to LimitQueueTimeout for a free slot and then
+	// answers 429, "reject" answers 429 at once, "ignore" routes anyway
+	// (limits become advisory). See .design/routing-limits.md.
+	LimitOverflow string `json:"limit_overflow,omitempty" yaml:"limit_overflow,omitempty"`
+
+	// LimitQueueTimeout is the maximum queue wait in seconds for
+	// LimitOverflow == "queue". 0 = default (DefaultLimitQueueTimeout).
+	LimitQueueTimeout int `json:"limit_queue_timeout,omitempty" yaml:"limit_queue_timeout,omitempty"`
+
 	// VisionProxyService enables the rule-scoped vision proxy when set. When a
 	// request matched by this rule carries an image, the configured service
 	// describes it and the image block is replaced with text before the
@@ -665,6 +676,34 @@ type Rule struct {
 	// Smart Routing Configuration
 	SmartEnabled bool                        `json:"smart_enabled" yaml:"smart_enabled"`
 	SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
+}
+
+// Overflow policies for Rule.Flags.LimitOverflow.
+const (
+	LimitOverflowQueue  = "queue"
+	LimitOverflowReject = "reject"
+	LimitOverflowIgnore = "ignore"
+
+	// DefaultLimitQueueTimeout is the queue wait when the flag is unset.
+	DefaultLimitQueueTimeout = 15 * time.Second
+)
+
+// LimitOverflowPolicy returns the effective overflow policy (default queue).
+func (r *Rule) LimitOverflowPolicy() string {
+	switch r.Flags.LimitOverflow {
+	case LimitOverflowReject, LimitOverflowIgnore:
+		return r.Flags.LimitOverflow
+	default:
+		return LimitOverflowQueue
+	}
+}
+
+// LimitQueueWait returns the effective maximum queue wait.
+func (r *Rule) LimitQueueWait() time.Duration {
+	if r.Flags.LimitQueueTimeout > 0 {
+		return time.Duration(r.Flags.LimitQueueTimeout) * time.Second
+	}
+	return DefaultLimitQueueTimeout
 }
 
 // AffinityEnabled reports whether session affinity should be applied for this

@@ -254,6 +254,26 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",
 		},
+		{
+			Key:         "limit_overflow",
+			Label:       "When accounts are at their limit",
+			Description: "What to do when every account of this rule is at its concurrency/usage limit (limits are set on providers and on this rule's services). Queue (default) waits briefly for a free slot, then answers 429. Reject answers 429 at once with Retry-After. Ignore routes anyway — limits become advisory and only steer traffic when an alternative exists.",
+			Type:        FlagTypeEnum,
+			Category:    FlagCategoryRouting,
+			Options: []FlagOption{
+				{Value: "queue", Label: "Wait in queue, then 429 (default)"},
+				{Value: "reject", Label: "Reject with 429 immediately"},
+				{Value: "ignore", Label: "Ignore limits and route anyway"},
+			},
+		},
+		{
+			Key:         "limit_queue_timeout",
+			Label:       "Queue wait (seconds)",
+			Description: "How long a request may wait for a free account slot when the overflow policy is Queue. 0 uses the default (15 seconds). Only concurrency limits are waited on; exhausted usage budgets answer 429 immediately.",
+			Type:        FlagTypeInt,
+			Category:    FlagCategoryRouting,
+			Placeholder: "e.g. 15",
+		},
 		// ── App ────────────────────────────────────────────────────────────
 		{
 			Key:         "cursor_compat",
