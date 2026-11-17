@@ -18,12 +18,13 @@ export interface RepoEntry {
 export type DirectoryConfig = components['schemas']['DirectorySpec'];
 export type DirectoryProject = Pick<Project, 'primary_repo_path' | 'repos' | 'disable_worktree'>;
 export function projectDirectories(project: DirectoryProject): RepoEntry[] {
-    return project.repos.map((r) => ({ root: r.path, branch: r.base_branch, kind: r.kind ?? 'git', workspace_mode: r.kind === 'directory' ? 'shared' : r.workspace_mode ?? (project.disable_worktree ? 'shared' : 'worktree') }));
+    // A project created before directory settings (or through the API alone) has no repos yet.
+    return (project.repos ?? []).map((r) => ({ root: r.path, branch: r.base_branch, kind: r.kind ?? 'git', workspace_mode: r.kind === 'directory' ? 'shared' : r.workspace_mode ?? (project.disable_worktree ? 'shared' : 'worktree') }));
 }
 export function directoryPayload(entries: RepoEntry[], primary: string) {
     return { directories: entries.map((r): DirectoryConfig => ({ path: r.root, workspace_mode: r.kind === 'directory' ? 'shared' : r.workspace_mode })), primary_repo_path: primary };
 }
-export function primaryPath(project: DirectoryProject) { return project.primary_repo_path ?? project.repos[0]?.path ?? ''; }
+export function primaryPath(project: DirectoryProject) { return project.primary_repo_path ?? project.repos?.[0]?.path ?? ''; }
 
 const mono = { fontFamily: fontMono } as const;
 
