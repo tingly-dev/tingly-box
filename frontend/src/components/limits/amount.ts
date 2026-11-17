@@ -25,3 +25,17 @@ export function formatAmount(n?: number): string {
     if (n % 1e3 === 0) return `${n / 1e3}K`;
     return String(n);
 }
+
+const oneDecimal = (v: number) => String(Math.round(v * 10) / 10);
+
+/**
+ * The display form of a count, the same K / M the field accepts: 1700000 ->
+ * "1.7M", 200000 -> "200K", 950 -> "950". Locale-independent on purpose, so what
+ * is shown can be typed back as is (Intl's compact form says "170万" in Chinese).
+ */
+export function shortCount(n: number): string {
+    if (!Number.isFinite(n) || n < 1e3) return String(Math.max(0, Math.round(n || 0)));
+    if (n >= 1e6) return `${oneDecimal(n / 1e6)}M`;
+    const k = Math.round(n / 100) / 10;
+    return k >= 1000 ? '1M' : `${oneDecimal(k)}K`;
+}

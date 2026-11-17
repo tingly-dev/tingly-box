@@ -179,6 +179,20 @@ describe('amount parsing', () => {
         expect(formatAmount(1_234_567)).toBe('1234567');
         expect(formatAmount(undefined)).toBe('');
     });
+
+    it('shows counts in the same short form it accepts', async () => {
+        const {shortCount, parseAmount} = await import('./amount');
+        expect(shortCount(0)).toBe('0');
+        expect(shortCount(950)).toBe('950');
+        expect(shortCount(1500)).toBe('1.5K');
+        expect(shortCount(200_000)).toBe('200K');
+        expect(shortCount(999_999)).toBe('1M');
+        expect(shortCount(1_700_000)).toBe('1.7M');
+        expect(shortCount(12_000_000)).toBe('12M');
+        for (const n of [1500, 200_000, 1_700_000]) { // what is shown can be typed back
+            expect(parseAmount(shortCount(n))).toEqual({kind: 'ok', value: n});
+        }
+    });
 });
 
 describe('LimitsBadge tooltip', () => {
