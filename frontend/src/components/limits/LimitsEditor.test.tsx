@@ -114,6 +114,36 @@ describe('limits at rest on a service node', () => {
     });
 });
 
+describe('LimitsBadge as a control', () => {
+    it('is clickable without bubbling to the node, and quiet (revealed on hover) while nothing is set', async () => {
+        const {default: LimitsBadge, LIMITS_QUIET_CLASS} = await import('./LimitsBadge');
+        const open = vi.fn();
+        const node = vi.fn();
+        const {container, rerender} = render(
+            <div onClick={node}><LimitsBadge onClick={open} /></div>,
+        );
+        // editable but unlimited: present, flagged quiet so the node can reveal it on hover
+        expect(container.querySelector(`.${LIMITS_QUIET_CLASS}`)).toBeTruthy();
+        fireEvent.click(screen.getByTestId('limits-badge'));
+        expect(open).toHaveBeenCalledTimes(1);
+        expect(node).not.toHaveBeenCalled();
+
+        fireEvent.keyDown(screen.getByTestId('limits-badge'), {key: 'Enter'});
+        expect(open).toHaveBeenCalledTimes(2);
+
+        // once limited it is always shown
+        rerender(<div onClick={node}><LimitsBadge serviceLimits={{max_concurrent: 2}} onClick={open} /></div>);
+        expect(container.querySelector(`.${LIMITS_QUIET_CLASS}`)).toBeNull();
+        expect(screen.getByTestId('limits-badge').getAttribute('role')).toBe('button');
+    });
+
+    it('renders nothing for an unlimited, read-only node', async () => {
+        const {default: LimitsBadge} = await import('./LimitsBadge');
+        render(<LimitsBadge serviceLimits={{}} accountLimits={{}} />);
+        expect(screen.queryByTestId('limits-badge')).toBeNull();
+    });
+});
+
 describe('amount parsing', () => {
     it('reads counts with K / M suffixes and writes them back short', async () => {
         const {parseAmount, formatAmount} = await import('./amount');

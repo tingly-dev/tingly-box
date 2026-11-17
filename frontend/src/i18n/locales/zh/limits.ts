@@ -64,7 +64,8 @@ export default {
       "quota": "上游额度用到 {{n}}% 时停用",
       "service": "此规则的份额",
       "account": "账号",
-      "indicator": "已设置限额"
+      "indicator": "已设置限额",
+      "clickToEdit": "点击编辑"
     }
   }
 };

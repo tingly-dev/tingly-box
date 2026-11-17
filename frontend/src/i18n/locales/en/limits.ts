@@ -64,7 +64,8 @@ export default {
       "quota": "stop at {{n}}% of upstream quota",
       "service": "This rule's share",
       "account": "Account",
-      "indicator": "Limits are set"
+      "indicator": "Limits are set",
+      "clickToEdit": "Click to edit"
     }
   }
 };
