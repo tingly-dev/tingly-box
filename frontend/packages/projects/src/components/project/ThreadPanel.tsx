@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert, Box, Button, Collapse, Divider, IconButton, Menu, MenuItem,
-    Popover, Skeleton, Tooltip, Typography,
+    Popover, Skeleton, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { api, unwrap, type Attachment, type BackgroundTask, type Subagent, type Thread, type ThreadEvent } from '../../client';
+import { api, unwrap, type Attachment, type BackgroundTask, type CleanupReport, type Subagent, type Thread, type ThreadEvent } from '../../client';
 import { buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
 import { ControlTooltip } from '../ControlTooltip';
@@ -15,7 +15,7 @@ import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
 import { ArrowBack, DiffIcon, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
-import { formatTokens } from '../../utils/format';
+import { formatBytes, formatTokens } from '../../utils/format';
 import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
 import { ThreadInfoRail } from './ThreadInfoRail';
@@ -155,7 +155,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // The handoff command stays on screen with its own copy button, since
     // copying right after the request can be refused by the browser.
     const [handoff, setHandoff] = useState<string | null>(null);
-    const [confirm, setConfirm] = useState<'resolve' | 'archive' | 'handoff' | null>(null);
+    const [confirm, setConfirm] = useState<'resolve' | 'archive' | 'handoff' | 'delete' | null>(null);
+    // The cleanup report a confirm dialog shows (what archive/delete frees, what stays).
+    const [report, setReport] = useState<CleanupReport | null>(null);
+    // The branch name typed back when a delete has to force past a missing merged PR.
+    const [typed, setTyped] = useState('');
     const [acting, setActing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -340,15 +344,24 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             return false;
         }
     };
-    const runConfirmed = async (what: 'resolve' | 'archive' | 'handoff') => {
+    const runConfirmed = async (what: 'resolve' | 'archive' | 'handoff' | 'delete') => {
         setActing(true);
+        if (what === 'delete' && report && !report.can_delete && thread?.branch && typed !== thread.branch) {
+            // The branch has no merged PR: the typed confirmation did not match.
+            notify(t('thread.deleteTypeBranch', { branch: thread.branch }), 'error');
+            setActing(false);
+            return;
+        }
         const done = what === 'resolve' ? await act(ops.finish)
             : what === 'archive' ? await act(ops.archiveSession)
+            : what === 'delete' ? await act(() => ops.deleteThread(!!report && !report.can_delete, thread?.branch || undefined))
             : await act(async () => setHandoff(await ops.handoff()));
         setActing(false);
         if (done) {
             setConfirm(null);
-            if (what !== 'handoff') onRefresh?.();
+            setReport(null);
+            setTyped('');
+            onRefresh?.();
         }
     };
     // Resolving or handing off ends the process and every background task it
@@ -357,6 +370,28 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         setMenu(null);
         if (liveTasks.length > 0 || (what === 'archive' && running)) setConfirm(what);
         else void runConfirmed(what);
+    };
+    // Archive and delete open on the cleanup report, so the dialog says what
+    // is freed and what stays; the server re-checks and refuses with the
+    // blockers if anything moved in between.
+    const openCleanup = (what: 'archive' | 'delete') => {
+        setMenu(null);
+        if (session) {
+            if (what === 'archive') guarded('archive');
+            return;
+        }
+        void (async () => {
+            setActing(true);
+            try {
+                setReport(await ops.cleanup());
+                setTyped('');
+                setConfirm(what);
+            } catch (e) {
+                notify((e as Error).message, 'error');
+            } finally {
+                setActing(false);
+            }
+        })();
     };
     // Renaming is metadata: it persists at once and the thread's next event
     // carries it to every surface that shows it.
@@ -429,9 +464,17 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         {!thread.archived_at && (thread.status !== 'resolved'
                             ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
                             : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
-                        {session && (thread.archived_at
-                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.restoreSession).then((ok) => { if (ok) onRefresh?.(); }); }}>{t('session.restore')}</MenuItem>
-                            : <MenuItem disabled={acting} onClick={() => guarded('archive')}>{t('session.archive')}</MenuItem>)}
+                        {!thread.archived_at && !session && (
+                            <MenuItem disabled={acting} onClick={() => openCleanup('archive')}>{t('thread.archive')}</MenuItem>
+                        )}
+                        {thread.archived_at ? (
+                            <>
+                                <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.restoreSession).then((ok) => { if (ok) onRefresh?.(); }); }}>{session ? t('session.restore') : t('thread.restore')}</MenuItem>
+                                <MenuItem disabled={acting} onClick={() => openCleanup('delete')} sx={{ color: 'error.main' }}>{t('thread.delete')}</MenuItem>
+                            </>
+                        ) : session && (
+                            <MenuItem disabled={acting} onClick={() => guarded('archive')}>{t('session.archive')}</MenuItem>
+                        )}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
@@ -620,13 +663,35 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             )}
             <ConfirmDialog
                 open={confirm !== null}
-                title={confirm === 'handoff' ? t('session.handoffConfirm') : confirm === 'archive' ? t('session.archiveConfirm') : t('session.resolveConfirm')}
-                description={liveTasks.length > 0 ? t('session.tasksWillStop', { count: liveTasks.length }) : undefined}
+                title={confirm === 'handoff' ? t('session.handoffConfirm')
+                    : confirm === 'archive' ? t(session ? 'session.archiveConfirm' : 'thread.archiveConfirm')
+                    : confirm === 'delete' ? t('thread.deleteConfirm')
+                    : t('session.resolveConfirm')}
+                description={confirm === 'archive' && report ? (
+                    <Box sx={{ display: 'grid', gap: 1 }}>
+                        {report.blockers?.length ? <Alert severity="warning">{report.blockers.join(' ')}</Alert> : null}
+                        <Typography variant="body2">
+                            {t('thread.archiveFrees', { worktree: formatBytes(report.worktree_bytes), tmp: formatBytes(report.tmp_bytes) })}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">{report.kept.join(' · ')}</Typography>
+                        {report.warnings?.length ? <Typography variant="body2" color="text.secondary">{report.warnings.join(' ')}</Typography> : null}
+                    </Box>
+                ) : confirm === 'delete' ? (
+                    <Box sx={{ display: 'grid', gap: 1 }}>
+                        <Typography variant="body2">{t('thread.deleteBody')}</Typography>
+                        {report && !report.can_delete && thread?.branch ? (
+                            <>
+                                <Alert severity="warning">{t('thread.deleteForce', { branch: thread.branch })}</Alert>
+                                <TextField size="small" label={t('thread.deleteTypeBranchLabel', { branch: thread.branch })} value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus />
+                            </>
+                        ) : null}
+                    </Box>
+                ) : liveTasks.length > 0 ? t('session.tasksWillStop', { count: liveTasks.length }) : undefined}
                 loading={acting}
                 cancelLabel={t('common.cancel')}
-                confirmLabel={confirm === 'handoff' ? t('session.handoff') : confirm === 'archive' ? t('session.archive') : t('session.resolve')}
-                confirmColor="warning"
-                onClose={() => setConfirm(null)}
+                confirmLabel={confirm === 'handoff' ? t('session.handoff') : confirm === 'archive' ? t(session ? 'session.archive' : 'thread.archive') : confirm === 'delete' ? t('thread.delete') : t('session.resolve')}
+                confirmColor={confirm === 'delete' ? 'error' : 'warning'}
+                onClose={() => { setConfirm(null); setReport(null); }}
                 onConfirm={() => confirm && void runConfirmed(confirm)}
             />
             </Box>

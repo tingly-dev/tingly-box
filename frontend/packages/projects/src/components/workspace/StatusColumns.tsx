@@ -53,7 +53,7 @@ export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinne
  */
 export function StatusColumns({ threads, selectedId, onOpen, onTasks, onStatus, listMaxHeight, rowRef, rowSx }: Props) {
     const { t } = useTranslation('projects');
-    const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => th.status === s) })).filter((g) => g.list.length > 0);
+    const groups = STATUS_ORDER.map((s) => ({ key: s, list: threads.filter((th) => !th.archived_at && th.status === s) })).filter((g) => g.list.length > 0);
     const columns = groups.filter((g) => g.key !== 'resolved');
     // Finished work is only counted here; the Overview pane is where to read it.
     const finished = groups.find((g) => g.key === 'resolved')?.list.length ?? 0;

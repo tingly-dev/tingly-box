@@ -95,6 +95,27 @@ func (s *Store) DeleteProjectCascade(projectID string) error {
 	})
 }
 
+// DeleteThreadCascade removes one thread and what is scoped to it: its
+// events, its coordinator settings delivery and the IM bindings that still
+// name it. Delete (of an archived thread) calls it; nothing else does.
+func (s *Store) DeleteThreadCascade(threadID string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("thread_id = ?", threadID).Delete(&ThreadEvent{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("thread_id = ?", threadID).Delete(&CoordinatorSettingsDelivery{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("target_thread_id = ?", threadID).Delete(&ChannelBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("thread_id = ?", threadID).Delete(&ChannelBinding{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", threadID).Delete(&Thread{}).Error
+	})
+}
+
 // SaveProject writes all fields of p.
 func (s *Store) SaveProject(p *Project) error {
 	return s.db.Save(p).Error

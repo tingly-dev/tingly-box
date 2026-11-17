@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1052,14 +1053,38 @@ func (m *Threads) withTmpEnv(env []string, p *db.Project, t *db.Thread) []string
 }
 
 // cleanTmp removes a finished thread's scratch directory. Files it sent with
-// send_file were copied into uploads/ and stay.
+// send_file were copied into uploads/ and stay. Tool caches left inside (a
+// Go module cache marks its files read-only) are made writable first; a
+// directory that still cannot be removed is reported, not fatal.
 func (m *Threads) cleanTmp(t *db.Thread) {
 	if t == nil {
 		return
 	}
 	dir := m.layout.TmpDir(t.ProjectID, t.ID)
+	makeWritable(dir)
 	if err := os.RemoveAll(dir); err != nil {
 		logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot remove the thread's temp dir")
+	}
+}
+
+// makeWritable adds the owner's write bit to everything under dir, so a
+// RemoveAll can take read-only caches (0555 directories, 0444 files) down.
+// A missing dir is fine; anything else is logged by the caller's remove.
+func makeWritable(dir string) {
+	if err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d == nil {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.Mode().Perm()&0o200 == 0 {
+			_ = os.Chmod(p, info.Mode().Perm()|0o200)
+		}
+		return nil
+	}); err != nil {
+		logrus.WithError(err).WithField("dir", dir).Warn("projects: cannot make the temp dir writable")
 	}
 }
 

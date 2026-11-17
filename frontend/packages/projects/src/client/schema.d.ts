@@ -750,7 +750,11 @@ export interface paths {
         get: operations["apiV1ThreadsIdGet"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/<branch>), scratch and settings files, and its rows. The project's library is kept
+         * @description Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/<branch>), scratch and settings files, and its rows. The project's library is kept
+         */
+        delete: operations["apiV1ThreadsIdDelete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -766,8 +770,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Archive a folder session, stopping its process without resolving it
-         * @description Archive a folder session, stopping its process without resolving it
+         * Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty
+         * @description Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty
          */
         post: operations["apiV1ThreadsIdArchivePost"];
         delete?: never;
@@ -829,6 +833,26 @@ export interface paths {
          * @description Set when the thread answers a question with its suggested option by itself
          */
         put: operations["apiV1ThreadsIdAuto-answerPut"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept
+         * @description What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept
+         */
+        get: operations["apiV1ThreadsIdCleanupGet"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1206,8 +1230,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restore an archived folder session without changing its status
-         * @description Restore an archived folder session without changing its status
+         * Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path
+         * @description Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path
          */
         post: operations["apiV1ThreadsIdRestorePost"];
         delete?: never;
@@ -1459,6 +1483,33 @@ export interface components {
              */
             index: number;
         };
+        CleanupReport: {
+            /** @description Field blockers */
+            blockers?: string[];
+            /** @description Field can_archive */
+            can_archive: boolean;
+            /** @description Field can_delete */
+            can_delete: boolean;
+            /** @description Field kept */
+            kept: string[];
+            /** @description Field thread_id */
+            thread_id: string;
+            /**
+             * Format: int64
+             * @description Field tmp_bytes
+             */
+            tmp_bytes: number;
+            /** @description Field warnings */
+            warnings?: string[];
+            /**
+             * Format: int64
+             * @description Field worktree_bytes
+             */
+            worktree_bytes: number;
+        };
+        CleanupResponse: {
+            report: components["schemas"]["CleanupReport"];
+        };
         ConnectionDraft: {
             /** @description Field api_key */
             api_key?: string;
@@ -1544,6 +1595,12 @@ export interface components {
             profile?: string;
             /** @description Field title */
             title?: string;
+        };
+        DeleteThreadRequest: {
+            /** @description Field confirm_branch */
+            confirm_branch?: string;
+            /** @description Field force */
+            force?: boolean;
         };
         Diff: {
             /**
@@ -2403,6 +2460,11 @@ export interface components {
             updated_at: string;
             /** @description Field wait_reason */
             wait_reason?: string;
+            /**
+             * Format: date-time
+             * @description Field worktree_freed_at
+             */
+            worktree_freed_at?: string;
         };
         ThreadCounts: {
             /**
@@ -3833,6 +3895,34 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdArchivePost: {
         parameters: {
             query?: never;
@@ -3929,6 +4019,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdCleanupGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupResponse"];
                 };
             };
         };

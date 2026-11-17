@@ -1,6 +1,10 @@
 # Thread 清理与 worktree 回收
 
-> 状态：**提案，等待决定；未实施。** 本文只做调查和方案，没有改代码。
+> 状态：**核心已实施（2026-11-17），其余待做。** 已落地：`cleanTmp` 只读修复、
+> 线程 Archive/Restore/Delete 后端（`projects/internal/project/thread_cleanup.go`）与 API
+> （`/threads/:id/archive|restore|cleanup`、`DELETE /threads/:id`）、线程页菜单与确认对话框、
+> Overview 的 Archived 分组；安全检查取 P1（有风险即拒绝），远端分支删除、快照（P2）、
+> 批量清理、`auto_archive_days` 自动策略和积压迁移**尚未实施**（见 §4 的 PR 4–6）。
 > 相关：[workspace.md](../projects/.design/workspace.md)（worktree 位置）、
 > [projects.md](../projects/.design/projects.md)（线程生命周期）、
 > [thread-card-requests.md](../projects/.design/thread-card-requests.md)。
@@ -15,6 +19,10 @@ Projects 能开线程（每个线程一个 worktree 和一个 `tp/*` 分支）�
 - Resolve 会清线程的 TMPDIR（`cleanTmp`），但**对大目录经常失败**（见 §2.3）。
 
 **范围决定（用户，2026-11-17）：清理 = 只回收 worktree 本身；library（uploads、outputs、memory）不动，分支保留。** 线程的 TMPDIR（`library/.tmp/<thread>`）属于 library，但它是“resolved 后即删”的既定约定，不是清理新增的动作；它此前不可见也被判定为问题——`.tmp` 子树已在 Library 树里可见、可下载、可删除（`origin: "scratch"`，见 `projects/.design/library-tree.md`），所以 `cleanTmp` 的只读目录 bug 修复（PR 1）不再是“替用户删看不见的东西”。Archive / Delete 的全部安全检查照旧。
+
+**补充决定（用户，2026-11-17）：**
+- **Archive / Delete 同时删 `.tmp`**：它是 Resolve 既定契约的一部分（先修只读 bug：`makeWritable` 先补 owner 写位再 `RemoveAll`），Restore 后下一个 turn 会重建。`outputs/`、`uploads/` 仍然永远不删。
+- **共享工具缓存按项目共享**：放 `library/.cache`（`.git` 风格的隐藏目录，Library 树、fork、zip 根目录都自动跳过隐藏目录）。线程启动 env 显式指 `GOMODCACHE`/`GOCACHE`/`npm_config_cache`/`PIP_CACHE_DIR` 过去——agent 自建 isolated-home 也共享缓存。**这项由协调者另开线程实施**，不与本 PR 混杂。fork 不带缓存/临时文件是现成行为（`copyTree` 跳过一切隐藏目录），fork 带的是 memory/ + library 非隐藏文件。
 
 ## 2. 现状（只读调查，2026-11-17，本机）
 

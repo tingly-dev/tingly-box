@@ -1672,6 +1672,48 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
+        "description": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
+        "operationId": "apiV1ThreadsIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteThreadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/threads/{id}/archive": {
@@ -1679,8 +1721,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Archive a folder session, stopping its process without resolving it",
-        "description": "Archive a folder session, stopping its process without resolving it",
+        "summary": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
+        "description": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
         "operationId": "apiV1ThreadsIdArchivePost",
         "parameters": [
           {
@@ -1819,6 +1861,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/cleanup": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
+        "description": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
+        "operationId": "apiV1ThreadsIdCleanupGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResponse"
                 }
               }
             }
@@ -2634,8 +2709,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Restore an archived folder session without changing its status",
-        "description": "Restore an archived folder session without changing its status",
+        "summary": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
+        "description": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
         "operationId": "apiV1ThreadsIdRestorePost",
         "parameters": [
           {
@@ -3184,6 +3259,73 @@
           "index"
         ]
       },
+      "CleanupReport": {
+        "type": "object",
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "description": "Field blockers",
+            "items": {
+              "type": "string"
+            }
+          },
+          "can_archive": {
+            "type": "boolean",
+            "description": "Field can_archive"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "description": "Field can_delete"
+          },
+          "kept": {
+            "type": "array",
+            "description": "Field kept",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "Field thread_id"
+          },
+          "tmp_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field tmp_bytes"
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Field warnings",
+            "items": {
+              "type": "string"
+            }
+          },
+          "worktree_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field worktree_bytes"
+          }
+        },
+        "required": [
+          "thread_id",
+          "worktree_bytes",
+          "tmp_bytes",
+          "kept",
+          "can_archive",
+          "can_delete"
+        ]
+      },
+      "CleanupResponse": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/CleanupReport"
+          }
+        },
+        "required": [
+          "report"
+        ]
+      },
       "ConnectionDraft": {
         "type": "object",
         "properties": {
@@ -3388,6 +3530,19 @@
         "required": [
           "content"
         ]
+      },
+      "DeleteThreadRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_branch": {
+            "type": "string",
+            "description": "Field confirm_branch"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Field force"
+          }
+        }
       },
       "Diff": {
         "type": "object",
@@ -5171,6 +5326,11 @@
           "wait_reason": {
             "type": "string",
             "description": "Field wait_reason"
+          },
+          "worktree_freed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field worktree_freed_at"
           }
         },
         "required": [

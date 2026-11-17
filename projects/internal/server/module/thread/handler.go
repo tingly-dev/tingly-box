@@ -257,11 +257,18 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("Resolve the thread; it stays readable and can be reopened"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/archive", h.archiveSession, tag,
-		swagger.WithDescription("Archive a folder session, stopping its process without resolving it"),
+		swagger.WithDescription("Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/restore", h.restoreSession, tag,
-		swagger.WithDescription("Restore an archived folder session without changing its status"),
+		swagger.WithDescription("Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path"),
 		swagger.WithResponseModel(db.Thread{}))
+	api.GET("/threads/:id/cleanup", h.cleanup, tag,
+		swagger.WithDescription("What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept"),
+		swagger.WithResponseModel(CleanupResponse{}))
+	api.DELETE("/threads/:id", h.deleteThread, tag,
+		swagger.WithDescription("Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/<branch>), scratch and settings files, and its rows. The project's library is kept"),
+		swagger.WithRequestModel(DeleteThreadRequest{}),
+		swagger.WithResponseModel(OKResponse{}))
 	api.POST("/threads/:id/reopen", h.reopen, tag,
 		swagger.WithDescription("Reopen a resolved thread"),
 		swagger.WithResponseModel(db.Thread{}))
@@ -647,48 +654,96 @@ func (h *Handler) resolve(c *gin.Context) {
 	c.JSON(http.StatusOK, t)
 }
 
-// folderSession limits the independent archive flag to folder sessions.
-func (h *Handler) folderSession(c *gin.Context) (*db.Thread, bool) {
-	t, ok := h.worker(c)
-	if !ok {
-		return nil, false
+// folderSession used to limit the archive flag to folder sessions; archive
+// and restore now serve every thread (project threads free their worktree).
+
+// BlockersResponse says why an archive or a delete was refused, item by
+// item, so the dialog can list them instead of one string.
+type BlockersResponse struct {
+	Error    string   `json:"error"`
+	Blockers []string `json:"blockers"`
+}
+
+// OKResponse acknowledges an action.
+type OKResponse struct {
+	OK bool `json:"ok"`
+}
+
+type DeleteThreadRequest struct {
+	// Force deletes a branch that no merged PR proves merged. Its commits
+	// stay under refs/tingly/trash/<branch>.
+	Force bool `json:"force,omitempty"`
+	// ConfirmBranch must repeat the branch name when Force is set.
+	ConfirmBranch string `json:"confirm_branch,omitempty"`
+}
+
+// blocked answers with the blockers of a refused archive or delete.
+func blocked(c *gin.Context, err error) {
+	var b *rt.BlockedArchive
+	if errors.As(err, &b) {
+		c.JSON(http.StatusConflict, BlockersResponse{Error: err.Error(), Blockers: b.Blockers})
+		return
 	}
-	p, err := h.svc.Store.GetProject(t.ProjectID)
-	if err != nil {
-		fail(c, err)
-		return nil, false
-	}
-	if p.Type != db.ProjectFolder {
-		apierr.BadRequest(c, "only folder sessions can be archived here")
-		return nil, false
-	}
-	return t, true
+	fail(c, err)
 }
 
 func (h *Handler) archiveSession(c *gin.Context) {
-	t, ok := h.folderSession(c)
+	t, ok := h.worker(c)
 	if !ok {
 		return
 	}
-	out, err := h.svc.Threads.ArchiveSession(t.ID)
+	out, err := h.svc.Threads.Archive(t.ID)
 	if err != nil {
-		fail(c, err)
+		blocked(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, out)
 }
 
 func (h *Handler) restoreSession(c *gin.Context) {
-	t, ok := h.folderSession(c)
+	t, ok := h.worker(c)
 	if !ok {
 		return
 	}
-	out, err := h.svc.Threads.RestoreSession(t.ID)
+	out, err := h.svc.Threads.Restore(t.ID)
+	if err != nil {
+		blocked(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// CleanupResponse is what archive (or delete) would free right now.
+type CleanupResponse struct {
+	Report rt.CleanupReport `json:"report"`
+}
+
+func (h *Handler) cleanup(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	report, err := h.svc.Threads.Cleanup(t.ID)
 	if err != nil {
 		fail(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, out)
+	c.JSON(http.StatusOK, CleanupResponse{Report: *report})
+}
+
+func (h *Handler) deleteThread(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	var req DeleteThreadRequest
+	// A DELETE may carry a body; empty is fine (no force).
+	_ = c.ShouldBindJSON(&req)
+	if err := h.svc.Threads.Delete(t.ID, rt.DeleteSpec{Force: req.Force, ConfirmBranch: req.ConfirmBranch}); err != nil {
+		blocked(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, OKResponse{OK: true})
 }
 
 func (h *Handler) reopen(c *gin.Context) {
