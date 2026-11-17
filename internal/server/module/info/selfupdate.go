@@ -108,10 +108,8 @@ func newUpdater(launchSource string) *updater {
 func (u *updater) support(ctx context.Context) (SelfUpdateSupport, string) {
 	switch u.launchSource {
 	case shortcut.SourceNpm:
-	case shortcut.SourceNpx, shortcut.SourceNpxBundle:
+	case shortcut.SourceNpx:
 		return SelfUpdateSupport{Reason: "started via npx; run the npx command with the new version"}, ""
-	case shortcut.SourceNpmBundle:
-		return SelfUpdateSupport{Reason: "tingly-box-bundle is retired; install tingly-box with npm instead"}, ""
 	case shortcut.SourceBinary:
 		return SelfUpdateSupport{Reason: "standalone binary; download the new release"}, ""
 	default:
