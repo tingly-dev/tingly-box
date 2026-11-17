@@ -3881,6 +3881,28 @@
         }
       }
     },
+    "/api/v1/info/version/update": {
+      "post": {
+        "tags": [
+          "info"
+        ],
+        "summary": "Install the latest version over this npm global install and restart into it",
+        "description": "Install the latest version over this npm global install and restart into it",
+        "operationId": "apiV1InfoVersionUpdatePost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfUpdateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/log": {
       "get": {
         "tags": [
@@ -4537,30 +4559,8 @@
         }
       }
     },
-    "/api/v1/info/version/update": {
+    "/api/v1/mcp/sources/{source_id}/check": {
       "post": {
-        "tags": [
-          "info"
-        ],
-        "summary": "Install the latest version over this npm global install and restart into it",
-        "description": "Install the latest version over this npm global install and restart into it",
-        "operationId": "apiV1InfoVersionUpdatePost",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SelfUpdateResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/log": {
-      "get": {
         "tags": [
           "mcp"
         ],
@@ -16017,6 +16017,9 @@
             "description": "Field release_url",
             "example": "https://github.com/tingly-dev/tingly-box/releases"
           },
+          "self_update": {
+            "$ref": "#/components/schemas/SelfUpdateSupport"
+          },
           "should_notify": {
             "type": "boolean",
             "description": "Field should_notify",
@@ -17359,29 +17362,9 @@
             "type": "string",
             "description": "Field path"
           },
-          "self_update": {
-            "$ref": "#/components/schemas/SelfUpdateSupport"
-          },
-          "should_notify": {
-            "type": "boolean",
-            "description": "Field should_notify",
-            "example": true
-          }
-        },
-        "required": [
-          "current_version",
-          "latest_version",
-          "has_update",
-          "release_url",
-          "should_notify",
-          "launch_source"
-        ]
-      },
-      "LatestVersionResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/LatestVersionInfo"
+          "provider": {
+            "type": "string",
+            "description": "Field provider"
           },
           "request_id": {
             "type": "string",
@@ -20940,6 +20923,78 @@
           }
         }
       },
+      "SelfUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SelfUpdateResult"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "output": {
+            "type": "string",
+            "description": "Field output"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "SelfUpdateResult": {
+        "type": "object",
+        "properties": {
+          "restart_required": {
+            "type": "boolean",
+            "description": "Field restart_required",
+            "example": false
+          },
+          "restarting": {
+            "type": "boolean",
+            "description": "Field restarting",
+            "example": true
+          },
+          "version": {
+            "type": "string",
+            "description": "Field version",
+            "example": "0.261001.1"
+          }
+        },
+        "required": [
+          "version",
+          "restarting",
+          "restart_required"
+        ]
+      },
+      "SelfUpdateSupport": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Field reason",
+            "example": "started via npx; run the npx command with the new version"
+          },
+          "supervised": {
+            "type": "boolean",
+            "description": "Field supervised",
+            "example": false
+          },
+          "supported": {
+            "type": "boolean",
+            "description": "Field supported",
+            "example": true
+          }
+        },
+        "required": [
+          "supported",
+          "supervised"
+        ]
+      },
       "SendRequest": {
         "type": "object",
         "properties": {
@@ -21385,79 +21440,7 @@
           "operation"
         ]
       },
-      "SelfUpdateResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/SelfUpdateResult"
-          },
-          "error": {
-            "type": "string",
-            "description": "Field error"
-          },
-          "output": {
-            "type": "string",
-            "description": "Field output"
-          },
-          "success": {
-            "type": "boolean",
-            "description": "Field success"
-          }
-        },
-        "required": [
-          "success"
-        ]
-      },
-      "SelfUpdateResult": {
-        "type": "object",
-        "properties": {
-          "restart_required": {
-            "type": "boolean",
-            "description": "Field restart_required",
-            "example": false
-          },
-          "restarting": {
-            "type": "boolean",
-            "description": "Field restarting",
-            "example": true
-          },
-          "version": {
-            "type": "string",
-            "description": "Field version",
-            "example": "0.261001.1"
-          }
-        },
-        "required": [
-          "version",
-          "restarting",
-          "restart_required"
-        ]
-      },
-      "SelfUpdateSupport": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "description": "Field reason",
-            "example": "started via npx; run the npx command with the new version"
-          },
-          "supervised": {
-            "type": "boolean",
-            "description": "Field supervised",
-            "example": false
-          },
-          "supported": {
-            "type": "boolean",
-            "description": "Field supported",
-            "example": true
-          }
-        },
-        "required": [
-          "supported",
-          "supervised"
-        ]
-      },
-      "SendMessageRequest": {
+      "SmartOpMeta": {
         "type": "object",
         "properties": {
           "description": {
