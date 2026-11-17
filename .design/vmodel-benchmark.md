@@ -136,9 +136,17 @@ one shared vocabulary instead of re-deriving checks per package.
   the canonical example: a `main` that calls `NewModelServer().Listen(addr)`
   and serves the model responder (real vmodel models) over loopback for
   non-Go drivers — i.e. it demonstrates the foundation itself. No new CLI surface
-  beyond this example.
+  was added by the benchmark foundation itself. The subsequent
+  [unified-definition design](./vmodel-definitions.md) adds `tb vmodel` as the
+  supported JSON/YAML-driven standalone entry point; the example remains a Go
+  foundation example.
 
 ### Two production-backed servers, one router
+
+For file-defined models, `spec.Runtime` compiles the common definition and
+exposes both an HTTP handler and scenario/check adapters. This sits above the
+existing responders; transport observation and assertions remain shared. See
+[`vmodel-definitions.md`](./vmodel-definitions.md) for migration boundaries.
 
 `NewModelServer()` (observable: capture + endpoint hits) and `LocalServer`
 (the capture-free load target used by the load generator) both serve the same

@@ -157,6 +157,7 @@
 | [harness-npm.md](./harness-npm.md) | Harness npm — 用本地 registry 和虚拟版本号，从当前源码演练整条 npm 发布与安装链路 | 脚本 `build/npx/harness-npm.sh`；CI 里只有手动触发的 `harness-npm.yml`（Linux、macOS、Windows 三平台） |
 | [rule-flag-testing.md](./rule-flag-testing.md) | Rule-Flag Behavior Testing | 设计说明；局部实施状态见正文 |
 | [vmodel.md](./vmodel.md) | vmodel — design index | 入口索引 |
+| [vmodel-definitions.md](./vmodel-definitions.md) | VModel 统一定义、加载与共享运行时 | #2618 已实现；场景集成在堆叠 PR #2621 |
 | [vmodel-benchmark.md](./vmodel-benchmark.md) | vmodel as a shared real-world benchmark | Phase 1–3 已完成 |
 | [vmodel-sequence.md](./vmodel-sequence.md) | Virtual sequence models | 设计说明；局部实施状态见正文 |
 | [vmodel-transport.md](./vmodel-transport.md) | vmodel transport — dispatch virtual providers over HTTP, not in-memory | 内存 listener 已实现；unix socket 未做 |
