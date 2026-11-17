@@ -5,7 +5,6 @@ import {
     Edit as EditIcon,
     KeyboardArrowUp,
     KeyboardArrowDown,
-    Speed as LimitsIcon,
 } from '@/components/icons';
 import {
     Box,
@@ -26,9 +25,9 @@ import { ProviderLabel } from '../ProviderLogo.tsx';
 import { ProbeMenu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
-import LimitsBadge from '../limits/LimitsBadge';
+import LimitsBadge, { LIMITS_QUIET_CLASS } from '../limits/LimitsBadge';
 import LimitsDialog from '../limits/LimitsDialog';
-import { isEmptyLimits, type Limits } from '../limits/LimitsEditor';
+import type { Limits } from '../limits/LimitsEditor';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
 import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
@@ -44,8 +43,16 @@ const ServiceNodeWrapper = styled(Box, {
     position: 'relative',
     overflow: 'visible', // Allow action buttons to extend beyond boundaries
     '&:hover .action-buttons': { opacity: 1 },
+    // An unset limits control stays out of sight (and out of reach) until the
+    // node is hovered or holds focus; a set one is always shown.
+    [`& .${LIMITS_QUIET_CLASS}`]: { opacity: 0, pointerEvents: 'none', transition: 'opacity 0.16s ease' },
+    [`&:is(:hover, :focus-within) .${LIMITS_QUIET_CLASS}`]: { opacity: 1, pointerEvents: 'auto' },
+    '@media (hover: none)': {
+        [`& .${LIMITS_QUIET_CLASS}`]: { opacity: 1, pointerEvents: 'auto' },
+    },
     ...(forceShowActions && {
         '& .action-buttons': { opacity: 1 },
+        [`& .${LIMITS_QUIET_CLASS}`]: { opacity: 1, pointerEvents: 'auto' },
     }),
 }));
 
@@ -339,12 +346,16 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 }}>
                                     {provider.model || t('rule.service.selectModel')}
                                 </Typography>
-                                {/* Caps visible at rest, not only in the hover action bar
-                                    (service share and/or account). Left side: the action bar
-                                    is pinned to the top-right and would cover (and block
-                                    hover on) anything placed there. Clear of the tier disk. */}
+                                {/* Limits control, a sibling of the quota ring: shown when a
+                                    cap is set (rule share and/or account), otherwise only on
+                                    hover. Left side: the action bar is pinned top-right and
+                                    would cover it. Clear of the tier disk. */}
                                 <Box sx={{ position: 'absolute', left: hasTier ? 26 : 0, top: '50%', transform: 'translateY(-50%)', lineHeight: 0 }}>
-                                    <LimitsBadge serviceLimits={provider.limits} accountLimits={providerInfo.provider?.limits} />
+                                    <LimitsBadge
+                                        serviceLimits={provider.limits}
+                                        accountLimits={providerInfo.provider?.limits}
+                                        onClick={onLimitsChange ? () => setLimitsOpen(true) : undefined}
+                                    />
                                 </Box>
                             </Box>
                         </NodeTooltip>
@@ -431,19 +442,6 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ p: 0.5 }}
                             >
                                 <PlayIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                        </NodeTooltip>
-                    )}
-                    {onLimitsChange && (
-                        <NodeTooltip title={t('limits.buttonTooltip')} placement="bottom">
-                            <IconButton
-                                size="small"
-                                aria-label={t('limits.button')}
-                                onClick={(e) => { e.stopPropagation(); setLimitsOpen(true); }}
-                                sx={{ p: 0.5 }}
-                                color={isEmptyLimits(provider.limits) ? 'default' : 'primary'}
-                            >
-                                <LimitsIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}

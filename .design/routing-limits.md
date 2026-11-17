@@ -111,6 +111,13 @@ counters; operations are O(#subjects) and are dwarfed by LLM latency.
 - **Cancelled / failed / streaming requests**: permit released at handler return in all cases; the usage
   window already counted the request at admission, tokens are added at completion (partial streams record
   what was produced). Queued waiters leave on request-context cancel.
+- **What a token is**: `max_tokens` counts `input + output` as normalized in `ai.TokenUsage` (the same figure
+  `usage_records.total_tokens` stores, so live counting and the restart warm start agree). Cache **reads** are
+  not counted (`CacheReadTokens` is kept apart; Anthropic's `cache_read_input_tokens` and OpenAI's
+  `cached_tokens` are both excluded from input), cache **writes** are (normalization folds them into input),
+  and reasoning tokens count only as far as the upstream includes them in output. The editor says so next to
+  the number: an info icon inside the Max tokens field (the app's field-info idiom: quiet `InfoOutlined`, tooltip
+  on hover), in the one shared `LimitsEditor` so account, rule share, person and Team dialogs read the same.
 - **Restart**: in-flight resets to 0 (their connections died with the process — correct). Usage windows are
   **warm-started** from `usage_records` (bucketed by timestamp) so a restart does not hand out a fresh
   budget. A window that was never configured has nothing to seed.
@@ -153,11 +160,15 @@ section only covers what an account/rule-level limit gives a Team on its own.
 - `GET /api/v1/limits/status` → live state per limited provider/service (in-flight, window usage, pressure,
   state). Backed by `Registry.Stat`. Used for badges.
 - UI: provider edit dialogs (API-key and OAuth) get an "Account limits" section with a live status line;
-  each service node in the rule graph gets a "Limits" action (dialog with live status) and, at rest, a small
-  limits icon on the node's top-left (blue when the rule's own share is limited, grey when only the account is;
-  hover shows both sets of numbers; unlimited nodes show nothing). The icon sits on the left because the hover
-  action bar is pinned top-right and would cover, and block hover on, anything placed there; it also stops
-  `mouseover` so the node's identity tooltip does not open on top of it. The two overflow
+  each service node in the rule graph carries a small limits icon on its top-left, a sibling of the quota ring:
+  its own control, hoverable for the numbers (both the rule's share and the account's) and clickable to open the
+  editor dialog with live status. Limited nodes always show it (blue when the rule's own share is limited, grey
+  when only the account is); unlimited nodes show a quiet icon only while the node is hovered or focused (always
+  on touch devices), so a first limit is one click away without marking every node. There is deliberately no
+  second entry in the hover action bar. The icon sits on the left because that bar is pinned top-right and would
+  cover, and block hover on, anything placed there; it also stops
+  `mouseover` so the node's identity tooltip does not open on top of it. Token budgets are typed as a plain
+  count or with a K / M suffix (`500K`, `1.5M`) and shown back in that short form. The two overflow
   flags appear in the rule Plugins card via the flag registry; the smart-rule catalog lists the two new
   positions. The rule update payload carries `limits` through (the UpdateRule PUT is full-replace — dropping
   the field there would silently wipe limits on any UI save). Status is polled every 4 s only while one of the

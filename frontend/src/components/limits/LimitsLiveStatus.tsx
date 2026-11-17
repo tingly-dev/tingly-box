@@ -1,5 +1,6 @@
 import {Chip, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
+import {shortCount} from './amount';
 import type {LimitStatusEntry} from './LimitsEditor';
 
 const STATE_COLOR = {ok: 'success', hot: 'warning', blocked: 'error'} as const;
@@ -15,8 +16,10 @@ export default function LimitsLiveStatus({entry}: {entry?: LimitStatusEntry}) {
             <Chip size="small" color={STATE_COLOR[state]} variant="outlined" label={t(`limits.state.${state}`)}/>
             <Typography variant="caption">{t('limits.liveInflight', {count: entry.inflight})}</Typography>
             {(entry.requests > 0 || entry.tokens > 0) && (
-                <Typography variant="caption" color="text.secondary">
-                    {t('limits.liveWindow', {requests: entry.requests, tokens: entry.tokens})}
+                // Short form to read at a glance, the exact figures on hover.
+                <Typography variant="caption" color="text.secondary"
+                            title={t('limits.liveWindow', {requests: entry.requests, tokens: entry.tokens})}>
+                    {t('limits.liveWindow', {requests: shortCount(entry.requests), tokens: shortCount(entry.tokens)})}
                 </Typography>
             )}
         </Stack>

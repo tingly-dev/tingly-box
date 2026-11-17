@@ -14,7 +14,9 @@ export default {
     "window7d": "7 天",
     "maxRequests": "最大请求数",
     "maxTokens": "最大 Token 数",
-    "maxTokensHint": "输入 + 输出 Token，在请求结束时计入。",
+    "maxTokensHint": "在请求结束时计入。可写 K、M，如 500K、2M。",
+    "maxTokensInfoLabel": "Token 计算口径",
+    "maxTokensInfo": "按每个已完成请求的 输入 + 输出 Token 计算。\n缓存写入计入，缓存读取不计入。\n推理（reasoning）Token 仅在上游已将其计入输出时才计入。",
     "softPercent": "提前分流阈值（%）",
     "softPercentHint": "任一限额达到该比例后，优先使用其他账号；留空表示只在达到硬上限时才停用。",
     "quotaPercent": "上游额度停用阈值（%）",
@@ -64,7 +66,8 @@ export default {
       "quota": "上游额度用到 {{n}}% 时停用",
       "service": "此规则的份额",
       "account": "账号",
-      "indicator": "已设置限额"
+      "indicator": "已设置限额",
+      "clickToEdit": "点击编辑"
     }
   }
 };

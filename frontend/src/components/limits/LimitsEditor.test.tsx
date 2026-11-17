@@ -4,6 +4,7 @@ import LimitsEditor, {compactLimits, isEmptyLimits} from './LimitsEditor';
 import {buildRuleUpdatePayload} from '@/components/rule-card/ruleUpdatePayload';
 import type {ConfigRecord} from '@/components/RoutingGraphTypes';
 
+vi.mock('@/services/api', () => ({api: {getLimitsStatus: vi.fn().mockResolvedValue({success: true, data: []})}}));
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({t: (key: string) => key}),
 }));
@@ -16,6 +17,23 @@ describe('LimitsEditor', () => {
         expect(onChange).toHaveBeenLastCalledWith({max_concurrent: 4});
         fireEvent.change(screen.getByLabelText('limits.maxTokens'), {target: {value: '1000000'}});
         expect(onChange).toHaveBeenLastCalledWith({max_tokens: 1000000});
+    });
+
+    it('reads K and M suffixes in the token budget and settles to the short form on blur', () => {
+        const onChange = vi.fn();
+        render(<LimitsEditor value={{}} onChange={onChange}/>);
+        const field = screen.getByLabelText('limits.maxTokens') as HTMLInputElement;
+        fireEvent.change(field, {target: {value: '2M'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 2_000_000});
+        fireEvent.change(field, {target: {value: '1.5m'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 1_500_000});
+        fireEvent.change(field, {target: {value: '500 K'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 500_000});
+        fireEvent.change(field, {target: {value: '12x'}});
+        expect(field.getAttribute('aria-invalid')).toBe('true');
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 500_000}); // unreadable text changes nothing
+        fireEvent.change(field, {target: {value: ''}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: undefined});
     });
 
     it('rejects out-of-range steering thresholds and only shows quota for accounts', () => {
@@ -97,6 +115,86 @@ describe('limits at rest on a service node', () => {
     });
 });
 
+describe('LimitsBadge as a control', () => {
+    it('is clickable without bubbling to the node, and quiet (revealed on hover) while nothing is set', async () => {
+        const {default: LimitsBadge, LIMITS_QUIET_CLASS} = await import('./LimitsBadge');
+        const open = vi.fn();
+        const node = vi.fn();
+        const {container, rerender} = render(
+            <div onClick={node}><LimitsBadge onClick={open} /></div>,
+        );
+        // editable but unlimited: present, flagged quiet so the node can reveal it on hover
+        expect(container.querySelector(`.${LIMITS_QUIET_CLASS}`)).toBeTruthy();
+        fireEvent.click(screen.getByTestId('limits-badge'));
+        expect(open).toHaveBeenCalledTimes(1);
+        expect(node).not.toHaveBeenCalled();
+
+        fireEvent.keyDown(screen.getByTestId('limits-badge'), {key: 'Enter'});
+        expect(open).toHaveBeenCalledTimes(2);
+
+        // once limited it is always shown
+        rerender(<div onClick={node}><LimitsBadge serviceLimits={{max_concurrent: 2}} onClick={open} /></div>);
+        expect(container.querySelector(`.${LIMITS_QUIET_CLASS}`)).toBeNull();
+        expect(screen.getByTestId('limits-badge').getAttribute('role')).toBe('button');
+    });
+
+    it('renders nothing for an unlimited, read-only node', async () => {
+        const {default: LimitsBadge} = await import('./LimitsBadge');
+        render(<LimitsBadge serviceLimits={{}} accountLimits={{}} />);
+        expect(screen.queryByTestId('limits-badge')).toBeNull();
+    });
+});
+
+describe('token count info icon', () => {
+    it('sits in the Max tokens field of every editor and spells out how tokens are counted on hover', async () => {
+        const {default: PolicyLimitsFields} = await import('./PolicyLimitsFields');
+        const {unmount} = render(<LimitsEditor value={{}} onChange={vi.fn()} showQuota/>);
+        const icon = screen.getByLabelText('limits.maxTokensInfoLabel');
+        expect(icon.closest('[data-testid="limits-editor"]')).toBeTruthy();
+        fireEvent.mouseOver(icon);
+        expect(await screen.findByText('limits.maxTokensInfo', {}, {timeout: 3000})).toBeTruthy();
+        unmount();
+
+        // person / team editors reuse the same editor, so the same icon
+        render(<PolicyLimitsFields value={{limits: {}, overflow: 'queue'}} onChange={vi.fn()}/>);
+        expect(screen.getByLabelText('limits.maxTokensInfoLabel')).toBeTruthy();
+    });
+});
+
+describe('amount parsing', () => {
+    it('reads counts with K / M suffixes and writes them back short', async () => {
+        const {parseAmount, formatAmount} = await import('./amount');
+        expect(parseAmount('2M')).toEqual({kind: 'ok', value: 2_000_000});
+        expect(parseAmount(' 1,500k ')).toEqual({kind: 'ok', value: 1_500_000});
+        expect(parseAmount('0.5M')).toEqual({kind: 'ok', value: 500_000});
+        expect(parseAmount('1.')).toEqual({kind: 'ok', value: 1});
+        expect(parseAmount('1234567')).toEqual({kind: 'ok', value: 1_234_567});
+        expect(parseAmount('')).toEqual({kind: 'empty'});
+        expect(parseAmount('0')).toEqual({kind: 'empty'});
+        expect(parseAmount('-5')).toEqual({kind: 'invalid'});
+        expect(parseAmount('2G')).toEqual({kind: 'invalid'});
+        expect(formatAmount(2_000_000)).toBe('2M');
+        expect(formatAmount(1_500_000)).toBe('1.5M');
+        expect(formatAmount(500_000)).toBe('500K');
+        expect(formatAmount(1_234_567)).toBe('1234567');
+        expect(formatAmount(undefined)).toBe('');
+    });
+
+    it('shows counts in the same short form it accepts', async () => {
+        const {shortCount, parseAmount} = await import('./amount');
+        expect(shortCount(0)).toBe('0');
+        expect(shortCount(950)).toBe('950');
+        expect(shortCount(1500)).toBe('1.5K');
+        expect(shortCount(200_000)).toBe('200K');
+        expect(shortCount(999_999)).toBe('1M');
+        expect(shortCount(1_700_000)).toBe('1.7M');
+        expect(shortCount(12_000_000)).toBe('12M');
+        for (const n of [1500, 200_000, 1_700_000]) { // what is shown can be typed back
+            expect(parseAmount(shortCount(n))).toEqual({kind: 'ok', value: n});
+        }
+    });
+});
+
 describe('LimitsBadge tooltip', () => {
     it('opens with the numbers on hover and does not leak mouseover to an enclosing tooltip', async () => {
         const {default: LimitsBadge} = await import('./LimitsBadge');
@@ -109,5 +207,24 @@ describe('LimitsBadge tooltip', () => {
         fireEvent.mouseOver(screen.getByTestId('limits-badge'));
         expect(await screen.findByTestId('limits-badge-tooltip', {}, {timeout: 3000})).toBeTruthy();
         expect(outer).not.toHaveBeenCalled();
+    });
+});
+
+describe('Account limits section (provider dialogs)', () => {
+    it('is behind Advanced, closed by default, and says how many caps are set', async () => {
+        const {default: AccountLimitsSection} = await import('./AccountLimitsSection');
+        const {rerender} = render(<AccountLimitsSection providerUuid="p1" value={{}} onChange={vi.fn()}/>);
+        const toggle = screen.getByRole('button', {name: /common.advanced/});
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByTestId('limits-editor')).toBeNull();
+        expect(screen.queryByText('common.advancedCustomized')).toBeNull();
+
+        // set caps stay visible on the closed header without forcing it open
+        rerender(<AccountLimitsSection providerUuid="p1" value={{max_concurrent: 4, max_tokens: 2_000_000, quota_percent: 95}} onChange={vi.fn()}/>);
+        expect(screen.getByText('common.advancedCustomized')).toBeTruthy();
+        expect(screen.queryByTestId('limits-editor')).toBeNull();
+
+        fireEvent.click(toggle);
+        expect(screen.getByTestId('limits-editor')).toBeTruthy();
     });
 });

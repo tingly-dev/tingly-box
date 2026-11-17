@@ -1,6 +1,7 @@
 import {Box, MenuItem, Stack, TextField, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import type {components} from '@/client';
+import AmountField from './AmountField';
 
 export type Limits = components['schemas']['Limits'];
 export type LimitStatusEntry = components['schemas']['LimitStatusEntry'];
@@ -69,11 +70,10 @@ export default function LimitsEditor({value, onChange, showQuota = false, showSo
                     onChange={(e) => set({max_requests: parseCount(e.target.value)})}
                     slotProps={{htmlInput: {min: 1, 'aria-label': t('limits.maxRequests')}}}
                 />
-                <TextField
-                    size="small" type="number" disabled={disabled}
-                    label={t('limits.maxTokens')} value={numField(v.max_tokens)}
-                    onChange={(e) => set({max_tokens: parseCount(e.target.value)})}
-                    slotProps={{htmlInput: {min: 1, 'aria-label': t('limits.maxTokens')}}}
+                <AmountField
+                    disabled={disabled} label={t('limits.maxTokens')}
+                    value={v.max_tokens} onChange={(n) => set({max_tokens: n})}
+                    info={{label: t('limits.maxTokensInfoLabel'), text: t('limits.maxTokensInfo')}}
                 />
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{mt: -1}}>{t('limits.maxTokensHint')}</Typography>

@@ -14,7 +14,9 @@ export default {
     "window7d": "7 days",
     "maxRequests": "Max requests",
     "maxTokens": "Max tokens",
-    "maxTokensHint": "Input + output tokens. Counted when a request finishes.",
+    "maxTokensHint": "Counted when a request finishes. Accepts K and M, e.g. 500K or 2M.",
+    "maxTokensInfoLabel": "How tokens are counted",
+    "maxTokensInfo": "Counts the input + output tokens of each finished request.\nCache writes count; cache reads do not.\nReasoning tokens count only when the upstream includes them in the output.",
     "softPercent": "Steer traffic away at (%)",
     "softPercentHint": "Prefer other accounts once any limit reaches this share. Empty = only stop at the hard limit.",
     "quotaPercent": "Stop at upstream quota (%)",
@@ -64,7 +66,8 @@ export default {
       "quota": "stop at {{n}}% of upstream quota",
       "service": "This rule's share",
       "account": "Account",
-      "indicator": "Limits are set"
+      "indicator": "Limits are set",
+      "clickToEdit": "Click to edit"
     }
   }
 };
