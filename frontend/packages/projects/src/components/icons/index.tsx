@@ -27,7 +27,8 @@ import {
     IconGitPullRequest,
     IconHandStop,
     IconHistoryToggle,
-    IconLayoutKanban,
+    IconChecklist,
+	IconLayoutKanban,
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
     IconLayoutSidebarRight,
@@ -93,6 +94,7 @@ export const FloatWindow = tablerMui(IconPictureInPictureOn);
 export const Minimize = tablerMui(IconMinus);
 export const LayoutIcon = tablerMui(IconLayout2);
 export const Kanban = tablerMui(IconLayoutKanban);
+export const Checklist = tablerMui(IconChecklist);
 
 // The tree view of a change, and a changed file by how it changed.
 export const ViewTree = tablerMui(IconListTree);

@@ -93,3 +93,40 @@ describe('ThreadsView with the default project groups', () => {
         expect(within(screen.getByRole('group', { name: 'overview.group.waiting' })).queryByText('Old rename')).not.toBeInTheDocument();
     });
 });
+
+describe('ThreadsView with the select mode', () => {
+    it('offers selecting only when the page can bulk-act, and picks rows by click', () => {
+        const bulk = { resolve: vi.fn(), archive: vi.fn() };
+        const threads = [th('a', 'Dark mode', 'waiting'), th('b', 'Fix links', 'working'), th('c', 'Old', 'resolved', { archived_at: '2026-10-01T00:00:00Z' })];
+        render(<ThreadsView scope="p1" threads={threads} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" bulk={bulk} />);
+        // The select mode is off: no checkboxes, opens work as before.
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'overview.select' }));
+        // Archived threads are not pickable.
+        expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+        fireEvent.click(screen.getByText('Dark mode'));
+        fireEvent.click(screen.getByText('Fix links'));
+        expect(screen.getByText('overview.selectedCount:2')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'overview.bulkArchive' }));
+        expect(bulk.archive).toHaveBeenCalledWith(['a', 'b']);
+        expect(bulk.resolve).not.toHaveBeenCalled();
+        // The action leaves the select mode.
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('resolves the picked threads and never counts the archived ones', () => {
+        const bulk = { resolve: vi.fn(), archive: vi.fn() };
+        const threads = [th('a', 'Dark mode', 'waiting'), th('c', 'Old', 'resolved', { archived_at: '2026-10-01T00:00:00Z' })];
+        render(<ThreadsView scope="p1" threads={threads} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" bulk={bulk} />);
+        fireEvent.click(screen.getByRole('button', { name: 'overview.select' }));
+        fireEvent.click(screen.getByRole('button', { name: 'overview.selectAll' }));
+        expect(screen.getByText('overview.selectedCount:1')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'overview.bulkResolve' }));
+        expect(bulk.resolve).toHaveBeenCalledWith(['a']);
+    });
+
+    it('keeps the toolbar without the select mode when the page cannot bulk-act', () => {
+        render(<ThreadsView scope="p1" threads={[th('a', 'Dark mode', 'waiting')]} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" />);
+        expect(screen.queryByRole('button', { name: 'overview.select' })).not.toBeInTheDocument();
+    });
+});

@@ -63,6 +63,12 @@ export const project = {
         threads: 'Threads', threadsWaiting: 'Threads · {{count}} waiting', library: 'Library', pin: 'Pin to top', unpin: 'Unpin', pinned: 'Pinned',
         threadCount_one: '{{count}} thread', threadCount_other: '{{count}} threads',
         noThreads: 'No threads yet. Send work in the conversation and they will appear here.',
+        select: 'Select threads', selectedCount: '{{count}} selected', selectAll: 'All', selectNone: 'None',
+        bulkResolve: 'Resolve', bulkArchive: 'Archive',
+        bulkResolveConfirm: 'Resolve {{count}} threads?', bulkArchiveConfirm: 'Archive {{count}} threads?',
+        bulkArchiveBody: 'Each worktree is freed and its scratch deleted; branches, records and transcripts stay. Restore brings one back.',
+        bulkResolved: 'Resolved {{ok}} threads{{failed}}', bulkArchived: 'Archived {{ok}} threads{{failed}}',
+        bulkFailedSuffix: ' · {{count}} refused',
         group: { waiting: 'Waiting on you', failed: 'Failed', ready: 'Ready for review', working: 'Working', idle: 'Idle', resolved: 'Resolved', archived: 'Archived' },
     },
     thread: {

@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import { Box, Tab, Tabs } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
+import { ConfirmDialog } from '@tingly/ui';
 import { needsUser } from './threadStatus';
+import { threadOps } from './threadOps';
 import { ThreadsView } from '../workspace/ThreadsView';
 import { Library } from './Library';
 import { collectLinks } from './LinksCard';
 import { isOpenLink, ProjectLinks } from './ProjectLinks';
+import { useNotify } from '../../hooks/useNotify';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -14,9 +17,34 @@ export type OverviewTab = 'threads' | 'library' | 'links';
 
 export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; /** Opens a thread's running tasks from its card's count pill, or all of them from the toolbar's chip. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; /** Opens a status's thread list from its group heading or column. */ onStatus?: (status: string, anchor: HTMLElement) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab }) {
     const { t } = useTranslation('projects');
+    const notify = useNotify();
     const [tab, setTab] = useState<OverviewTab>(initialTab);
+    // The bulk confirm: one dialog for the picked threads, then they are
+    // resolved or archived one by one — each is re-checked server-side, and
+    // one refusal does not stop the others.
+    const [bulk, setBulk] = useState<{ action: 'resolve' | 'archive'; ids: string[] } | null>(null);
+    const [acting, setActing] = useState(false);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
     const openLinks = useMemo(() => collectLinks(threads).filter(isOpenLink).length, [threads]);
+    const runBulk = async () => {
+        if (!bulk) return;
+        setActing(true);
+        let ok = 0;
+        let failed = 0;
+        for (const id of bulk.ids) {
+            try {
+                await (bulk.action === 'resolve' ? threadOps(id).finish() : threadOps(id).archiveSession());
+                ok += 1;
+            } catch {
+                failed += 1;
+            }
+        }
+        setActing(false);
+        setBulk(null);
+        const key = bulk.action === 'resolve' ? 'overview.bulkResolved' : 'overview.bulkArchived';
+        const failedPart = failed > 0 ? t('overview.bulkFailedSuffix', { count: failed }) : '';
+        notify(t(key, { ok, failed: failedPart }), failed > 0 ? 'warning' : 'success');
+    };
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {/* Tabs only: a control of one view does not live in this row, where a narrow pane would squeeze it or a tab out. */}
@@ -39,10 +67,24 @@ export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, li
                 {tab === 'threads' ? (
                     <ThreadsView scope={projectId} threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks}
                         onGroup={onStatus && ((key, _label, anchor) => onStatus(key, anchor))}
-                        countLabel={(count) => t('overview.threadCount', { count })} empty={t('overview.noThreads')} />
+                        countLabel={(count) => t('overview.threadCount', { count })} empty={t('overview.noThreads')}
+                        bulk={{
+                            resolve: (ids) => setBulk({ action: 'resolve', ids }),
+                            archive: (ids) => setBulk({ action: 'archive', ids }),
+                        }} />
                 ) : tab === 'links' ? <ProjectLinks projectId={projectId} threads={threads} onOpen={onOpen} />
                     : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
             </Box>
+            <ConfirmDialog
+                open={bulk !== null}
+                title={bulk?.action === 'resolve' ? t('overview.bulkResolveConfirm', { count: bulk.ids.length }) : t('overview.bulkArchiveConfirm', { count: bulk?.ids.length ?? 0 })}
+                description={bulk?.action === 'archive' ? t('overview.bulkArchiveBody') : undefined}
+                loading={acting}
+                confirmLabel={bulk?.action === 'resolve' ? t('overview.bulkResolve') : t('overview.bulkArchive')}
+                confirmColor={bulk?.action === 'archive' ? 'warning' : 'primary'}
+                onClose={() => setBulk(null)}
+                onConfirm={() => void runBulk()}
+            />
         </Box>
     );
 }

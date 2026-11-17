@@ -30,6 +30,10 @@ export interface StatusRow {
     selected?: boolean;
     /** Changed since the user last looked. */
     unseen?: boolean;
+    /** Overrides opening the thread: the select mode's toggle. */
+    onClick?: () => void;
+    /** At the right edge, before the meta: the select mode's checkbox. */
+    end?: ReactNode;
 }
 
 /** A quiet group heading: the state's mark, the name, a count. The key of a
@@ -50,7 +54,7 @@ export function StatusHeading({ label, status, count, onClick }: { label: string
 }
 
 function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) {
-    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} footer={row.footer} selected={row.selected} unseen={row.unseen} onClick={() => onOpen(row.id)} />;
+    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} footer={row.footer} end={row.end} selected={row.selected} unseen={row.unseen} onClick={row.onClick ?? (() => onOpen(row.id))} />;
 }
 
 /**
