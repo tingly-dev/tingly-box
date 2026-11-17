@@ -323,6 +323,10 @@ func readRecordedLines(t flagTB, recordDir string) []map[string]any {
 }
 
 func ruleFlagCases() []flagCase {
+	return append(limitFlagCases(), baseRuleFlagCases()...)
+}
+
+func baseRuleFlagCases() []flagCase {
 	return []flagCase{
 		// ── custom_user_agent ────────────────────────────────────────────────
 		{key: "custom_user_agent", run: func(t flagTB, env *TestEnv) {

@@ -1,0 +1,113 @@
+import {fireEvent, render, screen} from '@testing-library/react';
+import {describe, expect, it, vi} from 'vitest';
+import LimitsEditor, {compactLimits, isEmptyLimits} from './LimitsEditor';
+import {buildRuleUpdatePayload} from '@/components/rule-card/ruleUpdatePayload';
+import type {ConfigRecord} from '@/components/RoutingGraphTypes';
+
+vi.mock('react-i18next', () => ({
+    useTranslation: () => ({t: (key: string) => key}),
+}));
+
+describe('LimitsEditor', () => {
+    it('emits parsed numbers and drops empty fields', () => {
+        const onChange = vi.fn();
+        render(<LimitsEditor value={{}} onChange={onChange}/>);
+        fireEvent.change(screen.getByLabelText('limits.maxConcurrent'), {target: {value: '4'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_concurrent: 4});
+        fireEvent.change(screen.getByLabelText('limits.maxTokens'), {target: {value: '1000000'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 1000000});
+    });
+
+    it('rejects out-of-range steering thresholds and only shows quota for accounts', () => {
+        const onChange = vi.fn();
+        const {rerender} = render(<LimitsEditor value={{max_concurrent: 2}} onChange={onChange}/>);
+        fireEvent.change(screen.getByLabelText('limits.softPercent'), {target: {value: '150'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_concurrent: 2, soft_percent: undefined});
+        expect(screen.queryByLabelText('limits.quotaPercent')).toBeNull();
+        rerender(<LimitsEditor value={{}} onChange={onChange} showQuota/>);
+        expect(screen.getByLabelText('limits.quotaPercent')).toBeTruthy();
+    });
+
+    it('compacts to {} when everything is cleared (wire format for "clear limits")', () => {
+        expect(compactLimits({max_concurrent: undefined, window_seconds: 3600})).toEqual({});
+        expect(compactLimits({max_requests: 5, window_seconds: 600})).toEqual({max_requests: 5, window_seconds: 600});
+        expect(isEmptyLimits({})).toBe(true);
+        expect(isEmptyLimits({soft_percent: 80})).toBe(false);
+    });
+});
+
+describe('rule update payload', () => {
+    it('carries service limits through the full-replace PUT (omitting them would wipe them)', () => {
+        const config = {
+            uuid: 'r1', scenario: 'team', requestModel: 'm', responseModel: '', active: true, description: '',
+            flags: {}, smartEnabled: false, smartRouting: [],
+            providers: [{uuid: 's1', provider: 'p1', model: 'm1', tier: 0, limits: {max_concurrent: 2}}],
+        } as unknown as ConfigRecord;
+        const payload = buildRuleUpdatePayload({uuid: 'r1', scenario: 'team'} as never, config);
+        expect(payload.services[0].limits).toEqual({max_concurrent: 2});
+    });
+});
+
+describe('PolicyLimitsFields (person / team)', () => {
+    it('hides steering, and offers overflow only once a concurrency cap is set', async () => {
+        const {default: PolicyLimitsFields} = await import('./PolicyLimitsFields');
+        const onChange = vi.fn();
+        const {rerender} = render(
+            <PolicyLimitsFields value={{limits: {}, overflow: 'queue'}} onChange={onChange}/>,
+        );
+        expect(screen.queryByLabelText('limits.softPercent')).toBeNull();
+        expect(screen.queryByText('limits.overflow.label')).toBeNull();
+
+        rerender(<PolicyLimitsFields value={{limits: {max_concurrent: 2}, overflow: 'queue'}} onChange={onChange}/>);
+        expect(screen.getByLabelText('limits.overflow.timeout')).toBeTruthy();
+
+        rerender(<PolicyLimitsFields value={{limits: {max_concurrent: 2}, overflow: 'reject'}} onChange={onChange}/>);
+        expect(screen.queryByLabelText('limits.overflow.timeout')).toBeNull();
+    });
+});
+
+describe('limits at rest on a service node', () => {
+    it('summarizes configured caps, one line each', async () => {
+        const {summarizeLimits, formatWindow} = await import('./limitsSummary');
+        const t = (key: string, o?: Record<string, unknown>) => `${key}:${JSON.stringify(o ?? {})}`;
+        expect(summarizeLimits(undefined, t)).toEqual([]);
+        expect(summarizeLimits({}, t)).toEqual([]);
+        const lines = summarizeLimits({max_concurrent: 4, max_tokens: 2_000_000, window_seconds: 18000, soft_percent: 80, quota_percent: 95}, t);
+        expect(lines).toHaveLength(4);
+        expect(lines[0]).toContain('limits.summary.concurrent');
+        expect(lines[1]).toContain('"window":"5h"');
+        expect(formatWindow(3600)).toBe('1h');
+        expect(formatWindow(604800)).toBe('7d');
+        expect(formatWindow(90)).toBe('90s');
+    });
+
+    it('shows a badge only when the service or its account is limited', async () => {
+        const {default: LimitsBadge} = await import('./LimitsBadge');
+        const {rerender} = render(<LimitsBadge />);
+        expect(screen.queryByTestId('limits-badge')).toBeNull();
+
+        rerender(<LimitsBadge serviceLimits={{}} accountLimits={{}} />);
+        expect(screen.queryByTestId('limits-badge')).toBeNull(); // empty objects are "no limits"
+
+        rerender(<LimitsBadge serviceLimits={{max_concurrent: 2}} />);
+        expect(screen.getByTestId('limits-badge')).toBeTruthy();
+
+        rerender(<LimitsBadge accountLimits={{max_requests: 100}} />);
+        expect(screen.getByTestId('limits-badge')).toBeTruthy(); // account cap alone is enough
+    });
+});
+
+describe('LimitsBadge tooltip', () => {
+    it('opens with the numbers on hover and does not leak mouseover to an enclosing tooltip', async () => {
+        const {default: LimitsBadge} = await import('./LimitsBadge');
+        const outer = vi.fn();
+        render(
+            <div onMouseOver={outer}>
+                <LimitsBadge serviceLimits={{max_concurrent: 2}} accountLimits={{max_tokens: 1000}} />
+            </div>,
+        );
+        fireEvent.mouseOver(screen.getByTestId('limits-badge'));
+        expect(await screen.findByTestId('limits-badge-tooltip', {}, {timeout: 3000})).toBeTruthy();
+        expect(outer).not.toHaveBeenCalled();
+    });
+});

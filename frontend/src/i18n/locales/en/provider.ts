@@ -356,6 +356,7 @@ export default {
       "active": "Active",
       "inactive": "Disabled",
       "moveTooltip": "Move to another team",
+      "limitsTooltip": "Limits for this person",
       "deleteTooltip": "Delete token"
     }
   },

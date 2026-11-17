@@ -33,6 +33,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -317,6 +318,16 @@ func (ph *ProtocolHandler) selectFallbackService(
 		return nil, nil, nil
 	}
 
+	// Respect account concurrency/usage limits on the failover path too (it
+	// bypasses the routing pipeline). Blocked services are dropped; cool ones
+	// are preferred over hot ones. Never waits: the client is already waiting.
+	if guard := ph.limitsGuard(); guard != nil {
+		available = guard.Filter(rule, available, nil)
+		if len(available) == 0 {
+			return nil, nil, nil
+		}
+	}
+
 	tempRule := *rule
 	tempRule.Services = available
 
@@ -492,7 +503,7 @@ func (ph *ProtocolHandler) DispatchWithPriorityFailover(
 		// Pass "" so the candidate pool spans all API styles: each attempt
 		// re-transforms the request for the selected provider's style, so
 		// heterogeneous failover (e.g. Anthropic → OpenAI) is supported.
-		nextProvider, nextService, err := ph.selectFallbackService(rule, tried, "")
+		nextProvider, nextService, err := ph.selectFallbackServiceLimited(c, rule, tried, serviceID)
 		if err != nil {
 			fields := failoverLogFields(c, rule, provider, model, serviceID)
 			fields["stage"] = "failover_error"
@@ -559,4 +570,47 @@ func failoverLogFields(c *gin.Context, rule *typ.Rule, provider *typ.Provider, m
 		}
 	}
 	return fields
+}
+
+func (ph *ProtocolHandler) limitsGuard() *routing.LimitsGuard {
+	if ph.deps.RoutingSelector == nil {
+		return nil
+	}
+	return ph.deps.RoutingSelector.Limits()
+}
+
+// selectFallbackServiceLimited picks the next failover candidate and takes its
+// account permit. The failed attempt's permit is released first (its slot is
+// free again). Losing the race for the last slot excludes that service and
+// picks again.
+func (ph *ProtocolHandler) selectFallbackServiceLimited(
+	c *gin.Context,
+	rule *typ.Rule,
+	tried map[string]bool,
+	failedServiceID string,
+) (*typ.Provider, *loadbalance.Service, error) {
+	guard := ph.limitsGuard()
+	if guard == nil {
+		return ph.selectFallbackService(rule, tried, "")
+	}
+	lease := routing.LeaseFromGin(c)
+	lease.Release(failedServiceID)
+
+	excluded := make(map[string]bool, len(tried)+1)
+	for k, v := range tried {
+		excluded[k] = v
+	}
+	force := rule.LimitOverflowPolicy() == typ.LimitOverflowIgnore
+	for {
+		provider, svc, err := ph.selectFallbackService(rule, excluded, "")
+		if err != nil || svc == nil {
+			return provider, svc, err
+		}
+		permit, ok := guard.Acquire(rule.UUID, svc, force)
+		if ok {
+			lease.Hold(svc.ServiceID(), permit)
+			return provider, svc, nil
+		}
+		excluded[svc.ServiceID()] = true
+	}
 }

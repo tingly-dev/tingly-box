@@ -3,6 +3,7 @@ package provider
 import (
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -24,6 +25,7 @@ type ProviderResponse struct {
 	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`               // Virtual-model config (only for vmodel auth type)
 	Credential       map[string]string `json:"credential,omitempty"`                  // Multi-field cloud credentials (only for aws_sigv4/azure_key/gcp_sa)
 	Source           string            `json:"source,omitempty" example:"user"`       // "user" (default) or "builtin"
+	Limits           *ai.Limits        `json:"limits,omitempty"`                      // Account concurrency/usage limits (see .design/routing-limits.md)
 }
 
 // ProvidersResponse represents the response for listing providers.
@@ -72,6 +74,9 @@ type UpdateProviderRequest struct {
 	// types (aws_sigv4/azure_key/gcp_sa). Omit (null) to leave it unchanged; the
 	// edit UI resends the complete map since the read path returns it in full.
 	Credential map[string]string `json:"credential,omitempty" description:"Replacement cloud credential fields (aws_sigv4/azure_key/gcp_sa)"`
+	// Limits replaces the account's concurrency/usage limits. Omit (null) to
+	// leave them unchanged; an empty object clears them.
+	Limits *ai.Limits `json:"limits,omitempty" description:"Account concurrency/usage limits (empty object clears)"`
 }
 
 // UpdateProviderResponse represents the response for updating a provider.

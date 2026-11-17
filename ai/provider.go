@@ -220,6 +220,10 @@ type Provider struct {
 	// Codex OAuth completion. Routing reads this; users do not edit it
 	// directly. See the OpenAIEndpointMode constants for semantics.
 	OpenAIEndpointMode OpenAIEndpointMode `json:"openai_endpoint_mode,omitempty"`
+
+	// Limits caps this account's concurrency / usage across every rule and
+	// scope that routes to it. See .design/routing-limits.md.
+	Limits *Limits `json:"limits,omitempty"`
 }
 
 // OpenAIEndpointMode declares this provider's support for the OpenAI Chat

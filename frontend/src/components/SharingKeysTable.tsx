@@ -1,4 +1,4 @@
-import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove } from '@/components/icons';
+import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove, Speed as IconLimits } from '@/components/icons';
 import {
     Box,
     Stack,
@@ -45,6 +45,10 @@ interface SharingKeysTableProps {
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
     onMove: (token: SharingKey) => void;
+    /** Opens this person's limits (concurrency / usage). Hidden when omitted. */
+    onLimits?: (token: SharingKey) => void;
+    /** user_ids that currently have a limit policy (icon turns primary). */
+    limitedUserIds?: ReadonlySet<string>;
 }
 
 const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
@@ -56,6 +60,8 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onToggleEnabled,
     onDelete,
     onMove,
+    onLimits,
+    limitedUserIds,
 }) => {
     const { t } = useTranslation();
     const colSpan = 7;
@@ -74,7 +80,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                     <col style={{ width: 88 }} />
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '18%' }} />
-                    <col style={{ width: 96 }} />
+                    <col style={{ width: onLimits ? 128 : 96 }} />
                 </colgroup>
                 <TableHead>
                     <TableRow>
@@ -247,6 +253,18 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                 </TableCell>
                                 <TableCell align="right">
                                     <Stack direction="row" spacing={0.5} sx={{justifyContent: 'flex-end'}}>
+                                        {onLimits && (
+                                            <Tooltip title={t('sharingKeys.table.limitsTooltip')}>
+                                                <IconButton
+                                                    size="small"
+                                                    aria-label={t('sharingKeys.table.limitsTooltip')}
+                                                    color={limitedUserIds?.has(key.user_id) ? 'primary' : 'default'}
+                                                    onClick={() => onLimits(key)}
+                                                >
+                                                    <IconLimits sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                         <Tooltip title={t('sharingKeys.table.moveTooltip')}>
                                             <IconButton size="small" onClick={() => onMove(key)}>
                                                 <IconMove sx={{ fontSize: 16 }} />

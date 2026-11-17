@@ -264,16 +264,19 @@ func TestSelect_PipelineCaching(t *testing.T) {
 }
 
 func TestNewServiceSelector_PipelineOrder(t *testing.T) {
-	// One pipeline serves every rule: health → smart → affinity → load_balancer.
+	// One pipeline serves every rule: health → smart → limits → affinity → load_balancer.
 	// Smart runs BEFORE affinity so content routing decides the partition and
-	// stickiness lives inside it (and processor ops always run).
+	// stickiness lives inside it (and processor ops always run). Limits run
+	// after smart (inside the chosen scope) and before affinity (a pin to a
+	// saturated account must not be honoured).
 	sel := NewServiceSelector(&mockConfig{}, newMockAffinityStore(), &mockLoadBalancer{})
 
-	require.Len(t, sel.pipeline, 4)
+	require.Len(t, sel.pipeline, 5)
 	require.Equal(t, "health", sel.pipeline[0].Name(), "health must run first")
 	require.Equal(t, "smart_routing", sel.pipeline[1].Name(), "smart must run before affinity")
-	require.Equal(t, "affinity", sel.pipeline[2].Name())
-	require.Equal(t, "load_balancer", sel.pipeline[3].Name())
+	require.Equal(t, "limits", sel.pipeline[2].Name(), "limits run inside the smart scope, before affinity")
+	require.Equal(t, "affinity", sel.pipeline[3].Name())
+	require.Equal(t, "load_balancer", sel.pipeline[4].Name())
 }
 
 // End-to-end fix for "configured t1 but long-term auto-jumps to t2": a session

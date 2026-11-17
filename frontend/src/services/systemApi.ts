@@ -14,6 +14,23 @@ export const systemApi = {
     // Status endpoints
     getStatus: async (): Promise<any> => controlApi((client, headers) => client.GET('/api/v1/status', {headers})),
 
+    // Live account/service limit state (in-flight, usage window, pressure)
+    getLimitsStatus: async (): Promise<any> =>
+        controlApi((client, headers) => client.GET('/api/v1/limits/status', {headers})),
+
+    // Person / team / model limit policies (.design/routing-limits.md §10)
+    getLimitPolicies: async (query?: {kind?: string; ref?: string}): Promise<any> =>
+        controlApi((client, headers) => client.GET('/api/v1/limit-policies', {headers, params: {query}})),
+
+    putLimitPolicy: async (kind: string, ref: string, body: {
+        limits: Record<string, number | undefined>;
+        overflow?: string;
+        queue_timeout_seconds?: number;
+    }): Promise<any> =>
+        controlApi((client, headers) => client.PUT('/api/v1/limit-policies/{kind}/{ref}', {
+            headers, params: {path: {kind, ref}}, body,
+        })),
+
     getProviders: async (opts: {fresh?: boolean} = {}): Promise<any> =>
         readCached('providers', async () => {
             const body = await controlApi((client, headers) => client.GET('/api/v2/providers', {headers}));

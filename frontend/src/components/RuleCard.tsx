@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { isEmptyLimits, type Limits } from './limits/LimitsEditor';
 import { api } from '@/services/api';
 import type { Provider, ProviderModelsDataByUuid, ProviderModelData } from '@/types/provider';
 import type { ConfigRecord, FlagSpec, Rule, RuleFlags } from '@/components/RoutingGraphTypes';
@@ -231,6 +232,18 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         [configRecord, updateField, setConfigRecord]
     );
 
+    // Handler: Save a service's concurrency/usage limits (its share of the account).
+    const handleProviderLimitsChange = useCallback(
+        async (serviceUuid: string, limits: Limits) => {
+            if (!configRecord) return;
+            const updated = configRecord.providers.map((p) =>
+                p.uuid === serviceUuid ? { ...p, limits: isEmptyLimits(limits) ? undefined : limits } : p,
+            );
+            await updateField(configRecord, setConfigRecord, 'providers', updated);
+        },
+        [configRecord, updateField, setConfigRecord]
+    );
+
     // Adapter: Convert ruleUuid to ruleIndex for smart routing handlers
     const handleAddServiceToSmartRuleByUuid = useCallback(
         (ruleUuid: string) => {
@@ -384,6 +397,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onServiceNodeClick={handleServiceNodeClick}
                 onEditProvider={editProvider}
                 onTierChange={handleProviderTierChange}
+                onLimitsChange={handleProviderLimitsChange}
                 onDeleteService={(serviceUuid) => handleDeleteProvider(configRecord.uuid, serviceUuid)}
                 onAddService={handleAddServiceButtonClick}
                 onAddSmartRule={smartHandlers.handleAddSmartRule}
