@@ -126,8 +126,11 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                 }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
                 renderMeta={(n) => {
-                    // Scratch (a thread's TMPDIR under .tmp/) is labelled, so it is not mistaken for a deliverable.
-                    const scratch = n.origin === 'scratch' ? t('library.scratch') : null;
+                    // Scratch (a thread's TMPDIR under .tmp/) is labelled, but only down
+                    // to the thread folder: everything below it is scratch anyway, and
+                    // repeating the label on every level is noise.
+                    const depth = n.path.split('/').length;
+                    const scratch = n.origin === 'scratch' && depth <= 2 ? t('library.scratch') : null;
                     if (n.kind === 'file') {
                         const meta = `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}`;
                         return scratch ? `${scratch} · ${meta}` : meta;
