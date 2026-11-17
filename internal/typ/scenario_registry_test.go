@@ -2,6 +2,18 @@ package typ
 
 import "testing"
 
+func TestVModelScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioVModel)
+	if !ok || !d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatal("vmodel must support normal rules and scoped paths")
+	}
+	for _, transport := range []ScenarioTransport{TransportOpenAI, TransportAnthropic} {
+		if !ScenarioSupportsTransport(ScenarioVModel, transport) {
+			t.Fatalf("vmodel does not support %s", transport)
+		}
+	}
+}
+
 func TestRegisterScenario_AllowsRuleBindingWithoutPathUsage(t *testing.T) {
 	scenario := RuleScenario("test_shared_registry")
 

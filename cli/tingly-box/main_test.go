@@ -35,6 +35,7 @@ func TestCommandsThatMustNotOpenTheDatabase(t *testing.T) {
 		{"stop (not running)", []string{"stop"}},
 		{"log --once (not running)", []string{"log", "--once"}},
 		{"vmodel (invalid port)", []string{"vmodel", "--port=-1"}},
+		{"vmodel (tb not running)", []string{"vmodel"}},
 		// `open` on a running server is the interesting case, but it needs
 		// a live lock holder and a browser; its not-running branch starts
 		// the server, which legitimately opens the database.

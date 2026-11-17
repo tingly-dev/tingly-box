@@ -14,7 +14,7 @@ describe('hidden scenarios', () => {
     it('hides cursor and vmodel by default when nothing is stored', () => {
         expect([...getHiddenScenarios()]).toEqual(['cursor', 'vmodel']);
         const { result } = renderHook(() => useHiddenScenarios());
-        expect(SCENARIOS.filter((s) => s.id !== 'cursor').some((s) => result.current.isHidden(s.id))).toBe(false);
+        expect(SCENARIOS.filter((s) => s.id !== 'cursor' && s.id !== 'vmodel').some((s) => result.current.isHidden(s.id))).toBe(false);
     });
 
     it('persists a hidden agent across remounts and leaves the rest visible', () => {
@@ -24,7 +24,7 @@ describe('hidden scenarios', () => {
 
         const { result } = renderHook(() => useHiddenScenarios());
         expect(result.current.isHidden('codex')).toBe(true);
-        expect(SCENARIOS.filter((s) => s.id !== 'codex' && s.id !== 'cursor').some((s) => result.current.isHidden(s.id))).toBe(false);
+        expect(SCENARIOS.filter((s) => s.id !== 'codex' && s.id !== 'cursor' && s.id !== 'vmodel').some((s) => result.current.isHidden(s.id))).toBe(false);
     });
 
     it('persists showing a default-hidden agent', () => {
@@ -34,6 +34,15 @@ describe('hidden scenarios', () => {
 
         expect(getHiddenScenarios().has('cursor')).toBe(false);
         expect(localStorage.getItem('scenario.hiddenScenarios')).toBe('["vmodel"]');
+    });
+
+    it('uses the VModel power-up visibility for its scenario', () => {
+        expect(SCENARIOS.find((s) => s.id === 'vmodel')?.path).toBe('/agent/vmodel');
+        const { result } = renderHook(() => useHiddenScenarios());
+        expect(result.current.isHidden('vmodel')).toBe(true);
+        act(() => result.current.toggleHidden('vmodel'));
+        expect(result.current.isHidden('vmodel')).toBe(false);
+        expect(getHiddenScenarios().has('vmodel')).toBe(false);
     });
 
     it('keeps a stored choice over the defaults', () => {

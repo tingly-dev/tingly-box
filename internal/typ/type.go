@@ -55,6 +55,7 @@ type RuleScenario string
 const (
 	ScenarioOpenAI    RuleScenario = "openai"
 	ScenarioAnthropic RuleScenario = "anthropic"
+	ScenarioVModel    RuleScenario = "vmodel" // Virtual-model test routes through the normal gateway
 	// ScenarioAgent is deprecated — renamed to ScenarioCustom. Kept only so
 	// legacyScenarioAliases and the config migration can still reference it;
 	// no longer in BuiltinScenarios() and never written by new code.
@@ -83,6 +84,7 @@ func BuiltinScenarios() []RuleScenario {
 	return []RuleScenario{
 		ScenarioOpenAI,
 		ScenarioAnthropic,
+		ScenarioVModel,
 		ScenarioCustom,
 		ScenarioTeam,
 		ScenarioCodex,
