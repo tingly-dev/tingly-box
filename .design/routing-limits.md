@@ -115,7 +115,9 @@ counters; operations are O(#subjects) and are dwarfed by LLM latency.
   `usage_records.total_tokens` stores, so live counting and the restart warm start agree). Cache **reads** are
   not counted (`CacheReadTokens` is kept apart; Anthropic's `cache_read_input_tokens` and OpenAI's
   `cached_tokens` are both excluded from input), cache **writes** are (normalization folds them into input),
-  and reasoning tokens count only as far as the upstream includes them in output.
+  and reasoning tokens count only as far as the upstream includes them in output. The editor says so next to
+  the number: an info icon inside the Max tokens field (the app's field-info idiom: quiet `InfoOutlined`, tooltip
+  on hover), in the one shared `LimitsEditor` so account, rule share, person and Team dialogs read the same.
 - **Restart**: in-flight resets to 0 (their connections died with the process — correct). Usage windows are
   **warm-started** from `usage_records` (bucketed by timestamp) so a restart does not hand out a fresh
   budget. A window that was never configured has nothing to seed.
