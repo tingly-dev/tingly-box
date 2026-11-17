@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from 'react';
-import { Box, IconButton, Tooltip } from '@mui/material';
+import { Box, Checkbox, IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import { STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
@@ -25,15 +25,17 @@ interface Props {
 }
 
 /** One thread as an outlined card; the band's columns and the Overview's boards all draw it. */
-export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinned, onTogglePin, subtitle }: { thread: Thread; /** The line under the title; what the thread's request or report says by default. */ subtitle?: ReactNode; selectedId?: string; onOpen: (id: string) => void; /** Opens the thread's running tasks from the count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; stacked?: boolean; pinned?: boolean; /** Given only where a card can be pinned to the top: the Overview board. */ onTogglePin?: () => void }) {
+export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinned, onTogglePin, subtitle, selecting, picked, onTogglePick }: { thread: Thread; /** The line under the title; what the thread's request or report says by default. */ subtitle?: ReactNode; selectedId?: string; onOpen: (id: string) => void; /** Opens the thread's running tasks from the count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; stacked?: boolean; pinned?: boolean; /** Given only where a card can be pinned to the top: the Overview board. */ onTogglePin?: () => void; /** The select mode: clicks toggle the pick and the checkbox replaces the pin. */ selecting?: boolean; picked?: boolean; onTogglePick?: () => void }) {
     const { t, i18n } = useTranslation('projects');
     return (
-        <ListRow outlined stacked={stacked} selected={thread.id === selectedId} onClick={() => onOpen(thread.id)}
+        <ListRow outlined stacked={stacked} selected={thread.id === selectedId || picked} onClick={selecting && onTogglePick ? onTogglePick : () => onOpen(thread.id)}
             title={thread.title} subtitle={subtitle ?? <ThreadRequestSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} onTasks={onTasks} />} meta={timeAgo(thread.updated_at, i18n.language)}
             footer={<ThreadRequestsStrip thread={thread} onOpen={onOpen} />}
             // The star stays quiet: an unpinned card shows it on hover or keyboard focus only.
             sx={{ '&:hover .pin-star, &:focus-within .pin-star': { opacity: 1, pointerEvents: 'auto' } }}
-            end={onTogglePin != null && (
+            end={selecting && onTogglePick != null ? (
+                <Checkbox size="small" checked={!!picked} onChange={() => onTogglePick()} onClick={(e) => e.stopPropagation()} sx={{ p: 0.5 }} />
+            ) : onTogglePin != null && (
                 <Tooltip title={pinned ? t('overview.unpin') : t('overview.pin')}>
                     {/* The star must not open the thread. */}
                     <IconButton className="pin-star" size="small" sx={{ p: 0.5, opacity: pinned ? 1 : 0, pointerEvents: pinned ? 'auto' : 'none' }} aria-label={pinned ? t('overview.unpin') : t('overview.pin')} onClick={(e) => { e.stopPropagation(); onTogglePin(); }}>

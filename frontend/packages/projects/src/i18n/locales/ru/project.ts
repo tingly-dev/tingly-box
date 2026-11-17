@@ -66,6 +66,12 @@ export const project: PluralDict<typeof en> = {
         threads: 'Потоки', threadsWaiting: 'Потоки · ждут: {{count}}', library: 'Библиотека', pin: 'Закрепить сверху', unpin: 'Открепить', pinned: 'Закреплено',
         threadCount_one: '{{count}} поток', threadCount_few: '{{count}} потока', threadCount_many: '{{count}} потоков', threadCount_other: '{{count}} потока',
         noThreads: 'Потоков пока нет. Отправьте работу в разговоре, и они появятся здесь.',
+        select: 'Выбрать потоки', selectedCount: 'Выбрано: {{count}}', selectAll: 'Все', selectNone: 'Сбросить',
+        bulkResolve: 'Решить', bulkArchive: 'В архив',
+        bulkResolveConfirm: 'Отметить решёнными {{count}} потоков?', bulkArchiveConfirm: 'Архивировать {{count}} потоков?',
+        bulkArchiveBody: 'Каждый worktree освободится, временные файлы удалятся; ветки, записи и расшифровки останутся. Restore вернёт один обратно.',
+        bulkResolved: 'Решено потоков: {{ok}}{{failed}}', bulkArchived: 'В архиве потоков: {{ok}}{{failed}}',
+        bulkFailedSuffix: ' · отказано: {{count}}',
         group: { waiting: 'Ждут вас', failed: 'С ошибкой', ready: 'Готовы к проверке', working: 'В работе', idle: 'Простаивают', resolved: 'Решены', archived: 'В архиве' },
     },
     thread: {

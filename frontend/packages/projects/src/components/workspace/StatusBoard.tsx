@@ -42,13 +42,14 @@ const RAIL_AT = 640;
  * heading moves to the left of its cards. A narrow pane is one track, a wide
  * one many, with nothing to choose.
  */
-export function StatusBoard({ threads, selectedId, onOpen, onTasks, onStatus, groups: lanes, groupOf = (th) => th.status, subtitle, pinnedIds, onTogglePin }: Props) {
+export function StatusBoard({ threads, selectedId, onOpen, onTasks, onStatus, groups: lanes, groupOf = (th) => th.status, subtitle, pinnedIds, onTogglePin, selecting, picked, onTogglePick }: Props & { selecting?: boolean; picked?: Set<string>; onTogglePick?: (id: string) => void }) {
     const { t } = useTranslation('projects');
     const pinned = pinnedIds != null && onTogglePin != null ? new Set(pinnedIds) : undefined;
     const toggle = onTogglePin;
     const cards = (list: Thread[]) => list.map((th) => (
         <ThreadCard key={th.id} thread={th} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} stacked subtitle={subtitle?.(th)}
-            pinned={pinned?.has(th.id)} onTogglePin={pinned != null && toggle != null ? () => toggle(th.id) : undefined} />
+            pinned={pinned?.has(th.id)} onTogglePin={pinned != null && toggle != null ? () => toggle(th.id) : undefined}
+            selecting={selecting} picked={picked?.has(th.id)} onTogglePick={onTogglePick && (() => onTogglePick(th.id))} />
     ));
     // Pinned threads leave their statuses for one section above them all, in the stored order (newest pin first).
     const pinnedList = pinnedIds != null ? pinnedIds.map((id) => threads.find((th) => th.id === id)).filter((th): th is Thread => th != null) : [];

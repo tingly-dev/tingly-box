@@ -66,6 +66,12 @@ export const project: Dict<typeof projectEn> = {
         threads: '线程', threadsWaiting: '线程 · {{count}} 个等你处理', library: '文件库', pin: '置顶', unpin: '取消置顶', pinned: '已置顶',
         threadCount_one: '{{count}} 个线程', threadCount_other: '{{count}} 个线程',
         noThreads: '还没有线程。在对话里发送工作，线程会出现在这里。',
+        select: '多选线程', selectedCount: '已选 {{count}} 个', selectAll: '全选', selectNone: '清除',
+        bulkResolve: '标记完成', bulkArchive: '归档',
+        bulkResolveConfirm: '标记完成 {{count}} 个线程？', bulkArchiveConfirm: '归档 {{count}} 个线程？',
+        bulkArchiveBody: '每个 worktree 都会释放，临时文件删除；分支、记录和转录保留。Restore 可单个恢复。',
+        bulkResolved: '已完成 {{ok}} 个线程{{failed}}', bulkArchived: '已归档 {{ok}} 个线程{{failed}}',
+        bulkFailedSuffix: ' · {{count}} 个被拒绝',
         group: { waiting: '等你处理', failed: '失败', ready: '可以 review', working: '进行中', idle: '空闲', resolved: '已解决', archived: '已归档' },
     },
     thread: {

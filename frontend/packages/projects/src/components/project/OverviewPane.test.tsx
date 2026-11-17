@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
 import { OverviewPane } from './OverviewPane';
+
+const m = vi.hoisted(() => ({ finish: vi.fn(), archiveSession: vi.fn() }));
+vi.mock('./threadOps', () => ({ threadOps: () => ({ finish: m.finish, archiveSession: m.archiveSession }) }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { count?: number }) => (o?.count != null ? `${key}:${o.count}` : key), i18n: { language: 'en' } }) }));
 afterEach(() => {
@@ -176,5 +179,36 @@ describe('OverviewPane tabs', () => {
         expect(screen.getByRole('region', { name: 'links.prs' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Cache keys' }));
         expect(onOpen).toHaveBeenCalledWith('r1');
+    });
+});
+
+describe('OverviewPane bulk actions', () => {
+    it('resolves the picked threads one by one, keeping going past a refusal', async () => {
+        m.finish.mockReset().mockImplementation((id: unknown) => (id === 'p-w1' ? Promise.reject(new Error('busy')) : Promise.resolve({})));
+        m.archiveSession.mockReset();
+        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} />);
+        fireEvent.click(screen.getByRole('button', { name: 'overview.select' }));
+        fireEvent.click(screen.getByRole('button', { name: 'overview.selectAll' }));
+        expect(screen.getByText('overview.selectedCount:6')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'overview.bulkResolve' }));
+        await screen.findByText('overview.bulkResolveConfirm:6');
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'overview.bulkResolve' }));
+        await waitFor(() => expect(m.finish).toHaveBeenCalledTimes(6));
+        expect(m.archiveSession).not.toHaveBeenCalled();
+    });
+
+    it('archives the picked threads after the confirm says what archive frees', async () => {
+        m.finish.mockReset();
+        m.archiveSession.mockReset().mockResolvedValue({});
+        render(<OverviewPane projectId="p" threads={threads} onOpen={vi.fn()} libraryKey={0} />);
+        fireEvent.click(screen.getByRole('button', { name: 'overview.select' }));
+        fireEvent.click(screen.getByText('Pick a backoff'));
+        fireEvent.click(screen.getByText('Cache keys'));
+        fireEvent.click(screen.getByRole('button', { name: 'overview.bulkArchive' }));
+        await screen.findByText('overview.bulkArchiveConfirm:2');
+        expect(screen.getByText('overview.bulkArchiveBody')).toBeInTheDocument();
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'overview.bulkArchive' }));
+        await waitFor(() => expect(m.archiveSession).toHaveBeenCalledTimes(2));
+        expect(m.finish).not.toHaveBeenCalled();
     });
 });
