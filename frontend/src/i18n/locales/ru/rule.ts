@@ -359,10 +359,6 @@ export default {
     "addModels_many": "Добавить {{count}} моделей",
     "addModels_other": "Добавить {{count}} модели",
     "howRoutingWorks": "Как работает маршрутизация",
-    "sortOriginal": "Исходный порядок",
-    "sortByName": "По названию (А→Я)",
-    "sortTooltipToName": "Показан исходный порядок — нажмите, чтобы отсортировать по названию",
-    "sortTooltipToOriginal": "Показана сортировка по названию — нажмите, чтобы вернуть исходный порядок"
   },
   "templatePage": {
     "reorder": {

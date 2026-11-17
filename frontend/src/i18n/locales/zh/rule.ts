@@ -353,10 +353,6 @@ export default {
     "clearSelection": "清除",
     "addModels_other": "添加 {{count}} 个模型",
     "howRoutingWorks": "路由原理",
-    "sortOriginal": "原始顺序",
-    "sortByName": "按名称（A→Z）",
-    "sortTooltipToName": "当前按原始顺序显示 — 点击按名称排序",
-    "sortTooltipToOriginal": "当前按名称排序 — 点击恢复原始顺序"
   },
   "templatePage": {
     "reorder": {

@@ -18,7 +18,6 @@ import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules'
 import {SortableRuleList} from './SortableRuleList';
 import {pinToTop} from './ruleOrder';
 import {useCommitRuleOrder} from '@/pages/scenario/hooks/useCommitRuleOrder';
-import {useRuleSort} from '@/pages/scenario/hooks/useRuleSort';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
@@ -156,13 +155,8 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         setNewRuleUuid,
     } = useScrollToNewRule({rules});
 
-    // Display-only ordering for the Model Rules list — doesn't touch `rules`
-    // itself, so match priority (if any) and the scroll-to-new-rule logic
-    // above stay anchored to the real, backend-ordered array.
-    const {sortMode, toggleSortMode, sortedRules} = useRuleSort(rules);
-
-    // Hard ordering (drag and drop, "Pin to top"): only offered in the original
-    // order view — the name-sorted view is a lens, not the list.
+    // Hard ordering (drag and drop, "Pin to top"): the list is always shown in
+    // its real, persisted order — there is no display-only re-sort to mislead.
     const commitOrder = useCommitRuleOrder({scenario, rules, onRulesChange, loadRules, showNotification});
 
     const handlePinRule = useCallback((ruleUuid: string) => {
@@ -394,8 +388,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         onToggleExpandAll={handleToggleExpandAll}
                         showExpandCollapseButton={showExpandCollapseButton}
                         onShowGuide={() => setShowGuide(true)}
-                        sortMode={rules.length > 1 ? sortMode : undefined}
-                        onToggleSort={rules.length > 1 ? toggleSortMode : undefined}
                     />
                 }
                 rightAction={rightAction}
@@ -415,16 +407,14 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         </Box>
                     ) : (
                         (() => {
-                            // The scroll anchor (new rule, else the last one) is only
-                            // meaningful in the original, insertion-ordered view — it is
-                            // just a fallback for the initial mount scroll position.
-                            const anchorUuid = newRuleUuid
-                                ?? (sortMode === 'original' ? sortedRules[sortedRules.length - 1]?.uuid : undefined);
-                            const reorderEnabled = allowReorder && sortMode === 'original' && sortedRules.length > 1;
+                            // Scroll anchor: the new rule, else the last one (a fallback
+                            // for the initial mount scroll position).
+                            const anchorUuid = newRuleUuid ?? rules[rules.length - 1]?.uuid;
+                            const reorderEnabled = allowReorder && rules.length > 1;
 
                             return (
                                 <SortableRuleList
-                                    rules={sortedRules}
+                                    rules={rules}
                                     enabled={reorderEnabled}
                                     anchorUuid={anchorUuid}
                                     anchorRef={lastRuleRef}
@@ -448,7 +438,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             allowToggleRule={allowToggleRule}
                                             dragHandle={dragHandle}
                                             onPinRule={reorderEnabled ? handlePinRule : undefined}
-                                            canPin={rule.uuid !== sortedRules[0]?.uuid}
+                                            canPin={rule.uuid !== rules[0]?.uuid}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                             onContext1MToggle={onContext1MToggle}
                                             quickProbeSignal={probeAllSignal}
