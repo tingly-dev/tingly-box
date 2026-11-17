@@ -5,6 +5,10 @@ execution boundaries. Field examples and Go usage live in
 [`vmodel/spec/README.md`](../vmodel/spec/README.md); the design index is
 [`vmodel.md`](./vmodel.md).
 
+With stacked #2621 applied, gateway attachment becomes the CLI default and
+`--standalone` selects the base lifecycle below. See
+[`vmodel-scenario.md`](./vmodel-scenario.md) for that integration contract.
+
 ## Decision
 
 Use `vmodel/spec.Definition` as the common envelope for model definitions,
