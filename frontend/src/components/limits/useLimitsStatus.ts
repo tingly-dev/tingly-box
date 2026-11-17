@@ -11,6 +11,7 @@ export function useLimitsStatus(enabled: boolean): LimitStatusEntry[] {
         if (!enabled) return;
         let cancelled = false;
         const load = async () => {
+            if (document.visibilityState === 'hidden') return; // nobody is looking
             try {
                 const res = await api.getLimitsStatus();
                 if (!cancelled && res?.success && Array.isArray(res.data)) setEntries(res.data);
