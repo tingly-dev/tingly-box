@@ -28,7 +28,7 @@ describe('DiffView', () => {
     it('windows a 5000-file list and fetches only the file it opens on, skipping generated and binary ones first', async () => {
         const files = [file('assets/a.png', { binary: true }), file('package-lock.json', { generated: true }), ...Array.from({ length: 5000 }, (_, i) => file(`src/f${String(i).padStart(4, '0')}.ts`))];
         render(<DiffView threadId="t1" diff={diffOf(files)} />);
-        expect(screen.getAllByRole('option').length).toBeLessThan(60);
+        expect(screen.getAllByRole('treeitem').length).toBeLessThan(60);
         await waitFor(() => expect(screen.getByTestId('diff-patch')).toBeInTheDocument());
         const paths = get.mock.calls.map((c) => queryOf(c).path);
         expect(paths).toContain('src/f0000.ts');
@@ -82,7 +82,7 @@ describe('DiffView', () => {
         const files = [file('a.ts'), file('b.ts'), file('c.ts')];
         const { unmount } = render(<DiffView threadId="t9" diff={diffOf(files)} />);
         await waitFor(() => expect(screen.getByTestId('diff-patch')).toBeInTheDocument());
-        const selected = () => screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')?.getAttribute('title');
+        const selected = () => screen.getAllByRole('treeitem').find((o) => o.getAttribute('aria-selected') === 'true')?.getAttribute('title');
         expect(selected()).toBe('a.ts');
         fireEvent.keyDown(window, { key: 'j' });
         expect(selected()).toBe('b.ts');
@@ -104,7 +104,8 @@ describe('DiffView', () => {
     it('filters by name and says when nothing matches', () => {
         render(<DiffView threadId="t1" diff={diffOf([file('src/a.ts'), file('docs/b.md')])} />);
         fireEvent.change(screen.getByLabelText('thread.diff.filterPlaceholder'), { target: { value: 'docs' } });
-        expect(screen.getAllByRole('option')).toHaveLength(1);
+        // The match, plus the folder kept above it.
+        expect(screen.getAllByRole('treeitem')).toHaveLength(2);
         fireEvent.change(screen.getByLabelText('thread.diff.filterPlaceholder'), { target: { value: 'zzz' } });
         expect(screen.getByText('thread.diff.noMatch')).toBeInTheDocument();
     });

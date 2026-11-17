@@ -38,7 +38,37 @@ inside the first big lock file and the rest was silently dropped.
 ## The view
 
 File list on the left, one file's patch on the right (stacked on a narrow
-screen).
+screen). The list is a **folder tree** or a flat list, switched next to the
+filter field and remembered per browser (`diff.listMode` in localStorage,
+`DiffListSwitch`). The tree is the default: a flat list of hundreds of files is
+a wall of base names with directories squeezed into a suffix, while a tree
+groups a change the way it is actually laid out — and on a small change the
+tree is nearly flat anyway, so the default costs nothing.
+
+The tree (`diffTree.ts`, `DiffTreeList.tsx`):
+- built once per change set, memoized; a folder chain with single-child
+  folders collapses into one row (`src/components/usage`), a rename sits at its
+  new path;
+- each folder rolls up its shown files: count, how many viewed (`2/5`), and the
+  +/− totals;
+- filters apply to files and keep the ancestor folders of everything that
+  matches; a path filter shows its matches unfolded;
+- up to 150 files every folder starts open; a bigger change opens only its
+  top-level folders, so the tree is an outline to dig into. Folders the user
+  toggles are remembered for the dialog's lifetime;
+- selecting a file (click, `j`/`k`, the dialog opening) unfolds the folders
+  above it before the rows below are computed, so there is no flash;
+- the visible rows come from one `flattenTree` pass that jumps over closed
+  subtrees and file-less folders, then `useVirtualWindow` windows them like the
+  flat list: a 10,000-file change builds in a few ms and draws a screenful.
+- Files in tree mode are walked in the tree's order, so `j` / `k`, the
+  prefetch and the previous/next buttons follow what is on screen.
+- The tree is an ARIA tree (one tab stop, `aria-activedescendant`):
+  `↑`/`↓` move, `→` opens a folder or enters it, `←` closes it or goes to the
+  parent, `Enter`/`Space` toggles a folder or opens a file; `j` / `k` / `v`
+  keep working as in the flat list.
+- A file row shows a status icon by how it changed (added / modified /
+  deleted / renamed) instead of the flat list's letter.
 
 - Nothing is fetched or drawn for a file until it is opened; the next file is
   prefetched. The list and the patch are both windowed (`useVirtualWindow`,
@@ -58,4 +88,4 @@ show a plain note with no button, and the first and last are not requested at al
   frame was the remaining cost. Colours come from the theme palette.
 
 Not done: a split (side-by-side) view, syntax highlighting, word-level
-intra-line highlights, a directory tree.
+intra-line highlights.
