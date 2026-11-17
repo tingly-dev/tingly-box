@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import type { ProviderQuota, QuotaWindow, UsageRedeem } from '@/types/quota';
-import { quotaToWindows } from '@/types/quota';
+import { quotaBreakdowns, quotaToWindows } from '@/types/quota';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface ResourceEntry {
@@ -42,8 +42,8 @@ export function useQuotaBars(quota: ProviderQuota | undefined): {
 
   const resourceItems: ResourceItem[] = React.useMemo(() => {
     if (!quota) return [];
-    const breakdowns = quota.breakdowns;
-    if (!breakdowns?.length) return [];
+    const breakdowns = quotaBreakdowns(quota);
+    if (!breakdowns.length) return [];
 
     const groups = new Map<string, typeof breakdowns>();
     for (const bd of breakdowns) {
