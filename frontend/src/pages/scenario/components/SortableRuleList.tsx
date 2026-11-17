@@ -76,8 +76,8 @@ export interface SortableRuleListProps {
     /** Rule that gets the scroll anchor ref (new-rule / last-rule), if any. */
     anchorUuid?: string;
     anchorRef?: React.Ref<HTMLDivElement> | null;
-    /** The full new uuid order after a drop. */
-    onReorder: (orderedUuids: string[]) => void;
+    /** The full new uuid order after a drop, and the rule that was moved. */
+    onReorder: (orderedUuids: string[], movedUuid: string) => void;
     renderRule: (rule: Rule, dragHandle: React.ReactNode | undefined) => React.ReactNode;
 }
 
@@ -98,7 +98,7 @@ export const SortableRuleList: React.FC<SortableRuleListProps> = ({ rules, enabl
     const handleDragEnd = useCallback(({ active, over }: DragEndEvent) => {
         if (!over) return;
         const next = moveBefore(latestRules.current.map(r => r.uuid), String(active.id), String(over.id));
-        if (next) onReorder(next);
+        if (next) onReorder(next, String(active.id));
     }, [onReorder]);
 
     const announcements = useMemo<Announcements>(() => {

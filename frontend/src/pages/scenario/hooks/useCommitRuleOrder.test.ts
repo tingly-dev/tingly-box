@@ -29,7 +29,15 @@ describe('useCommitRuleOrder', () => {
         expect(onRulesChange.mock.calls[0][0].map((r: Rule) => r.uuid)).toEqual(['c', 'a', 'b']);
         expect(reorderRules).toHaveBeenCalledWith('openai', ['c', 'a', 'b']);
         expect(loadRules).not.toHaveBeenCalled();
-        expect(showNotification).not.toHaveBeenCalled();
+        expect(showNotification).toHaveBeenCalledOnce();
+        expect(showNotification).toHaveBeenCalledWith('templatePage.reorder.savedPlain', 'success');
+    });
+
+    it('names the moved rule and its new position in the success notice', async () => {
+        reorderRules.mockResolvedValue({ success: true });
+        const { commit, showNotification } = setup();
+        await act(async () => { await commit(['c', 'a', 'b'], 'c'); });
+        expect(showNotification).toHaveBeenCalledWith('templatePage.reorder.saved', 'success');
     });
 
     it('rolls back, toasts and reloads when the server rejects the order', async () => {
@@ -39,6 +47,7 @@ describe('useCommitRuleOrder', () => {
         expect(onRulesChange).toHaveBeenCalledTimes(2);
         expect(onRulesChange.mock.calls[1][0]).toBe(rules);
         expect(showNotification).toHaveBeenCalledWith(expect.stringContaining('saveFailed'), 'error');
+        expect(showNotification).not.toHaveBeenCalledWith(expect.anything(), 'success');
         expect(loadRules).toHaveBeenCalledWith('openai');
     });
 
