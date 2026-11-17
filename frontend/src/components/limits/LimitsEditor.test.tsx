@@ -18,6 +18,23 @@ describe('LimitsEditor', () => {
         expect(onChange).toHaveBeenLastCalledWith({max_tokens: 1000000});
     });
 
+    it('reads K and M suffixes in the token budget and settles to the short form on blur', () => {
+        const onChange = vi.fn();
+        render(<LimitsEditor value={{}} onChange={onChange}/>);
+        const field = screen.getByLabelText('limits.maxTokens') as HTMLInputElement;
+        fireEvent.change(field, {target: {value: '2M'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 2_000_000});
+        fireEvent.change(field, {target: {value: '1.5m'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 1_500_000});
+        fireEvent.change(field, {target: {value: '500 K'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 500_000});
+        fireEvent.change(field, {target: {value: '12x'}});
+        expect(field.getAttribute('aria-invalid')).toBe('true');
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: 500_000}); // unreadable text changes nothing
+        fireEvent.change(field, {target: {value: ''}});
+        expect(onChange).toHaveBeenLastCalledWith({max_tokens: undefined});
+    });
+
     it('rejects out-of-range steering thresholds and only shows quota for accounts', () => {
         const onChange = vi.fn();
         const {rerender} = render(<LimitsEditor value={{max_concurrent: 2}} onChange={onChange}/>);
@@ -94,6 +111,26 @@ describe('limits at rest on a service node', () => {
 
         rerender(<LimitsBadge accountLimits={{max_requests: 100}} />);
         expect(screen.getByTestId('limits-badge')).toBeTruthy(); // account cap alone is enough
+    });
+});
+
+describe('amount parsing', () => {
+    it('reads counts with K / M suffixes and writes them back short', async () => {
+        const {parseAmount, formatAmount} = await import('./amount');
+        expect(parseAmount('2M')).toEqual({kind: 'ok', value: 2_000_000});
+        expect(parseAmount(' 1,500k ')).toEqual({kind: 'ok', value: 1_500_000});
+        expect(parseAmount('0.5M')).toEqual({kind: 'ok', value: 500_000});
+        expect(parseAmount('1.')).toEqual({kind: 'ok', value: 1});
+        expect(parseAmount('1234567')).toEqual({kind: 'ok', value: 1_234_567});
+        expect(parseAmount('')).toEqual({kind: 'empty'});
+        expect(parseAmount('0')).toEqual({kind: 'empty'});
+        expect(parseAmount('-5')).toEqual({kind: 'invalid'});
+        expect(parseAmount('2G')).toEqual({kind: 'invalid'});
+        expect(formatAmount(2_000_000)).toBe('2M');
+        expect(formatAmount(1_500_000)).toBe('1.5M');
+        expect(formatAmount(500_000)).toBe('500K');
+        expect(formatAmount(1_234_567)).toBe('1234567');
+        expect(formatAmount(undefined)).toBe('');
     });
 });
 

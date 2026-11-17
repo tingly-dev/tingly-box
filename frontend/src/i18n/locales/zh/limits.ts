@@ -14,7 +14,7 @@ export default {
     "window7d": "7 天",
     "maxRequests": "最大请求数",
     "maxTokens": "最大 Token 数",
-    "maxTokensHint": "输入 + 输出 Token，在请求结束时计入。",
+    "maxTokensHint": "输入 + 输出 Token，在请求结束时计入；缓存读取不计。可写 K、M，如 500K、2M。",
     "softPercent": "提前分流阈值（%）",
     "softPercentHint": "任一限额达到该比例后，优先使用其他账号；留空表示只在达到硬上限时才停用。",
     "quotaPercent": "上游额度停用阈值（%）",

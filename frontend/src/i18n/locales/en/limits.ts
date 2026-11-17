@@ -14,7 +14,7 @@ export default {
     "window7d": "7 days",
     "maxRequests": "Max requests",
     "maxTokens": "Max tokens",
-    "maxTokensHint": "Input + output tokens. Counted when a request finishes.",
+    "maxTokensHint": "Input + output tokens, counted when a request finishes; cache reads are not counted. Accepts K and M, e.g. 500K or 2M.",
     "softPercent": "Steer traffic away at (%)",
     "softPercentHint": "Prefer other accounts once any limit reaches this share. Empty = only stop at the hard limit.",
     "quotaPercent": "Stop at upstream quota (%)",
