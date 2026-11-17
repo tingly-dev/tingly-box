@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/vmodel"
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
 	"gopkg.in/yaml.v3"
@@ -75,8 +74,7 @@ func (d Definition) MarshalYAML() (any, error) {
 	return node.Content[0], nil
 }
 
-// Load accepts one definition or a list. Legacy flat mock, SequenceConfig and
-// name/mock_responses fixture documents are normalized before validation.
+// Load accepts one canonical definition or a list. Identity and kind are explicit.
 func Load(path string) ([]Definition, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -125,71 +123,16 @@ func decodeOne(raw []byte) (Definition, error) {
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
 		return Definition{}, fmt.Errorf("definition must be an object")
 	}
-	if _, ok := fields["id"]; !ok {
-		if name, ok := fields["name"]; ok {
-			fields["id"] = name
-		}
-	}
-	if legacy, ok := fields["mock_responses"]; ok {
-		if _, exists := fields["responses"]; exists {
-			return Definition{}, fmt.Errorf("responses and mock_responses cannot both be set")
-		}
-		fields["responses"] = legacy
-		delete(fields, "mock_responses")
-	}
-	// Preserve existing flat mock/sequence file syntax as an import adapter.
-	var mock map[string]json.RawMessage
-	for _, key := range []string{"content", "tool_call", "tool_calls", "stream_chunks", "finish_reason", "stop_reason", "usage", "error", "error_category", "is_retryable", "severity"} {
-		if v, ok := fields[key]; ok {
-			if mock == nil {
-				mock = map[string]json.RawMessage{}
-			}
-			mock[key] = v
-			delete(fields, key)
-		}
-	}
-	if mock != nil {
-		if _, ok := fields["mock"]; ok {
-			return Definition{}, fmt.Errorf("mock block conflicts with flat mock fields")
-		}
-		fields["mock"], _ = json.Marshal(mock)
-	}
-	if _, ok := fields["steps"]; ok {
-		if _, exists := fields["sequence"]; exists {
-			return Definition{}, fmt.Errorf("sequence block conflicts with flat sequence fields")
-		}
-		seq := map[string]json.RawMessage{}
-		for _, key := range []string{"steps", "default_content", "on_exhaust"} {
-			if v, ok := fields[key]; ok {
-				seq[key] = v
-				delete(fields, key)
-			}
-		}
-		fields["sequence"], _ = json.Marshal(seq)
-	}
-	if delay, ok := fields["delay"]; ok {
-		target := "mock"
-		if _, ok := fields["sequence"]; ok {
-			target = "sequence"
-		}
-		block := map[string]json.RawMessage{}
-		if b, ok := fields[target]; ok {
-			if err := json.Unmarshal(b, &block); err != nil {
-				return Definition{}, err
-			}
-		}
-		if _, ok := block["delay"]; ok {
-			return Definition{}, fmt.Errorf("delay specified twice")
-		}
-		block["delay"] = delay
-		fields[target], _ = json.Marshal(block)
-		delete(fields, "delay")
-	}
 	for _, key := range []string{"mock", "sequence"} {
 		if b, ok := fields[key]; ok {
 			var block map[string]json.RawMessage
 			if err := json.Unmarshal(b, &block); err != nil || block == nil {
 				return Definition{}, fmt.Errorf("%s must be an object", key)
+			}
+			for _, identity := range []string{"id", "name", "description"} {
+				if _, ok := block[identity]; ok {
+					return Definition{}, fmt.Errorf("%s.%s belongs in the definition envelope", key, identity)
+				}
 			}
 			if v, ok := block["delay"]; ok {
 				var duration time.Duration
@@ -217,19 +160,6 @@ func decodeOne(raw []byte) (Definition, error) {
 			fields[key], _ = json.Marshal(block)
 		}
 	}
-	if _, ok := fields["kind"]; !ok {
-		kinds := map[string]Kind{"mock": Mock, "responses": Recording, "sequence": Sequence, "decision": Decision, "transform": Transform, "builtin": Builtin}
-		for key, kind := range kinds {
-			if _, ok := fields[key]; ok {
-				fields["kind"], _ = json.Marshal(kind)
-				break
-			}
-		}
-		if _, ok := fields["kind"]; !ok {
-			fields["kind"], _ = json.Marshal(Mock)
-			fields["mock"] = json.RawMessage(`{}`)
-		}
-	}
 	raw, _ = json.Marshal(fields)
 	var d Definition
 	if err := vmodel.DecodeConfig(raw, &d); err != nil {
@@ -246,16 +176,11 @@ func (d *Definition) Normalize() error {
 	if strings.TrimSpace(d.ID) == "" {
 		return fmt.Errorf("id is required")
 	}
-	if d.Mock != nil {
-		if d.Name == "" && d.Mock.Name != "" {
-			d.Name = d.Mock.Name
-		}
-		if d.Description == "" && d.Mock.Description != "" {
-			d.Description = d.Mock.Description
-		}
-	}
 	if d.Name == "" {
 		d.Name = d.ID
+	}
+	if d.Kind == "" {
+		return fmt.Errorf("kind is required")
 	}
 	blocks := 0
 	if d.Mock != nil {
@@ -290,34 +215,14 @@ func (d *Definition) Normalize() error {
 		d.Mock.ID = d.ID
 		d.Mock.Name = d.Name
 		d.Mock.Description = d.Description
-		// The singular tool_call spelling is an import-only adapter.
-		if d.Mock.ToolCall != nil {
-			if len(d.Mock.ToolCalls) > 0 {
-				return fmt.Errorf("tool_call and tool_calls cannot both be set")
-			}
-			// Legacy single-tool mocks used Content for streaming chunks but
-			// ignored it in non-stream replies. Preserve that distinction explicitly.
-			if d.Mock.Content != "" && len(d.Mock.StreamChunks) == 0 {
-				d.Mock.StreamChunks = token.SplitIntoChunks(d.Mock.Content)
-			}
-			d.Mock.ToolCalls = d.Mock.Calls()
-			d.Mock.ToolCall = nil
-			d.Mock.Content = ""
-		}
-		raw, err := json.Marshal(d.Mock)
-		if err != nil {
+		if err := d.Mock.Validate(); err != nil {
 			return err
 		}
-		cfg, err := vmodel.DecodeMockSpec(raw)
-		if err != nil {
-			return err
-		}
-		d.Mock = cfg
 	case Recording:
 		if d.Responses == nil {
 			return fmt.Errorf("kind recording requires responses")
 		}
-		if _, err := (scenario.Fixture{Name: d.ID, MockResponses: d.Responses, Expect: d.Expect, Structural: d.Structural}).Build(); err != nil {
+		if _, err := scenario.BuildRecording(scenario.Scenario{Name: d.ID}, d.Responses); err != nil {
 			return err
 		}
 	case Sequence:
@@ -384,14 +289,11 @@ func FromMock(s vmodel.SharedMockSpec) Definition {
 func FromSequence(s vmodel.SequenceConfig) Definition {
 	return Definition{ID: s.ID, Name: s.Name, Description: s.Description, Kind: Sequence, Sequence: &SequenceSpec{Steps: s.Steps, DefaultContent: s.DefaultContent, OnExhaust: s.OnExhaust, Delay: s.Delay}}
 }
-func FromFixture(f scenario.Fixture) Definition {
-	return Definition{ID: f.Name, Name: f.Name, Description: f.Description, Kind: Recording, Responses: f.MockResponses, Expect: f.Expect, Structural: f.Structural, Tags: f.Tags, SkipTransitive: f.SkipTransitive}
-}
 
 func marshalYAML(defs []Definition) ([]byte, error) { return yaml.Marshal(defs) }
 
-// MarshalJSON writes identity once, with readable durations, regardless of the
-// legacy input shape. Runtime-only config identity is restored by Normalize.
+// MarshalJSON writes identity once with readable durations. Runtime-only mock
+// identity is restored by Normalize.
 func (d Definition) MarshalJSON() ([]byte, error) {
 	type plain Definition
 	raw, err := json.Marshal(plain(d))

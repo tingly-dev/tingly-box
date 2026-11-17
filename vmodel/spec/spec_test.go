@@ -39,13 +39,13 @@ func call(t *testing.T, r http.Handler, path, body string) (int, []byte) {
 	return w.Code, w.Body.Bytes()
 }
 
-func TestLegacyFilesNormalizeToOneContract(t *testing.T) {
-	for _, legacy := range []string{
-		`{"id":"mock","content":"hello","delay":"2ms","tool_call":{"name":"a","arguments":{}}}`,
-		`{"name":"wire","mock_responses":{"openai_chat":{"raw_body":"{ \"ok\": true }"}},"expect":{"http_status":200}}`,
-		`{"id":"sequence","steps":[{"status":200},{"status":429}],"on_exhaust":"clamp","delay":"1ms"}`,
+func TestDefinitionsRoundTrip(t *testing.T) {
+	for _, source := range []string{
+		`{"id":"mock","kind":"mock","mock":{"content":"hello","delay":"2ms","tool_calls":[{"name":"a","arguments":{}}]}}`,
+		`{"id":"wire","kind":"recording","responses":{"openai_chat":{"raw_body":"{ \"ok\": true }"}},"expect":{"http_status":200}}`,
+		`{"id":"sequence","kind":"sequence","sequence":{"steps":[{"status":200},{"status":429}],"on_exhaust":"clamp","delay":"1ms"}}`,
 	} {
-		original, err := spec.Decode([]byte(legacy))
+		original, err := spec.Decode([]byte(source))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -54,12 +54,9 @@ func TestLegacyFilesNormalizeToOneContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if bytes.Contains(exported, []byte("mock_responses")) || bytes.Contains(exported, []byte("tool_call\"")) {
-				t.Fatalf("export retains legacy shape: %s", exported)
-			}
 			restored, err := spec.Decode(exported)
 			if err != nil {
-				t.Fatalf("%s: %v", exported, err)
+				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(original, restored) {
 				t.Fatalf("%s round trip changed definition", format)
@@ -67,6 +64,7 @@ func TestLegacyFilesNormalizeToOneContract(t *testing.T) {
 		}
 	}
 }
+
 func TestSameMockDefinitionServesAndTestsMultipleTools(t *testing.T) {
 	r := compile(t, `id: multi
 kind: mock
@@ -259,17 +257,17 @@ responses:
 func TestInvalidDefinitions(t *testing.T) {
 	for _, source := range []string{
 		"[]", "id: x\nkind: mystery", "id: x\nkind: mock\nmock: {}\nresponses: {}",
-		"id: x\nmock: {id: other}", "id: x\nmock: {delay: -1ms}", "id: x\nkind: mock\nmock: {typo: 1}",
-		"id: x\nsequence: {steps: [{status: 201}]}", "id: x\ndecision: {strategy: random}", "id: x\ndecision: {strategy: first, confidence: 2}",
-		"id: x\nresponses: {unknown: {body: {}}}", "id: x\nmock: {}\nprotocols: [unknown]",
-		"- {id: x, mock: {}}\n- {id: x, mock: {}}", "id: x\nmock: {}\ncontent: conflicting",
-		"id: x\nmock: {tool_call: {name: a}, tool_calls: [{name: b}]}",
+		"id: x\nkind: mock\nmock: {id: other}", "id: x\nkind: mock\nmock: {delay: -1ms}", "id: x\nkind: mock\nmock: {typo: 1}",
+		"id: x\nkind: sequence\nsequence: {steps: [{status: 201}]}", "id: x\nkind: decision\ndecision: {strategy: random}", "id: x\nkind: decision\ndecision: {strategy: first, confidence: 2}",
+		"id: x\nkind: recording\nresponses: {unknown: {body: {}}}", "id: x\nkind: mock\nmock: {}\nprotocols: [unknown]",
+		"- {id: x, kind: mock, mock: {}}\n- {id: x, kind: mock, mock: {}}", "id: x\nkind: mock\nmock: {}\ncontent: conflicting",
+		"id: x\nkind: mock\nmock: {tool_call: {name: a}, tool_calls: [{name: b}]}",
 	} {
 		if _, err := spec.Decode([]byte(source)); err == nil {
 			t.Fatalf("accepted invalid definition: %s", source)
 		}
 	}
-	for _, source := range []string{"id: x\nmock: {}\nprotocols: [google]", "id: x\ntransform: {builtin: missing}", "id: x\nbuiltin: missing"} {
+	for _, source := range []string{"id: x\nkind: mock\nmock: {}\nprotocols: [google]", "id: x\nkind: transform\ntransform: {builtin: missing}", "id: x\nkind: builtin\nbuiltin: missing"} {
 		defs, err := spec.Decode([]byte(source))
 		if err != nil {
 			t.Fatal(err)
@@ -302,6 +300,7 @@ func TestRawSSEBytesAndArgumentsPrecision(t *testing.T) {
 		t.Fatalf("raw stream changed: %q", body)
 	}
 	r = compile(t, `id: numbers
+kind: mock
 mock:
   tool_calls:
     - name: lookup
@@ -334,8 +333,8 @@ expect:
 	}
 }
 
-func TestLegacySingleToolStreamingContentIsRetained(t *testing.T) {
-	cfg := vmodel.SharedMockSpec{ID: "legacy-tool", Content: "stream-only", ToolCall: &vmodel.ToolCallConfig{Name: "run", Arguments: map[string]any{"message": "display"}}}
+func TestExplicitToolStreamingContentIsRetained(t *testing.T) {
+	cfg := vmodel.SharedMockSpec{ID: "stream-tool", StreamChunks: []string{"stream-only"}, ToolCalls: []vmodel.ToolCallConfig{{Name: "run", Arguments: map[string]any{"message": "display"}}}}
 	exported, err := spec.Export([]spec.Definition{spec.FromMock(cfg)}, "yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -345,13 +344,13 @@ func TestLegacySingleToolStreamingContentIsRetained(t *testing.T) {
 		t.Fatal(err)
 	}
 	if defs[0].Mock.Content != "" || len(defs[0].Mock.StreamChunks) == 0 || len(defs[0].Mock.ToolCalls) != 1 {
-		t.Fatal("legacy tool behavior was flattened")
+		t.Fatal("explicit stream content was lost")
 	}
 	r, err := spec.New(defs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc, err := r.Scenario("legacy-tool")
+	sc, err := r.Scenario("stream-tool")
 	if err != nil {
 		t.Fatal(err)
 	}

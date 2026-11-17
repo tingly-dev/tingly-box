@@ -1,7 +1,0 @@
-id: file-hello
-name: File Hello
-content: Hello from a file.
-delay: 0ms
-usage:
-  prompt_tokens: 10
-  completion_tokens: 8

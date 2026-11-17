@@ -174,15 +174,15 @@ expect:
 
 `tb vmodel --export catalog.yaml` exports the complete core inventory,
 including opt-in test fixtures, without starting a service. With `--config`,
-export normalizes just those inputs. Existing flat mock/sequence files and
-legacy `name`/`mock_responses` files remain accepted. `--fixture` remains a
-matrix alias for `--config`.
+export writes just those definitions. Every input must use explicit `id`,
+`kind` and one behavior block; alternate flat/name-based formats are rejected.
+`--fixture` remains a matrix alias for `--config`.
 
 See [the unified definition contract](spec/README.md) for all kinds,
 per-protocol recording payloads, exact `raw_body`/`raw_stream` preservation,
 native endpoint assertions, custom Go factories and migration boundaries.
-Old `LoadMockSpec` / `scenario.LoadFixture` APIs remain available to existing
-Go callers; new serving and test paths use the unified loader.
+`spec.Load` / `spec.Decode` are the only model-file loading APIs. Go callers
+use the shared mock configuration or named runtime factories.
 
 ### Base (`interface.go`)
 
@@ -242,16 +242,13 @@ Both the anthropic and openai `DefaultStream` helpers use these.
 
 ### SharedDefaultMocks
 
-`SharedDefaultMocks()` returns the specs for the four mocks that are registered
+`SharedDefaultMocks()` returns the specs for the mocks that are registered
 in **both** default registries. Each protocol's `RegisterDefaults` calls this
 and wraps each spec in its own `MockModel`:
 
 ```go
 for _, spec := range virtualmodel.SharedDefaultMocks() {
-    _ = reg.Register(NewMockModel(&MockModelConfig{
-        ID: spec.ID, Name: spec.Name, Content: spec.Content,
-        ToolCall: spec.ToolCall, Delay: spec.Delay,
-    }))
+    _ = reg.Register(NewMockModel(&spec))
 }
 ```
 
@@ -441,7 +438,7 @@ so static and tool mocks get streaming for free.
 
 A small facility lets a mock simulate an upstream failure without writing a
 custom handler. It is **opt-in per model** — set `MockModelConfig.Error` (or
-`MockScenario.Error`) to an `ErrorInjection`, and the virtual server handler
+`SharedMockSpec.Error`) to an `ErrorInjection`, and the virtual server handler
 honors it. Models with no `Error` field set behave exactly as before.
 
 ```go
