@@ -47,6 +47,47 @@ function windowSortKey(window: QuotaWindow): [number, number] {
     return [rank, minutes];
 }
 
+/** Code-unit comparison: the same answer in every locale and on every call. */
+function compareText(a: string | undefined, b: string | undefined): number {
+    const x = a ?? '';
+    const y = b ?? '';
+    return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/**
+ * THE order of quota details. Provider APIs list a limit's entries (models,
+ * windows, credits) in an order they do not keep from one call to the next, so
+ * every surface sorts with these comparators instead of trusting arrival order;
+ * otherwise rows jump around on each refresh.
+ *
+ * Windows: self-healing allowances, then standing resources, then entries with
+ * no figure; shorter periods first within each (5h → 7d → monthly); ties by
+ * label, then key.
+ * Breakdowns: by group, then label, then key.
+ *
+ * Nothing here reads usage, resets or availability — those change between
+ * refreshes, and an order keyed on them would flip rows as a window fills up.
+ */
+export function compareQuotaWindows(a: QuotaWindow, b: QuotaWindow): number {
+    const [ra, ma] = windowSortKey(a);
+    const [rb, mb] = windowSortKey(b);
+    return ra - rb || ma - mb || compareText(a.label, b.label) || compareText(a.key, b.key);
+}
+
+export function compareQuotaBreakdowns(a: UsageBreakdown, b: UsageBreakdown): number {
+    return compareText(a.group, b.group) || compareText(a.label, b.label) || compareText(a.key, b.key);
+}
+
+/** The quota's breakdowns in the fixed order, each with its windows in the fixed order. */
+export function quotaBreakdowns(quota?: Pick<ProviderQuota, 'breakdowns'>): UsageBreakdown[] {
+    return [...(quota?.breakdowns ?? [])]
+        .sort(compareQuotaBreakdowns)
+        .map(bd => ({
+            ...bd,
+            windows: [...(bd.windows ?? [])].sort((a, b) => compareQuotaWindows(a as QuotaWindow, b as QuotaWindow)),
+        }));
+}
+
 /** Used share of a countable window — mirrors ai/quota's UsageWindow.Percent. */
 function usedPercent(window: QuotaWindow): number {
     if (window.used_percent) return window.used_percent;
@@ -112,11 +153,7 @@ export function quotaToWindows(quota?: ProviderQuota): QuotaWindowDisplayItem[] 
             const key = window.key || `window-${index}`;
             return { key, label: window.label || key, window };
         })
-        .sort((a, b) => {
-            const [ra, ma] = windowSortKey(a.window);
-            const [rb, mb] = windowSortKey(b.window);
-            return ra !== rb ? ra - rb : ma - mb;
-        });
+        .sort((a, b) => compareQuotaWindows(a.window, b.window));
 }
 
 // Extended quota with breakdowns flattened for UI consumption
@@ -132,15 +169,13 @@ export function quotaToDisplayItems(quota: ProviderQuota): QuotaDisplayItem[] {
     const items: QuotaDisplayItem[] = [];
 
     // Add breakdowns first (per-model or per-type)
-    if (quota.breakdowns && quota.breakdowns.length > 0) {
-        for (const bd of quota.breakdowns) {
-            items.push({
-                key: bd.key,
-                label: bd.label,
-                group: bd.group,
-                windows: bd.windows,
-            });
-        }
+    for (const bd of quotaBreakdowns(quota)) {
+        items.push({
+            key: bd.key,
+            label: bd.label,
+            group: bd.group,
+            windows: bd.windows,
+        });
     }
 
     items.push({
