@@ -39,10 +39,18 @@ func TestLibraryTreeListsOneLevelAndRefusesEscapes(t *testing.T) {
 	var top treeResponse
 	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/library/tree", nil, &top))
 	assert.Equal(t, lib, top.Dir)
-	require.Len(t, top.Entries, 2)
-	assert.Equal(t, "outputs", top.Entries[0].Name)
+	require.Len(t, top.Entries, 3)
+	assert.Equal(t, ".tmp", top.Entries[0].Name)
 	assert.Equal(t, "dir", top.Entries[0].Kind)
-	assert.Equal(t, "a.md", top.Entries[1].Name)
+	assert.Equal(t, "scratch", top.Entries[0].Origin)
+	assert.Equal(t, "outputs", top.Entries[1].Name)
+	assert.Equal(t, "dir", top.Entries[1].Kind)
+	assert.Equal(t, "a.md", top.Entries[2].Name)
+
+	var scratch treeResponse
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/library/tree?path="+url.QueryEscape(".tmp"), nil, &scratch))
+	require.Len(t, scratch.Entries, 1)
+	assert.Equal(t, ".tmp/t", scratch.Entries[0].Path)
 
 	var sub treeResponse
 	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/library/tree?path="+url.QueryEscape("outputs/run"), nil, &sub))
@@ -50,7 +58,7 @@ func TestLibraryTreeListsOneLevelAndRefusesEscapes(t *testing.T) {
 	require.Len(t, sub.Entries, 1)
 	assert.Equal(t, "outputs/run/report.md", sub.Entries[0].Path)
 
-	for _, bad := range []string{"..", "outputs/../..", ".tmp", ".tmp/t"} {
+	for _, bad := range []string{"..", "outputs/../..", ".hidden"} {
 		assert.Equal(t, 400, c.do("GET", "/projects/"+p.ID+"/library/tree?path="+url.QueryEscape(bad), nil, nil), bad)
 	}
 	// A leading slash is not absolute: it stays inside the library.
@@ -58,6 +66,38 @@ func TestLibraryTreeListsOneLevelAndRefusesEscapes(t *testing.T) {
 	assert.Equal(t, 404, c.do("GET", "/projects/"+p.ID+"/library/tree?path=nope", nil, nil))
 	assert.Equal(t, 400, c.do("GET", "/projects/"+p.ID+"/library/tree?path=a.md", nil, nil))
 	assert.Equal(t, 404, c.do("GET", "/projects/missing/library/tree", nil, nil))
+}
+
+// A scratch folder is named after its thread; the tree shows the thread's
+// title, while the path stays the real one.
+func TestLibraryTreeNamesScratchFoldersAfterTheThread(t *testing.T) {
+	root := t.TempDir()
+	store, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "scratch"}, &p))
+	th := &db.Thread{ProjectID: p.ID, Title: "Fix the thing", Status: db.ThreadIdle, Agent: db.AgentLLM}
+	require.NoError(t, store.CreateThread(th))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	require.NoError(t, os.MkdirAll(filepath.Join(lib, project.ScratchDir, th.ID, "logs"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(lib, project.ScratchDir, th.ID, "logs", "run.log"), []byte("l"), 0o644))
+
+	var top treeResponse
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/library/tree", nil, &top))
+	require.Len(t, top.Entries, 1)
+	assert.Equal(t, project.ScratchDir, top.Entries[0].Name)
+	assert.Equal(t, "scratch", top.Entries[0].Origin)
+
+	var inside treeResponse
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/library/tree?path="+url.QueryEscape(project.ScratchDir), nil, &inside))
+	require.Len(t, inside.Entries, 1)
+	assert.Equal(t, "Fix the thing", inside.Entries[0].Name, "the title is shown")
+	assert.Equal(t, project.ScratchDir+"/"+th.ID, inside.Entries[0].Path, "the real path is kept")
+	assert.Equal(t, "scratch", inside.Entries[0].Origin)
+
+	var deep treeResponse
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/library/tree?path="+url.QueryEscape(project.ScratchDir+"/"+th.ID), nil, &deep))
+	require.Len(t, deep.Entries, 1)
+	assert.Equal(t, "logs", deep.Entries[0].Name, "below the thread folder names are as they are")
 }
 
 func TestLibraryFileDownloadAndDeleteApplyTheSameChecksAsTheTree(t *testing.T) {
@@ -78,7 +118,9 @@ func TestLibraryFileDownloadAndDeleteApplyTheSameChecksAsTheTree(t *testing.T) {
 	file := func(rel string) string { return "/projects/" + p.ID + "/library/file?path=" + url.QueryEscape(rel) }
 	assert.Equal(t, 200, c.do("GET", file("a.md"), nil, nil))
 	assert.Equal(t, 200, c.do("GET", file("outputs/run/report.md"), nil, nil))
-	for _, bad := range []string{"..", "../x", "outputs/../../x", ".tmp/t/x", "linkdir/secret", "leak.txt"} {
+	// The scratch subtree is served like any other folder; hidden names outside it are not.
+	assert.Equal(t, 200, c.do("GET", file(".tmp/t/x"), nil, nil))
+	for _, bad := range []string{"..", "../x", "outputs/../../x", ".hidden", "linkdir/secret", "leak.txt"} {
 		assert.Equal(t, 400, c.do("GET", file(bad), nil, nil), "GET "+bad)
 		assert.Equal(t, 400, c.do("DELETE", file(bad), nil, nil), "DELETE "+bad)
 	}
@@ -250,12 +292,21 @@ func TestLibraryArchiveStreamsAFolderAsAZip(t *testing.T) {
 	assert.NotContains(t, string(body), "SECRET")
 
 	// Refused before anything is streamed.
-	for _, bad := range []string{"..", "outputs/../..", ".tmp", ".tmp/t", "a.md"} {
+	for _, bad := range []string{"..", "outputs/../..", "a.md"} {
 		resp, body := archive(bad)
 		assert.Equal(t, 400, resp.StatusCode, bad)
 		assert.Contains(t, string(body), `"error"`, bad)
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"), bad)
 	}
+	// The scratch subtree zips too, when asked for directly; the root zip
+	// leaves it out (a dot entry in the scan) so scratch cannot blow the
+	// limits of a deliverables download.
+	resp, body = archive(".tmp/t")
+	require.Equal(t, 200, resp.StatusCode)
+	zr, err = zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	require.NoError(t, err)
+	require.Len(t, zr.File, 1)
+	assert.Equal(t, "x", zr.File[0].Name)
 	// Nothing to download is said, not sent as an empty zip: a folder of only
 	// empty folders, hidden entries and links.
 	require.NoError(t, os.MkdirAll(filepath.Join(lib, "hollow/inner"), 0o755))

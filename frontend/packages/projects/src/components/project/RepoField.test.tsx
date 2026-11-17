@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RepoField, type RepoEntry } from './RepoField';
+import { projectDirectories, primaryPath, RepoField, type RepoEntry } from './RepoField';
 import { NewProjectDialog } from './NewProjectDialog';
 
 const m = vi.hoisted(() => ({ post: vi.fn() }));
@@ -76,4 +76,9 @@ it('creates with the selected directory and explicit primary', async () => {
     await screen.findByText('repo.primary');
     fireEvent.click(screen.getByRole('button', { name: 'project.create' }));
     await waitFor(() => expect(create).toHaveBeenCalledWith({ name: 'Example', goal: '', directories: [{ path: '/picked/repo', workspace_mode: 'worktree' }], primary_repo_path: '/picked/repo' }));
+});
+
+it('treats a project without repos as having no directories, instead of crashing', () => {
+    expect(projectDirectories({ repos: null as never, primary_repo_path: '' })).toEqual([]);
+    expect(primaryPath({ repos: null as never, primary_repo_path: '' })).toBe('');
 });

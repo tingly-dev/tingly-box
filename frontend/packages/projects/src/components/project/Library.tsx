@@ -125,7 +125,18 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                     setPreview(toPreview(n));
                 }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
-                renderMeta={(n) => n.kind === 'file' ? `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}` : null}
+                renderMeta={(n) => {
+                    // Scratch (a thread's TMPDIR under .tmp/) is labelled, but only down
+                    // to the thread folder: everything below it is scratch anyway, and
+                    // repeating the label on every level is noise.
+                    const depth = n.path.split('/').length;
+                    const scratch = n.origin === 'scratch' && depth <= 2 ? t('library.scratch') : null;
+                    if (n.kind === 'file') {
+                        const meta = `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}`;
+                        return scratch ? `${scratch} · ${meta}` : meta;
+                    }
+                    return scratch;
+                }}
                 renderActions={(n, { tabIndex }) => n.kind === 'dir' ? (
                     <Tooltip title={t('library.downloadZip')}>
                         <IconButton size="small" tabIndex={tabIndex} aria-label={t('library.downloadZip')} onClick={() => void downloadZip(n)}><Download fontSize="small" /></IconButton>

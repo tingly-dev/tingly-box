@@ -43,11 +43,18 @@ func (l Layout) OutputDir(projectID, slug string) string {
 
 // TmpDir is a thread's scratch directory, used as its TMPDIR. It sits inside
 // the library, so the thread may write there and send_file may read from it,
-// but under a dot directory so ListLibrary does not show scratch files. It is
-// keyed by thread id (unlike OutputDir's title slug, which can repeat).
+// but under a dot directory; the Library lists it as scratch (see
+// ScratchDir), so what a thread left behind stays visible and reachable.
+// It is keyed by thread id (unlike OutputDir's title slug, which can repeat).
 func (l Layout) TmpDir(projectID, threadID string) string {
 	return filepath.Join(l.LibraryDir(projectID), ".tmp", threadID)
 }
+
+// ScratchDir is the library's dot directory holding the threads' scratch
+// (each thread's TmpDir). It is the one hidden path the library lists and
+// serves — origin "scratch" — so scratch files are not invisible; uploads
+// into it are still refused.
+const ScratchDir = ".tmp"
 
 // ThreadDir is a project thread's working directory: its worktree, or a
 // scratch directory when the project has no repository.
@@ -275,7 +282,9 @@ func (l Layout) ListLibrary(projectID string) ([]LibraryFile, error) {
 			return err
 		}
 		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".") && p != root {
+			// Hidden directories are skipped, except the scratch subtree at
+			// the root (ScratchDir, a thread's TMPDIR).
+			if strings.HasPrefix(d.Name(), ".") && p != root && !(p == filepath.Join(root, ScratchDir) || strings.HasPrefix(p, filepath.Join(root, ScratchDir)+string(filepath.Separator))) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -289,6 +298,9 @@ func (l Layout) ListLibrary(projectID string) ([]LibraryFile, error) {
 		origin := "upload"
 		if strings.HasPrefix(rel, "outputs/") {
 			origin = "output"
+		}
+		if inScratch(rel) {
+			origin = "scratch"
 		}
 		out = append(out, LibraryFile{Path: rel, Size: info.Size(), UpdatedAt: info.ModTime(), Origin: origin})
 		return nil
@@ -324,6 +336,7 @@ type LibraryEntry struct {
 	Kind      string    `json:"kind"`
 	Size      int64     `json:"size"`
 	UpdatedAt time.Time `json:"updated_at"`
-	// Origin is "upload" or "output" (under outputs/, written by a thread).
+	// Origin is "upload" or "output" (under outputs/, written by a thread),
+	// or "scratch" (under ScratchDir/, a thread's TMPDIR).
 	Origin string `json:"origin"`
 }

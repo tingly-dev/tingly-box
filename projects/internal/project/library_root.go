@@ -17,17 +17,18 @@ import (
 // any name that reaches outside the directory, by ".." or by a symlink, and it
 // does so while resolving the name, not before, so a file swapped for a link
 // between a check and the open cannot lead out. On top of that the library has
-// its own policy, checked here: no hidden (dot) segments, no symlinks at all,
-// and only regular files. A link that stays inside the library is also
-// refused, so a thread cannot alias a hidden folder into view; if one is
-// swapped in during a request the Root still keeps the access inside the
-// library.
+// its own policy, checked here: no hidden (dot) segments except the threads'
+// scratch subtree (ScratchDir, listed and served like any other folder so what
+// a thread left in its TMPDIR stays reachable), no symlinks at all, and only
+// regular files. A link that stays inside the library is also refused, so a
+// thread cannot alias a hidden folder into view; if one is swapped in during a
+// request the Root still keeps the access inside the library.
 
 // cleanLibraryRel trims the outer slashes of a library-relative path and
 // refuses what is not a plain relative path inside the library: empty, "." and
-// ".." segments, hidden (dot) segments such as .tmp, NUL bytes, and whatever
-// filepath.IsLocal rejects (reserved names and drive paths on Windows). A
-// leading "/" is dropped, so "/etc" names the library's own etc.
+// ".." segments, hidden (dot) segments — ScratchDir excepted — NUL bytes, and
+// whatever filepath.IsLocal rejects (reserved names and drive paths on
+// Windows). A leading "/" is dropped, so "/etc" names the library's own etc.
 func cleanLibraryRel(rel string) (string, error) {
 	rel = strings.Trim(filepath.ToSlash(rel), "/")
 	if rel == "" {
@@ -36,12 +37,18 @@ func cleanLibraryRel(rel string) (string, error) {
 	if strings.ContainsRune(rel, 0) || !filepath.IsLocal(filepath.FromSlash(rel)) {
 		return "", fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
 	}
-	for _, part := range strings.Split(rel, "/") {
-		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
+	for i, part := range strings.Split(rel, "/") {
+		if part == "" || part == "." || part == ".." || (strings.HasPrefix(part, ".") && !(i == 0 && part == ScratchDir)) {
 			return "", fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
 		}
 	}
 	return rel, nil
+}
+
+// inScratch reports whether a clean library-relative path is the scratch
+// subtree (a thread's TMPDIR).
+func inScratch(rel string) bool {
+	return rel == ScratchDir || strings.HasPrefix(rel, ScratchDir+"/")
 }
 
 // openLibraryRoot opens the project's library directory as a Root. With
@@ -149,7 +156,8 @@ func (l Layout) RemoveLibraryFile(projectID, rel string) error {
 }
 
 // WriteLibraryFile copies src into the library at rel, creating its folders,
-// and returns the bytes written. It refuses a hidden name and any path that
+// and returns the bytes written. It refuses a hidden name — the scratch
+// subtree included: scratch belongs to the threads — and any path that
 // goes through a symlink, so a link a thread left in the library cannot send
 // an upload elsewhere. With exclusive an existing file is an error
 // (fs.ErrExist); otherwise it is replaced.
@@ -158,7 +166,7 @@ func (l Layout) WriteLibraryFile(projectID, rel string, src io.Reader, exclusive
 	if err != nil {
 		return 0, err
 	}
-	if rel == "" {
+	if rel == "" || inScratch(rel) {
 		return 0, fmt.Errorf("%w %q", ErrInvalidLibraryPath, rel)
 	}
 	root, err := l.openLibraryRoot(projectID, true)
@@ -192,10 +200,10 @@ func (l Layout) WriteLibraryFile(projectID, rel string, src io.Reader, exclusive
 
 // ListLibraryDir lists one level of the library: rel is a library-relative
 // directory ("" is the root). Folders come first, then files, each by name.
-// Hidden (dot) entries, such as the threads' .tmp, and symlinks are left out,
-// and a hidden, escaping or symlinked rel is refused, so the tree never leads
-// outside the library or into scratch space. A library that does not exist yet
-// is empty.
+// Hidden (dot) entries are left out, except the scratch subtree (ScratchDir
+// and everything under it), and symlinks are left out; a hidden, escaping or
+// symlinked rel is refused, so the tree never leads outside the library. A
+// library that does not exist yet is empty.
 func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
 	rel, err := cleanLibraryRel(rel)
 	if err != nil {
@@ -232,7 +240,7 @@ func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
 	}
 	out := []LibraryEntry{}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".") {
+		if strings.HasPrefix(e.Name(), ".") && !(e.Name() == ScratchDir && rel == "") && !inScratch(rel) {
 			continue
 		}
 		fi, err := root.Lstat(filepath.Join(name, e.Name()))
@@ -250,6 +258,9 @@ func (l Layout) ListLibraryDir(projectID, rel string) ([]LibraryEntry, error) {
 			entry.Size = fi.Size()
 		} else {
 			continue
+		}
+		if inScratch(p) {
+			entry.Origin = "scratch"
 		}
 		if p == "outputs" || strings.HasPrefix(p, "outputs/") {
 			entry.Origin = "output"
