@@ -1,12 +1,12 @@
 # VModel scenario and gateway registration
 
-Status: implemented in stacked PR #2621, based on #2618. The shared definition
-and standalone runtime contract is owned by
+Status: implemented in PR #2621, rebased onto main after #2618 and #2624.
+The shared definition and standalone runtime contract is owned by
 [`vmodel-definitions.md`](./vmodel-definitions.md); this document owns the
 additional gateway lifecycle and UI behavior. See [`vmodel.md`](./vmodel.md)
 for the full design index.
 
-## Decision and PR boundary
+## Decision and implementation boundary
 
 Expose file-defined VModels through tb's existing scenario, provider and rule
 mechanisms. The process still runs the shared VModel HTTP runtime, but also
@@ -21,8 +21,9 @@ conversion, rule flags, routing, logging and usage handling.
 | Scenario, frontend and management API integration | Absent | Implemented |
 
 The CLI examples in the base definition design describe #2618. With this
-integration applied, start tb first or add `--standalone`. Export still exits
-without gateway registration. No Python SDK or separate `serve` command is
+integration applied, start tb first or add `--standalone`. Definitions use
+the strict id/kind contract from #2624; no legacy parsing is reintroduced.
+Export still exits without gateway registration. No Python SDK or separate `serve` command is
 introduced.
 
 ## Scenario and UI

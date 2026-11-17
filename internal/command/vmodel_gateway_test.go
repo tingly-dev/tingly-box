@@ -27,7 +27,7 @@ func TestVModelGatewayIntegration(t *testing.T) {
 	gateway := httptest.NewServer(gatewayServer.GetRouter())
 	defer gateway.Close()
 	beforeRules, beforeProviders := len(cfg.GetRequestConfigs()), len(cfg.ListProviders())
-	files := []string{vmodelConfigFile(t, "id: injected-one\ncontent: gateway response\n"), vmodelConfigFile(t, "id: injected-two\ncontent: second response\n")}
+	files := []string{vmodelConfigFile(t, "id: injected-one\nkind: mock\nmock: {content: gateway response}\n"), vmodelConfigFile(t, "id: injected-two\nkind: mock\nmock: {content: second response}\n")}
 	handler, ids, err := (&VModelCmdKong{Config: files}).handler()
 	if err != nil {
 		t.Fatal(err)

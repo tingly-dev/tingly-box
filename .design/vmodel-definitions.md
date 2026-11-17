@@ -1,11 +1,12 @@
 # VModel definitions and shared runtime
 
-Status: implemented in PR #2618. This document owns the file contract and
+Status: implemented in #2618, with strict-format cleanup in #2624.
+This document owns the file contract and
 execution boundaries. Field examples and Go usage live in
 [`vmodel/spec/README.md`](../vmodel/spec/README.md); the design index is
 [`vmodel.md`](./vmodel.md).
 
-With stacked #2621 applied, gateway attachment becomes the CLI default and
+With #2621 applied, gateway attachment becomes the CLI default and
 `--standalone` selects the base lifecycle below. See
 [`vmodel-scenario.md`](./vmodel-scenario.md) for that integration contract.
 
@@ -154,7 +155,7 @@ requires a binary with that behavior registered.
 ## Scope and verification
 
 Scenario routing, the VModel UI/power-up and automatic gateway registration
-belong to stacked PR #2621. They are not required by this file/runtime contract.
+belong to PR #2621. They are not required by this file/runtime contract.
 A Python construction SDK remains future work.
 
 Validation covers strict schema rejection and normalization, catalog round trips, fresh
