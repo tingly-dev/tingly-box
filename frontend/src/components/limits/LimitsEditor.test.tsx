@@ -4,6 +4,7 @@ import LimitsEditor, {compactLimits, isEmptyLimits} from './LimitsEditor';
 import {buildRuleUpdatePayload} from '@/components/rule-card/ruleUpdatePayload';
 import type {ConfigRecord} from '@/components/RoutingGraphTypes';
 
+vi.mock('@/services/api', () => ({api: {getLimitsStatus: vi.fn().mockResolvedValue({success: true, data: []})}}));
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({t: (key: string) => key}),
 }));
@@ -192,5 +193,24 @@ describe('LimitsBadge tooltip', () => {
         fireEvent.mouseOver(screen.getByTestId('limits-badge'));
         expect(await screen.findByTestId('limits-badge-tooltip', {}, {timeout: 3000})).toBeTruthy();
         expect(outer).not.toHaveBeenCalled();
+    });
+});
+
+describe('Account limits section (provider dialogs)', () => {
+    it('is behind Advanced, closed by default, and says how many caps are set', async () => {
+        const {default: AccountLimitsSection} = await import('./AccountLimitsSection');
+        const {rerender} = render(<AccountLimitsSection providerUuid="p1" value={{}} onChange={vi.fn()}/>);
+        const toggle = screen.getByRole('button', {name: /common.advanced/});
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByTestId('limits-editor')).toBeNull();
+        expect(screen.queryByText('common.advancedCustomized')).toBeNull();
+
+        // set caps stay visible on the closed header without forcing it open
+        rerender(<AccountLimitsSection providerUuid="p1" value={{max_concurrent: 4, max_tokens: 2_000_000, quota_percent: 95}} onChange={vi.fn()}/>);
+        expect(screen.getByText('common.advancedCustomized')).toBeTruthy();
+        expect(screen.queryByTestId('limits-editor')).toBeNull();
+
+        fireEvent.click(toggle);
+        expect(screen.getByTestId('limits-editor')).toBeTruthy();
     });
 });

@@ -24,3 +24,9 @@ export function summarizeLimits(l: Limits | undefined | null, t: T): string[] {
     if (l.quota_percent) lines.push(t('limits.summary.quota', {n: l.quota_percent}));
     return lines;
 }
+
+/** How many caps are configured (concurrency, requests, tokens, steer-away, quota stop). */
+export function countLimits(l: Limits | undefined | null): number {
+    if (!l) return 0;
+    return [l.max_concurrent, l.max_requests, l.max_tokens, l.soft_percent, l.quota_percent].filter(Boolean).length;
+}
