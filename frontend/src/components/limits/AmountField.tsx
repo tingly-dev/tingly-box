@@ -1,4 +1,5 @@
-import {TextField} from '@mui/material';
+import {Box, InputAdornment, TextField, Tooltip} from '@mui/material';
+import {InfoOutlined as InfoOutlinedIcon} from '@/components/icons';
 import {useEffect, useState} from 'react';
 import {formatAmount, parseAmount} from './amount';
 
@@ -7,6 +8,8 @@ interface AmountFieldProps {
     value?: number;
     onChange: (next: number | undefined) => void;
     disabled?: boolean;
+    /** What the number counts, spelled out on hover of an info icon inside the field. */
+    info?: {label: string; text: string};
 }
 
 /**
@@ -15,7 +18,7 @@ interface AmountFieldProps {
  * settles to the canonical form (2M) on blur. Unreadable text flags the field
  * and leaves the last good value alone.
  */
-export default function AmountField({label, value, onChange, disabled}: AmountFieldProps) {
+export default function AmountField({label, value, onChange, disabled, info}: AmountFieldProps) {
     const [draft, setDraft] = useState(formatAmount(value));
     const parsed = parseAmount(draft);
 
@@ -39,7 +42,22 @@ export default function AmountField({label, value, onChange, disabled}: AmountFi
                 else if (p.kind === 'empty') onChange(undefined);
             }}
             onBlur={() => setDraft(formatAmount(value))}
-            slotProps={{htmlInput: {inputMode: 'decimal', 'aria-label': label}}}
+            slotProps={{
+                htmlInput: {inputMode: 'decimal', 'aria-label': label},
+                input: info ? {
+                    endAdornment: (
+                        <InputAdornment position="end">
+                            {/* The app's field-info idiom (see the agent config panels): a quiet icon, tooltip on hover. */}
+                            <Tooltip placement="top" arrow title={<Box sx={{whiteSpace: 'pre-line'}}>{info.text}</Box>}>
+                                <InfoOutlinedIcon
+                                    tabIndex={0} aria-label={info.label} data-testid="amount-info"
+                                    sx={{fontSize: 14, color: 'text.disabled', cursor: 'help'}}
+                                />
+                            </Tooltip>
+                        </InputAdornment>
+                    ),
+                } : undefined,
+            }}
         />
     );
 }

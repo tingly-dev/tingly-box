@@ -73,6 +73,7 @@ export default function LimitsEditor({value, onChange, showQuota = false, showSo
                 <AmountField
                     disabled={disabled} label={t('limits.maxTokens')}
                     value={v.max_tokens} onChange={(n) => set({max_tokens: n})}
+                    info={{label: t('limits.maxTokensInfoLabel'), text: t('limits.maxTokensInfo')}}
                 />
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{mt: -1}}>{t('limits.maxTokensHint')}</Typography>

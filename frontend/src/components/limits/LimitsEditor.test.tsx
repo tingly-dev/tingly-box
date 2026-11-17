@@ -144,6 +144,22 @@ describe('LimitsBadge as a control', () => {
     });
 });
 
+describe('token count info icon', () => {
+    it('sits in the Max tokens field of every editor and spells out how tokens are counted on hover', async () => {
+        const {default: PolicyLimitsFields} = await import('./PolicyLimitsFields');
+        const {unmount} = render(<LimitsEditor value={{}} onChange={vi.fn()} showQuota/>);
+        const icon = screen.getByLabelText('limits.maxTokensInfoLabel');
+        expect(icon.closest('[data-testid="limits-editor"]')).toBeTruthy();
+        fireEvent.mouseOver(icon);
+        expect(await screen.findByText('limits.maxTokensInfo', {}, {timeout: 3000})).toBeTruthy();
+        unmount();
+
+        // person / team editors reuse the same editor, so the same icon
+        render(<PolicyLimitsFields value={{limits: {}, overflow: 'queue'}} onChange={vi.fn()}/>);
+        expect(screen.getByLabelText('limits.maxTokensInfoLabel')).toBeTruthy();
+    });
+});
+
 describe('amount parsing', () => {
     it('reads counts with K / M suffixes and writes them back short', async () => {
         const {parseAmount, formatAmount} = await import('./amount');
