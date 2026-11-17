@@ -3881,6 +3881,28 @@
         }
       }
     },
+    "/api/v1/info/version/update": {
+      "post": {
+        "tags": [
+          "info"
+        ],
+        "summary": "Install the latest version over this npm global install and restart into it",
+        "description": "Install the latest version over this npm global install and restart into it",
+        "operationId": "apiV1InfoVersionUpdatePost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfUpdateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/limit-policies": {
       "get": {
         "tags": [
@@ -5912,8 +5934,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List library files (uploads and thread outputs)",
-        "description": "List library files (uploads and thread outputs)",
+        "summary": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
+        "description": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
         "operationId": "apiV1ProjectsIdLibraryGet",
         "parameters": [
           {
@@ -5976,8 +5998,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
-        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
         "operationId": "apiV1ProjectsIdLibraryArchiveGet",
         "parameters": [
           {
@@ -6100,8 +6122,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path",
-        "description": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
         "operationId": "apiV1ProjectsIdLibraryTreeGet",
         "parameters": [
           {
@@ -16152,6 +16174,9 @@
             "description": "Field release_url",
             "example": "https://github.com/tingly-dev/tingly-box/releases"
           },
+          "self_update": {
+            "$ref": "#/components/schemas/SelfUpdateSupport"
+          },
           "should_notify": {
             "type": "boolean",
             "description": "Field should_notify",
@@ -21332,6 +21357,78 @@
             }
           }
         }
+      },
+      "SelfUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SelfUpdateResult"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "output": {
+            "type": "string",
+            "description": "Field output"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "SelfUpdateResult": {
+        "type": "object",
+        "properties": {
+          "restart_required": {
+            "type": "boolean",
+            "description": "Field restart_required",
+            "example": false
+          },
+          "restarting": {
+            "type": "boolean",
+            "description": "Field restarting",
+            "example": true
+          },
+          "version": {
+            "type": "string",
+            "description": "Field version",
+            "example": "0.261001.1"
+          }
+        },
+        "required": [
+          "version",
+          "restarting",
+          "restart_required"
+        ]
+      },
+      "SelfUpdateSupport": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Field reason",
+            "example": "started via npx; run the npx command with the new version"
+          },
+          "supervised": {
+            "type": "boolean",
+            "description": "Field supervised",
+            "example": false
+          },
+          "supported": {
+            "type": "boolean",
+            "description": "Field supported",
+            "example": true
+          }
+        },
+        "required": [
+          "supported",
+          "supervised"
+        ]
       },
       "SendRequest": {
         "type": "object",

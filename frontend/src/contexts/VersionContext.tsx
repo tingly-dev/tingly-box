@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { api } from '../services/api';
 
+// Whether the update panel can apply an available update itself; see the
+// backend's SelfUpdateSupport (only sent when an update is available).
+export interface SelfUpdateSupport {
+    supported: boolean;
+    reason?: string;
+    supervised: boolean;
+}
+
 interface VersionContextType {
     currentVersion: string;
     latestVersion: string | null;
@@ -12,6 +20,7 @@ interface VersionContextType {
     // that offers several equivalent methods (e.g. the update panel) default
     // to whichever one matches how the user is already running Tingly Box.
     launchSource: string | null;
+    selfUpdate: SelfUpdateSupport | null;
     checking: boolean;
     error: string | null;
     checkForUpdates: (manual?: boolean) => Promise<void>;
@@ -41,6 +50,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
     const [shouldNotify, setShouldNotify] = useState(false);
     const [releaseURL, setReleaseURL] = useState<string | null>(null);
     const [launchSource, setLaunchSource] = useState<string | null>(null);
+    const [selfUpdate, setSelfUpdate] = useState<SelfUpdateSupport | null>(null);
     const [checking, setChecking] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
@@ -58,6 +68,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
                 setShouldNotify(result.data.should_notify);
                 setReleaseURL(result.data.release_url);
                 setLaunchSource(result.data.launch_source || null);
+                setSelfUpdate(result.data.self_update || null);
             }
         } catch (err) {
             console.error('Failed to check for updates:', err);
@@ -113,6 +124,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
                 shouldNotify,
                 releaseURL,
                 launchSource,
+                selfUpdate,
                 checking,
                 error,
                 checkForUpdates,

@@ -50,6 +50,9 @@ type LatestVersionInfo struct {
 	// The update panel uses it to default its method picker (npx/npm/docker)
 	// to whichever channel matches this install.
 	LaunchSource string `json:"launch_source" example:"npx"`
+	// SelfUpdate reports whether the update panel can apply HasUpdate itself
+	// (POST /info/version/update). Only present when HasUpdate is true.
+	SelfUpdate *SelfUpdateSupport `json:"self_update,omitempty"`
 }
 
 // LatestVersionResponse is the JSON envelope for GET /info/version/check.

@@ -34,4 +34,10 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithDescription("Check if a newer version is available on GitHub"),
 		swagger.WithResponseModel(LatestVersionResponse{}),
 	)
+
+	apiV1.POST("/info/version/update", h.ApplyUpdate,
+		swagger.WithTags("info"),
+		swagger.WithDescription("Install the latest version over this npm global install and restart into it"),
+		swagger.WithResponseModel(SelfUpdateResponse{}),
+	)
 }
