@@ -13903,10 +13903,6 @@
             "description": "Whether provider requires no API key",
             "example": false
           },
-          "openai_endpoint_mode": {
-            "type": "string",
-            "description": "Field openai_endpoint_mode"
-          },
           "proxy_url": {
             "type": "string",
             "description": "HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)",

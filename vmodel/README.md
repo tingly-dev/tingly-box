@@ -151,25 +151,20 @@ recorded responses, sequences, decisions, transforms and named Go behavior.
 The service and matrix commands load the same file:
 
 ```sh
-tb start
 tb vmodel --config vmodel/testdata/unified.yaml
 go run ./cli/harness matrix --mode single --config vmodel/testdata/unified.yaml
 ```
 
-The VModel listener picks a free local port by default. It reports direct
-OpenAI/Anthropic/Google URLs and, after successful registration in tb, a
-`gateway_base_url` under `/tingly/vmodel`. Use that gateway URL with tb's model
-token for normal routing, rule flags, logging and usage. `--standalone` serves
-the direct endpoints without registering in tb or opening its database.
+The standalone VModel listener picks a free local port by default and reports
+its direct OpenAI/Anthropic/Google URLs. It runs without starting a tb gateway,
+opening its database, or registering providers/rules. Point an SDK directly at
+the printed protocol URL; any required API key can be a nonempty placeholder.
 `--json` emits one readiness record; `GET /healthz` reports service readiness.
-
-The injected rules appear in **Scenarios → VModel**. The existing VModel
-power-up controls both this page and the virtual-credentials navigation entry,
-keeping the user's saved visibility choice. Registration uses the running
-server's authenticated management APIs. Existing model-name collisions fail
-without overwriting rules, partial registration rolls back, and normal exit
-removes this process's temporary rules/providers. Forced termination or an
-unavailable gateway can leave entries for manual cleanup.
+All configured IDs share one listener. OpenAI uses the printed `<url>/v1`
+base; Anthropic uses `<url>` and appends `/v1/messages`. Multiple clients can
+use those same IDs and address. The fixed tb `/tingly/vmodel` endpoint serves
+its builtin catalog directly; CLI definitions remain at the CLI's own address.
+Neither path automatically creates providers or rules.
 
 ```yaml
 id: hello

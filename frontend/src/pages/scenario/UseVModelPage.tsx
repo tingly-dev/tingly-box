@@ -6,7 +6,7 @@ const vmodel: AgentPageDescriptor = {
     tooltipKey: 'layout.virtualModelsTooltip',
     connection: { compact: true, apiKeyRow: true },
     setup: { kind: 'none' },
-    install: { installCommand: 'tb vmodel --config model.yaml' },
+    directModels: true,
 };
 
 const UseVModelPage: React.FC = () => <AgentPage agent={vmodel} />;

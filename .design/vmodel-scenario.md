@@ -1,120 +1,69 @@
-# VModel scenario and gateway registration
+# VModel fixed address and independent CLI instances
 
-Status: implemented in PR #2621, rebased onto main after #2618 and #2624.
-The shared definition and standalone runtime contract is owned by
-[`vmodel-definitions.md`](./vmodel-definitions.md); this document owns the
-additional gateway lifecycle and UI behavior. See [`vmodel.md`](./vmodel.md)
-for the full design index.
+Status: implemented in PR #2621, on top of #2618/#2624. The canonical file
+contract is owned by [vmodel-definitions.md](./vmodel-definitions.md).
 
-## Decision and implementation boundary
+## Decision
 
-Expose file-defined VModels through tb's existing scenario, provider and rule
-mechanisms. The process still runs the shared VModel HTTP runtime, but also
-registers temporary gateway resources so requests exercise normal protocol
-conversion, rule flags, routing, logging and usage handling.
+Use one listener address per VModel instance and select models by request
+`model` ID. Many clients can share the same address and catalog. Starting or
+stopping a CLI process never creates providers or routing rules in tb.
 
-| Behavior | #2618 | #2621 |
+| Entry point | Catalog | Lifetime |
 | --- | --- | --- |
-| `tb vmodel --config model.yaml` | Standalone provider | Provider plus registration in the running tb instance |
-| Direct-only mode | Default behavior | Explicit `--standalone` |
-| Format, loader, export and harness adapters | Implemented | Reused unchanged |
-| Scenario, frontend and management API integration | Absent | Implemented |
+| tb `/tingly/vmodel` | Existing builtin VModels | tb process |
+| `tb vmodel --config models.yaml` | Definitions in the supplied files | Independent CLI process |
 
-The CLI examples in the base definition design describe #2618. With this
-integration applied, start tb first or add `--standalone`. Definitions use
-the strict id/kind contract from #2624; no legacy parsing is reintroduced.
-Export still exits without gateway registration. No Python SDK or separate `serve` command is
-introduced.
+The former automatic-registration approach has been removed, including its
+management client, collision preflight, rollback and shutdown cleanup. There
+are no temporary persisted resources, leases or cleanup obligations. Explicit
+user-managed providers/rules elsewhere in tb keep their ordinary behavior.
 
-## Scenario and UI
+## Fixed tb endpoint
 
-The internal scenario ID is `vmodel`; the gateway prefix is `/tingly/vmodel`.
-It accepts OpenAI and Anthropic client protocols through the normal scenario
-descriptor and conversion pipeline. Model names remain definition IDs, which
-become request-model names in the generated rules. This differs from the
-existing `/virtual/*` built-in model endpoints and does not replace them.
+`/tingly/vmodel/v1/models` lists the OpenAI builtin catalog. Chat and Responses
+use `/tingly/vmodel/v1/chat/completions` and `/tingly/vmodel/v1/responses`;
+Anthropic uses `/tingly/vmodel/v1/messages`. Requests name a model ID directly.
+These routes reuse the builtin virtualserver handlers and tb model-token auth,
+without needing enabled providers or model routing rules.
 
-The frontend route is `/agent/vmodel`, using the common `AgentPage` with
-connection credentials, model routing and a `tb vmodel --config model.yaml`
-startup hint. The existing Virtual Models power-up controls both the scenario
-navigation entry and the virtual-model Credentials entry through the same
-`vmodel` visibility key. It is hidden by default; existing visibility choices
-are preserved without a defaults-version bump. This is a UI visibility switch,
-not a service stop or authorization control: hiding it does not remove
-providers, rules or running VModel processes.
+This is a direct model endpoint like the existing `/virtual/openai` and
+`/virtual/anthropic` routes, which remain available. It does not perform gateway
+provider selection, rule flags, plugins or gateway usage accounting. Server
+HTTP access logging still applies. For full gateway behavior, users can
+explicitly configure a virtual provider and rules through the usual features.
+The `vmodel` scene does not allow rule binding.
 
-## Registration lifecycle
+## CLI address and model IDs
 
-```text
-tb vmodel
-  → find the running tb instance for the selected config directory
-  → load definitions and start the standalone HTTP listener
-  → check existing vmodel request-model rules for collisions
-  → read the listener's protocol-specific model lists
-  → create temporary providers, then active per-model rules
-  → emit readiness, including gateway_base_url and scenario
-  → serve until shutdown
-  → delete owned rules, then owned providers
-```
+`tb vmodel --config models.yaml --json` reports the root URL, protocol base
+URLs and model IDs after the listener starts. OpenAI uses `<url>/v1`;
+Anthropic uses `<url>` (its SDK appends `/v1/messages`). Both reach the same
+listener and select from the same definitions by ID. Protocol capabilities
+remain definition-specific. Existing protocol-prefixed listener aliases remain
+available, but the readiness output uses the common root.
 
-Discovery uses the config-directory lock and runtime port. Management requests
-use the user token read from that configuration and authenticated HTTP APIs;
-the subprocess never opens the gateway SQLite database. Model clients use the
-normal model credentials shown in the scenario page, not the management token.
-Readiness is emitted after registration succeeds. Attached JSON readiness adds
-`gateway_base_url: http://127.0.0.1:<tb-port>/tingly/vmodel` and
-`scenario: vmodel` to the direct-listener fields.
+Repeated `--config` arguments load multiple definitions into one instance;
+IDs must be unique there. Multiple clients share an instance. Independent
+instances bind different ports (`0` chooses a free port; `--port` fixes one),
+and can reuse IDs without conflict. No running tb gateway is required.
+`--standalone` is unnecessary and has been removed. Export remains unchanged.
 
-Resources are ordinary providers and rules created through the existing APIs:
-`/api/v2/providers` and `/api/v1/rule`. Names/descriptions contain a unique
-process-instance identifier; cleanup retains the exact returned UUIDs. Each
-rule has one selected provider service and preserves the model ID. Existing
-rules with the same scenario/request-model cause startup to fail instead of
-being replaced. The preflight check is not an atomic reservation against
-concurrent CLI starts.
+Custom CLI definitions are not automatically published at the fixed tb
+endpoint. Clients use that instance's printed URL and IDs. Closing the process
+closes its listener and leaves no gateway configuration behind.
 
-## Protocol selection
+## Navigation
 
-Registration reads model capabilities from the running listener instead of
-assuming all definitions support both Chat and Responses. Shared models prefer
-OpenAI, then Anthropic, then Google as available. OpenAI providers are grouped
-by `openai_endpoint_mode` (`both`, `chat`, `responses`); this field is carried
-through the provider create/update API and OpenAPI schema. Responses-only
-recordings therefore stay on their supported upstream endpoint. Anthropic
-and Google providers use their respective direct base URLs. A model with
-multiple capabilities receives one gateway rule, not one rule per protocol.
-
-Native-only decision definitions stay accessible through the direct runtime;
-they are not exposed as chat gateway rules. Loading a definition does not
-grant additional protocol capabilities or turn captured wire data into
-another format.
-
-## Failure and cleanup semantics
-
-If registration fails partway, delete resources already created in reverse
-order (rules before providers), and fail startup. On normal interrupt/SIGTERM,
-the same cleanup runs with its own bounded context, so canceled serving
-contexts do not prevent deletion. Cleanup errors are returned rather than
-hidden; deleting an already-absent resource is tolerated. The standalone HTTP
-listener is closed with the process lifecycle as well.
-
-This is temporary-resource cleanup, not a lease/reconciliation service. A
-forced kill or unavailable gateway can leave resources behind; those require
-manual removal. The CLI does not overwrite user rules, auto-enable the UI
-power-up, or persist definitions into a new gateway model store.
+The scene page lives at `/agent/vmodel` and shows the fixed URL and model API
+credentials. It does not offer rule editing, plugins, gateway request status
+or gateway logs for these direct calls. Credentials remains at
+`/credentials/virtual-models`; the Power-up still links there. The same
+visibility key shows/hides both entries, without starting/stopping services.
 
 ## Verification
 
-- Scenario registry and frontend tests cover protocol families, navigation and
-  the shared visibility toggle.
-- CLI/gateway tests cover registration, collisions, partial rollback, cleanup,
-  protocol-specific provider selection and readiness.
-- A real tb process plus a VModel process verifies default injection, Chat and
-  Anthropic requests, SSE, duplicate-ID rejection and resource removal after
-  shutdown.
-- `--standalone` retains the direct provider path and the same file/harness
-  contract from #2618.
-
-Implementation: `internal/command/vmodel_gateway.go`,
-`internal/command/vmodel.go`, `internal/typ/scenario_registry.go`, provider
-management API types/handlers, and the frontend scenario registry/AgentPage.
+Direct-route tests cover authentication, model listing and ID selection,
+Chat/Responses/Anthropic calls, SSE and unchanged provider/rule inventories.
+CLI lifecycle tests cover isolated catalogs, readiness and shutdown. Navigation
+visibility tests and canonical-definition tests remain in their existing suites.

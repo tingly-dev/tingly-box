@@ -159,7 +159,7 @@
 | [rule-flag-testing.md](./rule-flag-testing.md) | Rule-Flag Behavior Testing | 设计说明；局部实施状态见正文 |
 | [vmodel.md](./vmodel.md) | vmodel — design index | 入口索引 |
 | [vmodel-definitions.md](./vmodel-definitions.md) | VModel 统一定义、严格加载与共享运行时 | #2618/#2624 已合并；场景集成在 PR #2621 |
-| [vmodel-scenario.md](./vmodel-scenario.md) | VModel 场景路由、页面联动与临时注册 | #2621 已实现；已变基到包含 #2618/#2624 的 main |
+| [vmodel-scenario.md](./vmodel-scenario.md) | VModel 固定模型入口、页面联动与独立 CLI | #2621 已实现；已变基到包含 #2618/#2624 的 main |
 | [vmodel-benchmark.md](./vmodel-benchmark.md) | vmodel as a shared real-world benchmark | Phase 1–3 已完成 |
 | [vmodel-sequence.md](./vmodel-sequence.md) | Virtual sequence models | 设计说明；局部实施状态见正文 |
 | [vmodel-transport.md](./vmodel-transport.md) | vmodel transport — dispatch virtual providers over HTTP, not in-memory | 内存 listener 已实现；unix socket 未做 |

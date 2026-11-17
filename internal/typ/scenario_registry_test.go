@@ -4,8 +4,8 @@ import "testing"
 
 func TestVModelScenarioDescriptor(t *testing.T) {
 	d, ok := GetScenarioDescriptor(ScenarioVModel)
-	if !ok || !d.AllowRuleBinding || !d.AllowDirectPathUse {
-		t.Fatal("vmodel must support normal rules and scoped paths")
+	if !ok || d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatal("vmodel must expose direct paths without rule binding")
 	}
 	for _, transport := range []ScenarioTransport{TransportOpenAI, TransportAnthropic} {
 		if !ScenarioSupportsTransport(ScenarioVModel, transport) {

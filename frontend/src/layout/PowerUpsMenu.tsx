@@ -108,7 +108,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             icon: <IconFlask sx={iconSx} />,
             name: t('layout.virtualModels'),
             description: t('layout.virtualModelsTooltip'),
-            path: '/agent/vmodel',
+            path: '/credentials/virtual-models',
             enabled: !isHidden('vmodel'),
             onToggle: () => toggleHidden('vmodel'),
         },
