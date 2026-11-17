@@ -490,7 +490,7 @@ jobs:
           ## npm · $VERSION
 
           \`\`\`bash
-          npm install -g tingly-box
+          npm install -g tingly-box@$VERSION
           \`\`\`
 
           ### CLI
@@ -763,7 +763,7 @@ jobs:
             echo "$START"
             if [ "$PUBLISHED_CLI" != 'true' ]; then
               printf '\n## npm · %s\n\n' "$VERSION"
-              printf '```bash\nnpm install -g tingly-box\n```\n\n'
+              printf '```bash\nnpm install -g tingly-box@%s\n```\n\n' "$VERSION"
             fi
             cat << EOF
           ### GUI
