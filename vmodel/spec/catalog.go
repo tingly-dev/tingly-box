@@ -6,9 +6,7 @@ import (
 	"sort"
 
 	"github.com/tingly-dev/tingly-box/vmodel"
-	"github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
-	"github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -115,8 +113,7 @@ func Export(defs []Definition, format string) ([]byte, error) {
 	normalized := make([]Definition, 0, len(defs))
 	seen := map[string]bool{}
 	for _, original := range defs {
-		type plain Definition
-		raw, err := json.Marshal(plain(original))
+		raw, err := json.Marshal(original)
 		if err != nil {
 			return nil, err
 		}
@@ -142,19 +139,4 @@ func Export(defs []Definition, format string) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("export format must be json, yaml or yml")
 	}
-}
-
-// FromOpenAIScenario and FromAnthropicScenario adapt the existing Go builders
-// without discarding tool IDs, arguments or per-protocol completion reasons.
-func FromOpenAIScenario(s openai.MockScenario) Definition {
-	m := openai.NewMockFromScenario(&s).(*openai.MockModel)
-	d := FromMock(m.Spec())
-	d.Protocols = []scenario.ResponseFormat{scenario.FormatOpenAIChat, scenario.FormatOpenAIResponses}
-	return d
-}
-func FromAnthropicScenario(s anthropic.MockScenario) Definition {
-	m := anthropic.NewMockFromScenario(&s).(*anthropic.MockModel)
-	d := FromMock(m.Spec())
-	d.Protocols = []scenario.ResponseFormat{scenario.FormatAnthropic}
-	return d
 }

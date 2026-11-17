@@ -1,4 +1,4 @@
-package scenario_test
+package spec_test
 
 import (
 	"bytes"
@@ -9,16 +9,16 @@ import (
 	"reflect"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark"
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
+	"github.com/tingly-dev/tingly-box/vmodel/spec"
 )
 
 func TestRecordedFixtureFormatsAndReplay(t *testing.T) {
-	yamlData := []byte(`name: recorded
-mock_responses:
+	yamlData := []byte(`id: recorded
+kind: recording
+responses:
   openai_chat:
     body:
       choices: [{message: {role: assistant, content: hello}}]
@@ -29,12 +29,12 @@ expect:
   http_status: 200
   content_equals: hello
 `)
-	js := []byte(`{"name":"recorded","mock_responses":{"openai_chat":{"body":{"choices":[{"message":{"role":"assistant","content":"hello"}}]},"stream":["data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}","data: [DONE]"]}},"expect":{"http_status":200,"content_equals":"hello"}}`)
-	a, err := scenario.DecodeFixture(yamlData)
+	js := []byte(`{"id":"recorded","kind":"recording","responses":{"openai_chat":{"body":{"choices":[{"message":{"role":"assistant","content":"hello"}}]},"stream":["data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}","data: [DONE]"]}},"expect":{"http_status":200,"content_equals":"hello"}}`)
+	a, err := decodeRecording(yamlData)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := scenario.DecodeFixture(js)
+	b, err := decodeRecording(js)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,15 +43,15 @@ expect:
 	if as != bs || !bytes.Equal(ab, bb) || !reflect.DeepEqual(a.MockResponses[scenario.FormatOpenAIChat].Stream(), b.MockResponses[scenario.FormatOpenAIChat].Stream()) {
 		t.Fatal("JSON and YAML differ")
 	}
-	var fixture scenario.Fixture
-	if err := json.Unmarshal(js, &fixture); err != nil {
-		t.Fatal(err)
-	}
-	exported, err := yaml.Marshal(fixture)
+	definitions, err := spec.Decode(js)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reloaded, err := scenario.DecodeFixture(exported)
+	exported, err := spec.Export(definitions, "yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := decodeRecording(exported)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +100,9 @@ expect:
 }
 
 func TestRecordedFixtureErrorsAndRawBody(t *testing.T) {
-	s, err := scenario.DecodeFixture([]byte(`name: error-recording
-mock_responses:
+	s, err := decodeRecording([]byte(`id: error-recording
+kind: recording
+responses:
   anthropic:
     raw_body: '{ "error": {"message":"slow down"} }'
     stream_http_error: 429
@@ -121,15 +122,27 @@ mock_responses:
 		t.Fatalf("error changed: %d %s", w.Code, body)
 	}
 	for _, input := range []string{
-		"name: x", "name: x\nmock_responses:\n  unknown: {body: {}}",
-		"name: x\nmock_responses:\n  anthropic: {status: 600, body: {}}",
-		"name: x\nmock_responses:\n  anthropic: {body: {}, raw_body: text}",
-		"name: x\nmock_responses:\n  anthropic: {stream_http_error: 429, stream: []}",
-		"name: x\nmock_responses:\n  anthropic: {body: {}, typo: 1}",
-		"name: x\nmock_responses:\n  anthropic: {status: 500, stream_http_error: 429, body: {}}",
+		"id: x\nkind: recording", "id: x\nkind: recording\nresponses:\n  unknown: {body: {}}",
+		"id: x\nkind: recording\nresponses:\n  anthropic: {status: 600, body: {}}",
+		"id: x\nkind: recording\nresponses:\n  anthropic: {body: {}, raw_body: text}",
+		"id: x\nkind: recording\nresponses:\n  anthropic: {stream_http_error: 429, stream: []}",
+		"id: x\nkind: recording\nresponses:\n  anthropic: {body: {}, typo: 1}",
+		"id: x\nkind: recording\nresponses:\n  anthropic: {status: 500, stream_http_error: 429, body: {}}",
 	} {
-		if _, err := scenario.DecodeFixture([]byte(input)); err == nil {
+		if _, err := decodeRecording([]byte(input)); err == nil {
 			t.Fatalf("accepted %q", input)
 		}
 	}
+}
+
+func decodeRecording(data []byte) (scenario.Scenario, error) {
+	definitions, err := spec.Decode(data)
+	if err != nil {
+		return scenario.Scenario{}, err
+	}
+	runtime, err := spec.New(definitions)
+	if err != nil {
+		return scenario.Scenario{}, err
+	}
+	return runtime.Scenario(definitions[0].ID)
 }

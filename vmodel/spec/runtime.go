@@ -95,8 +95,7 @@ func NewWithCatalog(defs []Definition, catalog *Catalog) (*Runtime, error) {
 	r := &Runtime{service: virtualserver.NewEmptyService(), definitions: map[string]Definition{}, wire: map[string]scenario.Scenario{}, protocols: map[string]map[scenario.ResponseFormat]bool{}}
 	for _, original := range defs {
 		// Normalize a copy, including nested config, so factories can be reused.
-		type plain Definition
-		raw, err := json.Marshal(plain(original))
+		raw, err := json.Marshal(original)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +146,7 @@ func NewWithCatalog(defs []Definition, catalog *Catalog) (*Runtime, error) {
 			err = addChat(&anthropicAlias{VirtualModel: source, id: d.ID, name: d.Name}, nil)
 		case Recording:
 			var sc scenario.Scenario
-			sc, err = (scenario.Fixture{Name: d.ID, Description: d.Description, MockResponses: d.Responses, Expect: d.Expect, Structural: d.Structural, Tags: d.Tags, SkipTransitive: d.SkipTransitive}).Build()
+			sc, err = scenario.BuildRecording(scenario.Scenario{Name: d.ID, Description: d.Description, Assertions: d.Expect.Assertions(), Structural: d.Structural.Assertions(), Tags: d.Tags, SkipTransitive: d.SkipTransitive}, d.Responses)
 			if err == nil {
 				r.installWire(sc, supported)
 			}

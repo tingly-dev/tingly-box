@@ -30,7 +30,6 @@ type SharedMockSpec struct {
 	Description  string           `json:"description,omitempty" yaml:"description,omitempty"`
 	Content      string           `json:"content,omitempty" yaml:"content,omitempty"`
 	ToolCalls    []ToolCallConfig `json:"tool_calls,omitempty" yaml:"tool_calls,omitempty"`
-	ToolCall     *ToolCallConfig  `json:"tool_call,omitempty" yaml:"tool_call,omitempty"`
 	Delay        time.Duration    `json:"delay,omitempty" yaml:"delay,omitempty"`
 	StreamChunks []string         `json:"stream_chunks,omitempty" yaml:"stream_chunks,omitempty"`
 	// Protocol-native completion reasons; empty values keep each protocol's defaults.
@@ -58,7 +57,7 @@ func SharedDefaultMocks() []SharedMockSpec {
 		{
 			ID:   "ask-user-question",
 			Name: "Ask User Question",
-			ToolCall: &ToolCallConfig{
+			ToolCalls: []ToolCallConfig{{
 				Name: "ask_user_question",
 				Arguments: map[string]interface{}{
 					"question": "Which approach would you prefer?",
@@ -67,13 +66,13 @@ func SharedDefaultMocks() []SharedMockSpec {
 						{"label": "Accurate Mode", "value": "accurate", "description": "Slower but more accurate results"},
 					},
 				},
-			},
+			}},
 			Delay: 100 * time.Millisecond,
 		},
 		{
 			ID:   "ask-confirmation",
 			Name: "Ask Confirmation",
-			ToolCall: &ToolCallConfig{
+			ToolCalls: []ToolCallConfig{{
 				Name: "ask_user_question",
 				Arguments: map[string]interface{}{
 					"question": "Please confirm to proceed:",
@@ -82,16 +81,16 @@ func SharedDefaultMocks() []SharedMockSpec {
 						{"label": "No", "value": "no", "description": "Cancel the action"},
 					},
 				},
-			},
+			}},
 			Delay: 50 * time.Millisecond,
 		},
 		{
 			ID:   "web-search-example",
 			Name: "Web Search Example",
-			ToolCall: &ToolCallConfig{
+			ToolCalls: []ToolCallConfig{{
 				Name:      "web_search",
 				Arguments: map[string]interface{}{"query": "latest AI developments"},
-			},
+			}},
 			Delay: 50 * time.Millisecond,
 		},
 		// Error models - always fail for testing failover and error handling
@@ -197,10 +196,10 @@ func StreamTestMockSpecs() []SharedMockSpec {
 		{
 			ID:   "virtual-stream-test-tool",
 			Name: "Virtual Stream Test (Tool)",
-			ToolCall: &ToolCallConfig{
+			ToolCalls: []ToolCallConfig{{
 				Name:      "stream_test_tool",
 				Arguments: map[string]interface{}{"ok": true},
-			},
+			}},
 			Usage: usage,
 		},
 	}

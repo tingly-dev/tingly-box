@@ -42,7 +42,7 @@ func vmodelConfigFile(t *testing.T, contents string) string {
 }
 
 func TestVModelConfiguredHTTP(t *testing.T) {
-	path := vmodelConfigFile(t, "id: configured\ncontent: configured response\n")
+	path := vmodelConfigFile(t, "id: configured\nkind: mock\nmock: {content: configured response}\n")
 	cmd := VModelCmdKong{Config: []string{path}}
 	handler, ids, err := cmd.handler()
 	if err != nil {
@@ -100,7 +100,7 @@ func TestVModelConfiguredHTTP(t *testing.T) {
 }
 
 func TestVModelConfigValidationAndDefaults(t *testing.T) {
-	path := vmodelConfigFile(t, "id: duplicate\ncontent: hi\n")
+	path := vmodelConfigFile(t, "id: duplicate\nkind: mock\nmock: {content: hi}\n")
 	if _, _, err := (&VModelCmdKong{Config: []string{path, path}}).handler(); err == nil {
 		t.Fatal("accepted duplicate model")
 	}
@@ -118,7 +118,7 @@ func TestVModelConfigValidationAndDefaults(t *testing.T) {
 }
 
 func TestVModelLifecycle(t *testing.T) {
-	path := vmodelConfigFile(t, `{"id":"lifecycle","content":"hello"}`)
+	path := vmodelConfigFile(t, `{"id":"lifecycle","kind":"mock","mock":{"content":"hello"}}`)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reader, writer := io.Pipe()

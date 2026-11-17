@@ -29,10 +29,10 @@ type MockModel struct {
 var _ VirtualModel = (*MockModel)(nil)
 
 // NewMockModel creates a MockModel. StopReason defaults to "stop"
-// (or "tool_use" if ToolCall is set).
+// (or "tool_use" if tool calls are set).
 func NewMockModel(cfg *MockModelConfig) *MockModel {
 	if cfg.StopReason == "" {
-		if len(cfg.Calls()) > 0 {
+		if len(cfg.ToolCalls) > 0 {
 			cfg.StopReason = "tool_use"
 		} else {
 			cfg.StopReason = "stop"
@@ -43,7 +43,7 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 		description = vmodel.DefaultMockDescription
 	}
 	typ := vmodel.VirtualModelTypeStatic
-	if len(cfg.Calls()) > 0 {
+	if len(cfg.ToolCalls) > 0 {
 		typ = vmodel.VirtualModelTypeTool
 	}
 	return &MockModel{
@@ -70,7 +70,7 @@ func (m *MockModel) streamChunks() []string {
 
 // HandleAnthropic returns fixed content from config in Anthropic format.
 func (m *MockModel) HandleAnthropic(_ *protocol.AnthropicBetaMessagesRequest) (VModelResponse, error) {
-	if len(m.cfg.Calls()) > 0 {
+	if len(m.cfg.ToolCalls) > 0 {
 		return m.toolResponse(), nil
 	}
 	return m.staticResponse(), nil
@@ -86,9 +86,9 @@ func (m *MockModel) staticResponse() VModelResponse {
 }
 
 func (m *MockModel) toolResponse() VModelResponse {
-	calls := m.cfg.Calls()
+	calls := m.cfg.ToolCalls
 	text := m.cfg.Content
-	if (text == "" || m.cfg.ToolCall != nil) && len(calls) == 1 {
+	if text == "" && len(calls) == 1 {
 		text = vmodel.ToolCallDisplayContent(calls[0].Arguments)
 	}
 	content := []sdk.BetaContentBlockParamUnion{{OfText: &sdk.BetaTextBlockParam{Text: text}}}

@@ -21,7 +21,8 @@ responses:
 expect:
   http_status: 200
   content_equals: Hello from a recording.
-  finish_reason: stop
+# Completion reasons differ by client protocol (stop/end_turn/completed).
+# Keep the shared expectations on status and content.
 structural:
   http_status: 200
   content_non_empty: true

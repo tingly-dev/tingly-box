@@ -53,8 +53,8 @@ func ToolCallDisplayContent(args map[string]interface{}) string {
 	return ""
 }
 
-// ToolArguments preserves protocol-native arguments when supplied by a legacy
-// scenario; ordinary definitions use the structured arguments object.
+// ToolArguments preserves protocol-native arguments when supplied as raw JSON;
+// definitions may also use a structured arguments object.
 func ToolArguments(tc ToolCallConfig) json.RawMessage {
 	if tc.RawArguments != nil {
 		return append(json.RawMessage(nil), tc.RawArguments...)
@@ -64,14 +64,4 @@ func ToolArguments(tc ToolCallConfig) json.RawMessage {
 		return json.RawMessage(`{}`)
 	}
 	return raw
-}
-
-func (s SharedMockSpec) Calls() []ToolCallConfig {
-	if len(s.ToolCalls) > 0 {
-		return s.ToolCalls
-	}
-	if s.ToolCall != nil {
-		return []ToolCallConfig{*s.ToolCall}
-	}
-	return nil
 }

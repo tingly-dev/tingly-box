@@ -24,10 +24,10 @@ fields. The shared loader accepts both JSON and YAML.
 | `sequence.yaml` | `sequence` | `sequence` |
 | `decision.yaml` | `decision` | `decision` |
 
-The files under `legacy/` preserve the former flat mock and `name` /
-`mock_responses` formats only to exercise import compatibility. They are not
-examples of the current definition contract. New definitions should follow
-the files in this directory and [the definition documentation](../spec/README.md).
+The former legacy fixtures duplicated `model.yaml` and `recorded.yaml` and
+have been removed. Every definition must follow the explicit `id`/`kind`
+contract; there is no legacy-import path. See
+[the definition documentation](../spec/README.md).
 
 Captured client requests and golden wire outputs in other testdata directories
 are protocol inputs/evidence, not VModel definitions, and retain their native

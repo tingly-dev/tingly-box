@@ -61,7 +61,7 @@ const (
 )
 
 // ErrorInjection describes a synthetic failure that a mock virtual model
-// should simulate. Attach one to MockScenario.Error (or MockModelConfig.Error)
+// should simulate. Attach one to SharedMockSpec.Error (or MockModelConfig.Error)
 // and the virtualserver handler honors it without any real upstream
 // involvement.
 //

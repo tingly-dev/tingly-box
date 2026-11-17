@@ -24,10 +24,10 @@ type MockModel struct {
 var _ VirtualModel = (*MockModel)(nil)
 
 // NewMockModel creates a MockModel. FinishReason defaults to "stop"
-// (or "tool_calls" if ToolCall is set).
+// (or "tool_calls" if tool calls are set).
 func NewMockModel(cfg *MockModelConfig) *MockModel {
 	if cfg.FinishReason == "" {
-		if len(cfg.Calls()) > 0 {
+		if len(cfg.ToolCalls) > 0 {
 			cfg.FinishReason = "tool_calls"
 		} else {
 			cfg.FinishReason = "stop"
@@ -38,7 +38,7 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 		description = vmodel.DefaultMockDescription
 	}
 	typ := vmodel.VirtualModelTypeStatic
-	if len(cfg.Calls()) > 0 {
+	if len(cfg.ToolCalls) > 0 {
 		typ = vmodel.VirtualModelTypeTool
 	}
 	return &MockModel{
@@ -65,7 +65,7 @@ func (m *MockModel) streamChunks() []string {
 
 // HandleOpenAIChat returns fixed content from config in OpenAI Chat format.
 func (m *MockModel) HandleOpenAIChat(_ *protocol.OpenAIChatCompletionRequest) (VModelResponse, error) {
-	if len(m.cfg.Calls()) > 0 {
+	if len(m.cfg.ToolCalls) > 0 {
 		return m.toolResponse(), nil
 	}
 	return VModelResponse{
@@ -75,7 +75,7 @@ func (m *MockModel) HandleOpenAIChat(_ *protocol.OpenAIChatCompletionRequest) (V
 }
 
 func (m *MockModel) toolResponse() VModelResponse {
-	calls := m.cfg.Calls()
+	calls := m.cfg.ToolCalls
 	out := make([]VToolCall, 0, len(calls))
 	for i, tc := range calls {
 		id := tc.ID
@@ -88,9 +88,6 @@ func (m *MockModel) toolResponse() VModelResponse {
 		out = append(out, VToolCall{ID: id, Name: tc.Name, Arguments: string(vmodel.ToolArguments(tc))})
 	}
 	content := m.cfg.Content
-	if m.cfg.ToolCall != nil {
-		content = ""
-	} // Legacy singular tool mocks ignored Content.
 	return VModelResponse{Content: content, ToolCalls: out, FinishReason: m.cfg.FinishReason}
 }
 

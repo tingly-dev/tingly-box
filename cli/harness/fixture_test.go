@@ -12,10 +12,10 @@ func TestMatrixFixtureValidation(t *testing.T) {
 	dir := t.TempDir()
 	valid := filepath.Join(dir, "fixture.yaml")
 	noExpect := filepath.Join(dir, "no-expect.json")
-	if err := os.WriteFile(valid, []byte("name: imported\nmock_responses:\n  openai_chat:\n    body: {}\nexpect:\n  http_status: 200\n"), 0600); err != nil {
+	if err := os.WriteFile(valid, []byte("id: imported\nkind: recording\nresponses:\n  openai_chat:\n    body: {}\nexpect:\n  http_status: 200\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(noExpect, []byte(`{"name":"no-expect","mock_responses":{"openai_chat":{"body":{}}}}`), 0600); err != nil {
+	if err := os.WriteFile(noExpect, []byte(`{"id":"no-expect","kind":"recording","responses":{"openai_chat":{"body":{}}}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {

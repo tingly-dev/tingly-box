@@ -34,7 +34,7 @@ expect:
 | --- | --- |
 | `id` | Required model identity; unique within the compiled runtime. |
 | `name`, `description` | Optional display metadata; name defaults to id. |
-| `kind` | Behavior discriminator; the loader can infer it from the behavior block. Canonical examples and exports use it explicitly. |
+| `kind` | Required behavior discriminator; omission is an error. |
 | `protocols` | Optional restriction to supported formats; cannot add a capability the behavior lacks. |
 | `tags` | Optional metadata. |
 | `expect`, `structural` | Optional declarative assertions using the existing check layer. |
@@ -62,7 +62,7 @@ readable strings.
 
 ```text
 JSON/YAML or existing Go values
-  → import adapters → Definition → normalize/validate → spec.Runtime
+  → Definition → normalize/validate → spec.Runtime
       ├ HTTP handler → tb vmodel
       ├ Scenario(id) → protocoltest.Matrix → gateway round trip
       └ Check(id, result) → shared assertions, including native endpoints
@@ -89,7 +89,7 @@ that every model implements every endpoint. Unknown models and unsupported
 protocols return 404. A missing recording mode (stream/nonstream) returns 400;
 there is no fallback to another model, protocol or mode.
 
-Recordings choose structured `body` or exact `raw_body`, and legacy SSE lines
+Recordings choose structured `body` or exact `raw_body`, and SSE lines
 in `stream` or exact `raw_stream`. Each pair is mutually exclusive. Raw SSE
 preserves framing, comments, IDs and CRLFs; serving does not append completion
 frames. `stream_http_error` describes a pre-content HTTP error and must agree
@@ -108,7 +108,7 @@ cases use their HTTP endpoint and `Check` with status/raw-body results instead.
 ```sh
 tb vmodel --config model.yaml --json
 go run ./cli/harness matrix --mode=single --config model.yaml
-tb vmodel --config old-model.json --export normalized.yaml
+tb vmodel --config model.json --export models.yaml
 tb vmodel --export catalog.yaml
 ```
 
@@ -125,21 +125,27 @@ Harness `--config` (`--fixture` alias) uses the identical loader and requires
 the default when no file is supplied. `--config` here is a VModel definition;
 agent/replay live-provider configuration remains a separate contract.
 
-## Existing data migration
+## Completed migration and cleanup
 
-| Existing input | Import into the common contract |
-| --- | --- |
-| Flat `SharedMockSpec` | Identity/metadata plus `kind: mock` and `mock`. |
-| Flat `SequenceConfig` | Identity/metadata plus `kind: sequence` and `sequence`. |
-| `name` / `mock_responses` fixture | Name becomes id when absent; responses become `responses` under `kind: recording`. |
-| Existing Go models/scenarios | `FromMock`, `FromSequence`, `FromFixture`, protocol-scenario adapters, or a named catalog factory. |
-| Captured requests and golden outputs | Remain test inputs/evidence; they do not by themselves define executable model behavior. |
+All model definition examples and executable test definitions use the explicit
+`id`/`kind` envelope. The old `legacy/` examples duplicated canonical examples
+and have been removed. Alternate flat mock/sequence files and
+`name`/`mock_responses` fixtures are rejected; there is no automatic name-to-id
+mapping, kind inference or flat-field promotion.
 
-Canonical examples in `vmodel/testdata` share the id/kind envelope; legacy
-syntax is isolated under `vmodel/testdata/legacy` for compatibility coverage.
-Old Go loading APIs remain available, while export always emits the canonical
-shape. A builtin reference preserves behavior by name and requires a binary
-with that registration; it is not portable executable code.
+`spec.Load` / `spec.Decode` are the only file loaders. Separate mock/fixture
+loaders, fixture file envelopes and protocol-specific `MockScenario`
+constructors have been removed. Common Go mock and sequence structs remain
+runtime behavior configuration; `FromMock` / `FromSequence` supply their
+canonical envelope. Recording compilation uses a shared response builder
+without a second file contract. Single and multiple tool calls both use
+`tool_calls`; singular-field dispatch branches have been deleted.
+
+Protocol requests, golden wire outputs and LB simulation programs keep their
+own contracts: they are inputs/evidence or simulator configuration, not model
+definition files. Named Go factories preserve dynamic behavior that cannot be
+serialized. Export always emits the canonical shape; loading a builtin reference
+requires a binary with that behavior registered.
 
 ## Scope and verification
 
@@ -147,10 +153,10 @@ Scenario routing, the VModel UI/power-up and automatic gateway registration
 belong to stacked PR #2621. They are not required by this file/runtime contract.
 A Python construction SDK remains future work.
 
-Validation covers normalization/legacy import, catalog round trips, fresh
+Validation covers strict schema rejection and normalization, catalog round trips, fresh
 runtime state, exact wire responses, protocol restrictions, native checks and
-CLI lifecycle. The complete harness run on `de0c8275` passed matrix-all, all
+CLI lifecycle. The full harness validation covers matrix-all, all
 four SDK drivers, virtual/vmodel replay, LB, duo including default memory
 checks, routing and catalog checks, plus the harness/protocoltest package
-suites. The run retained registered skips and two existing FP3 recording gaps;
+suites. Registered skips and two existing FP3 recording gaps remain visible;
 live-provider credentials and missing real agent CLIs were outside that run.
