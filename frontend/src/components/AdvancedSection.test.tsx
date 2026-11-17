@@ -8,6 +8,13 @@ vi.mock('react-i18next', () => ({
 
 afterEach(cleanup);
 
+it('can keep its content unmounted until opened', () => {
+    render(<AdvancedSection unmountWhenClosed><span>inner</span></AdvancedSection>);
+    expect(screen.queryByText('inner')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /common.advanced/ }));
+    expect(screen.getByText('inner')).toBeTruthy();
+});
+
 it('starts collapsed even when settings are customised, and expands on click', () => {
     render(<AdvancedSection customizedCount={3}><span>inner</span></AdvancedSection>);
     const toggle = screen.getByRole('button', { name: /common.advanced/ });

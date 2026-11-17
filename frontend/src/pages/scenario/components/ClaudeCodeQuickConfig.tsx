@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
-import { AdvancedSection } from './config/AdvancedSection';
+import { AdvancedSection } from '@/components/AdvancedSection';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
