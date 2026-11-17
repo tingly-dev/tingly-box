@@ -234,6 +234,9 @@ type Thread struct {
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
 	// ArchivedAt hides a folder session from active work without resolving it.
 	ArchivedAt *time.Time `gorm:"index" json:"archived_at,omitempty"`
+	// WorktreeFreedAt is when the thread's worktree was freed (archive). Cwd
+	// still names the old path, so restore can rebuild the worktree there.
+	WorktreeFreedAt *time.Time `json:"worktree_freed_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 }

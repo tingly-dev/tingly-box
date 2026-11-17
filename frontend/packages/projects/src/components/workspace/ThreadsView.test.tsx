@@ -72,3 +72,24 @@ describe('ThreadsView with a working directory\'s groups', () => {
         expect(screen.getByText('none')).toBeInTheDocument();
     });
 });
+
+describe('ThreadsView with the default project groups', () => {
+    it('files an archived thread under its own collapsed group', () => {
+        render(
+            <ThreadsView scope="p1" threads={sessions} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" />,
+        );
+        // The archived group holds the thread, folded until opened.
+        expect(screen.getByRole('region', { name: 'overview.group.archived' })).toBeInTheDocument();
+        expect(screen.getByText('Old rename')).not.toBeVisible();
+    });
+
+    it('gives the board an archived section, apart from the statuses', () => {
+        render(
+            <ThreadsView scope="p1" threads={sessions} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'overview.view.board' }));
+        const archived = screen.getByRole('group', { name: 'overview.group.archived' });
+        expect(within(archived).getByText('Old rename')).toBeInTheDocument();
+        expect(within(screen.getByRole('group', { name: 'overview.group.waiting' })).queryByText('Old rename')).not.toBeInTheDocument();
+    });
+});

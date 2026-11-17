@@ -62,11 +62,11 @@ function Toolbar({ threads, countLabel, onTasks, view, onView }: Pick<Props, 'th
  * a working directory's sessions both draw this; they differ in the groups,
  * the subtitle and the words, never in how the list behaves.
  */
-export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGroup, groups, groupOf = (th) => th.status, subtitle, countLabel, empty }: Props) {
+export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGroup, groups, groupOf = (th) => (th.archived_at ? 'archived' : th.status), subtitle, countLabel, empty }: Props) {
     const { t, i18n } = useTranslation('projects');
     const [view, setView] = useThreadsView();
     const [pinnedIds, togglePin] = usePinnedThreads(scope);
-    const lanes: StatusGroup[] = groups ?? STATUS_ORDER.map((status) => ({ key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved' }));
+    const lanes: StatusGroup[] = groups ?? [...STATUS_ORDER.map((status) => ({ key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved' })), { key: 'archived', label: t('overview.group.archived'), collapsed: true }];
     const rows = threads.map((th) => ({
         id: th.id, group: groupOf(th), title: th.title, selected: th.id === selectedId,
         subtitle: subtitle ? subtitle(th) : <ThreadRequestSubtitle thread={th} />,

@@ -2,7 +2,7 @@
 // way, by id under /threads (.design/projects-sessions.md): a project's worker
 // thread, a project's main thread and a folder thread differ only in what the
 // page offers, never in the route.
-import { api, unwrap, type Attachment } from '../../client';
+import { api, unwrap, type Attachment, type CleanupReport } from '../../client';
 import type { SendMode } from '../Composer';
 
 export interface ThreadOps {
@@ -19,6 +19,10 @@ export interface ThreadOps {
     reopen: () => Promise<unknown>;
     archiveSession: () => Promise<unknown>;
     restoreSession: () => Promise<unknown>;
+    /** What archive (or delete, once archived) would free right now. */
+    cleanup: () => Promise<CleanupReport>;
+    /** Delete an archived thread for good; force needs the branch name back. */
+    deleteThread: (force?: boolean, confirmBranch?: string) => Promise<unknown>;
     /** Release a folder thread to a terminal: the command that resumes it. */
     handoff: () => Promise<string>;
     /** Rename the thread; the renamed thread comes back. */
@@ -41,6 +45,8 @@ export function threadOps(id: string): ThreadOps {
         reopen: () => unwrap(api.POST('/api/v1/threads/{id}/reopen', path)),
         archiveSession: () => unwrap(api.POST('/api/v1/threads/{id}/archive', path)),
         restoreSession: () => unwrap(api.POST('/api/v1/threads/{id}/restore', path)),
+        cleanup: async () => (await unwrap(api.GET('/api/v1/threads/{id}/cleanup', path))).report,
+        deleteThread: (force, confirm_branch) => unwrap(api.DELETE('/api/v1/threads/{id}', { ...path, body: { force, confirm_branch } })),
         handoff: async () => (await unwrap(api.POST('/api/v1/threads/{id}/handoff', path))).command,
         setTitle: (title) => unwrap(api.PUT('/api/v1/threads/{id}/title', { ...path, body: { title } })),
         setAutoAnswer: (auto_answer) => unwrap(api.PUT('/api/v1/threads/{id}/auto-answer', { ...path, body: { auto_answer } })),
