@@ -1,6 +1,7 @@
-name: recorded-hello
+id: recorded-hello
+kind: recording
 description: A recorded Chat response reused by the existing protocol matrix.
-mock_responses:
+responses:
   openai_chat:
     status: 200
     body:
