@@ -133,7 +133,7 @@ export const project = {
         intro: 'Files you add are readable by every thread. Threads without a repository deliver their files here.',
         add: 'Add files', empty: 'No files yet.', download: 'Download', downloadZip: 'Download as zip', copyPath: 'Copy folder path',
         tree: 'Library files', tooLarge: 'This file is too large to preview.', notPreviewable: 'This file can’t be previewed. Download it instead.',
-        previousImage: 'Previous image', nextImage: 'Next image',
+        previousImage: 'Previous image', nextImage: 'Next image', scratch: 'Scratch (TMPDIR)',
     },
     projectSettings: {
         maxRunning: 'Threads running at once',

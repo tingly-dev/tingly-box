@@ -132,10 +132,13 @@ func TestLibraryArchiveRefusesPathsOutsideTheLibrary(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(lib, "real"), 0o755))
 	require.NoError(t, os.Symlink(filepath.Join(lib, "real"), filepath.Join(lib, "reallink")))
 
-	for _, bad := range []string{"..", "../x", "outputs/../..", "outputs/../../x", ".tmp", ".tmp/t1", "outputs/.x", "linkdir", "linkdir/sub", "reallink", "a\x00b"} {
+	for _, bad := range []string{"..", "../x", "outputs/../..", "outputs/../../x", "outputs/.x", "linkdir", "linkdir/sub", "reallink", "a\x00b"} {
 		_, err := l.OpenLibraryArchive("p", bad)
 		assert.ErrorIs(t, err, ErrInvalidLibraryPath, bad)
 	}
+	// The scratch subtree zips like any other folder (its hidden entries inside are skipped).
+	got := archiveOf(t, l, ".tmp/t1")
+	assert.Equal(t, map[string]string{"scratch": "x"}, got)
 	// A leading slash is not absolute: it names the library's own etc.
 	_, err := l.OpenLibraryArchive("p", "/etc")
 	assert.ErrorIs(t, err, fs.ErrNotExist)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -184,15 +185,22 @@ func TestThreadsGetATempDirInTheLibraryInEveryMode(t *testing.T) {
 	waitStatus(t, f.store, s.ID, db.ThreadIdle)
 	requireTmpEnv(t, f.agent.Launches()[2].Env, f.threads.layout.TmpDir(s.ProjectID, s.ID))
 
-	// Scratch files are not listed in the Library tab, send_file still reads them,
-	// and resolving the thread removes the directory.
+	// Scratch files are listed in the Library tab with origin "scratch",
+	// send_file still reads them, and resolving the thread removes the directory.
 	shot := filepath.Join(dir, "shot.png")
 	require.NoError(t, os.WriteFile(shot, []byte("png"), 0o600))
 	files, err := f.threads.layout.ListLibrary(f.project.ID)
 	require.NoError(t, err)
+	var scratched bool
 	for _, lf := range files {
-		assert.NotContains(t, lf.Path, ".tmp")
+		if strings.HasPrefix(lf.Path, ".tmp/") {
+			assert.Equal(t, "scratch", lf.Origin, lf.Path)
+			scratched = true
+		} else {
+			assert.NotContains(t, lf.Path, ".tmp", lf.Path)
+		}
 	}
+	assert.True(t, scratched, "the thread's scratch file is listed")
 	svc := &Service{Store: f.store, Layout: f.threads.layout, Hub: NewHub()}
 	_, err = svc.PublishFile(context.Background(), th.ID, shot, "")
 	require.NoError(t, err)

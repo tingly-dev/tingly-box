@@ -14,6 +14,8 @@ Projects 能开线程（每个线程一个 worktree 和一个 `tp/*` 分支）�
 - 线程没有 delete；只有项目级 `DeleteProjectCascade`（数据库行），且没有 HTTP 入口在用它清盘。
 - Resolve 会清线程的 TMPDIR（`cleanTmp`），但**对大目录经常失败**（见 §2.3）。
 
+**范围决定（用户，2026-11-17）：清理 = 只回收 worktree 本身；library（uploads、outputs、memory）不动，分支保留。** 线程的 TMPDIR（`library/.tmp/<thread>`）属于 library，但它是“resolved 后即删”的既定约定，不是清理新增的动作；它此前不可见也被判定为问题——`.tmp` 子树已在 Library 树里可见、可下载、可删除（`origin: "scratch"`，见 `projects/.design/library-tree.md`），所以 `cleanTmp` 的只读目录 bug 修复（PR 1）不再是“替用户删看不见的东西”。Archive / Delete 的全部安全检查照旧。
+
 ## 2. 现状（只读调查，2026-11-17，本机）
 
 ### 2.1 每个动作实际删了什么
@@ -179,7 +181,7 @@ Delete（只接受已归档线程）：
 
 | PR | 内容 | 验证 |
 |---|---|---|
-| 1 | 修 `cleanTmp`（只读目录）+ 调查已 resolved 线程的残留 TMPDIR 的一次性清理入口；加测试（构造 0555 目录） | Go 单测；本机实测 4.8 GB 目录能删 |
+| 1 | 修 `cleanTmp`（只读目录）+ 调查已 resolved 线程的残留 TMPDIR 的一次性清理入口；加测试（构造 0555 目录）。`.tmp` 在 Library 里可见/可下载/可删除已随本提案先期落地 | Go 单测；本机实测 4.8 GB 目录能删 |
 | 2 | 后端 Archive/Restore（项目线程）：`CleanupReport`、`AddWorktreeExisting`、`WorktreeFreedAt`、路径安全、`ErrThreadArchived` 扩展；API + swagger | 真 git 仓库的集成测试：干净 / 脏 / submodule / 分支被占用 / 运行中 / 崩溃重试；Restore 后 `--resume` |
 | 3 | 前端：线程页和卡片的 Archive / Restore 对话框，Archived 分组；截图（单语言单主题） | `pnpm typecheck/lint/test/build`，mock 模式截图 |
 | 4 | 批量清理 + 项目设置 *Storage*（用量摘要、预览、执行），含积压迁移所需的 GitHub 合并状态补全 | 后端单测 + 本机 dry-run 对照 §2.2 的数字 |

@@ -125,7 +125,15 @@ export function Library({ projectId, refreshKey }: { projectId: string; refreshK
                     setPreview(toPreview(n));
                 }}
                 empty={<Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
-                renderMeta={(n) => n.kind === 'file' ? `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}` : null}
+                renderMeta={(n) => {
+                    // Scratch (a thread's TMPDIR under .tmp/) is labelled, so it is not mistaken for a deliverable.
+                    const scratch = n.origin === 'scratch' ? t('library.scratch') : null;
+                    if (n.kind === 'file') {
+                        const meta = `${formatBytes(n.size)} · ${timeAgo(n.updated_at, i18n.language, true)}`;
+                        return scratch ? `${scratch} · ${meta}` : meta;
+                    }
+                    return scratch;
+                }}
                 renderActions={(n, { tabIndex }) => n.kind === 'dir' ? (
                     <Tooltip title={t('library.downloadZip')}>
                         <IconButton size="small" tabIndex={tabIndex} aria-label={t('library.downloadZip')} onClick={() => void downloadZip(n)}><Download fontSize="small" /></IconButton>
