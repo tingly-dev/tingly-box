@@ -58,7 +58,7 @@ var thinkingLimitsClientLevels = []string{
 // thinkingLimitsRuleLevels are the rule thinking_effort values the UI offers.
 var thinkingLimitsRuleLevels = []string{
 	typ.ThinkingEffortDefault, typ.ThinkingEffortOff, typ.ThinkingEffortLow,
-	typ.ThinkingEffortMedium, typ.ThinkingEffortHigh, typ.ThinkingEffortMax,
+	typ.ThinkingEffortMedium, typ.ThinkingEffortHigh, typ.ThinkingEffortXHigh, typ.ThinkingEffortMax,
 }
 
 var thinkingLimitsSources = []protocol.APIType{
@@ -316,6 +316,9 @@ func checkThinkingLimits(env *TestEnv, c thinkingLimitsCase, model string) []str
 
 	case protocol.TypeOpenAIResponses:
 		checkLimit("max_output_tokens")
+		if c.rule == typ.ThinkingEffortXHigh {
+			want = "high" // the test uses an unverified Responses-compatible host
+		}
 		got := stringField(up, "reasoning", "effort")
 		if got == "none" {
 			got = ""

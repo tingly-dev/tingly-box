@@ -20,6 +20,7 @@ func TestValidateFlagOverlay(t *testing.T) {
 		{"bool ok", FlagOverlay{"skip_usage": raw("true")}, ""},
 		{"string ok", FlagOverlay{"custom_user_agent": raw(`"x/1"`)}, ""},
 		{"enum ok", FlagOverlay{"thinking_effort": raw(`"high"`)}, ""},
+		{"xhigh rule override", FlagOverlay{"thinking_effort": raw(`"xhigh"`)}, ""},
 		{"enum empty is inactive", FlagOverlay{"thinking_effort": raw(`""`)}, ""},
 		{"headers ok", FlagOverlay{"extra_headers": raw(`{"X-A":"1"}`)}, ""},
 		{"multi_enum ok", FlagOverlay{"recording": raw(`"client_request,upstream_request"`)}, ""},

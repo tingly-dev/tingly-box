@@ -161,6 +161,9 @@ type TransformContext struct {
 	// provider-aware behavior.
 	Provider *typ.Provider
 
+	// ruleThinkingEffort records an override separately from client-supplied effort.
+	ruleThinkingEffort typ.ThinkingEffortLevel
+
 	// Extra allows transforms to pass arbitrary data through the chain
 	Extra map[string]interface{}
 }

@@ -3,18 +3,14 @@ import { Box, Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/materia
 import React, { useState } from 'react';
 import {pluginControlStateStyles} from './pluginControlStyles';
 
-// "minimal" and "xhigh" are intentionally left out: outside a handful of the
-// newest OpenAI/Anthropic models they silently collapse onto "low"/"high"/
-// "max" server-side, so offering them as distinct menu choices was mostly a
-// false promise of precision (see .design/rule-flags.md). Rules already
-// persisted with those values keep working — they're just not selectable here.
 export const EFFORT_LEVELS = [
-    { value: '', label: 'By Client', description: "Pass the client's thinking config through unchanged" },
-    { value: 'off', label: 'Off', description: 'Force extended thinking disabled' },
-    { value: 'low', label: 'Low', description: '~4K tokens — Fast' },
-    { value: 'medium', label: 'Medium', description: '~10K tokens — Balanced' },
-    { value: 'high', label: 'High', description: '~20K tokens — Deep' },
-    { value: 'max', label: 'Max', description: '~32K tokens — Max quality' },
+    { value: '', label: 'By Client', description: 'Use the client setting when no rule or scenario override applies' },
+    { value: 'off', label: 'Off', description: 'Request that the model disable thinking' },
+    { value: 'low', label: 'Low', description: 'Light reasoning, about 4K tokens on budget-based models' },
+    { value: 'medium', label: 'Medium', description: 'Balanced reasoning, about 10K tokens on budget-based models' },
+    { value: 'high', label: 'High', description: 'Deep reasoning, about 20K tokens on budget-based models' },
+    { value: 'xhigh', label: 'XHigh', description: 'Uses xhigh where supported. Other models can map it to high, max, or a budget of about 24K tokens.' },
+    { value: 'max', label: 'Max', description: 'Maximum requested effort, about 32K tokens on budget-based models' },
 ] as const;
 
 interface ThinkingEffortControlProps {
@@ -28,9 +24,7 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
 
     const currentLevel = EFFORT_LEVELS.find(l => l.value === value);
     const isActive = value !== '';
-    // A rule can still carry a legacy "minimal"/"xhigh" value that's no longer
-    // in the menu (see EFFORT_LEVELS comment) — show it verbatim rather than
-    // mislabeling an active override as "By Client".
+    // Keep saved values such as "minimal" visible even when absent from the menu.
     const label = currentLevel?.label ?? (isActive ? value : 'By Client');
     const description = currentLevel?.description ?? (isActive ? `${value} (legacy level, no longer offered)` : 'By Client');
 

@@ -220,21 +220,28 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             >
                                 <Stack spacing={1.75}>
                                     {isChatShaped && panelRow('Thinking', (
-                                        <ToggleButtonGroup
-                                            exclusive
-                                            size="small"
-                                            value={effort}
-                                            disabled={updating.thinking_effort}
-                                            onChange={(_, v: string | null) => v !== null && setEffortLevel(v)}
-                                            sx={{ flexWrap: 'wrap' }}
-                                        >
-                                            {EFFORT_LEVELS.map(level => (
-                                                <ToggleButton key={level.value || 'client'} value={level.value} title={level.description}
-                                                    sx={(theme) => pluginToggleSx(theme)}>
-                                                    {level.label}
-                                                </ToggleButton>
-                                            ))}
-                                        </ToggleButtonGroup>
+                                        <Stack spacing={0.5}>
+                                            <ToggleButtonGroup
+                                                exclusive
+                                                size="small"
+                                                value={effort}
+                                                disabled={updating.thinking_effort}
+                                                onChange={(_, v: string | null) => v !== null && setEffortLevel(v)}
+                                                sx={{ flexWrap: 'wrap' }}
+                                            >
+                                                {EFFORT_LEVELS.map(level => (
+                                                    <ToggleButton key={level.value || 'client'} value={level.value} title={level.description}
+                                                        sx={(theme) => pluginToggleSx(theme)}>
+                                                        {level.label}
+                                                    </ToggleButton>
+                                                ))}
+                                            </ToggleButtonGroup>
+                                            {effort === 'xhigh' && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {EFFORT_LEVELS.find(level => level.value === effort)?.description}
+                                                </Typography>
+                                            )}
+                                        </Stack>
                                     ))}
                                     {isChatShaped && panelRow('Vision Proxy', (
                                         <VisionProxyControl

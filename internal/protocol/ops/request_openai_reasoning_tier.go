@@ -1,11 +1,42 @@
 package ops
 
 import (
+	"strings"
+
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
 )
+
+// OpenAIXHighEffort resolves an explicit xhigh override for OpenAI and Codex.
+// API-level enum support does not imply that the selected model accepts it.
+func OpenAIXHighEffort(model string) shared.ReasoningEffort {
+	model = strings.TrimSuffix(strings.ToLower(model), ":fast")
+	if strings.Contains(model, "-chat-") {
+		return ""
+	}
+	if model == "gpt-5.1-codex-max" {
+		return shared.ReasoningEffortXhigh
+	}
+	if version, ok := strings.CutPrefix(model, "gpt-"); ok {
+		family, _, _ := strings.Cut(version, "-")
+		switch family {
+		case "5.2", "5.3", "5.4", "5.5", "5.6", "6", "6.1", "6.2":
+			return shared.ReasoningEffortXhigh
+		case "5", "5.1":
+			return shared.ReasoningEffortHigh
+		}
+	}
+	switch model {
+	case "o1", "o1-2024-12-17", "o1-pro", "o1-pro-2025-03-19",
+		"o3", "o3-2025-04-16", "o3-mini", "o3-mini-2025-01-31", "o3-pro", "o3-pro-2025-06-10",
+		"o4-mini", "o4-mini-2025-04-16":
+		return shared.ReasoningEffortHigh
+	default:
+		return ""
+	}
+}
 
 // reasoningEffortTierMap collapses the canonical six-level thinking-effort
 // ladder (internal/protocol/thinking) onto a vendor's own reasoning_effort

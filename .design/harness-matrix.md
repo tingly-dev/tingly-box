@@ -832,11 +832,11 @@ source (anthropic_v1/beta, openai_chat, openai_responses)
   × client thinking level (none + minimal…max; budget for Anthropic,
                            reasoning effort for OpenAI clients)
   × client max_tokens (2048, 40000; OpenAI clients also absent)
-  × rule thinking_effort ("" / off / low / medium / high / max)
+  × rule thinking_effort ("" / off / low / medium / high / xhigh / max)
   × rule max-tokens field flag (Chat targets: none / use_max_completion_tokens
                                 / use_max_tokens)
   × streaming
-= 4200 combinations, one route (env) per source × target × rule flags
+= 4900 combinations, one route (env) per source × target × rule flags
 ```
 
 Each combination asserts properties of the request that reached the provider
@@ -850,7 +850,8 @@ rather than a hand-written expected body:
 - the effort that arrives is the effective one — the rule's level when set,
   none when the rule says off, else the client's — collapsed through the
   generic tier map on a Chat target whenever the gateway derived it (a Chat
-  client's own `reasoning_effort` is forwarded verbatim).
+  client's own `reasoning_effort` is forwarded verbatim). A rule's `xhigh`
+  maps to `high` on the test's generic Responses endpoint.
 
 It exposed three pre-existing gaps, all since fixed: TL1 — a budget capped to
 equal `max_tokens`, which Anthropic rejects (#1902); TL2 — an Anthropic

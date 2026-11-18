@@ -6,6 +6,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
+	"google.golang.org/genai"
 )
 
 // Constants and configurations for Gemini API compatibility
@@ -218,6 +219,30 @@ func getThinkingBudget(model, effort string) int {
 		budget = 24576
 	}
 	return int(budget)
+}
+
+// ApplyGoogleXHighThinking maps the rule override onto Gemini's native API.
+func ApplyGoogleXHighThinking(req *protocol.GoogleRequest) {
+	model := strings.ToLower(req.Model)
+	isBudgetModel := strings.Contains(model, "gemini-2.5-")
+	if !isBudgetModel && !strings.Contains(model, "gemini-3") {
+		return
+	}
+	if req.Config == nil {
+		req.Config = &genai.GenerateContentConfig{}
+	}
+	if req.Config.ThinkingConfig == nil {
+		req.Config.ThinkingConfig = &genai.ThinkingConfig{}
+	}
+	config := req.Config.ThinkingConfig
+	if isBudgetModel {
+		budget := int32(getThinkingBudget(model, thinking.LevelXHigh))
+		config.ThinkingBudget = &budget
+		config.ThinkingLevel = ""
+	} else {
+		config.ThinkingBudget = nil
+		config.ThinkingLevel = genai.ThinkingLevelHigh
+	}
 }
 
 // ============================================================================
