@@ -20,7 +20,7 @@ import {PlayerStop} from '@/components/icons';
 import ProviderIcon from '@/components/ProviderIcon';
 import AccountLimitsSection from '@/components/limits/AccountLimitsSection';
 import type {Limits} from '@/components/limits/LimitsEditor';
-import {isHttpUrl} from '@/components/provider-form-dialog/validation';
+import {isHttpUrl, isProxyUrl} from '@/components/provider-form-dialog/validation';
 import ProviderExportButton from '@/components/ProviderExportButton';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from '@/components/provider-form-dialog/ProviderFormLayout';
 import { radius } from '@tingly/ui/theme/radius';
@@ -108,6 +108,7 @@ const ProviderFormDialog = ({
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
     const [baseUrlError, setBaseUrlError] = useState(false);
+    const [proxyAttempted, setProxyAttempted] = useState(false);
 
     // ── Protocol slot state (independent from provider selection) ──
     const [slotOpenAI, setSlotOpenAI] = useState<ProtocolSlotData>({url: '', enabled: true});
@@ -467,6 +468,11 @@ const ProviderFormDialog = ({
         e.preventDefault();
 
         if (verifying || submitting || !validateEndpoints()) return;
+        if (!isProxyUrl(data.proxyUrl || '')) {
+            setProxyAttempted(true);
+            setTimeout(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(), 0);
+            return;
+        }
         setSubmitError(null);
         if (mode === 'add' && !allowEmptyKey && !noApiKey && !data.token.trim()) {
             setSubmitError(t('providerDialog.editUx.keyRequired'));
@@ -703,6 +709,7 @@ const ProviderFormDialog = ({
                     onUseGlobalProxyChange={handleUseGlobalProxyChange}
                     proxyEnabled={!data.proxyDisabled}
                     onProxyEnabledChange={mode === 'edit' ? (enabled) => onChange('proxyDisabled', !enabled) : undefined}
+                    showErrors={proxyAttempted}
                 />
             </ProviderFormSection>
             {mode === 'edit' && data.uuid && (

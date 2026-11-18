@@ -242,6 +242,7 @@ const ApiKeyTable = ({
                             {/* Main provider row */}
                             <TableRow
                                 hover
+                                className="proxy-row"
                                 sx={{
                                     "& > .MuiTableCell-root": {
                                         py: 1.25,

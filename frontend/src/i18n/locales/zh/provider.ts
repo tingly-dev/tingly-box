@@ -158,8 +158,12 @@ export default {
         "useGlobal": "使用常用代理（{{url}}）",
         "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）",
         "applyGlobal": "应用常用代理（{{url}}）",
-        "applyGlobalApplied": "已应用常用代理",
-        "useThis": "启用此代理"
+        "useThis": "启用此代理",
+        "invalid": "请输入类似 http://host:port、https://host:port 或 socks5://host:port 的地址。",
+        "stateNone": "未设置代理：此凭证直接连接。填写地址即可开启。",
+        "stateOn": "已开启：此凭证的请求经由该代理。",
+        "stateOff": "已关闭：请求直接连接，地址仍会保留，重新开启即可使用。",
+        "matchesGlobal": "与系统设置中的常用代理相同。此凭证保存的是自己的一份地址，之后修改常用代理不会影响它。"
       }
     },
     "verification": {

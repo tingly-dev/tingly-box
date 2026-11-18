@@ -368,6 +368,14 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 		// Typing a new URL turns the proxy on; clearing it leaves nothing to
 		// disable. Re-saving the unchanged URL must not undo a switched-off proxy.
 		if *req.ProxyURL != p.ProxyURL {
+			// Only a changed URL is validated, so an older stored value never
+			// blocks an unrelated save.
+			if *req.ProxyURL != "" {
+				if err := validateProxyURL(*req.ProxyURL); err != nil {
+					badRequest(c, "%s", err)
+					return
+				}
+			}
 			p.ProxyDisabled = false
 		}
 		p.ProxyURL = *req.ProxyURL

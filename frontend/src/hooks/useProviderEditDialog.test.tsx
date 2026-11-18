@@ -91,6 +91,33 @@ describe('provider edit', () => {
         fireEvent.change(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)'), {target: {value: 'http://127.0.0.1:9999'}});
         expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeChecked();
     });
+    it('keeps the proxy switch disabled until there is a valid URL and explains the state', async () => {
+        await open();
+        const useProxy = screen.getByRole('switch', {name: 'Use this proxy'});
+        expect(useProxy).toBeDisabled();
+        expect(screen.getByText(/No proxy: this credential connects directly/)).toBeVisible();
+        const field = screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)');
+        fireEvent.change(field, {target: {value: 'ftp://nope'}});
+        fireEvent.blur(field);
+        expect(screen.getByText(/Enter a URL like http:\/\/host:port/)).toBeVisible();
+        expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeDisabled();
+        fireEvent.change(field, {target: {value: 'socks5://127.0.0.1:1080'}});
+        expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeChecked();
+        expect(screen.getByText(/On: requests to this credential go through this proxy/)).toBeVisible();
+    });
+    it('does not save an invalid proxy URL', async () => {
+        await open();
+        fireEvent.change(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)'), {target: {value: 'not a url'}});
+        fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
+        expect(api.updateProvider).not.toHaveBeenCalled();
+        expect(screen.getByText(/Enter a URL like http:\/\/host:port/)).toBeVisible();
+    });
+    it('says when the URL is a copy of the quick proxy', async () => {
+        vi.mocked(api.getConfig).mockResolvedValue({data: {http_transport: {global_proxy_url: 'http://127.0.0.1:7890'}}});
+        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890'}});
+        await open();
+        expect(await screen.findByText(/Same as the quick proxy in System Settings/)).toBeVisible();
+    });
     it('explicitly selects no authentication without resending the stored key', async () => {
         await open();
         expect(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)')).toBeVisible();

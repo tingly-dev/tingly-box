@@ -428,3 +428,16 @@ func TestUpdateProvider_ExplicitProxyDisabledWins(t *testing.T) {
 	stored, _ = cfg.GetProviderByUUID("px")
 	assert.False(t, stored.ProxyDisabled)
 }
+
+func TestUpdateProvider_RejectsInvalidChangedProxyURL(t *testing.T) {
+	p := &typ.Provider{UUID: "px", Name: "P", APIBase: "https://api.example.com/v1", APIStyle: protocol.APIStyleOpenAI, AuthType: typ.AuthTypeAPIKey, Token: "k", Enabled: true, ProxyURL: "legacy-value"}
+	cfg, router, rec := newProxyTestEnv(t, p)
+
+	assert.Equal(t, http.StatusBadRequest, doJSON(router, http.MethodPut, "/providers/px", `{"proxy_url":"ftp://h:1"}`).Code)
+	assert.Empty(t, rec.updated)
+	// An unchanged legacy value does not block an unrelated save; clearing is always allowed.
+	require.Equal(t, http.StatusOK, doJSON(router, http.MethodPut, "/providers/px", `{"name":"P2","proxy_url":"legacy-value"}`).Code)
+	require.Equal(t, http.StatusOK, doJSON(router, http.MethodPut, "/providers/px", `{"proxy_url":""}`).Code)
+	stored, _ := cfg.GetProviderByUUID("px")
+	assert.Equal(t, "", stored.ProxyURL)
+}

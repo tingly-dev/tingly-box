@@ -18,9 +18,10 @@ A credential (provider) can route its outbound requests through an HTTP(S)/SOCKS
 
 ## UI
 
-- `ProxySwitch` (credential list: table, list and card views). Route icon = in use, route-off icon = stored but off, faint route = nothing stored (click opens the editor). It is a `role="switch"`, 40px touch target on phones, state also carried by icon shape and tooltip, not colour alone. Tooltip URLs hide proxy credentials.
+- `ProxySwitch` (credential list: table, list and card views). Route icon = in use, route-off icon = stored but off; both stay visible so the state is unambiguous. With no proxy stored the control is hidden until the row (`.proxy-row`) is hovered or focused, then leads to Edit; touch screens (`hover: none`) keep it reachable. It is a `role="switch"`, 40px touch target on phones, state also carried by icon shape and tooltip, not colour alone. Tooltip URLs hide proxy credentials.
 - `useProviderProxySwitch` flips the row optimistically, ignores clicks while that row's request is in flight, reconciles with the server's answer, and on failure restores the previous value and toasts the error.
-- Edit dialogs (API key and OAuth) show a "Use this proxy" switch under the URL; typing or applying a URL switches it on. Both views read the same server field, so they agree after any change.
+- Edit dialogs (API key and OAuth) use one control, `ProxyUrlField`: the URL input with its on/off switch inside it. The switch is disabled without a valid URL, typing or applying a URL turns it on, an invalid URL (not http/https/socks5) shows an error and blocks save, and the helper line says what the credential will do (none / on / off, URL kept). A URL equal to the System Settings quick proxy is labelled as a copy: the credential keeps its own URL, so changing the quick proxy later does not affect it.
+- Both views read the same server field, so they agree after any change. `PUT` validates only a *changed* proxy URL, so an old stored value never blocks an unrelated save.
 
 ## Not detected
 

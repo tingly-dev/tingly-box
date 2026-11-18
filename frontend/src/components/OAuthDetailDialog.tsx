@@ -12,6 +12,7 @@ import {api} from '@/services/api';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from './provider-form-dialog/ProviderFormLayout';
 import ProtocolSlot from './provider-form-dialog/ProtocolSlot';
 import ProxyUrlField from './provider-form-dialog/ProxyUrlField';
+import {isProxyUrl} from './provider-form-dialog/validation';
 import AccountLimitsSection from './limits/AccountLimitsSection';
 import type {Limits} from './limits/LimitsEditor';
 import {isHttpUrl} from './provider-form-dialog/validation';
@@ -85,7 +86,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         setValidationAttempted(true);
         setSubmitError(null);
         const urls = isDual ? [formData.apiBaseOpenAI || '', formData.apiBaseAnthropic || ''] : [formData.apiBase];
-        if (!urls.every(isHttpUrl)) {
+        if (!urls.every(isHttpUrl) || !isProxyUrl(formData.proxyUrl || '')) {
             setTimeout(() => formRef.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus(), 0);
             return;
         }
@@ -165,7 +166,8 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         <ProviderFormSection title={t('providerDialog.editUx.proxySettings')}>
             <ProxyUrlField mode="edit" proxyUrl={formData.proxyUrl || ''} onProxyUrlChange={proxyUrl => setFormData(previous => ({...previous, proxyUrl}))}
                 globalProxyUrl={globalProxyUrl} useGlobalProxy={false} onUseGlobalProxyChange={() => {}}
-                proxyEnabled={!formData.proxyDisabled} onProxyEnabledChange={enabled => setFormData(previous => ({...previous, proxyDisabled: !enabled}))}/>
+                proxyEnabled={!formData.proxyDisabled} onProxyEnabledChange={enabled => setFormData(previous => ({...previous, proxyDisabled: !enabled}))}
+                showErrors={validationAttempted}/>
         </ProviderFormSection>
         <AccountLimitsSection providerUuid={provider?.uuid} value={formData.limits} onChange={limits => setFormData(previous => ({...previous, limits}))}/>
         {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}

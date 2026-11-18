@@ -158,8 +158,12 @@ export default {
         "useGlobal": "Use quick proxy ({{url}})",
         "useGlobalNotSet": "Use quick proxy (not configured — set in System Settings)",
         "applyGlobal": "Apply quick proxy ({{url}})",
-        "applyGlobalApplied": "Quick proxy applied",
-        "useThis": "Use this proxy"
+        "useThis": "Use this proxy",
+        "invalid": "Enter a URL like http://host:port, https://host:port or socks5://host:port.",
+        "stateNone": "No proxy: this credential connects directly. Enter a URL to turn one on.",
+        "stateOn": "On: requests to this credential go through this proxy.",
+        "stateOff": "Off: requests connect directly. The URL is kept for when you turn it back on.",
+        "matchesGlobal": "Same as the quick proxy in System Settings. This credential keeps its own copy, so changing the quick proxy later won't affect it."
       }
     },
     "verification": {
