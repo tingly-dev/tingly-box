@@ -26,7 +26,7 @@ func archiveWithThread(t *testing.T) (*testFixture, *db.Thread) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmp, "go", "pkg", "mod", "locked", "cache.bin"), []byte("cache"), 0o444))
 	require.NoError(t, os.Chmod(filepath.Join(tmp, "go", "pkg", "mod", "locked"), 0o555))
 	require.NoError(t, os.WriteFile(filepath.Join(tmp, "notes.txt"), []byte("scratch"), 0o644))
-	cache := filepath.Join(f.threads.layout.CacheDir(f.project.ID), "go-mod", "cache.bin")
+	cache := filepath.Join(f.threads.layout.LibraryDir(f.project.ID), ".cache", "go-mod", "cache.bin")
 	require.NoError(t, os.MkdirAll(filepath.Dir(cache), 0o755))
 	require.NoError(t, os.WriteFile(cache, []byte("cache"), 0o644))
 	archived, err := f.threads.Archive(th.ID)
@@ -45,7 +45,7 @@ func TestArchiveFreesTheWorktreeAndKeepsTheBranch(t *testing.T) {
 	// The scratch went too, read-only cache included.
 	assert.NoDirExists(t, f.threads.layout.TmpDir(f.project.ID, archived.ID))
 	// The project's shared cache is not the thread's to delete.
-	assert.FileExists(t, filepath.Join(f.threads.layout.CacheDir(f.project.ID), "go-mod", "cache.bin"))
+	assert.FileExists(t, filepath.Join(f.threads.layout.LibraryDir(f.project.ID), ".cache", "go-mod", "cache.bin"))
 	// The thread is resolved and archived, with the freed worktree marked.
 	assert.NotNil(t, archived.ResolvedAt)
 	assert.NotNil(t, archived.ArchivedAt)
@@ -161,7 +161,7 @@ func TestDeleteNeedsAnArchiveAndAMergedBranch(t *testing.T) {
 	assert.Empty(t, events)
 	assert.False(t, BranchExists(t.Context(), f.repo, archived.Branch))
 	assert.DirExists(t, outputs, "the library's outputs are not the thread's to delete")
-	assert.FileExists(t, filepath.Join(f.threads.layout.CacheDir(f.project.ID), "go-mod", "cache.bin"),
+	assert.FileExists(t, filepath.Join(f.threads.layout.LibraryDir(f.project.ID), ".cache", "go-mod", "cache.bin"),
 		"the shared cache belongs to the project, not the thread")
 	_, err = os.Stat(f.threads.layout.SettingsFile(f.project.ID, archived.ID))
 	assert.True(t, os.IsNotExist(err), "the settings file went with the thread")

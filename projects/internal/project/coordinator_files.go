@@ -33,11 +33,6 @@ func (c *Coordinator) sharedFile(projectID, path string, list bool) ([]mcp.Conte
 	if len(parts) == 2 {
 		rel = parts[1]
 	}
-	// The shared tool cache is not project content: it is not listed, and a
-	// path into it is refused, as in the Library tab.
-	if parts[0] == "library" && (rel == cacheDirName || strings.HasPrefix(rel, cacheDirName+string(filepath.Separator))) {
-		return nil, fmt.Errorf("the shared cache is not project content")
-	}
 	root, err := os.OpenRoot(filepath.Join(base, parts[0]))
 	if err != nil {
 		return nil, err
@@ -70,9 +65,6 @@ func (c *Coordinator) sharedFile(projectID, path string, list bool) ([]mcp.Conte
 				break
 			}
 			name := entry.Name()
-			if parts[0] == "library" && rel == "." && name == cacheDirName {
-				continue // the shared tool cache is not a project file
-			}
 			if entry.IsDir() {
 				name += "/"
 			}

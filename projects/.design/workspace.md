@@ -132,7 +132,7 @@ library 就是共享上传目录（`library/uploads/` 上传，`library/outputs/
 
 ### 线程临时目录（TMPDIR）
 
-每个线程的 `TMPDIR` / `TMP` / `TEMP` 指向共享 library 里自己的目录，不再用全局 `/tmp`：`<library>/.tmp/<thread-id>/`（`Layout.TmpDir`；`Threads.withThreadEnv` 在每次 turn 启动前建目录并写进 env，项目线程、profile 线程、文件夹线程都走这一处，profile 自带的 env 保留）。
+每个线程的 `TMPDIR` / `TMP` / `TEMP` 指向共享 library 里自己的目录，不再用全局 `/tmp`：`<library>/.tmp/<thread-id>/`（`Layout.TmpDir`；`Threads.withTmpEnv` 在每次 turn 启动前建目录并写进 env，项目线程、profile 线程、文件夹线程都走这一处，profile 自带的 env 保留）。
 
 - **为什么在 library 下**：library 已有 `Read`/`Edit` 授权和 auto 分类器条目（上节），`send_file` 也收 library 里的文件；临时文件落在这里就不需要拷贝，也就没有“从 /tmp 拷进 library 被拒”的问题。
 - **为什么用 `.tmp/<thread-id>/`，不用 `outputs/<slug>/tmp/`**：`ListLibrary` 跳过点开头的目录，草稿文件不会出现在 Library 页；thread id 唯一，而标题 slug 会重复。`outputs/<slug>/` 保持“要给用户看的产出”。
@@ -142,7 +142,7 @@ library 就是共享上传目录（`library/uploads/` 上传，`library/outputs/
 
 ### 共享工具缓存（`.cache`）
 
-同一次 turn 启动还把这四个变量指向 `<library>/.cache/` 下按工具分的子目录：`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR`。缓存按项目共享、显式设变量（agent 自建 isolated HOME 也照旧共享）、不进 Library 树/zip/fork、不随线程 Archive/Delete 删除；理由和度量见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10。
+提示词引导线程把这四个变量指向 `<library>/.cache/` 下按工具分的子目录：`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR`。**不预设启动 env、不加逻辑特例**；缓存按项目共享、不进 Library 树/zip/fork、不随线程 Archive/Delete 删除。理由和度量见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10。
 
 `autoMemoryDirectory` 对所有项目线程设置（有仓库的也设），让一个项目只有一份记忆：Projects 自己的 `MEMORY.md` 机制与 Claude 的原生 auto memory 指向同一目录。
 

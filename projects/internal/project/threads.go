@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"maps"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -917,7 +917,7 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 	if effort == "" && !folder {
 		effort = p.ThreadEffort
 	}
-	env = m.withThreadEnv(env, p, t)
+	env = m.withTmpEnv(env, p, t)
 	opts = agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if m.SessionToolsConfig != nil {
 		if config, err := m.SessionToolsConfig(threadID); err == nil {
@@ -1040,49 +1040,16 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 }
 
-// withThreadEnv points the thread's TMPDIR (and TMP, TEMP) at its scratch
-// directory in the shared library, and its tool caches at the project's
-// shared cache — whatever the launch mode: project, profile or folder. On
-// error the thread keeps the global temp dir.
-func (m *Threads) withThreadEnv(env []string, p *db.Project, t *db.Thread) []string {
-	owner := UploadOwner(p, t)
-	dir := m.layout.TmpDir(owner, t.ID)
+// withTmpEnv points the thread's TMPDIR (and TMP, TEMP) at its scratch
+// directory in the shared library and creates it, whatever the launch mode:
+// project, profile or folder. On error the thread keeps the global temp dir.
+func (m *Threads) withTmpEnv(env []string, p *db.Project, t *db.Thread) []string {
+	dir := m.layout.TmpDir(UploadOwner(p, t), t.ID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot create the thread's temp dir")
 		return env
 	}
-	env = setEnv(env, "TMPDIR", dir, "TMP", dir, "TEMP", dir)
-	return m.withCacheEnv(env, owner, t)
-}
-
-// cacheDirs are the tools whose caches a thread shares with its project's
-// other threads. The variables are set explicitly, which wins over the
-// HOME-derived defaults, so an agent that gives a test its own isolated HOME
-// still shares these caches. They are content-addressed stores that tolerate
-// concurrent writers by design — which is also why sharing is worth it: one
-// thread's scratch held eight isolated homes' Go module caches, 702 MB each.
-var cacheDirs = []struct{ Variable, Dir string }{
-	{"GOMODCACHE", "go-mod"},
-	{"GOCACHE", "go-build"},
-	{"npm_config_cache", "npm"},
-	{"PIP_CACHE_DIR", "pip"},
-}
-
-// withCacheEnv adds the shared cache variables to a launch's env. A cache
-// directory that cannot be made keeps its tool on the default, rather than
-// pointing it at a directory the thread cannot write.
-func (m *Threads) withCacheEnv(env []string, projectID string, t *db.Thread) []string {
-	base := m.layout.CacheDir(projectID)
-	var kv []string
-	for _, c := range cacheDirs {
-		dir := filepath.Join(base, c.Dir)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{"thread_id": t.ID, "dir": dir}).Warn("projects: cannot create the shared cache dir")
-			continue
-		}
-		kv = append(kv, c.Variable, dir)
-	}
-	return setEnv(env, kv...)
+	return setEnv(env, "TMPDIR", dir, "TMP", dir, "TEMP", dir)
 }
 
 // cleanTmp removes a finished thread's scratch directory. Files it sent with
