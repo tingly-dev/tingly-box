@@ -42,7 +42,8 @@ describe('RequestJourney diagnostics', () => {
         render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [
             { trace_id: 'trace', span_id: 'root', name, start_time: '2026-10-21T00:00:00Z', end_time: '2026-10-21T00:00:01Z', status_code: 'Ok', attributes: { 'gen_ai.operation.name': operation } },
         ] })} />);
-        fireEvent.click(await screen.findByText(name));
+        expect(await screen.findByText(operation)).toBeInTheDocument();
+        expect(screen.getByText(`name=${name}`)).toBeInTheDocument();
         expect(screen.getByText(`gen_ai.operation.name=${operation}`)).toBeInTheDocument();
     });
 
@@ -91,5 +92,14 @@ describe('RequestJourney diagnostics', () => {
         await act(async () => resolveSecond({ trace_id: 'trace', spans: [span('s1', 'routing'), span('s2', 'upstream')] }));
         expect(screen.queryByText('attr_s1=v')).not.toBeInTheDocument();
         expect(screen.getByText('attr_s2=v')).toBeInTheDocument();
+    });
+
+    it('shows the root span as its operation with the model as detail', async () => {
+        render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [
+            { ...span('root', 'chat gpt-5.6-sol'), attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic' } },
+        ] })} />);
+        expect(await screen.findByText('chat')).toBeInTheDocument();
+        expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5 · Anthropic')).toBeInTheDocument();
+        expect(screen.getByText('name=chat gpt-5.6-sol')).toBeInTheDocument();
     });
 });

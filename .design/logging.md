@@ -28,6 +28,8 @@ Scenario / provider / status 过滤条。自动刷新,固定住的自动滚动�
 - 展开一个请求后,**stage 行默认展开**(耗时和属性就是展开它的目的),log 行保持折叠;
   每个可展开行末尾有共享的 disclosure 箭头,读者手动折叠/展开的选择在刷新间保留
   (按 span id / 事件内容为 key)。
+- Root span 的名字按 OTel GenAI 约定是 `{operation} {request model}`(导出到 OTLP 的后端依赖这个名字,不改);
+  展示时 `RequestJourney` 用 `gen_ai.operation.name` 作名称、把 `request → response model · provider` 放到详情列,完整名字仍在展开的 `name=` 里。
 - 自动刷新是静默的(不闪"Refreshing…"),已展开请求的详情只在它那一行数据变化时才重新拉取;
   重新拉取 trace 期间继续显示上一份 stage,不会让 stage 行消失再出现。
 - 读者正在读时(有展开的请求,或列表滚离顶部),新到的请求**不插入**——已显示的行位置和顺序不动、

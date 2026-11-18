@@ -115,6 +115,16 @@ const timed = (span: TraceSpan): TimedSpan => ({
 const describeSpan = (span: TimedSpan): { name: string; detail: string } => {
     const attrs = span.attributes || {};
     const service = attrs['tingly.lb.service_id'];
+    // The root span is named "{operation} {request model}" (the OTel GenAI
+    // convention, which exporters rely on). Here the operation is the name and
+    // the model moves to the detail, where it has room.
+    const operation = attrs['gen_ai.operation.name'];
+    if (operation) {
+        const requested = attrs['gen_ai.request.model'];
+        const served = attrs['gen_ai.response.model'];
+        const model = requested && served && served !== requested ? `${requested} → ${served}` : requested || served;
+        return { name: operation, detail: [model, attrs['gen_ai.provider.name']].filter(Boolean).join('  ·  ') };
+    }
     switch (span.name) {
         case 'routing':
             return { name: 'routing', detail: [service, attrs['tingly.lb.tactic']].filter(Boolean).join('  ·  ') };
