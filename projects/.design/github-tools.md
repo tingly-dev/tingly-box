@@ -1,6 +1,6 @@
 # Issue and PR tools for threads
 
-> Status: **batch 1 built** (the five tools and, later, `merge`, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view) and **stacks built** (`create_pr` takes a `head`; see [Stacked work](#stacked-work-more-than-one-branch)). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
+> Status: **batch 1 built** (the five tools and, later, `merge`, the link record, the refresher, the project setting, the rail and Status-tab cards, the coordinator's text view) and **PR amending built** ([Putting a PR right](#putting-a-pr-right)) and **stacks built** (`create_pr` takes a `head`; see [Stacked work](#stacked-work-more-than-one-branch)). Items under [Later](#later) are proposed only. `file:line` references are not used; search by name.
 > Builds on [mcp-tools.md](./mcp-tools.md) (one table of tools, scopes, golden files), [projects-harness.md](./projects-harness.md) and `.design/projects-thread-rail.md` (the rail and the coordinator's Status tab). The refresh back-off follows the idea of `.design/quota-backoff.md`.
 
 ## Problem
@@ -18,7 +18,7 @@ Six tools for the thread's own session (in the table below), one persisted recor
 | Tool | What it does |
 | --- | --- |
 | `create_issue` | Open an issue in the thread's repository (`title`, `body`). |
-| `create_pr` | Push a local branch of the thread's checkout (never forced), open a PR from it (`title`, `body`, optional `head`, `base`, `draft`). `head` is the thread's own branch unless another local branch is named. If the branch already has an open PR it pushes the branch again (so the PR carries the latest commits) and returns that PR instead of opening a second one. |
+| `create_pr` | Push a local branch of the thread's checkout (never forced), open a PR from it (`title`, `body`, optional `head`, `base`, `draft`). `head` is the thread's own branch unless another local branch is named. If the branch already has an open PR it pushes the branch again (so the PR carries the latest commits) and returns that PR instead of opening a second one; for a PR the thread opened it also puts the PR right to what the call says (see [Putting a PR right](#putting-a-pr-right)). |
 | `update` | Change `title` and `body` of an issue, or `title`, `body` and `base` of a PR, **that this thread opened**; addressed by `number` (optional only when the thread has one PR). |
 | `comment` | Comment on an issue or PR of the thread's repository (`number`, `body`). |
 | `view` | Read an issue or PR of the thread's repository by `number`: state and description, and for an open PR its checks and mergeability. The one read tool. |
@@ -56,6 +56,24 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 - *An edit keeps what it cannot know*: the answer to a PR edit carries no checks and often a mergeability GitHub has not worked out yet (`unknown`); `update` keeps the last known value of both until the next reading.
 - *Transport*: `gh api` with a JSON body for every call. Writes are REST; every read is one GraphQL query we write ourselves (see [Cost of a read](#cost-of-a-read)). Neither touches `gh pr edit`'s failing query, and the bodies never pass a shell.
 - *No footer.* The tool adds nothing to the body (no requester note, thread link or marker): the repository's PR template governs the text and the model writes it.
+
+## Putting a PR right
+
+Asked: a thread that opens a PR wrong (wrong base, wrong branch, wrong title or text) had only one way out, which was to have the user close it and open another. What was missing, found by tests (`links_amend_test.go`) before anything changed:
+
+- `create_pr` on a branch that already had an open PR pushed again and returned it, but ignored `title`, `body` and `base`: the model was told "already open" and the PR kept the wrong text.
+- `update` could change a PR's title, body and base (base since stacks) but a model that did not know that opened a second PR, and the thread's records then held two open PRs for one branch.
+- When the user closed the wrong PR on GitHub, the thread's record kept saying `open` until the next refresh. Opening the right PR from the same branch worked (GitHub allows a new PR once the old one is closed) but a bare `update` then failed with "several PRs", and `update` of the closed one said only "is closed".
+
+What it does now, and what it still does not:
+
+- **`create_pr` on a branch with an open PR amends it.** The branch is pushed again as before, then the fields that differ are edited: `title` always (it is required), `body` only when given (empty means "leave it"; clearing a description is `update`), `base` only when named (the default is never applied to an existing PR, or a bare `create_pr` would retarget a stack's PR to `main`). Same words send nothing (descriptions are compared with CRLF and outer whitespace ignored). `draft` is not changed: REST cannot convert a PR, and the GraphQL mutation is not worth a second client. A new base is checked as for a new PR (not the head, a valid name, already on GitHub) before the push and the edit, so a refused call changes nothing. The answer says which fields were updated.
+- **Only a PR this thread opened is edited.** The edit needs the thread's record of the PR with role `opened`, which is the same rule as `update`. A PR from the thread's branch that the thread has no record of (opened by hand, or its record lost) is adopted as it always was, recorded as the thread's, and *not* edited on that call; the answer says so, and the next call edits it. One call that quietly rewrote a hand-written description would be worse than one more call.
+- **`merge` never edits.** Its title and body are defaults taken from the thread (`merge_request` is also what the Review dialog calls), so `merge` finds the PR and leaves its text alone.
+- **`update` changes base** (it already did) and now refuses a closed or merged PR with a way on: commit and call `create_pr`, which opens a new PR for the branch.
+- **The head cannot be changed.** GitHub does not allow it. The options, by what was wrong: the *content* is wrong, commit to the PR's own branch and call `create_pr` (it pushes, no force, so the PR carries the commits); the *branch* is wrong, open a new PR with `create_pr(head=…)`. Closing the old PR stays the user's: this change adds no `close_pr` (still under [Later](#later)). To keep the wrong one from lingering unseen, opening a PR leaves a note when the thread has another open PR it opened against the **same base** from a different branch (a stack's PRs have different bases, so no note): "#N (x → main) is still open … the user has to close it".
+- **The record follows GitHub.** When `create_pr` finds no open PR for the branch, any of the thread's records for that branch that still say `open` are read again and stored as `closed` or `merged` (if GitHub cannot be read they are stored as `closed`: GitHub just said no open PR has that head). The answer names them ("#11 was closed … this is a new PR"). The old record stays in the list as history, told apart by its state, and a bare `update` means the one open PR again. A merged branch with no new commit still cannot get a new PR ("no commit beyond"), but its record is now `merged`.
+- **Unchanged boundary.** No tool closes, merges (apart from `merge`), force-pushes or deletes a branch, and nothing edits a PR the thread did not open.
 
 ## Authorization
 
@@ -196,6 +214,7 @@ The sweep keeps open items fresh; a person looking at a row can also ask. This a
 
 - Stacks (`links_stack_test.go`, harness G3): a head that is another local branch is pushed alone (origin gets nothing else); two PRs recorded with `head`/`base`; a bare `update` names them; a base retarget is read back; refusals (default branch as head, protected, not a local branch, a refspec or option as head, head = base, a base that is not on origin) push and record nothing; a diverged head is not forced; an existing PR for the head is returned; a fake `gh` for `Protected` (a 404 is unprotected, any other error is an error). Harness G3 runs the whole stack through the MCP tools with an actor that switches branches.
 - Mutation-checked: a forced refspec, the missing default-branch guard, the missing protected, local-branch and base-on-origin checks, the missing "opened by this thread" check and a back-off that never doubles each fail a test.
+- Putting a PR right (`links_amend_test.go`): the open PR is amended not duplicated; only differing fields are sent and a base is never guessed; a refused base changes nothing; a PR the thread does not hold is adopted, not edited; `merge` never edits; a closed PR's record becomes `closed` (also when GitHub cannot be read) and the branch gets a new PR that a bare `update` finds; a merged branch with nothing new is refused with the record `merged`; the same-base note, and no note for a stack. The fake GitHub's `OpenPR` finds an open PR by head like GitHub does.
 - Fake `GitHub` for the tools and the refresher; a fake `gh` executable (a shell script on `PATH`) for the real `ghCLI`: arguments, JSON body, `gh api -X PATCH` for updates, the redactor on a token in stderr.
 - Tools through the in-memory MCP client: scope lists (golden and `TestToolsOfEachScope`), each tool, refusals (no origin, non-GitHub origin, default branch, base equals head, no commits, someone else's PR number), idempotent `create_pr`, a failed push leaves nothing recorded.
 - Settings rules: `ask` default, `allow` when set, `view` always allowed, `gh pr create` still on `ask`.
