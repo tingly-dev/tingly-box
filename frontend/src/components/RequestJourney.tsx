@@ -60,7 +60,7 @@ interface JourneyRow {
     kind: 'request' | 'stage' | 'log';
     name: string;
     detail: string;
-    // The request row's detail is the model route and provider: it wraps instead of truncating.
+    // The request row's detail is the protocol and model route: it wraps instead of truncating.
     wrapDetail?: boolean;
     result?: string;
     tone: RowTone;
@@ -115,20 +115,19 @@ const timed = (span: TraceSpan): TimedSpan => ({
 // Presentation for the span names the gateway emits. Anything unrecognized
 // falls through to its raw span name rather than being hidden.
 // "Who to whom" in one line: the client's protocol and requested model, then the
-// provider with the protocol and model it was actually served by. Attributes
-// the backend did not record are skipped, down to the bare model route.
+// protocol and model the provider served it with. The provider's name stays out
+// of the row (it can be long) and is in the opened details. Attributes the
+// backend did not record are skipped, down to the bare model route.
 const describeRoute = (attrs: Record<string, string>): string => {
     const requested = attrs['gen_ai.request.model'];
     const served = attrs['gen_ai.response.model'];
     const inbound = attrs['tingly.protocol.inbound'];
     const upstream = attrs['tingly.protocol.upstream'];
-    const provider = attrs['gen_ai.provider.name'];
-    const join = (parts: (string | undefined)[], sep = ' · ') => parts.filter(Boolean).join(sep);
+    const join = (parts: (string | undefined)[]) => parts.filter(Boolean).join(' · ');
     if (!inbound && !upstream) {
-        const model = requested && served && served !== requested ? `${requested} → ${served}` : requested || served;
-        return join([model, provider], '  ·  ');
+        return requested && served && served !== requested ? `${requested} → ${served}` : requested || served || '';
     }
-    return join([join([inbound, requested]), join([provider, upstream, served])], '  →  ');
+    return [join([inbound, requested]), join([upstream, served])].filter(Boolean).join('  →  ');
 };
 
 const describeSpan = (span: TimedSpan): { kind?: 'request'; name: string; detail: string; wrapDetail?: boolean } => {
@@ -136,8 +135,8 @@ const describeSpan = (span: TimedSpan): { kind?: 'request'; name: string; detail
     const service = attrs['tingly.lb.service_id'];
     // The root span is named "{operation} {request model}" (the OTel GenAI
     // convention, which exporters rely on) — too long for the name column. Read
-    // the attributes instead: the operation is the name, and the models and
-    // provider go to the detail column, where they have room.
+    // the attributes instead: the operation is the name, and the protocols and
+    // models go to the detail column, where they have room.
     const operation = attrs['gen_ai.operation.name'];
     if (operation) {
         return { kind: 'request', name: operation, detail: describeRoute(attrs), wrapDetail: true };
