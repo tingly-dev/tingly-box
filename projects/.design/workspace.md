@@ -142,7 +142,7 @@ library 就是共享上传目录（`library/uploads/` 上传，`library/outputs/
 
 ### 共享工具缓存（`.cache`）
 
-提示词引导线程把这四个变量指向 `<library>/.cache/` 下按工具分的子目录：`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR`。**不预设启动 env、不加逻辑特例**；缓存按项目共享、不进 Library 树/zip/fork、不随线程 Archive/Delete 删除。理由和度量见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10。
+提示词引导线程把工具/构建缓存（`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR` 及其它工具的同类变量）指到 `<library>/.cache`——项目统一缓存。**不预设启动 env、不加逻辑特例**；缓存按项目共享、不进 Library 树/zip/fork、不随线程 Archive/Delete 删除。理由和度量见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10。
 
 `autoMemoryDirectory` 对所有项目线程设置（有仓库的也设），让一个项目只有一份记忆：Projects 自己的 `MEMORY.md` 机制与 Claude 的原生 auto memory 指向同一目录。
 

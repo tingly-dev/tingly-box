@@ -55,7 +55,7 @@ func threadSystemPrompt(l Layout, p *db.Project, t *db.Thread) string {
 	fmt.Fprintf(&b, "- Files the user added to the project are in %s. Memory and uploads are the same for every thread of this project, and they live outside the repository so you can write to them from a worktree.\n", l.LibraryDir(p.ID))
 	fmt.Fprintf(&b, "- %s\n", ArtifactGuidance(l, p, t))
 	cache := filepath.Join(l.LibraryDir(p.ID), ".cache")
-	fmt.Fprintf(&b, "- Build and tool caches are shared by this project's threads: put them under %s instead of the defaults (GOMODCACHE=%s, GOCACHE=%s, npm_config_cache=%s, PIP_CACHE_DIR=%s), and do not redirect them, even when you isolate HOME for a test — they are content-addressed and safe for concurrent builds.\n", cache, filepath.Join(cache, "go-mod"), filepath.Join(cache, "go-build"), filepath.Join(cache, "npm"), filepath.Join(cache, "pip"))
+	fmt.Fprintf(&b, "- Tool and build caches are shared by this project's threads: point them at %s instead of the defaults (for example GOMODCACHE, GOCACHE, npm_config_cache, PIP_CACHE_DIR).\n", cache)
 	b.WriteString("</rules>\n")
 
 	if len(p.Repos) > 1 {

@@ -187,17 +187,9 @@ Delete（只接受已归档线程）：
 
 **问题**：线程各自跑 `go test`、`npm install`、`pip install`，缓存落在自己的 HOME（或 agent 为测试自建的 isolated HOME）里，随线程 scratch 一起被删、又随下一个线程重新下载。实测一个线程的 `.tmp` 里留着 **8 份 isolated-home 的 Go 模块缓存，每份 702 MB，约 5.6 GB 纯重复**。
 
-**决定**：缓存按**项目**共享，位置 `library/.cache/<工具>/`；**实现只是线程系统提示词里的一行引导**，不预设任何启动 env，也不为 `.cache` 增加逻辑：
+**决定**：缓存按**项目**共享，位置 `library/.cache`；**实现只是线程系统提示词里的一句话**——「工具/构建缓存用 `<library>/.cache`，不用默认目录」。四个变量只是例子（`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR`；yarn/pnpm/cargo/uv 等其它工具的下载、构建缓存同理），提示词不逐一列举，也不预设任何启动 env、不为 `.cache` 增加逻辑。
 
-| 变量 | 建议目录（提示词里写明） |
-|---|---|
-| `GOMODCACHE` | `library/.cache/go-mod` |
-| `GOCACHE` | `library/.cache/go-build` |
-| `npm_config_cache` | `library/.cache/npm` |
-| `PIP_CACHE_DIR` | `library/.cache/pip` |
-
-- **提示词**（`threadSystemPrompt`）：告诉线程缓存由项目共享、写到上述目录、`HOME` 隔离（测试）时也不要重定向这四个变量。
-- **为什么够了**：线程都以同一个 OS 用户运行，路径可写；这些工具默认从 `HOME`/`XDG_CACHE_HOME` 推目录，agent 按提示显式设变量即可共享，不需要产品替它设。缓存是内容寻址存储（Go 模块/构建缓存、npm `_cacache`、pip HTTP 缓存），并发读写是设计内的，线程之间无需互斥。
+- **为什么够了**：线程都以同一个 OS 用户运行，路径可写；这些工具默认从 `HOME`/`XDG_CACHE_HOME` 推目录，agent 按提示把四个变量指到 `.cache` 下的子目录即可共享，不需要产品替它设。缓存是内容寻址存储（Go 模块/构建缓存、npm `_cacache`、pip HTTP 缓存），并发读写是设计内的，线程之间无需互斥。
 - **不做**：不设启动 env；不加 `Layout.CacheDir`/大小统计；不在 Library 树、下载、zip、fork、coordinator 的工具里给 `.cache` 加特例——它就是普通点目录，现有的“跳过点目录”规则本来就不列出、不服务、不复制它。也不清理：Archive/Delete/Resolve 的 `cleanTmp` 只删 `.tmp/<thread>`。
 - **代价**：依赖 agent 遵守提示；不遵守时缓存仍落在 HOME/scratch，只是没有收益，不会出错。若将来确需强制共享，再回到“启动 env 显式指定”。
 - **测试**：提示词测试断言四个变量名与 `.cache` 路径；`seedLibrary` 加一个 `.cache` 文件，断言 Library 树、zip、fork 都不带它；Archive/Delete 测试断言它不被删除。
