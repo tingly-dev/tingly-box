@@ -257,7 +257,7 @@ export default {
     "managing_many": "Управление {{count}} ключами",
     "managing_other": "Управление {{count}} ключами",
     "emptyTitle": "Подключите свой первый ИИ",
-    "emptyDescription": "Войдите по имеющейся подписке (Claude Code, Codex, Gemini CLI…) или вставьте API-ключ (OpenAI, Anthropic, DeepSeek…). Все ключи появляются здесь, а правила маршрутизации выбирают из них модели.",
+    "emptyDescription": "Войдите по имеющейся подписке (Claude Code, Codex…) или вставьте API-ключ (OpenAI, Anthropic, DeepSeek…). Все ключи появляются здесь, а правила маршрутизации выбирают из них модели.",
     "sectionOAuth": "OAuth",
     "oauthProtocolLabel": "Протокол",
     "oauthProtocolDual": "Нативно обслуживает клиентов OpenAI и Anthropic без конвертации",

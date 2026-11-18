@@ -36,3 +36,9 @@ describe('self-hosted catalog in Connect AI', () => {
         });
     });
 });
+
+it('hides Gemini CLI OAuth from the provider picker while retaining other OAuth options', () => {
+    render(<ProviderListContent query="" onQueryChange={vi.fn()} onSelect={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /Google Gemini CLI/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Claude Code/i })).toBeInTheDocument();
+});

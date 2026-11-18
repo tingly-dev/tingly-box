@@ -301,7 +301,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
 
     const oauthProviders = useMemo(
         () => FALLBACK_OAUTH_PROVIDERS.filter(
-            (p: OAuthProvider) => p.enabled !== false && (!p.dev || import.meta.env.DEV)
+            (p: OAuthProvider) => p.enabled !== false && !p.hiddenFromPicker && (!p.dev || import.meta.env.DEV)
         ),
         []
     );

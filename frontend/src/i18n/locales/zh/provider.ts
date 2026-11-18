@@ -254,7 +254,7 @@ export default {
     "empty": "还没有凭证",
     "managing_other": "共 {{count}} 个凭证",
     "emptyTitle": "连接你的第一个 AI",
-    "emptyDescription": "用你已有的订阅登录（Claude Code、Codex、Gemini CLI…），或粘贴 API Key（OpenAI、Anthropic、DeepSeek…）。所有凭证都会出现在这里，路由规则从中选择模型。",
+    "emptyDescription": "用你已有的订阅登录（Claude Code、Codex…），或粘贴 API Key（OpenAI、Anthropic、DeepSeek…）。所有凭证都会出现在这里，路由规则从中选择模型。",
     "sectionOAuth": "OAuth",
     "oauthProtocolLabel": "协议",
     "oauthProtocolDual": "原生同时服务 OpenAI 和 Anthropic 客户端,无需协议转换",
