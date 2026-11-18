@@ -261,14 +261,30 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 // several branches (a stack), and base may be any branch on GitHub, including
 // another stack branch. The push is the same plain one either way.
 func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, base string, draft bool) (string, error) {
-	r, err := l.createPR(ctx, t, title, body, head, base, draft)
+	r, err := l.createPR(ctx, t, title, body, head, base, draft, true)
 	if err != nil {
 		return "", err
 	}
+	var b strings.Builder
 	if r.existed {
-		return fmt.Sprintf("PR #%d is already open for branch %s (the branch was pushed again, so it has your latest commits): %s%s", r.item.Number, r.head, r.item.URL, saved(r.recordErr)), nil
+		fmt.Fprintf(&b, "PR #%d is already open for branch %s (the branch was pushed again, so it has your latest commits): %s", r.item.Number, r.head, r.item.URL)
+		switch {
+		case len(r.amended) > 0:
+			fmt.Fprintf(&b, "; updated its %s", strings.Join(r.amended, ", "))
+		case r.notEdited:
+			b.WriteString("; its title, description and base were not edited, because this thread had not recorded it as its own (it is now: call create_pr or update again to change them)")
+		}
+	} else {
+		fmt.Fprintf(&b, "opened PR #%d %s (%s → %s)", r.item.Number, r.item.URL, r.head, r.base)
 	}
-	return fmt.Sprintf("opened PR #%d %s (%s → %s)%s", r.item.Number, r.item.URL, r.head, r.base, saved(r.recordErr)), nil
+	b.WriteString(saved(r.recordErr))
+	for _, n := range r.closed {
+		fmt.Fprintf(&b, "\nPR #%d was closed on GitHub, so it is recorded as closed; this is a new PR for the branch.", n)
+	}
+	if r.rival != nil {
+		fmt.Fprintf(&b, "\nPR #%d (%s → %s) is still open against the same base. If this one replaces it, the user has to close it: no tool here closes a PR.", r.rival.Number, r.rival.Head, r.rival.Base)
+	}
+	return b.String(), nil
 }
 
 // MergeInput says how a thread's branch is merged on GitHub.
@@ -318,7 +334,7 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 			body = strings.TrimSpace(t.Task)
 		}
 	}
-	r, err := l.createPR(ctx, t, title, body, "", "", false)
+	r, err := l.createPR(ctx, t, title, body, "", "", false, false)
 	if err != nil {
 		return MergeOutcome{}, err
 	}
@@ -359,9 +375,22 @@ type prResult struct {
 	head, base string
 	// recordErr is why the thread's link to the PR could not be written.
 	recordErr error
+	// amended are the fields of an already open PR that were changed to what
+	// the call said (title, description, base); notEdited is set when the call
+	// asked for edits but the PR is not one this thread has recorded as its own.
+	amended   []string
+	notEdited bool
+	// closed are the thread's records for this branch that GitHub no longer
+	// has open; rival is another open PR of the thread against the same base.
+	closed []int
+	rival  *db.ThreadLink
 }
 
-func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, base string, draft bool) (prResult, error) {
+// createPR pushes the branch and opens its PR, or finds the one that is open.
+// With amend set, the open PR is put right to what title, body and base say
+// (only for a PR the thread has recorded as its own, and only the fields given
+// that differ); Merge passes it unset, as its title is only a default.
+func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, base string, draft, amend bool) (prResult, error) {
 	if err := checkText("title", title, titleMax); err != nil {
 		return prResult{}, err
 	}
@@ -390,6 +419,7 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 		return prResult{}, err
 	}
 	base = strings.TrimSpace(base)
+	asked := base
 	if base == "" && (head == "" || head == own) {
 		base = t.BaseBranch
 	}
@@ -407,16 +437,17 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 	if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
 		return prResult{}, bad
 	}
-	if existing, err := l.gh.OpenPR(ctx, lc.repo, lc.head); err != nil {
+	existing, err := l.gh.OpenPR(ctx, lc.repo, lc.head)
+	if err != nil {
 		return prResult{}, err
-	} else if existing != nil {
-		// Publish what the thread has done since: the PR is its branch.
-		if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
-			return prResult{}, err
-		}
-		_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, *existing)
-		return prResult{item: *existing, existed: true, repo: lc.repo, head: lc.head, base: base, recordErr: rerr}, nil
 	}
+	if existing != nil {
+		return l.openPR(ctx, t, lc, *existing, title, body, asked, amend)
+	}
+	// GitHub has no open PR for the branch: a record that says there is one is
+	// out of date (its PR was closed or merged), and would be mistaken for the
+	// new PR's twin.
+	closed := l.settleClosed(ctx, t, lc.repo, lc.head)
 	// Before anything is pushed: a base that GitHub does not have fails the PR
 	// after its head is already published, and this call never pushes the base.
 	if !onOrigin(ctx, t.Cwd, base) {
@@ -433,7 +464,125 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 		return prResult{}, fmt.Errorf("the branch %s was pushed but the PR was not created: %w", lc.head, err)
 	}
 	_, rerr := l.record(t, lc.repo, db.LinkPR, db.LinkOpened, it)
-	return prResult{item: it, repo: lc.repo, head: lc.head, base: base, recordErr: rerr}, nil
+	return prResult{item: it, repo: lc.repo, head: lc.head, base: base, recordErr: rerr, closed: closed, rival: l.rivalOf(t, lc.repo, it)}, nil
+}
+
+// openPR is createPR when the branch already has an open PR: the branch is
+// pushed again (the PR is its branch) and, when the call asks for it, the PR is
+// put right: the fields that differ from what the call said (a base only when
+// one was named) are edited, all before anything is pushed if one is refused.
+func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, existing GitHubItem, title, body, base string, amend bool) (prResult, error) {
+	r := prResult{item: existing, existed: true, repo: lc.repo, head: lc.head, base: existing.Base}
+	own, err := l.store.FindThreadLink(t.ID, lc.repo.Slug(), existing.Number)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return prResult{}, err
+	}
+	mine := own != nil && own.Role == db.LinkOpened
+	var newTitle, newBody, newBase *string
+	if amend && mine {
+		if s := strings.TrimSpace(title); s != existing.Title {
+			newTitle = &s
+		}
+		if body != "" && !sameText(body, existing.Body) {
+			newBody = &body
+		}
+		if base != "" && base != existing.Base {
+			if base == lc.head {
+				return prResult{}, fmt.Errorf("branch %s cannot be the base of its own PR", base)
+			}
+			if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
+				return prResult{}, bad
+			}
+			if !onOrigin(ctx, t.Cwd, base) {
+				return prResult{}, fmt.Errorf("base branch %s is not on GitHub: open its PR with create_pr first (that pushes it), or choose a base that is", base)
+			}
+			newBase = &base
+		}
+	}
+	// Publish what the thread has done since: the PR is its branch.
+	if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
+		return prResult{}, err
+	}
+	if newTitle != nil || newBody != nil || newBase != nil {
+		it, err := l.gh.UpdatePR(ctx, lc.repo, existing.Number, newTitle, newBody, newBase)
+		if err != nil {
+			return prResult{}, fmt.Errorf("the branch %s was pushed but PR #%d was not edited: %w", lc.head, existing.Number, err)
+		}
+		// The edit's answer has no CI and no settled mergeability: keep the last reading.
+		if own != nil {
+			it.CI, it.Checks = own.CI, own.Checks
+			if it.MergeState == "unknown" || it.MergeState == "" {
+				it.MergeState = own.MergeState
+			}
+		}
+		l.forgetView(t, it.Number)
+		r.item, r.base = it, it.Base
+		for _, f := range []struct {
+			set  bool
+			name string
+		}{{newTitle != nil, "title"}, {newBody != nil, "description"}, {newBase != nil, "base"}} {
+			if f.set {
+				r.amended = append(r.amended, f.name)
+			}
+		}
+	}
+	r.notEdited = amend && !mine
+	_, r.recordErr = l.record(t, lc.repo, db.LinkPR, db.LinkOpened, r.item)
+	return r, nil
+}
+
+// sameText is whether two descriptions read the same: GitHub stores a body
+// with CRLF line ends and may trim it, which is not a change.
+func sameText(a, b string) bool {
+	norm := func(s string) string { return strings.TrimSpace(strings.ReplaceAll(s, "\r\n", "\n")) }
+	return norm(a) == norm(b)
+}
+
+// settleClosed corrects the thread's records of PRs from branch that say open
+// though GitHub has no open PR for it: each is read again (merged or closed as
+// GitHub says) and, if GitHub cannot be read, marked closed, as it cannot be
+// open. It returns the numbers of the records that changed.
+func (l *Links) settleClosed(ctx context.Context, t *db.Thread, repo GitHubRepo, branch string) []int {
+	links, err := l.store.ThreadLinks(t.ID)
+	if err != nil {
+		return nil
+	}
+	var changed []int
+	for _, k := range links {
+		if k.Repo != repo.Slug() || k.Kind != db.LinkPR || k.Head != branch || k.State != db.LinkStateOpen {
+			continue
+		}
+		_, it, err := l.read(ctx, repo, k.Number)
+		if err != nil || it.State == db.LinkStateOpen {
+			// An open reading against OpenPR's answer is GitHub catching up, not a
+			// reason to keep the record open: it is closed here and a refresh corrects it.
+			it = GitHubItem{Number: k.Number, URL: k.URL, Title: k.Title, Head: k.Head, Base: k.Base, State: db.LinkStateClosed, IsPR: true}
+		}
+		if _, rerr := l.record(t, repo, db.LinkPR, k.Role, it); rerr != nil {
+			logrus.WithError(rerr).Warn("projects: cannot record a closed PR")
+			continue
+		}
+		l.forgetView(t, k.Number)
+		changed = append(changed, k.Number)
+	}
+	return changed
+}
+
+// rivalOf is another open PR the thread opened against the same base as the new
+// PR it, from a different branch: the usual look of a PR opened from the wrong
+// branch and opened again from the right one. A stack's PRs have other bases.
+func (l *Links) rivalOf(t *db.Thread, repo GitHubRepo, it GitHubItem) *db.ThreadLink {
+	links, err := l.store.ThreadLinks(t.ID)
+	if err != nil {
+		return nil
+	}
+	for _, k := range links {
+		if k.Repo == repo.Slug() && k.Kind == db.LinkPR && k.Role == db.LinkOpened && k.State == db.LinkStateOpen &&
+			k.Number != it.Number && k.Base == it.Base && k.Head != it.Head {
+			return &k
+		}
+	}
+	return nil
 }
 
 // onOrigin is whether origin has the branch (asked of the remote itself, as the
@@ -482,6 +631,9 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		return "", fmt.Errorf("#%d is an issue: base only applies to a PR", link.Number)
 	}
 	if link.State != db.LinkStateOpen {
+		if link.Kind == db.LinkPR {
+			return "", fmt.Errorf("PR #%d is %s: only an open one can be edited. To carry on from its branch, commit and call create_pr: it opens a new PR for the branch", link.Number, link.State)
+		}
 		return "", fmt.Errorf("%s #%d is %s: only an open one can be edited", link.Kind, link.Number, link.State)
 	}
 	var it GitHubItem

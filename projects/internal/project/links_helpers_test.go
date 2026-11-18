@@ -93,14 +93,25 @@ func (g *fakeGitHub) Comment(_ context.Context, r GitHubRepo, n int, body string
 
 func (g *fakeGitHub) OpenPR(_ context.Context, r GitHubRepo, branch string) (*GitHubItem, error) {
 	err := g.log("open-pr %s %s", r.Slug(), branch)
-	return g.existing, err
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.existing != nil {
+		return g.existing, err
+	}
+	// Like GitHub: the open PR whose head is the branch, whoever opened it.
+	for n := 1; n <= g.next; n++ {
+		if it, ok := g.items[n]; ok && it.IsPR && it.State == "open" && it.Head == branch {
+			return &it, err
+		}
+	}
+	return nil, err
 }
 
 func (g *fakeGitHub) CreatePR(_ context.Context, r GitHubRepo, title, body, head, base string, draft bool) (GitHubItem, error) {
 	if err := g.log("create-pr %s %q head=%s base=%s draft=%t", r.Slug(), title, head, base, draft); err != nil {
 		return GitHubItem{}, err
 	}
-	return g.add(db.LinkPR, title, func(it *GitHubItem) { it.Head, it.Base, it.Draft = head, base, draft }), nil
+	return g.add(db.LinkPR, title, func(it *GitHubItem) { it.Head, it.Base, it.Draft, it.Body = head, base, draft, body }), nil
 }
 
 func (g *fakeGitHub) SquashPR(_ context.Context, r GitHubRepo, n int, sha, title, message string) error {
@@ -137,6 +148,9 @@ func (g *fakeGitHub) UpdatePR(_ context.Context, r GitHubRepo, n int, title, bod
 	it := g.items[n]
 	if title != nil {
 		it.Title = *title
+	}
+	if body != nil {
+		it.Body = *body
 	}
 	if base != nil {
 		it.Base = *base
