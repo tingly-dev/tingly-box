@@ -86,13 +86,27 @@ func (ph *ProtocolHandler) tracingMiddleware(c *gin.Context) {
 	c.Next()
 }
 
+// Operation is the gen_ai.operation.name of a gateway route. It is a closed
+// set: every distinct value mints permanent metric timeseries, so routes
+// declare one of these constants rather than a free-form string.
+type Operation string
+
+const (
+	OperationChat            Operation = "chat"      // Chat Completions and Anthropic Messages
+	OperationResponses       Operation = "responses" // OpenAI Responses API
+	OperationEmbeddings      Operation = "embeddings"
+	OperationDecisions       Operation = "decisions"
+	OperationImageGeneration Operation = "image_generation"
+	OperationImageEdit       Operation = "image_edit"
+)
+
 // DeclareOperation records the gen_ai.operation.name of a route. Registered
 // on the routes whose operation is not the default "chat", it gives the
 // metrics and trace pipelines one shared source for that axis — deriving it
 // separately is how they came to disagree (spans said "embeddings" while
 // every metric reported the "chat" default).
-func DeclareOperation(operation string) gin.HandlerFunc {
-	return func(c *gin.Context) { c.Set(constant.CtxKeyOperation, operation) }
+func DeclareOperation(operation Operation) gin.HandlerFunc {
+	return func(c *gin.Context) { c.Set(constant.CtxKeyOperation, string(operation)) }
 }
 
 // OperationFromContext returns the route's declared gen_ai operation, or the
@@ -101,7 +115,7 @@ func OperationFromContext(c *gin.Context) string {
 	if op := c.GetString(constant.CtxKeyOperation); op != "" {
 		return op
 	}
-	return string(genaiconv.OperationNameChat)
+	return string(OperationChat)
 }
 
 // finishRequestSpan renames and enriches the root span from the tracking

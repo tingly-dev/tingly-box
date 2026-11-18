@@ -158,7 +158,7 @@ middleware——会成环。文件名从 `tracing_middleware.go` 改为 `tracing
 - **root span**：`tracingMiddleware`（`contextMiddleware` 之后）创建。入口 Extract 入站
   `traceparent`（propagator 未启用时是全局 no-op，零成本）；`c.Next()` 之后从 tracking
   context 读回 provider/model/rule/LB 决策，`span.SetName("{operation} {request model}")`
-  （operation 从路径推导：/embeddings → embeddings，其余 chat，与 UsageOptions.Operation
+  （operation 由路由用 `DeclareOperation(Operation…)` 声明——/responses → responses、/embeddings → embeddings 等，未声明的（chat/completions、Anthropic messages）默认 chat，与 UsageOptions.Operation
   同轴同默认）并补全属性，按 HTTP 状态置 error（**canceled ≠ error 规则同 §3**：
   `c.Request.Context().Err() == Canceled` 时不置 error status）。
 - **失败尝试不再丢失**：`UpdateTrackingForFailover` 覆盖 ctx 只留最终赢家（UsageRecord

@@ -39,6 +39,14 @@ describe('RequestJourney diagnostics', () => {
         expect(screen.getByText(/4 spans were dropped/)).toBeInTheDocument();
     });
 
+    it.each([['responses gpt-5', 'responses'], ['chat gpt-5', 'chat']])('shows the %s root stage under its own operation', async (name, operation) => {
+        render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [
+            { trace_id: 'trace', span_id: 'root', name, start_time: '2026-10-21T00:00:00Z', end_time: '2026-10-21T00:00:01Z', status_code: 'Ok', attributes: { 'gen_ai.operation.name': operation } },
+        ] })} />);
+        fireEvent.click(await screen.findByText(name));
+        expect(screen.getByText(`gen_ai.operation.name=${operation}`)).toBeInTheDocument();
+    });
+
     it('distinguishes a trace API failure from eviction', async () => {
         render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockRejectedValue(new Error('HTTP 503'))} />);
         expect(await screen.findByText(/Failed to load stage timings: HTTP 503/)).toBeInTheDocument();

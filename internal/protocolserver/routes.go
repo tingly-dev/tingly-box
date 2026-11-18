@@ -93,8 +93,8 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	group.POST("/chat/completions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleOpenAIChatCompletions)...)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesCreate)...)
-	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleResponsesGet)...)
+	group.POST("/responses", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationResponses), ph.HandleResponsesCreate)...)
+	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationResponses), ph.HandleResponsesGet)...)
 
 	// Chat completions endpoint (Anthropic compatible)
 	group.POST("/messages", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleAnthropicMessages)...)
@@ -102,23 +102,23 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	group.POST("/messages/count_tokens", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.AnthropicCountTokens)...)
 
 	// Embeddings endpoint (OpenAI compatible)
-	group.POST("/embeddings", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("embeddings"), ph.HandleOpenAIEmbeddings)...)
+	group.POST("/embeddings", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationEmbeddings), ph.HandleOpenAIEmbeddings)...)
 
 	// Decisions endpoint (OpenAI Decisions API, opaque passthrough)
-	group.POST("/decisions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("decisions"), ph.HandleOpenAIDecisions)...)
-	group.POST("/systemone", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("decisions"), ph.HandleOpenAIDecisions)...)
+	group.POST("/decisions", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationDecisions), ph.HandleOpenAIDecisions)...)
+	group.POST("/systemone", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationDecisions), ph.HandleOpenAIDecisions)...)
 
 	// Image generation endpoint (OpenAI compatible).
 	// Routed directly to upstream POST /v1/images/generations; the Responses API
 	// (POST /responses with the image_generation tool) is exposed in parallel via
 	// the same scenario, with the caller choosing which surface to use.
-	group.POST("/images/generations", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("image_generation"), ph.HandleOpenAIImageGeneration)...)
+	group.POST("/images/generations", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationImageGeneration), ph.HandleOpenAIImageGeneration)...)
 
 	// Image edit endpoint (OpenAI compatible). Accepts the standard multipart
 	// wire format plus a JSON mirror with inline base64/data-URL images; the
 	// client layer adapts per vendor (Codex uses its native JSON edits
 	// endpoint, everyone else gets the SDK's multipart /images/edits).
-	group.POST("/images/edits", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation("image_edit"), ph.HandleOpenAIImageEdit)...)
+	group.POST("/images/edits", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationImageEdit), ph.HandleOpenAIImageEdit)...)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.ListModelsByScenario)...)
@@ -136,8 +136,8 @@ func (ph *ProtocolHandler) SetupOpenAIEndpoints(group *gin.RouterGroup, modelAut
 	group.GET("/models", ph.modelAuthChain(modelAuth, ph.HandleOpenAIListModels)...)
 
 	// Responses API endpoints (OpenAI compatible)
-	group.POST("/responses", ph.modelAuthChain(modelAuth, ph.HandleResponsesCreate)...)
-	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, ph.HandleResponsesGet)...)
+	group.POST("/responses", ph.modelAuthChain(modelAuth, DeclareOperation(OperationResponses), ph.HandleResponsesCreate)...)
+	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, DeclareOperation(OperationResponses), ph.HandleResponsesGet)...)
 }
 
 // SetupAnthropicEndpoints registers the Anthropic-only endpoint set on group.
