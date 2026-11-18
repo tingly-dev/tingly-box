@@ -186,7 +186,7 @@ func TestLatestOpenAIAndCodexModels(t *testing.T) {
 	}
 
 	// openai-com carries the API figure; codex carries the Codex default window
-	// from openai/codex models.json (context_window 272000). Users can widen it
+	// from openai/codex models.json (272000 or 500000 by model). Users can widen it
 	// with Codex's 1M switch (max_context_window 872000), so it is not the catalog value.
 	tests := []struct {
 		providerID string
@@ -194,7 +194,8 @@ func TestLatestOpenAIAndCodexModels(t *testing.T) {
 		context    int
 	}{
 		{providerID: "openai-com", modelIDs: []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"}, context: 1050000},
-		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"}, context: 272000},
+		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}, context: 272000},
+		{providerID: "codex", modelIDs: []string{"gpt-6.1-sol", "gpt-6.1-sol:fast"}, context: 500000},
 	}
 
 	for _, tt := range tests {
