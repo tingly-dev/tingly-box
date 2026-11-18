@@ -431,7 +431,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, scenario }: Requ
                         icon={<KeyboardArrowUpIcon />}
                         label={t('logViewer.newRequests', { count: pending, defaultValue: '{{count}} new requests' })}
                         onClick={() => showHeld(true)}
-                        sx={{ position: 'absolute', top: 44, left: '50%', transform: 'translateX(-50%)', zIndex: 3, boxShadow: 2 }}
+                        sx={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', zIndex: 3, boxShadow: 2 }}
                     />
                 </Fade>
             )}
