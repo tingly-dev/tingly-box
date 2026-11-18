@@ -1,4 +1,5 @@
 import {CredentialCards} from "@/components/credential/CredentialCards";
+import {ProxySwitch, type ProxyControl} from "@/components/credential/ProxySwitch";
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
 import {
@@ -13,10 +14,8 @@ import {
     Cancel,
     ContentCopy,
     Delete,
-    Edit,
     ListAlt,
     MoreVert,
-    Route,
     Visibility,
 } from '@/components/icons';
 import ConfirmPopover from "@/components/ConfirmPopover";
@@ -55,6 +54,7 @@ interface ApiKeyTableProps {
     view?: "table" | "list" | "card";
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
+    proxy?: ProxyControl;
     onDelete?: (providerUuid: string) => void;
     onNotification?: (message: string, severity: "success" | "error") => void;
     providerQuotas?: { [uuid: string]: ProviderQuota };
@@ -96,6 +96,7 @@ const ApiKeyTable = ({
                          view = "table",
                          onEdit,
                          onToggle,
+                         proxy,
                          onDelete,
                          onNotification,
                          providerQuotas,
@@ -217,7 +218,7 @@ const ApiKeyTable = ({
         >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
-            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} proxy={proxy} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
                     <TableRow>
                         {columns.map((col) => (
@@ -237,6 +238,7 @@ const ApiKeyTable = ({
                             {/* Main provider row */}
                             <TableRow
                                 hover
+                                className="proxy-row"
                                 sx={{
                                     "& > .MuiTableCell-root": {
                                         py: 1.25,
@@ -369,20 +371,7 @@ const ApiKeyTable = ({
                                 </TableCell>
                                 {/* Proxy */}
                                 <TableCell align="center">
-                                    {provider.proxy_url ? (
-                                        <Tooltip title={provider.proxy_url} arrow>
-                                            <Route
-                                                fontSize="small"
-                                                sx={{color: "text.secondary"}}
-                                            />
-                                        </Tooltip>
-                                    ) : (
-                                        <Typography variant="body2" sx={{
-                                            color: "text.secondary"
-                                        }}>
-                                            -
-                                        </Typography>
-                                    )}
+                                    <ProxySwitch provider={provider} proxy={proxy}/>
                                 </TableCell>
                                 {/* Actions */}
                                 <TableCell>
@@ -398,18 +387,18 @@ const ApiKeyTable = ({
                                             width: "fit-content",
                                         }}
                                     >
-                                        {/* Edit — primary action, always visible */}
+                                        {/* Edit, always visible */}
                                         {onEdit && (
-                                            <Tooltip title="Edit">
-                                                <IconButton
-                                                    aria-label={`Edit ${provider.name}`}
-                                                    size="small"
-                                                    color="primary"
-                                                    onClick={() => onEdit(provider.uuid)}
-                                                >
-                                                    <Edit fontSize="small"/>
-                                                </IconButton>
-                                            </Tooltip>
+                                            <Button
+                                                variant="text"
+                                                size="small"
+                                                color="inherit"
+                                                aria-label={`Edit ${provider.name}`}
+                                                onClick={() => onEdit(provider.uuid)}
+                                                sx={{fontSize: fontSizes.sm, minWidth: "auto", px: {xs: 0.75, xl: 1}}}
+                                            >
+                                                Edit
+                                            </Button>
                                         )}
                                         <Divider orientation="vertical" flexItem/>
                                         {/* Models text button */}
@@ -417,6 +406,7 @@ const ApiKeyTable = ({
                                             variant="text"
                                             size="small"
                                             startIcon={<ListAlt/>}
+                                            color="inherit"
                                             onClick={() => handleModelListClick(provider.uuid)}
                                             sx={{
                                                 fontSize: fontSizes.sm,

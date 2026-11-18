@@ -1,4 +1,5 @@
 import {CredentialCards} from "@/components/credential/CredentialCards";
+import {ProxySwitch, type ProxyControl} from "@/components/credential/ProxySwitch";
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
 import {
@@ -12,11 +13,9 @@ import ConfirmPopover from "@/components/ConfirmPopover";
 import {
     ContentCopy,
     Delete,
-    Edit,
     ListAlt,
     MoreVert,
     Refresh as RefreshIcon,
-    Route,
     Schedule,
     VpnKey,
 } from '@/components/icons';
@@ -53,6 +52,7 @@ interface OAuthTableProps {
     view?: "table" | "list" | "card";
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
+    proxy?: ProxyControl;
     onDelete?: (providerUuid: string) => void;
     onReauthorize?: (providerUuid: string) => void;
     onRefreshToken?: (providerUuid: string) => Promise<void>;
@@ -95,6 +95,7 @@ const OAuthTable = ({
                         view = "table",
                         onEdit,
                         onToggle,
+                        proxy,
                         onDelete,
                         onReauthorize,
                         onRefreshToken,
@@ -229,7 +230,7 @@ const OAuthTable = ({
         >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
-            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} proxy={proxy} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
                     <TableRow>
                         {columns.map((col) => (
@@ -252,6 +253,7 @@ const OAuthTable = ({
                                 {/* Main provider row */}
                                 <TableRow
                                     hover
+                                    className="proxy-row"
                                     sx={{
                                         "& > .MuiTableCell-root": {
                                             py: 1.25,
@@ -355,20 +357,7 @@ const OAuthTable = ({
                                     </TableCell>
                                     {/* Proxy */}
                                     <TableCell align="center">
-                                        {provider.proxy_url ? (
-                                            <Tooltip title={provider.proxy_url} arrow>
-                                                <Route
-                                                    fontSize="small"
-                                                    sx={{color: "text.secondary"}}
-                                                />
-                                            </Tooltip>
-                                        ) : (
-                                            <Typography variant="body2" sx={{
-                                                color: "text.secondary"
-                                            }}>
-                                                -
-                                            </Typography>
-                                        )}
+                                        <ProxySwitch provider={provider} proxy={proxy}/>
                                     </TableCell>
                                     {/* Actions */}
                                     <TableCell sx={{whiteSpace: "nowrap"}}>
@@ -384,18 +373,18 @@ const OAuthTable = ({
                                                 width: "fit-content",
                                             }}
                                         >
-                                            {/* Edit — primary action */}
+                                            {/* Edit, always visible */}
                                             {onEdit && (
-                                                <Tooltip title="View Details">
-                                                    <IconButton
-                                                        aria-label={`View details for ${provider.name}`}
-                                                        size="small"
-                                                        color="primary"
-                                                        onClick={() => onEdit(provider.uuid)}
-                                                    >
-                                                        <Edit fontSize="small"/>
-                                                    </IconButton>
-                                                </Tooltip>
+                                                <Button
+                                                    variant="text"
+                                                    size="small"
+                                                    color="inherit"
+                                                    aria-label={`Edit ${provider.name}`}
+                                                    onClick={() => onEdit(provider.uuid)}
+                                                    sx={{fontSize: fontSizes.sm, minWidth: "auto", px: {xs: 0.75, xl: 1}}}
+                                                >
+                                                    Edit
+                                                </Button>
                                             )}
                                             <Divider orientation="vertical" flexItem/>
                                             {/* Models text button */}
@@ -403,6 +392,7 @@ const OAuthTable = ({
                                                 variant="text"
                                                 size="small"
                                                 startIcon={<ListAlt/>}
+                                                color="inherit"
                                                 onClick={() => handleModelListClick(provider.uuid)}
                                                 sx={{
                                                     fontSize: fontSizes.sm,
