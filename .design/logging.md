@@ -29,7 +29,10 @@ Scenario / provider / status 过滤条。自动刷新,固定住的自动滚动�
   每个可展开行末尾有共享的 disclosure 箭头,读者手动折叠/展开的选择在刷新间保留
   (按 span id / 事件内容为 key)。
 - Root span 的名字按 OTel GenAI 约定是 `{operation} {request model}`(导出到 OTLP 的后端依赖这个名字,不改);
-  展示时 `RequestJourney` 用 `gen_ai.operation.name` 作名称、把 `request → response model · provider` 放到详情列,完整名字仍在展开的 `name=` 里。
+  名字只管标准化,细节在属性里。`RequestJourney` 不解析这个名字,而是读属性,把请求行拼成"谁到谁":
+  类目列 `REQUEST`、名称列 `chat`(`gen_ai.operation.name`),详情列
+  `<入口协议> · <请求模型> → <provider> · <上游协议> · <实际模型>`(取自 `tingly.protocol.inbound/upstream`、
+  `gen_ai.*`;自动换行不截断,带 tooltip)。缺属性时退回 `请求模型 → 实际模型 · provider`;完整 span 名仍在展开的 `name=` 里。
 - 自动刷新是静默的(不闪"Refreshing…"),已展开请求的详情只在它那一行数据变化时才重新拉取;
   重新拉取 trace 期间继续显示上一份 stage,不会让 stage 行消失再出现。
 - 读者正在读时(有展开的请求,或列表滚离顶部),新到的请求**不插入**——已显示的行位置和顺序不动、

@@ -56,7 +56,7 @@ tingly-box 有三类"请求发生了什么"的数据，各有唯一的权威来�
 
 **命名空间纪律**：网关自有维度不占用标准前缀，放 `tingly.*`：`tingly.scenario` / `tingly.provider.uuid` / `tingly.rule.uuid` / `tingly.streaming` / `tingly.user.tier`。观测平台（Datadog / New Relic 等）的 GenAI 面板自动识别 `gen_ai.*`，我们的维度作为自定义标签共存。
 
-**Span 约定**：命名 `"{operation} {request model}"`（如 `chat claude-sonnet-4-6`），kind CLIENT，属性 `gen_ai.operation.name` / `gen_ai.provider.name` / `gen_ai.request.model` + `tingly.*`；token 用量是 span 属性 `gen_ai.usage.input_tokens` / `output_tokens`（`Tracer.SetTokenUsage`），不是 event。
+**Span 约定**：命名 `"{operation} {request model}"`（如 `chat claude-sonnet-4-6`），kind CLIENT，属性 `gen_ai.operation.name` / `gen_ai.provider.name` / `gen_ai.request.model` + HTTP 标准属性（`http.request.method` / `http.route` / `url.path`）+ `tingly.*`（含 `tingly.protocol.inbound` / `tingly.protocol.upstream`：`<vendor>.<api>` 写法，如 `openai.chat`、`anthropic.messages`；由 `DispatchChainResult` 记入 gin ctx，没走 dispatch 的请求不带）；token 用量是 span 属性 `gen_ai.usage.input_tokens` / `output_tokens`（`Tracer.SetTokenUsage`），不是 event。
 
 ## 4. 基数纪律（#1255 的血泪，不可回退）
 

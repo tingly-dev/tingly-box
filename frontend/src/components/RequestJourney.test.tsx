@@ -101,5 +101,21 @@ describe('RequestJourney diagnostics', () => {
         expect(await screen.findByText('chat')).toBeInTheDocument();
         expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5 · Anthropic')).toBeInTheDocument();
         expect(screen.getByText('name=chat gpt-5.6-sol')).toBeInTheDocument();
+        // The model route is never ellipsized: it wraps (and keeps a tooltip).
+        expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5 · Anthropic')).toHaveAttribute('title', 'gpt-5.6-sol → claude-sonnet-5  ·  Anthropic');
+        expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5 · Anthropic')).toHaveStyle({ whiteSpace: 'normal' });
+    });
+
+    it('reads who-to-whom from the protocol attributes, and falls back to the bare model route without them', async () => {
+        const root = { ...span('root', 'chat gpt-5.6-sol'), attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic', 'tingly.protocol.inbound': 'openai.chat', 'tingly.protocol.upstream': 'anthropic.messages' } };
+        const { unmount } = render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [root] })} />);
+        expect(await screen.findByText('request')).toBeInTheDocument();
+        expect(screen.getByText('chat')).toBeInTheDocument();
+        expect(screen.getByText('openai.chat · gpt-5.6-sol → Anthropic · anthropic.messages · claude-sonnet-5')).toBeInTheDocument();
+        unmount();
+
+        const failed = { ...root, attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.provider.name': 'OpenAI', 'tingly.protocol.inbound': 'openai.chat', 'tingly.protocol.upstream': 'openai.chat' } };
+        render(<RequestJourney events={[]} traceId="trace2" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace2', spans: [failed] })} />);
+        expect(await screen.findByText('openai.chat · gpt-5.6-sol → OpenAI · openai.chat')).toBeInTheDocument();
     });
 });

@@ -18,6 +18,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -118,13 +119,43 @@ func OperationFromContext(c *gin.Context) string {
 	return string(OperationChat)
 }
 
+// protocolLabel renders a protocol.APIType as the "<vendor>.<api>" form the
+// protocol attributes use. Unknown values pass through; empty stays empty (the
+// request never reached a dispatch, e.g. embeddings).
+func protocolLabel(apiType string) string {
+	switch protocol.APIType(apiType) {
+	case protocol.TypeOpenAIChat:
+		return "openai.chat"
+	case protocol.TypeOpenAIResponses:
+		return "openai.responses"
+	case protocol.TypeAnthropicV1:
+		return "anthropic.messages"
+	case protocol.TypeAnthropicBeta:
+		return "anthropic.messages.beta"
+	case protocol.TypeGoogle:
+		return "google.generate_content"
+	default:
+		return apiType
+	}
+}
+
 // finishRequestSpan renames and enriches the root span from the tracking
 // context populated during the request, sets the final status, and ends it.
 func finishRequestSpan(c *gin.Context, span trace.Span, status int) {
 	rule, provider, model, requestModel, _, streamed, _ := GetTrackingContext(c)
 	operation := OperationFromContext(c)
-	attrs := make([]attribute.KeyValue, 0, 10)
+	attrs := make([]attribute.KeyValue, 0, 16)
 	attrs = append(attrs, pkgotel.AttrGenAIOperationName.String(operation))
+	attrs = append(attrs, pkgotel.AttrHTTPRequestMethod.String(c.Request.Method), pkgotel.AttrURLPath.String(c.Request.URL.Path))
+	if route := c.FullPath(); route != "" {
+		attrs = append(attrs, pkgotel.AttrHTTPRoute.String(route))
+	}
+	if in := protocolLabel(c.GetString(constant.CtxKeyProtocolInbound)); in != "" {
+		attrs = append(attrs, pkgotel.AttrTinglyProtocolInbound.String(in))
+	}
+	if up := protocolLabel(c.GetString(constant.CtxKeyProtocolUpstream)); up != "" {
+		attrs = append(attrs, pkgotel.AttrTinglyProtocolUpstream.String(up))
+	}
 
 	// Per the GenAI convention the span is named "{operation} {request
 	// model}". The request model is parsed from the body, so the name can

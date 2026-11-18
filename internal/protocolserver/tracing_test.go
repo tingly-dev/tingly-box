@@ -16,6 +16,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -74,6 +75,8 @@ func TestTracingMiddleware_RootSpanLifecycle(t *testing.T) {
 		rule := &typ.Rule{UUID: "rule-1"}
 		provider := &typ.Provider{UUID: "prov-1", Name: "acme"}
 		SetTrackingContext(c, rule, provider, "claude-sonnet-4-6", "tingly/cc", true)
+		c.Set(constant.CtxKeyProtocolInbound, string(protocol.TypeOpenAIChat))
+		c.Set(constant.CtxKeyProtocolUpstream, string(protocol.TypeAnthropicV1))
 		traceIDInCtx = c.GetString(constant.CtxKeyTraceID)
 		c.Status(http.StatusOK)
 	})
@@ -102,6 +105,11 @@ func TestTracingMiddleware_RootSpanLifecycle(t *testing.T) {
 		"tingly.scenario":           "claude_code",
 		"tingly.streaming":          true,
 		"http.response.status_code": int64(200),
+		"http.request.method":       "POST",
+		"url.path":                  "/tingly/claude_code/v1/messages",
+		"http.route":                "/tingly/:scenario/v1/messages",
+		"tingly.protocol.inbound":   "openai.chat",
+		"tingly.protocol.upstream":  "anthropic.messages",
 	}
 	for k, want := range checks {
 		if got := attrs[k]; got != want {
@@ -266,6 +274,11 @@ func TestDeclaredOperationDrivesSpanAndMetrics(t *testing.T) {
 	if spans[0].Name != "embeddings text-embed-3" {
 		t.Errorf("span name = %q, want %q", spans[0].Name, "embeddings text-embed-3")
 	}
+	for _, k := range []string{"tingly.protocol.inbound", "tingly.protocol.upstream"} {
+		if _, ok := attrMap(spans[0])[k]; ok {
+			t.Errorf("attr %s set for a request that never reached a protocol dispatch", k)
+		}
+	}
 	if got := attrMap(spans[0])["gen_ai.operation.name"]; got != "embeddings" {
 		t.Errorf("span operation = %v, want embeddings", got)
 	}
@@ -328,5 +341,21 @@ func TestInboundAPIDeclaresOperation(t *testing.T) {
 				t.Errorf("span name = %q, want prefix %q", spans[0].Name, tc.want)
 			}
 		})
+	}
+}
+
+func TestProtocolLabel(t *testing.T) {
+	for in, want := range map[string]string{
+		string(protocol.TypeOpenAIChat):      "openai.chat",
+		string(protocol.TypeOpenAIResponses): "openai.responses",
+		string(protocol.TypeAnthropicV1):     "anthropic.messages",
+		string(protocol.TypeAnthropicBeta):   "anthropic.messages.beta",
+		string(protocol.TypeGoogle):          "google.generate_content",
+		"":                                   "",
+		"future_api":                         "future_api",
+	} {
+		if got := protocolLabel(in); got != want {
+			t.Errorf("protocolLabel(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
