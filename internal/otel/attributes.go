@@ -18,6 +18,11 @@ var (
 	AttrGenAIUsageInputTokens  = semconv.GenAIUsageInputTokensKey
 	AttrGenAIUsageOutputTokens = semconv.GenAIUsageOutputTokensKey
 	AttrErrorType              = semconv.ErrorTypeKey
+
+	// Standard HTTP attributes on the root span: what was asked of the gateway.
+	AttrHTTPRequestMethod = semconv.HTTPRequestMethodKey
+	AttrHTTPRoute         = semconv.HTTPRouteKey
+	AttrURLPath           = semconv.URLPathKey
 )
 
 // Gateway-specific attributes, aliased from tracker (their single home) so
@@ -39,5 +44,9 @@ var (
 	AttrTinglyLBServiceID     = attribute.Key("tingly.lb.service_id")
 	AttrTinglyLBTactic        = attribute.Key("tingly.lb.tactic")
 	AttrTinglyFailoverAttempt = attribute.Key("tingly.failover.attempt")
-	AttrHTTPResponseStatus    = semconv.HTTPResponseStatusCodeKey
+	// The protocol the client spoke to the gateway and the one the gateway
+	// spoke to the provider, as "<vendor>.<api>" (openai.chat, anthropic.messages).
+	AttrTinglyProtocolInbound  = attribute.Key("tingly.protocol.inbound")
+	AttrTinglyProtocolUpstream = attribute.Key("tingly.protocol.upstream")
+	AttrHTTPResponseStatus     = semconv.HTTPResponseStatusCodeKey
 )

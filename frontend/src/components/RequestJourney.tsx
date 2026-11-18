@@ -57,9 +57,11 @@ type RowTone = 'ok' | 'error' | 'warning' | 'plain';
 // duration; `log` rows come from the pipeline's log lines and do not.
 interface JourneyRow {
     key: string;
-    kind: 'stage' | 'log';
+    kind: 'request' | 'stage' | 'log';
     name: string;
     detail: string;
+    // The request row's detail is the protocol and model route: it wraps instead of truncating.
+    wrapDetail?: boolean;
     result?: string;
     tone: RowTone;
     start: number;
@@ -112,9 +114,33 @@ const timed = (span: TraceSpan): TimedSpan => ({
 
 // Presentation for the span names the gateway emits. Anything unrecognized
 // falls through to its raw span name rather than being hidden.
-const describeSpan = (span: TimedSpan): { name: string; detail: string } => {
+// "Who to whom" in one line: the client's protocol and requested model, then the
+// protocol and model the provider served it with. The provider's name stays out
+// of the row (it can be long) and is in the opened details. Attributes the
+// backend did not record are skipped, down to the bare model route.
+const describeRoute = (attrs: Record<string, string>): string => {
+    const requested = attrs['gen_ai.request.model'];
+    const served = attrs['gen_ai.response.model'];
+    const inbound = attrs['tingly.protocol.inbound'];
+    const upstream = attrs['tingly.protocol.upstream'];
+    const join = (parts: (string | undefined)[]) => parts.filter(Boolean).join(' · ');
+    if (!inbound && !upstream) {
+        return requested && served && served !== requested ? `${requested} → ${served}` : requested || served || '';
+    }
+    return [join([inbound, requested]), join([upstream, served])].filter(Boolean).join('  →  ');
+};
+
+const describeSpan = (span: TimedSpan): { kind?: 'request'; name: string; detail: string; wrapDetail?: boolean } => {
     const attrs = span.attributes || {};
     const service = attrs['tingly.lb.service_id'];
+    // The root span is named "{operation} {request model}" (the OTel GenAI
+    // convention, which exporters rely on) — too long for the name column. Read
+    // the attributes instead: the operation is the name, and the protocols and
+    // models go to the detail column, where they have room.
+    const operation = attrs['gen_ai.operation.name'];
+    if (operation) {
+        return { kind: 'request', name: operation, detail: describeRoute(attrs), wrapDetail: true };
+    }
     switch (span.name) {
         case 'routing':
             return { name: 'routing', detail: [service, attrs['tingly.lb.tactic']].filter(Boolean).join('  ·  ') };
@@ -127,13 +153,14 @@ const describeSpan = (span: TimedSpan): { name: string; detail: string } => {
 
 const buildRows = (events: ModelRequestEvent[], spans: TraceSpan[]): JourneyRow[] => {
     const rows: JourneyRow[] = spans.map(timed).map((span) => {
-        const { name, detail } = describeSpan(span);
+        const { kind, name, detail, wrapDetail } = describeSpan(span);
         const attrs = span.attributes || {};
         return {
             key: span.span_id,
-            kind: 'stage',
+            kind: kind ?? 'stage',
             name,
             detail,
+            wrapDetail,
             result: attrs['http.response.status_code'] || span.status_message,
             tone: span.status_code === 'Error' ? 'error' : span.status_code === 'Ok' ? 'ok' : 'plain',
             start: span.start,
@@ -185,17 +212,17 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
         size="small"
         label={kind}
         sx={{
-            width: 58,
+            width: 64,
             height: 17,
             fontSize: fontSizes.micro,
             fontWeight: 600,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
             borderRadius: radius.chip,
-            color: tone === 'error' ? 'error.main' : kind === 'stage' ? 'primary.main' : 'text.disabled',
+            color: tone === 'error' ? 'error.main' : kind !== 'log' ? 'primary.main' : 'text.disabled',
             backgroundColor: (theme) => tone === 'error'
                 ? alpha(theme.palette.error.main, 0.1)
-                : kind === 'stage'
+                : kind !== 'log'
                     ? alpha(theme.palette.primary.main, 0.1)
                     : theme.palette.action.hover,
             '& .MuiChip-label': { px: 0 },
@@ -287,7 +314,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
         >
             {rows.map((row) => {
                 const expandable = row.payload.length > 0 || !!row.rules;
-                const open = expandable && (toggled[row.key] ?? row.kind === 'stage');
+                const open = expandable && (toggled[row.key] ?? row.kind !== 'log');
                 const cellSx = {
                     py: 0.32,
                     cursor: expandable ? 'pointer' : 'default',
@@ -318,7 +345,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                     fontFamily: fontMono,
                                     fontSize: fontSizes.sm,
                                     fontWeight: 500,
-                                    color: row.kind === 'stage' ? 'text.primary' : 'text.secondary',
+                                    color: row.kind !== 'log' ? 'text.primary' : 'text.secondary',
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -329,13 +356,14 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell} sx={{ ...cellSx, minWidth: 0 }}>
                             <Typography
+                                title={row.detail}
                                 sx={{
                                     fontFamily: fontMono,
                                     fontSize: fontSizes.micro,
                                     color: toneColor(row.tone),
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
+                                    ...(row.wrapDetail
+                                        ? { whiteSpace: 'normal', overflowWrap: 'anywhere' }
+                                        : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
                                 }}
                             >
                                 {row.detail}

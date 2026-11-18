@@ -42,7 +42,8 @@ describe('RequestJourney diagnostics', () => {
         render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [
             { trace_id: 'trace', span_id: 'root', name, start_time: '2026-10-21T00:00:00Z', end_time: '2026-10-21T00:00:01Z', status_code: 'Ok', attributes: { 'gen_ai.operation.name': operation } },
         ] })} />);
-        fireEvent.click(await screen.findByText(name));
+        expect(await screen.findByText(operation)).toBeInTheDocument();
+        expect(screen.getByText(`name=${name}`)).toBeInTheDocument();
         expect(screen.getByText(`gen_ai.operation.name=${operation}`)).toBeInTheDocument();
     });
 
@@ -91,5 +92,33 @@ describe('RequestJourney diagnostics', () => {
         await act(async () => resolveSecond({ trace_id: 'trace', spans: [span('s1', 'routing'), span('s2', 'upstream')] }));
         expect(screen.queryByText('attr_s1=v')).not.toBeInTheDocument();
         expect(screen.getByText('attr_s2=v')).toBeInTheDocument();
+    });
+
+    it('shows the root span as its operation with the model as detail', async () => {
+        render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [
+            { ...span('root', 'chat gpt-5.6-sol'), attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic' } },
+        ] })} />);
+        expect(await screen.findByText('chat')).toBeInTheDocument();
+        expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5')).toBeInTheDocument();
+        expect(screen.getByText('name=chat gpt-5.6-sol')).toBeInTheDocument();
+        // The model route is never ellipsized: it wraps (and keeps a tooltip).
+        expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5')).toHaveAttribute('title', 'gpt-5.6-sol → claude-sonnet-5');
+        expect(screen.getByText('gpt-5.6-sol → claude-sonnet-5')).toHaveStyle({ whiteSpace: 'normal' });
+    });
+
+    it('reads who-to-whom from the protocol attributes, and falls back to the bare model route without them', async () => {
+        const root = { ...span('root', 'chat gpt-5.6-sol'), attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic', 'tingly.protocol.inbound': 'openai.chat', 'tingly.protocol.upstream': 'anthropic.messages' } };
+        const { unmount } = render(<RequestJourney events={[]} traceId="trace" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace', spans: [root] })} />);
+        expect(await screen.findByText('request')).toBeInTheDocument();
+        expect(screen.getByText('chat')).toBeInTheDocument();
+        expect(screen.getByText('openai.chat · gpt-5.6-sol → anthropic.messages · claude-sonnet-5')).toBeInTheDocument();
+        // The provider name is not in the row; it is in the opened details.
+        expect(screen.queryByText(/Anthropic ·/)).not.toBeInTheDocument();
+        expect(screen.getByText('gen_ai.provider.name=Anthropic')).toBeInTheDocument();
+        unmount();
+
+        const failed = { ...root, attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.provider.name': 'OpenAI', 'tingly.protocol.inbound': 'openai.chat', 'tingly.protocol.upstream': 'openai.chat' } };
+        render(<RequestJourney events={[]} traceId="trace2" getTrace={vi.fn().mockResolvedValue({ trace_id: 'trace2', spans: [failed] })} />);
+        expect(await screen.findByText('openai.chat · gpt-5.6-sol → openai.chat')).toBeInTheDocument();
     });
 });
