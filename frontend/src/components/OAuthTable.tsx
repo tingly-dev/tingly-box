@@ -13,7 +13,6 @@ import ConfirmPopover from "@/components/ConfirmPopover";
 import {
     ContentCopy,
     Delete,
-    Edit,
     ListAlt,
     MoreVert,
     Refresh as RefreshIcon,
@@ -374,18 +373,18 @@ const OAuthTable = ({
                                                 width: "fit-content",
                                             }}
                                         >
-                                            {/* Edit — primary action */}
+                                            {/* Edit, always visible */}
                                             {onEdit && (
-                                                <Tooltip title="View Details">
-                                                    <IconButton
-                                                        aria-label={`View details for ${provider.name}`}
-                                                        size="small"
-                                                        color="primary"
-                                                        onClick={() => onEdit(provider.uuid)}
-                                                    >
-                                                        <Edit fontSize="small"/>
-                                                    </IconButton>
-                                                </Tooltip>
+                                                <Button
+                                                    variant="text"
+                                                    size="small"
+                                                    color="inherit"
+                                                    aria-label={`Edit ${provider.name}`}
+                                                    onClick={() => onEdit(provider.uuid)}
+                                                    sx={{fontSize: fontSizes.sm, minWidth: "auto", px: {xs: 0.75, xl: 1}}}
+                                                >
+                                                    Edit
+                                                </Button>
                                             )}
                                             <Divider orientation="vertical" flexItem/>
                                             {/* Models text button */}
@@ -393,6 +392,7 @@ const OAuthTable = ({
                                                 variant="text"
                                                 size="small"
                                                 startIcon={<ListAlt/>}
+                                                color="inherit"
                                                 onClick={() => handleModelListClick(provider.uuid)}
                                                 sx={{
                                                     fontSize: fontSizes.sm,

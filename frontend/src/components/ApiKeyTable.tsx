@@ -14,7 +14,6 @@ import {
     Cancel,
     ContentCopy,
     Delete,
-    Edit,
     ListAlt,
     MoreVert,
     Visibility,
@@ -388,18 +387,18 @@ const ApiKeyTable = ({
                                             width: "fit-content",
                                         }}
                                     >
-                                        {/* Edit — primary action, always visible */}
+                                        {/* Edit, always visible */}
                                         {onEdit && (
-                                            <Tooltip title="Edit">
-                                                <IconButton
-                                                    aria-label={`Edit ${provider.name}`}
-                                                    size="small"
-                                                    color="primary"
-                                                    onClick={() => onEdit(provider.uuid)}
-                                                >
-                                                    <Edit fontSize="small"/>
-                                                </IconButton>
-                                            </Tooltip>
+                                            <Button
+                                                variant="text"
+                                                size="small"
+                                                color="inherit"
+                                                aria-label={`Edit ${provider.name}`}
+                                                onClick={() => onEdit(provider.uuid)}
+                                                sx={{fontSize: fontSizes.sm, minWidth: "auto", px: {xs: 0.75, xl: 1}}}
+                                            >
+                                                Edit
+                                            </Button>
                                         )}
                                         <Divider orientation="vertical" flexItem/>
                                         {/* Models text button */}
@@ -407,6 +406,7 @@ const ApiKeyTable = ({
                                             variant="text"
                                             size="small"
                                             startIcon={<ListAlt/>}
+                                            color="inherit"
                                             onClick={() => handleModelListClick(provider.uuid)}
                                             sx={{
                                                 fontSize: fontSizes.sm,
