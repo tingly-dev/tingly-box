@@ -30,6 +30,7 @@ type ProviderRecord struct {
 	NoKeyRequired bool     `gorm:"column:no_key_required;default:false"`
 	Enabled       bool     `gorm:"column:enabled;default:true"`
 	ProxyURL      string   `gorm:"column:proxy_url"`
+	ProxyDisabled bool     `gorm:"column:proxy_disabled;default:false"`
 	Timeout       int64    `gorm:"column:timeout"`
 	Tags          []string `gorm:"column:tags;type:text;serializer:json"`
 	LastUpdated   string   `gorm:"column:last_updated"`
@@ -150,6 +151,7 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		NoKeyRequired:      r.NoKeyRequired,
 		Enabled:            r.Enabled,
 		ProxyURL:           r.ProxyURL,
+		ProxyDisabled:      r.ProxyDisabled,
 		Timeout:            r.Timeout,
 		LastUpdated:        r.LastUpdated,
 		OpenAIEndpointMode: ai.OpenAIEndpointMode(r.OpenAIEndpointMode),
@@ -197,6 +199,7 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 		NoKeyRequired:      p.NoKeyRequired,
 		Enabled:            p.Enabled,
 		ProxyURL:           p.ProxyURL,
+		ProxyDisabled:      p.ProxyDisabled,
 		Timeout:            p.Timeout,
 		LastUpdated:        p.LastUpdated,
 		OpenAIEndpointMode: string(p.OpenAIEndpointMode),
@@ -245,6 +248,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	record.NoKeyRequired = p.NoKeyRequired
 	record.Enabled = p.Enabled
 	record.ProxyURL = p.ProxyURL
+	record.ProxyDisabled = p.ProxyDisabled
 	record.Timeout = p.Timeout
 	record.LastUpdated = p.LastUpdated
 	record.OpenAIEndpointMode = string(p.OpenAIEndpointMode)

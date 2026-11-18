@@ -170,7 +170,7 @@ type codexResetCredit struct {
 
 func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 
 	// Resolve account_id from OAuth extra_fields
 	accountID := provider.OAuthDetail.GetExtraFieldString("account_id")

@@ -101,7 +101,7 @@ func (f *OpenCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
 	req.Header.Set("Accept", "application/json")
 
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)

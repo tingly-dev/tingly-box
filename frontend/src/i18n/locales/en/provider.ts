@@ -158,7 +158,8 @@ export default {
         "useGlobal": "Use quick proxy ({{url}})",
         "useGlobalNotSet": "Use quick proxy (not configured — set in System Settings)",
         "applyGlobal": "Apply quick proxy ({{url}})",
-        "applyGlobalApplied": "Quick proxy applied"
+        "applyGlobalApplied": "Quick proxy applied",
+        "useThis": "Use this proxy"
       }
     },
     "verification": {
@@ -288,6 +289,14 @@ export default {
     "deleted": "Provider deleted successfully!",
     "deleteFailed": "Failed to delete provider: {{error}}",
     "toggleFailed": "Failed to toggle provider: {{error}}",
+    "proxySwitchLabel": "Proxy for {{name}}",
+    "proxyOnHint": "Proxy on: {{url}}. Click to connect directly (the URL is kept).",
+    "proxyOffHint": "Proxy off: connecting directly. Click to use {{url}} again.",
+    "proxyNoneHint": "No proxy set. Click to add one in Edit.",
+    "proxyNoneAction": "Add a proxy for {{name}}",
+    "proxyEnabledToast": "Proxy on for {{name}}",
+    "proxyDisabledToast": "Proxy off for {{name}}",
+    "proxyToggleFailed": "Couldn't change the proxy for {{name}}: {{error}}",
     "tokenRefreshed": "Token refreshed successfully!",
     "reauthorized": "Provider reauthorized successfully!",
     "reauthorizeUnknownIssuer": "Cannot reauthorize: provider issuer is unknown",

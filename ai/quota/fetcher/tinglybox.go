@@ -52,7 +52,7 @@ func (f *TinglyBoxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	req.Header.Set("Authorization", "Bearer "+provider.GetAccessToken())
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second).Do(req)
+	resp, err := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

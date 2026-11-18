@@ -158,7 +158,8 @@ export default {
         "useGlobal": "使用常用代理（{{url}}）",
         "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）",
         "applyGlobal": "应用常用代理（{{url}}）",
-        "applyGlobalApplied": "已应用常用代理"
+        "applyGlobalApplied": "已应用常用代理",
+        "useThis": "启用此代理"
       }
     },
     "verification": {
@@ -287,6 +288,14 @@ export default {
     "deleted": "服务商已删除",
     "deleteFailed": "删除服务商失败：{{error}}",
     "toggleFailed": "切换服务商状态失败：{{error}}",
+    "proxySwitchLabel": "{{name}} 的代理",
+    "proxyOnHint": "代理已开启：{{url}}。点击改为直连（保留代理地址）。",
+    "proxyOffHint": "代理已关闭，正在直连。点击重新使用 {{url}}。",
+    "proxyNoneHint": "未设置代理。点击进入编辑添加。",
+    "proxyNoneAction": "为 {{name}} 添加代理",
+    "proxyEnabledToast": "已为 {{name}} 开启代理",
+    "proxyDisabledToast": "已为 {{name}} 关闭代理",
+    "proxyToggleFailed": "无法修改 {{name}} 的代理：{{error}}",
     "tokenRefreshed": "令牌已刷新",
     "reauthorized": "服务商已重新授权",
     "reauthorizeUnknownIssuer": "无法重新授权：未知该服务商的签发方",

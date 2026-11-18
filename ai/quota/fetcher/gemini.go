@@ -66,7 +66,7 @@ type geminiQuotaBucket struct {
 
 func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 
 	// 1. Get quota — try with empty project first
 	quotaResp, rawResponse, err := f.fetchQuota(ctx, client, token, "")

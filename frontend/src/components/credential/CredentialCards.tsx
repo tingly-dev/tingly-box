@@ -1,6 +1,7 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import ProviderLogo from '@/components/ProviderLogo';
-import { Edit, ListAlt, MoreVert, Route } from '@/components/icons';
+import { Edit, ListAlt, MoreVert } from '@/components/icons';
+import { ProxySwitch } from './ProxySwitch';
 import { QuotaCell } from '@/components/credential/QuotaCell';
 import type { RedeemOutcome } from '@/hooks/useProviderQuota';
 import type { Provider } from '@/types/provider';
@@ -16,6 +17,8 @@ interface Props {
     layout: "list" | "card";
     onEdit?: (uuid: string) => void;
     onToggle?: (uuid: string) => void;
+    onToggleProxy?: (uuid: string) => void;
+    proxyPending?: ReadonlySet<string>;
     onModels: (uuid: string) => void;
     onMore: (event: MouseEvent<HTMLElement>, uuid: string) => void;
     providerQuotas?: Record<string, ProviderQuota>;
@@ -24,7 +27,7 @@ interface Props {
     onQuotaRedeem?: (uuid: string, rewardId: string) => Promise<RedeemOutcome>;
 }
 
-export function CredentialCards({ layout, providers, onEdit, onToggle, onModels, onMore, providerQuotas, refreshingQuotas, onQuotaRefresh, onQuotaRedeem }: Props) {
+export function CredentialCards({ layout, providers, onEdit, onToggle, onToggleProxy, proxyPending, onModels, onMore, providerQuotas, refreshingQuotas, onQuotaRefresh, onQuotaRedeem }: Props) {
     const { t } = useTranslation();
     return (
         <Box sx={{ display: 'grid', gridTemplateColumns: layout === 'card' ? 'repeat(auto-fit, minmax(min(100%, 580px), 1fr))' : 'minmax(0, 1fr)', gap: 1.5 }}> 
@@ -38,7 +41,7 @@ export function CredentialCards({ layout, providers, onEdit, onToggle, onModels,
                     : provider.api_base ? [{ label: t('credentialPage.baseUrl'), url: provider.api_base }] : [];
                 return (
                     <Paper key={provider.uuid} variant="outlined" sx={{ px: { xs: 2, md: 2.5 }, py: 1, borderRadius: radius.card, minWidth: 0 }}>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) auto auto', md: layout === 'card' ? 'minmax(155px, 1.6fr) minmax(85px, 0.8fr) minmax(85px, 1fr) 20px auto auto' : 'minmax(230px, 1.5fr) minmax(130px, 0.8fr) minmax(130px, 1fr) 24px auto auto' }, gridTemplateAreas: { xs: '"identity identity status" "endpoint endpoint endpoint" "quota quota proxy" "actions actions actions"', md: '"identity endpoint quota proxy actions status"' }, alignItems: 'center', columnGap: { xs: 2, md: layout === 'card' ? 0.75 : 3 }, rowGap: 1 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) auto auto', md: layout === 'card' ? 'minmax(155px, 1.6fr) minmax(85px, 0.8fr) minmax(85px, 1fr) 28px auto auto' : 'minmax(230px, 1.5fr) minmax(130px, 0.8fr) minmax(130px, 1fr) 28px auto auto' }, gridTemplateAreas: { xs: '"identity identity status" "endpoint endpoint endpoint" "quota quota proxy" "actions actions actions"', md: '"identity endpoint quota proxy actions status"' }, alignItems: 'center', columnGap: { xs: 2, md: layout === 'card' ? 0.75 : 3 }, rowGap: 1 }}>
                             <Box sx={{ gridArea: 'identity', minWidth: 0, display: 'flex', alignItems: 'center', gap: layout === 'card' ? 1 : 2 }}>
                                 <ProviderLogo provider={provider} size={42} sx={{ flexShrink: 0 }} />
                                 <Box sx={{ minWidth: 0 }}><Typography variant="subtitle1" noWrap title={provider.name} sx={{ fontWeight: 600 }}>{provider.name}</Typography>
@@ -52,8 +55,8 @@ export function CredentialCards({ layout, providers, onEdit, onToggle, onModels,
                                 {endpoints.length > 0 && <Tooltip arrow placement="top" title={<Stack spacing={1}>{endpoints.map(({ label, url }) => <Box key={label}><Typography variant="caption" sx={{ display: 'block', fontWeight: 600, color: 'text.secondary' }}>{label}</Typography><Typography variant="caption" sx={{ display: 'block', overflowWrap: 'anywhere', color: 'text.primary' }}>{url}</Typography></Box>)}</Stack>} slotProps={{ tooltip: { sx: { maxWidth: 420, p: 1.5 } } }}><Box component="button" type="button" aria-label={`${provider.name}: ${t(dual ? 'credentialPage.twoEndpoints' : 'credentialPage.endpoint')}`} sx={{ border: 0, p: 0, bgcolor: 'transparent', color: 'primary.main', font: 'inherit', fontSize: fontSizes.sm, textAlign: 'left', cursor: 'help', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}>{t(dual ? 'credentialPage.twoEndpoints' : 'credentialPage.endpoint')}</Box></Tooltip>}
                             </Box>
                             {onQuotaRefresh && <Box sx={{ gridArea: 'quota', minWidth: 0, borderLeft: { md: '1px solid' }, borderLeftColor: { md: 'divider' }, pl: { md: layout === 'card' ? 1 : 3 } }}><QuotaCell quota={providerQuotas?.[provider.uuid]} refreshing={refreshingQuotas?.has(provider.uuid) ?? false} onRefresh={() => onQuotaRefresh(provider.uuid)} onRedeem={onQuotaRedeem && (id => onQuotaRedeem(provider.uuid, id))}/></Box>}
-                            <Box sx={{ gridArea: 'proxy', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24 }}>
-                                {provider.proxy_url && <Tooltip title={provider.proxy_url} arrow><Box component="span" aria-label={`Proxy: ${provider.proxy_url}`} sx={{ display: 'flex', color: 'text.secondary' }}><Route fontSize="small" /></Box></Tooltip>}
+                            <Box sx={{ gridArea: 'proxy', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 28 }}>
+                                <ProxySwitch provider={provider} pending={proxyPending?.has(provider.uuid)} onToggle={onToggleProxy} onConfigure={onEdit} />
                             </Box>
                             <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', gridArea: 'actions' }}>
                                 {layout === 'card' ? <Tooltip title="Models"><IconButton size="small" aria-label={`Models for ${provider.name}`} color="inherit" onClick={() => onModels(provider.uuid)}><ListAlt fontSize="small" /></IconButton></Tooltip> : <Button size="small" color="inherit" startIcon={<ListAlt />} onClick={() => onModels(provider.uuid)}>Models</Button>}

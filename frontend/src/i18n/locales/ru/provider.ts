@@ -158,7 +158,8 @@ export default {
         "useGlobal": "Использовать быстрый прокси ({{url}})",
         "useGlobalNotSet": "Использовать быстрый прокси (не настроен — задайте в системных настройках)",
         "applyGlobal": "Применить быстрый прокси ({{url}})",
-        "applyGlobalApplied": "Быстрый прокси применён"
+        "applyGlobalApplied": "Быстрый прокси применён",
+        "useThis": "Использовать этот прокси"
       }
     },
     "verification": {
@@ -290,6 +291,14 @@ export default {
     "deleted": "Провайдер удалён",
     "deleteFailed": "Не удалось удалить провайдера: {{error}}",
     "toggleFailed": "Не удалось переключить провайдера: {{error}}",
+    "proxySwitchLabel": "Прокси для {{name}}",
+    "proxyOnHint": "Прокси включён: {{url}}. Нажмите, чтобы подключаться напрямую (адрес сохранится).",
+    "proxyOffHint": "Прокси выключен: прямое подключение. Нажмите, чтобы снова использовать {{url}}.",
+    "proxyNoneHint": "Прокси не задан. Нажмите, чтобы добавить в редакторе.",
+    "proxyNoneAction": "Добавить прокси для {{name}}",
+    "proxyEnabledToast": "Прокси включён для {{name}}",
+    "proxyDisabledToast": "Прокси выключен для {{name}}",
+    "proxyToggleFailed": "Не удалось изменить прокси для {{name}}: {{error}}",
     "tokenRefreshed": "Токен обновлён",
     "reauthorized": "Провайдер повторно авторизован",
     "reauthorizeUnknownIssuer": "Невозможно повторно авторизовать: издатель провайдера неизвестен",

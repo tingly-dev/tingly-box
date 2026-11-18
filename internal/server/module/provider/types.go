@@ -20,6 +20,7 @@ type ProviderResponse struct {
 	NoKeyRequired    bool              `json:"no_key_required" example:"false"`
 	Enabled          bool              `json:"enabled" example:"true"`
 	ProxyURL         string            `json:"proxy_url,omitempty" example:"http://localhost:7890"`
+	ProxyDisabled    bool              `json:"proxy_disabled" example:"false"`        // true: proxy_url is kept but not used
 	AuthType         string            `json:"auth_type,omitempty" example:"api_key"` // api_key, oauth, vmodel, aws_sigv4, azure_key, gcp_sa
 	OAuthDetail      *typ.OAuthDetail  `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
 	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`               // Virtual-model config (only for vmodel auth type)
@@ -70,6 +71,7 @@ type UpdateProviderRequest struct {
 	NoKeyRequired    *bool   `json:"no_key_required,omitempty" description:"Whether provider requires no API key"`
 	Enabled          *bool   `json:"enabled,omitempty" description:"New enabled status"`
 	ProxyURL         *string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL"`
+	ProxyDisabled    *bool   `json:"proxy_disabled,omitempty" description:"true keeps proxy_url stored but unused; wins over the implicit switch-on that a changed proxy_url causes"`
 	// Credential replaces the full multi-field credential bundle for cloud auth
 	// types (aws_sigv4/azure_key/gcp_sa). Omit (null) to leave it unchanged; the
 	// edit UI resends the complete map since the read path returns it in full.
@@ -93,6 +95,21 @@ type ToggleProviderResponse struct {
 	Data    struct {
 		Enabled bool `json:"enabled" example:"true"`
 	} `json:"data"`
+}
+
+// SetProviderProxyRequest switches a provider's proxy on or off.
+type SetProviderProxyRequest struct {
+	Enabled bool `json:"enabled" description:"true to route this provider's outbound requests through its proxy, false to connect directly (the proxy URL is kept)"`
+	// ProxyURL is only needed when turning the proxy on for a provider that has
+	// none stored yet (e.g. adopting the global proxy). It replaces the stored URL.
+	ProxyURL *string `json:"proxy_url,omitempty" description:"Proxy URL to store when enabling a provider that has none (http, https or socks5)"`
+}
+
+// SetProviderProxyResponse represents the response for switching a provider's proxy.
+type SetProviderProxyResponse struct {
+	Success bool             `json:"success" example:"true"`
+	Message string           `json:"message" example:"Proxy enabled for provider openai"`
+	Data    ProviderResponse `json:"data"`
 }
 
 // DeleteProviderResponse represents the response for deleting a provider.

@@ -312,7 +312,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 		return
 	}
 
-	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
+	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.EffectiveProxyURL())}
 	if ai.IsKimiCodeIssuer(issuer) && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}

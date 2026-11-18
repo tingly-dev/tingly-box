@@ -24,6 +24,7 @@ interface OAuthEditFormData {
     apiBaseAnthropic?: string;
     enabled: boolean;
     proxyUrl?: string;
+    proxyDisabled?: boolean;
     limits?: Limits;
 }
 interface OAuthDetailDialogProps {
@@ -55,7 +56,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         setFormData({
             name: provider.name, apiBase: provider.api_base,
             apiBaseOpenAI: provider.api_base_openai || '', apiBaseAnthropic: provider.api_base_anthropic || '',
-            enabled: provider.enabled, proxyUrl: provider.proxy_url || '', limits: provider.limits,
+            enabled: provider.enabled, proxyUrl: provider.proxy_url || '', proxyDisabled: !!provider.proxy_disabled, limits: provider.limits,
         });
         setVisibleTokens({});
         setSubmitError(null);
@@ -163,7 +164,8 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         </ProviderFormSection>
         <ProviderFormSection title={t('providerDialog.editUx.proxySettings')}>
             <ProxyUrlField mode="edit" proxyUrl={formData.proxyUrl || ''} onProxyUrlChange={proxyUrl => setFormData(previous => ({...previous, proxyUrl}))}
-                globalProxyUrl={globalProxyUrl} useGlobalProxy={false} onUseGlobalProxyChange={() => {}}/>
+                globalProxyUrl={globalProxyUrl} useGlobalProxy={false} onUseGlobalProxyChange={() => {}}
+                proxyEnabled={!formData.proxyDisabled} onProxyEnabledChange={enabled => setFormData(previous => ({...previous, proxyDisabled: !enabled}))}/>
         </ProviderFormSection>
         <AccountLimitsSection providerUuid={provider?.uuid} value={formData.limits} onChange={limits => setFormData(previous => ({...previous, limits}))}/>
         {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}

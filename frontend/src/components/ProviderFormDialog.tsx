@@ -34,6 +34,7 @@ export interface EnhancedProviderFormData {
     noKeyRequired?: boolean;
     enabled?: boolean;
     proxyUrl?: string;
+    proxyDisabled?: boolean;
     authType?: 'api_key' | 'oauth';
     protocols?: ('openai' | 'anthropic')[];
     providerBaseUrls?: { openai?: string; anthropic?: string };
@@ -700,6 +701,8 @@ const ProviderFormDialog = ({
                     globalProxyUrl={globalProxyUrl}
                     useGlobalProxy={useGlobalProxy}
                     onUseGlobalProxyChange={handleUseGlobalProxyChange}
+                    proxyEnabled={!data.proxyDisabled}
+                    onProxyEnabledChange={mode === 'edit' ? (enabled) => onChange('proxyDisabled', !enabled) : undefined}
                 />
             </ProviderFormSection>
             {mode === 'edit' && data.uuid && (

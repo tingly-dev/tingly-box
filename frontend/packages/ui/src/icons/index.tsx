@@ -99,6 +99,7 @@ import {
     IconShare,
     IconChartDonut,
     IconRoute,
+    IconRouteOff,
     IconSelector,
     IconGauge,
     IconPin,
@@ -297,6 +298,7 @@ export const LaptopMac = tablerMui(IconDeviceLaptop);
 // --- Additional aliases pulled in by the broad rollout ----------------------
 export const DataUsage = tablerMui(IconChartDonut);
 export const Route = tablerMui(IconRoute);
+export const RouteOff = tablerMui(IconRouteOff);
 export const Router = tablerMui(IconRouter);
 export const UnfoldMore = tablerMui(IconSelector);
 export const FoldDown = tablerMui(IconFoldDown);

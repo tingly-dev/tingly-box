@@ -23,7 +23,7 @@ func validateAPIKeyProvider(provider *ai.Provider) error {
 }
 
 func fetchBearerJSON(ctx context.Context, provider *ai.Provider, url string, target interface{}) (string, error) {
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

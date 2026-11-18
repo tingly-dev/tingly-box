@@ -42,7 +42,7 @@ func NewAntigravityClient(provider *typ.Provider, model string, sessionID typ.Se
 	transport := &antigravityRoundTripper{
 		RoundTripper: createSessionBoundTransport(provider, sessionID),
 		project:      project,
-		proxyURL:     provider.ProxyURL,
+		proxyURL:     provider.EffectiveProxyURL(),
 		conversation: antigravityConversationID(provider.UUID, sessionID),
 	}
 

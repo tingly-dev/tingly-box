@@ -132,7 +132,7 @@ func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	token := provider.GetAccessToken()
 
 	// Create an HTTP client with proxy support.
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 
 	// Build the request.
 	req, err := http.NewRequestWithContext(ctx, "GET",

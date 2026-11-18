@@ -43,6 +43,13 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(ToggleProviderResponse{}),
 	)
 
+	api.POST("/providers/:uuid/proxy", h.SetProviderProxy,
+		swagger.WithDescription("Switch a provider's proxy on or off without forgetting its proxy URL; applies to live clients immediately"),
+		swagger.WithTags("providers"),
+		swagger.WithRequestModel(SetProviderProxyRequest{}),
+		swagger.WithResponseModel(SetProviderProxyResponse{}),
+	)
+
 	api.DELETE("/providers/:uuid", h.DeleteProvider,
 		swagger.WithDescription("Delete a provider configuration"),
 		swagger.WithTags("providers"),

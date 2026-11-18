@@ -320,8 +320,8 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 					matches = isAnthropicProvider
 				}
 
-				if matches && p.ProxyURL != "" {
-					proxyURL = p.ProxyURL
+				if matches && p.EffectiveProxyURL() != "" {
+					proxyURL = p.EffectiveProxyURL()
 					log.Printf("[OAuth] Auto-detected proxy URL from provider %s: %s", p.Name, proxyURL)
 					break
 				}
@@ -693,7 +693,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	}
 
 	// Refresh token
-	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
+	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.EffectiveProxyURL())}
 	if ai.IsKimiCodeIssuer(issuer) && provider.OAuthDetail.DeviceID != "" {
 		refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
@@ -1190,6 +1190,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		// Honor a proxy chosen during re-auth; otherwise keep the existing one.
 		if proxyURL != "" {
 			existing.ProxyURL = proxyURL
+			existing.ProxyDisabled = false
 		}
 		if err := h.config.UpdateProvider(existing.UUID, existing); err != nil {
 			return "", fmt.Errorf("failed to update provider during re-auth: %w", err)

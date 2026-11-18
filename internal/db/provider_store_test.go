@@ -63,6 +63,7 @@ func TestProviderSaveAndGetByUUID(t *testing.T) {
 		Tags:          []string{"test", "openai"},
 		Timeout:       300,
 		ProxyURL:      "http://localhost:8080",
+		ProxyDisabled: true,
 		LastUpdated:   time.Now().Format(time.RFC3339),
 	}
 
@@ -95,6 +96,9 @@ func TestProviderSaveAndGetByUUID(t *testing.T) {
 	}
 	if retrieved.ProxyURL != provider.ProxyURL {
 		t.Errorf("ProxyURL mismatch: got %s, want %s", retrieved.ProxyURL, provider.ProxyURL)
+	}
+	if retrieved.ProxyDisabled != provider.ProxyDisabled {
+		t.Errorf("ProxyDisabled mismatch: got %v, want %v", retrieved.ProxyDisabled, provider.ProxyDisabled)
 	}
 	if retrieved.Timeout != provider.Timeout {
 		t.Errorf("Timeout mismatch: got %d, want %d", retrieved.Timeout, provider.Timeout)

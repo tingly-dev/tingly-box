@@ -66,7 +66,7 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	token := provider.GetAccessToken()
 
 	// Create an HTTP client with proxy support.
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 
 	// Build the request. The configured base already ends in /v1 for a normal
 	// OpenAI provider, so it comes off before the full path goes on.

@@ -70,6 +70,27 @@ describe('provider edit', () => {
         expect(await screen.findAllByText(/Authentication failed/)).not.toHaveLength(0);
         expect(api.probeProviderLightweight).toHaveBeenCalledWith('My provider', 'openai', provider.api_base, 'stored-secret', 'api_key', expect.any(AbortSignal));
     });
+    it('shows the stored proxy as off and saves the switch with the form', async () => {
+        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true}});
+        await open();
+        const useProxy = screen.getByRole('switch', {name: 'Use this proxy'});
+        expect(useProxy).not.toBeChecked();
+        fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
+        await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true})));
+    });
+    it('saves the proxy switch turned back on', async () => {
+        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true}});
+        await open();
+        fireEvent.click(screen.getByRole('switch', {name: 'Use this proxy'}));
+        fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
+        await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({proxy_disabled: false})));
+    });
+    it('typing a proxy URL switches it on', async () => {
+        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true}});
+        await open();
+        fireEvent.change(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)'), {target: {value: 'http://127.0.0.1:9999'}});
+        expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeChecked();
+    });
     it('explicitly selects no authentication without resending the stored key', async () => {
         await open();
         expect(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)')).toBeVisible();

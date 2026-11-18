@@ -242,7 +242,7 @@ func (f *KimiCodeFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*qu
 		req.Header.Set("User-Agent", "KimiCLI/1.10.6")
 	}
 
-	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
+	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)

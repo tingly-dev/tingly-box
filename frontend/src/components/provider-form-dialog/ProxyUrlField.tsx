@@ -1,4 +1,4 @@
-import {Box, Button, Checkbox, FormControlLabel, TextField, Typography} from '@mui/material';
+import {Box, Button, Checkbox, FormControlLabel, Switch, TextField, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
 
@@ -9,6 +9,9 @@ interface ProxyUrlFieldProps {
     globalProxyUrl: string;
     useGlobalProxy: boolean;
     onUseGlobalProxyChange: (checked: boolean) => void;
+    /** Edit mode: whether the stored URL is in use. Omit to hide the switch. */
+    proxyEnabled?: boolean;
+    onProxyEnabledChange?: (enabled: boolean) => void;
 }
 
 const ProxyUrlField: React.FC<ProxyUrlFieldProps> = ({
@@ -18,8 +21,15 @@ const ProxyUrlField: React.FC<ProxyUrlFieldProps> = ({
     globalProxyUrl,
     useGlobalProxy,
     onUseGlobalProxyChange,
+    proxyEnabled,
+    onProxyEnabledChange,
 }) => {
     const {t} = useTranslation();
+    // Entering or applying a URL means the user wants it used.
+    const changeUrl = (value: string) => {
+        onProxyUrlChange(value);
+        if (mode === 'edit' && value) onProxyEnabledChange?.(true);
+    };
 
     return (
         <Box>
@@ -29,8 +39,21 @@ const ProxyUrlField: React.FC<ProxyUrlFieldProps> = ({
                 label={t('providerDialog.advanced.proxyUrl.label')}
                 placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
                 value={proxyUrl}
-                onChange={(e) => onProxyUrlChange(e.target.value)}
+                onChange={(e) => changeUrl(e.target.value)}
             />
+            {mode === 'edit' && proxyUrl && onProxyEnabledChange && (
+                <FormControlLabel
+                    sx={{mt: 0.5, ml: 0}}
+                    control={
+                        <Switch
+                            size="small"
+                            checked={proxyEnabled !== false}
+                            onChange={(e) => onProxyEnabledChange(e.target.checked)}
+                        />
+                    }
+                    label={<Typography variant="body2" color="text.secondary">{t('providerDialog.advanced.proxyUrl.useThis')}</Typography>}
+                />
+            )}
             {mode === 'add' && (
                 <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
                     <FormControlLabel
@@ -59,7 +82,7 @@ const ProxyUrlField: React.FC<ProxyUrlFieldProps> = ({
                         size="small"
                         variant="text"
                         disabled={proxyUrl === globalProxyUrl}
-                        onClick={() => onProxyUrlChange(globalProxyUrl)}
+                        onClick={() => changeUrl(globalProxyUrl)}
                         sx={{textTransform: 'none', minWidth: 0, p: 0}}
                     >
                         {proxyUrl === globalProxyUrl

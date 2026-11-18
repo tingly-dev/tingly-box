@@ -29,7 +29,7 @@ type loggingRoundTripper struct {
 func wrapWithLogging(inner http.RoundTripper, provider *typ.Provider) http.RoundTripper {
 	var proxyRaw string
 	if provider != nil {
-		proxyRaw = provider.ProxyURL
+		proxyRaw = provider.EffectiveProxyURL()
 	}
 	return &loggingRoundTripper{
 		inner:    inner,
