@@ -22,6 +22,7 @@ export default {
     "autoRefresh": "自动刷新",
     "refreshNow": "立即刷新",
     "refreshRequests": "刷新请求",
+    "newRequests_other": "{{count}} 个新请求",
     "columns": {
       "time": "时间",
       "agent": "Agent",

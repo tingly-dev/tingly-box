@@ -4,6 +4,7 @@ import type { ModelRequestEvent } from '@/components/AILogViewer';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { alpha } from '@mui/material/styles';
 import { radius } from '@tingly/ui/theme/radius';
+import { DisclosureChevron } from '@tingly/projects/disclosure';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -21,6 +22,12 @@ import { radius } from '@tingly/ui/theme/radius';
 // under it. One shape means one way to read the list and one way to open a
 // detail, instead of the four the page used to mix (table row, stage row,
 // annotation sub-line, attribute dump).
+//
+// Stage rows open by default — their timings and attributes are the point of
+// opening a request, and a second click to reach them was easy to miss. Log
+// rows stay folded (there can be many). Every expandable row carries the shared
+// disclosure chevron, and a row the reader toggled keeps that choice across
+// refreshes (keyed by span id / event content, so refreshed data never resets it).
 //
 // It degrades on purpose: with tracing off (or the trace evicted from the
 // in-memory ring) the log rows stand alone — same shape, minus the timings.
@@ -225,28 +232,30 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
 );
 
 const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
-    // Associate each response with the log snapshot that requested it, so
-    // auto-refresh can fetch spans completed since the previous snapshot.
+    // Re-fetched whenever the log snapshot changes, so spans completed since
+    // the previous snapshot show up.
     const [traceState, setTraceState] = useState<{
         id?: string;
-        events?: ModelRequestEvent[];
         detail?: TraceDetail | null;
         error?: string;
     }>({});
-    const current = traceState.id === traceId && traceState.events === events;
+    // A refresh keeps showing the previous timings of the same trace until the
+    // new ones land; dropping them meanwhile made every stage row vanish and
+    // reappear, shifting everything below it.
+    const current = traceState.id === traceId;
     const trace = current ? traceState.detail : undefined;
     const traceError = current ? traceState.error : undefined;
-    const [openRow, setOpenRow] = useState<string | null>(null);
+    const [toggled, setToggled] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         if (!traceId) return;
         let cancelled = false;
         getTrace(traceId)
             .then((detail) => {
-                if (!cancelled) setTraceState({ id: traceId, events, detail });
+                if (!cancelled) setTraceState({ id: traceId, detail });
             })
             .catch((error: unknown) => {
-                if (!cancelled) setTraceState({ id: traceId, events, error: error instanceof Error ? error.message : 'Failed to load trace' });
+                if (!cancelled) setTraceState({ id: traceId, error: error instanceof Error ? error.message : 'Failed to load trace' });
             });
         return () => {
             cancelled = true;
@@ -267,24 +276,24 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
         <Box
             sx={{
                 display: 'grid',
-                // kind · name · detail · result · duration — one grid for the
+                // kind · name · detail · result · duration · chevron — one grid for the
                 // whole journey so every row, and every opened panel, lines up
                 // on the same edges.
-                gridTemplateColumns: 'auto 92px 1fr auto 64px',
+                gridTemplateColumns: 'auto 92px 1fr auto 64px 16px',
                 columnGap: 1,
                 rowGap: 0.1,
                 alignItems: 'center',
             }}
         >
             {rows.map((row) => {
-                const open = openRow === row.key;
                 const expandable = row.payload.length > 0 || !!row.rules;
+                const open = expandable && (toggled[row.key] ?? row.kind === 'stage');
                 const cellSx = {
                     py: 0.32,
                     cursor: expandable ? 'pointer' : 'default',
                     backgroundColor: open ? 'action.hover' : 'transparent',
                 };
-                const onClick = () => expandable && setOpenRow(open ? null : row.key);
+                const onClick = () => expandable && setToggled((prev) => ({ ...prev, [row.key]: !open }));
                 const cell = { onClick, sx: cellSx };
 
                 return (
@@ -292,7 +301,18 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         <Box {...cell} sx={{ ...cellSx, display: 'flex' }}>
                             <KindBadge kind={row.kind} tone={row.tone} />
                         </Box>
-                        <Box {...cell}>
+                        <Box
+                            {...cell}
+                            role={expandable ? 'button' : undefined}
+                            tabIndex={expandable ? 0 : undefined}
+                            aria-expanded={expandable ? open : undefined}
+                            onKeyDown={expandable ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    onClick();
+                                }
+                            } : undefined}
+                        >
                             <Typography
                                 sx={{
                                     fontFamily: fontMono,
@@ -341,6 +361,9 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                             >
                                 {row.durationMs != null ? formatDuration(row.durationMs) : ''}
                             </Typography>
+                        </Box>
+                        <Box {...cell} sx={{ ...cellSx, display: 'flex', color: 'text.disabled' }}>
+                            {expandable && <DisclosureChevron open={open} fontSize={14} />}
                         </Box>
 
                         {/* One detail panel shape for every row, aligned under

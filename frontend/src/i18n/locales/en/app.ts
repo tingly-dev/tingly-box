@@ -25,6 +25,8 @@ export default {
     "autoRefresh": "Auto-refresh",
     "refreshNow": "Refresh now",
     "refreshRequests": "Refresh requests",
+    "newRequests_one": "{{count}} new request",
+    "newRequests_other": "{{count}} new requests",
     "columns": {
       "time": "Time",
       "agent": "Agent",

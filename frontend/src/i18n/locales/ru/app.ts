@@ -31,6 +31,10 @@ export default {
     "autoRefresh": "Автообновление",
     "refreshNow": "Обновить сейчас",
     "refreshRequests": "Обновить запросы",
+    "newRequests_one": "{{count}} новый запрос",
+    "newRequests_few": "{{count}} новых запроса",
+    "newRequests_many": "{{count}} новых запросов",
+    "newRequests_other": "{{count}} нового запроса",
     "columns": {
       "time": "Время",
       "agent": "Агент",
