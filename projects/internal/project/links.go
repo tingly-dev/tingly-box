@@ -484,7 +484,7 @@ func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, exist
 		}
 		// The edit's answer has no CI and no settled mergeability: keep the last reading.
 		if own != nil {
-			it.CI, it.Checks = own.CI, own.Checks
+			it.CI, it.Checks = own.CI, ghChecks(own.Checks)
 			if it.MergeState == "unknown" || it.MergeState == "" {
 				it.MergeState = own.MergeState
 			}
