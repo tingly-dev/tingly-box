@@ -1,7 +1,7 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import ProviderLogo from '@/components/ProviderLogo';
 import { Edit, ListAlt, MoreVert } from '@/components/icons';
-import { ProxySwitch } from './ProxySwitch';
+import { ProxySwitch, type ProxyControl } from './ProxySwitch';
 import { QuotaCell } from '@/components/credential/QuotaCell';
 import type { RedeemOutcome } from '@/hooks/useProviderQuota';
 import type { Provider } from '@/types/provider';
@@ -17,8 +17,7 @@ interface Props {
     layout: "list" | "card";
     onEdit?: (uuid: string) => void;
     onToggle?: (uuid: string) => void;
-    onToggleProxy?: (uuid: string) => void;
-    proxyPending?: ReadonlySet<string>;
+    proxy?: ProxyControl;
     onModels: (uuid: string) => void;
     onMore: (event: MouseEvent<HTMLElement>, uuid: string) => void;
     providerQuotas?: Record<string, ProviderQuota>;
@@ -27,7 +26,7 @@ interface Props {
     onQuotaRedeem?: (uuid: string, rewardId: string) => Promise<RedeemOutcome>;
 }
 
-export function CredentialCards({ layout, providers, onEdit, onToggle, onToggleProxy, proxyPending, onModels, onMore, providerQuotas, refreshingQuotas, onQuotaRefresh, onQuotaRedeem }: Props) {
+export function CredentialCards({ layout, providers, onEdit, onToggle, proxy, onModels, onMore, providerQuotas, refreshingQuotas, onQuotaRefresh, onQuotaRedeem }: Props) {
     const { t } = useTranslation();
     return (
         <Box sx={{ display: 'grid', gridTemplateColumns: layout === 'card' ? 'repeat(auto-fit, minmax(min(100%, 580px), 1fr))' : 'minmax(0, 1fr)', gap: 1.5 }}> 
@@ -56,7 +55,7 @@ export function CredentialCards({ layout, providers, onEdit, onToggle, onToggleP
                             </Box>
                             {onQuotaRefresh && <Box sx={{ gridArea: 'quota', minWidth: 0, borderLeft: { md: '1px solid' }, borderLeftColor: { md: 'divider' }, pl: { md: layout === 'card' ? 1 : 3 } }}><QuotaCell quota={providerQuotas?.[provider.uuid]} refreshing={refreshingQuotas?.has(provider.uuid) ?? false} onRefresh={() => onQuotaRefresh(provider.uuid)} onRedeem={onQuotaRedeem && (id => onQuotaRedeem(provider.uuid, id))}/></Box>}
                             <Box sx={{ gridArea: 'proxy', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 28 }}>
-                                <ProxySwitch provider={provider} pending={proxyPending?.has(provider.uuid)} onToggle={onToggleProxy} onConfigure={onEdit} />
+                                <ProxySwitch provider={provider} proxy={proxy} />
                             </Box>
                             <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', gridArea: 'actions' }}>
                                 {layout === 'card' ? <Tooltip title="Models"><IconButton size="small" aria-label={`Models for ${provider.name}`} color="inherit" onClick={() => onModels(provider.uuid)}><ListAlt fontSize="small" /></IconButton></Tooltip> : <Button size="small" color="inherit" startIcon={<ListAlt />} onClick={() => onModels(provider.uuid)}>Models</Button>}

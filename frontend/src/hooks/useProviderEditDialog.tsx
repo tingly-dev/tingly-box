@@ -15,7 +15,6 @@ interface OAuthEditFormData {
     apiBaseAnthropic?: string;
     enabled: boolean;
     proxyUrl?: string;
-    proxyDisabled?: boolean;
     limits?: Limits;
 }
 
@@ -60,7 +59,6 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
             no_key_required: fd.noKeyRequired || false,
             enabled: fd.enabled,
             proxy_url: fd.proxyUrl ?? '',
-            proxy_disabled: !!fd.proxyDisabled,
             api_base_openai: fd.apiBaseOpenAI ?? '',
             api_base_anthropic: fd.apiBaseAnthropic ?? '',
             // Omitted (undefined) leaves limits unchanged; `{}` clears them.
@@ -114,7 +112,6 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                         enabled: provider.enabled,
                         noKeyRequired: provider.no_key_required || false,
                         proxyUrl: provider.proxy_url || '',
-                        proxyDisabled: !!provider.proxy_disabled,
                         limits: provider.limits,
                         authType: provider.auth_type || 'api_key',
                     } as any);
@@ -157,7 +154,6 @@ export function useProviderEditDialog({ onUpdated, showNotification }: UseProvid
                 : {}),
             enabled: data.enabled,
             proxy_url: data.proxyUrl ?? '',
-            proxy_disabled: !!data.proxyDisabled,
             limits: data.limits ? compactLimits(data.limits) : undefined,
         });
         if (!result.success) throw new Error(result.error || 'Failed to update provider');

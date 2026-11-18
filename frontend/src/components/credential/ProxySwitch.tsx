@@ -1,69 +1,51 @@
 import { CircularProgress, IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Route, RouteOff } from '@/components/icons';
-import { proxyState, redactProxyUrl } from './proxyState';
+
+export interface ProxyControl {
+    pending: ReadonlySet<string>;
+    /** Turning the proxy off clears its URL. */
+    onDisable: (uuid: string) => void;
+    /** Turning it on asks for (a prefilled) URL first. */
+    onEnable: (uuid: string) => void;
+}
 
 interface Props {
-    provider: { uuid: string; name: string; proxy_url?: string | null; proxy_disabled?: boolean | null };
-    pending?: boolean;
-    onToggle?: (uuid: string) => void;
-    /** With no proxy stored there is nothing to switch; the control leads to the editor instead. */
-    onConfigure?: (uuid: string) => void;
+    provider: { uuid: string; name: string; proxy_url?: string | null };
+    proxy?: ProxyControl;
 }
 
 /**
- * Per-credential proxy control. State is carried by the icon shape and the
- * tooltip as well as colour: route = in use, route-off = stored but off.
- * With no proxy stored there is nothing to show, so the control stays hidden
- * until its row (`.proxy-row`) is hovered or focused and then leads to the
- * editor; touch screens have no hover, so it stays reachable there. Touch
- * target is 40px on phones.
+ * One-click proxy control for a credential row. A stored proxy URL means "on":
+ * the route icon turns it off (clears the URL). With none stored the control
+ * stays hidden until its row (`.proxy-row`) is hovered or focused, and then
+ * offers to turn one on; touch screens have no hover, so it stays visible there.
  */
-export function ProxySwitch({ provider, pending = false, onToggle, onConfigure }: Props) {
+export function ProxySwitch({ provider, proxy }: Props) {
     const { t } = useTranslation();
-    const state = proxyState(provider);
-    const url = provider.proxy_url ? redactProxyUrl(provider.proxy_url) : '';
+    if (!proxy) return null;
+    const on = !!provider.proxy_url;
+    const pending = proxy.pending.has(provider.uuid);
     const size = { width: { xs: 40, md: 28 }, height: { xs: 40, md: 28 } };
+    const hidden = on ? {} : {
+        opacity: 0,
+        transition: 'opacity 120ms',
+        '.proxy-row:hover &, .proxy-row:focus-within &, &:focus-visible': { opacity: 1 },
+        '@media (hover: none)': { opacity: 1 },
+    };
 
-    if (state === 'none') {
-        if (!onConfigure) return null;
-        const label = t('credentialPage.proxyNoneAction', { name: provider.name });
-        return (
-            <Tooltip title={t('credentialPage.proxyNoneHint')} arrow>
-                <IconButton
-                    size="small"
-                    aria-label={label}
-                    onClick={() => onConfigure(provider.uuid)}
-                    sx={{
-                        ...size,
-                        color: 'text.disabled',
-                        opacity: 0,
-                        transition: 'opacity 120ms',
-                        '.proxy-row:hover &, .proxy-row:focus-within &, &:focus-visible': { opacity: 1 },
-                        '@media (hover: none)': { opacity: 1 },
-                    }}
-                >
-                    <Route fontSize="small" />
-                </IconButton>
-            </Tooltip>
-        );
-    }
-
-    const on = state === 'on';
-    const label = t('credentialPage.proxySwitchLabel', { name: provider.name });
-    const hint = t(on ? 'credentialPage.proxyOnHint' : 'credentialPage.proxyOffHint', { url });
     return (
-        <Tooltip title={hint} arrow>
+        <Tooltip title={on ? t('credentialPage.proxyOnHint', { url: provider.proxy_url }) : t('credentialPage.proxyOffHint')} arrow>
             <span>
                 <IconButton
                     size="small"
                     role="switch"
                     aria-checked={on}
-                    aria-label={label}
+                    aria-label={t('credentialPage.proxySwitchLabel', { name: provider.name })}
                     aria-busy={pending || undefined}
-                    disabled={pending || !onToggle}
-                    onClick={() => onToggle?.(provider.uuid)}
-                    sx={{ ...size, color: on ? 'success.main' : 'text.secondary' }}
+                    disabled={pending}
+                    onClick={() => (on ? proxy.onDisable(provider.uuid) : proxy.onEnable(provider.uuid))}
+                    sx={{ ...size, color: on ? 'success.main' : 'text.secondary', ...hidden }}
                 >
                     {pending ? <CircularProgress size={16} color="inherit" /> : on ? <Route fontSize="small" /> : <RouteOff fontSize="small" />}
                 </IconButton>

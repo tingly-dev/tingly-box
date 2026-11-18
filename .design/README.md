@@ -62,7 +62,6 @@
 | [model-data.md](./model-data.md) | 模型数据分层 | 设计说明；局部实施状态见正文 |
 | [model-list.md](./model-list.md) | Model List 获取 / 缓存 / 兜底 设计 | 设计说明；局部实施状态见正文 |
 | [dual-provider.md](./dual-provider.md) | Dual Provider | 设计说明；局部实施状态见正文 |
-| [provider-proxy.md](./provider-proxy.md) | 凭证级代理开关 | 已实现 |
 ## 接入、凭证与配额
 
 | 文档 | 内容 | 状态 / 阅读边界 |

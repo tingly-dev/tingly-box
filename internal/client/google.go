@@ -32,7 +32,7 @@ type GoogleClient struct {
 // session-bound transport. NewGoogleClient itself stays generic.
 func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*GoogleClient, error) {
 	var transport http.RoundTripper
-	if provider.AuthType == typ.AuthTypeOAuth || provider.EffectiveProxyURL() != "" {
+	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
 		transport = createSessionBoundTransport(provider, sessionID)
 
 		issuer := ""
@@ -42,14 +42,14 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		if issuer != "" {
 			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", issuer, sessionID.Value)
 		}
-		if provider.EffectiveProxyURL() != "" {
-			logrus.Infof("Using proxy for Google client: %s", provider.EffectiveProxyURL())
+		if provider.ProxyURL != "" {
+			logrus.Infof("Using proxy for Google client: %s", provider.ProxyURL)
 		}
 	} else {
 		// Use the transport pool instead of http.DefaultTransport so that env
 		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 		// proxy is explicitly configured for the provider.
-		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.EffectiveProxyURL(), ai.Issuer(""), sessionID)
+		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	}
 
 	// MENTION: must set timeout, otherwise operations may fail unexpectedly

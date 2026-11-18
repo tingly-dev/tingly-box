@@ -5,12 +5,10 @@ export const isHttpUrl = (value: string): boolean => {
     } catch { return false; }
 };
 
-/** Empty means "no proxy"; otherwise the schemes the gateway can dial. */
+/** The schemes the gateway can dial through. */
 export const isProxyUrl = (value: string): boolean => {
-    const trimmed = value.trim();
-    if (!trimmed) return true;
     try {
-        const url = new URL(trimmed);
+        const url = new URL(value.trim());
         return ['http:', 'https:', 'socks5:'].includes(url.protocol) && !!url.hostname;
     } catch { return false; }
 };

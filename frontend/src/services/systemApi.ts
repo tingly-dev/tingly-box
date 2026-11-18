@@ -91,15 +91,6 @@ export const systemApi = {
             params: {path: {uuid}}
         })),
 
-    // Switch a provider's proxy on/off; the stored proxy URL is kept while off.
-    // proxyUrl is only needed to enable a provider that has none stored yet.
-    setProviderProxy: async (uuid: string, enabled: boolean, proxyUrl?: string): Promise<any> =>
-        controlApi((client, headers) => client.POST('/api/v2/providers/{uuid}/proxy', {
-            headers,
-            params: {path: {uuid}},
-            body: {enabled, ...(proxyUrl ? {proxy_url: proxyUrl} : {})},
-        })),
-
     generateToken: async (clientId: string): Promise<any> =>
         controlApi((client, headers) => client.POST('/api/v1/token', {
             headers,

@@ -788,21 +788,3 @@ func TestDualEndpointsKimiPerPlatform(t *testing.T) {
 		t.Error("IsKimiCodeIssuer wrong")
 	}
 }
-
-func TestProvider_EffectiveProxyURL(t *testing.T) {
-	var nilProvider *Provider
-	if got := nilProvider.EffectiveProxyURL(); got != "" {
-		t.Errorf("nil provider: got %q", got)
-	}
-	p := &Provider{ProxyURL: "http://localhost:7890"}
-	if got := p.EffectiveProxyURL(); got != "http://localhost:7890" {
-		t.Errorf("zero value must keep the proxy on: got %q", got)
-	}
-	p.ProxyDisabled = true
-	if got := p.EffectiveProxyURL(); got != "" {
-		t.Errorf("disabled: got %q", got)
-	}
-	if p.ProxyURL != "http://localhost:7890" {
-		t.Error("disabling must not erase the stored URL")
-	}
-}

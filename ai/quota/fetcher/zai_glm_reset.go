@@ -205,7 +205,7 @@ func (f *GLMFetcher) glmResetRequest(ctx context.Context, provider *ai.Provider,
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
+	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("request failed: %w", err)

@@ -48,7 +48,7 @@ type minimaxRemainsResponse struct {
 }
 
 func fetchMiniMaxQuota(ctx context.Context, provider *ai.Provider, endpoint string, providerType quota.ProviderType) (*quota.ProviderUsage, error) {
-	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
+	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)

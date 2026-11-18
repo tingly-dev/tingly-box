@@ -160,7 +160,7 @@ func (f *WorkBuddyFetcher) Redeem(ctx context.Context, provider *ai.Provider, re
 	if f.baseURL != "" {
 		site.Origin = strings.TrimRight(f.baseURL, "/")
 	}
-	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
+	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	st, err := f.checkinStatus(ctx, client, site, provider)
 	if err != nil {

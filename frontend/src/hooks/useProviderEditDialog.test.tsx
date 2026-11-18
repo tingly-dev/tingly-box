@@ -70,54 +70,6 @@ describe('provider edit', () => {
         expect(await screen.findAllByText(/Authentication failed/)).not.toHaveLength(0);
         expect(api.probeProviderLightweight).toHaveBeenCalledWith('My provider', 'openai', provider.api_base, 'stored-secret', 'api_key', expect.any(AbortSignal));
     });
-    it('shows the stored proxy as off and saves the switch with the form', async () => {
-        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true}});
-        await open();
-        const useProxy = screen.getByRole('switch', {name: 'Use this proxy'});
-        expect(useProxy).not.toBeChecked();
-        fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
-        await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true})));
-    });
-    it('saves the proxy switch turned back on', async () => {
-        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true}});
-        await open();
-        fireEvent.click(screen.getByRole('switch', {name: 'Use this proxy'}));
-        fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
-        await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({proxy_disabled: false})));
-    });
-    it('typing a proxy URL switches it on', async () => {
-        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890', proxy_disabled: true}});
-        await open();
-        fireEvent.change(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)'), {target: {value: 'http://127.0.0.1:9999'}});
-        expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeChecked();
-    });
-    it('keeps the proxy switch disabled until there is a valid URL and explains the state', async () => {
-        await open();
-        const useProxy = screen.getByRole('switch', {name: 'Use this proxy'});
-        expect(useProxy).toBeDisabled();
-        expect(screen.getByText(/No proxy: this credential connects directly/)).toBeVisible();
-        const field = screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)');
-        fireEvent.change(field, {target: {value: 'ftp://nope'}});
-        fireEvent.blur(field);
-        expect(screen.getByText(/Enter a URL like http:\/\/host:port/)).toBeVisible();
-        expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeDisabled();
-        fireEvent.change(field, {target: {value: 'socks5://127.0.0.1:1080'}});
-        expect(screen.getByRole('switch', {name: 'Use this proxy'})).toBeChecked();
-        expect(screen.getByText(/On: requests to this credential go through this proxy/)).toBeVisible();
-    });
-    it('does not save an invalid proxy URL', async () => {
-        await open();
-        fireEvent.change(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)'), {target: {value: 'not a url'}});
-        fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
-        expect(api.updateProvider).not.toHaveBeenCalled();
-        expect(screen.getByText(/Enter a URL like http:\/\/host:port/)).toBeVisible();
-    });
-    it('says when the URL is a copy of the quick proxy', async () => {
-        vi.mocked(api.getConfig).mockResolvedValue({data: {http_transport: {global_proxy_url: 'http://127.0.0.1:7890'}}});
-        vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, proxy_url: 'http://127.0.0.1:7890'}});
-        await open();
-        expect(await screen.findByText(/Same as the quick proxy in System Settings/)).toBeVisible();
-    });
     it('explicitly selects no authentication without resending the stored key', async () => {
         await open();
         expect(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)')).toBeVisible();

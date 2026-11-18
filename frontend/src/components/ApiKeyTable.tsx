@@ -1,5 +1,5 @@
 import {CredentialCards} from "@/components/credential/CredentialCards";
-import {ProxySwitch} from "@/components/credential/ProxySwitch";
+import {ProxySwitch, type ProxyControl} from "@/components/credential/ProxySwitch";
 import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
 import ModelListDialog from "@/components/ModelListDialog";
 import {
@@ -17,7 +17,6 @@ import {
     Edit,
     ListAlt,
     MoreVert,
-    Route,
     Visibility,
 } from '@/components/icons';
 import ConfirmPopover from "@/components/ConfirmPopover";
@@ -56,8 +55,7 @@ interface ApiKeyTableProps {
     view?: "table" | "list" | "card";
     onEdit?: (providerUuid: string) => void;
     onToggle?: (providerUuid: string) => void;
-    onToggleProxy?: (providerUuid: string) => void;
-    proxyPending?: ReadonlySet<string>;
+    proxy?: ProxyControl;
     onDelete?: (providerUuid: string) => void;
     onNotification?: (message: string, severity: "success" | "error") => void;
     providerQuotas?: { [uuid: string]: ProviderQuota };
@@ -99,8 +97,7 @@ const ApiKeyTable = ({
                          view = "table",
                          onEdit,
                          onToggle,
-                         onToggleProxy,
-                         proxyPending,
+                         proxy,
                          onDelete,
                          onNotification,
                          providerQuotas,
@@ -222,7 +219,7 @@ const ApiKeyTable = ({
         >
             {/* Fixed column widths (see COLUMNS above); the table itself
                 scrolls horizontally below minWidth instead of columns resizing. */}
-            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} onToggleProxy={onToggleProxy} proxyPending={proxyPending} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} proxy={proxy} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
                 <TableHead>
                     <TableRow>
                         {columns.map((col) => (
@@ -375,7 +372,7 @@ const ApiKeyTable = ({
                                 </TableCell>
                                 {/* Proxy */}
                                 <TableCell align="center">
-                                    <ProxySwitch provider={provider} pending={proxyPending?.has(provider.uuid)} onToggle={onToggleProxy} onConfigure={onEdit}/>
+                                    <ProxySwitch provider={provider} proxy={proxy}/>
                                 </TableCell>
                                 {/* Actions */}
                                 <TableCell>

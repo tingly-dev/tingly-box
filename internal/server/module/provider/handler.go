@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -59,7 +58,6 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 		NoKeyRequired:    p.NoKeyRequired,
 		Enabled:          p.Enabled,
 		ProxyURL:         p.ProxyURL,
-		ProxyDisabled:    p.ProxyDisabled,
 		AuthType:         string(p.AuthType),
 		Source:           string(p.Source),
 		Limits:           p.Limits.Normalize(),
@@ -365,23 +363,7 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 		p.Enabled = *req.Enabled
 	}
 	if req.ProxyURL != nil {
-		// Typing a new URL turns the proxy on; clearing it leaves nothing to
-		// disable. Re-saving the unchanged URL must not undo a switched-off proxy.
-		if *req.ProxyURL != p.ProxyURL {
-			// Only a changed URL is validated, so an older stored value never
-			// blocks an unrelated save.
-			if *req.ProxyURL != "" {
-				if err := validateProxyURL(*req.ProxyURL); err != nil {
-					badRequest(c, "%s", err)
-					return
-				}
-			}
-			p.ProxyDisabled = false
-		}
 		p.ProxyURL = *req.ProxyURL
-	}
-	if req.ProxyDisabled != nil {
-		p.ProxyDisabled = *req.ProxyDisabled
 	}
 	if req.Limits != nil {
 		p.Limits = req.Limits.Normalize()
@@ -470,91 +452,6 @@ func (h *Handler) ToggleProvider(c *gin.Context) {
 	}
 	resp.Data.Enabled = p.Enabled
 	c.JSON(http.StatusOK, resp)
-}
-
-// validateProxyURL accepts the schemes the transport can dial.
-func validateProxyURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return fmt.Errorf("proxy_url must be a URL such as http://host:port or socks5://host:port")
-	}
-	switch u.Scheme {
-	case "http", "https", "socks5":
-		return nil
-	}
-	return fmt.Errorf("unsupported proxy scheme %q (use http, https or socks5)", u.Scheme)
-}
-
-// SetProviderProxy switches a provider's proxy on or off. The proxy URL is kept
-// while off so the switch is lossless. The update goes through the provider
-// update hooks, so pooled clients and transports are rebuilt immediately.
-func (h *Handler) SetProviderProxy(c *gin.Context) {
-	uid := c.Param("uuid")
-	if uid == "" {
-		apierr.Failure(c, http.StatusBadRequest, "Provider name is required")
-		return
-	}
-
-	var req SetProviderProxyRequest
-	if !bind.JSON(c, &req, apierr.Failure) {
-		return
-	}
-
-	p, err := h.config.GetProviderByUUID(uid)
-	if err != nil {
-		apierr.Failure(c, http.StatusNotFound, "Provider not found")
-		return
-	}
-	if p.IsBuiltin() {
-		apierr.Failure(c, http.StatusForbidden, "Builtin providers are read-only")
-		return
-	}
-	if p.IsVirtual() {
-		badRequest(c, "Virtual-model providers do not use a proxy")
-		return
-	}
-
-	if req.Enabled {
-		if req.ProxyURL != nil {
-			if err := validateProxyURL(*req.ProxyURL); err != nil {
-				badRequest(c, "%s", err)
-				return
-			}
-			p.ProxyURL = *req.ProxyURL
-		}
-		if p.ProxyURL == "" {
-			badRequest(c, "No proxy URL is configured for this provider; set one first")
-			return
-		}
-	}
-	p.ProxyDisabled = !req.Enabled
-
-	if err = h.config.UpdateProvider(uid, p); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"action":        obs.ActionUpdateProvider,
-			"success":       false,
-			"name":          uid,
-			"proxy_enabled": req.Enabled,
-		}).Error(err.Error())
-		apierr.Failure(c, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	state := "disabled"
-	if req.Enabled {
-		state = "enabled"
-	}
-	logrus.WithFields(logrus.Fields{
-		"action":  obs.ActionUpdateProvider,
-		"success": true,
-		"name":    uid,
-	}).Info(fmt.Sprintf("Proxy %s for provider %s", state, uid))
-
-	c.JSON(http.StatusOK, SetProviderProxyResponse{
-		Success: true,
-		Message: fmt.Sprintf("Proxy %s for provider %s", state, p.Name),
-		Data:    maskForResponse(p),
-	})
 }
 
 // modelListExpiry returns when the frontend should stop trusting a resolved

@@ -5912,8 +5912,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
-        "description": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
+        "summary": "List library files (uploads and thread outputs)",
+        "description": "List library files (uploads and thread outputs)",
         "operationId": "apiV1ProjectsIdLibraryGet",
         "parameters": [
           {
@@ -5976,8 +5976,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
-        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries and symlinks are left out.",
         "operationId": "apiV1ProjectsIdLibraryArchiveGet",
         "parameters": [
           {
@@ -6100,8 +6100,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
-        "description": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path",
         "operationId": "apiV1ProjectsIdLibraryTreeGet",
         "parameters": [
           {
@@ -8571,48 +8571,6 @@
             }
           }
         }
-      },
-      "delete": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
-        "description": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
-        "operationId": "apiV1ThreadsIdDelete",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteThreadRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OKResponse"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/threads/{id}/archive": {
@@ -8620,8 +8578,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
-        "description": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
+        "summary": "Archive a folder session, stopping its process without resolving it",
+        "description": "Archive a folder session, stopping its process without resolving it",
         "operationId": "apiV1ThreadsIdArchivePost",
         "parameters": [
           {
@@ -8760,39 +8718,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/threads/{id}/cleanup": {
-      "get": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
-        "description": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
-        "operationId": "apiV1ThreadsIdCleanupGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CleanupResponse"
                 }
               }
             }
@@ -9608,8 +9533,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
-        "description": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
+        "summary": "Restore an archived folder session without changing its status",
+        "description": "Restore an archived folder session without changing its status",
         "operationId": "apiV1ThreadsIdRestorePost",
         "parameters": [
           {
@@ -11504,51 +11429,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeleteProviderResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/providers/{uuid}/proxy": {
-      "post": {
-        "tags": [
-          "providers"
-        ],
-        "summary": "Switch a provider's proxy on or off without forgetting its proxy URL; applies to live clients immediately",
-        "description": "Switch a provider's proxy on or off without forgetting its proxy URL; applies to live clients immediately",
-        "operationId": "apiV2ProvidersUuidProxyPost",
-        "parameters": [
-          {
-            "name": "uuid",
-            "in": "path",
-            "description": "Unique identifier (UUID)",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetProviderProxyRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SetProviderProxyResponse"
                 }
               }
             }
@@ -13575,73 +13455,6 @@
           "coAuthoredBy"
         ]
       },
-      "CleanupReport": {
-        "type": "object",
-        "properties": {
-          "blockers": {
-            "type": "array",
-            "description": "Field blockers",
-            "items": {
-              "type": "string"
-            }
-          },
-          "can_archive": {
-            "type": "boolean",
-            "description": "Field can_archive"
-          },
-          "can_delete": {
-            "type": "boolean",
-            "description": "Field can_delete"
-          },
-          "kept": {
-            "type": "array",
-            "description": "Field kept",
-            "items": {
-              "type": "string"
-            }
-          },
-          "thread_id": {
-            "type": "string",
-            "description": "Field thread_id"
-          },
-          "tmp_bytes": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field tmp_bytes"
-          },
-          "warnings": {
-            "type": "array",
-            "description": "Field warnings",
-            "items": {
-              "type": "string"
-            }
-          },
-          "worktree_bytes": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Field worktree_bytes"
-          }
-        },
-        "required": [
-          "thread_id",
-          "worktree_bytes",
-          "tmp_bytes",
-          "kept",
-          "can_archive",
-          "can_delete"
-        ]
-      },
-      "CleanupResponse": {
-        "type": "object",
-        "properties": {
-          "report": {
-            "$ref": "#/components/schemas/CleanupReport"
-          }
-        },
-        "required": [
-          "report"
-        ]
-      },
       "ClientConfigDifference": {
         "type": "object",
         "properties": {
@@ -14488,19 +14301,6 @@
           "success",
           "message"
         ]
-      },
-      "DeleteThreadRequest": {
-        "type": "object",
-        "properties": {
-          "confirm_branch": {
-            "type": "string",
-            "description": "Field confirm_branch"
-          },
-          "force": {
-            "type": "boolean",
-            "description": "Field force"
-          }
-        }
       },
       "Diff": {
         "type": "object",
@@ -20060,11 +19860,6 @@
           "oauth_detail": {
             "$ref": "#/components/schemas/OAuthDetail"
           },
-          "proxy_disabled": {
-            "type": "boolean",
-            "description": "Field proxy_disabled",
-            "example": false
-          },
           "proxy_url": {
             "type": "string",
             "description": "Field proxy_url",
@@ -20096,8 +19891,7 @@
           "api_style",
           "token",
           "no_key_required",
-          "enabled",
-          "proxy_disabled"
+          "enabled"
         ]
       },
       "ProviderUsage": {
@@ -21628,45 +21422,6 @@
           "time_window"
         ]
       },
-      "SetProviderProxyRequest": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "description": "true to route this provider's outbound requests through its proxy, false to connect directly (the proxy URL is kept)"
-          },
-          "proxy_url": {
-            "type": "string",
-            "description": "Proxy URL to store when enabling a provider that has none (http, https or socks5)"
-          }
-        },
-        "required": [
-          "enabled"
-        ]
-      },
-      "SetProviderProxyResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/ProviderResponse"
-          },
-          "message": {
-            "type": "string",
-            "description": "Field message",
-            "example": "Proxy enabled for provider openai"
-          },
-          "success": {
-            "type": "boolean",
-            "description": "Field success",
-            "example": true
-          }
-        },
-        "required": [
-          "success",
-          "message",
-          "data"
-        ]
-      },
       "Settings": {
         "type": "object",
         "properties": {
@@ -22727,11 +22482,6 @@
           "wait_reason": {
             "type": "string",
             "description": "Field wait_reason"
-          },
-          "worktree_freed_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Field worktree_freed_at"
           }
         },
         "required": [
@@ -23843,10 +23593,6 @@
           "no_key_required": {
             "type": "boolean",
             "description": "Whether provider requires no API key"
-          },
-          "proxy_disabled": {
-            "type": "boolean",
-            "description": "true keeps proxy_url stored but unused; wins over the implicit switch-on that a changed proxy_url causes"
           },
           "proxy_url": {
             "type": "string",

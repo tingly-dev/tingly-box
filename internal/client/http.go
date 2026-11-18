@@ -257,14 +257,14 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		issuer = ai.Issuer(provider.OAuthDetail.GetIssuer())
 	}
 
-	if provider.EffectiveProxyURL() != "" {
-		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.EffectiveProxyURL())
+	if provider.ProxyURL != "" {
+		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.ProxyURL)
 	}
 
 	return &SessionBoundTransport{
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
-		proxyURL:      provider.EffectiveProxyURL(),
+		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
 	}

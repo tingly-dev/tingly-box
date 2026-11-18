@@ -47,7 +47,7 @@ func NewGeminiClient(provider *typ.Provider, model string, sessionID typ.Session
 	transport := &geminiRoundTripper{
 		RoundTripper: createSessionBoundTransport(provider, sessionID),
 		project:      project,
-		proxyURL:     provider.EffectiveProxyURL(),
+		proxyURL:     provider.ProxyURL,
 	}
 
 	// MENTION: must set timeout, otherwise operations may fail unexpectedly

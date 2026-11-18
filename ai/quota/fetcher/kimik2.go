@@ -47,7 +47,7 @@ type kimiCreditsResponse struct {
 
 func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
-	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
+	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	req, err := http.NewRequestWithContext(ctx, "GET",
 		endpoint(f.baseURL, "https://kimi-k2.ai", "/api/user/credits"), nil)

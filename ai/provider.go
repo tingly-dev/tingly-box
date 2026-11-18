@@ -190,11 +190,6 @@ type Provider struct {
 	NoKeyRequired bool     `json:"no_key_required"`
 	Enabled       bool     `json:"enabled"`
 	ProxyURL      string   `json:"proxy_url"` // HTTP or SOCKS proxy URL (e.g., "http://localhost:7890" or "socks5://localhost:1080")
-	// ProxyDisabled turns the proxy off without forgetting ProxyURL, so the
-	// one-click switch is lossless. The zero value keeps every existing
-	// provider's proxy on. Outbound paths must read EffectiveProxyURL, never
-	// ProxyURL directly.
-	ProxyDisabled bool `json:"proxy_disabled,omitempty"`
 	// NOTE: there is deliberately no provider-level User-Agent override. The
 	// outbound User-Agent is a request-path concern, not provider config: it is
 	// decided by the request (rule/scenario custom_user_agent > inbound client
@@ -229,15 +224,6 @@ type Provider struct {
 	// Limits caps this account's concurrency / usage across every rule and
 	// scope that routes to it. See .design/routing-limits.md.
 	Limits *Limits `json:"limits,omitempty"`
-}
-
-// EffectiveProxyURL is the proxy outbound requests use: ProxyURL unless the
-// proxy is switched off. Nil-safe.
-func (p *Provider) EffectiveProxyURL() string {
-	if p == nil || p.ProxyDisabled {
-		return ""
-	}
-	return p.ProxyURL
 }
 
 // OpenAIEndpointMode declares this provider's support for the OpenAI Chat

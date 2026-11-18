@@ -11,7 +11,7 @@ import { PageLayout } from '@/components/PageLayout';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
-import { useProviderProxySwitch } from '@/hooks/useProviderProxySwitch';
+import { useProviderProxy } from '@/hooks/useProviderProxy';
 import { useProviderDialog } from '@/hooks/useProviderDialog';
 import { IconArrowsSort, IconLayoutGrid, IconList, IconTable } from '@tabler/icons-react';
 import { Add, Check, VpnKey } from '@/components/icons';
@@ -131,7 +131,7 @@ const CredentialPage = () => {
         else { showNotification(t('credentialPage.deleteFailed', { error: result.error }), 'error'); }
     };
 
-    const { toggleProxy: handleToggleProxy, proxyPending } = useProviderProxySwitch(providers, { setProviders, notify: showNotification });
+    const { proxyControl, proxyDialog } = useProviderProxy(providers, { setProviders, notify: showNotification });
 
     const handleToggleProvider = async (uuid: string) => {
         const result = await api.toggleProvider(uuid);
@@ -251,13 +251,13 @@ const CredentialPage = () => {
                             {credentialCounts.oauth > 0 && (
                                 <Box>
                                     <SectionTitle label={t('credentialPage.sectionOAuth')} count={credentialCounts.oauth}/>
-                                    <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onToggleProxy={handleToggleProxy} proxyPending={proxyPending} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                    <OAuthTable view={view} providers={oauthProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} proxy={proxyControl} onDelete={handleDeleteProvider} onRefreshToken={handleRefreshToken} onReauthorize={handleReauthorize} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
                                 </Box>
                             )}
                             {credentialCounts.apiKeys > 0 && (
                                 <Box>
                                     <SectionTitle label={t('credentialPage.sectionApiKeys')} count={credentialCounts.apiKeys}/>
-                                    <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} onToggleProxy={handleToggleProxy} proxyPending={proxyPending} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
+                                    <ApiKeyTable view={view} providers={apiKeyProviders} onEdit={handleEditProvider} onToggle={handleToggleProvider} proxy={proxyControl} onDelete={handleDeleteProvider} onNotification={showNotification} providerQuotas={quotaData} refreshingQuotas={refreshing} onQuotaRefresh={refreshQuota} onQuotaRedeem={redeemReward}/>
                                 </Box>
                             )}
                         </Stack>
@@ -288,6 +288,7 @@ const CredentialPage = () => {
                 </DialogActions>
             </Dialog>
             {providerEditDialogs}
+            {proxyDialog}
         </PageLayout>
     );
 };

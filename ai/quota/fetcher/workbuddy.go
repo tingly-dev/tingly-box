@@ -159,7 +159,7 @@ func (f *WorkBuddyFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*q
 	if f.baseURL != "" {
 		site.Origin = strings.TrimRight(f.baseURL, "/")
 	}
-	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
+	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 	now := time.Now()
 	if f.now != nil {
 		now = f.now()

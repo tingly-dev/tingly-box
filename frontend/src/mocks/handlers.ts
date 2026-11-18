@@ -158,7 +158,6 @@ interface MockProviderCatalogEntry {
         token: string
         enabled: boolean
         proxy_url: string
-        proxy_disabled?: boolean
         api_base_openai: string | null
         api_base_anthropic: string | null
         oauth_detail?: {
@@ -2577,20 +2576,6 @@ export const handlers = [
 
         provider.enabled = !provider.enabled
         return HttpResponse.json({ success: true, data: provider })
-    }),
-
-    http.post('/api/v2/providers/:uuid/proxy', async ({ params, request }) => {
-        const { uuid } = params as { uuid: string }
-        const body = await request.json() as { enabled: boolean; proxy_url?: string }
-        const provider = getMockProviders().find((provider) => provider.uuid === uuid)
-        if (!provider) return HttpResponse.json({ success: false, error: 'Not found' }, { status: 404 })
-
-        if (body.enabled && body.proxy_url) provider.proxy_url = body.proxy_url
-        if (body.enabled && !provider.proxy_url) {
-            return HttpResponse.json({ success: false, error: 'No proxy URL is configured for this provider; set one first' }, { status: 400 })
-        }
-        Object.assign(provider, { proxy_disabled: !body.enabled })
-        return HttpResponse.json({ success: true, message: `Proxy ${body.enabled ? 'enabled' : 'disabled'} for provider ${provider.name}`, data: provider })
     }),
 
     http.delete('/api/v2/providers/:uuid', ({ params }) => {

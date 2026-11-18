@@ -67,7 +67,7 @@ type openrouterCreditsResponse struct {
 
 func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
-	client := quota.NewHTTPClient(provider.EffectiveProxyURL(), 30*time.Second)
+	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	// OpenRouter providers are configured with the inference base
 	// ("https://openrouter.ai/api/v1", or "…/api" for the Anthropic style);

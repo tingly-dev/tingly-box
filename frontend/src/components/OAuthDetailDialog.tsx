@@ -12,7 +12,6 @@ import {api} from '@/services/api';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from './provider-form-dialog/ProviderFormLayout';
 import ProtocolSlot from './provider-form-dialog/ProtocolSlot';
 import ProxyUrlField from './provider-form-dialog/ProxyUrlField';
-import {isProxyUrl} from './provider-form-dialog/validation';
 import AccountLimitsSection from './limits/AccountLimitsSection';
 import type {Limits} from './limits/LimitsEditor';
 import {isHttpUrl} from './provider-form-dialog/validation';
@@ -25,7 +24,6 @@ interface OAuthEditFormData {
     apiBaseAnthropic?: string;
     enabled: boolean;
     proxyUrl?: string;
-    proxyDisabled?: boolean;
     limits?: Limits;
 }
 interface OAuthDetailDialogProps {
@@ -57,7 +55,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         setFormData({
             name: provider.name, apiBase: provider.api_base,
             apiBaseOpenAI: provider.api_base_openai || '', apiBaseAnthropic: provider.api_base_anthropic || '',
-            enabled: provider.enabled, proxyUrl: provider.proxy_url || '', proxyDisabled: !!provider.proxy_disabled, limits: provider.limits,
+            enabled: provider.enabled, proxyUrl: provider.proxy_url || '', limits: provider.limits,
         });
         setVisibleTokens({});
         setSubmitError(null);
@@ -86,7 +84,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         setValidationAttempted(true);
         setSubmitError(null);
         const urls = isDual ? [formData.apiBaseOpenAI || '', formData.apiBaseAnthropic || ''] : [formData.apiBase];
-        if (!urls.every(isHttpUrl) || !isProxyUrl(formData.proxyUrl || '')) {
+        if (!urls.every(isHttpUrl)) {
             setTimeout(() => formRef.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus(), 0);
             return;
         }
@@ -165,9 +163,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         </ProviderFormSection>
         <ProviderFormSection title={t('providerDialog.editUx.proxySettings')}>
             <ProxyUrlField mode="edit" proxyUrl={formData.proxyUrl || ''} onProxyUrlChange={proxyUrl => setFormData(previous => ({...previous, proxyUrl}))}
-                globalProxyUrl={globalProxyUrl} useGlobalProxy={false} onUseGlobalProxyChange={() => {}}
-                proxyEnabled={!formData.proxyDisabled} onProxyEnabledChange={enabled => setFormData(previous => ({...previous, proxyDisabled: !enabled}))}
-                showErrors={validationAttempted}/>
+                globalProxyUrl={globalProxyUrl} useGlobalProxy={false} onUseGlobalProxyChange={() => {}}/>
         </ProviderFormSection>
         <AccountLimitsSection providerUuid={provider?.uuid} value={formData.limits} onChange={limits => setFormData(previous => ({...previous, limits}))}/>
         {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}
