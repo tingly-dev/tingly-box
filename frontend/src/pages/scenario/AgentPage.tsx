@@ -106,6 +106,8 @@ export interface AgentPageDescriptor {
     setup: AgentSetup;
     install?: AgentInstall;
     headerLinks?: AgentHeaderLink[];
+    /** Direct model catalogs expose connection info without gateway rules or plugins. */
+    directModels?: boolean;
     /** Title of the routing rules card when it is not the default. */
     rulesTitleKey?: string;
 	/** Optional scenario-specific content shown immediately above routing rules. */
@@ -165,7 +167,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     // Rules: the scenario's own, or — with slot routing — the set for the current mode.
     const slots = useSlotRouting(scenario, slotRouting?.unifiedRuleUuid ?? '', !!slotRouting);
     const slotList = slotRouting ? slots.slots : undefined;
-    const internal = useScenarioPageInternal(scenario, { skipRules: !!slotRouting });
+    const internal = useScenarioPageInternal(scenario, { skipRules: !!slotRouting || !!agent.directModels });
     const { notification, showNotification, copyToClipboard, baseUrl, loadRules } = internal;
     const rules = slotRouting ? slots.rules : internal.rules;
     const isLoading = internal.isLoading || (!!slotRouting && slots.loading);
@@ -259,7 +261,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     );
     const headerActions = (
         <>
-            <AgentLogButton onOpenLog={() => setLogOpen(true)} />
+            {!agent.directModels && <AgentLogButton onOpenLog={() => setLogOpen(true)} />}
             {install && (
                 <Button onClick={() => setGuideOpen(true)} variant="outlined" size="small">
                     {t('agentSetup.quickStart')}
@@ -287,7 +289,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             addon={agent.titleAddon}
                         />
                     }
-                    meta={(
+                    meta={!agent.directModels && (
                         <AgentStatusRow
                             observation={observation.data}
                             connected={connected}
@@ -308,7 +310,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     url={accessUrl}
                     foldedExtras={(
                         <>
-                            {pluginsActive && pluginsRow}
+                            {!agent.directModels && pluginsActive && pluginsRow}
                         </>
                     )}
                 >
@@ -343,12 +345,12 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         {slotRouting && (
                             <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
                         )}
-                        <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
+                        {!agent.directModels && <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>}
                     </Box>
                 </AgentAccessSection>
 
                 {agent.renderBeforeRules?.(slot)}
-                <TemplatePage
+                {!agent.directModels && <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's
                     // Connect AI and Quick Start's both refresh it.
@@ -373,7 +375,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     collapsible={true}
                     hideTroubleshoot
                     {...(agent.context1M ? { onContext1MToggle: handleContext1MToggle } : {})}
-                />
+                />}
 
                 {agent.renderAfterRules?.(slot)}
                 <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />

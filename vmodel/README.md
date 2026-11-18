@@ -160,6 +160,11 @@ its direct OpenAI/Anthropic/Google URLs. It runs without starting a tb gateway,
 opening its database, or registering providers/rules. Point an SDK directly at
 the printed protocol URL; any required API key can be a nonempty placeholder.
 `--json` emits one readiness record; `GET /healthz` reports service readiness.
+All configured IDs share one listener. OpenAI uses the printed `<url>/v1`
+base; Anthropic uses `<url>` and appends `/v1/messages`. Multiple clients can
+use those same IDs and address. The fixed tb `/tingly/vmodel` endpoint serves
+its builtin catalog directly; CLI definitions remain at the CLI's own address.
+Neither path automatically creates providers or rules.
 
 ```yaml
 id: hello

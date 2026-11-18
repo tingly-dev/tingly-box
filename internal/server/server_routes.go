@@ -60,7 +60,10 @@ func (s *Server) UseAIEndpoints() {
 // ensures /models returns only the model IDs the chosen protocol can
 // actually dispatch.
 //
-// The canonical path for virtual models in normal use is still
+// /tingly/vmodel provides another fixed, mixed-protocol address for this
+// same direct builtin catalog. It does not create provider or rule resources.
+//
+// The canonical path for virtual models through gateway features is still
 // /v1/messages and /v1/chat/completions, where a vmodel provider is dispatched
 // like any other provider: through the SDK to the private in-memory
 // virtualserver listener (see .design/vmodel-transport.md).
@@ -74,6 +77,19 @@ func (s *Server) UseVirtualModelEndpoints() {
 	anthropic := s.engine.Group("/virtual/anthropic")
 	anthropic.Use(mw)
 	s.virtualModelService.SetupAnthropicRoutes(anthropic)
+
+	// One fixed, authenticated address for builtins. Model IDs select the
+	// response; no provider or routing rule is created for a client process.
+	models := s.engine.Group("/tingly/vmodel")
+	models.Use(mw)
+	models.Use(middleware.ClearServerIOTimeouts())
+	s.virtualModelService.SetupOpenAIRoutes(models)
+	models.POST("/v1/messages", s.virtualModelService.GetHandler().Messages)
+	models.POST("/messages", s.virtualModelService.GetHandler().Messages)
+	models.POST("/chat/completions", s.virtualModelService.GetHandler().ChatCompletions)
+	models.POST("/responses", s.virtualModelService.GetHandler().Responses)
+	models.GET("/models", s.virtualModelService.GetHandler().ListOpenAIModels)
+
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {

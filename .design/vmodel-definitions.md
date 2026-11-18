@@ -1,9 +1,14 @@
 # VModel definitions and shared runtime
 
-Status: implemented in PR #2618. This document owns the file contract and
+Status: implemented in #2618, with strict-format cleanup in #2624.
+This document owns the file contract and
 execution boundaries. Field examples and Go usage live in
 [`vmodel/spec/README.md`](../vmodel/spec/README.md); the design index is
 [`vmodel.md`](./vmodel.md).
+
+The VModel scene in #2621 provides a fixed direct address for tb's builtin
+catalog. The CLI remains standalone and never registers gateway rules. See
+[`vmodel-scenario.md`](./vmodel-scenario.md).
 
 ## Decision
 
@@ -116,9 +121,9 @@ In #2618, `tb vmodel` is standalone by default: bind `127.0.0.1:0`, report the
 selected address and IDs, serve HTTP, and shut down on interrupt/SIGTERM. It
 does not open the application database or require a running gateway. JSON
 readiness includes `url`, `openai_base_url`, `anthropic_base_url`, `models`,
-and `google_base_url`. OpenAI uses `/openai/v1`, Anthropic uses `/anthropic`
+and `google_base_url`. OpenAI uses `/v1`, Anthropic uses the root URL
 as its SDK base; Google uses the root URL. Export exits without starting a
-listener. There is no `--standalone` flag in this base PR.
+listener. No `--standalone` flag is needed.
 
 Harness `--config` (`--fixture` alias) uses the identical loader and requires
 `--mode=single` plus test assertions. Existing built-in matrix behavior remains
@@ -149,8 +154,9 @@ requires a binary with that behavior registered.
 
 ## Scope and verification
 
-Scenario routing, the VModel UI/power-up and automatic gateway registration
-belong to stacked PR #2621. They are not required by this file/runtime contract.
+The fixed builtin-model endpoint and the VModel UI/power-up belong to PR
+#2621. They are not required by this file/runtime contract; neither entry point
+automatically registers gateway resources.
 A Python construction SDK remains future work.
 
 Validation covers strict schema rejection and normalization, catalog round trips, fresh

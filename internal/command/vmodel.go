@@ -114,12 +114,12 @@ func (c *VModelCmdKong) run(ctx context.Context, out io.Writer) error {
 		}
 	}
 	base := "http://" + net.JoinHostPort(host, strconv.Itoa(address.Port))
-	ready := vmodelReady{URL: base, OpenAIBaseURL: base + "/openai/v1", AnthropicBaseURL: base + "/anthropic", Models: models, GoogleBaseURL: base}
+	ready := vmodelReady{URL: base, OpenAIBaseURL: base + "/v1", AnthropicBaseURL: base, Models: models, GoogleBaseURL: base}
 
 	if c.JSON {
 		err = json.NewEncoder(out).Encode(ready)
 	} else {
-		_, err = fmt.Fprintf(out, "VModel ready: %s\nOpenAI base URL: %s\nAnthropic base URL: %s\nModels: %v\n", ready.URL, ready.OpenAIBaseURL, ready.AnthropicBaseURL, ready.Models)
+		_, err = fmt.Fprintf(out, "VModel ready: %s\nOpenAI base URL: %s\nAnthropic base URL: %s\nModels (request model IDs): %v\n", ready.URL, ready.OpenAIBaseURL, ready.AnthropicBaseURL, ready.Models)
 	}
 	if err != nil {
 		return fmt.Errorf("write vmodel readiness: %w", err)

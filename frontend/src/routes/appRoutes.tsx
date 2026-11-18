@@ -24,6 +24,7 @@ const UseCodexPage = lazy(() => import('@/pages/scenario/UseCodexPage'));
 const UseClaudeCodePage = lazy(() => import('@/pages/scenario/UseClaudeCodePage'));
 const ClaudeCodeProfilePage = lazy(() => import('@/pages/scenario/ClaudeCodeProfilePage'));
 const UseClaudeDesktopPage = lazy(() => import('@/pages/scenario/UseClaudeDesktopPage'));
+const UseVModelPage = lazy(() => import('@/pages/scenario/UseVModelPage'));
 const UseCustomPage = lazy(() => import('@/pages/scenario/UseCustomPage'));
 const UseTeamPage = lazy(() => import('@/pages/scenario/UseTeamPage'));
 const TeamKeysPage = lazy(() => import('@/pages/scenario/TeamKeysPage'));
@@ -125,6 +126,7 @@ export const appRoutes = (
             <Route path="/agent/claude_code" element={<UseClaudeCodePage />} />
             <Route path="/agent/claude_code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
             <Route path="/agent/claude_desktop" element={<UseClaudeDesktopPage />} />
+            <Route path="/agent/vmodel" element={<UseVModelPage />} />
             <Route path="/agent/custom" element={<UseCustomPage />} />
             {/* "agent" was renamed to "custom" (formerly OpenClaw); keep the old
                 bookmarked path working. */}
