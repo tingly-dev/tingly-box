@@ -694,6 +694,9 @@ cli/harness/
   agent_exec.go      Tier C agent CLI drivers (claude/codex/opencode), timeout
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
   lb.go              Tier LB command — load-balancing scenario simulator
+  lb_schema.go       lb scenario YAML schema (faults, services, program steps)
+  lb_expect.go       lb self-check: the `expect` block evaluated against the outcome
+  lb_render.go       lb trace output: pencil graph, table
                      (engine: internal/server.LBSimulator; shapes per
                      .design/tier-routing.md)
   testdata/lb/       sample LB scenario YAML files
