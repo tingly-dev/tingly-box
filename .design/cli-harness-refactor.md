@@ -80,7 +80,7 @@ hand-edited.
 | Phase | Content | Items | Risk |
 |---|---|---|---|
 | **P0** (this PR) | Review + this doc; `gofmt -w agent.go agent_assert.go` as its own commit (pure whitespace) | F1 | none |
-| **P1** | Dead/trivial: drop `Sprintf("%s")`, inline `loadProvidersConfig`, drop `builtinRequestModel` alias or `DefaultSummaryFile`, derive `--example` help from `lbExampleNames`, simplify `lb --all` loop | F10, F12, part F9 | none–low |
+| **P1** (stacked PR on P0) | Dead/trivial: drop `Sprintf("%s")`, inline `loadProvidersConfig`, drop `builtinRequestModel` alias or `DefaultSummaryFile`, derive `--example` help from `lbExampleNames`, simplify `lb --all` loop | F10, F12, part F9 | none–low |
 | **P2** | Vocabulary + guard tests, no flag changes: rename `Fixtures`→`Definitions` and messages/tests "fixture"→"definition" (keep `--fixture` as alias); add a test that every `replayScenarios[*].defaultVModel` exists in `spec.DefaultDefinitions()`; README: add `matrix --config` section linking to `vmodel-definitions.md`; fix `harness-agent-testing.md:18,29` wording; one glossary in README for virtual / vmodel / mock / fixture | M1, M2, M4 (docs), M5 guard, M6 | low |
 | **P3** | `matrix.go`: extract `scenariosFromDefinitions(paths, only)` into `matrix_definitions.go` with direct unit tests (same errors); optional `spec.LoadFiles` in a separate tiny PR coordinated with the `internal/` thread | F7, F8 | low |
 | **P4** | `agent.go` split by `tingly-go move`: `agent_exec.go` (executors, `AgentTestResult`, timeout), `agent_mock.go` (`runVirtualAgentTest`), `agent_batch.go`; no behavior change. First add a golden test over `summaryWriter.Append` + `outputWriter.Write` so P5 can prove byte-identical output | F2, F14 (README split optional) | low |
