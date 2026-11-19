@@ -52,3 +52,15 @@ func TestResponsesOutputItemAddedEvent_MessageCarriesContent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"content":[]`)
 }
+
+// Codex reads the code of a failed response from response.error (#2417).
+func TestNewResponsesFailedEvent(t *testing.T) {
+	ev := NewResponsesFailedEvent(10, "resp_1", 1700000000, "gpt-5", ResponsesFailedErrorWire{Code: "some_code", Message: "flagged"})
+	assert.Equal(t, "response.failed", ev.EventType())
+	b, err := json.Marshal(ev)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"response.failed","sequence_number":10,"response":{
+		"id":"resp_1","object":"response","created_at":1700000000,"status":"failed","output":[],
+		"model":"gpt-5","incomplete_details":null,
+		"error":{"code":"some_code","message":"flagged"}}}`, string(b))
+}

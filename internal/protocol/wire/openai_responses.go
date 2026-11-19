@@ -16,6 +16,7 @@ func (e ResponsesCreatedEvent) EventType() string                    { return e.
 func (e ResponsesInProgressEvent) EventType() string                 { return e.Type }
 func (e ResponsesCompletedEvent) EventType() string                  { return e.Type }
 func (e ResponsesIncompleteEvent) EventType() string                 { return e.Type }
+func (e ResponsesFailedEvent) EventType() string                     { return e.Type }
 func (e ResponsesOutputItemAddedEvent) EventType() string            { return e.Type }
 func (e ResponsesOutputItemDoneEvent) EventType() string             { return e.Type }
 func (e ResponsesContentPartAddedEvent) EventType() string           { return e.Type }
@@ -39,6 +40,42 @@ type ResponsesStreamErrorEvent struct {
 // NewResponsesStreamErrorEvent builds a mid-stream "error" event.
 func NewResponsesStreamErrorEvent(seq int64, code, message string) ResponsesStreamErrorEvent {
 	return ResponsesStreamErrorEvent{Type: "error", SequenceNumber: seq, Code: code, Message: message}
+}
+
+// ResponsesFailedEvent is the response.failed lifecycle event. The proxy
+// emits it when an upstream error with a code ends a stream that has already
+// started (#2417): Codex reads a content-policy code only from response.failed
+// or an HTTP 400 body, not from an "error" event, and retries a stream that
+// ends without a terminal event.
+type ResponsesFailedEvent struct {
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
+	Response       ResponsesWireResponse `json:"response"`
+}
+
+// ResponsesFailedErrorWire is the error object of a failed response.
+type ResponsesFailedErrorWire struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// NewResponsesFailedEvent builds a response.failed event for the response
+// with the given id (the one its response.created carried, "" if none was
+// seen).
+func NewResponsesFailedEvent(seq int64, id string, createdAt int64, model string, failure ResponsesFailedErrorWire) ResponsesFailedEvent {
+	return ResponsesFailedEvent{
+		Type:           "response.failed",
+		SequenceNumber: seq,
+		Response: ResponsesWireResponse{
+			ID:        id,
+			Object:    "response",
+			CreatedAt: createdAt,
+			Status:    "failed",
+			Output:    []ResponsesOutputItemWire{},
+			Model:     model,
+			Error:     failure,
+		},
+	}
 }
 
 type ResponsesCreatedEvent struct {
@@ -81,7 +118,7 @@ type ResponsesWireResponse struct {
 	Model             string                          `json:"model,omitempty"`
 	CompletedAt       int64                           `json:"completed_at,omitempty"`
 	IncompleteDetails *ResponsesIncompleteDetailsWire `json:"incomplete_details"`
-	Error             interface{}                     `json:"error"` // always null: failures surface as error events or HTTP errors
+	Error             interface{}                     `json:"error"` // null except in response.failed (NewResponsesFailedEvent)
 }
 
 // ToMap converts the typed response contract to the legacy map surface used by

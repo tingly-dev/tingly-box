@@ -9,6 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/ssestream"
 )
 
 // maxClientDetailLen caps the vendor message relayed to a client so a
@@ -58,6 +59,20 @@ func statusLine(code int) string {
 	return fmt.Sprintf("%d", code)
 }
 
+// UpstreamErrorCode returns the code of an upstream *openai.Error in err and
+// the message to relay with it: the vendor's message, capped like the client
+// messages built here, or the full client message when the vendor sent none.
+func UpstreamErrorCode(err error) (code, message string, ok bool) {
+	var e *openai.Error
+	if !errors.As(err, &e) || e.Code == "" {
+		return "", "", false
+	}
+	if msg := truncateClientDetail(e.Message); msg != "" {
+		return e.Code, msg, true
+	}
+	return e.Code, safeOpenAIMessage(e), true
+}
+
 func truncateClientDetail(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) <= maxClientDetailLen {
@@ -105,6 +120,12 @@ func UpstreamLogDetail(err error) string {
 	var anthropicErr *anthropic.Error
 	if errors.As(err, &anthropicErr) {
 		return fmt.Sprintf("anthropic status=%d request_id=%q body=%s", anthropicErr.StatusCode, anthropicErr.RequestID, truncateLogDetail(anthropicErr.RawJSON()))
+	}
+	// An in-stream error event: the SDK's message keeps only the "error"
+	// object; the event carries the whole payload (type, sequence_number).
+	var streamErr *ssestream.StreamError
+	if errors.As(err, &streamErr) {
+		return fmt.Sprintf("stream event=%q data=%s", streamErr.Event.Type, truncateLogDetail(strings.TrimSpace(string(streamErr.Event.Data))))
 	}
 	return ""
 }
