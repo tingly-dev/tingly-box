@@ -679,6 +679,7 @@ cli/harness/
   main.go            Kong CLI root: version / matrix / agent / replay / lb /
                      duo / routing / provider / init-config
   matrix.go          Tier A command — wraps protocoltest.Matrix
+  matrix_definitions.go  --config: definition files → matrix scenarios
   replay.go          Tier B command — fixture replay, upstream selection
   duo.go             Tier Duo command — wraps protocoltest.DuoEnv (function +
                      per-instance memory); child mode via MaybeRunDuoServe in main.go
@@ -687,7 +688,10 @@ cli/harness/
   duo_report.go      shared duo-topology CLI scaffolding (boot line, check
                      blocks, JSON/PASS/exit)
   testdata/routing/  example user-defined routing scenario YAML
-  agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
+  agent.go           Tier C command — flags, mode selection, resume/only-failing
+  agent_mock.go      Tier C --mock mode: one run against the VirtualServer upstream
+  agent_batch.go     Tier C `batch`: every agent in sequence, one summary
+  agent_exec.go      Tier C agent CLI drivers (claude/codex/opencode), timeout
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
   lb.go              Tier LB command — load-balancing scenario simulator
                      (engine: internal/server.LBSimulator; shapes per
