@@ -284,14 +284,19 @@ func convertAnthropicViewToOpenAIRequest(view anthropicRequestView, isStreaming 
 	openaiReq.MaxTokens = openai.Opt(view.MaxTokens)
 
 	// Convert messages
+	toolIDs := mapAnthropicToolIDs(view.Messages)
 	for _, msg := range view.Messages {
 		switch msg.Role {
 		case anthropic.MessageParamRoleUser:
 			// User messages may contain tool_result blocks - need special handling
-			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewUserToOpenAI(msg.Content)...)
+			converted := convertAnthropicViewUserToOpenAI(msg.Content)
+			applyAnthropicToolResultIDs(converted, msg.Content, toolIDs)
+			openaiReq.Messages = append(openaiReq.Messages, converted...)
 		case anthropic.MessageParamRoleAssistant:
 			// Convert assistant message with potential tool_use blocks
-			openaiReq.Messages = append(openaiReq.Messages, convertAnthropicViewAssistantToOpenAI(msg.Content))
+			converted := convertAnthropicViewAssistantToOpenAI(msg.Content)
+			applyAnthropicToolUseIDs(converted.OfAssistant, msg.Content, toolIDs)
+			openaiReq.Messages = append(openaiReq.Messages, converted)
 		}
 	}
 
@@ -437,6 +442,53 @@ func convertAnthropicViewAssistantToOpenAI(blocks []anthropic.ContentBlockParamU
 	assistant.SetExtraFields(map[string]any{"x_thinking": thinking})
 
 	return openai.ChatCompletionMessageParamUnion{OfAssistant: assistant}
+}
+
+// applyAnthropicToolResultIDs fills tool_call_id values by walking the actual
+// OpenAI tool messages. The converter may also emit a user message for text or
+// image blocks from the same Anthropic user message, so the source block index
+// must not be used as the destination index.
+func applyAnthropicToolResultIDs(messages []openai.ChatCompletionMessageParamUnion, blocks []anthropic.ContentBlockParamUnion, toolIDs map[string]string) {
+	toolResultIDs := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if block.OfToolResult != nil {
+			toolResultIDs = append(toolResultIDs, block.OfToolResult.ToolUseID)
+		}
+	}
+
+	resultIndex := 0
+	for i := range messages {
+		if resultIndex >= len(toolResultIDs) {
+			return
+		}
+		if messages[i].OfTool == nil {
+			continue
+		}
+		messages[i].OfTool.ToolCallID = toolIDs[toolResultIDs[resultIndex]]
+		resultIndex++
+	}
+}
+
+// applyAnthropicToolUseIDs fills assistant tool call IDs by walking the actual
+// OpenAI function call slots, keeping source and destination indexes independent.
+func applyAnthropicToolUseIDs(assistant *openai.ChatCompletionAssistantMessageParam, blocks []anthropic.ContentBlockParamUnion, toolIDs map[string]string) {
+	if assistant == nil {
+		return
+	}
+
+	toolUseIDs := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if block.OfToolUse != nil {
+			toolUseIDs = append(toolUseIDs, block.OfToolUse.ID)
+		}
+	}
+
+	for i := range assistant.ToolCalls {
+		if i >= len(toolUseIDs) || assistant.ToolCalls[i].OfFunction == nil {
+			continue
+		}
+		assistant.ToolCalls[i].OfFunction.ID = toolIDs[toolUseIDs[i]]
+	}
 }
 
 // convertAnthropicViewUserToOpenAI converts a user message's blocks to OpenAI
