@@ -289,7 +289,15 @@ func (c *LbCmd) runOne() error {
 		if lastTrace != nil && lastSession != "" {
 			finalPin = sim.Pin(lastSession)
 		}
-		if cerr := c.checkExpect(scn, out.Steps, out.FinalBreakers, out.FinalHealth, lastTrace, lastSession, finalPin, finalPins, firstAttempts); cerr != nil {
+		outcome := lbOutcome{
+			lastTrace:     lastTrace,
+			finalPin:      finalPin,
+			finalPins:     finalPins,
+			finalBreakers: out.FinalBreakers,
+			finalHealth:   out.FinalHealth,
+			firstAttempts: firstAttempts,
+		}
+		if cerr := scn.Expect.check(outcome); cerr != nil {
 			return cerr
 		}
 	}
@@ -313,13 +321,25 @@ func (c *LbCmd) runOne() error {
 	return nil
 }
 
-// checkExpect evaluates the Expect block after the program runs. On mismatch,
+// lbOutcome is what the expect block is evaluated against: the LAST request's
+// trace plus the FINAL snapshots after the program ran.
+type lbOutcome struct {
+	lastTrace     *server.LBTrace
+	finalPin      string            // affinity pin of the last request's session
+	finalPins     map[string]string // final pin per named session
+	finalBreakers map[string]string
+	finalHealth   map[string]string
+	firstAttempts map[string]bool // every serviceID seen as a request's first attempt
+}
+
+// check evaluates the expect block after the program runs. On mismatch,
 // returns an error → non-zero exit (CI leg fails).
-func (c *LbCmd) checkExpect(scn *lbScenario, steps []lbStepOutput, finalBreakers, finalHealth map[string]string, lastTrace *server.LBTrace, lastSession string, finalPin string, finalPins map[string]string, firstAttempts map[string]bool) error {
-	e := scn.Expect
+func (e *lbExpect) check(o lbOutcome) error {
 	if e == nil {
 		return nil
 	}
+	lastTrace, finalPin, finalPins := o.lastTrace, o.finalPin, o.finalPins
+	finalBreakers, finalHealth, firstAttempts := o.finalBreakers, o.finalHealth, o.firstAttempts
 
 	// Helper: string pointer to string (or "" if nil).
 	ptrStr := func(p *string) string {
