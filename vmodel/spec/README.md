@@ -10,7 +10,6 @@ and the existing scenario/matrix adapters.
 tb vmodel --config model.yaml
 # The identical file supplies the upstream response and its assertions.
 go run ./cli/harness matrix --mode single --config model.yaml
-# --fixture remains an alias of --config in the matrix command.
 ```
 
 A small shared definition:

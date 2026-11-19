@@ -181,7 +181,7 @@ expect:
 including opt-in test fixtures, without starting a service. With `--config`,
 export writes just those definitions. Every input must use explicit `id`,
 `kind` and one behavior block; alternate flat/name-based formats are rejected.
-`--fixture` remains a matrix alias for `--config`.
+The harness matrix loads the same files with `--config`.
 
 See [the unified definition contract](spec/README.md) for all kinds,
 per-protocol recording payloads, exact `raw_body`/`raw_stream` preservation,

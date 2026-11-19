@@ -74,7 +74,7 @@ Assertions + SemanticEquivalence checks
 ### Key types
 
 File-defined scenarios use the same `vmodel/spec` loader as `tb vmodel`:
-`harness matrix --mode=single --config model.yaml` (`--fixture` is an alias).
+`harness matrix --mode=single --config model.yaml`.
 Files replace the default scenarios and must supply test assertions. The
 runtime's `Scenario(id)` adapter preserves protocol/mode restrictions, raw
 recordings and named Go behavior; native-only decision checks use HTTP plus
