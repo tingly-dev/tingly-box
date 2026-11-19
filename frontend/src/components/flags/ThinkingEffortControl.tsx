@@ -9,7 +9,7 @@ export const EFFORT_LEVELS = [
     { value: 'low', label: 'Low', description: 'Light reasoning, about 4K tokens on budget-based models' },
     { value: 'medium', label: 'Medium', description: 'Balanced reasoning, about 10K tokens on budget-based models' },
     { value: 'high', label: 'High', description: 'Deep reasoning, about 20K tokens on budget-based models' },
-    { value: 'xhigh', label: 'XHigh', description: 'Uses xhigh where supported. Other models can map it to high, max, or a budget of about 24K tokens.' },
+    { value: 'xhigh', label: 'XHigh', description: 'Request xhigh using the existing provider mapping. Some upstreams may reject this level.' },
     { value: 'max', label: 'Max', description: 'Maximum requested effort, about 32K tokens on budget-based models' },
 ] as const;
 

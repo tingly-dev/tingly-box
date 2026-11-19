@@ -190,7 +190,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
-			Description:     "Thinking effort for this route. By Client inherits the scenario setting when configured. Off requests that the model disable thinking. XHigh can map to high or max depending on the model. On budget-based models, Low through Max target about 4K, 10K, 20K, 24K, and 32K tokens.",
+			Description:     "Thinking effort for this route. By Client inherits the scenario setting when configured. Off requests that the model disable thinking. Levels use the existing provider mappings, and upstreams may reject unsupported settings. On budget-based models, Low through Max target about 4K, 10K, 20K, 24K, and 32K tokens.",
 			Type:            FlagTypeEnum,
 			Category:        FlagCategoryReasoning,
 			Shared:          true,

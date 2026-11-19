@@ -4,7 +4,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/openai/openai-go/v3/shared"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	"github.com/tingly-dev/tingly-box/internal/protocol/thinking"
@@ -38,15 +37,11 @@ func (t *VendorTransform) Apply(ctx *TransformContext) error {
 	case *openai.ChatCompletionNewParams:
 		ctx.Request = t.applyChat(ctx, req, providerURL)
 	case *responses.ResponseNewParams:
-		ctx.Request = t.applyResponses(ctx, req, providerURL)
+		ctx.Request = t.applyResponses(ctx, req)
 	case *anthropic.MessageNewParams:
 		ctx.Request = t.applyAnthropicV1(ctx, req, providerURL)
 	case *anthropic.BetaMessageNewParams:
 		ctx.Request = t.applyAnthropicBeta(ctx, req, providerURL)
-	case *protocol.GoogleRequest:
-		if ctx.ruleThinkingEffort == thinking.LevelXHigh {
-			ops.ApplyGoogleXHighThinking(req)
-		}
 	}
 	return nil
 }
@@ -63,33 +58,17 @@ func (t *VendorTransform) applyChat(ctx *TransformContext, req *openai.ChatCompl
 	if config == nil {
 		config = &protocol.OpenAIConfig{}
 	}
-	req = ops.ApplyProviderTransforms(req, providerURL, string(req.Model), config)
-	if ctx.ruleThinkingEffort == thinking.LevelXHigh {
-		host, _ := ops.SplitProviderHostPath(providerURL)
-		switch {
-		case host == "api.openai.com":
-			req.ReasoningEffort = ops.OpenAIXHighEffort(string(req.Model))
-		case host == "poe.com" && req.ReasoningEffort == shared.ReasoningEffortXhigh:
-			// Poe's Gemini path filters tools and leaves effort in Chat format.
-			req.ReasoningEffort = shared.ReasoningEffortHigh
-		}
-	}
-	return req
+	return ops.ApplyProviderTransforms(req, providerURL, string(req.Model), config)
 }
 
-func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.ResponseNewParams, providerURL string) *responses.ResponseNewParams {
-	if req == nil || req.Model == "" || ctx.ruleThinkingEffort != thinking.LevelXHigh {
+func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.ResponseNewParams) *responses.ResponseNewParams {
+	if req == nil || req.Model == "" {
 		return req
 	}
-	host, _ := ops.SplitProviderHostPath(providerURL)
-	switch {
-	case host == "api.openai.com" || ctx.Provider.IsCodexProvider():
-		req.Reasoning.Effort = ops.OpenAIXHighEffort(req.Model)
-	case host == "api.deepseek.com":
-		req.Reasoning.Effort = shared.ReasoningEffortMax
-	default:
-		req.Reasoning.Effort = shared.ReasoningEffortHigh
-	}
+	// MENTION: no need to do transform here, the codex client will handle this
+	//if t.providerURL(ctx) == protocol.CodexAPIBase {
+	//	return ops.ApplyCodexResponsesTransform(req, ctx.OriginalRequest)
+	//}
 	return req
 }
 
@@ -134,23 +113,8 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 	case host == "api.anthropic.com" || host == "claude.ai": // any other credential, e.g. an API key
 		req = reconcileAnthropicV1Thinking(req)
 	case host == "api.deepseek.com":
-		if ctx.ruleThinkingEffort == thinking.LevelXHigh {
-			req.OutputConfig.Effort = anthropic.OutputConfigEffortMax
-			if req.Thinking.OfAdaptive != nil {
-				req.Thinking = anthropic.ThinkingConfigParamOfEnabled(ops.MinAnthropicThinkingBudget)
-			}
-		}
 		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
-	default:
-		if ctx.ruleThinkingEffort == thinking.LevelXHigh {
-			req.OutputConfig.Effort = ""
-			if req.Thinking.OfAdaptive != nil {
-				if budget, ok := ops.FitAnthropicThinkingBudget(thinking.BudgetMapping[thinking.LevelXHigh], req.MaxTokens); ok {
-					req.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
-				}
-			}
-		}
 	}
 	return req
 }
@@ -167,23 +131,8 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 	case host == "api.anthropic.com" || host == "claude.ai": // any other credential, e.g. an API key
 		req = reconcileAnthropicBetaThinking(req)
 	case host == "api.deepseek.com":
-		if ctx.ruleThinkingEffort == thinking.LevelXHigh {
-			req.OutputConfig.Effort = anthropic.BetaOutputConfigEffortMax
-			if req.Thinking.OfAdaptive != nil {
-				req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(ops.MinAnthropicThinkingBudget)
-			}
-		}
 		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)
-	default:
-		if ctx.ruleThinkingEffort == thinking.LevelXHigh {
-			req.OutputConfig.Effort = ""
-			if req.Thinking.OfAdaptive != nil {
-				if budget, ok := ops.FitAnthropicThinkingBudget(thinking.BudgetMapping[thinking.LevelXHigh], req.MaxTokens); ok {
-					req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
-				}
-			}
-		}
 	}
 	return req
 }

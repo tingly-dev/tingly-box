@@ -316,9 +316,6 @@ func checkThinkingLimits(env *TestEnv, c thinkingLimitsCase, model string) []str
 
 	case protocol.TypeOpenAIResponses:
 		checkLimit("max_output_tokens")
-		if c.rule == typ.ThinkingEffortXHigh {
-			want = "high" // the test uses an unverified Responses-compatible host
-		}
 		got := stringField(up, "reasoning", "effort")
 		if got == "none" {
 			got = ""

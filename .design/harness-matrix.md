@@ -850,8 +850,7 @@ rather than a hand-written expected body:
 - the effort that arrives is the effective one — the rule's level when set,
   none when the rule says off, else the client's — collapsed through the
   generic tier map on a Chat target whenever the gateway derived it (a Chat
-  client's own `reasoning_effort` is forwarded verbatim). A rule's `xhigh`
-  maps to `high` on the test's generic Responses endpoint.
+  client's own `reasoning_effort` is forwarded verbatim).
 
 It exposed three pre-existing gaps, all since fixed: TL1 — a budget capped to
 equal `max_tokens`, which Anthropic rejects (#1902); TL2 — an Anthropic

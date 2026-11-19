@@ -1,86 +1,17 @@
 package transform
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-func TestFullChain_RuleXHighUsesUpstreamDialect(t *testing.T) {
-	cases := []struct {
-		name, provider      string
-		request             any
-		field, want, absent string
-		withoutRule         bool
-	}{
-		{name: "OpenAI GPT-5.2 Chat", provider: "https://api.openai.com/v1",
-			request: &openai.ChatCompletionNewParams{Model: "gpt-5.2-2025-12-11"}, field: "reasoning_effort", want: "xhigh"},
-		{name: "OpenAI GPT-5.1 Chat", provider: "https://api.openai.com/v1",
-			request: &openai.ChatCompletionNewParams{Model: "gpt-5.1"}, field: "reasoning_effort", want: "high"},
-		{name: "OpenAI non-reasoning Chat", provider: "https://api.openai.com/v1",
-			request: &openai.ChatCompletionNewParams{Model: "gpt-4.1"}, field: "reasoning_effort"},
-		{name: "Codex priority Responses", provider: protocol.CodexAPIBase,
-			request: &responses.ResponseNewParams{Model: "gpt-5.6-sol:fast"}, field: "reasoning.effort", want: "xhigh"},
-		{name: "OpenAI GPT-5.1 Responses", provider: "https://api.openai.com/v1",
-			request: &responses.ResponseNewParams{Model: "gpt-5.1"}, field: "reasoning.effort", want: "high"},
-		{name: "compatible Responses", provider: "https://relay.example/v1",
-			request: &responses.ResponseNewParams{Model: "relay-model"}, field: "reasoning.effort", want: "high"},
-		{name: "client-owned compatible Responses", provider: "https://relay.example/v1",
-			request: &responses.ResponseNewParams{Model: "relay-model", Reasoning: shared.ReasoningParam{Effort: "xhigh"}},
-			field:   "reasoning.effort", want: "xhigh", withoutRule: true},
-		{name: "Kimi Chat", provider: "https://api.moonshot.ai/v1",
-			request: &openai.ChatCompletionNewParams{Model: "kimi-k3"}, field: "reasoning_effort", want: "max"},
-		{name: "Gemini 3 Chat", provider: "https://generativelanguage.googleapis.com/v1beta/openai",
-			request: &openai.ChatCompletionNewParams{Model: "gemini-3.5-flash"},
-			field:   "extra_body.google.thinking_config.thinking_level", want: "high", absent: "reasoning_effort"},
-		{name: "Gemini via Poe Chat", provider: "https://poe.com/v1",
-			request: &openai.ChatCompletionNewParams{Model: "gemini-3.5-flash"}, field: "reasoning_effort", want: "high"},
-		{name: "DeepSeek Responses", provider: "https://api.deepseek.com",
-			request: &responses.ResponseNewParams{Model: "deepseek-pro"}, field: "reasoning.effort", want: "max"},
-		{name: "DeepSeek Anthropic", provider: "https://api.deepseek.com/anthropic",
-			request: &anthropic.MessageNewParams{Model: "deepseek-pro", MaxTokens: 32000},
-			field:   "output_config.effort", want: "max"},
-		{name: "Claude 4.7 Beta", provider: "https://api.anthropic.com",
-			request: &anthropic.BetaMessageNewParams{Model: "claude-opus-4-7", MaxTokens: 32000},
-			field:   "output_config.effort", want: "xhigh"},
-		{name: "Claude 4.6 V1", provider: "https://api.anthropic.com",
-			request: &anthropic.MessageNewParams{Model: "claude-opus-4-6", MaxTokens: 32000},
-			field:   "output_config.effort", want: "high"},
-		{name: "compatible Anthropic", provider: thirdPartyAnthropicURL,
-			request: &anthropic.BetaMessageNewParams{Model: "glm-5", MaxTokens: 32000,
-				Thinking: anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}},
-			field: "thinking.budget_tokens", want: "24576", absent: "output_config.effort"},
-		{name: "Gemini 2.5 native", provider: "https://generativelanguage.googleapis.com",
-			request: &protocol.GoogleRequest{Model: "gemini-2.5-flash"}, field: "Config.thinkingConfig.thinkingBudget", want: "24576"},
-		{name: "Gemini 3 native", provider: "https://generativelanguage.googleapis.com",
-			request: &protocol.GoogleRequest{Model: "gemini-3.5-flash"}, field: "Config.thinkingConfig.thinkingLevel", want: "HIGH"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := newFullChainContext(tc.request, tc.provider, nil)
-			if !tc.withoutRule {
-				require.NoError(t, NewRuleThinkingTransform(typ.ThinkingEffortXHigh).Apply(ctx))
-			}
-			require.NoError(t, NewVendorTransform().Apply(ctx))
-			body, err := json.Marshal(ctx.Request)
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, gjson.GetBytes(body, tc.field).String())
-			if tc.absent != "" {
-				assert.False(t, gjson.GetBytes(body, tc.absent).Exists())
-			}
-		})
-	}
-}
 
 // newFullChainContext creates a TransformContext with common fields for full-chain tests.
 func newFullChainContext(request interface{}, providerURL string, extra map[string]interface{}) *TransformContext {

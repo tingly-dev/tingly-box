@@ -147,15 +147,7 @@ config-only flag——只在生成 Codex 模型目录时读取，不进请求链
 给它一个通用的整数输入框）。设计见 [`codex-config.md`](./codex-config.md) 的
 “Per-model auto-compact”。
 
-**`xhigh` 的出站映射**
-
-| 上游 | 实际设置 |
-|------|----------|
-| OpenAI / Codex | 支持的 GPT 模型发送原生 `xhigh`，例如 GPT-5.2、GPT-5.4 和 GPT-6；早期支持 effort 的模型（例如 GPT-5.1）用 `high`，其余省略 effort。 |
-| Anthropic / Claude Code | 按 Claude catalog 保留原生 `xhigh`、降到支持的档位，或使用预算。通用 Anthropic 兼容出口使用预算配置。 |
-| DeepSeek / Kimi | DeepSeek 的 Chat、Responses 和 Anthropic 出口使用 `max`。Kimi 的 Chat 出口使用 `max`。 |
-| Gemini | Gemini 3 映射到 `high`。Gemini 2.5 映射到 24,576 token。 |
-| 通用 OpenAI 兼容出口 | Chat / Responses 的规则覆盖映射到 `high`。 |
+`xhigh` 沿用现有出站映射。上游拒绝所收到的档位时，按正常请求错误处理。
 
 ---
 
@@ -513,7 +505,7 @@ Plugins Card 操作。
 | 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
 | 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
 | `Shared` / `InheritanceMode` 嵌入 FlagSpec | ✅ | 前端单独维护共享清单 | 继承语义是 flag 固有属性，放在 registry 可信源里前端零维护 |
-| `thinking_effort` UI 提供 7 档（`xhigh` 位于 `high` 和 `max` 之间） | ✅ | 完整暴露内部阶梯 | 支持原生 `xhigh` 的模型可以独立使用该档位。前端说明兼容映射与预算上限，旧配置里的 `minimal` 仍可识别和执行。Probe 的规则 flag overlay 同步使用 registry，生成客户端请求的 thinking 滑块沿用自己的档位。 |
+| `thinking_effort` UI 提供 7 档（`xhigh` 位于 `high` 和 `max` 之间） | ✅ | 完整暴露内部阶梯 | 规则、场景和 Probe 的规则 flag overlay 均可设置 `xhigh`。旧配置里的 `minimal` 仍可识别和执行。Probe 生成客户端请求的 thinking 滑块沿用自己的档位。 |
 
 ---
 
