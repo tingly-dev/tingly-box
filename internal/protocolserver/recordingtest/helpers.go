@@ -6,10 +6,11 @@
 // recording_test file because its helpers must be importable both from
 // internal/recording's own tests and from internal/server's
 // e2e tests — Go test files, even in an external _test package, are never
-// importable from another package. Putting the helpers in a normal package
-// that imports internal/protocolserver avoids that restriction; it stays
-// free of any import cycle because protocolserver's production code never
-// imports recordingtest.
+// importable from another package. It lives under internal/protocolserver
+// (not internal/recording) because it imports protocolserver: placed next to
+// the package it drives, recording's production tree stays free of any
+// protocolserver import. It adds no import cycle because protocolserver's
+// production code never imports recordingtest.
 package recordingtest
 
 import (
