@@ -116,7 +116,7 @@ if [ -n "$REAL_CONFIG" ]; then
         exit 2
     fi
     # real sweep failures don't undo a green mock, but they count.
-    if ! run_batch "真实 provider 扫描 ($REAL_CONFIG)" --config "$REAL_CONFIG"; then
+    if ! run_batch "真实 provider 扫描 ($REAL_CONFIG)" --providers "$REAL_CONFIG"; then
         OVERALL=1
     fi
 fi

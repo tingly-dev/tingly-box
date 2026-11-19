@@ -504,8 +504,8 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
   ```bash
   export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)   # 或复制 tingly-box 里 Claude Code OAuth provider 的 access_token
   go run ./cli/harness init-config --output providers.yaml
-  go run ./cli/harness replay claude --upstream real --config providers.yaml   # 三个 fixture，200 即通过
-  go run ./cli/harness agent  claude --config providers.yaml                   # 由真实 claude CLI 发请求
+  go run ./cli/harness replay claude --upstream real --providers providers.yaml   # 三个 fixture，200 即通过
+  go run ./cli/harness agent  claude --providers providers.yaml                   # 由真实 claude CLI 发请求
   ```
 
   `TestSetupRealOAuthAgent_ClaudeCode` 是它的封闭版：虚拟上游充当 Anthropic，断言 Bearer 认证、UA、request-class、

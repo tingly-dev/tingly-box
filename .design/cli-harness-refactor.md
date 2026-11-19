@@ -1,9 +1,9 @@
 # cli/harness refactor — review and phased plan
 
-Status: review of `main` at f5235a0f5 (after #2618/#2621/#2624). P0–P7 are
-implemented as a stack of PRs (table in section 4, merge in that order); the
-items in section 5 are still proposals. Nothing is decided unless marked
-**Decided**.
+Status: review of `main` at f5235a0f5 (after #2618/#2621/#2624). P0–P7 and the
+decisions in section 5 (provider stub, `--fixture`) are merged (PR numbers in
+section 4); the `--providers` flag is #2665; item 4 is still open. Nothing is
+decided unless marked **Decided**.
 
 Related: [`vmodel-definitions.md`](./vmodel-definitions.md) (the file contract),
 [`harness-matrix.md`](./harness-matrix.md), [`harness-agent-testing.md`](./harness-agent-testing.md),
@@ -88,26 +88,39 @@ hand-edited.
 | **P6** | #2652 | `agentRunOpts` + explicit timeout replace the `agentRunTimeout` global | F6 | medium |
 | **fix** | #2653 | Found while verifying P6: a timed-out run waited as long as a child holding the output pipe lived; now bounded by `agentKillGrace`, test written first | new | low |
 | **P7** | #2655 | `lb.go` split into schema / expect / render files; `checkExpect` → `(*lbExpect).check(lbOutcome)` | F9 | low |
+| **D1** | #2662 | Decision 3: unimplemented `provider` command removed | F11 | low (breaking, could only fail) |
+| **D2** | #2663 | Decision 2: `matrix --fixture` alias removed | M1 | low (breaking) |
+| **D3** | #2665 | Decision 1: `agent`/`replay` credentials file is `--providers`, `--config` kept as deprecated alias there | M3 | low |
 
-Not done: F11 (`provider` stub, a decision), F14 (splitting the 800-line
+Not done: F14 (splitting the 800-line
 README; a docs reorganisation with no code dependency, left for whoever next
 edits it) and the shared `spec.LoadFiles` (F8, cross-cutting).
 
-## 5. Decisions needed (not started; each is user-visible)
+## 5. Decisions
 
-1. **`--config` collision (M3).** Proposal: add `--providers` as the name for the
-   credentials file in `agent`/`replay` and keep `--config` there as a
-   deprecated alias; `matrix --config` stays the definition flag. Touches
-   `tests/harness-baseline.sh:119`, README and the
-   `harness-agent-testing.md` runbook (CI templates do not pass `--config`). Breaking only if the alias is later removed.
+1. **`--config` collision (M3).** **Decided**: `agent` and `replay` take the
+   credentials file as `--providers`; `--config` still works there as a
+   deprecated alias. `matrix --config` stays the definition flag.
 2. **`--fixture` alias.** **Decided**: unify directly. The alias is removed;
    `matrix --config` is the only spelling.
-3. **`provider` stub (F11).** Delete the Phase 3 stub commands (and their two
-   parse tests) or keep the placeholder and fix its dead spec link.
+3. **`provider` stub (F11).** **Decided**: deleted (#2662).
 4. **Definition files for `agent --mock` / `replay --upstream vmodel` (M5).**
-   Could accept `--config model.yaml` and serve it through a `spec.Runtime`
-   instead of builtin IDs. This is a feature, needs `internal/protocoltest`
-   changes (other thread's area); out of scope for the refactor unless asked.
+   **Open — deferred, to be discussed in a later thread.** Today only
+   `matrix --config` can run a user definition file; `agent --mock` talks to the
+   in-process VirtualServer mock and `replay --upstream vmodel` to the seeded
+   builtin provider, both by a Go-registered ID (`replayScenarios[*].defaultVModel`,
+   `replay.go:42-59`; `SetupVModelAgent`, `internal/protocoltest/agent_env.go:342`).
+   Letting them take `--config model.yaml` means compiling it through
+   `spec.New` and pointing the gateway rule at the resulting `spec.Runtime`,
+   either (a) as a generated provider served over the `vmodel://` in-process
+   dialer, or (b) through the independent `tb vmodel` listener
+   (`vmodel-definitions.md`, #2621) used as a plain OpenAI/Anthropic upstream.
+   Open questions: which of (a)/(b); which scenarios' structural assertions
+   apply to a user definition (its own `expect` block vs `Scenario.Structural`);
+   whether `agent --mock` should pass on `VirtualMockAnswerMarker` or the
+   definition's `expect`. Needs `internal/protocoltest` changes (the
+   `internal/` review thread's area). Nothing is implemented; the replay
+   default IDs are pinned by `TestReplayDefaultVModelsAreDefined` meanwhile.
 5. **LB `faults` encoding (`lb.go:80-126`).** **Decided** by #2624 to keep its
    own contract (the shorthand `[500,500,200]` + `steps`/`on_exhaust`); not
    planned to be folded into `kind: sequence`.

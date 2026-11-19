@@ -68,10 +68,10 @@ var replayScenarioOrder = []string{"text", "tool_use", "streaming_text"}
 // and fast — no CLI install, no subprocess — and lets it cover the builtin
 // vmodel provider dispatch path that the spawn-the-CLI modes never touch.
 type ReplayCmd struct {
-	Upstream  string   `kong:"name='upstream',default='vmodel',enum='virtual,vmodel,real',help='Upstream to route through: virtual (VirtualServer mock), vmodel (builtin vmodel provider), real (live provider via --config)'"`
+	Upstream  string   `kong:"name='upstream',default='vmodel',enum='virtual,vmodel,real',help='Upstream to route through: virtual (VirtualServer mock), vmodel (builtin vmodel provider), real (live provider via --providers)'"`
 	Scenario  []string `kong:"name='scenario',sep=',',help='Scenario(s) to run: text, tool_use, streaming_text (default: all)'"`
 	VModel    string   `kong:"name='vmodel',help='Override the vmodel registry ID for every scenario (upstream=vmodel only)'"`
-	Config    string   `kong:"name='config',help='Provider config file — required for upstream=real; the first runnable entry is used'"`
+	Providers string   `kong:"name='providers',aliases='config',help='Providers file (YAML) — required for upstream=real; the first runnable entry is used; --config is a deprecated alias'"`
 	AgentType string   `kong:"arg,name='agent',help='Agent: claude | codex | opencode | batch'"`
 }
 
@@ -90,7 +90,7 @@ Upstreams:
             assertions are checked.
   vmodel    Route to a seeded builtin virtual-model provider (private
             in-process HTTP listener). Structural assertions only.
-  real      Route to a live provider read from --config (first runnable
+  real      Route to a live provider read from --providers (first runnable
             entry). Structural assertions only. An entry with oauth_token
             (Claude Code OAuth) is sent through the Claude OAuth chain signed
             as the newest native client (claude_code_version latest), which
@@ -101,7 +101,7 @@ Examples:
   harness replay batch --upstream virtual
   harness replay codex --scenario text,tool_use
   harness replay claude --upstream vmodel --vmodel echo-model
-  harness replay claude --upstream real --config providers.yaml`
+  harness replay claude --upstream real --providers providers.yaml`
 }
 
 // replayRow is the per-(agent,scenario) outcome of a replay run.
@@ -135,12 +135,12 @@ func (r *ReplayCmd) Run() error {
 
 	var realEntry *protocoltest.RealModelEntry
 	if r.Upstream == "real" {
-		realEntry, err = firstRunnableEntry(r.Config)
+		realEntry, err = firstRunnableEntry(r.Providers)
 		if err != nil {
 			return err
 		}
-	} else if r.Config != "" {
-		fmt.Printf("⚠️  --config is ignored unless --upstream=real\n\n")
+	} else if r.Providers != "" {
+		fmt.Printf("⚠️  --providers is ignored unless --upstream=real\n\n")
 	}
 
 	fmt.Printf("🧪 Replay: agents=%v scenarios=%v upstream=%s\n", agents, scenarios, r.Upstream)
@@ -304,7 +304,7 @@ func resolveReplayScenarios(filter []string) ([]string, error) {
 // has all fields needed to run (used by --upstream=real).
 func firstRunnableEntry(configFile string) (*protocoltest.RealModelEntry, error) {
 	if configFile == "" {
-		return nil, fmt.Errorf("--upstream=real requires --config <file>")
+		return nil, fmt.Errorf("--upstream=real requires --providers <file>")
 	}
 	entries, err := protocoltest.LoadProvidersConfig(configFile)
 	if err != nil {
