@@ -100,9 +100,8 @@ edits it) and the shared `spec.LoadFiles` (F8, cross-cutting).
    deprecated alias; `matrix --config` stays the definition flag. Touches
    `tests/harness-baseline.sh:119`, README and the
    `harness-agent-testing.md` runbook (CI templates do not pass `--config`). Breaking only if the alias is later removed.
-2. **`--fixture` alias.** Kept by #2618; propose keeping it through P2 and
-   removing in a later release once nothing in CI/docs uses it (grep shows only
-   `vmodel-definitions.md:128` and the test).
+2. **`--fixture` alias.** **Decided**: unify directly. The alias is removed;
+   `matrix --config` is the only spelling.
 3. **`provider` stub (F11).** Delete the Phase 3 stub commands (and their two
    parse tests) or keep the placeholder and fix its dead spec link.
 4. **Definition files for `agent --mock` / `replay --upstream vmodel` (M5).**
