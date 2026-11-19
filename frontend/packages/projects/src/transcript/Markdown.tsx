@@ -8,6 +8,7 @@ import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from './conversationStyles';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { autolinkBoundaryConfig } from './autolink';
+import { breaksConfig } from './breaks';
 
 // Plain text of a rendered node tree: a fenced block's code reaches the code
 // component as parsed children, but a code block takes a string.
@@ -49,6 +50,7 @@ const Code = ({block, lang, children}: ComponentProps) => {
 const Pre = ({children}: ComponentProps) => <>{children}</>;
 
 const components = {code: Code, pre: Pre};
+const config = {...breaksConfig, ...autolinkBoundaryConfig};
 
 // Markdown renders an agent's reply. Raw HTML in the output is shown as text,
 // never rendered: the reply comes from a model reading arbitrary files.
@@ -60,7 +62,7 @@ const Markdown = ({content}: {content: string}) => (
             content={content}
             components={components}
             escapeRawHtml
-            config={autolinkBoundaryConfig}
+            config={config}
             openLinksInNewTab
             disableDefaultStyles
         />

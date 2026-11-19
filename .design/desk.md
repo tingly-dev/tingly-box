@@ -481,6 +481,11 @@ of tool:
   Replies render as Markdown through `@ant-design/x-markdown` (already used
   by the Skills page) with `escapeRawHtml` on, so HTML in a model's output is
   shown as text, never rendered; fenced code goes through `CodeBlock`.
+  A single newline renders as a line break (`<br>`), not a space: people and
+  agents write one line per line. Blank lines still split paragraphs and code
+  keeps its own newlines. The rule is `transcript/breaks.ts` (remark-breaks
+  for react-markdown, `breaks: true` for marked), shared by every Markdown
+  surface so the thread and the workspace agree.
 - **Composer** (`Composer`): Enter sends, Shift+Enter adds a line, and an
   IME composition's Enter never sends. While a turn runs, Stop shows and
   the input stays open: a message sent then is queued above the composer
