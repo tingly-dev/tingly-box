@@ -10,7 +10,7 @@ const render = (ui: React.ReactElement) => renderWithHost(ui, {
     wrapper: ({ children }) => <ProjectsHostProvider host={host}>{children}</ProjectsHostProvider>,
 });
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' }, t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key }) }));
 const respond = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('./threadOps', () => ({ threadOps: () => ({ respond }) }));
 vi.mock('../ThreadComposer', () => ({ ThreadComposer: ({ leftSlot }: { leftSlot?: React.ReactNode }) => <div>Composer{leftSlot}</div> }));

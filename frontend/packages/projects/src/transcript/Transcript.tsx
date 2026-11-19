@@ -10,7 +10,7 @@ import {useTranslation} from 'react-i18next';
 import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
 import type {ActivityStep, CommandPayload, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
-import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
+import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import {serverNow} from '../utils/serverClock';
@@ -18,6 +18,7 @@ import {DisclosureChevron, DisclosureRow} from '../components/common/Disclosure'
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 import {conciseBlock, type MessageDetail} from './messageDetail';
+import {exactLabel, fullLabel, markLabel, nextMidnight, timeMarks, type TimeMark} from './timeMarks';
 
 // Respond answers a request. remember asks to allow the tool from now on
 // without asking (offered only when the host passes rememberLabel); answers
@@ -495,6 +496,9 @@ interface BlockListProps {
     // The block index where what is new since the last visit begins; a
     // divider marks it. -1 for none.
     newFrom?: number;
+    // Marks where time passed (a new day, a long silence) between blocks.
+    // Only the conversation itself has them, not a subagent's own work.
+    timeMarked?: boolean;
 }
 
 // shownBlocks is what a list renders: a settled approval that its call's row
@@ -528,8 +532,9 @@ const holdsPending = (block: TranscriptBlock | undefined, pendingRequestId?: str
 
 // BlockList renders a run of blocks: the conversation, or a subagent's own
 // work inside its card.
-const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1}: BlockListProps) => {
+const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1, timeMarked = false}: BlockListProps) => {
     const {detail, renderCustom: renderHostCustom} = useTranscriptHost();
+    useDayRollover(timeMarked);
     const items = shownBlocks(blocks, pendingRequestId, detail);
     // A merged run of calls keeps its first index, so the divider goes
     // before the first item at or past newFrom.
@@ -538,9 +543,9 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
-                    return <Box key={i} {...anchor}><UserBubble message={b.message}/></Box>;
+                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><UserBubble message={b.message}/></Box>;
                 case 'assistant':
-                    return <Box key={i} {...anchor}><AssistantText message={b.message}/></Box>;
+                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><AssistantText message={b.message}/></Box>;
                 case 'activity':
                     return <ActivityRun key={i} steps={b.steps} live={working && last} hold={holdsPending(items[at + 1]?.block, pendingRequestId)} expandAll={expandAll} pendingRequestId={pendingRequestId}/>;
                 case 'agent':
@@ -582,12 +587,73 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                 }
             }
     };
+    // A block a host chose not to draw takes no part in telling when time
+    // passed, or its marker would stand over nothing.
+    const nodes = items.map((item, at) => render(item, at));
+    const marks = timeMarked ? timeMarks(items.map((item, at) => (nodes[at] == null ? undefined : blockTime(item.block)))) : undefined;
     return (
         <>
-            {items.map((item, at) => item.index === dividerAt
-                ? <Fragment key={`new-${item.index}`}><NewDivider/>{render(item, at)}</Fragment>
-                : render(item, at))}
+            {items.map((item, at) => {
+                const mark = marks?.get(at);
+                if (!mark && item.index !== dividerAt) return nodes[at];
+                return (
+                    <Fragment key={`mark-${item.index}`}>
+                        {mark && <TimeDivider mark={mark}/>}
+                        {item.index === dividerAt && <NewDivider/>}
+                        {nodes[at]}
+                    </Fragment>
+                );
+            })}
         </>
+    );
+};
+
+// useDayRollover re-renders at local midnight, so a "Today" marker turns
+// into "Yesterday" while the page stays open.
+const useDayRollover = (on: boolean) => {
+    const [, tick] = useState(0);
+    useEffect(() => {
+        if (!on) return;
+        const timer = setTimeout(() => tick((n) => n + 1), Math.max(1000, nextMidnight(serverNow()) - serverNow() + 1000));
+        return () => clearTimeout(timer);
+    });
+};
+
+// TimeDivider says when, between two blocks: quiet, centred, and named for
+// a screen reader by the full date and time rather than by its colour.
+const TimeDivider = ({mark}: {mark: TimeMark}) => {
+    const {i18n} = useTranslation();
+    const full = fullLabel(mark.at, i18n.language);
+    const line = <Box sx={{flex: 1, borderTop: 1, borderColor: 'divider'}}/>;
+    return (
+        <Stack role="separator" aria-label={full} title={full} data-time-divider={mark.day ? 'day' : 'hour'} direction="row" spacing={1.5} sx={{alignItems: 'center', color: 'text.secondary'}}>
+            {line}
+            <Typography component="time" dateTime={mark.at} variant="caption" sx={{color: 'inherit', fontWeight: mark.day ? 600 : 400, whiteSpace: 'nowrap'}}>
+                {markLabel(mark, i18n.language)}
+            </Typography>
+            {line}
+        </Stack>
+    );
+};
+
+// stampHost / MessageStamp: the exact time of one message, shown above its
+// corner while the pointer is on it. It sits in the gap between messages, so
+// it never moves anything; touch screens (no hover) rely on the dividers.
+const stampHost = {
+    position: 'relative',
+    '@media (hover: hover)': {'&:hover > .message-stamp': {opacity: 1}},
+} as const;
+
+const MessageStamp = ({at}: {at?: string}) => {
+    const {i18n} = useTranslation();
+    if (!at) return null;
+    const exact = exactLabel(at, i18n.language);
+    if (!exact) return null;
+    return (
+        <Typography className="message-stamp" component="time" dateTime={at} aria-hidden variant="caption"
+            sx={{position: 'absolute', right: 0, bottom: '100%', mb: 0.25, pointerEvents: 'none', color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap', opacity: 0, display: 'none', '@media (hover: hover)': {display: 'block'}, transition: 'opacity 120ms'}}>
+            {exact}
+        </Typography>
     );
 };
 
@@ -952,7 +1018,7 @@ const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', exp
         <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} messageSource={messageSource} renderCustom={renderCustom}>
             <Stack spacing={messageSpacing}>
                 {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
-                <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
+                <BlockList anchored timeMarked blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
                 {showWorking && <WorkingLine blocks={blocks}/>}
             </Stack>
         </TranscriptHostProvider>
