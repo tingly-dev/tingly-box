@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	"github.com/tingly-dev/tingly-box/internal/routing/routingtest"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -36,8 +37,8 @@ func TestRepro_BasePoolEliminatedBySmartUnionHealth(t *testing.T) {
 	partitionProvider := addTestProvider(t, cfg, "partition-provider")
 	healthMonitor, _, selector := newSelectorStack(cfg)
 
-	baseSvc := routing.ServiceForTest(baseProvider, "main-model", true)
-	partitionSvc := routing.ServiceForTest(partitionProvider, "background-model", true)
+	baseSvc := routingtest.Service(baseProvider, "main-model", true)
+	partitionSvc := routingtest.Service(partitionProvider, "background-model", true)
 	rule := &typ.Rule{
 		Scenario:     typ.ScenarioClaudeCode,
 		RequestModel: "main-model",

@@ -25,19 +25,6 @@ func testService(provider, model string, active bool) *loadbalance.Service {
 	}
 }
 
-// ServiceForTest and OpenAIRequestForTest are exported wrappers around this
-// package's own fixtures, for external test packages (e.g. routing_test's
-// benchmarks, which must live outside package routing to import
-// protocolserver without an import cycle) that need identical shapes without
-// reimplementing them.
-func ServiceForTest(provider, model string, active bool) *loadbalance.Service {
-	return testService(provider, model, active)
-}
-
-func OpenAIRequestForTest(model string) *openai.ChatCompletionNewParams {
-	return testOpenAIRequest(model)
-}
-
 func testProvider(uuid, name string, enabled bool) *typ.Provider {
 	return &typ.Provider{
 		UUID:    uuid,
