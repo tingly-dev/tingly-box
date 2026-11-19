@@ -23,7 +23,7 @@ import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProv
 import OAuthAuthorizationDialog, {type OAuthAuthorizationData} from './oauth/OAuthAuthorizationDialog';
 import WorkBuddyConnectionNote from './oauth/WorkBuddyConnectionNote';
 import QoderConnectionNote from './oauth/QoderConnectionNote';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface OAuthDialogProps {

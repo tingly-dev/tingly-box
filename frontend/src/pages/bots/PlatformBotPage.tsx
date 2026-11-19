@@ -1,7 +1,7 @@
 import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import { BotTable, BotConfigDialog } from '@/components/bot';
-import EmptyState from '@/components/EmptyState';
-import { PageLayout } from '@/components/PageLayout';
+import EmptyState from '@tingly/ui/components/EmptyState';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
 import { useBotList } from '@/hooks/useBotList';

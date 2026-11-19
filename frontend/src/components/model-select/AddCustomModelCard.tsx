@@ -2,7 +2,7 @@ import { Add } from '@/components/icons';
 import { ButtonBase, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { getModelCardActiveColor, modelCardTransition } from './cardStyles';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface AddCustomModelCardProps {

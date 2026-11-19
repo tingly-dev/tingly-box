@@ -25,8 +25,8 @@ import { useState, useEffect } from 'react';
 import { type SkillLocation, type DiscoveryResult } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
-import DialogHeader from '@/components/DialogHeader';
-import { fontSizes } from '@/theme/fonts';
+import DialogHeader from '@tingly/ui/components/DialogHeader';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface AutoDiscoveryDialogProps {
     open: boolean;

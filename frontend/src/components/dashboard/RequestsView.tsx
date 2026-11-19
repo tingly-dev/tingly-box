@@ -24,8 +24,8 @@ import { ProviderLabel } from '@/components/ProviderLogo';
 import { WaveSine as StreamIcon } from '@/components/icons';
 import { formatNumber, hasCacheWrites } from './chartStyles';
 import api from '@/services/api';
-import { fontMono, fontSizes } from '@/theme/fonts';
-import { getStatusColor } from '@/theme/status';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { getStatusColor } from '@tingly/ui/theme/status';
 import { radius } from '@tingly/ui/theme/radius';
 import { formatLatency } from '@/utils/formatLatency';
 

@@ -20,9 +20,9 @@ import {
     Typography,
 } from '@mui/material';
 import { Add, Delete, Edit, Refresh } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import AgentAccessSection, { useAccessExpanded } from '@/pages/scenario/components/AgentAccessSection';
 import { agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeader';
 import { getApiBaseUrl } from '@/utils/protocol';

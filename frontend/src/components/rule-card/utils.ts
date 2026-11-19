@@ -3,7 +3,7 @@ import { api } from '@/services/api';
 import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi, FlagSpec } from '@/components/RoutingGraphTypes';
 import { getFlagValue, flagDefault, isFlagActive, snakeToCamel, apiToFlags } from './flagHelpers';
 import { downloadText } from '@/utils/download';
-import { writeToClipboard } from '@/utils/clipboard';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
 
 // ============================================================================
 // Helper Functions

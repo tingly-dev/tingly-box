@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { InputAdornment, TextField } from '@mui/material';
 import type { SxProps, TextFieldProps, Theme } from '@mui/material';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { usePromptText, type PromptStore } from './usePromptStore';
 
 // The prompt's input surfaces. They subscribe to the store themselves, so a

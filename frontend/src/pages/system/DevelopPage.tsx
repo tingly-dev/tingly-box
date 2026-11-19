@@ -1,5 +1,5 @@
 import CardGrid from '@/components/CardGrid';
-import { PageLayout } from '@/components/PageLayout';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { Button, Stack, Typography } from '@mui/material';
 import { useNotify } from '@/hooks/useNotify';

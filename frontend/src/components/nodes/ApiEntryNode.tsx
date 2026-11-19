@@ -2,7 +2,7 @@ import {Box, Divider, Typography} from '@mui/material';
 import {NODE_LAYER_STYLES, StyledBotGraphNode} from './styles';
 import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // ApiEntryNode is the source of the notify routing graph: the authenticated
 // HTTP surface (POST /api/v1/bots/:bot/notify|interact) that drives a bot's

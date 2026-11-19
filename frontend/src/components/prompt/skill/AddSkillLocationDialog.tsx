@@ -14,7 +14,7 @@ import {
 import { useState, useEffect } from 'react';
 import { type IDESource } from '@/types/prompt';
 import { IDE_SOURCES } from '@/constants/ideSources';
-import DialogHeader from '@/components/DialogHeader';
+import DialogHeader from '@tingly/ui/components/DialogHeader';
 
 interface AddSkillLocationData {
     name: string;

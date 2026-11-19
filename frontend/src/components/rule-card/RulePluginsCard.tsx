@@ -12,7 +12,7 @@ import {
 } from '@/components/nodes/styles';
 import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
 import { getFlagValue, headersValue, isFlagActive } from './flagHelpers';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 const CARD_STYLES = {

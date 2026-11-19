@@ -2,11 +2,11 @@ import { Check as IconCheck, Computer as IconComputer } from '@/components/icons
 import { Box, Button, CircularProgress, Divider, Paper, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { useNotify } from '@/hooks/useNotify.ts';
 import { api } from '@/services/api.ts';
 import { host } from '@/host';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 /**
  * Whether the shortcut section has anything useful to show. Wails GUI users

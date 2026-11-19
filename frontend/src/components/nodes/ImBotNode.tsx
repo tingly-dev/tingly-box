@@ -14,7 +14,7 @@ import type {BotSettings} from '@/types/bot';
 import {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {PLATFORM_BRAND_ICONS, platformDisplayName} from '@/constants/platformGuides';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface ImBotNodeProps {
     imbot: BotSettings;

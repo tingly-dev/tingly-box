@@ -1,9 +1,9 @@
 import { Box, Chip, FormControlLabel, IconButton, List, ListItem, Stack, Switch, Tooltip, Typography } from '@mui/material';
 import { DeleteOutline } from '@/components/icons';
-import EmptyState from '@/components/EmptyState';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import { getEffectivePolicyState, buildPolicySummary } from './policyPresentation';
 import type { DisplayPolicy, PolicyGroup } from './types';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 type PolicyListSectionProps = {

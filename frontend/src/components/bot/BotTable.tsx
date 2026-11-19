@@ -1,7 +1,7 @@
 import StatusDot from '@tingly/ui/components/StatusDot';
 import { quietDangerIconSx } from '@tingly/ui/theme/selection';
 import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon} from '@/components/icons';
-import ConfirmPopover from '@/components/ConfirmPopover';
+import ConfirmPopover from '@tingly/ui/components/ConfirmPopover';
 import {capabilityEnabled} from '@/types/bot';
 import type {BotSettings} from '@/types/bot';
 import {EntityLabel} from '@tingly/ui';

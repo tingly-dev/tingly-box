@@ -8,14 +8,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Alert, AlertTitle, Box, Collapse, IconButton, Link, Slide } from '@mui/material';
 import { Close } from '@/components/icons';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import {
   type NotifyItem,
   dismissNotify,
   getNotifyItems,
   subscribeNotify,
 } from '@/utils/notify';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const EXIT_TRANSITION_MS = 200;
 

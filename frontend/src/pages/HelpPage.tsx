@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Stack } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import CardGrid from '@/components/CardGrid.tsx';
-import { PageLayout } from '@/components/PageLayout.tsx';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import { CollapsibleCard } from '@/components/CollapsibleCard.tsx';
 import { ShortcutCard, shouldShowShortcutCard } from '@/components/ShortcutCard.tsx';
 import { ProvidersCard } from '@/components/ProvidersCard.tsx';

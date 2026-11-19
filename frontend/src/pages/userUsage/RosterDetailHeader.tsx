@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material';
 import type { AggregatedStat } from '@/components/dashboard';
 import { formatDateTime } from './userUsageModel';
 import type { UserUsageRow, ViewMode } from './userUsageModel';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 
 // Identity line for the detail card's header bar. Single baseline row (name +
 // id/provider + joined) so the header stays at the shared 72px minHeight and

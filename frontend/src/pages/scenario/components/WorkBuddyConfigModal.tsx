@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface WorkBuddyConfigModalProps {

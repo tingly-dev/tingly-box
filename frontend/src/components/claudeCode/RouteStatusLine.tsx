@@ -1,11 +1,11 @@
-import {getReadableAccent} from '@/theme/status';
+import {getReadableAccent} from '@tingly/ui/theme/status';
 import {useTheme, type Theme} from '@mui/material/styles';
 import {Box, Tooltip, Typography} from '@mui/material';
 import type {ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
 import {formatTokens} from '@tingly/projects/transcript';
 import {cacheHitPct, type SessionUsage} from './sessionUsage';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // Where a session's requests are routed and the quota they draw on: the
 // Tingly Box half of the line (GET /scenario/:scenario/route).

@@ -3,12 +3,12 @@ import { sortCredentials, type CredentialSort } from '@/components/credential/so
 import { providerIconId } from '@/utils/providerIcon';
 import { getServiceProvidersSync, useProviderCatalogLoaded } from '@/services/serviceProviders';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
-import EmptyState from '@/components/EmptyState';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
-import PageHeader from '@/components/PageHeader';
-import { PageLayout } from '@/components/PageLayout';
-import Surface from '@/components/Surface';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import Surface from '@tingly/ui/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { useProviderProxy } from '@/hooks/useProviderProxy';
@@ -39,7 +39,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useNotify } from '@/hooks/useNotify';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 type CredentialView = 'table' | 'list' | 'card';

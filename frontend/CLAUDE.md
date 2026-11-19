@@ -25,7 +25,7 @@ Call the API through `api.*` / `controlApi` / `fetchUIAPI` (identical concurrent
 
 These get reinvented locally often enough that it's worth naming explicitly:
 
-- **Copy-to-clipboard feedback** (a "copied" flag that auto-resets after ~2s): use `hooks/useCopyFeedback.ts`, not a local `useState` + `setTimeout`. It also takes an optional `onCopied` callback for a toast, and a `reset()` for clearing the flag early (e.g. on dialog close).
+- **Copy-to-clipboard feedback** (a "copied" flag that auto-resets after ~2s): use `useCopyFeedback` from `@tingly/ui`, not a local `useState` + `setTimeout`. It also takes an optional `onCopied` callback for a toast, and a `reset()` for clearing the flag early (e.g. on dialog close).
 - **Toast/snackbar notifications**: use `useNotify()` (`hooks/useNotify.ts`) — it renders globally via `NotificationProvider`, so there's no local `Snackbar`/`Alert`/open-state to wire up. Don't add a component-local `Snackbar`.
 
 ## Style literals

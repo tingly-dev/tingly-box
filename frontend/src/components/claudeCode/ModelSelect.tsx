@@ -4,7 +4,7 @@ import type {ClaudeCodeModels as ModelChoice, ClaudeCodeModelTier as ModelTier} 
 import {Box, MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {fontMono, fontSizes} from '@/theme/fonts';
+import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
 import {composerPickerLabelSx, composerPickerMenuProps, composerPickerSx} from '@tingly/projects';
 
 interface ModelSelectProps {

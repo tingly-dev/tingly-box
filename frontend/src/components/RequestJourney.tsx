@@ -1,7 +1,7 @@
 import { Box, Chip, Collapse, Stack, Typography } from '@mui/material';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha } from '@mui/material/styles';
 import { radius } from '@tingly/ui/theme/radius';
 import { DisclosureChevron } from '@tingly/projects/disclosure';

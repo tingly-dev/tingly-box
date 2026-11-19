@@ -9,7 +9,7 @@ import {
 import {QuotaCell} from "@/components/credential/QuotaCell";
 import type {RedeemOutcome} from "@/hooks/useProviderQuota";
 import {ProviderLabel} from "@/components/ProviderLogo";
-import ConfirmPopover from "@/components/ConfirmPopover";
+import ConfirmPopover from "@tingly/ui/components/ConfirmPopover";
 import {
     ContentCopy,
     Delete,
@@ -43,7 +43,7 @@ import React, {useCallback, useState} from "react";
 import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import type {Provider} from "../types/provider";
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { tableFrameSx } from '@tingly/ui/theme/table';
 

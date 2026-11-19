@@ -17,8 +17,8 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Close, DeleteSweep, Edit, ErrorOutline, Photo, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
-import ConfirmDialog from '@/components/ConfirmDialog';
-import EmptyState from '@/components/EmptyState';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import SearchField from '@/components/SearchField';
 import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
 import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';

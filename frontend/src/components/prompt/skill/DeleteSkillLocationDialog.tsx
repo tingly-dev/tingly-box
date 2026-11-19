@@ -1,7 +1,7 @@
 import { Box } from '@mui/material';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { type SkillLocation } from '@/types/prompt';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 
 interface DeleteSkillLocationDialogProps {
     location: SkillLocation | null;

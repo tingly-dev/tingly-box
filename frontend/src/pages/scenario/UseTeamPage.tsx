@@ -1,6 +1,6 @@
 import CardGrid from '@/components/CardGrid.tsx';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
-import ConfirmDialog from '@/components/ConfirmDialog.tsx';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
@@ -13,8 +13,8 @@ import {suggestTeamCopyName} from '@/utils/copyName';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import AgentAccessSection, {useAccessExpanded} from './components/AgentAccessSection';
 import AgentStatusRow, {AgentLogButton} from './components/AgentStatusRow';
@@ -33,7 +33,7 @@ import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageCo
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();

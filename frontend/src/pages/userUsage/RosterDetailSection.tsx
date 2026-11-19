@@ -14,7 +14,7 @@ import type { AggregatedStat, MetricRow, RosterAxisState, UsageMetricLabels, Sha
 import RosterDetailHeader from './RosterDetailHeader';
 import { usageTableCardSx } from './RosterTable';
 import type { UserUsageRow, ViewMode } from './userUsageModel';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 
 type ActiveAxis =
     | RosterAxisState<UserUsageRow, AggregatedStat>

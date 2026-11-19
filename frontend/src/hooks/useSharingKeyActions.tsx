@@ -14,12 +14,12 @@ import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
-import { writeToClipboard } from '@/utils/clipboard';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
 import type SharingKeysTable from '@/components/SharingKeysTable';
 import type { SharingKey } from '@/components/SharingKeysTable';
 import type { Team } from '@/types/team';
 import TeamKeyScopeAlert from '@/components/TeamKeyScopeAlert';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import PolicyLimitsDialog from '@/components/limits/PolicyLimitsDialog';
 
 export type SharingKeyTableActions = Pick<

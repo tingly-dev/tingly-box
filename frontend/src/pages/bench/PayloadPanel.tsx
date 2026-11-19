@@ -4,9 +4,9 @@ import { Close as RemoveIcon } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import type { ProbeCurlResult } from '@/components/probe/runProbe';
 import { CopyBlock } from '@/components/probe/ResultSections';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import type { ProbeRequest } from '@/types/probe';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // PayloadPanel: "what actually goes out" — the request as POST

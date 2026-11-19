@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import type { ResolvedThemeMode, ThemeMode } from '@/theme';
-import { readStoredThemeMode, SYSTEM_THEME_MODE_VALUES, THEME_MODE_VALUES } from '@/theme/options';
+import type { ResolvedThemeMode, ThemeMode } from '@tingly/ui/theme';
+import { readStoredThemeMode, SYSTEM_THEME_MODE_VALUES, THEME_MODE_VALUES } from '@tingly/ui/theme/options';
 
 interface ThemeContextType {
   mode: ThemeMode;
