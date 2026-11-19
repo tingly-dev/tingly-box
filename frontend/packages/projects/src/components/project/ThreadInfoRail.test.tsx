@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Subagent, Thread } from '../../client';
 
 const { writeToClipboard } = vi.hoisted(() => ({ writeToClipboard: vi.fn(() => Promise.resolve()) }));
-vi.mock('@tingly/ui', async (importOriginal) => ({ ...(await importOriginal()), writeToClipboard }));
+vi.mock('@tingly/ui/utils/clipboard', async (importOriginal) => ({ ...(await importOriginal<object>()), writeToClipboard }));
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { readLocal } from '../../utils/storage';
 import { ThreadInfoRail } from './ThreadInfoRail';
