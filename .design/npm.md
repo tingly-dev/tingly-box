@@ -412,6 +412,6 @@ and npm >= 11.5.1 exchanges it for a single-publish credential. There is no
   placeholder version, or the real one with
   `build/npx/scripts/publish-platform-packages-manual.sh <tag>`), then
   configured with `npm trust` or on npmjs.com, then left to CI. Step by step:
-  [npm-ci.md](./npm-ci.md).
+  [ci.md](./ci.md).
 - **Local runs** (`npm publish` from a laptop) still work with 2FA and are the
   fallback if GitHub OIDC is unavailable.

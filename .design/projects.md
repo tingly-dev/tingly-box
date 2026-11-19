@@ -15,7 +15,7 @@
 - `projects/` 是 go.work 里的一个 module（`github.com/tingly-dev/tingly-box/projects`），
   和 `agentboot`、`swagger` 一样用 `replace` 指本地目录，不钉版本。
 - 根 go.mod（和 `gui/wails3/go.mod`）`require github.com/tingly-dev/tingly-box/projects` +
-  `replace` 指本地目录；CI `verify-compile` 的 cli/gui 不再排除 `projects/**`。
+  `replace` 指本地目录；CI 的 `daily.yml` 编译 cli/gui 时包含 `projects/**`。
 - 只 import `projects` 和 `projects/llm`；其余在它的 `internal/` 下，碰不到。
   反方向（projects import 根模块）由 `task projects:boundary` 和 CI 拦住。
 - 前端在 `frontend/packages/projects`（`@tingly/projects`），是 workspace 里的普通包；入口 `src/embed.ts`，

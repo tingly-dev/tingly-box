@@ -10,6 +10,7 @@ run-name: 🌙 Daily (${{ github.event_name }}) ${{ github.sha }}
 #   test-projects     boundary check, go vet and go test -race of projects/
 #   test-remote       boundary check, go vet and go test -race of remote/
 #   test-imbot        the Tingly IM and Projects integration harness
+#   catalog-check     offline validity check of the model catalogs
 #   harness           harness-template.yml, the full matrix (same as the release gate)
 #
 # The jobs are independent: the Go builds embed the committed PLACEHOLDER dist,
@@ -17,7 +18,7 @@ run-name: 🌙 Daily (${{ github.event_name }}) ${{ github.sha }}
 # (verify-frontend.yml). Releases do not depend on this workflow: release.yml
 # builds every binary and gates on the same harness. A red run is reported by
 # GitHub to whoever last touched the schedule; look at the Actions tab.
-# See .design/ci-optimization.md.
+# See .design/ci.md.
 on:
   schedule:
     # 19:23 UTC = 03:23 UTC+8, off the :00 mark.
@@ -209,3 +210,25 @@ jobs:
     uses: ./.github/workflows/harness-template.yml
     with:
       focus: all
+
+  # Offline validity check of the embedded model catalogs (internal/catalog).
+  # harness-template.yml does not run it; it used to live in harness-pr.yml.
+  catalog-check:
+    name: Catalog check
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Catalog check
+        run: go run ./cli/harness catalog check

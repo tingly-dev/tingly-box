@@ -7,7 +7,7 @@ name: Verify Frontend
 # The Go-side checks (compile cli/gui, Projects and Remote tests, the IM and
 # Projects harness) no longer run per PR: daily.yml runs them once a day on
 # main, and release.yml gates every release on the harness and builds every
-# binary. See .design/ci-optimization.md.
+# binary. See .design/ci.md.
 on:
   pull_request:
     paths:

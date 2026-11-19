@@ -6,7 +6,7 @@
 #   --real FILE mock 之后追加真实 provider 扫描（需要 providers.yaml + 真实凭证）
 #
 # 这不是 CI —— 它依赖开发者本机的 agent CLI 和（真实模式下）provider 凭证。
-# CI 侧的 hermetic 覆盖由 .github/workflows/harness-matrix.yml 负责；本脚本是
+# CI 侧的 hermetic 覆盖由 .github/workflows/harness-template.yml（见 .design/ci.md） 负责；本脚本是
 # 「一个阶段后要做的真实补充测试」。
 #
 # 退出码: 0 全绿 | 1 有 FAIL/TIMEOUT | 2 环境错误（CLI 缺失 / build 失败 / config 缺失）
