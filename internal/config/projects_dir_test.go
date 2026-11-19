@@ -1,4 +1,4 @@
-package options
+package config
 
 import (
 	"path/filepath"
