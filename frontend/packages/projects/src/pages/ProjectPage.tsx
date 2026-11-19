@@ -575,7 +575,7 @@ export default function ProjectPage() {
                                     writeLocal('worktreeNoticeSeen', '1');
                                 }
                                 await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
-                                // Older servers accept /clear synchronously, without a coordinator turn.
+                                // /clear rotates the session synchronously, without a coordinator turn.
                                 if (text.trim() !== '/clear' || attachments.length > 0) setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.
                                 await conversation.catchUp().catch(() => undefined);

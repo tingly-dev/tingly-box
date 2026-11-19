@@ -408,7 +408,6 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     // Per conversation: its draft starts fresh.
                     key={threadId}
                     draftKey={threadId}
-                    allowClear={false}
                     autoFocus
                     disabled={disabled}
                     seed={seed}

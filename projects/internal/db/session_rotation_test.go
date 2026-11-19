@@ -7,15 +7,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRotateRejectsCoordinator(t *testing.T) {
+func TestRotateRotatesCoordinatorLikeAnyThread(t *testing.T) {
 	s := newStore(t)
 	p, _ := newProject(t, s, "Project")
 	th, err := s.GetThread(p.MainThreadID)
 	require.NoError(t, err)
-	require.ErrorContains(t, s.RotateThreadSession(th.ID, th.SessionID, "replacement", &ThreadEvent{}), "coordinator")
+	require.Equal(t, AgentLLM, th.Agent)
+	require.NoError(t, s.RotateThreadSession(th.ID, th.SessionID, "replacement", &ThreadEvent{}))
 	got, err := s.GetThread(th.ID)
 	require.NoError(t, err)
-	require.Equal(t, th.SessionID, got.SessionID)
+	require.Equal(t, "replacement", got.SessionID)
+	require.Zero(t, got.Turns)
+	ok, err := s.HasCoordinatorSessionBoundary(th.ID, "replacement")
+	require.NoError(t, err)
+	require.True(t, ok)
 }
 
 func TestRotateRollsBackWhenBoundaryInsertFails(t *testing.T) {

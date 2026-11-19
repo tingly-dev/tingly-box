@@ -97,7 +97,7 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 ## Workspace `/clear`
 
-The coordinator session is locked: Workspace `/clear` is rejected on the server and omitted from its command menu. Worker and folder sessions still support it, without deleting their visible history. The storage layer also refuses coordinator rotation. Previously stored explicit session boundaries remain recognized on restart, preventing inadvertent import of old history. The IM folder command retains its existing thread-switching semantics. See [slash-commands.md](../../.design/slash-commands.md).
+`/clear` rotates the coordinator session in place, exactly as it does for a worker: `Coordinator.NewSession` closes the resident session, stores a new session ID with a durable `clear` boundary card, and keeps the main thread, its events, usage and the project. It is refused (`ErrBusy`) while a turn runs, messages are queued or an input needs recovery, and by a paused or archived project; it is never queued or sent to the model. The next input starts the new session without resume, with the project context and current settings and without the previous conversation (the boundary prevents history migration). The IM folder command retains its existing thread-switching semantics. See [slash-commands.md](../../.design/slash-commands.md).
 
 ## 验证与已知边界
 
