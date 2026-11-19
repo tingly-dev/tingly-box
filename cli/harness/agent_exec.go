@@ -219,6 +219,24 @@ func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string, timeout
 	return result, nil
 }
 
+// codexProviderKey is the [model_providers.<key>] entry the harness config uses.
+const codexProviderKey = "harness"
+
+// codexConfigTOML is the config.toml that points codex at the gateway.
+// requires_openai_auth makes codex send the gateway key from auth.json's
+// OPENAI_API_KEY, as the config `tb` writes does.
+func codexConfigTOML(gatewayURL, model string) string {
+	return fmt.Sprintf(`model = %q
+model_provider = %q
+
+[model_providers.%s]
+name = "Harness"
+base_url = %q
+wire_api = "responses"
+requires_openai_auth = true
+`, model, codexProviderKey, codexProviderKey, gatewayURL)
+}
+
 // executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
 func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string, timeout time.Duration) (*AgentTestResult, error) {
 	start := time.Now()
@@ -227,7 +245,6 @@ func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt st
 		Prompt: prompt,
 	}
 
-	const providerKey = "harness"
 	gatewayURL := env.BaseURL() + "/tingly/codex"
 	apiKey := env.ModelToken()
 
@@ -237,15 +254,7 @@ func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt st
 	}
 	defer os.RemoveAll(codexHome)
 
-	configTOML := fmt.Sprintf(`model = %q
-model_provider = %q
-disable_response_storage = true
-
-[model_providers.%s]
-name = "Harness"
-base_url = %q
-wire_api = "responses"
-`, model, providerKey, providerKey, gatewayURL)
+	configTOML := codexConfigTOML(gatewayURL, model)
 
 	configPath := filepath.Join(codexHome, "config.toml")
 	result.SettingsPath = configPath
