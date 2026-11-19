@@ -12,8 +12,8 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { type AppLanguage } from '@/i18n';
+import { useAppLanguage } from '@/hooks/useAppLanguage';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { CODEX_COMPACT, planCodexCompact } from '@/components/rule-card/codexCompact';
 import { radius } from '@tingly/ui/theme/radius';
@@ -234,10 +234,6 @@ const UI_TEXT: Record<AppLanguage, { panelHeader: string; sectionTitle: string; 
     },
 };
 
-function useLang(): AppLanguage {
-    const { i18n } = useTranslation();
-    return resolveLanguage(i18n.language);
-}
 
 // ── Auto-compact warnings ──────────────────────────────────────────────
 // The shared default is judged against the default 200K window; a rule that
@@ -306,7 +302,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
         </Box>
     );
 
-    const lang = useLang();
+    const lang = useAppLanguage();
     const warning = field.key === 'auto_compact_percent' ? compactDefaultWarning(prefs, COMPACT_WARN_TEXT[lang]) : null;
 
     return (
@@ -421,7 +417,7 @@ interface CodexQuickConfigProps {
 }
 
 const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, writeCatalog, setWriteCatalog }) => {
-    const lang = useLang();
+    const lang = useAppLanguage();
     const uiText = UI_TEXT[lang];
     const fieldsText = FIELDS_TEXT[lang];
     const catalogText = CATALOG_TEXT[lang];

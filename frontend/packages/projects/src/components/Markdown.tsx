@@ -5,7 +5,7 @@ import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useTranslation } from 'react-i18next';
 import { Check, ContentCopy } from './icons';
-import { useCopyFeedback } from '../hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from '../transcript/conversationStyles';

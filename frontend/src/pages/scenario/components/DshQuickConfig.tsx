@@ -9,8 +9,8 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { type AppLanguage } from '@/i18n';
+import { useAppLanguage } from '@/hooks/useAppLanguage';
 import { fontMono, fontSizes } from '@/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -154,10 +154,6 @@ const PROTOCOL_VALUE_LABEL: Record<AppLanguage, Record<string, string>> = {
     },
 };
 
-function useLang(): AppLanguage {
-    const { i18n } = useTranslation();
-    return resolveLanguage(i18n.language);
-}
 
 interface DshQuickConfigProps {
     prefs: DshPrefs;
@@ -165,7 +161,7 @@ interface DshQuickConfigProps {
 }
 
 const DshQuickConfig: React.FC<DshQuickConfigProps> = ({ prefs, setPrefs }) => {
-    const lang = useLang();
+    const lang = useAppLanguage();
     const uiText = UI_TEXT[lang];
     const text = FIELD_TEXT[lang];
     const valueLabel = VALUE_LABEL[lang];

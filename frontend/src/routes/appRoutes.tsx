@@ -79,17 +79,11 @@ const MCPProfilesPage = lazy(() => import('@/pages/mcp/MCPProfilesPage'));
 const HubPage = lazy(() => import('@/pages/HubPage'));
 const MorePage = lazy(() => import('@/shell/MorePage'));
 
-// LegacyRemoteAgentRedirect keeps old per-platform bookmarks working
-// (/remote-agent/:platform and the older /remote-control/*): Remote Control
-// settings now live on the bot overview, so they all land there.
-const LegacyRemoteAgentRedirect = () => {
-    const location = useLocation();
-    return <Navigate to={`/bots/overview${location.search}`} replace />;
-};
-
-// The original Remote Coder surface has been replaced by Remote Control.
-// Keep bookmarks useful without exposing the retired pages and their dead API calls.
-const LegacyRemoteCoderRedirect = () => {
+// LegacyBotsRedirect keeps old bookmarks working: the per-platform
+// /remote-agent/:platform and /remote-control/* pages, and the original
+// /remote-coder surface, are all gone — Remote Control settings now live on
+// the bot overview, so they all land there (query string kept).
+const LegacyBotsRedirect = () => {
     const location = useLocation();
     return <Navigate to={`/bots/overview${location.search}`} replace />;
 };
@@ -184,8 +178,8 @@ export const appRoutes = (
             <Route path="/prompt/skill" element={<ExperimentalFeatureGate feature="skill_ide"><SkillPage /></ExperimentalFeatureGate>} />
             <Route path="/prompt/command" element={<Navigate to="/prompt/skill" replace />} />
             {/* Retired Remote Coder bookmarks now enter Remote Control. */}
-            <Route path="/remote-coder" element={<LegacyRemoteCoderRedirect />} />
-            <Route path="/remote-coder/*" element={<LegacyRemoteCoderRedirect />} />
+            <Route path="/remote-coder" element={<LegacyBotsRedirect />} />
+            <Route path="/remote-coder/*" element={<LegacyBotsRedirect />} />
             {/* Bots — Overview is the front door: every connected bot, across every
                 platform, one list. The old per-platform pages stay live (not
                 removed) as deep-link targets — /bots/:platform?add=1 links and any
@@ -209,10 +203,10 @@ export const appRoutes = (
             <Route path="/projects/im" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="im" /></ExperimentalFeatureGate>} />
             <Route path="/projects/:id" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="project" /></ExperimentalFeatureGate>} />
             {/* Legacy Remote Control URL. */}
-            <Route path="/remote-agent" element={<LegacyRemoteAgentRedirect />} />
+            <Route path="/remote-agent" element={<LegacyBotsRedirect />} />
             {/* Back-compat: per-platform pages and the pre-split /remote-control/* */}
-            <Route path="/remote-agent/:platform" element={<LegacyRemoteAgentRedirect />} />
-            <Route path="/remote-control/*" element={<LegacyRemoteAgentRedirect />} />
+            <Route path="/remote-agent/:platform" element={<LegacyBotsRedirect />} />
+            <Route path="/remote-control/*" element={<LegacyBotsRedirect />} />
             {/* Guardrails */}
             <Route path="/guardrails" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsPage /></ExperimentalFeatureGate>} />
             <Route path="/guardrails/groups" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsGroupsPage /></ExperimentalFeatureGate>} />

@@ -3,7 +3,7 @@ import { Box, Button, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { ThreadLink } from '../../client';
-import { useCopyFeedback } from '../../hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui';
 import { timeAgo } from '../../utils/format';
 import { Check, Close, ContentCopy, OpenInNew, Refresh } from '../icons';
 import { colorOf, LinkIcon, type Tone } from './linkView';
