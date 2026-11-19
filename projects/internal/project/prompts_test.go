@@ -63,3 +63,19 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.Contains(t, s, "the tool asks the user to approve")
 	assert.NotContains(t, s, "off limits", "beyond the boundary the user is asked, nothing is forbidden outright")
 }
+
+// The thread prompt and the tool list are part of the cached prefix of every
+// turn: what the branch rules say must not depend on what other threads, PRs
+// or approvals exist, or each change would cost the thread its prompt cache.
+func TestThreadPromptDoesNotDependOnOtherThreadsOrLinks(t *testing.T) {
+	l := Layout{Root: t.TempDir()}
+	p := &db.Project{ID: "p1", Name: "Demo"}
+	th := &db.Thread{ID: "t1", Title: "Fix bug", Branch: "tb/fix", BaseBranch: "main", Cwd: "/w", RepoPath: "/r"}
+	before := threadSystemPrompt(l, p, th)
+
+	other := *th
+	other.Links = []db.ThreadLink{{Kind: db.LinkPR, Repo: "a/b", Number: 7, Role: db.LinkOpened, Head: "tb/other", Base: "main"}}
+	th.Links = other.Links
+	th.LastReport, th.Status, th.WaitReason = "report", db.ThreadWaiting, "Approve: push"
+	assert.Equal(t, before, threadSystemPrompt(l, p, th))
+}
