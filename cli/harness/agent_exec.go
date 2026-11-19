@@ -14,6 +14,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	internalagent "github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
@@ -219,6 +220,26 @@ func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string, timeout
 	return result, nil
 }
 
+// codexHomeFiles returns the config.toml and auth.json for an isolated
+// CODEX_HOME pointing codex at the gateway. config.toml is rendered by the same
+// function the GUI preview and `apply` use (config.RenderCodexConfigTOML, with
+// the default prefs), so the harness exercises the configuration real users
+// get — including requires_openai_auth, without which codex sends no key. The
+// classic gateway path keeps the key in auth.json's OPENAI_API_KEY, the file
+// config.ApplyCodexAuth writes; that function targets the real ~/.codex, so
+// the payload is built here instead.
+func codexHomeFiles(gatewayURL, model, apiKey string) (configTOML, authJSON []byte, err error) {
+	configTOML, err = config.RenderCodexConfigTOML(gatewayURL, []string{model}, config.DefaultCodexPrefs(), false, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("render codex config: %w", err)
+	}
+	authJSON, err = json.Marshal(map[string]string{"OPENAI_API_KEY": apiKey})
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal codex auth: %w", err)
+	}
+	return configTOML, authJSON, nil
+}
+
 // executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
 func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string, timeout time.Duration) (*AgentTestResult, error) {
 	start := time.Now()
@@ -227,9 +248,7 @@ func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt st
 		Prompt: prompt,
 	}
 
-	const providerKey = "harness"
 	gatewayURL := env.BaseURL() + "/tingly/codex"
-	apiKey := env.ModelToken()
 
 	codexHome, err := os.MkdirTemp("", "harness-codex-*")
 	if err != nil {
@@ -237,24 +256,16 @@ func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt st
 	}
 	defer os.RemoveAll(codexHome)
 
-	configTOML := fmt.Sprintf(`model = %q
-model_provider = %q
-disable_response_storage = true
-
-[model_providers.%s]
-name = "Harness"
-base_url = %q
-wire_api = "responses"
-`, model, providerKey, providerKey, gatewayURL)
-
+	configTOML, authJSON, err := codexHomeFiles(gatewayURL, model, env.ModelToken())
+	if err != nil {
+		return nil, err
+	}
 	configPath := filepath.Join(codexHome, "config.toml")
 	result.SettingsPath = configPath
-	if err := os.WriteFile(configPath, []byte(configTOML), 0644); err != nil {
+	if err := os.WriteFile(configPath, configTOML, 0644); err != nil {
 		return nil, fmt.Errorf("write codex config: %w", err)
 	}
-
-	authJSON := fmt.Sprintf(`{"auth_mode":"apikey","OPENAI_API_KEY":%q}`, apiKey)
-	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), []byte(authJSON), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(codexHome, "auth.json"), authJSON, 0600); err != nil {
 		return nil, fmt.Errorf("write codex auth: %w", err)
 	}
 
