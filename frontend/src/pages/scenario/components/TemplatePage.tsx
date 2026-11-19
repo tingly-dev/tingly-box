@@ -1,13 +1,12 @@
-import ApiKeyModal from '@/components/ApiKeyModal';
+import ApiKeyModal from '@/pages/scenario/components/ApiKeyModal';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Box, Fab} from '@mui/material';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
-import EmptyState from '@/components/EmptyState';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
-import {api} from '@/services/api';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
@@ -18,11 +17,11 @@ import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules'
 import {SortableRuleList} from './SortableRuleList';
 import {pinToTop} from './ruleOrder';
 import {useCommitRuleOrder} from '@/pages/scenario/hooks/useCommitRuleOrder';
-import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
-import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
+import {useScrollToNewRule} from '@/pages/scenario/hooks/useScrollToNewRule';
+import {useModelSelectDialog} from '@/pages/scenario/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
-import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
+import {useScenarioPageModal} from '@/features/scenario/ScenarioPageContext';
 import {ROUTING_GUIDE_SEEN_KEY} from '@/utils/onboardingFlags';
 import {ProviderQuotaProvider} from '@/contexts/ProviderQuotaContext';
 
@@ -68,9 +67,7 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         allowReorder = false,
         scenario,
         showAddApiKeyButton = true,
-        showCreateRuleButton = true,
         showExpandCollapseButton = true,
-        showImportButton = true,
         showEmptyState = true,
         rightAction: customRightAction,
         onAddApiKeyClick,
@@ -87,8 +84,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     const onProvidersLoad = props.onProvidersLoad ?? internalData.loadProviders;
     const loadRules = props.loadRules ?? internalData.loadRules;
     const onRuleDelete = props.onRuleDelete ?? internalData.handleRuleDelete;
-    const newlyCreatedRuleUuids = props.newlyCreatedRuleUuids ?? internalData.newlyCreatedRuleUuids;
-    const isLoading = internalData.isLoading;
 
     const navigate = useNavigate();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
@@ -224,9 +219,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         },
     });
     const { handleConnectAIClick } = connectAI;
-
-    // Cloud-credential dialog state (Bedrock/Vertex/Azure)
-    const [cloudPresetId, setCloudPresetId] = useState<string | null>(null);
 
     const handleAddApiKeyClick = useCallback(() => {
         handleConnectAIClick();

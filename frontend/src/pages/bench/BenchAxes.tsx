@@ -10,7 +10,7 @@ import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from 
 import { protocolAvailability, visionAvailable, type ProbeAxes } from '@/components/probe/probeConfig';
 import { templatesForProtocol, MESSAGE_ID, type ContentTemplate } from './contentOptions';
 import type { BenchTarget } from './benchState';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // BenchAxes: every probe axis resident, no Advanced fold — the page exists
 // so that all knobs are visible and composable (.design/bench.md §2). Not a

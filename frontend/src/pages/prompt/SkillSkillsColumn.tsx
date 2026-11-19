@@ -26,9 +26,9 @@ import {
     getRelativePath,
     getTwoLevelDisplayName,
     groupSkillsIntelligently,
-} from '@/components/prompt/skill/skillGrouping';
+} from '@/pages/prompt/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface SkillListItemProps {
     skill: Skill;

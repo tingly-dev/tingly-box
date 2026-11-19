@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import CopyIconButton from '@/components/CopyIconButton';
+import CopyIconButton from '@tingly/ui/components/CopyIconButton';
 
 interface ModelCopyButtonProps {
     model: string;

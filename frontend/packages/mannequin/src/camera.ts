@@ -1,7 +1,7 @@
 // Each figure carries its own perspective camera, aimed at the middle of its
 // torso. Everything outward-facing — grabbing, fitting, drawing — is measured
 // on the projected figure, and the 3D renderer builds the very same camera.
-import { JOINT_KEYS, TORSO_HEIGHT_RATIO, figureUnit, type FigureTurn, type JointKey, type PoseFigure } from './skeleton';
+import { JOINT_KEYS, figureUnit, type FigureTurn, type JointKey, type PoseFigure } from './skeleton';
 import { rad, zOf, type Vec3 } from './vec3';
 import type { Point } from './types';
 

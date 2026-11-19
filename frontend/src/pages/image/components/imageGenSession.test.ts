@@ -16,7 +16,7 @@ import {
     runImage,
     wrapCardSpanSx,
 } from './imageGenSession';
-import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, ImportedImage, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
 
 const run = (over: Partial<GenerationRun> & Pick<GenerationRun, 'id'>): GenerationRun => ({
     endpoint: 'generations',

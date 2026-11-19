@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { Add, DeleteOutline, ExpandMore } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import type { MCPKVPair, MCPSourceFormValue } from './types';
+import type { MCPKVPair, MCPSourceFormValue } from '../../features/mcp/types';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface MCPSourceEditorProps {

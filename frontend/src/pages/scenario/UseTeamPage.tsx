@@ -1,20 +1,20 @@
 import CardGrid from '@/components/CardGrid.tsx';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
-import ConfirmDialog from '@/components/ConfirmDialog.tsx';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip,
 } from '@mui/material';
 import {Delete, Duplicate, Edit, HelpOutline, Info as IconInfo, Speed as IconLimits} from '@/components/icons';
-import DuplicateDialog from '@/components/DuplicateDialog';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
 import TeamLimitsDialog from '@/components/limits/TeamLimitsDialog';
-import {suggestTeamCopyName} from '@/utils/copyName';
+import {suggestTeamCopyName} from '@/pages/scenario/utils/copyName';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import AgentAccessSection, {useAccessExpanded} from './components/AgentAccessSection';
 import AgentStatusRow, {AgentLogButton} from './components/AgentStatusRow';
@@ -25,15 +25,15 @@ import { usePluginsActive } from '@/hooks/usePluginsActive';
 import PluginFeatures from '@/components/PluginFeatures';
 import TemplatePage from './components/TemplatePage.tsx';
 import TeamKeysOverview, {useTeamKeysOverviewExpanded} from './components/TeamKeysOverview';
-import {useSharingKeyActions} from '@/hooks/useSharingKeyActions';
-import {useTeamSharingKeys} from '@/hooks/useTeamSharingKeys';
+import {useSharingKeyActions} from '@/pages/scenario/hooks/useSharingKeyActions';
+import {useTeamSharingKeys} from '@/pages/scenario/hooks/useTeamSharingKeys';
 import TeamGuideDialog from '@/components/TeamGuideDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
+import {ScenarioPageModalProvider} from '@/features/scenario/ScenarioPageContext';
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();

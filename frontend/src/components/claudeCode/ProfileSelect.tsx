@@ -2,7 +2,7 @@ import {Route, ExpandMore} from '@/components/icons';
 import {useProfileContext} from '@/contexts/ProfileContext';
 import {MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import {composerPickerLabelSx, composerPickerMenuProps, composerPickerSx} from '@tingly/projects';
 
 interface ProfileSelectProps {

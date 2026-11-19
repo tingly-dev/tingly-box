@@ -1,11 +1,11 @@
 import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import { BotTable, BotConfigDialog } from '@/components/bot';
-import EmptyState from '@/components/EmptyState';
-import { PageLayout } from '@/components/PageLayout';
-import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
+import EmptyState from '@tingly/ui/components/EmptyState';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import CollapsibleGuide from '@/pages/bots/CollapsibleGuide';
 import UnifiedCard from '@/components/UnifiedCard';
-import { useBotList } from '@/hooks/useBotList';
-import { useBotToggle } from '@/hooks/useBotToggle';
+import { useBotList } from '@/pages/bots/useBotList';
+import { useBotToggle } from '@/pages/bots/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
 import { Add } from '@/components/icons';
 import { Box, Button, CircularProgress } from '@mui/material';

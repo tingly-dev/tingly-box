@@ -1,8 +1,8 @@
-import type { ChipProps, SxProps } from '@mui/material';
+import type { SxProps } from '@mui/material';
 import { Chip } from '@mui/material';
 import { LocationOn as LocationOnIcon } from '@/components/icons';
 import { EMPTY_SX } from '@/constants/defaults';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface RegionBadgeProps {
   region: 'cn' | 'global' | 'self-hosted';

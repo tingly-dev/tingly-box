@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNumber } from './chartStyles';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { heatmapCellLine, heatmapEmpty, heatmapScale } from '@/theme/dataviz';
 import { overlay } from '@tingly/ui/theme/overlay';
-import { elevation } from '@/theme/elevation';
+import { elevation } from '@tingly/ui/theme/elevation';
 import { radius } from '@tingly/ui/theme/radius';
 
 // BCP-47 tags for date formatting, keyed by the languages the UI ships.

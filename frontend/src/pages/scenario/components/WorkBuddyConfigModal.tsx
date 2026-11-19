@@ -1,10 +1,10 @@
 import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Button, Divider, Typography, Stack } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface WorkBuddyConfigModalProps {

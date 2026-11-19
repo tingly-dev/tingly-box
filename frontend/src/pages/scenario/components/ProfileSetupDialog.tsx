@@ -1,8 +1,8 @@
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { CheckCircle as CheckCircleIcon, ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface ProfileSetupDialogProps {

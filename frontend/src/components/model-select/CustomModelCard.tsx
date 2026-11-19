@@ -10,8 +10,8 @@ import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
 import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
-import ConfirmPopover from '@/components/ConfirmPopover';
-import { fontSizes } from '@/theme/fonts';
+import ConfirmPopover from '@tingly/ui/components/ConfirmPopover';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface CustomModelCardProps {

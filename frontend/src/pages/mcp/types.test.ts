@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formValueToSource, sourceToFormValue, type MCPSourceConfig } from './types';
+import { formValueToSource, sourceToFormValue, type MCPSourceConfig } from '../../features/mcp/types';
 
 describe('MCP source editing', () => {
     it.each(['http', 'sse'])('preserves advanced settings and clears authentication fields for %s', (transport) => {

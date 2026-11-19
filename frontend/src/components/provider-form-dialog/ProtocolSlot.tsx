@@ -2,7 +2,7 @@ import {OpenAI, Anthropic} from '../BrandIcons';
 import {Box, Checkbox, FormControlLabel, Link, Stack, TextField, Typography} from '@mui/material';
 import {useTranslation} from 'react-i18next';
 import ProviderIcon from '@/components/ProviderIcon';
-import {fontMono} from '@/theme/fonts';
+import {fontMono} from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface ProtocolSlotData {url: string; enabled: boolean;}

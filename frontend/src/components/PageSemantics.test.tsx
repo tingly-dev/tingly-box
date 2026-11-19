@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import PageHeader from './PageHeader';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import UnifiedCard from './UnifiedCard';
 
 describe('page heading semantics', () => {

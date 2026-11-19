@@ -1,10 +1,9 @@
 import { Visibility as VisibilityIcon, ContentCopy as CopyIcon } from '@/components/icons';
 import { IconButton, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { ConfigRow } from './ConfigRow';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { copyableTextStyle } from '@/styles/textStyles';
 import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 
@@ -70,7 +69,6 @@ export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
     onEnvModeChange,
     showApiKeyRow = true,
 }) => {
-    const { t } = useTranslation();
     // Get modal state from context
     const { token, setShowTokenModal } = useScenarioPageModal();
     const [localEnvMode, setLocalEnvMode] = useState<EnvironmentMode>('local');

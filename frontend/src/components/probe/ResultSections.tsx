@@ -11,8 +11,8 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import type { ProbeResult, ProbeProtocol, ProbeTargetType } from '@/types/probe';
-import { CopyIconButton } from '@/components/CopyIconButton';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // ResultSections: the probe result vocabulary shared by the probe dialog and
@@ -210,7 +210,6 @@ export const CopyBlock = memo(({ text, maxHeight, fontSize = '0.78rem' }: { text
 
 // StatusBar: the one-glance verdict — success/failure, latency, tokens.
 export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
-    const theme = useTheme();
     const { t } = useTranslation();
     const ok = result.success;
     const d = result.data;

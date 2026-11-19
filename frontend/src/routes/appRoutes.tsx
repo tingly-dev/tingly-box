@@ -16,8 +16,8 @@ import OnboardingGate from './OnboardingGate';
 // Every route below this point is reached only after auth + navigation, so it
 // is lazy-loaded: each becomes its own chunk that downloads on first visit
 // instead of being bundled into the initial page load.
-const HelpPage = lazy(() => import('@/pages/HelpPage'));
-const VirtualModelsPage = lazy(() => import('@/pages/VirtualModelsPage'));
+const HelpPage = lazy(() => import('@/pages/help/HelpPage'));
+const VirtualModelsPage = lazy(() => import('@/pages/virtualModels/VirtualModelsPage'));
 const UseOpenAIPage = lazy(() => import('@/pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('@/pages/scenario/UseAnthropicPage'));
 const UseCodexPage = lazy(() => import('@/pages/scenario/UseCodexPage'));
@@ -44,19 +44,19 @@ const ImageProfilePage = lazy(() => import('@/pages/image/ImageProfilePage'));
 const ImageLibraryPage = lazy(() => import('@/pages/image/ImageLibraryPage'));
 const ImageToPromptPage = lazy(() => import('@/pages/image/ImageToPromptPage'));
 const IdeaToPromptPage = lazy(() => import('@/pages/image/IdeaToPromptPage'));
-const CredentialPage = lazy(() => import('@/pages/CredentialPage'));
+const CredentialPage = lazy(() => import('@/pages/credential/CredentialPage'));
 const System = lazy(() => import('@/pages/system/System'));
 const AccessControl = lazy(() => import('@/pages/system/AccessControl'));
 const LogsPage = lazy(() => import('@/pages/system/LogsPage'));
 const ExperimentalPage = lazy(() => import('@/pages/system/ExperimentalPage'));
 const DevelopPage = lazy(() => import('@/pages/system/DevelopPage'));
-const GuardrailsPage = lazy(() => import('@/pages/GuardrailsPage'));
+const GuardrailsPage = lazy(() => import('@/pages/guardrails/GuardrailsPage'));
 const GuardrailsRulesPage = lazy(() => import('@/pages/guardrails/RulesPage'));
 const GuardrailsCredentialsPage = lazy(() => import('@/pages/guardrails/CredentialsPage'));
 const GuardrailsGroupsPage = lazy(() => import('@/pages/guardrails/GroupsPage'));
 const GuardrailsHistoryPage = lazy(() => import('@/pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
-const UserUsagePage = lazy(() => import('@/pages/UserUsagePage'));
+const UserUsagePage = lazy(() => import('@/pages/userUsage/UserUsagePage'));
 const QuotaHistoryPage = lazy(() => import('@/pages/QuotaHistoryPage'));
 const ModelTestPage = lazy(() => import('@/pages/ModelTestPage'));
 const BenchPage = lazy(() => import('@/pages/bench/BenchPage'));
@@ -79,17 +79,11 @@ const MCPProfilesPage = lazy(() => import('@/pages/mcp/MCPProfilesPage'));
 const HubPage = lazy(() => import('@/pages/HubPage'));
 const MorePage = lazy(() => import('@/shell/MorePage'));
 
-// LegacyRemoteAgentRedirect keeps old per-platform bookmarks working
-// (/remote-agent/:platform and the older /remote-control/*): Remote Control
-// settings now live on the bot overview, so they all land there.
-const LegacyRemoteAgentRedirect = () => {
-    const location = useLocation();
-    return <Navigate to={`/bots/overview${location.search}`} replace />;
-};
-
-// The original Remote Coder surface has been replaced by Remote Control.
-// Keep bookmarks useful without exposing the retired pages and their dead API calls.
-const LegacyRemoteCoderRedirect = () => {
+// LegacyBotsRedirect keeps old bookmarks working: the per-platform
+// /remote-agent/:platform and /remote-control/* pages, and the original
+// /remote-coder surface, are all gone — Remote Control settings now live on
+// the bot overview, so they all land there (query string kept).
+const LegacyBotsRedirect = () => {
     const location = useLocation();
     return <Navigate to={`/bots/overview${location.search}`} replace />;
 };
@@ -184,8 +178,8 @@ export const appRoutes = (
             <Route path="/prompt/skill" element={<ExperimentalFeatureGate feature="skill_ide"><SkillPage /></ExperimentalFeatureGate>} />
             <Route path="/prompt/command" element={<Navigate to="/prompt/skill" replace />} />
             {/* Retired Remote Coder bookmarks now enter Remote Control. */}
-            <Route path="/remote-coder" element={<LegacyRemoteCoderRedirect />} />
-            <Route path="/remote-coder/*" element={<LegacyRemoteCoderRedirect />} />
+            <Route path="/remote-coder" element={<LegacyBotsRedirect />} />
+            <Route path="/remote-coder/*" element={<LegacyBotsRedirect />} />
             {/* Bots — Overview is the front door: every connected bot, across every
                 platform, one list. The old per-platform pages stay live (not
                 removed) as deep-link targets — /bots/:platform?add=1 links and any
@@ -209,10 +203,10 @@ export const appRoutes = (
             <Route path="/projects/im" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="im" /></ExperimentalFeatureGate>} />
             <Route path="/projects/:id" element={<ExperimentalFeatureGate feature="projects"><ProjectsRoute page="project" /></ExperimentalFeatureGate>} />
             {/* Legacy Remote Control URL. */}
-            <Route path="/remote-agent" element={<LegacyRemoteAgentRedirect />} />
+            <Route path="/remote-agent" element={<LegacyBotsRedirect />} />
             {/* Back-compat: per-platform pages and the pre-split /remote-control/* */}
-            <Route path="/remote-agent/:platform" element={<LegacyRemoteAgentRedirect />} />
-            <Route path="/remote-control/*" element={<LegacyRemoteAgentRedirect />} />
+            <Route path="/remote-agent/:platform" element={<LegacyBotsRedirect />} />
+            <Route path="/remote-control/*" element={<LegacyBotsRedirect />} />
             {/* Guardrails */}
             <Route path="/guardrails" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsPage /></ExperimentalFeatureGate>} />
             <Route path="/guardrails/groups" element={<ExperimentalFeatureGate feature="guardrails"><GuardrailsGroupsPage /></ExperimentalFeatureGate>} />

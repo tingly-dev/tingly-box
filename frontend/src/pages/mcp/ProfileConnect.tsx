@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, Typography } from '@mui/material';
 import ConfigRow from '@/components/ConfigRow';
 import { ChoiceToggle } from '@/components/ChoiceToggle';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { api } from '@/services/api';
 import { getApiBaseUrl } from '@/utils/protocol';
 import { copyableTextStyle } from '@/styles/textStyles';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 
 export type AgentRuntime = 'claude' | 'codex' | 'opencode';
 

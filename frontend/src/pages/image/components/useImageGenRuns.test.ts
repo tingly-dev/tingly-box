@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/services/modelApi', () => ({
     getOpenAIClient: async () => ({ images: { generate: mocks.generate, edit: mocks.edit } }),
 }));
-vi.mock('@/utils/playgroundSession', () => ({
+vi.mock('@/pages/image/utils/playgroundSession', () => ({
     loadPlaygroundSession: async () => ({ runs: [], imports: [] }),
     savePlaygroundSession: mocks.save,
 }));

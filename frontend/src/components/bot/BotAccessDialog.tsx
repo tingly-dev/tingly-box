@@ -11,7 +11,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import PairingCodePanel from './PairingCodePanel';
 import type {RemoteAccess} from './useRemoteAccess';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { EntityLabel } from '@tingly/ui';
 import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import { radius } from '@tingly/ui/theme/radius';

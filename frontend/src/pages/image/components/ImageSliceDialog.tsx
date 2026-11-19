@@ -25,7 +25,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Add, Close, Download, Gif, GridView, Movie, Pause, PlayArrow, Remove, ZoomIn } from '@/components/icons';
 import { downloadBlob, slugify } from '@/utils/download';
-import { loadSliceParams, saveSliceParams } from '@/utils/sliceParamsStore';
+import { loadSliceParams, saveSliceParams } from '@/pages/image/utils/sliceParamsStore';
 import {
     createZipBlob,
     encodeGif,
@@ -61,7 +61,7 @@ import {
     type MatteSpec,
     type TileRect,
 } from '@tingly/vision';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { overlay, cssRgb } from '@tingly/ui/theme/overlay';
 

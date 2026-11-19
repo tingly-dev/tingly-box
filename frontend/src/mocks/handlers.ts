@@ -4308,7 +4308,6 @@ export const handlers = [
     }),
 
     http.post('/api/v1/scenario/:scenario/profiles', async ({ params, request }) => {
-        const { scenario } = params as { scenario: string }
         const body = await request.json() as any
         const newProfile = {
             id: `profile-${Date.now()}`,

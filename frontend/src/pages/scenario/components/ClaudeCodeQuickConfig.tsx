@@ -18,9 +18,10 @@ import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import { AdvancedSection } from '@/components/AdvancedSection';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { type AppLanguage } from '@/i18n';
+import { useAppLanguage } from '@/hooks/useAppLanguage';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
@@ -855,11 +856,6 @@ export const CLAUDE_CODE_FIELDS_TEXT: Record<AppLanguage, FieldTextMap> = { zh: 
 const SECTION_TEXT: Record<AppLanguage, SectionTextMap> = { zh: SECTION_TEXT_ZH, en: SECTION_TEXT_EN, ru: SECTION_TEXT_RU };
 const UI_TEXT: Record<AppLanguage, UIText> = { zh: UI_TEXT_ZH, en: UI_TEXT_EN, ru: UI_TEXT_RU };
 
-const useLang = (): AppLanguage => {
-    const { i18n } = useTranslation();
-    return resolveLanguage(i18n.language);
-};
-
 // ── Default prefs derivation ───────────────────────────────────────────
 // Build initial prefs from the active routing rules, mirroring how the
 // legacy modal picks models per slot. Anything not derivable falls back
@@ -1327,7 +1323,7 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelWithBehaviorProps> = ({
     coAuthoredBy,
     setCoAuthoredBy,
 }) => {
-    const lang = useLang();
+    const lang = useAppLanguage();
     // Model slots are derived from routing rules, so only the settings a user
     // typed in by hand count as "customised".
     const customizedCount = CLAUDE_CODE_FIELD_STRUCT.filter(f =>

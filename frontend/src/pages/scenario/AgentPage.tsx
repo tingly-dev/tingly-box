@@ -2,16 +2,14 @@ import { useState } from 'react';
 import { Box, Button, Stack, Tooltip } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import ChoiceToggle from '@/components/ChoiceToggle';
-import ConfigRow from '@/components/ConfigRow';
-import PageHeader from '@/components/PageHeader';
-import PageLayout from '@/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import type { EnvironmentMode } from '@/components/EnvironmentModeSwitcher';
 import { transformUrlByMode } from '@/utils/tokenUtils';
-import { type ClientConfigTool, useClientConfigStatus } from '@/hooks/useClientConfigStatus';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { type ClientConfigTool, useClientConfigStatus } from '@/pages/scenario/hooks/useClientConfigStatus';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
@@ -148,17 +146,6 @@ export interface AgentPageSlot {
     closeApplied: (result: AgentApplyResult) => void;
     isApplyLoading: boolean;
 }
-
-/** One more row of the connection list: a ConfigRow whose content is a control, not a value. */
-const ToggleRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-    <Box sx={{ py: 0.5 }}>
-        <ConfigRow
-            activeTab="row"
-            onTabChange={() => undefined}
-            tabs={[{ key: 'row', label, content: <Box sx={{ display: 'flex', alignItems: 'center' }}>{children}</Box> }]}
-        />
-    </Box>
-);
 
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();

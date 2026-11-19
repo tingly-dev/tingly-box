@@ -1,10 +1,9 @@
 # cli/harness refactor — review and phased plan
 
-Status: review of `main` at f5235a0f5 (after #2618/#2621/#2624). P0–P7 are
-implemented as a stack of PRs (table in section 4, merge in that order); the
-decisions in section 5 (providers flag, provider stub, `--fixture`) are
-implemented as follow-up PRs on top; item 4 is still open. Nothing is decided
-unless marked **Decided**.
+Status: review of `main` at f5235a0f5 (after #2618/#2621/#2624). P0–P7 and the
+decisions in section 5 (provider stub, `--fixture`) are merged (PR numbers in
+section 4); the `--providers` flag is #2665; item 4 is still open. Nothing is
+decided unless marked **Decided**.
 
 Related: [`vmodel-definitions.md`](./vmodel-definitions.md) (the file contract),
 [`harness-matrix.md`](./harness-matrix.md), [`harness-agent-testing.md`](./harness-agent-testing.md),
@@ -89,8 +88,11 @@ hand-edited.
 | **P6** | #2652 | `agentRunOpts` + explicit timeout replace the `agentRunTimeout` global | F6 | medium |
 | **fix** | #2653 | Found while verifying P6: a timed-out run waited as long as a child holding the output pipe lived; now bounded by `agentKillGrace`, test written first | new | low |
 | **P7** | #2655 | `lb.go` split into schema / expect / render files; `checkExpect` → `(*lbExpect).check(lbOutcome)` | F9 | low |
+| **D1** | #2662 | Decision 3: unimplemented `provider` command removed | F11 | low (breaking, could only fail) |
+| **D2** | #2663 | Decision 2: `matrix --fixture` alias removed | M1 | low (breaking) |
+| **D3** | #2665 | Decision 1: `agent`/`replay` credentials file is `--providers`, `--config` kept as deprecated alias there | M3 | low |
 
-Not done: F11 (`provider` stub, a decision), F14 (splitting the 800-line
+Not done: F14 (splitting the 800-line
 README; a docs reorganisation with no code dependency, left for whoever next
 edits it) and the shared `spec.LoadFiles` (F8, cross-cutting).
 

@@ -24,14 +24,14 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, Palette, tablerMui } from '@/components/icons';
 import { IconTextPlus, IconWriting } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import { api } from '@/services/api';
 import { downloadImage, slugify } from '@/utils/download';
-import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
+import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/pages/image/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
 import ImageGenGalleryDialog from './ImageGenGalleryDialog';
 import ImageGenLightbox from './ImageGenLightbox';
@@ -45,8 +45,8 @@ import ImageModelPicker from './ImageModelPicker';
 import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
-import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
-import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/imageProfileTypes';
+import { createImageProfile, removeImageProfile, updateImageProfile } from '../../../features/image/imageProfileStore';
+import { newPromptId, type ImageProfile, type ProfilePrompt } from '../../../features/image/imageProfileTypes';
 import { PromptEditorCopyButton, PromptEditorField, PromptPanelField } from './PromptFields';
 import { usePromptFilled, usePromptStore } from './usePromptStore';
 import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
@@ -72,7 +72,7 @@ import type {
     ImportedImage,
     Quality,
     SelectedImage,
-} from './ImageGenPlayground.types';
+} from '../../../features/image/ImageGenPlayground.types';
 
 // The results strip is "what's happening right now", not a scrollback buffer —
 // dragging through dozens of past generations to find one belongs in the
@@ -361,23 +361,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         if (promptFile) void handleOpenPromptFile(promptFile);
         if (imageFiles.length > 0) void handleAddReferenceImages(imageFiles);
     }, [handleAddReferenceImages, handleOpenPromptFile]);
-
-    // The Paste button is the click-shaped twin of Ctrl+V: it asks the
-    // clipboard directly (Chromium-family browsers grant this after a prompt)
-    // and, where the browser won't hand the clipboard to a click, says so and
-    // points at the shortcut that always works — never a silent no-op.
-    const handlePasteFromClipboard = useCallback(async () => {
-        const nothingPasted = () => showNotification(
-            t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
-            'info',
-        );
-        const files = await readClipboardImages();
-        if (files.length === 0) {
-            nothingPasted();
-            return;
-        }
-        await handleAddReferenceImages(files);
-    }, [handleAddReferenceImages, showNotification, t]);
 
     const handleOpenReference = useCallback((index: number) => {
         const image = referenceSelection(index);

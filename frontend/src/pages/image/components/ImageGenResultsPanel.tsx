@@ -2,13 +2,13 @@ import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useMemo, useRef } from 'react';
 import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons';
-import { CopyIconButton } from '@/components/CopyIconButton';
-import { fontMono } from '@/theme/fonts';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import GenerationRunCard from './GenerationRunCard';
 import ImportedImageCard from './ImportedImageCard';
 import PanelAction from './PanelAction';
 import { STRIP_CARD_HEIGHT, WRAP_GRID_COLUMNS, WRAP_GRID_GAP } from './imageGenSession';
-import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, ImportedImage, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
 import { radius } from '@tingly/ui/theme/radius';
 
 // One timeline for the results panel: images brought in to work on and

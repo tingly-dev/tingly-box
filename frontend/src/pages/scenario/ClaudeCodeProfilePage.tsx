@@ -1,12 +1,12 @@
 import CardGrid from "@/components/CardGrid.tsx";
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import AgentStatusRow, { AgentLogButton } from './components/AgentStatusRow';
 import AgentAccessSection, { useAccessExpanded } from './components/AgentAccessSection';
 import ProfileSetupDialog from './components/ProfileSetupDialog';
 import { useAgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
-import { isCredentialProvider } from '@/utils/providers';
+import { isCredentialProvider } from '@/pages/scenario/utils/providers';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, agentPageHeaderSx } from './components/ScenarioCardHeader';
 import PluginFeatures from '@/components/PluginFeatures';
@@ -26,7 +26,6 @@ import { Edit as EditIcon } from '@/components/icons';
 import { Duplicate as DuplicateIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { Terminal as TerminalIcon } from '@/components/icons';
-import Switch from '@mui/material/Switch';
 import {
     Box,
     Button,
@@ -34,23 +33,22 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Divider,
     IconButton,
     Stack,
     TextField,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
-import ConfirmDialog from '@/components/ConfirmDialog';
-import { fontMono, fontSizes } from '@/theme/fonts';
-import DuplicateDialog from '@/components/DuplicateDialog';
-import { suggestProfileCopyName } from '@/utils/copyName';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
+import { suggestProfileCopyName } from '@/pages/scenario/utils/copyName';
 import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
 
 const BASE_SCENARIO = 'claude_code';
@@ -78,9 +76,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const scenario = `${BASE_SCENARIO}:${profileId}`;
 
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         showNotification,
         providers,
         notification,

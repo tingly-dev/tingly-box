@@ -1,7 +1,7 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import CopyIconButton from '@/components/CopyIconButton';
-import type { MCPCatalogTool } from './types';
+import CopyIconButton from '@tingly/ui/components/CopyIconButton';
+import type { MCPCatalogTool } from '../../features/mcp/types';
 import { radius } from '@tingly/ui/theme/radius';
 
 const isEmpty = (schema: unknown) =>

@@ -3,7 +3,7 @@ import { Box, Typography, Tooltip, ToggleButton, ToggleButtonGroup, Slider } fro
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
 import type { ProbeThinking, ProbeProtocol } from '@/types/probe';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // AxisPrimitives: the instrument-panel vocabulary shared by the probe dialog's
 // control rail and the Bench page's compose column — one axis logic, two

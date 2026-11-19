@@ -14,7 +14,7 @@ import {
 import { type SkillLocation } from '@/types/prompt';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import SkillColumnShell from './SkillColumnShell';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface SkillLocationsColumnProps {
     locations: SkillLocation[];

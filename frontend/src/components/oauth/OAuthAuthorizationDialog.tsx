@@ -1,6 +1,6 @@
 import {Close, OpenInNew} from '@/components/icons';
 import { host } from '@/host';
-import CopyIconButton from '@/components/CopyIconButton';
+import CopyIconButton from '@tingly/ui/components/CopyIconButton';
 import {
     Alert,
     Box,
@@ -17,7 +17,7 @@ import {useEffect, useState} from 'react';
 import WorkBuddyConnectionNote from './WorkBuddyConnectionNote';
 import QoderConnectionNote from './QoderConnectionNote';
 import api from "@/services/api.ts";
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Type for timer (browser vs Node.js)

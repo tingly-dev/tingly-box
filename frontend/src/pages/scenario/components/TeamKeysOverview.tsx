@@ -11,11 +11,11 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfigRow from '@/components/ConfigRow';
-import CreateSharingKeyButton from '@/components/CreateSharingKeyButton';
+import CreateSharingKeyButton from '@/pages/scenario/components/CreateSharingKeyButton';
 import type { SharingKey } from '@/components/SharingKeysTable';
-import type { SharingKeyTableActions } from '@/hooks/useSharingKeyActions';
+import type { SharingKeyTableActions } from '@/pages/scenario/hooks/useSharingKeyActions';
 import type { Team } from '@/types/team';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
 import { radius } from '@tingly/ui/theme/radius';

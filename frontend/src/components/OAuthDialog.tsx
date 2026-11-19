@@ -23,7 +23,7 @@ import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProv
 import OAuthAuthorizationDialog, {type OAuthAuthorizationData} from './oauth/OAuthAuthorizationDialog';
 import WorkBuddyConnectionNote from './oauth/WorkBuddyConnectionNote';
 import QoderConnectionNote from './oauth/QoderConnectionNote';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface OAuthDialogProps {
@@ -44,10 +44,9 @@ interface OAuthDialogProps {
 const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProviderUuid}: OAuthDialogProps) => {
     const {t} = useTranslation();
     const isReauth = Boolean(reauthProviderUuid);
-    const [authorizing, setAuthorizing] = useState<string | null>(null);
     const [authDialogOpen, setAuthDialogOpen] = useState(false);
     const [authData, setAuthData] = useState<OAuthAuthorizationData | null>(null);
-    const [oauthProviders, setOAuthProviders] = useState<OAuthProvider[]>(FALLBACK_OAUTH_PROVIDERS);
+    const [oauthProviders] = useState<OAuthProvider[]>(FALLBACK_OAUTH_PROVIDERS);
     const [initError, setInitError] = useState<string | null>(null);
     const [proxyUrl, setProxyUrl] = useState('');
     const [autoDetectedProxy, setAutoDetectedProxy] = useState('');
@@ -186,7 +185,6 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
     const handleProviderClick = async (provider: OAuthProvider) => {
         if (provider.enabled === false) return;
 
-        setAuthorizing(provider.id);
         setInitError(null); // Clear any previous errors
 
         try {
@@ -241,7 +239,6 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProvi
             setInitError(`OAuth authorization failed: ${errorMsg}`);
             console.error('OAuth authorization failed:', error);
         } finally {
-            setAuthorizing(null);
         }
     };
 

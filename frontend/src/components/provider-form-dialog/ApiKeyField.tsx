@@ -2,7 +2,7 @@ import {Visibility, VisibilityOff} from '@/components/icons';
 import {Box, Checkbox, FormControlLabel, IconButton, InputAdornment, TextField} from '@mui/material';
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface ApiKeyFieldProps {
     mode: 'add' | 'edit';

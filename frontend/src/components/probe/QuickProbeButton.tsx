@@ -13,7 +13,7 @@ import { formatLatency, runProbe } from './runProbe';
 import { ProbeDialog } from './ProbeDialog';
 import { DEFAULT_AXES } from './probeConfig';
 import { CopyBlock, Journey, StatusBar } from './ResultSections';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface QuickProbeButtonProps {

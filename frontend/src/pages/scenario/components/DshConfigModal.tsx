@@ -9,7 +9,7 @@ import { writeFileScripts } from './config/writeFileScripts';
 import { useAppliedPrefs } from './config/useAppliedPrefs';
 import { useDebouncedPreview } from './config/useDebouncedPreview';
 import { api } from '@/services/api';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 
 interface DshConfigModalProps {
     open: boolean;

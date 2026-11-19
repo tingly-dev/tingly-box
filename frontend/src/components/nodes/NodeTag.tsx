@@ -1,7 +1,7 @@
 import {Chip} from '@mui/material';
 import {alpha} from '@mui/material/styles';
 import {getRouteGraphActiveColor} from './styles';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface NodeTagProps {
     label: string;

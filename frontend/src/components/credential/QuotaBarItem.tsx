@@ -4,7 +4,7 @@ import type { QuotaWindow } from '@/types/quota';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent } from '@/types/quota';
 import { useTheme } from '@mui/material/styles';
 import { formatNumber, getQuotaTrackColor } from '../dashboard/chartStyles';
-import { getStatusColor, quotaTone } from '@/theme/status';
+import { getStatusColor, quotaTone } from '@tingly/ui/theme/status';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 

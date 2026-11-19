@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
-import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
+import { loadPlaygroundSession, savePlaygroundSession } from '@/pages/image/utils/playgroundSession';
 import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImageReasoningEffort, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
+import type { Endpoint, GenerationRun, ImageReasoningEffort, ImportedImage, Quality, ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 

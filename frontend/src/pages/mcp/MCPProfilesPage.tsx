@@ -20,9 +20,9 @@ import {
     Typography,
 } from '@mui/material';
 import { Add, Delete, Edit, Refresh } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import AgentAccessSection, { useAccessExpanded } from '@/pages/scenario/components/AgentAccessSection';
 import { agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeader';
 import { getApiBaseUrl } from '@/utils/protocol';
@@ -43,8 +43,8 @@ import {
     setProfileToolOn,
 } from './profileState';
 import { nextMCPId } from './workspaceState';
-import { publishMCPProfiles } from './profileStore';
-import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
+import { publishMCPProfiles } from '../../features/mcp/profileStore';
+import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from '../../features/mcp/types';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Keyed by profile so each one remembers its own folded state.

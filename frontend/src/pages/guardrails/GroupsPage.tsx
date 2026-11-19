@@ -23,7 +23,7 @@ import {
     DeleteOutline,
     LockOutlined,
 } from '@/components/icons';
-import PageLayout from '@/components/PageLayout';
+import PageLayout from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
