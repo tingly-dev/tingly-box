@@ -198,7 +198,7 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocolte
 	// Normalize the fixture's model field to the built-in rule's RequestModel
 	// so fixtures stay upstream-agnostic — the rule (not the fixture) decides
 	// which provider+model the request resolves to.
-	body, err = rewriteModel(body, builtinRequestModel(agentType))
+	body, err = rewriteModel(body, protocoltest.BuiltinRequestModel(agentType))
 	if err != nil {
 		row.Err = fmt.Sprintf("rewrite fixture model: %v", err)
 		row.Duration = time.Since(start)
@@ -306,7 +306,7 @@ func firstRunnableEntry(configFile string) (*protocoltest.RealModelEntry, error)
 	if configFile == "" {
 		return nil, fmt.Errorf("--upstream=real requires --config <file>")
 	}
-	entries, err := loadProvidersConfig(configFile)
+	entries, err := protocoltest.LoadProvidersConfig(configFile)
 	if err != nil {
 		return nil, err
 	}

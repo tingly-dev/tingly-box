@@ -244,8 +244,8 @@ func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter,
 		Agent:        agentName,
 		APIStyle:     virtualAPIStyle(agentType),
 		Prompt:       prompt,
-		Model:        builtinRequestModel(agentType),
-		RequestModel: builtinRequestModel(agentType),
+		Model:        protocoltest.BuiltinRequestModel(agentType),
+		RequestModel: protocoltest.BuiltinRequestModel(agentType),
 	}
 	if err != nil {
 		r.Duration = time.Since(start)
@@ -296,13 +296,6 @@ func virtualAPIStyle(agentType protocoltest.AgentType) string {
 		return "openai"
 	}
 	return ""
-}
-
-// builtinRequestModel returns the fixed RequestModel used by the built-in rule
-// for each agent type — what the agent CLI actually sends to the gateway.
-// Thin alias over the engine's single copy of the mapping.
-func builtinRequestModel(agentType protocoltest.AgentType) string {
-	return protocoltest.BuiltinRequestModel(agentType)
 }
 
 // batchAgents is the ordered list of agents to run in batch mode.

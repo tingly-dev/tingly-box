@@ -56,7 +56,7 @@ func listLBExamples() []string {
 // "Rule config shapes (taxonomy)".
 type LbCmd struct {
 	File    string `kong:"name='file',short='f',help='Scenario YAML file (see --example for the schema)'"`
-	Example string `kong:"name='example',help='Run a built-in example instead of --file: cascade|flat|grid|single|regression|ratelimit|authflip|crossmodel|halfopen|degrade|inactive|noeviction|withintier|multiaffinity'"`
+	Example string `kong:"name='example',help='Run a built-in example instead of --file (default: cascade); names are listed at the end of --help'"`
 	All     bool   `kong:"name='all',help='Run all built-in examples in sequence (useful for CI)'"`
 	JSON    bool   `kong:"name='json',help='Emit the trace as JSON'"`
 	Table   bool   `kong:"name='table',short='t',help='Compact table view (default is the pencil graph)'"`
@@ -171,6 +171,12 @@ type lbExpect struct {
 	DistinctFirstAttempts []string `yaml:"distinct_first_attempts"`
 }
 
+// Help returns the long usage for `harness lb --help`; the example list is
+// derived from testdata/lb so it cannot drift from the embedded scenarios.
+func (*LbCmd) Help() string {
+	return "Built-in examples (--example <name>, or --all to run each): " + strings.Join(lbExampleNames, ", ")
+}
+
 func (c *LbCmd) Run() error {
 	if !c.Verbose {
 		// config.NewConfig runs migrations/seeds at Info; keep the trace clean.
@@ -187,20 +193,13 @@ func (c *LbCmd) Run() error {
 		for i, name := range examples {
 			// Clear the global breaker store between examples to avoid state leakage.
 			loadbalance.DefaultBreakerStore().Reset()
-			// Temporarily set Example and clear File/All for this run.
-			origFile := c.File
-			origAll := c.All
-			c.File = ""
-			c.All = false
-			c.Example = name
+			one := *c
+			one.All = false
+			one.Example = name
 			fmt.Fprintf(os.Stderr, "▶ Running [%d/%d] %s\n", i+1, len(examples), name)
-			if err := c.runOne(); err != nil {
+			if err := one.runOne(); err != nil {
 				return fmt.Errorf("example %s failed: %w", name, err)
 			}
-			// Restore original values.
-			c.File = origFile
-			c.All = origAll
-			c.Example = ""
 		}
 		fmt.Fprintf(os.Stderr, "✅ All %d lb examples passed\n", len(examples))
 		return nil
