@@ -20,7 +20,7 @@ func TestVirtualAgentsCoverEveryAgent(t *testing.T) {
 			t.Errorf("agent %q: virtual model %q != built-in request model %q", name, spec.model, protocoltest.BuiltinRequestModel(agentType))
 		}
 	}
-	if _, err := executeAgentCommand("nope", "hi"); err == nil {
+	if _, err := executeAgentCommand("nope", "hi", 0); err == nil {
 		t.Fatal("unknown agent type must be rejected")
 	}
 }

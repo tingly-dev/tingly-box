@@ -8,7 +8,8 @@ import "fmt"
 // `prompt` is non-empty. In real mode the same config file is reused across
 // agents. If filter is non-empty, only config entries whose name matches (case-
 // insensitive) are run; ignored in virtual mode.
-func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, only map[resumeKey]struct{}, filter []string) error {
+func runBatchAgentTests(useMock bool, configFile string, opts agentRunOpts) error {
+	prompt, writer, filter := opts.prompt, opts.writer, opts.filter
 	fmt.Printf("🧪 Batch agent test: %v\n", batchAgents)
 	if configFile != "" {
 		fmt.Printf("📋 Config: %s\n", configFile)
@@ -38,9 +39,9 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *
 		var err error
 		switch {
 		case configFile != "":
-			results, err = runRealAgentTests(agentName, configFile, prompt, writer, skip, only, filter)
+			results, err = runRealAgentTests(agentName, configFile, opts)
 		case useMock:
-			results, err = runVirtualAgentTest(agentName, prompt, writer, skip)
+			results, err = runVirtualAgentTest(agentName, opts)
 		default:
 			err = fmt.Errorf("internal: batch invoked without mode")
 		}
