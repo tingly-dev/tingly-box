@@ -56,6 +56,29 @@ func runAgentCmdWithTimeout(cmd *exec.Cmd) ([]byte, bool, error) {
 	}
 }
 
+// applyAgentResult copies the outcome of an agent CLI run into the unified
+// result row shared by the mock, real and batch paths. Duration is left to
+// the caller: the mock path takes the CLI's own, the real path times the whole
+// entry including gateway setup.
+func applyAgentResult(r *RealAgentTestResult, inner *AgentTestResult) {
+	r.Success = inner.Success
+	r.TimedOut = inner.TimedOut
+	r.Output = inner.Output
+	r.Error = inner.Error
+	r.ExitCode = inner.ExitCode
+}
+
+// appendSummary persists one row, warning (never failing the run) when the
+// summary file cannot be written. A nil writer is a no-op.
+func appendSummary(writer *summaryWriter, r *RealAgentTestResult) {
+	if writer == nil {
+		return
+	}
+	if err := writer.Append(r); err != nil {
+		fmt.Printf("⚠️  summary append failed: %v\n", err)
+	}
+}
+
 // finishAgentResult records the shared outcome fields of one agent CLI run —
 // the single implementation of the timeout / error / success classification
 // every executor uses.
@@ -75,35 +98,45 @@ func finishAgentResult(result *AgentTestResult, start time.Time, output []byte, 
 	}
 }
 
-// executeAgentCommand executes the actual agent CLI command against the virtual-model gateway.
-func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*AgentTestResult, error) {
-	switch agentType {
-	case protocoltest.AgentTypeClaudeCode:
-		return executeClaudeTest(prompt)
-	case protocoltest.AgentTypeCodex:
-		return executeCodexTest(prompt)
-	case protocoltest.AgentTypeOpenCode:
-		return executeOpenCodeTest(prompt)
-	default:
-		return nil, fmt.Errorf("unknown agent type: %s", agentType)
-	}
+// virtualAgent describes how one agent CLI is run against the virtual-model
+// gateway: the provider name and model it is registered under, and the driver
+// that writes the agent's config and spawns the CLI.
+type virtualAgent struct {
+	provider string
+	model    string
+	run      func(env *protocoltest.AgentTestEnv, model, prompt string) (*AgentTestResult, error)
 }
 
-// executeClaudeTest executes claude CLI backed by an ephemeral gateway + virtual server.
-func executeClaudeTest(prompt string) (*AgentTestResult, error) {
-	const model = "cc"
+var virtualAgents = map[protocoltest.AgentType]virtualAgent{
+	protocoltest.AgentTypeClaudeCode: {
+		provider: "virtual-claude", model: "cc",
+		run: func(env *protocoltest.AgentTestEnv, _, prompt string) (*AgentTestResult, error) {
+			return executeClaudeWithEnv(env, prompt)
+		},
+	},
+	protocoltest.AgentTypeCodex:    {provider: "virtual-codex", model: "tingly-codex", run: executeCodexWithEnv},
+	protocoltest.AgentTypeOpenCode: {provider: "virtual-opencode", model: "tingly-opencode", run: executeOpenCodeWithEnv},
+}
 
-	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeClaudeCode)
+// executeAgentCommand runs the actual agent CLI against an ephemeral gateway
+// wired to the virtual-model server.
+func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*AgentTestResult, error) {
+	spec, ok := virtualAgents[agentType]
+	if !ok {
+		return nil, fmt.Errorf("unknown agent type: %s", agentType)
+	}
+
+	env, err := protocoltest.NewAgentTestEnv(agentType)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupAgent(protocoltest.AgentTypeClaudeCode, "virtual-claude", model); err != nil {
+	if err := env.SetupAgent(agentType, spec.provider, spec.model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
-	return executeClaudeWithEnv(env, prompt)
+	return spec.run(env, spec.model, prompt)
 }
 
 // executeClaudeWithEnv writes settings.json and runs claude CLI against a pre-configured env.
@@ -163,23 +196,6 @@ func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string) (*Agent
 	return result, nil
 }
 
-// executeCodexTest executes codex CLI backed by an ephemeral gateway + virtual server.
-func executeCodexTest(prompt string) (*AgentTestResult, error) {
-	const model = "tingly-codex"
-
-	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeCodex)
-	if err != nil {
-		return nil, fmt.Errorf("create test env: %w", err)
-	}
-	defer env.Close(false)
-
-	if err := env.SetupAgent(protocoltest.AgentTypeCodex, "virtual-codex", model); err != nil {
-		return nil, fmt.Errorf("setup profile: %w", err)
-	}
-
-	return executeCodexWithEnv(env, model, prompt)
-}
-
 // executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
 func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
@@ -236,23 +252,6 @@ wire_api = "responses"
 	output, timedOut, err := runAgentCmdWithTimeout(cmd)
 	finishAgentResult(result, start, output, timedOut, err)
 	return result, nil
-}
-
-// executeOpenCodeTest executes opencode CLI backed by an ephemeral gateway + virtual server.
-func executeOpenCodeTest(prompt string) (*AgentTestResult, error) {
-	const model = "tingly-opencode"
-
-	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeOpenCode)
-	if err != nil {
-		return nil, fmt.Errorf("create test env: %w", err)
-	}
-	defer env.Close(false)
-
-	if err := env.SetupAgent(protocoltest.AgentTypeOpenCode, "virtual-opencode", model); err != nil {
-		return nil, fmt.Errorf("setup profile: %w", err)
-	}
-
-	return executeOpenCodeWithEnv(env, model, prompt)
 }
 
 // executeOpenCodeWithEnv writes XDG config and runs opencode CLI against a pre-configured env.

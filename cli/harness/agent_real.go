@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -101,38 +102,10 @@ func claudeOAuthAccountID(token string) string {
 	return strings.TrimSpace(id)
 }
 
-// runRealAgentTests iterates over all model entries and runs the agent against each.
-// It returns the per-entry results and a terminal error if the entire run could
-// not proceed (e.g., bad config, no runnable entries). A non-nil results slice
-// with failed entries returns a non-nil error summarising the failure count, so
-// callers can still render the detailed report.
-//
-// If writer is non-nil, each per-entry result is appended durably as soon as
-// it completes. Any (agent, entry) key already present in skip is bypassed so
-// --resume can pick up where a previous run left off. If filter is non-empty,
-// only entries whose name matches (case-insensitive) are considered; unknown
-// filter names are warned about but do not fail the run.
-func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, only map[resumeKey]struct{}, filter []string) ([]*RealAgentTestResult, error) {
-	profileType := parseAgentType(agentName)
-	if profileType == "" {
-		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
-	}
-
-	// Prompt priority: a non-empty CLI/positional `prompt` overrides everything
-	// (applies to all entries). Otherwise each entry's yaml `prompt` field is
-	// used, falling back to the agent default. The CLI override is captured here;
-	// the per-entry fallback is resolved in the loop.
-	cliPrompt := prompt
-	defaultPrompt := "What is the capital of France?"
-	if p, ok := defaultPrompts[agentName]; ok {
-		defaultPrompt = p
-	}
-
-	entries, err := protocoltest.LoadProvidersConfig(modelsFile)
-	if err != nil {
-		return nil, err
-	}
-
+// selectRunnableEntries applies --filter (by provider name, case-insensitive)
+// and drops entries with missing or placeholder fields, printing what was
+// skipped and why. It errors when nothing is left to run.
+func selectRunnableEntries(entries []protocoltest.RealModelEntry, modelsFile string, filter []string) ([]protocoltest.RealModelEntry, error) {
 	// Build a case-insensitive lookup of filter names, if any.
 	var wanted map[string]struct{}
 	if len(filter) > 0 {
@@ -177,6 +150,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 			}
 		}
 		if len(unknown) > 0 {
+			sort.Strings(unknown)
 			fmt.Printf("⚠️  --filter names not found in config: %s\n\n", strings.Join(unknown, ", "))
 		}
 	}
@@ -194,6 +168,45 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 			return nil, fmt.Errorf("no runnable entries in %s matched --filter %v", modelsFile, filter)
 		}
 		return nil, fmt.Errorf("no runnable entries in %s — fill in apikey, baseurl, and model fields", modelsFile)
+	}
+	return runnable, nil
+}
+
+// runRealAgentTests iterates over all model entries and runs the agent against each.
+// It returns the per-entry results and a terminal error if the entire run could
+// not proceed (e.g., bad config, no runnable entries). A non-nil results slice
+// with failed entries returns a non-nil error summarising the failure count, so
+// callers can still render the detailed report.
+//
+// If writer is non-nil, each per-entry result is appended durably as soon as
+// it completes. Any (agent, entry) key already present in skip is bypassed so
+// --resume can pick up where a previous run left off. If filter is non-empty,
+// only entries whose name matches (case-insensitive) are considered; unknown
+// filter names are warned about but do not fail the run.
+func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, only map[resumeKey]struct{}, filter []string) ([]*RealAgentTestResult, error) {
+	profileType := parseAgentType(agentName)
+	if profileType == "" {
+		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
+	}
+
+	// Prompt priority: a non-empty CLI/positional `prompt` overrides everything
+	// (applies to all entries). Otherwise each entry's yaml `prompt` field is
+	// used, falling back to the agent default. The CLI override is captured here;
+	// the per-entry fallback is resolved in the loop.
+	cliPrompt := prompt
+	defaultPrompt := "What is the capital of France?"
+	if p, ok := defaultPrompts[agentName]; ok {
+		defaultPrompt = p
+	}
+
+	entries, err := protocoltest.LoadProvidersConfig(modelsFile)
+	if err != nil {
+		return nil, err
+	}
+
+	runnable, err := selectRunnableEntries(entries, modelsFile, filter)
+	if err != nil {
+		return nil, err
 	}
 
 	fmt.Printf("🧪 Real Agent test: %s\n", agentName)
@@ -230,11 +243,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 		r := runOneRealAgentTest(profileType, entry, entryPrompt)
 		results = append(results, r)
 		printRealAgentTestResult(r)
-		if writer != nil {
-			if aerr := writer.Append(r); aerr != nil {
-				fmt.Printf("⚠️  summary append failed: %v\n", aerr)
-			}
-		}
+		appendSummary(writer, r)
 		fmt.Println()
 	}
 
@@ -315,11 +324,7 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 		return result
 	}
 
-	result.Success = agentResult.Success
-	result.TimedOut = agentResult.TimedOut
-	result.Output = agentResult.Output
-	result.Error = agentResult.Error
-	result.ExitCode = agentResult.ExitCode
+	applyAgentResult(result, agentResult)
 
 	// Real upstreams aren't test-controlled, so exit 0 alone is a "fake green":
 	// a CLI may print an upstream error yet exit cleanly. Apply the content

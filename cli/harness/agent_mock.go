@@ -53,19 +53,11 @@ func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter,
 		fmt.Printf("❌ Execution failed: %v\n", err)
 		printRealAgentTestResult(r)
 		fmt.Println()
-		if writer != nil {
-			if aerr := writer.Append(r); aerr != nil {
-				fmt.Printf("⚠️  summary append failed: %v\n", aerr)
-			}
-		}
+		appendSummary(writer, r)
 		return []*RealAgentTestResult{r}, nil
 	}
 
-	r.Success = inner.Success
-	r.TimedOut = inner.TimedOut
-	r.Output = inner.Output
-	r.Error = inner.Error
-	r.ExitCode = inner.ExitCode
+	applyAgentResult(r, inner)
 	r.Duration = inner.Duration
 
 	// The virtual upstream's answer is fixed, so a zero exit code alone is not
@@ -78,11 +70,7 @@ func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter,
 
 	printRealAgentTestResult(r)
 	fmt.Println()
-	if writer != nil {
-		if aerr := writer.Append(r); aerr != nil {
-			fmt.Printf("⚠️  summary append failed: %v\n", aerr)
-		}
-	}
+	appendSummary(writer, r)
 	return []*RealAgentTestResult{r}, nil
 }
 
