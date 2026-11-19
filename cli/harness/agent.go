@@ -10,11 +10,11 @@ import (
 )
 
 // AgentCmd runs an agent CLI (claude, codex, opencode) end-to-end through the
-// tingly-box gateway. Use --mock for a virtual upstream or --config <file> for
+// tingly-box gateway. Use --mock for a virtual upstream or --providers <file> for
 // real providers; exactly one of the two modes must be selected.
 type AgentCmd struct {
 	Mock        bool          `kong:"name='mock',help='Virtual-model mode: run against an in-process mock upstream'"`
-	Config      string        `kong:"name='config',help='Real-provider mode: path to provider config file (YAML)'"`
+	Providers   string        `kong:"name='providers',aliases='config',help='Real-provider mode: path to the providers file (YAML); --config is a deprecated alias'"`
 	Prompt      string        `kong:"name='prompt',help='Prompt to send (overrides positional arg and default)'"`
 	Summary     string        `kong:"name='summary',default='harness-summary.csv',help='Path to CSV summary file (per-row results, written durably)'"`
 	OutputDir   string        `kong:"name='output-dir',help='Directory for full output files (default: harness-output/)'"`
@@ -44,16 +44,16 @@ Two modes, selected by an explicit flag:
     and runs the real agent CLI against it. Exercises protocol translation and
     rule matching without touching any real upstream.
 
-  --config <file>        Real-provider mode
-    Reads a list of real providers from a YAML config file. For each provider
+  --providers <file>     Real-provider mode (--config is a deprecated alias)
+    Reads a list of real providers from a YAML providers file. For each provider
     and model combination, spins up an isolated gateway, registers the provider,
     binds the built-in rule (builtin:claude_code:cc / builtin:codex:default / builtin:opencode:default)
     to a Service pointing at that provider+model, and runs the agent CLI against
     the gateway. Reports pass/fail per entry.
 
-Exactly one of --mock or --config must be supplied.
+Exactly one of --mock or --providers must be supplied.
 
-Config file format — YAML (.yaml/.yml):
+Providers file format — YAML (.yaml/.yml):
   providers:
     - name: "my-provider"
       baseurl: "https://api.anthropic.com"
@@ -71,16 +71,16 @@ Examples:
   harness agent batch    --mock
 
   # Real-provider mode
-  harness agent claude --config providers.yaml
-  harness agent codex  --config providers.yaml "What is 2+2?"
-  harness agent batch  --config providers.yaml
+  harness agent claude --providers providers.yaml
+  harness agent codex  --providers providers.yaml "What is 2+2?"
+  harness agent batch  --providers providers.yaml
 
   # Resume an interrupted run (skips every (agent,entry) already in the CSV)
-  harness agent batch --config providers.yaml --resume ""
+  harness agent batch --providers providers.yaml --resume ""
 
   # Run only specific entries by name (real-provider mode)
-  harness agent claude --config providers.yaml --filter acme,beta
-  harness agent batch  --config providers.yaml --filter acme
+  harness agent claude --providers providers.yaml --filter acme,beta
+  harness agent batch  --providers providers.yaml --filter acme
 
 Persistence:
   Every run appends per-row results to harness-summary.csv in the working
@@ -110,10 +110,10 @@ func (a *AgentCmd) Run() error {
 	}
 
 	switch {
-	case a.Mock && a.Config != "":
-		return fmt.Errorf("--mock and --config are mutually exclusive; pick exactly one")
-	case !a.Mock && a.Config == "":
-		return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
+	case a.Mock && a.Providers != "":
+		return fmt.Errorf("--mock and --providers are mutually exclusive; pick exactly one")
+	case !a.Mock && a.Providers == "":
+		return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --providers <file> (real providers)")
 	}
 
 	if a.OnlyFailing && a.Resume != "" {
@@ -153,7 +153,7 @@ func (a *AgentCmd) Run() error {
 	// here (not in runRealAgentTests) so the "no prior summary" error surfaces
 	// before any work runs.
 	var only map[resumeKey]struct{}
-	if a.OnlyFailing && a.Config != "" {
+	if a.OnlyFailing && a.Providers != "" {
 		only, err = loadFailedKeys(a.Summary)
 		if err != nil {
 			if errors.Is(err, errNoPriorSummary) {
@@ -179,13 +179,13 @@ func (a *AgentCmd) Run() error {
 	}
 
 	if strings.EqualFold(agentName, "batch") {
-		return runBatchAgentTests(a.Mock, a.Config, opts)
+		return runBatchAgentTests(a.Mock, a.Providers, opts)
 	}
 
 	var results []*RealAgentTestResult
 	var runErr error
-	if a.Config != "" {
-		results, runErr = runRealAgentTests(agentName, a.Config, opts)
+	if a.Providers != "" {
+		results, runErr = runRealAgentTests(agentName, a.Providers, opts)
 	} else {
 		if len(a.Filter) > 0 {
 			fmt.Printf("⚠️  --filter is ignored in --mock mode (no named entries)\n\n")

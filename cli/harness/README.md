@@ -42,7 +42,8 @@ TCP between them.
 | **fixture** | A captured agent request body under `testdata/fixtures/` that `replay` posts (not a definition). |
 | **virtual** upstream | The in-process `VirtualServer` mock, used by `agent --mock` and `replay --upstream virtual`. |
 | **vmodel** upstream | The seeded builtin vmodel provider dispatched in-process, used by `replay --upstream vmodel` (IDs from the default definitions). |
-| `--config` | A VModel definition list for `matrix`; a providers/credentials YAML for `agent` and `replay` (see `init-config`). |
+| `--config` | A VModel definition list for `matrix` only. |
+| `--providers` | A providers/credentials YAML for `agent` and `replay` (see `init-config`); `--config` still works there as a deprecated alias. |
 
 ### Running your own definitions through the matrix
 
@@ -92,7 +93,7 @@ path — because that is the product's core. This boundary is deliberate:
   plane's contract, but the harness does not aim to e2e the management plane.
 - **Known open axes** (product-decision-gated, not accidental gaps): the
   Google target path, multimodal (image-block) scenarios, automated
-  real-provider conformance (Tier D — no command; `agent --config` and
+  real-provider conformance (Tier D — no command; `agent --providers` and
   `replay --upstream real` cover live providers by hand), and vmodel usage/quota tracking (the `IsVirtual()` short-circuit
   intentionally skips outbound dispatch helpers; tracked in the vmodel
   roadmap). See [Planned work & known issues](#planned-work--known-issues)
@@ -178,11 +179,11 @@ go build -o harness ./cli/harness
 # Tier B — replay captured fixtures through the gateway
 ./harness replay batch --upstream virtual     # deterministic mock upstream
 ./harness replay batch --upstream vmodel      # in-process vmodel dispatch
-./harness replay claude --upstream real --config providers.yaml
+./harness replay claude --upstream real --providers providers.yaml
 
 # Tier C — run a real agent CLI through the gateway
 ./harness agent claude   --mock
-./harness agent batch    --config providers.yaml
+./harness agent batch    --providers providers.yaml
 
 # Offline catalog validity check (providers.json + claude.models.json + cross-consistency)
 ./harness catalog check                       # embedded catalogs
@@ -195,8 +196,8 @@ go build -o harness ./cli/harness
 # ${CLAUDE_CODE_OAUTH_TOKEN}; such an entry goes through the gateway's Claude
 # OAuth chain signed as the newest native client (claude_code_version latest).
 export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)
-./harness replay claude --upstream real --config providers.yaml
-./harness agent  claude --config providers.yaml
+./harness replay claude --upstream real --providers providers.yaml
+./harness agent  claude --providers providers.yaml
 ```
 
 ### OAuth providers (Claude Code)
@@ -278,7 +279,7 @@ runs assertions on the round-trip result. **No agent CLI is spawned.**
   └─────────┼──────────────┼────────────────┼──────────────────┘
             │              │                │
    VirtualServer    in-process vmodel   live provider
-   mock responses   registry dispatch   (from --config)
+   mock responses   registry dispatch   (from --providers)
    (deterministic)  (IsVirtual short-   (real network I/O)
             │         circuit)               │
             ▼              ▼                  ▼
@@ -309,7 +310,7 @@ fixture, decides which provider+model the request resolves to.
 |--------------|-------------------------------------------------|---------------------------|
 | `virtual`    | built-in rule → in-process `VirtualServer` mock | `Scenario.Assertions` (content-level — response is deterministic) |
 | `vmodel`     | built-in rule → seeded builtin vmodel provider, dispatched in-process via `provider.IsVirtual()` short-circuit | `Scenario.Structural` (upstream-independent) |
-| `real`       | built-in rule → live provider from `--config`   | `Scenario.Structural` (upstream-independent) |
+| `real`       | built-in rule → live provider from `--providers` | `Scenario.Structural` (upstream-independent) |
 
 Only the `virtual` upstream controls the response byte-for-byte, so only it can
 run the scenario's **content** assertions. `vmodel` and `real` responses aren't
@@ -360,7 +361,7 @@ agent's own request construction, auth headers, and output parsing.
           └───────────────────▶│   in-process gateway       │
                                │                            │
                                │   --mock     → virtual      │
-                               │   --config   → real provider│
+                               │   --providers→ real provider│
                                └────────────────────────────┘
 ```
 
@@ -372,7 +373,7 @@ Two mutually-exclusive modes:
   code: the CLI's output must contain the mock's fixed answer
   (`protocoltest.VirtualMockAnswerMarker`), so a CLI that prints an error yet
   exits cleanly is a FAIL.
-- `--config <file>` — real-provider mode: for every provider×model in the YAML,
+- `--providers <file>` — real-provider mode: for every provider×model in the YAML,
   spins an isolated gateway, binds the built-in rule to that provider, and runs
   the agent CLI against it.
 
@@ -720,7 +721,7 @@ internal/protocoltest/   shared engine used by all tiers
   aliases.go         re-exports of the check/scenario foundation (the canonical
                      Assertion library and Scenario fixtures live in
                      vmodel/benchmark/{check,scenario})
-  real_model.go      providers.yaml parsing for --upstream=real / --config
+  real_model.go      providers.yaml parsing for --upstream=real / --providers
   duo.go             Tier Duo parent: routes, child spawning, request driving
   duo_serve.go       Tier Duo child: full server boot + gateway/vmodel seeding
   duo_checks.go      Tier Duo functional phase
@@ -808,7 +809,7 @@ regenerated in CI.
   multi-block responses).
 - `--upstream real`: allow running **all** runnable config entries, not just
   `firstRunnableEntry`, so replay can sweep a provider matrix the way
-  `agent --config` does.
+  `agent --providers` does.
 
 ### Known issue: full single-process test run can exhaust file descriptors
 

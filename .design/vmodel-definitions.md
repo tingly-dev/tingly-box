@@ -128,7 +128,7 @@ listener. No `--standalone` flag is needed.
 Harness `--config` uses the identical loader and requires
 `--mode=single` plus test assertions. Existing built-in matrix behavior remains
 the default when no file is supplied. `--config` here is a VModel definition;
-agent/replay live-provider configuration remains a separate contract.
+agent/replay live-provider credentials use `--providers`, a separate contract.
 
 ## Completed migration and cleanup
 

@@ -2,8 +2,9 @@
 
 Status: review of `main` at f5235a0f5 (after #2618/#2621/#2624). P0–P7 are
 implemented as a stack of PRs (table in section 4, merge in that order); the
-items in section 5 are still proposals. Nothing is decided unless marked
-**Decided**.
+decisions in section 5 (providers flag, provider stub, `--fixture`) are
+implemented as follow-up PRs on top; item 4 is still open. Nothing is decided
+unless marked **Decided**.
 
 Related: [`vmodel-definitions.md`](./vmodel-definitions.md) (the file contract),
 [`harness-matrix.md`](./harness-matrix.md), [`harness-agent-testing.md`](./harness-agent-testing.md),
@@ -93,21 +94,19 @@ Not done: F11 (`provider` stub, a decision), F14 (splitting the 800-line
 README; a docs reorganisation with no code dependency, left for whoever next
 edits it) and the shared `spec.LoadFiles` (F8, cross-cutting).
 
-## 5. Decisions needed (not started; each is user-visible)
+## 5. Decisions
 
-1. **`--config` collision (M3).** Proposal: add `--providers` as the name for the
-   credentials file in `agent`/`replay` and keep `--config` there as a
-   deprecated alias; `matrix --config` stays the definition flag. Touches
-   `tests/harness-baseline.sh:119`, README and the
-   `harness-agent-testing.md` runbook (CI templates do not pass `--config`). Breaking only if the alias is later removed.
+1. **`--config` collision (M3).** **Decided**: `agent` and `replay` take the
+   credentials file as `--providers`; `--config` still works there as a
+   deprecated alias. `matrix --config` stays the definition flag.
 2. **`--fixture` alias.** **Decided**: unify directly. The alias is removed;
    `matrix --config` is the only spelling.
-3. **`provider` stub (F11).** Delete the Phase 3 stub commands (and their two
-   parse tests) or keep the placeholder and fix its dead spec link.
+3. **`provider` stub (F11).** **Decided**: deleted (#2662).
 4. **Definition files for `agent --mock` / `replay --upstream vmodel` (M5).**
    Could accept `--config model.yaml` and serve it through a `spec.Runtime`
    instead of builtin IDs. This is a feature, needs `internal/protocoltest`
-   changes (other thread's area); out of scope for the refactor unless asked.
+   changes (other thread's area). **Open**: to be discussed after the three
+   decisions above land.
 5. **LB `faults` encoding (`lb.go:80-126`).** **Decided** by #2624 to keep its
    own contract (the shorthand `[500,500,200]` + `steps`/`on_exhaust`); not
    planned to be folded into `kind: sequence`.

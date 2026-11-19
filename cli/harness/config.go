@@ -11,7 +11,7 @@ import (
 )
 
 // InitConfigCmd generates a pre-filled providers config file for use with
-// `harness agent <agent> --config <file>`.
+// `harness agent <agent> --providers <file>`.
 type InitConfigCmd struct {
 	Output string `kong:"name='output',short='o',help='Output file path (default: providers.yaml)'"`
 }
@@ -59,7 +59,7 @@ func runInitConfig(output string) error {
 	providerCount := len(tm.GetAllTemplates())
 	fmt.Printf("✅ Created %s (%d providers)\n", output, providerCount)
 	fmt.Printf("📝 Fill in your API keys and configure models, then run:\n")
-	fmt.Printf("   harness agent claude --config %s\n", output)
+	fmt.Printf("   harness agent claude --providers %s\n", output)
 	fmt.Printf("   (providers with empty apikey / oauth_token are automatically skipped)\n")
 	return nil
 }
@@ -126,7 +126,7 @@ func buildProvidersConfig(templates map[string]*catalog.ProviderCatalog) string 
 
 func buildProvidersYAML(entries []providerEntry) string {
 	var sb strings.Builder
-	sb.WriteString("# Harness providers config — used with: harness agent <agent> --config <this-file>\n")
+	sb.WriteString("# Harness providers config — used with: harness agent <agent> --providers <this-file>\n")
 	sb.WriteString("#\n")
 	sb.WriteString("# Fill in the 'apikey' field for each provider you want to test.\n")
 	sb.WriteString("# Configure the 'models' array with the models you want to test.\n")

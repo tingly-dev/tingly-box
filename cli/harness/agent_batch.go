@@ -5,14 +5,14 @@ import "fmt"
 // runBatchAgentTests runs every supported agent in sequence. All agents run
 // regardless of earlier failures; the command returns an error iff any agent
 // failed. In virtual mode each agent uses its own default prompt unless
-// `prompt` is non-empty. In real mode the same config file is reused across
+// `prompt` is non-empty. In real mode the same providers file is reused across
 // agents. If filter is non-empty, only config entries whose name matches (case-
 // insensitive) are run; ignored in virtual mode.
-func runBatchAgentTests(useMock bool, configFile string, opts agentRunOpts) error {
+func runBatchAgentTests(useMock bool, providersFile string, opts agentRunOpts) error {
 	prompt, writer, filter := opts.prompt, opts.writer, opts.filter
 	fmt.Printf("🧪 Batch agent test: %v\n", batchAgents)
-	if configFile != "" {
-		fmt.Printf("📋 Config: %s\n", configFile)
+	if providersFile != "" {
+		fmt.Printf("📋 Providers: %s\n", providersFile)
 	} else {
 		fmt.Printf("📋 Mode: virtual upstream (--mock)\n")
 	}
@@ -38,8 +38,8 @@ func runBatchAgentTests(useMock bool, configFile string, opts agentRunOpts) erro
 		var results []*RealAgentTestResult
 		var err error
 		switch {
-		case configFile != "":
-			results, err = runRealAgentTests(agentName, configFile, opts)
+		case providersFile != "":
+			results, err = runRealAgentTests(agentName, providersFile, opts)
 		case useMock:
 			results, err = runVirtualAgentTest(agentName, opts)
 		default:

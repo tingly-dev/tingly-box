@@ -29,13 +29,13 @@ var (
 type CLI struct {
 	Version    VersionCmd    `kong:"cmd,help='Show version'"`
 	Matrix     MatrixCmd     `kong:"cmd,help='Run protocol validation matrix tests'"`
-	Agent      AgentCmd      `kong:"cmd,help='Run agent e2e tests (use --mock or --config <file>)'"`
+	Agent      AgentCmd      `kong:"cmd,help='Run agent e2e tests (use --mock or --providers <file>)'"`
 	Replay     ReplayCmd     `kong:"cmd,help='Replay a captured agent request fixture through the gateway'"`
 	Lb         LbCmd         `kong:"cmd,help='Simulate load-balancing (tier/failover/breaker/affinity) over a request sequence'"`
 	Duo        DuoCmd        `kong:"cmd,help='Two-instance e2e verification: tb2 gateway routed to tb1 vmodel (function + memory)'"`
 	Routing    RoutingCmd    `kong:"cmd,help='Smart-routing e2e scenarios on the duo topology (rules via API, wire + trace assertions)'"`
 	Catalog    CatalogCmd    `kong:"cmd,help='Check the validity of the provider / model catalogs'"`
-	InitConfig InitConfigCmd `kong:"cmd,name='init-config',help='Create a providers config file template for agent --config'"`
+	InitConfig InitConfigCmd `kong:"cmd,name='init-config',help='Create a providers config file template for agent --providers'"`
 }
 
 func main() {
