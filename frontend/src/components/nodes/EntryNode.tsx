@@ -1,4 +1,4 @@
-import { ToggleButton, Tooltip, Box } from '@mui/material';
+import { ToggleButton, Box } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';

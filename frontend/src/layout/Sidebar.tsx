@@ -11,13 +11,12 @@ import {
     ListItemText,
     Popover,
     Stack,
-    Switch,
     TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
-import {Trans, useTranslation} from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';

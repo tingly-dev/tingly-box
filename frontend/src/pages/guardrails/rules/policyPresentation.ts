@@ -59,8 +59,3 @@ export const buildPolicySummary = (policy: DisplayPolicy) => {
     }
     return summarizeValues(patterns, 'No patterns configured');
 };
-
-export const buildPolicyScope = (policy: DisplayPolicy) => {
-    const scenarios = policy.scope?.scenarios?.join(', ') || '';
-    return scenarios;
-};

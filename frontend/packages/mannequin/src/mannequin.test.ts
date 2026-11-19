@@ -23,7 +23,6 @@ import {
     figureUnit,
     HANDLE_KEYS,
     handlePointOf,
-    HEAD_LENGTH_RATIO,
     figureVisualBounds,
     flipFigure,
     hitTestBody,

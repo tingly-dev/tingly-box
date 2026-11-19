@@ -39,7 +39,6 @@ export interface DirectChatDetail { chat: DirectChat; permissions: AccessPermiss
 export interface GroupActor { actor: {id:string; external_actor_id:string; display_name?:string}; label?:string; permissions:AccessPermission[]; }
 export interface BotGroup { id:string; bot_uuid:string; platform:string; external_group_id:string; alias?:string; name?:string; blocked:boolean; }
 export interface BotGroupDetail { group:BotGroup; capabilities:Partial<Record<CapabilityName,AccessEffect>>; actors:GroupActor[]; }
-export interface AuthorizationDecision { allowed:boolean; reason:string; failed_gate?:string; facts:Record<string,unknown>; }
 
 // One concrete destination on the IM Notify work surface. Direct Chats and
 // Groups are peer resources; the UI must not force users through a chat-kind
@@ -78,50 +77,6 @@ export type {
     GroupingStrategy,
 };
 
-// Category display labels
-export const CategoryLabels: Record<string, string> = {
-    im: 'IM Platforms',
-    enterprise: 'Enterprise',
-    business: 'Business',
-};
-
-// Auth type display labels
-export const AuthTypeLabels: Record<string, string> = {
-    token: 'Token',
-    oauth: 'OAuth',
-    qr: 'QR Code',
-    basic: 'Basic Auth',
-};
-
-// Helper to mask secret values for display
-export function maskSecret(value: string, visible = false): string {
-    if (!value) return '-';
-    if (visible) return value;
-    if (value.length <= 8) return '*'.repeat(value.length);
-    return value.substring(0, 4) + '*'.repeat(Math.min(8, value.length - 4)) + value.substring(value.length - 4);
-}
-
-// Helper to get display name for auth field value
-export function getAuthDisplayValue(settings: BotSettings, config: BotPlatformConfig): string {
-    if (!settings.auth || Object.keys(settings.auth).length === 0) {
-        return '-';
-    }
-
-    // For token auth, show masked token
-    if (config.auth_type === 'token') {
-        const token = settings.auth['token'];
-        return token ? maskSecret(token) : '-';
-    }
-
-    // For OAuth, show clientId
-    if (config.auth_type === 'oauth') {
-        const clientId = settings.auth['clientId'];
-        return clientId ? maskSecret(clientId) : '-';
-    }
-
-    return 'Configured';
-}
-
 // CLAUDE_CODE_AGENT is the base agent identifier stored in default_agent when
 // @cc uses the main claude_code scenario. A profiled selection is stored as
 // "claude_code:<profileId>" — mirrors the backend scenario naming.
@@ -142,10 +97,6 @@ export function ccProfileIdFromDefaultAgent(defaultAgent?: string): string {
 export function defaultAgentForCCProfile(profileId: string): string {
     return profileId ? `${CLAUDE_CODE_AGENT}:${profileId}` : CLAUDE_CODE_AGENT;
 }
-
-// REMOTE_AGENT_SCENARIO is the mount name for the remote-agent purpose
-// (use Claude Code from chat). Mirrors the backend constant.
-export const REMOTE_AGENT_SCENARIO = 'remote_agent';
 
 // PLATFORM_DEFAULT_REQUIRE_PAIRING lists the token-DM platforms that default to
 // TOFU pairing on. Mirrors bot.PlatformDefaultsRequirePairing on the backend.
@@ -210,33 +161,6 @@ export function groupCanControl(detail: BotGroupDetail): boolean {
         && detail.actors.some((actor) => actorAllowed(actor, 'remote_control.start') && actorAllowed(actor, 'remote_control.approve'));
 }
 
-// isRemoteAgentMounted reports whether the remote_agent purpose is mounted on a
-// bot, from its raw scenarios JSON. Mirrors the backend binding.ScenarioMounted:
-// an absent binding counts as mounted (legacy default on); an explicit
-// enabled:false turns it off; malformed JSON is treated as mounted.
-export function isRemoteAgentMounted(scenarios?: string): boolean {
-    if (!scenarios || !scenarios.trim()) return true;
-    try {
-        const rows = JSON.parse(scenarios) as Array<{ name?: string; enabled?: boolean }>;
-        const row = Array.isArray(rows) ? rows.find((r) => r?.name === REMOTE_AGENT_SCENARIO) : undefined;
-        if (!row) return true;
-        return row.enabled !== false;
-    } catch {
-        return true;
-    }
-}
-
-// A route row in a bot's scenarios JSON: a real outbound scenario binding
-// (e.g. "claude_code") rather than the "remote_agent" mount row. Read-only
-// mirror of the Go struct in remote/binding — there is no write path for
-// these from the frontend yet (see NotifyPage).
-export interface NotifyRoute {
-    name: string;
-    chat_id?: string;
-    events?: string[];
-    enabled?: boolean;
-}
-
 // A chat a bot can reach, as returned by GET /api/v1/bots/:bot/chats. The
 // chat_id is the channel-native conversation identifier the notify/interact
 // API requires in its request body — surfacing it here (and in BotTable) is
@@ -252,27 +176,6 @@ export interface BotChat {
     updated_at?: string;
     blocked?: boolean;
     can_notify?: boolean;
-}
-
-// notifyRoutes extracts a bot's outbound scenario bindings (every scenarios
-// row that isn't the remote_agent mount) from its raw scenarios JSON.
-export function notifyRoutes(scenarios?: string): NotifyRoute[] {
-    if (!scenarios || !scenarios.trim()) return [];
-    try {
-        const rows = JSON.parse(scenarios) as Array<NotifyRoute & { name?: string }>;
-        if (!Array.isArray(rows)) return [];
-        return rows.filter((r): r is NotifyRoute => !!r?.name && r.name !== REMOTE_AGENT_SCENARIO);
-    } catch {
-        return [];
-    }
-}
-
-// isNotifyMounted reports whether the notify purpose is mounted on a bot.
-// Mirrors the backend binding.OutboundScenarioMounted: mounted iff at least
-// one non-remote_agent row exists and isn't explicitly disabled. Unlike
-// remote_agent, notify fails CLOSED — no bindings means not mounted.
-export function isNotifyMounted(scenarios?: string): boolean {
-    return notifyRoutes(scenarios).some((r) => r.enabled !== false);
 }
 
 // countBotsByPlatform tallies active/total bots per platform — feeds the

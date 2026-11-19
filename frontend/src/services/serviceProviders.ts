@@ -144,11 +144,6 @@ export function getServiceProvider(id: string): ServiceProvider | null {
     return provider || null;
 }
 
-// Get provider options filtered by API style
-export function getProvidersByStyle(style: 'openai' | 'anthropic'): ServiceProviderOption[] {
-    return getServiceProviderOptions().filter(option => option.api_style === style);
-}
-
 // Unique provider representation (not duplicated by style)
 export interface UniqueProvider {
     id: string;

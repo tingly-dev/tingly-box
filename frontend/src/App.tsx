@@ -1,5 +1,5 @@
 import { Error as ErrorIcon, Refresh } from '@/components/icons';
-import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { Suspense, useMemo } from 'react';
@@ -11,7 +11,7 @@ import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeModeProvider, useThemeMode } from './contexts/ThemeContext';
-import { useVersion, VersionProvider } from './contexts/VersionContext';
+import { VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
 import { TeamProvider } from './contexts/TeamContext';
 import { appRoutes } from './routes/appRoutes';

@@ -1,15 +1,13 @@
-import { Close as CloseIcon, ContentCopy } from '@/components/icons';
+import { Close as CloseIcon } from '@/components/icons';
 import {
     Box,
     Dialog,
     DialogContent,
     DialogTitle,
     IconButton,
-    Stack,
-    Tooltip,
     Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import ModelSelectDialog from './ModelSelectDialog.tsx';
 import type { Provider } from '../types/provider';
 
