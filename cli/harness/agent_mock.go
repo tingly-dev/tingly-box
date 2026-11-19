@@ -16,7 +16,8 @@ import (
 // If writer is non-nil, the produced result row is appended immediately. If
 // the (agent, "mock") key is already present in skip, the run is skipped and
 // an empty slice is returned with a message.
-func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}) ([]*RealAgentTestResult, error) {
+func runVirtualAgentTest(agentName string, opts agentRunOpts) ([]*RealAgentTestResult, error) {
+	prompt, writer, skip := opts.prompt, opts.writer, opts.skip
 	if prompt == "" {
 		prompt = defaultPrompts[agentName]
 	}
@@ -36,7 +37,7 @@ func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter,
 	fmt.Println()
 
 	start := time.Now()
-	inner, err := executeAgentCommand(agentType, prompt)
+	inner, err := executeAgentCommand(agentType, prompt, opts.timeout)
 
 	// Wrap the agent-CLI outcome in the unified result shape.
 	r := &RealAgentTestResult{

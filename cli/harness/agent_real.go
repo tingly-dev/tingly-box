@@ -183,7 +183,8 @@ func selectRunnableEntries(entries []protocoltest.RealModelEntry, modelsFile str
 // --resume can pick up where a previous run left off. If filter is non-empty,
 // only entries whose name matches (case-insensitive) are considered; unknown
 // filter names are warned about but do not fail the run.
-func runRealAgentTests(agentName string, modelsFile string, prompt string, writer *summaryWriter, skip map[resumeKey]struct{}, only map[resumeKey]struct{}, filter []string) ([]*RealAgentTestResult, error) {
+func runRealAgentTests(agentName string, modelsFile string, opts agentRunOpts) ([]*RealAgentTestResult, error) {
+	prompt, writer, skip, only, filter := opts.prompt, opts.writer, opts.skip, opts.only, opts.filter
 	profileType := parseAgentType(agentName)
 	if profileType == "" {
 		return nil, fmt.Errorf("unknown agent: %q (available: claude, codex, opencode)", agentName)
@@ -240,7 +241,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 			}
 		}
 		fmt.Printf("── [%d/%d] %s ──\n", i+1, len(runnable), entry.Name)
-		r := runOneRealAgentTest(profileType, entry, entryPrompt)
+		r := runOneRealAgentTest(profileType, entry, entryPrompt, opts.timeout)
 		results = append(results, r)
 		printRealAgentTestResult(r)
 		appendSummary(writer, r)
@@ -260,7 +261,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 }
 
 // runOneRealAgentTest runs the agent CLI for a single model entry.
-func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.RealModelEntry, prompt string) *RealAgentTestResult {
+func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.RealModelEntry, prompt string, timeout time.Duration) *RealAgentTestResult {
 	result := &RealAgentTestResult{
 		EntryName: entry.Name,
 		Agent:     string(agentType),
@@ -310,11 +311,11 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 	var agentResult *AgentTestResult
 	switch agentType {
 	case protocoltest.AgentTypeClaudeCode:
-		agentResult, err = executeClaudeWithEnv(env, prompt)
+		agentResult, err = executeClaudeWithEnv(env, prompt, timeout)
 	case protocoltest.AgentTypeCodex:
-		agentResult, err = executeCodexWithEnv(env, requestModel, prompt)
+		agentResult, err = executeCodexWithEnv(env, requestModel, prompt, timeout)
 	case protocoltest.AgentTypeOpenCode:
-		agentResult, err = executeOpenCodeWithEnv(env, requestModel, prompt)
+		agentResult, err = executeOpenCodeWithEnv(env, requestModel, prompt, timeout)
 	}
 
 	result.Duration = time.Since(start)
