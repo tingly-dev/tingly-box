@@ -3,8 +3,8 @@
 > 状态：**核心已实施（2026-11-17），其余待做。** 已落地：`cleanTmp` 只读修复、
 > 线程 Archive/Restore/Delete 后端（`projects/internal/project/thread_cleanup.go`）与 API
 > （`/threads/:id/archive|restore|cleanup`、`DELETE /threads/:id`）、线程页菜单与确认对话框、
-> Overview 的 Archived 分组；安全检查取 P1（有风险即拒绝），远端分支删除、快照（P2）、
-> 批量清理、`auto_archive_days` 自动策略和积压迁移**尚未实施**（见 §4 的 PR 4–6）。
+> Overview 的 Archived 分组、**按项目共享的工具缓存 `library/.cache`（仅提示词引导，见 §3.10）**；安全检查取 P1（有风险即拒绝），
+> 远端分支删除、快照（P2）、批量清理、`auto_archive_days` 自动策略和积压迁移**尚未实施**（见 §4 的 PR 4–6）。
 > 相关：[workspace.md](../projects/.design/workspace.md)（worktree 位置）、
 > [projects.md](../projects/.design/projects.md)（线程生命周期）、
 > [thread-card-requests.md](../projects/.design/thread-card-requests.md)。
@@ -22,7 +22,7 @@ Projects 能开线程（每个线程一个 worktree 和一个 `tp/*` 分支）�
 
 **补充决定（用户，2026-11-17）：**
 - **Archive / Delete 同时删 `.tmp`**：它是 Resolve 既定契约的一部分（先修只读 bug：`makeWritable` 先补 owner 写位再 `RemoveAll`），Restore 后下一个 turn 会重建。`outputs/`、`uploads/` 仍然永远不删。
-- **共享工具缓存按项目共享**：放 `library/.cache`（`.git` 风格的隐藏目录，Library 树、fork、zip 根目录都自动跳过隐藏目录）。线程启动 env 显式指 `GOMODCACHE`/`GOCACHE`/`npm_config_cache`/`PIP_CACHE_DIR` 过去——agent 自建 isolated-home 也共享缓存。**这项由协调者另开线程实施**，不与本 PR 混杂。fork 不带缓存/临时文件是现成行为（`copyTree` 跳过一切隐藏目录），fork 带的是 memory/ + library 非隐藏文件。
+- **共享工具缓存按项目共享**：放 `library/.cache`（点目录，Library 树、fork、zip 根目录本来就跳过点目录）。**只靠线程提示词引导**——告诉线程把 `GOMODCACHE`/`GOCACHE`/`npm_config_cache`/`PIP_CACHE_DIR` 指过去、项目内共享；不预设启动 env，也不在库的读写逻辑里为 `.cache` 加特例（**2026-11-18 简化决定**，取代先前的“启动 env 显式指定”，见 §3.10）。fork 不带缓存/临时文件是现成行为（`copyTree` 跳过一切隐藏目录），fork 带的是 memory/ + library 非隐藏文件。
 
 ## 2. 现状（只读调查，2026-11-17，本机）
 
@@ -182,6 +182,17 @@ Delete（只接受已归档线程）：
 3. 预览分四类：已合并且干净（约 12.7 GB，可一次释放）；未合并但已推送；未合并且只在本地（18 个，必须人看）；脏的（4 个）。只有第一类默认勾选。
 4. 先修 TMPDIR 只读 bug，再提供“清理已 resolved 线程的 TMPDIR”（本机立刻能释放约 14 GB 的大头，7 个已 resolved 线程）。
 5. 本地分支（160 个）本身不占空间，积压里**不主动删**；用户在 Archived 里逐个 Delete 即可。
+
+### 3.10 共享工具缓存（提示词引导，2026-11-17；2026-11-18 简化为仅提示）
+
+**问题**：线程各自跑 `go test`、`npm install`、`pip install`，缓存落在自己的 HOME（或 agent 为测试自建的 isolated HOME）里，随线程 scratch 一起被删、又随下一个线程重新下载。实测一个线程的 `.tmp` 里留着 **8 份 isolated-home 的 Go 模块缓存，每份 702 MB，约 5.6 GB 纯重复**。
+
+**决定**：缓存按**项目**共享，位置 `library/.cache`；**实现只是线程系统提示词里的一句话**——「工具/构建缓存用 `<library>/.cache`，不用默认目录」。四个变量只是例子（`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR`；yarn/pnpm/cargo/uv 等其它工具的下载、构建缓存同理），提示词不逐一列举，也不预设任何启动 env、不为 `.cache` 增加逻辑。
+
+- **为什么够了**：线程都以同一个 OS 用户运行，路径可写；这些工具默认从 `HOME`/`XDG_CACHE_HOME` 推目录，agent 按提示把四个变量指到 `.cache` 下的子目录即可共享，不需要产品替它设。缓存是内容寻址存储（Go 模块/构建缓存、npm `_cacache`、pip HTTP 缓存），并发读写是设计内的，线程之间无需互斥。
+- **不做**：不设启动 env；不加 `Layout.CacheDir`/大小统计；不在 Library 树、下载、zip、fork、coordinator 的工具里给 `.cache` 加特例——它就是普通点目录，现有的“跳过点目录”规则本来就不列出、不服务、不复制它。也不清理：Archive/Delete/Resolve 的 `cleanTmp` 只删 `.tmp/<thread>`。
+- **代价**：依赖 agent 遵守提示；不遵守时缓存仍落在 HOME/scratch，只是没有收益，不会出错。若将来确需强制共享，再回到“启动 env 显式指定”。
+- **测试**：提示词测试断言四个变量名与 `.cache` 路径；`seedLibrary` 加一个 `.cache` 文件，断言 Library 树、zip、fork 都不带它；Archive/Delete 测试断言它不被删除。
 
 ## 4. 推荐方案与 PR 拆分
 

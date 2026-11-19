@@ -96,7 +96,7 @@ func TestLibraryArchiveOfTheRootWorksWithinTheLimits(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	// Dot entries (.tmp, .hidden) are not in it.
+	// Dot entries (.tmp, .cache, .hidden) are not in it.
 	assert.Equal(t, []string{"notes.md", "outputs/run-1/data/rows.csv", "outputs/run-1/report.md", "outputs/run-2/a.txt", "uploads/z.png"}, keys)
 }
 
