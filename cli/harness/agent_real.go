@@ -101,12 +101,6 @@ func claudeOAuthAccountID(token string) string {
 	return strings.TrimSpace(id)
 }
 
-// loadProvidersConfig reads and parses a providers config file (YAML).
-// Returns the expanded list of test entries.
-func loadProvidersConfig(path string) ([]protocoltest.RealModelEntry, error) {
-	return protocoltest.LoadProvidersConfig(path)
-}
-
 // runRealAgentTests iterates over all model entries and runs the agent against each.
 // It returns the per-entry results and a terminal error if the entire run could
 // not proceed (e.g., bad config, no runnable entries). A non-nil results slice
@@ -134,7 +128,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 		defaultPrompt = p
 	}
 
-	entries, err := loadProvidersConfig(modelsFile)
+	entries, err := protocoltest.LoadProvidersConfig(modelsFile)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +277,7 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 		return result
 	}
 	result.APIStyle = apiStyle
-	providerName := fmt.Sprintf("%s", entry.Name)
+	providerName := entry.Name
 
 	if err := setupRealUpstream(env, agentType, providerName, entry, apiStyle); err != nil {
 		result.Error = fmt.Sprintf("setup real Agent: %v", err)
@@ -296,7 +290,7 @@ func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.Re
 	// rule by RequestModel, then forwards upstream via Service{Provider, Model=entry.Model}.
 	// Sending entry.Model directly bypasses rule matching and breaks the
 	// provider → rule → service routing contract.
-	requestModel := builtinRequestModel(agentType)
+	requestModel := protocoltest.BuiltinRequestModel(agentType)
 	if requestModel == "" {
 		result.Error = fmt.Sprintf("unsupported Agent type: %s", agentType)
 		result.Duration = time.Since(start)
