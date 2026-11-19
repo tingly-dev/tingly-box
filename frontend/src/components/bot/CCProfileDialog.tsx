@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 import type { BotSettings } from '@/types/bot';
 import { ccProfileIdFromDefaultAgent } from '@/types/bot';
 import type { ProfileInfo } from '@/contexts/ProfileContext';
-import { fontSizes } from '@/theme/fonts';
 
 interface CCProfileDialogProps {
     open: boolean;

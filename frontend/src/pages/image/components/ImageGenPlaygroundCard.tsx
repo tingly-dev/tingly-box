@@ -362,23 +362,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         if (imageFiles.length > 0) void handleAddReferenceImages(imageFiles);
     }, [handleAddReferenceImages, handleOpenPromptFile]);
 
-    // The Paste button is the click-shaped twin of Ctrl+V: it asks the
-    // clipboard directly (Chromium-family browsers grant this after a prompt)
-    // and, where the browser won't hand the clipboard to a click, says so and
-    // points at the shortcut that always works — never a silent no-op.
-    const handlePasteFromClipboard = useCallback(async () => {
-        const nothingPasted = () => showNotification(
-            t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
-            'info',
-        );
-        const files = await readClipboardImages();
-        if (files.length === 0) {
-            nothingPasted();
-            return;
-        }
-        await handleAddReferenceImages(files);
-    }, [handleAddReferenceImages, showNotification, t]);
-
     const handleOpenReference = useCallback((index: number) => {
         const image = referenceSelection(index);
         if (image) setSelectedImage(image);

@@ -248,8 +248,6 @@ const BotNotifyGroup: React.FC<BotNotifyGroupProps> = ({bot, onToggle, isTogglin
     const activeTargets = targets.filter(target => !target.blocked);
     const disabledCount = targets.length - activeTargets.length;
     const visibleTargets = showDisabled ? targets : activeTargets;
-    const directCount = activeTargets.filter(target => target.kind === 'direct_chat').length;
-    const groupCount = activeTargets.filter(target => target.kind === 'group').length;
 
     // One sentence answering "can this bot deliver right now?" — the same
     // status-line shape as a Remote Control card, replacing the old chip +
