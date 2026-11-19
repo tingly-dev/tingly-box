@@ -22,17 +22,17 @@ import (
 // tingly-box gateway. Use --mock for a virtual upstream or --config <file> for
 // real providers; exactly one of the two modes must be selected.
 type AgentCmd struct {
-	Mock      bool          `kong:"name='mock',help='Virtual-model mode: run against an in-process mock upstream'"`
-	Config    string        `kong:"name='config',help='Real-provider mode: path to provider config file (YAML)'"`
-	Prompt    string        `kong:"name='prompt',help='Prompt to send (overrides positional arg and default)'"`
-	Summary   string        `kong:"name='summary',default='harness-summary.csv',help='Path to CSV summary file (per-row results, written durably)'"`
-	OutputDir string        `kong:"name='output-dir',help='Directory for full output files (default: harness-output/)'"`
-	Resume    string        `kong:"name='resume',help='Resume — skip every (agent,entry) already recorded in the summary file'"`
-	OnlyFailing bool        `kong:"name='only-failing',help='Only re-run (agent,entry) pairs whose latest summary row is FAIL/TIMEOUT. Real-provider mode only; mutually exclusive with --resume.'"`
-	Filter    []string      `kong:"name='filter',sep=',',help='Only run providers whose name matches (case-insensitive, comma-separated). Real-provider mode only.'"`
-	Timeout   time.Duration `kong:"name='timeout',short='t',default='2m',help='Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.'"`
-	AgentType string        `kong:"arg,optional,name='agent',help='Agent type: claude | codex | opencode | batch'"`
-	Args      []string      `kong:"arg,optional,name='prompt-args',help='Optional positional prompt parts (joined with spaces)'"`
+	Mock        bool          `kong:"name='mock',help='Virtual-model mode: run against an in-process mock upstream'"`
+	Config      string        `kong:"name='config',help='Real-provider mode: path to provider config file (YAML)'"`
+	Prompt      string        `kong:"name='prompt',help='Prompt to send (overrides positional arg and default)'"`
+	Summary     string        `kong:"name='summary',default='harness-summary.csv',help='Path to CSV summary file (per-row results, written durably)'"`
+	OutputDir   string        `kong:"name='output-dir',help='Directory for full output files (default: harness-output/)'"`
+	Resume      string        `kong:"name='resume',help='Resume — skip every (agent,entry) already recorded in the summary file'"`
+	OnlyFailing bool          `kong:"name='only-failing',help='Only re-run (agent,entry) pairs whose latest summary row is FAIL/TIMEOUT. Real-provider mode only; mutually exclusive with --resume.'"`
+	Filter      []string      `kong:"name='filter',sep=',',help='Only run providers whose name matches (case-insensitive, comma-separated). Real-provider mode only.'"`
+	Timeout     time.Duration `kong:"name='timeout',short='t',default='2m',help='Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.'"`
+	AgentType   string        `kong:"arg,optional,name='agent',help='Agent type: claude | codex | opencode | batch'"`
+	Args        []string      `kong:"arg,optional,name='prompt-args',help='Optional positional prompt parts (joined with spaces)'"`
 }
 
 // Help returns the long usage for `harness agent --help`.
