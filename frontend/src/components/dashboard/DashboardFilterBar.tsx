@@ -26,7 +26,7 @@ import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
 import { usageAccountLabel } from '@/utils/usageAccountLabel';
 import { useMemo } from 'react';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Owner label is rendered through t() so a live language switch updates it;

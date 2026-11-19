@@ -11,7 +11,7 @@ import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { type AppLanguage } from '@/i18n';
 import { useAppLanguage } from '@/hooks/useAppLanguage';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // DshPrefs mirrors the Go struct in internal/config (DshPrefs). Keys

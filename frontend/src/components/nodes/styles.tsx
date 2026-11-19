@@ -1,6 +1,6 @@
 import { Box } from '@mui/material';
 import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { nodeScrollbar, routeGraphColors, routeGraphShadows } from '@/theme/routeGraph';
 
 const scrollbarOf = (theme: Theme) => nodeScrollbar[theme.palette.mode === 'dark' ? 'dark' : 'light'];

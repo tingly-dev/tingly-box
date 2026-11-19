@@ -1,7 +1,7 @@
 import { TextField } from '@mui/material';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import type { ProxyControl } from '@/components/credential/ProxySwitch';
 import { isProxyUrl } from '@/components/provider-form-dialog/validation';
 import { api } from '@/services/api';

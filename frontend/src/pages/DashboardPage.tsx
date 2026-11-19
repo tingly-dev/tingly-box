@@ -20,7 +20,7 @@ import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import { useTranslation } from 'react-i18next';
 import { useDashboardData, TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
 import type { TimeRange } from '@/hooks/useDashboardData';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 const DashboardSkeleton = () => (

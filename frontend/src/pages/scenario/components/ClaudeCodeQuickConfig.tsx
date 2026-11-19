@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { type AppLanguage } from '@/i18n';
 import { useAppLanguage } from '@/hooks/useAppLanguage';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.

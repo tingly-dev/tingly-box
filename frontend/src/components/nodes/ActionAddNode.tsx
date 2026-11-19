@@ -11,7 +11,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
 import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, ROUTE_GRAPH_QUIET_CLASS, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const { node } = { node: SMALL_NODE_STYLES };
 

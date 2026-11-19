@@ -25,14 +25,14 @@ import {
     Refresh as RefreshIcon,
     VpnKey,
 } from '@/components/icons';
-import PageLayout from '@/components/PageLayout';
+import PageLayout from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { blurActiveElement } from '@/utils/dom';
 import CredentialEditorDialog, { type CredentialEditorState } from './CredentialEditorDialog';
 import ProviderImportDialog, { type ImportableProvider } from './ProviderImportDialog';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { tableFrameSx } from '@tingly/ui/theme/table';
 

@@ -30,7 +30,7 @@ import {
     RULE_PROTOCOLS,
 } from './probeConfig';
 import { ProbeControls } from './ProbeControls';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import api from '@/services/api';
 import { ProbeDevControls } from './ProbeDialogDevControls';
 import {

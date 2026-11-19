@@ -16,7 +16,7 @@ import {loadNotifyTargets} from '@/components/notify/notifyTargets';
 import {EntityLabel} from '@tingly/ui';
 import {useEntityLabels} from '@/components/entity/useEntityLabels';
 import {api} from '@/services/api';
-import {fontMono, fontSizes} from '@/theme/fonts';
+import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
 import type {BotSettings, NotifyTarget} from '@/types/bot';
 import {capabilityEnabled, isPairingRequired} from '@/types/bot';
 import {getApiBaseUrl} from '@/utils/protocol';

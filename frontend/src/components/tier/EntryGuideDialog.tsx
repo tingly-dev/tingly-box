@@ -21,7 +21,7 @@ import { AGENT_APPLY_STEP, AGENT_INSTALL_STEP, AGENT_VERIFY_STEP, ROUTING_GUIDE_
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideToolbarPreview } from './GuideToolbarPreview';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { overlay } from '@tingly/ui/theme/overlay';
 

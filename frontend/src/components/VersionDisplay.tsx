@@ -3,7 +3,7 @@ import { displayVersion } from '@/utils/version';
 import React, { type ReactNode } from 'react';
 import { useVersion } from '@/contexts/VersionContext';
 import { Check, Refresh, UpgradeOutlined } from '@/components/icons';
-import { elevation } from '@/theme/elevation';
+import { elevation } from '@tingly/ui/theme/elevation';
 
 interface VersionDisplayProps {
     /**

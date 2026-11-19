@@ -115,7 +115,7 @@ Files whose **only** importer area is a single page — colocate them with it (o
 ### 3.4 `src/theme`, `src/styles`, `src/constants`
 
 - `src/theme/{controls,elevation,fonts,options,status,index,palettes/light}.ts` are one-line re-exports of `@tingly/ui/theme/*` ("old paths only re-export", `CLAUDE.md`). Importers: `@/theme/fonts` 117 files, `status` 9, `elevation` 5, others 1–3. `components/{CoachMark,ConfirmDialog,ConfirmPopover,CopyIconButton,DialogHeader,EmptyState,PageHeader,PageLayout,Surface}.tsx`, `constants/zIndex.ts`, `hooks/useCopyFeedback.ts`, `utils/clipboard.ts` are the same kind of shim (3–28 importers each; `PageLayout` 28, `CopyIconButton` 18, `ConfirmDialog` 15). `components/icons` is a shim by design (202 importers, documented convention) — keep.
-  Proposal: codemod imports to `@tingly/ui/...` and delete the shims in one mechanical PR, *except* `@/components/icons` and `@/theme/{brand,dataviz,routeGraph}` (host-only). Keep `CLAUDE.md` ("old `src/` paths only re-export") in sync.
+  **Done (phase 3a)**: codemod rewrote 241 imports in 167 files to `@tingly/ui/*`, deleted the 19 shims, moved the four primitive tests (`ConfirmDialog`, `ConfirmPopover`, `DialogHeader`, `EmptyState`) into `packages/ui`. Original proposal: codemod imports to `@tingly/ui/...` and delete the shims in one mechanical PR, *except* `@/components/icons` and `@/theme/{brand,dataviz,routeGraph}` (host-only). Keep `CLAUDE.md` ("old `src/` paths only re-export") in sync.
 - `src/styles/{textStyles,toggleStyles}.tsx` are theme-adjacent style tokens living outside `theme/`; `components/dashboard/chartStyles.ts` and `components/RoutingGraphTypes.ts` likewise. Move `toggleStyles` to `@tingly/ui/theme/` (it only depends on `radius`) and `chartStyles` next to `src/theme/dataviz.ts`.
 - `src/constants/{ideSources,platformGuides,profileScenarios,defaults}` mix data with JSX (`platformGuides.tsx`); fine, but `platformGuides.tsx` belongs under `components/bot/` (its only consumers).
 - Colours: the strict style-literals lint already forbids new literals outside theme modules, so no colour migration is pending (checked: `pnpm lint` → `style literals: ok`).
@@ -158,4 +158,4 @@ Each phase ends with `pnpm gen:api && pnpm typecheck && pnpm lint && pnpm test` 
 
 - `pnpm typecheck` is only clean after `pnpm gen:api`; `tsconfig.json` includes `packages/*/src`, but running `tsc` *inside* `packages/projects` reports unrelated `process` type errors in `*.test.ts` (missing `@types/node` there) — not part of the repo's check.
 - Do the work in an isolated checkout with real per-entry `node_modules` symlinks (project memory `ui-preview-env`); the 16 "Denied ID" test files are environmental there.
-- `frontend/CLAUDE.md` has two lines that go stale if phase 3a lands ("old `src/` paths only re-export", the `@/theme/*` mentions); update them in that PR.
+- Phase 3a updated the two stale lines in `CLAUDE.md` / `frontend/CLAUDE.md`.

@@ -27,9 +27,9 @@ import { Refresh as RefreshIcon } from '@/components/icons';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatLogTime } from '@/utils/datetime';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha, useTheme } from '@mui/material/styles';
-import { getStatusColor, logLevelTone, httpStatusTone } from '@/theme/status';
+import { getStatusColor, logLevelTone, httpStatusTone } from '@tingly/ui/theme/status';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface SystemLogEntry {

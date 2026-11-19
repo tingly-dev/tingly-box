@@ -23,8 +23,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 import { notify } from '@/utils/notify';
-import { writeToClipboard } from '@/utils/clipboard';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 import {CodexCompactChip} from '@/components/rule-card/CodexCompactChip';
 import { radius } from '@tingly/ui/theme/radius';

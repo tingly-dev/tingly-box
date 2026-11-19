@@ -20,7 +20,7 @@ import {
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface SmartNodeProps {

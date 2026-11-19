@@ -4,7 +4,7 @@ import { IconLayoutSidebarLeftCollapse, IconPower } from '@tabler/icons-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Z_INDEX } from '../constants/zIndex';
+import { Z_INDEX } from '@tingly/ui/theme/zIndex';
 import { activityBarWidth, sidebarWidth } from './constants';
 import { mobileContentSx, mobileMenuButtonSx, mobileNavigationBarSx } from './styles';
 import { ActivityBar } from './ActivityBar.tsx';
@@ -17,7 +17,7 @@ import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators
 import { syncUiPrefs } from '../services/uiPrefs';
 import { useHiddenScenarios, usePinnedScenarios } from '@/pages/scenario/scenarioRegistry';
 import { rememberAgentPath } from '@/pages/scenario/lastAgent';
-import { CoachMark } from '@/components/CoachMark';
+import { CoachMark } from '@tingly/ui';
 import { useOneTimeTip } from '@/hooks/useOneTimeTip';
 import type { NavItem } from './types';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';

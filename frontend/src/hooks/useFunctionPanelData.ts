@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import type { Provider } from '../types/provider';
 import { notify } from '@/utils/notify';
-import { writeToClipboard } from '@/utils/clipboard';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
 
 export const useFunctionPanelData = () => {
     const [showTokenModal, setShowTokenModal] = useState(false);

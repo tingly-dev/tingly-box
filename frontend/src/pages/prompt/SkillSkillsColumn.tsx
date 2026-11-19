@@ -28,7 +28,7 @@ import {
     groupSkillsIntelligently,
 } from '@/components/prompt/skill/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface SkillListItemProps {
     skill: Skill;

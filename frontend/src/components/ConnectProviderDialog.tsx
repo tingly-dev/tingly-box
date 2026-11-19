@@ -22,7 +22,7 @@ import {useInRouterContext, useNavigate} from 'react-router-dom';
 import {type UniqueProvider, useProviderCatalogs, useCloudProviders, searchProviders} from '../services/serviceProviders';
 import ProviderIcon from './ProviderIcon';
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // What the picker emits when a card is chosen. The parent routes each kind to

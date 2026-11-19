@@ -61,7 +61,7 @@ import {
     type MatteSpec,
     type TileRect,
 } from '@tingly/vision';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { overlay, cssRgb } from '@tingly/ui/theme/overlay';
 

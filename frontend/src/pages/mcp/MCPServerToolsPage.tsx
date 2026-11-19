@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { IconButton, Stack } from '@mui/material';
 import { Refresh } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import MCPSourceDrawer from './MCPSourceDrawer';
 import MCPToolsPanel from './MCPToolsPanel';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';

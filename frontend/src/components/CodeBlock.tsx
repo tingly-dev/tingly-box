@@ -5,8 +5,8 @@ import React from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import './prismLanguages';
 import type { Language } from 'prism-react-renderer';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Object form only: the style is spread into the root's own sx.

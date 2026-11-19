@@ -18,7 +18,7 @@ import {
     MoreVert,
     Visibility,
 } from '@/components/icons';
-import ConfirmPopover from "@/components/ConfirmPopover";
+import ConfirmPopover from "@tingly/ui/components/ConfirmPopover";
 import {
     Box,
     Button,
@@ -40,12 +40,12 @@ import {
 } from "@mui/material";
 import type {ProviderQuota} from "@/types/quota";
 import React, {useCallback, useState} from "react";
-import {useCopyFeedback} from "@/hooks/useCopyFeedback";
+import {useCopyFeedback} from "@tingly/ui/hooks/useCopyFeedback";
 import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
 import api from "../services/api";
 import type {Provider} from "../types/provider";
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { tableFrameSx } from '@tingly/ui/theme/table';
 

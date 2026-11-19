@@ -1,7 +1,7 @@
 import { Box, Paper, Typography, alpha, useTheme } from '@mui/material';
 import type { ReactNode } from 'react';
-import { fontSizes } from '@/theme/fonts';
-import { getReadableAccent } from '@/theme/status';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { getReadableAccent } from '@tingly/ui/theme/status';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface StatCardProps {

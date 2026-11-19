@@ -14,7 +14,7 @@ import {
     footerHeight,
     headerHeight,
 } from './constants';
-import { Z_INDEX } from '../constants/zIndex';
+import { Z_INDEX } from '@tingly/ui/theme/zIndex';
 import type { SxProps } from '@mui/material';
 import { alpha, type Theme } from '@mui/material/styles';
 import { radius } from '@tingly/ui/theme/radius';

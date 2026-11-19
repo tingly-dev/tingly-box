@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Box, Button, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { IconTextPlus } from '@tabler/icons-react';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { DeleteOutline, Palette, Refresh, tablerMui } from '@/components/icons';
 import type { PromptRunBase } from './promptRunStore';
 import { radius } from '@tingly/ui/theme/radius';
