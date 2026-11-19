@@ -102,7 +102,7 @@
 | [agentboot-live-control.md](./agentboot-live-control.md) | AgentBoot 会话中途注入消息与在线改参数 | TEP #2114，已用真实 CLI 验证 |
 | [slash-commands.md](./slash-commands.md) | 会话控制 API（先做 `Compact` / `ContextUsage`）：agentboot 里与后端无关的小接口，Claude 实现映射 `/compact` 与 `get_context_usage`；web/IM 的斜杠命令只是它的前端，`/clear` 等不下发；列出已有同类调用与未来候选 | 设计，未实现；证据见 `.research/slash-commands-claude-code.md` |
 | [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | 已退役：Remote 的 `@cc` 执行路径已删除，聊天走 Projects（remote-into-projects.md） |
-| [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7 |
+| [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7；各版本逆向记录见 `.research/claude-code/`（最新 2.1.328） |
 | [bot-arch.md](./bot-arch.md) | Bot Architecture — resource, channel, consumers (+ naming) | 设计说明；局部实施状态见正文 |
 | [bot-im-alias-display.md](./bot-im-alias-display.md) | Bot / IM 统一展示格式 `平台 · alias · id`（群聊：`平台群 · alias · id`） 与命名模型（平台名即默认别名，不覆盖用户别名） | 已实现；拆出的后续项见正文 §7 |
 | [bot-capability-access-control.md](./bot-capability-access-control.md) | Bot Capability Access Control — Bot、Direct Chat、Group 与 Actor | 资源/授权核心已实现；验收项按正文核对 |
