@@ -1,7 +1,7 @@
 # CI Optimization (PR-time workflows)
 
-> Analysis only. No workflow is changed by this document; it records what the
-> data says, the options, and what needs a maintainer decision.
+> §1–7 are analysis only. §8 records the maintainer's decision and what was
+> implemented (`verify-frontend.yml`, `daily.yml`).
 > Related: `.github/workflows/AGENTS.md` (rules for editing workflows),
 > [`harness-matrix.md`](./harness-matrix.md), [`harness-npm.md`](./harness-npm.md).
 
@@ -305,3 +305,30 @@ Needs code: a daily run (`schedule`), release also running the Go test jobs
 (`test-projects`, `test-remote`, IM harness; release today builds all
 binaries and runs the harness gate but not those tests), and any narrowing of
 `verify-compile.yml`.
+
+### Implemented (branch `tp/pr-ci-2fe5d5`)
+
+Decision: do not touch `release*`; do (a) a frontend-only PR check and (b) a
+daily Go + harness run.
+
+- `verify-compile.yml` → `verify-frontend.yml` (renamed, `Verify Frontend`):
+  only the frontend job, triggered by `frontend/**` (not `*.md`), `openapi.json`,
+  `.github/actions/setup-frontend/**` and itself. The `changes`/paths-filter job
+  and the cli/gui/projects/remote jobs are gone.
+- `daily.yml` (new): cron `23 19 * * *` (03:23 UTC+8) + dispatch. A `gate` job
+  skips scheduled runs when the last green scheduled run was at the same `main`
+  SHA (dispatch always runs; a red day re-runs the next night). Jobs:
+  `compile-cli`, `compile-gui`, `test-projects`, `test-remote`, `test-imbot`
+  (the old `verify-imbot-projects` test) and `harness` (the full
+  `harness-template.yml`, same as the release gate). Uses the `setup-go` cache,
+  no hand-managed cache entries.
+- Not changed in code, to be disabled in the Actions UI by the maintainer:
+  `verify-imbot-projects.yml`, `harness-pr.yml`, `harness-matrix.yml` (their
+  jobs now live in `daily.yml`). Until they are disabled they keep running.
+- Not verified locally: `actionlint`/`shellcheck` could not be installed in this
+  environment; the YAML parses and the gate script passes `bash -n`.
+  `verify-ci.yml` lints both files on the PR. `daily.yml` can only be exercised
+  by dispatching it once after merge.
+- Resulting PR load (est., from the 14-day numbers): with the three workflows
+  disabled and the Go jobs gone from the PR check, ≈ 49 of the 54 PR-time
+  job-hours disappear; what remains is the frontend job (≈ 8 h).

@@ -1,0 +1,66 @@
+name: Verify Frontend
+
+# The only PR-time check. It builds and lints the frontend (and typechecks,
+# tests and builds @tingly/projects) when a PR touches frontend/ or the
+# committed openapi.json its client is generated from.
+#
+# The Go-side checks (compile cli/gui, Projects and Remote tests, the IM and
+# Projects harness) no longer run per PR: daily.yml runs them once a day on
+# main, and release.yml gates every release on the harness and builds every
+# binary. See .design/ci-optimization.md.
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '!frontend/**/*.md'
+      # The client is generated from the committed spec (setup-frontend).
+      - 'openapi.json'
+      - '.github/actions/setup-frontend/**'
+      - '.github/workflows/verify-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-frontend:
+    name: Compile frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Same install + codegen as the release build (build-frontend.yml).
+      - name: Set up frontend
+        uses: ./.github/actions/setup-frontend
+
+      # Same policy as build-frontend.yml (the release build): legacy type errors exist, so report them
+      # without failing the check.
+      - name: Type check (non-blocking)
+        continue-on-error: true
+        run: |
+          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
+
+      - name: Build frontend
+        run: pnpm build
+
+      # @tingly/projects (the Projects web UI) is type-clean, so its checks block.
+      - name: Projects web UI
+        run: |
+          pnpm --filter @tingly/projects typecheck
+          pnpm --filter @tingly/projects test
+          pnpm --filter @tingly/projects build
+
+      # Unit tests: disabled for now; uncomment to run vitest.
+      # - name: Unit tests
+      #   run: pnpm test
+
+      - name: Lint
+        run: pnpm lint

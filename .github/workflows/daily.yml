@@ -1,0 +1,211 @@
+name: Daily
+
+run-name: 🌙 Daily (${{ github.event_name }}) ${{ github.sha }}
+
+# The Go-side checks that used to run on every PR. One run a day on main (and on
+# demand), skipped when main has not moved since the last green run:
+#
+#   compile-cli       go build/vet of ./cli/... (the tingly-box binary)
+#   compile-gui       go build/vet of the Wails3 GUI (Linux, GTK4 + WebKitGTK via cgo)
+#   test-projects     boundary check, go vet and go test -race of projects/
+#   test-remote       boundary check, go vet and go test -race of remote/
+#   test-imbot        the Tingly IM and Projects integration harness
+#   harness           harness-template.yml, the full matrix (same as the release gate)
+#
+# The jobs are independent: the Go builds embed the committed PLACEHOLDER dist,
+# so none of them waits on the frontend, which has its own PR check
+# (verify-frontend.yml). Releases do not depend on this workflow: release.yml
+# builds every binary and gates on the same harness. A red run is reported by
+# GitHub to whoever last touched the schedule; look at the Actions tab.
+# See .design/ci-optimization.md.
+on:
+  schedule:
+    # 19:23 UTC = 03:23 UTC+8, off the :00 mark.
+    - cron: '23 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  # A scheduled run is skipped when the last green scheduled run already covered
+  # this commit. A manual dispatch always runs.
+  gate:
+    name: Anything new on main
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Compare with the last green run
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(gh api "repos/$REPO/actions/workflows/daily.yml/runs?status=success&event=schedule&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // ""' || true)
+          if [ "$last" = "$GITHUB_SHA" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ main is still at $GITHUB_SHA, already green — skipping."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  compile-cli:
+    name: Compile cli (Linux)
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Build CLI
+        run: go build ./cli/...
+
+      - name: Vet CLI
+        run: go vet ./cli/...
+
+  compile-gui:
+    name: Compile gui/wails3 (Linux)
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Install webview build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Build GUI package
+        run: go build ./gui/wails3/...
+
+      - name: Vet GUI package
+        run: go vet ./gui/wails3/...
+
+  test-projects:
+    name: Test projects
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./projects
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Boundary
+        run: |
+          if go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | grep -qx 'github.com/tingly-dev/tingly-box'; then
+            echo "::error::projects imports github.com/tingly-dev/tingly-box (the root module)"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  test-remote:
+    name: Test remote
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./remote
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      # Remote is a library: the root module and Projects import it, never the
+      # other way round. Its ports live in remote/agent.
+      - name: Boundary
+        run: |
+          deps=$(go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | sort -u)
+          if echo "$deps" | grep -qxE 'github.com/tingly-dev/tingly-box|github.com/tingly-dev/tingly-box/projects'; then
+            echo "::error::remote imports the root module or projects"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  test-imbot:
+    name: Tingly IM and Projects harness
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      - name: Run Tingly integration harness
+        run: go test -race ./internal/server/module/projects -run '^TestTingly' -count=1
+
+  harness:
+    name: Harness
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    uses: ./.github/workflows/harness-template.yml
+    with:
+      focus: all
