@@ -118,6 +118,8 @@ Everything in the table is merged. The backlog is §5.
 
 ## 5. Backlog and open questions
 
+> Re-audited on 2026-11-19 in [`backend-internal-refactor.md`](./backend-internal-refactor.md), which tracks what is done (item 1, `internal/task`, is deleted) and the phased plan for the rest.
+
 Not started, roughly in order of payoff and risk. Numbers are from `main` after step 6.
 
 1. **Delete `internal/task`** (~960 LOC): zero importers outside itself. `.design/db.md` wrongly names it as the real task subsystem.
