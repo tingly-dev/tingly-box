@@ -6,7 +6,7 @@ import { radius } from '@tingly/ui/theme/radius';
 import type { Thread } from '../../client';
 import { Check } from '../icons';
 import { DisclosureRow } from '../common/Disclosure';
-import { useCopyFeedback } from '../../hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui';
 import { ThreadStateMark } from './threadStatus';
 import { formatTokens, timeAgo } from '../../utils/format';
 import { cacheHitPct, contextFill, formatTurnDuration } from '../../utils/usage';

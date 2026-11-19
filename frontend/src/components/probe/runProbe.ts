@@ -56,5 +56,4 @@ export async function buildProbeCurl(body: ProbeRequest): Promise<ProbeCurlResul
     return response as ProbeCurlResult;
 }
 
-// formatLatency renders a millisecond latency compactly: "850ms" / "1.8s".
-export const formatLatency = (ms: number): string => (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
+export { formatLatency } from '@/utils/formatLatency';
