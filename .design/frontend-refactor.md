@@ -141,7 +141,7 @@ Files whose **only** importer area is a single page — colocate them with it (o
 
 ## 4. Phased plan (one PR each, review-sized) and status
 
-Stack (each PR is based on the previous one): #2644 → #2651 → #2654 → #2656 → #2658 → #2659.
+The phases were developed as a stack (#2644 → #2651 → #2654 → #2656 → #2658 → #2659 → #2660) and then combined into the single PR #2644; the PR column below names the original stack PR. Phase 6 (#2660) removed the unused dependencies and the ESLint stack, which the earlier phases left open.
 
 | Phase | PR | Content | Status |
 |---|---|---|---|
