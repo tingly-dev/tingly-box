@@ -92,8 +92,8 @@ path — because that is the product's core. This boundary is deliberate:
   plane's contract, but the harness does not aim to e2e the management plane.
 - **Known open axes** (product-decision-gated, not accidental gaps): the
   Google target path, multimodal (image-block) scenarios, automated
-  real-provider conformance (Tier D — placeholder in `provider.go`, not part
-  of replay), and vmodel usage/quota tracking (the `IsVirtual()` short-circuit
+  real-provider conformance (Tier D — no command; `agent --config` and
+  `replay --upstream real` cover live providers by hand), and vmodel usage/quota tracking (the `IsVirtual()` short-circuit
   intentionally skips outbound dispatch helpers; tracked in the vmodel
   roadmap). See [Planned work & known issues](#planned-work--known-issues)
   below for scenario/fixture/upstream-coverage work still open.
@@ -702,7 +702,6 @@ cli/harness/
   testdata/lb/       sample LB scenario YAML files
   config.go          init-config: generates providers.yaml from provider templates
                      (Claude Code emitted as an oauth_token entry)
-  provider.go        Tier D placeholder (live provider API tests — not impl.)
   summary.go         CSV summary persistence / resume bookkeeping
   output.go          full prompt+output markdown file writer
   output_writer.go   table / JSON result rendering
