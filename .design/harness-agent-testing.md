@@ -15,7 +15,7 @@
 
 | 路径 | 命令 | 上游 | 依赖 | 何时用 |
 |---|---|---|---|---|
-| **mock 冒烟** | `--mock` | 进程内 vmodel 虚拟上游 | 仅本地 CLI | 每次先跑，零配置 |
+| **mock 冒烟** | `--mock` | 进程内 VirtualServer mock 上游（`virtual`，非 vmodel provider） | 仅本地 CLI | 每次先跑，零配置 |
 | **真实扫描** | `--config providers.yaml` | 真实 provider | 本地 CLI + 凭证 | 接入真实 provider 后 |
 
 ---
@@ -26,10 +26,10 @@
 ./scripts/harness-baseline.sh
 ```
 
-build harness → 预检三个 CLI 在 PATH → 跑 `agent batch --mock`（claude/codex/opencode 各一次，vmodel
-虚拟上游）→ 打印汇总表 + 写产物。分钟级（opencode 因 bun 启动较慢，单条 ~15–20s）。
+build harness → 预检三个 CLI 在 PATH → 跑 `agent batch --mock`（claude/codex/opencode 各一次，VirtualServer
+mock 上游）→ 打印汇总表 + 写产物。分钟级（opencode 因 bun 启动较慢，单条 ~15–20s）。
 
-绿了 = 数据面在 vmodel 虚拟上游下三个真实 agent CLI 都能跑通（协议转换 + 规则匹配 + dispatch +
+绿了 = 数据面在 VirtualServer mock 上游下三个真实 agent CLI 都能跑通（协议转换 + 规则匹配 + dispatch +
 响应回写），且输出含真实回答内容（不只 exit 0）。
 
 ## 2. 配置 `providers.yaml`（真实测试用）

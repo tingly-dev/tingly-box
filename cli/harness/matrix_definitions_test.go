@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func TestMatrixFixtureValidation(t *testing.T) {
+func TestMatrixDefinitionValidation(t *testing.T) {
 	dir := t.TempDir()
-	valid := filepath.Join(dir, "fixture.yaml")
+	valid := filepath.Join(dir, "definition.yaml")
 	noExpect := filepath.Join(dir, "no-expect.json")
 	if err := os.WriteFile(valid, []byte("id: imported\nkind: recording\nresponses:\n  openai_chat:\n    body: {}\nexpect:\n  http_status: 200\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -23,10 +23,10 @@ func TestMatrixFixtureValidation(t *testing.T) {
 		cmd  MatrixCmd
 		want string
 	}{
-		{"mode", MatrixCmd{Mode: "default", Fixtures: []string{valid}}, "requires --mode=single"},
-		{"duplicate", MatrixCmd{Mode: "single", Fixtures: []string{valid, valid}}, "duplicate definition id"},
-		{"assertions", MatrixCmd{Mode: "single", Fixtures: []string{noExpect}}, "at least one expect"},
-		{"filter", MatrixCmd{Mode: "single", Fixtures: []string{valid}, Scenarios: []string{"missing"}}, "not found"},
+		{"mode", MatrixCmd{Mode: "default", Definitions: []string{valid}}, "requires --mode=single"},
+		{"duplicate", MatrixCmd{Mode: "single", Definitions: []string{valid, valid}}, "duplicate definition id"},
+		{"assertions", MatrixCmd{Mode: "single", Definitions: []string{noExpect}}, "at least one expect"},
+		{"filter", MatrixCmd{Mode: "single", Definitions: []string{valid}, Scenarios: []string{"missing"}}, "not found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.cmd.Run()
@@ -37,7 +37,7 @@ func TestMatrixFixtureValidation(t *testing.T) {
 	}
 }
 
-func TestUnifiedConfigAndFixtureAlias(t *testing.T) {
+func TestMatrixConfigAndFixtureAlias(t *testing.T) {
 	for _, flag := range []string{"--config", "--fixture"} {
 		var cli CLI
 		parser, err := kong.New(&cli)
@@ -47,7 +47,7 @@ func TestUnifiedConfigAndFixtureAlias(t *testing.T) {
 		if _, err := parser.Parse([]string{"matrix", "--mode", "single", flag, "model.yaml"}); err != nil {
 			t.Fatal(err)
 		}
-		if len(cli.Matrix.Fixtures) != 1 || cli.Matrix.Fixtures[0] != "model.yaml" {
+		if len(cli.Matrix.Definitions) != 1 || cli.Matrix.Definitions[0] != "model.yaml" {
 			t.Fatalf("lost %s alias", flag)
 		}
 	}
