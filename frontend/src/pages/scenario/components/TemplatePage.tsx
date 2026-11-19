@@ -1,4 +1,4 @@
-import ApiKeyModal from '@/components/ApiKeyModal';
+import ApiKeyModal from '@/pages/scenario/components/ApiKeyModal';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -17,8 +17,8 @@ import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules'
 import {SortableRuleList} from './SortableRuleList';
 import {pinToTop} from './ruleOrder';
 import {useCommitRuleOrder} from '@/pages/scenario/hooks/useCommitRuleOrder';
-import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
-import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
+import {useScrollToNewRule} from '@/pages/scenario/hooks/useScrollToNewRule';
+import {useModelSelectDialog} from '@/pages/scenario/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';

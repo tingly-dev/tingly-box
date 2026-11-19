@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
 import { api } from '@/services/api';
-import { useProviderProxy } from '@/hooks/useProviderProxy';
+import { useProviderProxy } from '@/pages/credential/useProviderProxy';
 import { CredentialCards } from './CredentialCards';
 import { ProxySwitch } from './ProxySwitch';
 

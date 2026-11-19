@@ -1,13 +1,13 @@
 import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import VirtualModelsTable from '@/components/VirtualModelsTable';
+import VirtualModelsTable from '@/pages/virtualModels/VirtualModelsTable';
 import EmptyState from '@tingly/ui/components/EmptyState';
 import { Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotify } from '@/hooks/useNotify';
-import { api } from '../services/api';
-import type { Provider } from '../types/provider';
+import { api } from '../../services/api';
+import type { Provider } from '../../types/provider';
 
 const VirtualModelsPage = () => {
     const { t } = useTranslation();

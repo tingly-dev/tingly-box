@@ -6,7 +6,7 @@ import {alpha} from '@mui/material/styles';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
-import {api} from '../services/api';
+import {api} from '../../services/api';
 import {armWorkspaceImHint} from '@tingly/projects/workspace-im-hint';
 import { radius } from '@tingly/ui/theme/radius';
 

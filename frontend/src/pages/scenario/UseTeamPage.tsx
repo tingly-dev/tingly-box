@@ -7,9 +7,9 @@ import {
     TextField, Tooltip,
 } from '@mui/material';
 import {Delete, Duplicate, Edit, HelpOutline, Info as IconInfo, Speed as IconLimits} from '@/components/icons';
-import DuplicateDialog from '@/components/DuplicateDialog';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
 import TeamLimitsDialog from '@/components/limits/TeamLimitsDialog';
-import {suggestTeamCopyName} from '@/utils/copyName';
+import {suggestTeamCopyName} from '@/pages/scenario/utils/copyName';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
@@ -25,8 +25,8 @@ import { usePluginsActive } from '@/hooks/usePluginsActive';
 import PluginFeatures from '@/components/PluginFeatures';
 import TemplatePage from './components/TemplatePage.tsx';
 import TeamKeysOverview, {useTeamKeysOverviewExpanded} from './components/TeamKeysOverview';
-import {useSharingKeyActions} from '@/hooks/useSharingKeyActions';
-import {useTeamSharingKeys} from '@/hooks/useTeamSharingKeys';
+import {useSharingKeyActions} from '@/pages/scenario/hooks/useSharingKeyActions';
+import {useTeamSharingKeys} from '@/pages/scenario/hooks/useTeamSharingKeys';
 import TeamGuideDialog from '@/components/TeamGuideDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';

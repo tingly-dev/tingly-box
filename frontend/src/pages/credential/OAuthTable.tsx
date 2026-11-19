@@ -42,7 +42,7 @@ import type {ProviderQuota} from "@/types/quota";
 import React, {useCallback, useState} from "react";
 import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
 import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
-import type {Provider} from "../types/provider";
+import type {Provider} from "../../types/provider";
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { tableFrameSx } from '@tingly/ui/theme/table';

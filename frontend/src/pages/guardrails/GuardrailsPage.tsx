@@ -25,8 +25,8 @@ import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { blurActiveElement } from '@/utils/dom';
 import { downloadText } from '@/utils/download';
-import FragmentImportDialog from './guardrails/FragmentImportDialog';
-import FragmentExportDialog, { type GuardrailsImportRef } from './guardrails/FragmentExportDialog';
+import FragmentImportDialog from './FragmentImportDialog';
+import FragmentExportDialog, { type GuardrailsImportRef } from './FragmentExportDialog';
 
 type GuardrailsHistoryEntry = {
     time: string;

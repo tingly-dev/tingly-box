@@ -3,11 +3,11 @@ import { BotTable, BotConfigDialog, PlatformPicker, RemoteAgentBotCard } from '@
 import EmptyState from '@tingly/ui/components/EmptyState';
 import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
-import CollapsibleGuide from '@/components/remote-control/CollapsibleGuide';
+import CollapsibleGuide from '@/pages/bots/CollapsibleGuide';
 import { BOT_PLATFORM_IDS, PLATFORM_BRAND_ICONS, platformDisplayName, usePlatformGuide } from '@/constants/platformGuides';
 import { countBotsByPlatform } from '@/types/bot';
-import { useBotList } from '@/hooks/useBotList';
-import { useBotToggle } from '@/hooks/useBotToggle';
+import { useBotList } from '@/pages/bots/useBotList';
+import { useBotToggle } from '@/pages/bots/useBotToggle';
 import { useNotify } from '@/hooks/useNotify';
 import { Add, ArrowBack, HelpOutline, ListAlt } from '@/components/icons';
 import { Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';

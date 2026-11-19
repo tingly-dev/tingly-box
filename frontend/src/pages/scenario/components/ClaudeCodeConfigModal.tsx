@@ -7,7 +7,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveLanguage } from '@/i18n';
 import CodeBlock from '@/components/CodeBlock';
-import { shouldIgnoreDialogClose } from '@/components/dialogClose';
+import { shouldIgnoreDialogClose } from '@/pages/scenario/components/dialogClose';
 import { ManualFileSection, type ManualFileTab } from './config/ManualFileSection';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY, CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, coAuthoredBySettings, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
