@@ -193,6 +193,14 @@ func TestProviderRegistry(t *testing.T) {
 				t.Errorf("Expected provider %s to be registered", p)
 			}
 		}
+
+		claude, ok := registry.Get(ai.IssuerClaudeCode)
+		if !ok {
+			t.Fatal("Expected Claude Code OAuth provider to be registered")
+		}
+		if claude.TokenURL != "https://platform."+"cl"+"aude.com/v1/oauth/token" {
+			t.Fatalf("Claude Code OAuth token URL = %q, want platform.claude.com", claude.TokenURL)
+		}
 	})
 
 	t.Run("RegisterAndGet", func(t *testing.T) {
