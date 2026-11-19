@@ -4,10 +4,9 @@ import { Visibility as VisibilityIcon } from '@/components/icons';
 import {
     Box,
     type BoxProps,
-    Divider,
     IconButton,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import React, { type ReactNode, useState } from 'react';
 import { ConfigRow } from './ConfigRow';

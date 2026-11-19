@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, type ReactNode } from 'react';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 
 /**

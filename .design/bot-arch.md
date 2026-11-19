@@ -518,7 +518,8 @@ disabled (§4) — not a stored boolean like `remote_agent`. There is no
 existing UI or API for creating/editing those route rows (they're
 currently CLI/config-only), so `NotifyPage` reads real status
 (`isNotifyMounted` / `notifyRoutes` in `types/bot.ts`, parsed client-side
-from the same `scenarios` JSON the backend already returns) but the
+from the same `scenarios` JSON the backend already returns; the page and
+these helpers were later deleted as dead code) but the
 "attach a route" action is a disabled placeholder. Making that real needs
 a backend endpoint + swagger definition for outbound route CRUD — not done
 in this pass; do that before promising notify configuration in-product.

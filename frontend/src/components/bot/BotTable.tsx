@@ -19,7 +19,6 @@ import {
     TableHead,
     TableRow,
     Tooltip,
-    Typography,
 } from '@mui/material';
 import {useCallback, useState} from 'react';
 import {useTranslation} from 'react-i18next';

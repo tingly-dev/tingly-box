@@ -63,9 +63,9 @@ required/optional, one line. The status codes sit under it.
 
 ## Not done / follow-ups
 
-- `pages/notify/NotifyPage.tsx` is no longer routed (`/notify` redirects to
-  `/bots/overview`); it was only updated so it still compiles with the new
-  props. It could be deleted.
+- `pages/notify/NotifyPage.tsx` was no longer routed (`/notify` redirects to
+  `/bots/overview`) and has since been deleted (frontend refactor phase 1,
+  `.design/frontend-refactor.md`).
 - `level` is passed through as a hint (`Meta["level"]`); no platform renders it
   differently yet, so the guide calls it a severity hint.
 - Interact (`/interact`, `/wait`) has no guide; this one covers one-way notify.

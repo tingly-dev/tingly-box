@@ -11,7 +11,6 @@ import {
     IconButton,
     Stack,
     Typography,
-    Divider,
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Provider } from '@/types/provider';

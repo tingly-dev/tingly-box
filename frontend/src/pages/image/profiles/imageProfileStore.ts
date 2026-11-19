@@ -34,8 +34,6 @@ const store = createWorkspaceCollection<ImageProfile>(
 export const useImageProfiles = store.useItems;
 export const useImageProfilesReady = store.useReady;
 
-export const getImageProfile = (id: string) => store.get().find((profile) => profile.id === id);
-
 export const createImageProfile = (fields: Omit<ImageProfile, 'id' | 'updatedAt'>): ImageProfile => {
     const profile: ImageProfile = {
         ...fields,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
 import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement';
 import { useScenarioPageData } from '@/pages/scenario/hooks/useScenarioPageData';
