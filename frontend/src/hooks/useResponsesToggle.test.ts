@@ -144,7 +144,7 @@ describe('useResponsesToggle', () => {
         const onUpdateRecord = vi.fn();
         const record = makeRecord({openaiEndpointOverride: 'responses'});
 
-        const {result, rerender} = renderHook(
+        const {rerender} = renderHook(
             ({service}) => useResponsesToggle({record, primaryService: service, onUpdateRecord}),
             {initialProps: {service: makeService({model: 'gpt-5'})}},
         );

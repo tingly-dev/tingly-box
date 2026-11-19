@@ -1,5 +1,4 @@
 import { ContentCopy as CopyIcon } from '@/components/icons';
-import { Info as InfoIcon } from '@/components/icons';
 import { Visibility as VisibilityIcon } from '@/components/icons';
 import {
     Box,
@@ -87,8 +86,6 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
 }) => {
     // Get modal state from context instead of props
     const { token, setShowTokenModal } = useScenarioPageModal();
-    const showOptionalSections = (showPlugins && scenario) || modeSelection || extraContent;
-    const hasDivider = showApiKeyRow && showOptionalSections;
 
     // Compact mode: single horizontal layout with tab switching
     if (compact) {

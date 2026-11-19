@@ -7,7 +7,7 @@ import { Z_INDEX } from '../constants/zIndex';
 
 export const FloatingStatusIndicators = () => {
     const { t } = useTranslation();
-    const { hasUpdate, showUpdateDialog } = useAppVersion();
+    const { hasUpdate } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
 
     const showError = !isHealthy;

@@ -210,7 +210,6 @@ export const CopyBlock = memo(({ text, maxHeight, fontSize = '0.78rem' }: { text
 
 // StatusBar: the one-glance verdict — success/failure, latency, tokens.
 export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
-    const theme = useTheme();
     const { t } = useTranslation();
     const ok = result.success;
     const d = result.data;

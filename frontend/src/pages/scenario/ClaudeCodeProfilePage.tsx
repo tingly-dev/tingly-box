@@ -26,7 +26,6 @@ import { Edit as EditIcon } from '@/components/icons';
 import { Duplicate as DuplicateIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { Terminal as TerminalIcon } from '@/components/icons';
-import Switch from '@mui/material/Switch';
 import {
     Box,
     Button,
@@ -77,9 +76,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const scenario = `${BASE_SCENARIO}:${profileId}`;
 
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         showNotification,
         providers,
         notification,
