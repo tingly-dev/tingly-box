@@ -29,7 +29,7 @@ import {useSharingKeyActions} from '@/pages/scenario/hooks/useSharingKeyActions'
 import {useTeamSharingKeys} from '@/pages/scenario/hooks/useTeamSharingKeys';
 import TeamGuideDialog from '@/components/TeamGuideDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
+import {ScenarioPageModalProvider} from '@/features/scenario/ScenarioPageContext';
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';

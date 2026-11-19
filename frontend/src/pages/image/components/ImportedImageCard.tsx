@@ -12,9 +12,9 @@ import { useTranslation } from 'react-i18next';
 import { Close, Edit, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { formatBytes, stripCardBasis, STRIP_CARD_HEIGHT } from './imageGenSession';
-import type { ImportedImage } from './ImageGenPlayground.types';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_CARD } from './imageThumbnails';
+import type { ImportedImage } from '../../../features/image/ImageGenPlayground.types';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_CARD } from '../../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface ImportedImageCardProps {

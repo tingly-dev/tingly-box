@@ -20,7 +20,7 @@ import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import type { TimeRange } from '@/hooks/useDashboardData';
 import { TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
 import type { ProviderOptionGroup, ScenarioOption, UsageIdentity } from '@/hooks/useDashboardData';
-import { scenarioLabel } from '@/pages/scenario/scenarioRegistry';
+import { scenarioLabel } from '@/features/scenario/scenarioRegistry';
 import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';

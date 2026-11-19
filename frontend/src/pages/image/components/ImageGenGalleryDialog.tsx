@@ -20,10 +20,10 @@ import { Close, DeleteSweep, Edit, ErrorOutline, Photo, Refresh, RestartAlt, Zoo
 import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import EmptyState from '@tingly/ui/components/EmptyState';
 import SearchField from '@/components/SearchField';
-import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, ImportedImage } from '../../../features/image/ImageGenPlayground.types';
 import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';
-import { THUMB_EDGE_BADGE, THUMB_EDGE_TILE } from './imageThumbnails';
-import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE, THUMB_EDGE_TILE } from '../../../features/image/imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
 import {
     fullBleedDialogPaperSx,
     hoverRevealSx,

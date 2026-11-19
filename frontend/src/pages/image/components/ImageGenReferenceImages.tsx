@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { IconLibraryPhoto } from '@tabler/icons-react';
 import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn, tablerMui } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
-import type { ReferenceMask } from './ImageGenPlayground.types';
+import type { ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_BADGE } from './imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_BADGE } from '../../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 
 const LibraryPhoto = tablerMui(IconLibraryPhoto);

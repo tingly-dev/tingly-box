@@ -22,7 +22,7 @@ import WebtoolsSettings from './WebtoolsSettings';
 import AdvisorSettings from './AdvisorSettings';
 import MCPSourceEditor from './MCPSourceEditor';
 import { connectionPatch } from './workspaceState';
-import { sourceToFormValue, type MCPCatalogTool, type MCPRouteSource, type MCPSourceConfig } from './types';
+import { sourceToFormValue, type MCPCatalogTool, type MCPRouteSource, type MCPSourceConfig } from '../../features/mcp/types';
 
 export default function MCPSourceWorkspace({
     source,

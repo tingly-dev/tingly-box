@@ -4,7 +4,7 @@ import type { Provider } from '@/types/provider';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BUILTIN_ADVISOR_ID, type MCPSourceConfig } from './types';
+import { BUILTIN_ADVISOR_ID, type MCPSourceConfig } from '../../features/mcp/types';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 interface AdvisorCardProps {
     advisorSource: MCPSourceConfig | undefined;

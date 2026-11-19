@@ -10,8 +10,8 @@ vi.mock('../contexts/FeatureFlagsContext', () => ({
 }));
 vi.mock('./useProjectsWaiting', () => ({ useProjectsWaiting: () => false }));
 vi.mock('@/contexts/ProfileContext', () => ({ useProfileContext: () => ({ profiles: {} }) }));
-vi.mock('@/pages/mcp/profileStore', () => ({ useMCPProfiles: () => [] }));
-vi.mock('@/pages/image/profiles/imageProfileStore', () => ({ useImageProfiles: () => [] }));
+vi.mock('@/features/mcp/profileStore', () => ({ useMCPProfiles: () => [] }));
+vi.mock('@/features/image/imageProfileStore', () => ({ useImageProfiles: () => [] }));
 vi.mock('@/contexts/TeamContext', () => ({ useTeamContext: () => ({ teams: [] }) }));
 
 describe('Workspace rail item', () => {

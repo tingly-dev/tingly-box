@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
-import type { MCPConfigResponse, MCPRoutingSnapshot, MCPRuntimeConfig, MCPSourceConfig } from './types';
+import type { MCPConfigResponse, MCPRoutingSnapshot, MCPRuntimeConfig, MCPSourceConfig } from '../../features/mcp/types';
 
 // Configuration, the applied routing snapshot and execution state, shared by the
 // Tools and Profiles pages. Routing is what the gateway actually does, so both

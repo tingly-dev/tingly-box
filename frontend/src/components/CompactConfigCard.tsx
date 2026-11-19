@@ -3,7 +3,7 @@ import { IconButton, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { ConfigRow } from './ConfigRow';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { copyableTextStyle } from '@/styles/textStyles';
 import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 

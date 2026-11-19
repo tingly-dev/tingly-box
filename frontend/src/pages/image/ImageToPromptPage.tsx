@@ -18,8 +18,8 @@ import { Close, ContentPaste, FileUpload, Palette, tablerMui } from '@/component
 import { useNotify } from '@/hooks/useNotify';
 import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement';
 import ImageModelPicker from './components/ImageModelPicker';
-import ThumbImage from './components/ThumbImage';
-import { THUMB_EDGE_TILE } from './components/imageThumbnails';
+import ThumbImage from '../../features/image/ThumbImage';
+import { THUMB_EDGE_TILE } from '../../features/image/imageThumbnails';
 import { pastedImageFiles, readClipboardImages } from './components/clipboardImages';
 import { imageModelOptions } from './components/imageModelRules';
 import AssetPickerDialog from './library/AssetPickerDialog';

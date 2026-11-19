@@ -15,14 +15,14 @@ import { useNavigate } from 'react-router-dom';
 import { Brush, Check, Close, ContentCopy, Create, Download, Edit, GridView, RestartAlt, tablerMui } from '@/components/icons';
 import { IconBookmarkPlus, IconPhotoScan } from '@tabler/icons-react';
 import { fullBleedDialogPaperSx, overlayPlateSx } from './ImageGenPlayground.chrome';
-import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
 import type { LightboxFrame } from './useImageGenLightbox';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import { keepImage, useAssets } from '../library/assetStore';
 import { deriveLabel } from '../profiles/promptLabel';
 import { handOffPicture } from '../prompt/pictureHandoff';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_BADGE } from './imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_BADGE } from '../../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 import { overlay } from '@tingly/ui/theme/overlay';
 

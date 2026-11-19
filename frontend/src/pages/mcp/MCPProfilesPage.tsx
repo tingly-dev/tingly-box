@@ -43,8 +43,8 @@ import {
     setProfileToolOn,
 } from './profileState';
 import { nextMCPId } from './workspaceState';
-import { publishMCPProfiles } from './profileStore';
-import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
+import { publishMCPProfiles } from '../../features/mcp/profileStore';
+import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from '../../features/mcp/types';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Keyed by profile so each one remembers its own folded state.
