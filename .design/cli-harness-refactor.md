@@ -1,9 +1,9 @@
 # cli/harness refactor — review and phased plan
 
-Status: **proposal** (review of `main` at f5235a0f5, after #2618/#2621/#2624).
-Nothing here is decided unless marked **Decided**. Phase 1 (this PR) is the
-review, this plan, and a formatting-only commit; later phases are separate PRs
-and wait for confirmation.
+Status: review of `main` at f5235a0f5 (after #2618/#2621/#2624). P0–P7 are
+implemented as a stack of PRs (table in section 4, merge in that order); the
+items in section 5 are still proposals. Nothing is decided unless marked
+**Decided**.
 
 Related: [`vmodel-definitions.md`](./vmodel-definitions.md) (the file contract),
 [`harness-matrix.md`](./harness-matrix.md), [`harness-agent-testing.md`](./harness-agent-testing.md),
@@ -77,16 +77,21 @@ under an isolated `HOME` for phases that touch run paths. Go moves use
 `/home/x0079/tingly-go/tingly-go move` so references are rewritten, not
 hand-edited.
 
-| Phase | Content | Items | Risk |
-|---|---|---|---|
-| **P0** (this PR) | Review + this doc; `gofmt -w agent.go agent_assert.go` as its own commit (pure whitespace) | F1 | none |
-| **P1** (stacked PR on P0) | Dead/trivial: drop `Sprintf("%s")`, inline `loadProvidersConfig`, drop `builtinRequestModel` alias or `DefaultSummaryFile`, derive `--example` help from `lbExampleNames`, simplify `lb --all` loop | F10, F12, part F9 | none–low |
-| **P2** (stacked PR on P1) | Vocabulary + guard tests, no flag changes: rename `Fixtures`→`Definitions` and messages/tests "fixture"→"definition" (keep `--fixture` as alias); add a test that every `replayScenarios[*].defaultVModel` exists in `spec.DefaultDefinitions()`; README: add `matrix --config` section linking to `vmodel-definitions.md`; fix `harness-agent-testing.md:18,29` wording; one glossary in README for virtual / vmodel / mock / fixture | M1, M2, M4 (docs), M5 guard, M6 | low |
-| **P3** | `matrix.go`: extract `scenariosFromDefinitions(paths, only)` into `matrix_definitions.go` with direct unit tests (same errors); optional `spec.LoadFiles` in a separate tiny PR coordinated with the `internal/` thread | F7, F8 | low |
-| **P4** | `agent.go` split by `tingly-go move`: `agent_exec.go` (executors, `AgentTestResult`, timeout), `agent_mock.go` (`runVirtualAgentTest`), `agent_batch.go`; no behavior change. First add a golden test over `summaryWriter.Append` + `outputWriter.Write` so P5 can prove byte-identical output | F2, F14 (README split optional) | low |
-| **P5** | De-dup: table-driven `executeXTest` (F3), one `applyAgentResult(r, inner)` (F4), one `appendSummary(writer, r)` (F5), split `runRealAgentTests` into select / run / tally (F13). Unify the two result types only if the golden test stays green | F3, F4, F5, F13 | medium (output contract) |
-| **P6** | Replace global `agentRunTimeout` with a field on a small `agentRunner` passed to executors | F6 | medium |
-| **P7** | `lb.go` split into `lb_schema.go` / `lb_expect.go` / `lb_render.go`; `checkExpect` takes one `lbOutcome` struct instead of 9 params | F9 | low |
+| Phase | Status | Content | Items | Risk |
+|---|---|---|---|---|
+| **P0** | #2641 | Review + this doc; `gofmt -w agent.go agent_assert.go` as its own commit (pure whitespace) | F1 | none |
+| **P1** | #2645 | Dead/trivial: drop `Sprintf("%s")`, the `loadProvidersConfig` / `builtinRequestModel` wrappers and `DefaultSummaryFile`; `lb --help` examples derived from `lbExampleNames`; simplify `lb --all` | F10, F12, part F9 | none–low |
+| **P2** | #2647 | Vocabulary + guard tests, no flag changes: `Fixtures`→`Definitions`, messages/tests "fixture"→"definition" (`--fixture` kept as alias); test that every `replayScenarios[*].defaultVModel` is in `spec.DefaultDefinitions()`; README glossary and `matrix --config` section; agent runbook wording | M1, M2, M4 (docs), M5 guard, M6 | low |
+| **P3** | #2648 | `scenariosFromDefinitions(paths, only)` in `matrix_definitions.go` with direct tests. `spec.LoadFiles` (F8) not done: it touches `vmodel/spec` and `internal/` | F7 | low |
+| **P4** | #2649 | Golden test over `summaryWriter.Append` + `outputWriter.Write`; `agent.go` split (pure move) into `agent.go` / `agent_mock.go` / `agent_batch.go` / `agent_exec.go` | F2 | low |
+| **P5** | #2650 | `virtualAgents` table replaces three executors; `applyAgentResult`, `appendSummary`, `selectRunnableEntries`. The two result types stay separate (different fields); only their copy is shared | F3, F4 (copy), F5, F13 | medium |
+| **P6** | #2652 | `agentRunOpts` + explicit timeout replace the `agentRunTimeout` global | F6 | medium |
+| **fix** | #2653 | Found while verifying P6: a timed-out run waited as long as a child holding the output pipe lived; now bounded by `agentKillGrace`, test written first | new | low |
+| **P7** | #2655 | `lb.go` split into schema / expect / render files; `checkExpect` → `(*lbExpect).check(lbOutcome)` | F9 | low |
+
+Not done: F11 (`provider` stub, a decision), F14 (splitting the 800-line
+README; a docs reorganisation with no code dependency, left for whoever next
+edits it) and the shared `spec.LoadFiles` (F8, cross-cutting).
 
 ## 5. Decisions needed (not started; each is user-visible)
 
