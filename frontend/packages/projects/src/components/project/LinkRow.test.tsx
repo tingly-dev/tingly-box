@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ThreadLink } from '../../client';
 
 const { post, writeToClipboard } = vi.hoisted(() => ({ post: vi.fn(), writeToClipboard: vi.fn(() => Promise.resolve()) }));
-vi.mock('@tingly/ui', async (importOriginal) => ({ ...(await importOriginal()), writeToClipboard }));
+vi.mock('@tingly/ui/utils/clipboard', async (importOriginal) => ({ ...(await importOriginal<object>()), writeToClipboard }));
 vi.mock('../../client', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../client')>()), api: { POST: post } }));
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${Object.values(o).join(' ')}` : key), i18n: { language: 'en' } }),
