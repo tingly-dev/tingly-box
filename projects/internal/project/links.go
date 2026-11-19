@@ -1389,11 +1389,11 @@ func pushBranch(ctx context.Context, dir, branch string, lease *string) error {
 		msg := redact(strings.TrimSpace(out.String()))
 		switch {
 		case lease != nil && (strings.Contains(msg, "stale info") || strings.Contains(msg, "[rejected]")):
-			return &staleLeaseError{fmt.Sprintf("force-pushing %s was refused: origin's %s moved since this checkout last saw it, so someone else's commits would be lost. Fetch it, look at what is there and rebase onto it: %s", branch, branch, clip(msg, 400))}
+			return &staleLeaseError{fmt.Sprintf("force-pushing %s was refused: origin's branch moved since this checkout saw it. Fetch and rebase onto it: %s", branch, clip(msg, 400))}
 		// Only a push that lost to newer commits earns the rebase advice; a
 		// hook or a protected branch rejects for other reasons.
 		case strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first"):
-			return fmt.Errorf("pushing %s was rejected because origin has commits it does not: rebase onto origin/%s and try again. If you rewrote the branch on purpose (a rebase), call create_pr again with force=true: that is --force-with-lease: %s", branch, branch, clip(msg, 400))
+			return fmt.Errorf("pushing %s was rejected because origin has commits it does not: rebase onto origin/%s and try again (after a rebase, create_pr with force=true): %s", branch, branch, clip(msg, 400))
 		}
 		return fmt.Errorf("pushing %s failed: %s", branch, clip(msg, 600))
 	}
