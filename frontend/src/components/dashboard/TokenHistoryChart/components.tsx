@@ -56,9 +56,7 @@ export function LegendItem({ label, color, visible, onToggle }: LegendItemProps)
 const SERIES_ORDER = ['cacheTokens', 'inputTokens', 'outputTokens'];
 
 export function CustomTooltip({ active, payload }: any) {
-    const theme = useTheme();
     const { t } = useTranslation();
-    const chartStyles = getThemeChartStyles(theme);
 
     if (!active || !payload || !payload.length) return null;
 

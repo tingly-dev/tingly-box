@@ -17,6 +17,7 @@ frontend/src/client
 .task
 bin
 frontend/dist
+frontend/*.tsbuildinfo
 frontend/node_modules
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # `task cli:build` output (a single binary dropped straight into build/,

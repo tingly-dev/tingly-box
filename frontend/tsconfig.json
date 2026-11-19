@@ -27,6 +27,7 @@
  */
     "checkJs": false,
     "strict": true,
+    "noUnusedLocals": true,
     "skipLibCheck": true,
     /* Bundler mode */
     "allowImportingTsExtensions": true,

@@ -9,7 +9,6 @@ import { useRecentModels } from '@/hooks/useRecentModels';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { ModelSelectProvider, useModelSelectContext } from '@/contexts/ModelSelectContext';
 import type { Provider } from '@/types/provider';
-import { getModelTypeInfo } from '@/utils/modelUtils';
 import { ProviderSidebar, ModelsPanel, CustomModelDialog } from './model-select';
 
 export interface ProviderSelectTabOption {
@@ -49,7 +48,7 @@ function ModelSelectTabInner({
     onCustomModelSave,
     singleProvider,
 }: ModelSelectTabProps) {
-    const { customModels, removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
+    const { removeCustomModel, saveCustomModel, updateCustomModel } = useCustomModels();
     const { providerModels, refreshingProviders, fetchModels: fetchProviderModels } = useProviderModels();
     // Providers whose first fetch has settled, so the panel can tell "still
     // loading" apart from "loaded, nothing here" and not flash an empty list.
@@ -65,8 +64,6 @@ function ModelSelectTabInner({
     const {
         internalCurrentTab,
         setInternalCurrentTab,
-        isInitialized,
-        setIsInitialized,
         openCustomModelDialog,
         closeCustomModelDialog,
         customModelDialog,
@@ -74,7 +71,7 @@ function ModelSelectTabInner({
         showSnackbar,
     } = useModelSelectContext();
 
-    const { recentModels, lastProvider, addRecentModel } = useRecentModels();
+    const { lastProvider, addRecentModel } = useRecentModels();
 
     const handleModelSelect = useCallback(async (provider: Provider, model: string) => {
         onSelected?.({ provider, model });

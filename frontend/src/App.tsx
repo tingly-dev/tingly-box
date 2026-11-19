@@ -32,7 +32,7 @@ const RouteFallback = () => (
 // Dialogs component that uses the health context
 const AppDialogs = () => {
     const { t } = useTranslation();
-    const { isHealthy, checking, checkHealth, disconnectDialogOpen, closeDisconnectDialog } = useHealth();
+    const { checking, checkHealth, disconnectDialogOpen, closeDisconnectDialog } = useHealth();
 
     return (
         <>

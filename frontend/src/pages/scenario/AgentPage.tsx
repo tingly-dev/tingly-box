@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { Box, Button, Stack, Tooltip } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import ChoiceToggle from '@/components/ChoiceToggle';
-import ConfigRow from '@/components/ConfigRow';
 import PageHeader from '@/components/PageHeader';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
@@ -148,17 +146,6 @@ export interface AgentPageSlot {
     closeApplied: (result: AgentApplyResult) => void;
     isApplyLoading: boolean;
 }
-
-/** One more row of the connection list: a ConfigRow whose content is a control, not a value. */
-const ToggleRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-    <Box sx={{ py: 0.5 }}>
-        <ConfigRow
-            activeTab="row"
-            onTabChange={() => undefined}
-            tabs={[{ key: 'row', label, content: <Box sx={{ display: 'flex', alignItems: 'center' }}>{children}</Box> }]}
-        />
-    </Box>
-);
 
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();
