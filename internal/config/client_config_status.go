@@ -67,10 +67,14 @@ func CompareCodexConfig(applied CodexAppliedState, models []string, contextWindo
 		return ClientConfigNotApplied, nil
 	}
 	var diffs []ClientConfigDiff
-	if len(models) > 0 && applied.Model != models[0] {
+	// `model` is only the default pick. Codex rewrites it when the user
+	// chooses another model with /model, so any model the gateway serves is as
+	// good as the first one; only one it no longer serves is a difference.
+	if len(models) > 0 && !slices.Contains(models, applied.Model) {
 		diffs = append(diffs, ClientConfigDiff{Key: "model", Applied: applied.Model, Expected: models[0]})
 	}
-	if applied.CatalogModels != nil {
+	// With no models an apply writes no catalog, so there is nothing to compare.
+	if applied.CatalogModels != nil && len(models) > 0 {
 		if joinModels(applied.CatalogModels) != joinModels(models) {
 			diffs = append(diffs, ClientConfigDiff{Key: "models", Applied: joinModels(applied.CatalogModels), Expected: joinModels(models)})
 		}
