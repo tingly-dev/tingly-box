@@ -283,3 +283,25 @@ gh api "repos/tingly-dev/tingly-box/actions/caches?per_page=100"
 Window-specific: the measured period includes the release of 8 tags and an
 unusually busy stretch (30 PRs opened on 2026-11-13 and 29 on 11-14), so
 absolute numbers will vary; the ratios between workflows are the stable part.
+
+## 8. Closing without code changes (maintainer's direction)
+
+Direction given after the first analysis: keep the frontend PR check, stop the
+other PR-time CI for now, and let the release (and later a daily run) do the
+catch-all checks. Disabling a workflow in the Actions UI (or
+`gh workflow disable <file>`) is reversible and needs no commit. It stops every
+trigger of that file, including `workflow_dispatch`, until it is re-enabled.
+
+| Workflow | Disable with no code change? | Effect |
+|---|---|---|
+| `verify-imbot-projects.yml` | **Yes** | PR-only (+dispatch); nothing calls it. −9.1 h/14 d. |
+| `harness-pr.yml` | **Yes** | PR-only (+dispatch); nothing calls it. −4.3 h/14 d. |
+| `harness-matrix.yml` | **Yes**, but no per-merge harness and no manual/`ci/**` run until re-enabled | `release.yml` calls `harness-template.yml` directly, so the release gate is unaffected. −4.0 h/14 d. |
+| `verify-compile.yml` | **No** (it also holds the frontend job to keep) | Dropping cli/gui/projects/remote needs a small edit of the file (remove those jobs and narrow the `paths`), or accept keeping everything. |
+| `verify-ci`, `homepage`, `harness-docker`, `issue-area` | Can, but not worth it | <0.5 min each, path-filtered, rare. |
+| `release*`, `verify-release-*`, `npm`, `harness-npm`, `docker-source` | No | Release/manual path. |
+
+Needs code: a daily run (`schedule`), release also running the Go test jobs
+(`test-projects`, `test-remote`, IM harness; release today builds all
+binaries and runs the harness gate but not those tests), and any narrowing of
+`verify-compile.yml`.
