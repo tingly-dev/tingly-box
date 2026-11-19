@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
 import { ThreadsView } from './ThreadsView';
@@ -50,12 +50,9 @@ describe('ThreadsView with a working directory\'s groups', () => {
         expect(screen.getByRole('group', { name: 'overview.pinned' })).toBeInTheDocument();
     });
 
-    it('takes the line under a title from the page, and opens a group from its heading with its label', () => {
-        const onGroup = vi.fn();
-        show({ subtitle: (s) => (s.wait_reason ? `reason: ${s.wait_reason}` : undefined), onGroup });
+    it('takes the line under a title from the page', () => {
+        show({ subtitle: (s) => (s.wait_reason ? `reason: ${s.wait_reason}` : undefined) });
         expect(screen.getByText('reason: Approve npm test')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Waiting 1' }));
-        expect(onGroup).toHaveBeenCalledWith('waiting', 'Waiting', expect.any(HTMLElement));
     });
 
     it('opens a session from its row and marks the open one', () => {
@@ -128,5 +125,126 @@ describe('ThreadsView with the select mode', () => {
     it('keeps the toolbar without the select mode when the page cannot bulk-act', () => {
         render(<ThreadsView scope="p1" threads={[th('a', 'Dark mode', 'waiting')]} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" />);
         expect(screen.queryByRole('button', { name: 'overview.select' })).not.toBeInTheDocument();
+    });
+});
+
+describe('ThreadsView folding its groups', () => {
+    const FOLDS = 'tingly-project.overview.folds.v1.p1';
+    const threads = [
+        th('a', 'Dark mode', 'waiting'), th('b', 'Fix links', 'working'), th('e', 'Tidy docs', 'idle'),
+        th('d', 'Shipped', 'resolved'), th('f', 'Old rename', 'resolved', { archived_at: '2026-10-01T00:00:00Z' }),
+    ];
+    const view = (over: Partial<React.ComponentProps<typeof ThreadsView>> = {}) => (
+        <ThreadsView scope="p1" threads={threads} onOpen={vi.fn()} countLabel={(n) => `${n} threads`} empty="none" {...over} />
+    );
+    const header = (name: string) => screen.getByRole('button', { name });
+    const board = () => fireEvent.click(screen.getByRole('button', { name: 'overview.view.board' }));
+
+    it('starts with Resolved and Archived folded and the other groups open, in the list and on the board', () => {
+        render(view());
+        expect(header('overview.group.waiting 1')).toHaveAttribute('aria-expanded', 'true');
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'false');
+        expect(header('overview.group.archived 1')).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.getByText('Shipped')).not.toBeVisible();
+        expect(screen.getByText('Dark mode')).toBeVisible();
+        board();
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'false');
+        expect(header('overview.group.working 1')).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Shipped')).not.toBeVisible();
+    });
+
+    it('toggles from the whole header row by click, Enter and Space, with aria-controls on the cards', async () => {
+        render(view());
+        board();
+        const resolved = header('overview.group.resolved 1');
+        const cards = document.getElementById(resolved.getAttribute('aria-controls') ?? '');
+        expect(cards).toContainElement(screen.getByText('Shipped'));
+        fireEvent.click(resolved);
+        expect(resolved).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Shipped')).toBeVisible();
+        fireEvent.keyDown(resolved, { key: 'Enter' });
+        expect(resolved).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.keyDown(resolved, { key: ' ' });
+        expect(resolved).toHaveAttribute('aria-expanded', 'true');
+        // Any group folds, not only the finished ones, and the count stays on the folded header.
+        fireEvent.click(header('overview.group.working 1'));
+        expect(header('overview.group.working 1')).toHaveAttribute('aria-expanded', 'false');
+        // The fold is a short transition; the cards leave the page when it ends.
+        await waitFor(() => expect(screen.getByText('Fix links')).not.toBeVisible());
+    });
+
+    it('remembers the choice across a reload, shared by the list and the board, and per scope', () => {
+        const first = render(view());
+        fireEvent.click(header('overview.group.resolved 1'));
+        fireEvent.click(header('overview.group.idle 1'));
+        expect(JSON.parse(localStorage.getItem(FOLDS) ?? '{}')).toEqual({ resolved: false, idle: true });
+        first.unmount();
+        render(view());
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'true');
+        expect(header('overview.group.idle 1')).toHaveAttribute('aria-expanded', 'false');
+        board();
+        expect(header('overview.group.idle 1')).toHaveAttribute('aria-expanded', 'false');
+        cleanup();
+        render(view({ scope: 'p2' }));
+        expect(header('overview.group.idle 1')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('lives with a broken stored value', () => {
+        localStorage.setItem(FOLDS, '[1,"x"]');
+        render(view());
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'false');
+        localStorage.setItem(FOLDS, '{"resolved":"yes","idle":true}');
+        cleanup();
+        render(view());
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'false');
+        expect(header('overview.group.idle 1')).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('keeps a folded group folded while threads arrive, and its count follows', () => {
+        const { rerender } = render(view());
+        board();
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'false');
+        rerender(view({ threads: [...threads, th('g', 'Another shipped', 'resolved'), th('h', 'More work', 'working')] }));
+        expect(header('overview.group.resolved 2')).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.getByText('Another shipped')).not.toBeVisible();
+        expect(header('overview.group.working 2')).toHaveAttribute('aria-expanded', 'true');
+        // A group the user folded stays folded too.
+        fireEvent.click(header('overview.group.working 2'));
+        rerender(view({ threads: [...threads, th('i', 'Third', 'working')] }));
+        expect(header('overview.group.working 2')).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('shows a folded group\'s waiting threads on its heading, in the list and on the board', () => {
+        const pinned = [th('a', 'Dark mode', 'waiting'), th('b', 'Needs a look', 'failed'), th('c', 'Fix links', 'working')];
+        localStorage.setItem('tingly-project.overview.pinned.p1', JSON.stringify(['a', 'b']));
+        localStorage.setItem(FOLDS, JSON.stringify({ pinned: true }));
+        render(view({ threads: pinned }));
+        board();
+        const heading = header('overview.pinned 2 · overview.needsYouIn:2');
+        expect(heading).toHaveAttribute('aria-expanded', 'false');
+        expect(within(heading).getByTitle('overview.needsYouIn:2')).toBeInTheDocument();
+        // Open, the cards say it themselves.
+        fireEvent.click(heading);
+        expect(header('overview.pinned 2')).toBeInTheDocument();
+    });
+
+    it('holds a folded-by-default group open for the thread that is open in it, unless the user folded it', () => {
+        render(view({ selectedId: 'd' }));
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.click(header('overview.group.resolved 1'));
+        expect(header('overview.group.resolved 1')).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('folds and unfolds every group from the toolbar', () => {
+        render(view());
+        fireEvent.click(screen.getByRole('button', { name: 'overview.collapseAll' }));
+        for (const k of ['waiting', 'working', 'idle', 'resolved', 'archived']) {
+            expect(header(`overview.group.${k} 1`)).toHaveAttribute('aria-expanded', 'false');
+        }
+        fireEvent.click(screen.getByRole('button', { name: 'overview.expandAll' }));
+        for (const k of ['waiting', 'working', 'idle', 'resolved', 'archived']) {
+            expect(header(`overview.group.${k} 1`)).toHaveAttribute('aria-expanded', 'true');
+        }
+        expect(screen.getByRole('button', { name: 'overview.collapseAll' })).toBeInTheDocument();
     });
 });

@@ -24,8 +24,8 @@ const threads = [
 
 const show = (onOpen = vi.fn(), selectedId?: string) => render(<OverviewPane projectId="p" threads={threads} onOpen={onOpen} libraryKey={0} selectedId={selectedId} />);
 const lane = (status: string) => screen.getByRole('group', { name: `overview.group.${status}` });
-// The card's own button carries no aria-label; the pin star on it does.
-const cards = (status: string) => within(lane(status)).getAllByRole('button').filter((b) => b.getAttribute('aria-label') == null);
+// The card's own button carries no aria-label; the pin star on it does. Folded lanes (Resolved) still hold their cards.
+const cards = (status: string) => within(lane(status)).getAllByRole('button', { hidden: true }).filter((b) => b.getAttribute('aria-label') == null);
 
 describe('OverviewPane view', () => {
     it('starts as the status list and switches to a board with a lane per status', () => {

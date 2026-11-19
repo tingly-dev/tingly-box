@@ -39,6 +39,7 @@ export function DisclosureRow({ open, onToggle, variant = 'header', chevron = tr
     sx?: SxProps<Theme>;
     'aria-label'?: string;
     'aria-haspopup'?: 'dialog' | 'menu';
+    'aria-controls'?: string;
 }) {
     const toggleable = onToggle != null;
     return (

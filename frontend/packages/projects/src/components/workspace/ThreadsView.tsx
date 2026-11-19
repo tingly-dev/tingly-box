@@ -2,15 +2,17 @@ import { useState, type ReactNode } from 'react';
 import { Box, Button, ButtonBase, Checkbox, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { mobile } from '@tingly/ui/theme/mobile';
 import { radius } from '@tingly/ui/theme/radius';
 import type { Thread } from '../../client';
+import { useGroupFolds } from '../../hooks/useGroupFolds';
 import { usePinnedThreads } from '../../hooks/usePinnedThreads';
 import { timeAgo } from '../../utils/format';
-import { Checklist } from '../icons';
-import { STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
+import { Checklist, CollapseAll, ExpandAll } from '../icons';
+import { needsUser, STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
 import { ThreadRequestSubtitle, ThreadRequestsStrip } from '../project/ThreadRequests';
 import { StatusBoard } from './StatusBoard';
-import { StatusGroups, type StatusGroup } from './StatusGroups';
+import { StatusGroups, type GroupFold, type StatusGroup } from './StatusGroups';
 import { useThreadsView, ViewSwitch } from './ViewSwitch';
 
 interface Props {
@@ -21,8 +23,6 @@ interface Props {
     onOpen: (id: string) => void;
     /** Opens a thread's running tasks from its card's count pill, or all of them from the toolbar's chip. */
     onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
-    /** Opens a group's list from its heading: the group's key, its label, the heading. */
-    onGroup?: (key: string, label: string, anchor: HTMLElement) => void;
     /** The groups, in order, with the labels they read; by default a project's statuses. */
     groups?: StatusGroup[];
     /** Which group a thread stands in; by default its status. */
@@ -42,7 +42,7 @@ interface Props {
 
 /** What the toolbar says about the list: how many, and the tasks they run — or,
  * in the select mode, what is picked and what the picked ones can do. */
-function Toolbar({ threads, countLabel, onTasks, view, onView, canSelect, selecting, picked, onToggleSelecting, onPick, onResolve, onArchive }: Pick<Props, 'threads' | 'countLabel' | 'onTasks'> & { view: ReturnType<typeof useThreadsView>[0]; onView: ReturnType<typeof useThreadsView>[1]; canSelect: boolean; selecting: boolean; picked: number; onToggleSelecting: () => void; onPick: (all: boolean) => void; onResolve: () => void; onArchive: () => void }) {
+function Toolbar({ threads, countLabel, onTasks, view, onView, canSelect, folding, selecting, picked, onToggleSelecting, onPick, onResolve, onArchive }: Pick<Props, 'threads' | 'countLabel' | 'onTasks'> & { folding: { allFolded: boolean; toggleAll: () => void } | null; view: ReturnType<typeof useThreadsView>[0]; onView: ReturnType<typeof useThreadsView>[1]; canSelect: boolean; selecting: boolean; picked: number; onToggleSelecting: () => void; onPick: (all: boolean) => void; onResolve: () => void; onArchive: () => void }) {
     const { t } = useTranslation('projects');
     const busy = threads.filter((th) => th.running_tasks > 0);
     const running = busy.reduce((n, th) => n + th.running_tasks, 0);
@@ -69,6 +69,12 @@ function Toolbar({ threads, countLabel, onTasks, view, onView, canSelect, select
                             </ButtonBase>
                         )}
                     </Box>
+                    {folding && (
+                        <ButtonBase aria-label={folding.allFolded ? t('overview.expandAll') : t('overview.collapseAll')} title={folding.allFolded ? t('overview.expandAll') : t('overview.collapseAll')} onClick={folding.toggleAll}
+                            sx={{ width: 28, height: 28, borderRadius: radius.chip, color: 'text.secondary', '&:hover': { bgcolor: 'action.hover' }, '@media (pointer: coarse)': { minWidth: mobile.tapMin, minHeight: mobile.tapMin } }}>
+                            {folding.allFolded ? <ExpandAll fontSize="small" /> : <CollapseAll fontSize="small" />}
+                        </ButtonBase>
+                    )}
                     {canSelect && pickable.length > 0 && (
                         <ButtonBase aria-label={t('overview.select')} title={t('overview.select')} onClick={onToggleSelecting}
                             sx={{ width: 28, height: 28, borderRadius: radius.chip, color: 'text.secondary', '&:hover': { bgcolor: 'action.hover' } }}><Checklist fontSize="small" /></ButtonBase>
@@ -87,7 +93,7 @@ function Toolbar({ threads, countLabel, onTasks, view, onView, canSelect, select
  * a working directory's sessions both draw this; they differ in the groups,
  * the subtitle and the words, never in how the list behaves.
  */
-export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGroup, groups, groupOf = (th) => (th.archived_at ? 'archived' : th.status), subtitle, countLabel, empty, bulk }: Props) {
+export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, groups, groupOf = (th) => (th.archived_at ? 'archived' : th.status), subtitle, countLabel, empty, bulk }: Props) {
     const { t, i18n } = useTranslation('projects');
     const [view, setView] = useThreadsView();
     const [pinnedIds, togglePin] = usePinnedThreads(scope);
@@ -110,27 +116,39 @@ export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, onGro
         exit();
     };
     const lanes: StatusGroup[] = groups ?? [...STATUS_ORDER.map((status) => ({ key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved' })), { key: 'archived', label: t('overview.group.archived'), collapsed: true }];
+    // The user's fold choices; a group nobody touched follows its lane's default, so new threads never move it.
+    const [folds, setFolds] = useGroupFolds(scope);
+    const defaultFolded = (key: string) => lanes.find((g) => g.key === key)?.collapsed === true;
+    const fold: GroupFold = {
+        // A group folded by default still opens by itself while it holds the open thread, unless the user folded it.
+        isOpen: (key, holdsSelected) => (key in folds ? !folds[key] : !defaultFolded(key) || holdsSelected),
+        onToggle: (key, open) => setFolds([key], !open),
+    };
+    // The groups on screen: the pinned section (board only) and every group that has a thread.
+    const pinnedShown = view === 'board' && pinnedIds.some((id) => threads.some((th) => th.id === id));
+    const shownKeys = [...(pinnedShown ? ['pinned'] : []), ...new Set(threads.filter((th) => !(view === 'board' && pinnedIds.includes(th.id))).map(groupOf))].filter((k) => k === 'pinned' || lanes.some((g) => g.key === k));
+    const allFolded = shownKeys.every((k) => !fold.isOpen(k, false));
     const rows = threads.map((th) => ({
-        id: th.id, group: groupOf(th), title: th.title, selected: th.id === selectedId,
+        id: th.id, group: groupOf(th), title: th.title, selected: th.id === selectedId, needsYou: needsUser(th.status) && !th.archived_at,
         subtitle: subtitle ? subtitle(th) : <ThreadRequestSubtitle thread={th} />,
         footer: <ThreadRequestsStrip thread={th} onOpen={onOpen} />, badges: <ThreadBadges thread={th} onTasks={onTasks} />, meta: timeAgo(th.updated_at, i18n.language),
         onClick: selecting && pickable.has(th.id) ? () => togglePick(th.id) : undefined,
         end: selecting && pickable.has(th.id) ? <Checkbox size="small" checked={picked.has(th.id)} onChange={() => togglePick(th.id)} onClick={(e) => e.stopPropagation()} sx={{ p: 0.5 }} /> : undefined,
     }));
-    const labelOf = (key: string) => lanes.find((g) => g.key === key)?.label ?? key;
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             <Toolbar threads={threads} countLabel={countLabel} onTasks={onTasks} view={view} onView={setView} canSelect={!!bulk}
+                folding={shownKeys.length > 0 ? { allFolded, toggleAll: () => setFolds(shownKeys, !allFolded) } : null}
                 selecting={selecting} picked={picked.size} onToggleSelecting={() => (selecting ? exit() : setSelecting(true))}
                 onPick={pick} onResolve={() => act(bulk!.resolve)} onArchive={() => act(bulk!.archive)} />
             <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
                 {view === 'list'
-                    ? <StatusGroups groups={lanes} rows={rows} onOpen={onOpen} onGroupClick={onGroup && ((key, label, anchor) => onGroup(key, label, anchor))} empty={empty} />
+                    ? <StatusGroups groups={lanes} rows={rows} onOpen={onOpen} fold={fold} empty={empty} />
                     // The board takes the pane's width and grows downward: the pane scrolls vertically, never sideways.
                     : threads.length === 0
                         ? <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>{empty}</Typography>
                         : <StatusBoard threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks} groups={lanes} groupOf={groupOf} subtitle={subtitle}
-                            onStatus={onGroup && ((key, anchor) => onGroup(key, labelOf(key), anchor))} pinnedIds={pinnedIds} onTogglePin={togglePin}
+                            fold={fold} pinnedIds={pinnedIds} onTogglePin={togglePin}
                             selecting={selecting} picked={picked} onTogglePick={togglePick} />}
             </Box>
         </Box>

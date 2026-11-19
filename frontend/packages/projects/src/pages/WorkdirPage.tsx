@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Box, Button, IconButton, Menu, MenuItem, Popover, Skeleton, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, IconButton, Menu, MenuItem, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -18,7 +18,6 @@ import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
 import type { StatusGroup } from '../components/workspace/StatusGroups';
 import { ThreadsView } from '../components/workspace/ThreadsView';
-import { StatusThreadsPopover } from '../components/project/StatusThreadsPopover';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
 import { MoreVert } from '../components/icons';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -289,8 +288,6 @@ export default function WorkdirPage() {
 
     const groups: StatusGroup[] = GROUPS.map((g) => ({ key: g.key, label: t(`session.group.${g.key}`), collapsed: g.collapsed }));
     const waitingHere = (sessions ?? []).some((s) => !s.archived_at && needsUser(s.status));
-    // A status count, opened into its list: the sessions standing in that state (same grouping as the rows above).
-    const [statusList, setStatusList] = useState<{ label: string; sessions: Thread[]; anchor: HTMLElement } | null>(null);
     const sessionGroup = (s: Thread) => (s.archived_at ? 'archived' : s.status === 'ready' ? 'idle' : s.status);
     const sessionSubtitle = (s: Thread) =>
         [scope ? '' : folderName(s.cwd), !s.archived_at && needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined;
@@ -299,7 +296,6 @@ export default function WorkdirPage() {
         ? <Box sx={{ p: 2 }}><Skeleton height={36} /><Skeleton height={36} /></Box>
         : <ThreadsView scope={folder?.id ?? 'folders'} threads={sessions} selectedId={sessionId} onOpen={openSession}
             groups={groups} groupOf={sessionGroup} subtitle={sessionSubtitle}
-            onGroup={(key, label, anchor) => setStatusList({ label, sessions: sessions.filter((x) => sessionGroup(x) === key), anchor })}
             countLabel={(count) => t('session.count', { count })} empty={t('session.none')} />;
 
     return (
@@ -409,14 +405,6 @@ export default function WorkdirPage() {
                     />
                 )}
             />
-            {/* What a status count stands for: the sessions in that state, each row opening the session. */}
-            <Popover open={!!statusList} anchorEl={statusList?.anchor ?? null} onClose={() => setStatusList(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }} transformOrigin={{ vertical: 'top', horizontal: 'left' }}>
-                {statusList && (
-                    <StatusThreadsPopover label={statusList.label} threads={statusList.sessions} onOpen={openSession}
-                        subtitleFor={sessionSubtitle} onClose={() => setStatusList(null)} />
-                )}
-            </Popover>
             {im?.dialog}
             <ConfirmDialog
                 open={confirmRemove}

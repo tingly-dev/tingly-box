@@ -8,6 +8,8 @@ import {
     IconArchiveOff,
     IconArrowUp,
     IconBellOff,
+    IconChevronsDown,
+    IconChevronsUp,
     IconCircleDashed,
     IconCircleDot,
     IconFileArrowRight,
@@ -58,6 +60,8 @@ export * from '@tingly/ui/icons';
 export const Star = tablerMuiFilled(IconStarFilled);
 
 export const Stack = tablerMui(IconStack2);
+export const ExpandAll = tablerMui(IconChevronsDown);
+export const CollapseAll = tablerMui(IconChevronsUp);
 export const BellOff = tablerMui(IconBellOff);
 export const Unarchive = tablerMui(IconArchiveOff);
 export const Folder = tablerMui(IconFolder);
