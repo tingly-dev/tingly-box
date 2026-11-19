@@ -60,5 +60,6 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.NotContains(t, s, "touch other branches", "other local branches of the worktree are the thread's to work on")
 	assert.NotContains(t, s, "force-push,", "a rebased branch is pushed with create_pr force")
 	assert.Contains(t, s, "force=true")
-	assert.Contains(t, s, "belongs to another thread")
+	assert.Contains(t, s, "the tool asks the user to approve")
+	assert.NotContains(t, s, "off limits", "beyond the boundary the user is asked, nothing is forbidden outright")
 }

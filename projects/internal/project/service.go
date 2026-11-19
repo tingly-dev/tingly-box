@@ -83,6 +83,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 		Host: host,
 	}
 	svc.Links = NewLinks(store, nil, threads.republish)
+	svc.Links.approve = threads.askApproval
 	threads.links = func() *Links { return svc.Links }
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
@@ -95,6 +96,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 // default). Call it before any thread session starts: tests give a fake.
 func (s *Service) SetGitHub(gh GitHub) {
 	s.Links = NewLinks(s.Store, gh, s.Threads.republish)
+	s.Links.approve = s.Threads.askApproval
 }
 
 // Start recovers interrupted threads and runs housekeeping until ctx ends,

@@ -17,8 +17,10 @@ const permissionModeAuto = "auto"
 //     request, an issue, a merge), and pushes the thread has no business
 //     making by hand (to the base branch, forced, deleting), always ask, so
 //     the user can tap Allow in the chat or the web. The thread's route for
-//     any other branch and for a rebased one is create_pr (head, force), which
-//     checks whose branch it is and leases the force.
+//     any other branch and for a rebased one is create_pr (head, force): it
+//     pushes what is the thread's own and puts the rest to the user itself,
+//     as an approval card, since a permission rule cannot see a tool's
+//     arguments (see approval.go).
 //
 // Rules are checked deny, ask, then allow, and run before the classifier. A
 // blanket `git push *` ask would therefore also catch the allowed own-branch

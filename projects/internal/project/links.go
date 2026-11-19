@@ -25,6 +25,9 @@ type Links struct {
 	gh    GitHub
 	// changed is told which thread's links changed; it publishes the thread.
 	changed func(threadID string)
+	// approve asks the user about a call that is outside what a thread may do
+	// on its own (see approval.go); nil means there is nobody to ask.
+	approve Approver
 	now     func() time.Time
 	// sweeping keeps two sweeps from overlapping.
 	sweeping sync.Mutex
@@ -260,8 +263,10 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 // head is the thread's own branch unless one is named: a thread may work on
 // several branches (a stack), and base may be any branch on GitHub, including
 // another stack branch. The push is a plain fast-forward one unless force is
-// set, which is --force-with-lease (see pushBranch) and only for a branch the
-// thread created or opened a PR from.
+// set, which is --force-with-lease (see pushBranch). What is beyond the
+// thread's own say (another thread's branch, the default or a protected branch,
+// a force on a branch it did not create or open a PR from, overwriting commits
+// it has not seen) is put to the user, not refused.
 func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, base string, draft, force bool) (string, error) {
 	r, err := l.createPR(ctx, t, title, body, head, base, draft, true, force)
 	if err != nil {
@@ -413,9 +418,16 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 		}
 		lc.head = head
 	}
+	// needs is why the user has to approve this call, one clause per boundary
+	// crossed; empty when the thread may do it on its own.
+	var needs []string
 	if lc.head != "" && lc.head != own {
-		if err := l.checkNotAnothersBranch(t, lc); err != nil {
+		other, err := l.anothersBranch(t, lc)
+		if err != nil {
 			return prResult{}, err
+		}
+		if other != nil {
+			needs = append(needs, fmt.Sprintf("branch %s belongs to another thread (%q)", lc.head, other.Title))
 		}
 	}
 	if lc.head == "" {
@@ -433,28 +445,37 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 	if base == "" {
 		base = def
 	}
-	if lc.head == base || lc.head == def {
-		return prResult{}, fmt.Errorf("branch %s is the base or the repository's default branch: a PR comes from a work branch, and the default branch is never pushed to", lc.head)
+	if lc.head == base {
+		return prResult{}, fmt.Errorf("branch %s is the base of its own PR: a PR comes from a branch other than its base", lc.head)
+	}
+	if lc.head == def {
+		needs = append(needs, fmt.Sprintf("branch %s is the repository's default branch", lc.head))
 	}
 	if protected, err := l.gh.Protected(ctx, lc.repo, lc.head); err != nil {
 		return prResult{}, err
 	} else if protected {
-		return prResult{}, fmt.Errorf("branch %s is protected on GitHub: it is never pushed to", lc.head)
+		needs = append(needs, fmt.Sprintf("branch %s is protected on GitHub", lc.head))
 	}
 	if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
 		return prResult{}, bad
 	}
 	if force {
-		if err := l.checkMayForce(t, lc); err != nil {
+		if ok, err := l.mayForce(t, lc); err != nil {
 			return prResult{}, err
+		} else if !ok {
+			needs = append(needs, fmt.Sprintf("a force push of branch %s, which this thread neither created nor opened a PR from", lc.head))
 		}
 	}
+	// The one gate before the first push: everything that could be refused
+	// outright has been checked by now, so the user is asked about a call that
+	// would otherwise go through.
+	push := &pusher{l: l, t: t, branch: lc.head, force: force, needs: needs, base: base, title: title}
 	existing, err := l.gh.OpenPR(ctx, lc.repo, lc.head)
 	if err != nil {
 		return prResult{}, err
 	}
 	if existing != nil {
-		return l.openPR(ctx, t, lc, *existing, title, body, asked, amend, force)
+		return l.openPR(ctx, t, lc, *existing, title, body, asked, amend, push)
 	}
 	// GitHub has no open PR for the branch: a record that says there is one is
 	// out of date (its PR was closed or merged), and would be mistaken for the
@@ -468,7 +489,7 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 	if n, ok := commitsAhead(ctx, t.Cwd, base, lc.head); ok && n == 0 {
 		return prResult{}, fmt.Errorf("branch %s has no commit beyond %s: commit your work first", lc.head, base)
 	}
-	if err := pushBranch(ctx, t.Cwd, lc.head, force); err != nil {
+	if err := push.run(ctx); err != nil {
 		return prResult{}, err
 	}
 	it, err := l.gh.CreatePR(ctx, lc.repo, strings.TrimSpace(title), body, lc.head, base, draft)
@@ -483,7 +504,7 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 // pushed again (the PR is its branch) and, when the call asks for it, the PR is
 // put right: the fields that differ from what the call said (a base only when
 // one was named) are edited, all before anything is pushed if one is refused.
-func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, existing GitHubItem, title, body, base string, amend, force bool) (prResult, error) {
+func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, existing GitHubItem, title, body, base string, amend bool, push *pusher) (prResult, error) {
 	r := prResult{item: existing, existed: true, repo: lc.repo, head: lc.head, base: existing.Base}
 	own, err := l.store.FindThreadLink(t.ID, lc.repo.Slug(), existing.Number)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
@@ -512,7 +533,7 @@ func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, exist
 		}
 	}
 	// Publish what the thread has done since: the PR is its branch.
-	if err := pushBranch(ctx, t.Cwd, lc.head, force); err != nil {
+	if err := push.run(ctx); err != nil {
 		return prResult{}, err
 	}
 	if newTitle != nil || newBody != nil || newBase != nil {
@@ -607,58 +628,149 @@ func holdsHead(links []db.ThreadLink, repo, head string) bool {
 	return false
 }
 
-// checkNotAnothersBranch refuses a head that belongs to another thread: one
-// that was started on it, or one that thread opened a PR from (a stack branch)
-// unless this thread has a PR from it too. Every worktree of a repository sees
-// every local branch, so the checkout alone does not tell whose a branch is.
-func (l *Links) checkNotAnothersBranch(t *db.Thread, lc *linkContext) error {
-	refuse := func(title string) error {
-		return fmt.Errorf("branch %s belongs to another thread (%q): a thread pushes its own branches only", lc.head, title)
-	}
+// anothersBranch is the thread that owns head when it is not this one, else
+// nil: a thread that was started on it, or one that opened a PR from it (a stack
+// branch) unless this thread has a PR from it too. Every worktree of a
+// repository sees every local branch, so the checkout alone does not tell whose
+// a branch is.
+func (l *Links) anothersBranch(t *db.Thread, lc *linkContext) (*db.Thread, error) {
 	if t.RepoPath != "" {
 		other, err := l.store.OtherThreadOnBranch(t.RepoPath, lc.head, t.ID)
 		if err == nil {
-			return refuse(other.Title)
+			return other, nil
 		} else if !errors.Is(err, db.ErrNotFound) {
-			return err
+			return nil, err
 		}
 	}
 	mine, err := l.store.ThreadLinks(t.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if holdsHead(mine, lc.repo.Slug(), lc.head) {
-		return nil
+		return nil, nil
 	}
 	linked, err := l.store.LinkedThreads()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, o := range linked {
 		if o.ID != t.ID && holdsHead(o.Links, lc.repo.Slug(), lc.head) {
-			return refuse(o.Title)
+			return l.store.GetThread(o.ID)
 		}
 	}
-	return nil
+	return nil, nil
 }
 
-// checkMayForce allows a lease-guarded force push of the head only when the
-// thread created it (its own branch) or opened a PR from it, so a force never
-// lands on a branch the thread merely found in the checkout.
-func (l *Links) checkMayForce(t *db.Thread, lc *linkContext) error {
+// mayForce is whether the thread may force-push the head on its own: it created
+// it (its own branch) or opened a PR from it. A branch merely found in the
+// checkout is not the thread's to rewrite without the user's say.
+func (l *Links) mayForce(t *db.Thread, lc *linkContext) (bool, error) {
 	if lc.head == t.Branch {
-		return nil
+		return true, nil
 	}
 	mine, err := l.store.ThreadLinks(t.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, k := range mine {
 		if k.Kind == db.LinkPR && k.Role == db.LinkOpened && k.Repo == lc.repo.Slug() && k.Head == lc.head {
-			return nil
+			return true, nil
 		}
 	}
-	return fmt.Errorf("force is only for a branch this thread created or opened a PR from, and branch %s is neither: push it plainly first (create_pr without force), which records it", lc.head)
+	return false, nil
+}
+
+// pusher is the push of one head for one create_pr call: it asks the user once
+// (needs, and a lease that no longer holds) and then pushes.
+type pusher struct {
+	l           *Links
+	t           *db.Thread
+	branch      string
+	force       bool
+	needs       []string
+	base, title string
+	asked       bool
+}
+
+func (p *pusher) run(ctx context.Context) error {
+	if len(p.needs) > 0 && !p.asked {
+		verb := "Push"
+		if p.force {
+			verb = "Force-push (--force-with-lease)"
+		}
+		slug := ""
+		if lc, err := p.l.resolve(ctx, p.t); err == nil {
+			slug = lc.repo.Slug()
+		}
+		err := p.l.authorize(ctx, p.t, Approval{
+			Tool:    githubToolRule(toolCreatePR),
+			Summary: fmt.Sprintf("%s branch %s to origin and open or update its PR (base %s)", verb, p.branch, p.base),
+			Reason:  strings.Join(p.needs, "; "),
+			Input:   map[string]any{"head": p.branch, "base": p.base, "force": p.force, "title": p.title},
+			Key:     fmt.Sprintf("%s\x00%s\x00%s\x00force=%t", toolCreatePR, slug, p.branch, p.force),
+		})
+		if err != nil {
+			return err
+		}
+		p.asked = true
+	}
+	if !p.force {
+		return pushBranch(ctx, p.t.Cwd, p.branch, nil)
+	}
+	seen := trackedOrigin(ctx, p.t.Cwd, p.branch)
+	err := pushBranch(ctx, p.t.Cwd, p.branch, &seen)
+	var stale *staleLeaseError
+	if !errors.As(err, &stale) {
+		return err
+	}
+	// origin has commits this checkout never saw: overwriting them is the one
+	// thing the lease exists to stop, so it is the user's call, on the commit
+	// they are shown, which is the lease of the retry.
+	now := originSha(ctx, p.t.Cwd, p.branch)
+	if now == "" || now == seen {
+		return err
+	}
+	seenText := "nowhere: it never saw the branch"
+	if seen != "" {
+		seenText = shortSHA(seen)
+	}
+	if err := p.l.authorize(ctx, p.t, Approval{
+		Tool:    githubToolRule(toolCreatePR),
+		Summary: fmt.Sprintf("Overwrite origin's %s (now at %s) with this checkout's %s", p.branch, shortSHA(now), p.branch),
+		Reason:  fmt.Sprintf("origin's %s has commits this checkout has not seen (it was at %s here); a force push would lose them", p.branch, seenText),
+		Input:   map[string]any{"head": p.branch, "force": true, "origin_at": now},
+	}); err != nil {
+		return err
+	}
+	return pushBranch(ctx, p.t.Cwd, p.branch, &now)
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
+}
+
+// trackedOrigin is the commit this checkout last saw on origin's branch (its
+// remote-tracking ref); empty when it never saw one.
+func trackedOrigin(ctx context.Context, dir, branch string) string {
+	out, _ := git(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
+	return strings.TrimSpace(out)
+}
+
+// originSha is the commit origin has on the branch now, asked of the remote
+// itself; empty when it has none or cannot be reached.
+func originSha(ctx context.Context, dir, branch string) string {
+	out, err := git(ctx, dir, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	if err != nil {
+		return ""
+	}
+	f := strings.Fields(out)
+	if len(f) == 0 {
+		return ""
+	}
+	return f[0]
 }
 
 // onOrigin is whether origin has the branch (asked of the remote itself, as the
@@ -670,8 +782,9 @@ func onOrigin(ctx context.Context, dir, branch string) bool {
 }
 
 // Update changes the title and description of an issue, or the title,
-// description and base of a PR, that this thread opened. It cannot close or
-// merge anything.
+// description and base of a PR. One the thread opened is edited as asked; any
+// other is put to the user first, who sees the change on the card. It cannot
+// close or merge anything.
 func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, body, base *string) (string, error) {
 	if title == nil && body == nil && base == nil {
 		return "", errors.New("nothing to change: pass title, body or base")
@@ -699,7 +812,23 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 	if err != nil {
 		return "", err
 	}
-	link, err := l.ownItem(t, lc.repo.Slug(), number, true)
+	var what []string
+	if title != nil {
+		what = append(what, "title")
+	}
+	if body != nil {
+		what = append(what, "description")
+	}
+	if base != nil {
+		what = append(what, "base")
+	}
+	shown := map[string]any{"number": number}
+	for k, v := range map[string]*string{"title": title, "body": body, "base": base} {
+		if v != nil {
+			shown[k] = clip(*v, 500)
+		}
+	}
+	link, role, err := l.editTarget(ctx, t, lc, number, what, shown)
 	if err != nil {
 		return "", err
 	}
@@ -733,18 +862,44 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		return "", err
 	}
 	l.forgetView(t, link.Number)
-	_, rerr := l.record(t, lc.repo, link.Kind, db.LinkOpened, it)
-	var what []string
-	if title != nil {
-		what = append(what, "title")
-	}
-	if body != nil {
-		what = append(what, "description")
-	}
-	if base != nil {
-		what = append(what, "base")
-	}
+	_, rerr := l.record(t, lc.repo, link.Kind, role, it)
 	return fmt.Sprintf("updated %s #%d %s (%s)%s", link.Kind, it.Number, it.URL, strings.Join(what, ", "), saved(rerr)), nil
+}
+
+// editTarget is the item an edit means and the role the thread's record of it
+// gets. One the thread opened needs nothing more. Any other (not recorded, or
+// one the thread only commented on) is read, shown to the user with what is to
+// change, and edited only if they allow it; it is recorded as touched, not
+// opened, so the next edit asks again unless they allowed it for the thread.
+func (l *Links) editTarget(ctx context.Context, t *db.Thread, lc *linkContext, number int, what []string, input map[string]any) (*db.ThreadLink, string, error) {
+	slug := lc.repo.Slug()
+	if number <= 0 {
+		link, err := l.ownItem(t, slug, 0, true)
+		return link, db.LinkOpened, err
+	}
+	link, err := l.store.FindThreadLink(t.ID, slug, number)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return nil, "", err
+	}
+	if err == nil && link.Role == db.LinkOpened {
+		return link, db.LinkOpened, nil
+	}
+	kind, it, err := l.read(ctx, lc.repo, number)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := l.authorize(ctx, t, Approval{
+		Tool:    githubToolRule(toolUpdate),
+		Summary: fmt.Sprintf("Edit the %s of %s #%d %q, which this thread did not open", strings.Join(what, ", "), kind, number, clip(it.Title, 80)),
+		Reason:  fmt.Sprintf("%s #%d was not opened by this thread", kind, number),
+		Input:   input,
+		Key:     fmt.Sprintf("%s\x00%s\x00%d", toolUpdate, slug, number),
+	}); err != nil {
+		return nil, "", err
+	}
+	fresh := &db.ThreadLink{Kind: kind, Repo: slug, Number: number, Role: db.LinkCommented}
+	fillLink(fresh, it, l.now())
+	return fresh, db.LinkCommented, nil
 }
 
 // ownItem is the link a call means: the numbered one, or, with no number, the
@@ -1205,20 +1360,25 @@ func commitsAhead(ctx context.Context, dir, base, head string) (int, bool) {
 	return 0, false
 }
 
+// staleLeaseError is a force push that git refused because origin's branch is
+// not where the lease said: someone's commits would have been lost.
+type staleLeaseError struct{ msg string }
+
+func (e *staleLeaseError) Error() string { return e.msg }
+
 // pushBranch publishes one branch of the thread. The refspec names only that
 // branch and has no "+", so it can neither touch another branch nor delete one.
-// A plain push can only fast-forward. With force it is --force-with-lease with
-// the lease on the commit this checkout last saw on origin (its remote-tracking
-// ref; none means the branch must not be on origin at all), so it overwrites
-// what the thread pushed and nothing a person or another thread added since.
-func pushBranch(ctx context.Context, dir, branch string, force bool) error {
+// With lease nil it is a plain push, which can only fast-forward. Otherwise it
+// is --force-with-lease on the commit *lease names (empty: the branch must not
+// be on origin), so it overwrites that commit and whatever the thread pushed
+// before it, and nothing a person or another thread added since.
+func pushBranch(ctx context.Context, dir, branch string, lease *string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	spec := "refs/heads/" + branch + ":refs/heads/" + branch
 	args := []string{"-C", dir, "push"}
-	if force {
-		seen, _ := git(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
-		args = append(args, "--force-with-lease=refs/heads/"+branch+":"+strings.TrimSpace(seen))
+	if lease != nil {
+		args = append(args, "--force-with-lease=refs/heads/"+branch+":"+*lease)
 	}
 	cmd := exec.CommandContext(ctx, "git", append(args, "origin", spec)...)
 	// A push may never wait for a password.
@@ -1228,12 +1388,12 @@ func pushBranch(ctx context.Context, dir, branch string, force bool) error {
 	if err := cmd.Run(); err != nil {
 		msg := redact(strings.TrimSpace(out.String()))
 		switch {
-		case force && (strings.Contains(msg, "stale info") || strings.Contains(msg, "[rejected]")):
-			return fmt.Errorf("force-pushing %s was refused: origin's %s moved (or is new) since this checkout last saw it, so someone else's commits would be lost. Fetch it, look at what is there, rebase onto it and call again; the lease is never overridden: %s", branch, branch, clip(msg, 400))
+		case lease != nil && (strings.Contains(msg, "stale info") || strings.Contains(msg, "[rejected]")):
+			return &staleLeaseError{fmt.Sprintf("force-pushing %s was refused: origin's %s moved since this checkout last saw it, so someone else's commits would be lost. Fetch it, look at what is there and rebase onto it: %s", branch, branch, clip(msg, 400))}
 		// Only a push that lost to newer commits earns the rebase advice; a
 		// hook or a protected branch rejects for other reasons.
 		case strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first"):
-			return fmt.Errorf("pushing %s was rejected because origin has commits it does not: rebase onto origin/%s and try again. If you rewrote the branch on purpose (a rebase), call create_pr again with force=true: that is --force-with-lease, allowed for a branch this thread created or opened a PR from: %s", branch, branch, clip(msg, 400))
+			return fmt.Errorf("pushing %s was rejected because origin has commits it does not: rebase onto origin/%s and try again. If you rewrote the branch on purpose (a rebase), call create_pr again with force=true: that is --force-with-lease: %s", branch, branch, clip(msg, 400))
 		}
 		return fmt.Errorf("pushing %s failed: %s", branch, clip(msg, 600))
 	}
