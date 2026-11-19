@@ -5,7 +5,7 @@ One file per analysed Claude Code release (read-only reverse engineering of the 
 
 | Version | File | Scope |
 |---|---|---|
-| 2.1.328 | [2.1.328.md](./2.1.328.md) | Requests (headers, betas, billing header, body), OAuth, embedded gateway protocol, gap list vs tingly-box |
+| 2.1.328 | [2.1.328.md](./2.1.328.md) | Requests (headers, betas, billing header, body), OAuth, embedded gateway protocol, gap list vs tingly-box; §9 = live `-p` wire captures (proxy/direct × OAuth/API key), `cch` verified against our code |
 
 Earlier analyses live in the design docs rather than here:
 
