@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	toolhub "github.com/tingly-dev/tingly-box/mcphub/tool"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
@@ -64,11 +65,12 @@ type ToolCall struct {
 	Input json.RawMessage
 }
 
+// The generic halves live in mcphub/tool; these keep the package's names.
 func textResult(text string, isErr bool) *mcp.CallToolResult {
-	return &mcp.CallToolResult{IsError: isErr, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
+	return toolhub.TextResult(text, isErr)
 }
 
 // strProp is the schema of a string property.
 func strProp(desc string) map[string]any {
-	return map[string]any{"type": "string", "description": desc}
+	return toolhub.StrProp(desc)
 }

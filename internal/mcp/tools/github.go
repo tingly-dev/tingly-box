@@ -2,14 +2,28 @@ package tools
 
 import "strings"
 
-// GitHubPreset marks a source as the GitHub integration (the official
-// github-mcp-server, remote or local). The integration is a fixed, curated
-// subset: only the tools below are ever offered or callable, whatever the
-// upstream server exposes and however the source is configured.
+// GitHubPreset marks a source as the GitHub integration. Today that is the
+// built-in gh-backed server (the github-builtin source); the integration is a
+// fixed, curated subset: only the tools below are ever offered or callable,
+// whatever the upstream server exposes and however the source is configured.
 const GitHubPreset = "github"
 
-// GitHubRemoteEndpoint is the hosted github-mcp-server.
-const GitHubRemoteEndpoint = "https://api.githubcopilot.com/mcp/"
+// The built-in GitHub source: mcphub's gh-backed server (the host binary's
+// `mcp-github` subcommand) instead of the remote one. Same preset, same
+// subset — the tool names are the official server's.
+const (
+	BuiltinGithubSourceID   = "github-builtin"
+	BuiltinGithubSourceName = "GitHub (gh)"
+)
+
+// BuiltinGithubToolNames is every tool the built-in GitHub server offers.
+func BuiltinGithubToolNames() []string {
+	return []string{
+		"get_me", "list_issues", "issue_read", "issue_write", "add_issue_comment",
+		"list_pull_requests", "pull_request_read", "create_pull_request", "update_pull_request",
+		"list_branches", "get_file_contents",
+	}
+}
 
 // githubSubset is every upstream tool the integration allows. Anything not
 // listed is dropped from catalogs and refused at call time. Nothing here

@@ -21,8 +21,10 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 	// Check if builtins already exist
 	var existingWebtools *typ.MCPSourceConfig
 	var existingAdvisor *typ.MCPSourceConfig
+	var existingGithub *typ.MCPSourceConfig
 	webtoolsIndex := -1
 	advisorIndex := -1
+	githubIndex := -1
 	for i, source := range cfg.Sources {
 		if source.ID == mcptools.BuiltinWebtoolsSourceID {
 			existingWebtools = &cfg.Sources[i]
@@ -31,6 +33,10 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		if source.ID == mcptools.BuiltinAdvisorSourceID {
 			existingAdvisor = &cfg.Sources[i]
 			advisorIndex = i
+		}
+		if source.ID == mcptools.BuiltinGithubSourceID {
+			existingGithub = &cfg.Sources[i]
+			githubIndex = i
 		}
 	}
 
@@ -144,6 +150,50 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		cfg.Sources[serverIndex] = server
 	} else {
 		cfg.Sources = append(cfg.Sources, server)
+	}
+
+	// The built-in GitHub source: mcphub's gh-backed server, no PAT to
+	// configure — the host's own gh signs in. Off by default: opt in, like
+	// webtools.
+	githubEnabled := typ.BoolPtr(false)
+	githubVisibility := typ.ToolVisibilityClient
+	githubTools := mcptools.BuiltinGithubToolNames()
+	if existingGithub != nil {
+		if existingGithub.Enabled != nil {
+			githubEnabled = existingGithub.Enabled
+		}
+		if existingGithub.Visibility != "" {
+			githubVisibility = existingGithub.Visibility
+		}
+		if len(existingGithub.Tools) > 0 {
+			githubTools = existingGithub.Tools
+		}
+	}
+	builtinGithub := typ.MCPSourceConfig{
+		ID:         mcptools.BuiltinGithubSourceID,
+		Name:       mcptools.BuiltinGithubSourceName,
+		Transport:  "stdio",
+		Command:    currentExecPath,
+		Args:       []string{"mcp-github"},
+		Preset:     mcptools.GitHubPreset,
+		Enabled:    githubEnabled,
+		Visibility: githubVisibility,
+		Tools:      githubTools,
+		Env:        map[string]string{},
+	}
+	if existingGithub != nil {
+		if existingGithub.Name != "" {
+			builtinGithub.Name = existingGithub.Name
+		}
+		builtinGithub.Usage = existingGithub.Usage
+		builtinGithub.ToolPolicies = maps.Clone(existingGithub.ToolPolicies)
+	}
+	if githubIndex >= 0 {
+		cfg.Sources[githubIndex] = builtinGithub
+		logrus.Info("mcp: updated builtin github configuration")
+	} else {
+		cfg.Sources = append(cfg.Sources, builtinGithub)
+		logrus.Info("mcp: registered builtin github configuration")
 	}
 
 	// Create advisor configuration and register as virtual tool.

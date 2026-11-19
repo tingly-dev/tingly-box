@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	mcphub "github.com/tingly-dev/tingly-box/mcphub/github"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
@@ -89,7 +89,7 @@ func (l *Links) pausedUntil() time.Time {
 // NewLinks makes the tools' backend over gh.
 func NewLinks(store *db.Store, gh GitHub, changed func(threadID string)) *Links {
 	if gh == nil {
-		gh = ghCLI{}
+		gh = mcphub.Client{}
 	}
 	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}, reading: map[string]bool{}, projectAsked: map[string]time.Time{}}
 }
@@ -112,7 +112,7 @@ func (l *Links) resolve(ctx context.Context, t *db.Thread) (*linkContext, error)
 	if err != nil {
 		return nil, errors.New("this thread's repository has no origin remote")
 	}
-	repo, err := parseGitHubRemote(remote)
+	repo, err := mcphub.ParseRemote(remote)
 	if err != nil {
 		return nil, err
 	}
@@ -121,32 +121,6 @@ func (l *Links) resolve(ctx context.Context, t *db.Thread) (*linkContext, error)
 		head = HeadBranch(ctx, t.Cwd)
 	}
 	return &linkContext{t: t, repo: repo, head: head}, nil
-}
-
-// parseGitHubRemote reads owner and name from a github.com remote URL in any
-// of its spellings. Credentials in the URL are dropped, never kept or shown.
-func parseGitHubRemote(remote string) (GitHubRepo, error) {
-	remote = strings.TrimSpace(remote)
-	var host, path string
-	switch {
-	case strings.Contains(remote, "://"):
-		u, err := url.Parse(remote)
-		if err != nil {
-			return GitHubRepo{}, errors.New("origin is not a GitHub repository")
-		}
-		host, path = u.Hostname(), u.Path
-	case strings.Contains(remote, "@") && strings.Contains(remote, ":"):
-		// scp-like: git@github.com:owner/name.git
-		rest := remote[strings.Index(remote, "@")+1:]
-		host, path, _ = strings.Cut(rest, ":")
-	default:
-		return GitHubRepo{}, errors.New("origin is not a GitHub repository")
-	}
-	parts := strings.Split(strings.Trim(strings.TrimSuffix(strings.Trim(path, "/"), ".git"), "/"), "/")
-	if !strings.EqualFold(host, "github.com") || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return GitHubRepo{}, errors.New("origin is not a github.com repository; the issue and PR tools only work with github.com")
-	}
-	return GitHubRepo{Owner: parts[0], Name: parts[1]}, nil
 }
 
 // checkLength refuses text longer than max characters.
@@ -185,7 +159,7 @@ func fillLink(k *db.ThreadLink, it GitHubItem, now time.Time) {
 	if it.Head != "" {
 		k.Head, k.Base = it.Head, it.Base
 	}
-	k.Checks = it.Checks
+	k.Checks = dbChecks(it.Checks)
 	if it.URL != "" {
 		k.URL = it.URL
 	}
@@ -510,7 +484,7 @@ func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, exist
 		}
 		// The edit's answer has no CI and no settled mergeability: keep the last reading.
 		if own != nil {
-			it.CI, it.Checks = own.CI, own.Checks
+			it.CI, it.Checks = own.CI, ghChecks(own.Checks)
 			if it.MergeState == "unknown" || it.MergeState == "" {
 				it.MergeState = own.MergeState
 			}
@@ -648,7 +622,7 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		it, err = l.gh.UpdatePR(ctx, lc.repo, link.Number, title, body, base)
 		// The edit's answer has no CI, and GitHub has not worked out the
 		// mergeability yet: keep the last reading of both.
-		it.CI, it.Checks = link.CI, link.Checks
+		it.CI, it.Checks = link.CI, ghChecks(link.Checks)
 		if it.MergeState == "unknown" || it.MergeState == "" {
 			it.MergeState = link.MergeState
 		}

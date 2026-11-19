@@ -18,6 +18,9 @@ includes:
   remote:
     taskfile: ./remote/Taskfile.yml
     dir: ./remote
+  mcphub:
+    taskfile: ./mcphub/Taskfile.yml
+    dir: ./mcphub
 
 vars:
   VERSION: ""

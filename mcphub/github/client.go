@@ -1,4 +1,7 @@
-package project
+// Package github is GitHub over the host's own gh CLI: the client the issue
+// and PR tools need, used by both Tingly Box and Projects. Everything goes
+// through `gh api` as the signed-in user; no token is managed here.
+package github
 
 import (
 	"bytes"
@@ -13,23 +16,22 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
-// GitHubRepo names a repository on github.com: where a thread's issues and PRs
-// go. (GitHub Enterprise hosts are a later step; see .design/github-tools.md.)
-type GitHubRepo struct {
+// Repo names a repository on github.com: where a thread's issues and PRs
+// go. (GitHub Enterprise hosts are a later step; see Projects'
+// .design/github-tools.md.)
+type Repo struct {
 	Owner, Name string
 }
 
 // Slug is owner/name: what a record stores and the REST paths are built from.
-func (r GitHubRepo) Slug() string { return r.Owner + "/" + r.Name }
+func (r Repo) Slug() string { return r.Owner + "/" + r.Name }
 
-func (r GitHubRepo) path() string { return "repos/" + r.Owner + "/" + r.Name }
+func (r Repo) path() string { return "repos/" + r.Owner + "/" + r.Name }
 
-// GitHubItem is an issue or PR as GitHub reports it.
-type GitHubItem struct {
+// Item is an issue or PR as GitHub reports it.
+type Item struct {
 	Number int
 	URL    string
 	Title  string
@@ -45,55 +47,37 @@ type GitHubItem struct {
 	CI         string
 	MergeState string
 	// Checks break an open PR's CI down.
-	Checks *db.LinkChecks
+	Checks *Checks
 	// Rate is what GitHub said about the caller's request budget in the same
 	// answer; zero when the answer did not carry it.
-	Rate GitHubRate
+	Rate Rate
 }
 
-// GitHubRate is the request budget GitHub reports: how many points are left
+// Rate is the request budget GitHub reports: how many points are left
 // and when the window resets.
-type GitHubRate struct {
+type Rate struct {
 	Remaining int
 	ResetAt   time.Time
 }
 
-// GitHub is what the issue and PR tools need from GitHub. The real one runs
-// the host's gh; tests give a fake, so nothing in the tests reaches GitHub.
-type GitHub interface {
-	// DefaultBranch is the repository's default branch.
-	DefaultBranch(ctx context.Context, r GitHubRepo) (string, error)
-	// Protected is whether GitHub holds the branch protected; a branch that is
-	// not on GitHub is not.
-	Protected(ctx context.Context, r GitHubRepo, branch string) (bool, error)
-	CreateIssue(ctx context.Context, r GitHubRepo, title, body string) (GitHubItem, error)
-	// Comment adds a comment to an issue or PR and returns its URL.
-	Comment(ctx context.Context, r GitHubRepo, number int, body string) (string, error)
-	// OpenPR is the open PR whose head is branch of this repository, if any.
-	OpenPR(ctx context.Context, r GitHubRepo, branch string) (*GitHubItem, error)
-	CreatePR(ctx context.Context, r GitHubRepo, title, body, head, base string, draft bool) (GitHubItem, error)
-	// SquashPR squash-merges an open PR on GitHub. sha is the head commit the
-	// caller means to merge: GitHub refuses when the PR's head has moved. Nothing
-	// else is touched (the branch is not deleted).
-	SquashPR(ctx context.Context, r GitHubRepo, number int, sha, title, message string) error
-	// UpdatePR changes only the fields that are not nil.
-	UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error)
-	// UpdateIssue changes only the fields that are not nil.
-	UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error)
-	// Read is an issue or PR in one request: for a PR its CI and mergeability
-	// too (IsPR says which it is), and the request budget in Rate.
-	Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
+// Checks is an open PR's checks as GitHub last said: how many of each, and
+// the failing ones by name (at most ChecksListed, the rest counted in More).
+type Checks struct {
+	Failing, Pending, Passing, More int
+	Failed                          []Check `json:"failed,omitempty"`
 }
 
-// ghCLI is GitHub over the host's own `gh`, signed in as the user. Every call
-// is a REST request through `gh api` with a JSON body: no GraphQL (`gh pr edit`
-// fails on this repository's retired Projects classic), and no shell quoting.
-type ghCLI struct {
-	// bin is the gh executable; empty means "gh" on PATH.
-	bin string
+// ChecksListed is how many failing checks a record names.
+const ChecksListed = 5
+
+// Check is one failing check.
+type Check struct {
+	Name, URL string
 }
 
-const ghTimeout = 60 * time.Second
+// ErrUnavailable is gh missing or not signed in: the user's to fix, not
+// the model's.
+var ErrUnavailable = errors.New("GitHub is not available: gh is missing or not signed in on this machine (the user can run `gh auth login`)")
 
 // tokenShapes are the strings that must never leave this process: GitHub's
 // token formats, bearer headers and credentials inside URLs.
@@ -104,24 +88,70 @@ var tokenShapes = []*regexp.Regexp{
 	regexp.MustCompile(`(https?://)[^/@\s:]+(?::[^/@\s]*)?@`),
 }
 
-// redact removes anything that looks like a credential from text that is about
+// Redact removes anything that looks like a credential from text that is about
 // to become an error, a log line or a tool result.
-func redact(s string) string {
+func Redact(s string) string {
 	s = tokenShapes[0].ReplaceAllString(s, "[redacted]")
 	s = tokenShapes[1].ReplaceAllString(s, "${1}[redacted]")
 	s = tokenShapes[2].ReplaceAllString(s, "${1}[redacted]")
 	return tokenShapes[3].ReplaceAllString(s, "${1}")
 }
 
-// ErrGitHubUnavailable is gh missing or not signed in: the user's to fix, not
-// the model's.
-var ErrGitHubUnavailable = errors.New("GitHub is not available: gh is missing or not signed in on this machine (the user can run `gh auth login`)")
+// ParseRemote reads owner and name from a github.com remote URL in any
+// of its spellings. Credentials in the URL are dropped, never kept or shown.
+func ParseRemote(remote string) (Repo, error) {
+	remote = strings.TrimSpace(remote)
+	var host, path string
+	switch {
+	case strings.Contains(remote, "://"):
+		u, err := url.Parse(remote)
+		if err != nil {
+			return Repo{}, errors.New("origin is not a GitHub repository")
+		}
+		host, path = u.Hostname(), u.Path
+	case strings.Contains(remote, "@") && strings.Contains(remote, ":"):
+		// scp-like: git@github.com:owner/name.git
+		rest := remote[strings.Index(remote, "@")+1:]
+		host, path, _ = strings.Cut(rest, ":")
+	default:
+		return Repo{}, errors.New("origin is not a GitHub repository")
+	}
+	parts := strings.Split(strings.Trim(strings.TrimSuffix(strings.Trim(path, "/"), ".git"), "/"), "/")
+	if !strings.EqualFold(host, "github.com") || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return Repo{}, errors.New("origin is not a github.com repository; the issue and PR tools only work with github.com")
+	}
+	return Repo{Owner: parts[0], Name: parts[1]}, nil
+}
+
+// RemoteEndpoint is the hosted github-mcp-server. Nothing here uses it today
+// — hosts serve the built-in toolset over the local gh — but if a hosted
+// GitHub source is ever revived, this is where it belongs, not in a host.
+const RemoteEndpoint = "https://api.githubcopilot.com/mcp/"
+
+// Client is GitHub over the host's own `gh`, signed in as the user. Every call
+// is a REST request through `gh api` with a JSON body: no GraphQL (`gh pr edit`
+// fails on this repository's retired Projects classic), and no shell quoting.
+type Client struct {
+	// Bin is the gh executable; empty means "gh" on PATH.
+	Bin string
+}
+
+const ghTimeout = 60 * time.Second
+
+// clip shortens s to n runes with an ellipsis.
+func clip(s string, n int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= n {
+		return string(r)
+	}
+	return string(r[:n]) + "…"
+}
 
 // api runs one `gh api` request and decodes the JSON answer into out.
-func (g ghCLI) api(ctx context.Context, r GitHubRepo, method, path string, body any, out any) error {
+func (g Client) api(ctx context.Context, r Repo, method, path string, body any, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, ghTimeout)
 	defer cancel()
-	bin := g.bin
+	bin := g.Bin
 	if bin == "" {
 		bin = "gh"
 	}
@@ -142,11 +172,11 @@ func (g ghCLI) api(ctx context.Context, r GitHubRepo, method, path string, body 
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, fs.ErrNotExist) {
-			return ErrGitHubUnavailable
+			return ErrUnavailable
 		}
-		msg := redact(strings.TrimSpace(stderr.String() + " " + stdout.String()))
+		msg := Redact(strings.TrimSpace(stderr.String() + " " + stdout.String()))
 		if strings.Contains(msg, "gh auth login") || strings.Contains(msg, "HTTP 401") {
-			return ErrGitHubUnavailable
+			return ErrUnavailable
 		}
 		if msg == "" {
 			msg = err.Error()
@@ -187,11 +217,11 @@ type ghPull struct {
 	} `json:"base"`
 }
 
-func (i ghIssue) item() GitHubItem {
-	return GitHubItem{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil}
+func (i ghIssue) item() Item {
+	return Item{Number: i.Number, URL: i.HTMLURL, Title: i.Title, Body: i.Body, State: i.State, IsPR: i.PullRequest != nil}
 }
 
-func (p ghPull) item() GitHubItem {
+func (p ghPull) item() Item {
 	it := p.ghIssue.item()
 	if p.Merged {
 		it.State = "merged"
@@ -230,7 +260,8 @@ func mergeState(p ghPull) string {
 	return "unknown"
 }
 
-func (g ghCLI) DefaultBranch(ctx context.Context, r GitHubRepo) (string, error) {
+// DefaultBranch is the repository's default branch.
+func (g Client) DefaultBranch(ctx context.Context, r Repo) (string, error) {
 	var out struct {
 		DefaultBranch string `json:"default_branch"`
 	}
@@ -243,7 +274,9 @@ func (g ghCLI) DefaultBranch(ctx context.Context, r GitHubRepo) (string, error) 
 	return out.DefaultBranch, nil
 }
 
-func (g ghCLI) Protected(ctx context.Context, r GitHubRepo, branch string) (bool, error) {
+// Protected is whether GitHub holds the branch protected; a branch that is
+// not on GitHub is not.
+func (g Client) Protected(ctx context.Context, r Repo, branch string) (bool, error) {
 	var out struct {
 		Protected bool `json:"protected"`
 	}
@@ -258,13 +291,14 @@ func (g ghCLI) Protected(ctx context.Context, r GitHubRepo, branch string) (bool
 	return out.Protected, err
 }
 
-func (g ghCLI) CreateIssue(ctx context.Context, r GitHubRepo, title, body string) (GitHubItem, error) {
+func (g Client) CreateIssue(ctx context.Context, r Repo, title, body string) (Item, error) {
 	var out ghIssue
 	err := g.api(ctx, r, "POST", r.path()+"/issues", map[string]any{"title": title, "body": body}, &out)
 	return out.item(), err
 }
 
-func (g ghCLI) Comment(ctx context.Context, r GitHubRepo, number int, body string) (string, error) {
+// Comment adds a comment to an issue or PR and returns its URL.
+func (g Client) Comment(ctx context.Context, r Repo, number int, body string) (string, error) {
 	var out struct {
 		HTMLURL string `json:"html_url"`
 	}
@@ -272,7 +306,8 @@ func (g ghCLI) Comment(ctx context.Context, r GitHubRepo, number int, body strin
 	return out.HTMLURL, err
 }
 
-func (g ghCLI) OpenPR(ctx context.Context, r GitHubRepo, branch string) (*GitHubItem, error) {
+// OpenPR is the open PR whose head is branch of this repository, if any.
+func (g Client) OpenPR(ctx context.Context, r Repo, branch string) (*Item, error) {
 	var out []ghPull
 	q := url.Values{"head": {r.Owner + ":" + branch}, "state": {"open"}}
 	if err := g.api(ctx, r, "GET", r.path()+"/pulls?"+q.Encode(), nil, &out); err != nil {
@@ -285,13 +320,16 @@ func (g ghCLI) OpenPR(ctx context.Context, r GitHubRepo, branch string) (*GitHub
 	return &it, nil
 }
 
-func (g ghCLI) CreatePR(ctx context.Context, r GitHubRepo, title, body, head, base string, draft bool) (GitHubItem, error) {
+func (g Client) CreatePR(ctx context.Context, r Repo, title, body, head, base string, draft bool) (Item, error) {
 	var out ghPull
 	err := g.api(ctx, r, "POST", r.path()+"/pulls", map[string]any{"title": title, "body": body, "head": head, "base": base, "draft": draft}, &out)
 	return out.item(), err
 }
 
-func (g ghCLI) SquashPR(ctx context.Context, r GitHubRepo, number int, sha, title, message string) error {
+// SquashPR squash-merges an open PR on GitHub. sha is the head commit the
+// caller means to merge: GitHub refuses when the PR's head has moved. Nothing
+// else is touched (the branch is not deleted).
+func (g Client) SquashPR(ctx context.Context, r Repo, number int, sha, title, message string) error {
 	body := map[string]any{"merge_method": "squash", "sha": sha}
 	if title != "" {
 		body["commit_title"] = title
@@ -310,13 +348,98 @@ func (g ghCLI) SquashPR(ctx context.Context, r GitHubRepo, number int, sha, titl
 	return nil
 }
 
-func (g ghCLI) UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error) {
+// Me is the signed-in user's login.
+func (g Client) Me(ctx context.Context) (string, error) {
+	var out struct {
+		Login string `json:"login"`
+	}
+	if err := g.api(ctx, Repo{}, "GET", "user", nil, &out); err != nil {
+		return "", err
+	}
+	return out.Login, nil
+}
+
+// ListIssues is a repository's issues (and only issues: PRs are skipped) in
+// the given state ("open", "closed" or "all").
+func (g Client) ListIssues(ctx context.Context, r Repo, state string) ([]Item, error) {
+	var out []ghIssue
+	q := url.Values{"state": {state}}
+	if err := g.api(ctx, r, "GET", r.path()+"/issues?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	var items []Item
+	for _, i := range out {
+		if i.PullRequest == nil {
+			items = append(items, i.item())
+		}
+	}
+	return items, nil
+}
+
+// ListPulls is a repository's PRs in the given state.
+func (g Client) ListPulls(ctx context.Context, r Repo, state string) ([]Item, error) {
+	var out []ghPull
+	q := url.Values{"state": {state}}
+	if err := g.api(ctx, r, "GET", r.path()+"/pulls?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	var items []Item
+	for _, p := range out {
+		items = append(items, p.item())
+	}
+	return items, nil
+}
+
+// ListBranches is a repository's branch names, newest first.
+func (g Client) ListBranches(ctx context.Context, r Repo) ([]string, error) {
+	var out []struct {
+		Name string `json:"name"`
+	}
+	if err := g.api(ctx, r, "GET", r.path()+"/branches", nil, &out); err != nil {
+		return nil, err
+	}
+	names := make([]string, len(out))
+	for i, b := range out {
+		names[i] = b.Name
+	}
+	return names, nil
+}
+
+// File is one file as GitHub serves it.
+type File struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+// FileContents is one file of a repository at a ref (empty ref: the default
+// branch). Content is base64, as GitHub answers.
+func (g Client) FileContents(ctx context.Context, r Repo, path, ref string) (File, error) {
+	q := url.Values{}
+	if ref != "" {
+		q.Set("ref", ref)
+	}
+	var out struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	p := r.path() + "/contents/" + path
+	if len(q) != 0 {
+		p += "?" + q.Encode()
+	}
+	if err := g.api(ctx, r, "GET", p, nil, &out); err != nil {
+		return File{}, err
+	}
+	return File{Path: out.Path, Content: out.Content}, nil
+}
+
+func (g Client) UpdateIssue(ctx context.Context, r Repo, number int, title, body *string) (Item, error) {
 	var out ghIssue
 	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/issues/%d", r.path(), number), patchBody(map[string]*string{"title": title, "body": body}), &out)
 	return out.item(), err
 }
 
-func (g ghCLI) UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error) {
+// UpdatePR changes only the fields that are not nil.
+func (g Client) UpdatePR(ctx context.Context, r Repo, number int, title, body, base *string) (Item, error) {
 	var out ghPull
 	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/pulls/%d", r.path(), number), patchBody(map[string]*string{"title": title, "body": body, "base": base}), &out)
 	return out.item(), err
@@ -390,18 +513,20 @@ type gqlRead struct {
 	} `json:"data"`
 }
 
-func (g ghCLI) Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
+// Read is an issue or PR in one request: for a PR its CI and mergeability
+// too (IsPR says which it is), and the request budget in Rate.
+func (g Client) Read(ctx context.Context, r Repo, number int) (Item, error) {
 	var out gqlRead
 	body := map[string]any{"query": readQuery, "variables": map[string]any{"owner": r.Owner, "name": r.Name, "number": number}}
 	if err := g.api(ctx, r, "POST", "graphql", body, &out); err != nil {
-		return GitHubItem{}, err
+		return Item{}, err
 	}
 	n := out.Data.Repository.Item
 	if n == nil {
-		return GitHubItem{}, fmt.Errorf("GitHub has no issue or PR #%d in %s", number, r.Slug())
+		return Item{}, fmt.Errorf("GitHub has no issue or PR #%d in %s", number, r.Slug())
 	}
-	it := GitHubItem{Number: n.Number, URL: n.URL, Title: n.Title, Body: n.Body, State: strings.ToLower(n.State), IsPR: n.Typename == "PullRequest",
-		Rate: GitHubRate{Remaining: out.Data.RateLimit.Remaining, ResetAt: out.Data.RateLimit.ResetAt}}
+	it := Item{Number: n.Number, URL: n.URL, Title: n.Title, Body: n.Body, State: strings.ToLower(n.State), IsPR: n.Typename == "PullRequest",
+		Rate: Rate{Remaining: out.Data.RateLimit.Remaining, ResetAt: out.Data.RateLimit.ResetAt}}
 	if !it.IsPR {
 		return it, nil
 	}
@@ -443,12 +568,12 @@ func graphqlMergeState(status, mergeable string) string {
 // foldChecks folds a head commit's check runs and statuses into one word and
 // the breakdown the details show. More contexts than were read (over 100) leave
 // the rollup's own word the last say, so a failure past the cut still shows.
-func foldChecks(rollup string, nodes []gqlContext, total int) (string, *db.LinkChecks) {
-	var sum db.LinkChecks
+func foldChecks(rollup string, nodes []gqlContext, total int) (string, *Checks) {
+	var sum Checks
 	fail := func(name, url string) {
 		sum.Failing++
-		if len(sum.Failed) < db.LinkChecksListed {
-			sum.Failed = append(sum.Failed, db.LinkCheck{Name: name, URL: url})
+		if len(sum.Failed) < ChecksListed {
+			sum.Failed = append(sum.Failed, Check{Name: name, URL: url})
 		} else {
 			sum.More++
 		}

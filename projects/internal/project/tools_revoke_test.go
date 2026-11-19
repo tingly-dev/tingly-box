@@ -17,9 +17,7 @@ import (
 // 404 once nothing is served at its path.
 func answers(t *testing.T, tools *sessionToolsMCP, threadID string) (status int, url string) {
 	t.Helper()
-	tools.mu.Lock()
-	url = tools.urls[threadID]
-	tools.mu.Unlock()
+	url = tools.loop().URL(threadID)
 	require.NotEmpty(t, url, "the thread has a tool URL")
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	require.NoError(t, err)
@@ -95,17 +93,11 @@ func TestResolveAndArchiveRevokeAThreadsTools(t *testing.T) {
 
 	_, err = svc.Threads.Resolve(worker.ID)
 	require.NoError(t, err)
-	tools.mu.Lock()
-	_, kept := tools.urls[worker.ID]
-	tools.mu.Unlock()
-	assert.False(t, kept, "a resolved thread has no tool URL")
+	assert.Empty(t, tools.loop().URL(worker.ID), "a resolved thread has no tool URL")
 
 	_, err = svc.Threads.ArchiveSession(session.ID)
 	require.NoError(t, err)
-	tools.mu.Lock()
-	_, kept = tools.urls[session.ID]
-	tools.mu.Unlock()
-	assert.False(t, kept, "an archived session has no tool URL")
+	assert.Empty(t, tools.loop().URL(session.ID), "an archived session has no tool URL")
 
 	// Reopened, a thread runs again with a fresh URL.
 	_, err = svc.Threads.Reopen(worker.ID, Source{})
@@ -150,12 +142,8 @@ func TestPausingOrArchivingAProjectEndsItsThreadsToolsButNotTheCoordinators(t *t
 			p, err := f.store.GetProject(f.project.ID)
 			require.NoError(t, err)
 			require.NoError(t, c.stop(svc, p))
-			tools.mu.Lock()
-			_, workerURL := tools.urls[worker.ID]
-			_, mainURL := tools.urls[f.project.MainThreadID]
-			tools.mu.Unlock()
-			assert.False(t, workerURL, "the project's thread has no tool URL")
-			assert.True(t, mainURL, "the coordinator's is left alone: its tools already refuse the project")
+			assert.Empty(t, tools.loop().URL(worker.ID), "the project's thread has no tool URL")
+			assert.NotEmpty(t, tools.loop().URL(f.project.MainThreadID), "the coordinator's is left alone: its tools already refuse the project")
 
 			require.NoError(t, c.back(svc, p))
 			_, err = svc.Threads.Send(context.Background(), worker.ID, "again", Source{}, nil)
@@ -163,9 +151,7 @@ func TestPausingOrArchivingAProjectEndsItsThreadsToolsButNotTheCoordinators(t *t
 			<-started
 			waitStatus(t, f.store, worker.ID, db.ThreadIdle)
 			require.Eventually(t, func() bool {
-				tools.mu.Lock()
-				defer tools.mu.Unlock()
-				return tools.urls[worker.ID] != ""
+				return tools.loop().URL(worker.ID) != ""
 			}, 2*time.Second, 10*time.Millisecond)
 			status, _ = answers(t, tools, worker.ID)
 			assert.NotEqual(t, http.StatusNotFound, status)

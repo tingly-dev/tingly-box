@@ -99,19 +99,27 @@ func TestRegisterBuiltinTools_RegistersWebtoolsAndAdvisor(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, saved)
-	require.Len(t, saved.Sources, 3)
+	require.Len(t, saved.Sources, 4)
 
-	var webtools, advisor *typ.MCPSourceConfig
+	var webtools, github, advisor *typ.MCPSourceConfig
 	for i := range saved.Sources {
 		switch saved.Sources[i].ID {
 		case mcptools.BuiltinWebtoolsSourceID:
 			webtools = &saved.Sources[i]
+		case mcptools.BuiltinGithubSourceID:
+			github = &saved.Sources[i]
 		case mcptools.BuiltinAdvisorSourceID:
 			advisor = &saved.Sources[i]
 		}
 	}
 	require.NotNil(t, webtools)
+	require.NotNil(t, github)
 	require.NotNil(t, advisor)
+	require.False(t, *github.Enabled, "the built-in GitHub source is off by default")
+	require.Equal(t, "stdio", github.Transport)
+	require.Equal(t, []string{"mcp-github"}, github.Args)
+	require.Equal(t, mcptools.GitHubPreset, github.Preset)
+	require.Equal(t, mcptools.BuiltinGithubToolNames(), github.Tools)
 	require.True(t, *advisor.Enabled, "the Server Tool is on by default")
 	require.NotNil(t, advisor.Advisor)
 	// No placeholder strings — fields are empty by default

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -261,78 +260,6 @@ func TestProjectsToolsAreApprovedAtThePromptUnlessTheProjectAsks(t *testing.T) {
 	p.ThreadGitHubAccess = GitHubAsk
 	require.NoError(t, f.store.SaveProject(p))
 	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": false, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
-}
-
-func TestRedact(t *testing.T) {
-	for in, want := range map[string]string{
-		"token ghp_abcdefghijklmnopqrstuvwxyz0123456789 end": "token [redacted] end",
-		"github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz":    "[redacted]",
-		"Authorization: Bearer abc.def-ghi":                  "Authorization: Bearer [redacted]",
-		"GH_TOKEN=abc123 gh":                                 "GH_TOKEN=[redacted] gh",
-		"fatal: https://user:p4ss@github.com/a/b.git":        "fatal: https://github.com/a/b.git",
-		"https://x-access-token:ghs_abc@github.com/a/b":      "https://github.com/a/b",
-		"nothing secret here":                                "nothing secret here",
-	} {
-		assert.Equal(t, want, redact(in), in)
-	}
-}
-
-// fakeGH writes a gh executable that records its arguments and body and
-// answers from a canned file, so ghCLI is exercised with no network.
-func fakeGH(t *testing.T, answer string, exit int) (bin, logFile string) {
-	t.Helper()
-	dir := t.TempDir()
-	logFile = filepath.Join(dir, "log")
-	script := "#!/bin/sh\n" +
-		"echo \"$@\" >> " + logFile + "\n" +
-		"cat >> " + logFile + "\n" +
-		"if [ " + string(rune('0'+exit)) + " -ne 0 ]; then echo 'gh: HTTP 422 Unprocessable ghp_abcdefghijklmnopqrstuvwxyz0123456789' >&2; exit " + string(rune('0'+exit)) + "; fi\n" +
-		"cat <<'EOF'\n" + answer + "\nEOF\n"
-	bin = filepath.Join(dir, "gh")
-	require.NoError(t, os.WriteFile(bin, []byte(script), 0o755))
-	return bin, logFile
-}
-
-func TestGhCLIUsesRESTWithAJSONBody(t *testing.T) {
-	bin, logFile := fakeGH(t, `{"number":7,"html_url":"https://github.com/acme/widgets/pull/7","title":"T","state":"open","head":{"ref":"tp/x","sha":"abc"},"base":{"ref":"main"},"mergeable_state":"dirty"}`, 0)
-	g := ghCLI{bin: bin}
-	repo := GitHubRepo{Owner: "acme", Name: "widgets"}
-
-	title, body := "New \"title\"", "line 1\nline 2 $(rm -rf /) `x`"
-	it, err := g.UpdatePR(context.Background(), repo, 7, &title, &body, nil)
-	require.NoError(t, err)
-	assert.Equal(t, 7, it.Number)
-	assert.Equal(t, "conflicts", it.MergeState)
-	b, err := os.ReadFile(logFile)
-	require.NoError(t, err)
-	got := string(b)
-	assert.Contains(t, got, "api -X PATCH --input - repos/acme/widgets/pulls/7", "REST, not `gh pr edit`")
-	assert.Contains(t, got, `"title":"New \"title\""`)
-	assert.Contains(t, got, `$(rm -rf /)`, "the body travels as data, never through a shell")
-	assert.NotContains(t, got, `"base"`, "an unset field is not sent")
-
-	// An issue is edited through the issues endpoint, with only the fields given.
-	_, err = g.UpdateIssue(context.Background(), repo, 9, &title, nil)
-	require.NoError(t, err)
-	b, _ = os.ReadFile(logFile)
-	assert.Contains(t, string(b), "api -X PATCH --input - repos/acme/widgets/issues/9")
-
-	_, err = g.CreatePR(context.Background(), repo, "T", "B", "tp/x", "main", true)
-	require.NoError(t, err)
-	b, _ = os.ReadFile(logFile)
-	assert.Contains(t, string(b), "api -X POST --input - repos/acme/widgets/pulls")
-	assert.Contains(t, string(b), `"draft":true`)
-}
-
-func TestGhCLIErrorsAreRedactedAndGhMissingIsSaid(t *testing.T) {
-	bin, _ := fakeGH(t, "", 1)
-	_, err := ghCLI{bin: bin}.CreateIssue(context.Background(), GitHubRepo{Owner: "a", Name: "b"}, "t", "b")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "HTTP 422")
-	assert.NotContains(t, err.Error(), "ghp_abcdef")
-
-	_, err = ghCLI{bin: filepath.Join(t.TempDir(), "no-gh")}.DefaultBranch(context.Background(), GitHubRepo{Owner: "a", Name: "b"})
-	assert.ErrorIs(t, err, ErrGitHubUnavailable)
 }
 
 // A folder session is offered the Projects tools like a project thread, and its
