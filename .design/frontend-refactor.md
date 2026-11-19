@@ -95,7 +95,9 @@ Also: `LegacyRemoteAgentRedirect` and `LegacyRemoteCoderRedirect` in `routes/app
 - `layout/Layout.tsx`, `shell/MobileShell.tsx` → `pages/scenario/lastAgent`.
 - `layout/useActivityItems.tsx` → `pages/mcp/{profileStore,types}`, `pages/image/profiles/imageProfileStore`, `pages/image/components/{ThumbImage,imageThumbnails}`, `pages/projects/ProjectsNav`.
 
-These are the "nav-level shared state lives in a page folder" pattern the CLAUDE.md warns about; it is currently safe (modules are page-free) but the *location* says otherwise. Proposal: a `src/features/` (or `src/domain/`) layer for cross-cutting feature state — `scenario/{registry,lastAgent,context}`, `mcp/profileStore`, `image/profiles` — that `pages/`, `layout/` and `components/` all import; `pages/` then only contains routed screens and their private parts. Mechanical move + import rewrite; guard with an oxlint/`no-restricted-imports` rule (`components|layout|shell|hooks|utils` must not import `@/pages/*`).
+**Done (phase 3c)**: `src/features/{scenario,mcp,image}` now hold `scenarioRegistry`, `lastAgent`, `ScenarioPageContext`, `useFunctionPanelData`, the MCP profile store/types, and the image workspace DB, profile store/types, `ThumbImage` and thumbnails (13 files + the image playground types); import specifiers rewritten by a resolver-based script, typecheck clean, `modulepreload` set unchanged. `.oxlintrc.json` now bans `@/pages/*` from the shared layers (rule verified to fire on a probe file). Left as is: `pages/image` and `pages/mcp` still import `pages/scenario/{components,hooks}` (TemplatePage, useRuleManagement, …) — page-to-page, outside the rule; that library would need its own move (`features/scenario/` or `components/scenario/`) and is the next candidate. `layout/useActivityItems` keeps one lazy import of `pages/projects/ProjectsNav` (a widget, not state).
+
+These were the "nav-level shared state lives in a page folder" pattern the CLAUDE.md warns about; it is currently safe (modules are page-free) but the *location* says otherwise. Proposal: a `src/features/` (or `src/domain/`) layer for cross-cutting feature state — `scenario/{registry,lastAgent,context}`, `mcp/profileStore`, `image/profiles` — that `pages/`, `layout/` and `components/` all import; `pages/` then only contains routed screens and their private parts. Mechanical move + import rewrite; guard with an oxlint/`no-restricted-imports` rule (`components|layout|shell|hooks|utils` must not import `@/pages/*`).
 
 ### 3.2 Page-owned code sitting in shared folders
 
@@ -137,24 +139,24 @@ Files whose **only** importer area is a single page — colocate them with it (o
 - `components/credential/{LazyQuotaRawResponseDialog,QuotaRawResponseDialog}` both export a component named `QuotaRawResponseDialog` — rename the lazy wrapper.
 - `pages/mcp/types.ts` has 9 unused exports (constants + aliases) — trim during phase 3.
 
-## 4. Phased plan (one PR each, review-sized)
+## 4. Phased plan (one PR each, review-sized) and status
 
-| Phase | PR | Content | Risk | Verify |
-|---|---|---|---|---|
-| **1** (this PR) | Remove unreachable code | §1.1 | none: typecheck, lint, tests, vite build identical | `gen:api` → `typecheck` → `lint` → `test` (16 pre-existing env failures unchanged) → `vite build` |
-| 1b | Remaining dead code | §1.2: unused locals (per file), `TokenHistoryChart` wrapper, unused deps, tracked artefacts (+ `.gitignore`), stale comments, eslint decision; **add `knip` + `noUnusedLocals`** so it stays clean | low | typecheck; lockfile diff reviewed; build; modulepreload list in `dist/index.html` unchanged |
-| 2a | Tooling guard | `knip` config, `no-restricted-imports` for `@/pages` from non-pages, unused-export report in CI (non-blocking first) | none | lint |
-| 2b | Pure-same duplicates | D4, D5, `Legacy*Redirect`, D1 (`useCopyFeedback` → ui) | low | tests for the helper; copy button manual check |
-| 2c | Diverged duplicates | D3 rename, D6 `FieldRow`, D8 storage helpers, D9 formatters (table tests first) | low–medium | unit tests; screenshots of Claude Code / Codex config modals (expect none changed) |
-| 2d | Larger dedupe | D7 IndexedDB util, D11 code-sample component, D15 deferred table/log shells | medium | needs tests/screenshots; split further if big |
-| 3a | Delete shims | §3.4 codemod to `@tingly/ui/*`, remove `src/theme` + component shims; update `CLAUDE.md` | low (mechanical, typecheck-proven) | typecheck, tests, build |
-| 3b | Colocate single-use code | §3.2, one PR per page area (scenario, credential, image, rest) | low | typecheck; lazy-chunk check (`CLAUDE.md` code-splitting section) |
-| 3c | Feature layer | §3.1/3.3: `features/` for scenario/mcp/image shared state + the import-ban rule; move `ScenarioPageContext` (the 2026-09 deferred item) | medium (large import churn, chunking) | typecheck, tests, `pnpm build` + `modulepreload` unchanged |
-| 3d | Page folders / naming | §3.6 | low | typecheck, route contract test |
-| 4 | i18n key cleanup | unused keys per locale with a usage scanner; keep en/zh/ru parity | low, noisy | i18n parity test + app smoke in mock mode |
-| 5 | Package boundaries | §3.5 trims, `ThemeModeProvider` question (D10) | low | typecheck of every package |
+Stack (each PR is based on the previous one): #2644 → #2651 → #2654 → #2656 → #2658 → #2659.
 
-Each phase ends with `pnpm gen:api && pnpm typecheck && pnpm lint && pnpm test` and, for anything touching imports of lazy pages, `pnpm build` + a check that `dist/index.html`'s `modulepreload` list did not grow. Phases that can change pixels (2c, 2d) include before/after mock-mode screenshots (`ui-preview` skill) in the PR.
+| Phase | PR | Content | Status |
+|---|---|---|---|
+| **1** | #2644 | Unreachable files, unused imports, dead helpers (§1.1) + this document | done |
+| 1b | #2651 | Unused locals, `TokenHistoryChart` wrapper, tracked artefacts, `noUnusedLocals` on (§1.2) | done, except unused dependencies / ESLint stack (needs `pnpm install --lockfile-only`, refused in this environment) |
+| 2a | #2659 (part) | The `@/pages` import ban in `.oxlintrc.json` | done; **`knip` not added** (not installed; would need `pnpm add`) |
+| 2b | #2654 | Identical duplicates: D1 `useCopyFeedback`, D4 `formatLatency`, D5 `useAppLanguage`, legacy redirects | done |
+| 2c | — | Diverged duplicates: D3 `maskToken` renames, D6 `FieldRow`, D8 storage helpers, D9 formatters | **not done**: re-checked, `maskToken` ×3 and `formatTokens` ×2 have *different* output (renaming is churn, unifying changes the UI), D6/D8 need per-site judgement and screenshots |
+| 2d | — | D7 IndexedDB util, D11 code-sample component, D15 deferred table/log shells | not done (medium risk, needs tests/screenshots) |
+| 3a | #2656 | Delete `@tingly/ui` re-export shims, move primitive tests into the package | done |
+| 3b | #2658 | Colocate loose single-page files, page shells into folders (domain folders deliberately kept) | done |
+| 3c | #2659 | `src/features/{scenario,mcp,image}` + lint ban | done; `pages/image|mcp` → `pages/scenario/{components,hooks}` still open |
+| 3d | #2658 (part) | Page folders: Credential, Help, VirtualModels, UserUsage, Guardrails | done; `DashboardPage`, `HubPage`, `Login`, `ModelTestPage`, `QuotaHistoryPage`, `RetiredRecordingsPage` have no sibling folder, left |
+| 4 | — | Unused i18n keys | not done: needs a scanner that understands dynamic keys (`t(`foo.${x}`)`); parity across en/zh/ru must hold |
+| 5 | — | Package boundaries (§3.5) | **decided against for now**: `embed.ts` exports (`WorkspaceLayout`, `Composer`, `StatusGroups`, `timeAgo`, sidebar prop types) have no host consumer today but are the documented host surface (`.design/projects-panel.md`, `projects-desk-absorption.md`, `workspace-home.md`); the `@tingly/ui` palette constants are an intentional palette API. Trimming either is an owner call, not a refactor |
 
 ## 5. Notes for whoever continues
 

@@ -43,7 +43,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';

@@ -6,7 +6,7 @@ import { loadPlaygroundSession, savePlaygroundSession } from '@/pages/image/util
 import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImageReasoningEffort, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
+import type { Endpoint, GenerationRun, ImageReasoningEffort, ImportedImage, Quality, ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 

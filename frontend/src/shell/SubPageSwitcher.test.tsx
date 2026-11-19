@@ -11,8 +11,8 @@ vi.mock('@/contexts/FeatureFlagsContext', () => ({
 }));
 vi.mock('@/layout/useProjectsWaiting', () => ({ useProjectsWaiting: () => false }));
 vi.mock('@/contexts/ProfileContext', () => ({ useProfileContext: () => ({ profiles: { claude_code: [{ id: 'p1', name: 'ds' }, { id: 'p2', name: 'sonnet' }] } }) }));
-vi.mock('@/pages/mcp/profileStore', () => ({ useMCPProfiles: () => [{ id: 'default', name: 'Default' }, { id: 'm2', name: 'Extra' }] }));
-vi.mock('@/pages/image/profiles/imageProfileStore', () => ({ useImageProfiles: () => [{ id: 'i1', name: 'Poster', refs: [] }] }));
+vi.mock('@/features/mcp/profileStore', () => ({ useMCPProfiles: () => [{ id: 'default', name: 'Default' }, { id: 'm2', name: 'Extra' }] }));
+vi.mock('@/features/image/imageProfileStore', () => ({ useImageProfiles: () => [{ id: 'i1', name: 'Poster', refs: [] }] }));
 vi.mock('@/contexts/TeamContext', () => ({ useTeamContext: () => ({ teams: [{ slug: 'a', name: 'Alpha', is_default: true }, { slug: 'b', name: 'Beta' }] }) }));
 vi.mock('@/services/uiPrefs', () => ({ syncUiPrefs: vi.fn() }));
 

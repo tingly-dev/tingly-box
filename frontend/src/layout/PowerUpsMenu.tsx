@@ -26,7 +26,7 @@ import type { ExperimentalFeature } from '@/components/ExperimentalFeatureGate';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
-import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
+import { SCENARIOS, useHiddenScenarios } from '@/features/scenario/scenarioRegistry';
 import { Z_INDEX } from '@tingly/ui/theme/zIndex';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { announceFeatureDisabled } from './featureNotice';

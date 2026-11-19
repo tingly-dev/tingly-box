@@ -25,8 +25,8 @@ import { fontMono } from '@tingly/ui/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
 import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';
-import ThumbImage from './components/ThumbImage';
-import { THUMB_EDGE_TILE } from './components/imageThumbnails';
+import ThumbImage from '../../features/image/ThumbImage';
+import { THUMB_EDGE_TILE } from '../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 

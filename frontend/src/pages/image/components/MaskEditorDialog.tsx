@@ -32,7 +32,7 @@ import {
     type MaskLayers,
     type Stroke,
 } from '@tingly/vision';
-import type { ReferenceMask } from './ImageGenPlayground.types';
+import type { ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob, parseImageSize } from '@tingly/vision';
 import { addReferences, reorderReferences } from './imageGenSession';
-import type { ReferenceMask } from './ImageGenPlayground.types';
+import type { ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 import type { SketchLayers, SketchResult } from './SketchCanvasDialog';
 import { MAX_EDIT_REFERENCE_IMAGES, type ReferenceImage } from './ImageGenReferenceImages';
 

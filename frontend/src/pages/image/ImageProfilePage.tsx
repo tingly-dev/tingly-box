@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useRuleManagement } from '@/pages/scenario/hooks/useRuleManagement';
 import { useNotify } from '@/hooks/useNotify';
 import ImageGenPlaygroundCard from './components/ImageGenPlaygroundCard';
-import { createImageProfile, useImageProfiles, useImageProfilesReady } from './profiles/imageProfileStore';
+import { createImageProfile, useImageProfiles, useImageProfilesReady } from '../../features/image/imageProfileStore';
 
 const scenario = 'imagegen';
 const WORKBENCH_MIN_HEIGHT = 600;

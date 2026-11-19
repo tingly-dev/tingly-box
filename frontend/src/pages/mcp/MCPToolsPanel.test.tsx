@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPToolsPanel from './MCPToolsPanel';
-import type { MCPRouteSource, MCPSourceConfig } from './types';
+import type { MCPRouteSource, MCPSourceConfig } from '../../features/mcp/types';
 
 const mocks = vi.hoisted(() => ({ save: vi.fn() }));
 vi.mock('react-i18next', () => ({

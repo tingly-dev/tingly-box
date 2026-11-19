@@ -1,4 +1,4 @@
-import { USE_MOCK } from '../imageWorkspaceDb';
+import { USE_MOCK } from '../../../features/image/imageWorkspaceDb';
 import { ideaUserMessage } from './ideaPromptTemplates';
 import { createPromptRunStore, type PromptRunBase } from './promptRunStore';
 

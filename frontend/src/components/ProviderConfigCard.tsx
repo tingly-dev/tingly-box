@@ -12,7 +12,7 @@ import { ConfigRow } from './ConfigRow';
 import { CompactConfigCard } from './CompactConfigCard';
 import PluginFeatures from './PluginFeatures';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { copyableTextStyle } from '@/styles/textStyles';
 import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 

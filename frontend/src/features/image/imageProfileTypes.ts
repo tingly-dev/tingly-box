@@ -1,5 +1,8 @@
-import type { ReferenceImage } from '../components/ImageGenReferenceImages';
-import type { ImageReasoningEffort, Quality } from '../components/ImageGenPlayground.types';
+// Type-only: a profile stores reference images in the playground's shape, which is defined next to the
+// component that edits them. No runtime edge, so the nav can import this module without the page.
+// oxlint-disable-next-line no-restricted-imports
+import type { ReferenceImage } from '@/pages/image/components/ImageGenReferenceImages';
+import type { ImageReasoningEffort, Quality } from './ImageGenPlayground.types';
 
 // One of a profile's saved prompts. The profile page has a single prompt
 // field; these are what it switches between.

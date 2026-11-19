@@ -9,7 +9,7 @@ import ScenarioLogDialog from '@/components/RuleLogDialog';
 import type { EnvironmentMode } from '@/components/EnvironmentModeSwitcher';
 import { transformUrlByMode } from '@/utils/tokenUtils';
 import { type ClientConfigTool, useClientConfigStatus } from '@/pages/scenario/hooks/useClientConfigStatus';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';

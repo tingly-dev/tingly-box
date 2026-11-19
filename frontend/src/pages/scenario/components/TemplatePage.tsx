@@ -21,7 +21,7 @@ import {useScrollToNewRule} from '@/pages/scenario/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/pages/scenario/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
-import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
+import {useScenarioPageModal} from '@/features/scenario/ScenarioPageContext';
 import {ROUTING_GUIDE_SEEN_KEY} from '@/utils/onboardingFlags';
 import {ProviderQuotaProvider} from '@/contexts/ProviderQuotaContext';
 

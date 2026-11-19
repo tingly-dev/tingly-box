@@ -3,7 +3,7 @@ import { Box, Button, ButtonBase, Collapse, IconButton, Stack, Switch, Typograph
 import { useTranslation } from 'react-i18next';
 import { Close, KeyboardArrowDown } from '@/components/icons';
 import MCPToolParameters from './MCPToolParameters';
-import type { MCPCatalogTool } from './types';
+import type { MCPCatalogTool } from '../../features/mcp/types';
 
 // The one row every tool list uses (MCP Tools, Server Tools, MCP profile): a
 // monospace name, a one-line description and a switch. Click the row to see the
