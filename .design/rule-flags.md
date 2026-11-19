@@ -215,7 +215,7 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 |----|------|------|------|
 | **op（操作原语）** | `internal/protocol/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyThinkingEffort`、`ops.ApplyCursorCompatContentNormalization(*openai.ChatCompletionNewParams)` |
 | **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`RulePreBaseTransforms` / `RulePreVendorTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform`、`transform.RuleThinkingTransform` |
-| **Transform（链路阶段，server-domain）** | `internal/protocolserver/transform/` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）或运行时依赖（MCP runtime）。 | `MaxTokensDefaultTransform` / `OutputLimitTransform`（输出上限）、`CleanHeaderTransform`、`ThinkingCompactTransform`、MCP 注入 |
+| **Transform（链路阶段，server-domain）** | `internal/protocolserver/servertransform/` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）或运行时依赖（MCP runtime）。 | `MaxTokensDefaultTransform` / `OutputLimitTransform`（输出上限）、`CleanHeaderTransform`、`ThinkingCompactTransform`、MCP 注入 |
 
 **为什么必须分两层？**
 
@@ -238,7 +238,7 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 - 协议层 Transform 只依赖 SDK 类型，可以放在 `protocol/transform/`，与
   `BaseTransform`、`ConsistencyTransform`、`VendorTransform` 同包。
 - 一旦 Transform 需要读 `*typ.ScenarioConfig`、`*typ.Rule` 等 server
-  类型，就放到 `internal/protocolserver/transform/`，避免反向依赖。
+  类型，就放到 `internal/protocolserver/servertransform/`，避免反向依赖。
 
 ---
 
@@ -433,7 +433,7 @@ Plugins Card 操作。
    │   ② internal/protocol/transform/<xxx>.go：写 Transform，      │
    │      构造期接受配置，Apply() 里 type-switch ctx.Request，     │
    │      匹配目标类型时调 op。如需 server-domain 类型才放到       │
-   │      internal/protocolserver/transform/ 下。                  │
+   │      internal/protocolserver/servertransform/ 下。                  │
    │   ③ pre-Base / post-Base 二选一：                             │
    │      • 作用于 inbound 形态（cursor_compat 类）→               │
    │        protocolserver/rule_flags.go::RulePreBaseTransforms    │
@@ -500,7 +500,7 @@ Plugins Card 操作。
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
 | preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |
-| Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/protocolserver/transform/`。避免反向依赖 |
+| Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/protocolserver/servertransform/`。避免反向依赖 |
 | chain 装配（`sourceTransforms` / `targetTransforms` / `buildTransformChain`）是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `preVendor` 两个 slot 入参并保证插入位置（preBase / preVendor slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 preVendor transforms 误落在 Vendor 之后 |
 | 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
 | 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
@@ -527,7 +527,7 @@ rule flag 在请求级覆盖或继承它。`ResolveRuleFlagsWithScenario`（`int
 
 | Flag | 作用 |
 |------|------|
-| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/protocolserver/transform.ThinkingCompactTransform`） |
+| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context（实现：`internal/protocolserver/servertransform.ThinkingCompactTransform`） |
 | ~~`recording_v2`~~ | 已升级为 shared flag `recording` 的 scenario 侧（见上方共享表与 `.design/recording.md` §3.5），值为采集点多选集合 |
 | `unified` / `separate` / `smart` | 路由模式开关 |
 
