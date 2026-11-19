@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
-	"github.com/tingly-dev/tingly-box/vmodel/spec"
 )
 
 // MatrixCmd runs the protocol validation matrix tests.
@@ -171,37 +170,9 @@ func (m *MatrixCmd) Run() error {
 		if m.Mode != "single" {
 			return fmt.Errorf("--config requires --mode=single")
 		}
-		seen := make(map[string]bool)
-		var definitions []spec.Definition
-		for _, path := range m.Definitions {
-			loaded, err := spec.Load(path)
-			if err != nil {
-				return err
-			}
-			definitions = append(definitions, loaded...)
-		}
-		runtime, err := spec.New(definitions)
+		definitionScenarios, err = scenariosFromDefinitions(m.Definitions, m.Scenarios)
 		if err != nil {
 			return err
-		}
-		for _, id := range runtime.IDs() {
-			if len(m.Scenarios) > 0 && !slices.Contains(m.Scenarios, id) {
-				continue
-			}
-			scn, err := runtime.Scenario(id)
-			if err != nil {
-				return err
-			}
-			if len(scn.Assertions) == 0 {
-				return fmt.Errorf("definition %q requires at least one expect assertion for matrix tests", scn.Name)
-			}
-			seen[scn.Name] = true
-			definitionScenarios = append(definitionScenarios, scn)
-		}
-		for _, name := range m.Scenarios {
-			if !seen[name] {
-				return fmt.Errorf("scenario %q not found in --config files", name)
-			}
 		}
 	}
 
