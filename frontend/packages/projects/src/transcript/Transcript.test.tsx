@@ -7,7 +7,7 @@ import type {ActivityStep, TranscriptBlock, TranscriptEntry} from './model';
 import {buildTranscript} from './model';
 import {noteServerDate, resetServerClock} from '../utils/serverClock';
 
-vi.mock('react-i18next', () => ({useTranslation: () => ({t: (_key: string, opts: {defaultValue: string; count?: number}) => opts.defaultValue.replace('{{count}}', String(opts.count)).replace('Read 1 files', 'Read 1 file').replace('ran 1 commands', 'ran 1 command').replace('edited 1 files', 'edited 1 file')})}));
+vi.mock('react-i18next', () => ({useTranslation: () => ({i18n: {language: 'en'}, t: (_key: string, opts: {defaultValue: string; count?: number}) => opts.defaultValue.replace('{{count}}', String(opts.count)).replace('Read 1 files', 'Read 1 file').replace('ran 1 commands', 'ran 1 command').replace('edited 1 files', 'edited 1 file')})}));
 // A fresh store per test; within one, it outlives unmounts like the host's does.
 let drafts: DraftStorage;
 beforeEach(() => {drafts = createMemoryDraftStorage();});
@@ -294,18 +294,17 @@ describe('new since last visit', () => {
 
     it('draws the divider right above the first unseen message', () => {
         at('2026-10-04T00:02:00Z');
-        const divider = screen.getByRole('separator');
-        expect(divider).toHaveTextContent('New');
+        const divider = screen.getByText('New').closest('[role="separator"]') as HTMLElement;
         expect(divider.compareDocumentPosition(screen.getByText('seen reply')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
         expect(divider.compareDocumentPosition(screen.getByText('unseen reply')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     it('draws none on a first visit or when nothing is new', () => {
         at(undefined);
-        expect(screen.queryByRole('separator')).toBeNull();
+        expect(screen.queryByText('New')).toBeNull();
         cleanup();
         at('2026-10-04T00:05:00Z');
-        expect(screen.queryByRole('separator')).toBeNull();
+        expect(screen.queryByText('New')).toBeNull();
     });
 });
 

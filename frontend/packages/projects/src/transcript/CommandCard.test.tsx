@@ -5,6 +5,7 @@ import type {TranscriptBlock} from './model';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
+        i18n: {language: 'en'},
         t: (_key: string, opts: {defaultValue: string} & Record<string, unknown>) => opts.defaultValue.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(opts[name])),
     }),
 }));
