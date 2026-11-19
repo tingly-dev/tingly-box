@@ -34,6 +34,27 @@ construction). The duo-topology rungs (duo / routing) trade speed for
 process-level fidelity: two full `server.Start()` child processes and real
 TCP between them.
 
+### Terms used by the commands
+
+| Term | Meaning |
+|------|---------|
+| **definition** | A VModel `id` / `kind` file (JSON/YAML) loaded by `spec.Load`; the contract is in [`vmodel-definitions.md`](../../.design/vmodel-definitions.md). `matrix --config` takes these. |
+| **fixture** | A captured agent request body under `testdata/fixtures/` that `replay` posts (not a definition). `--fixture` on `matrix` is a deprecated alias of `--config`. |
+| **virtual** upstream | The in-process `VirtualServer` mock, used by `agent --mock` and `replay --upstream virtual`. |
+| **vmodel** upstream | The seeded builtin vmodel provider dispatched in-process, used by `replay --upstream vmodel` (IDs from the default definitions). |
+| `--config` | A VModel definition list for `matrix`; a providers/credentials YAML for `agent` and `replay` (see `init-config`). |
+
+### Running your own definitions through the matrix
+
+```sh
+./harness matrix --mode=single --config model.yaml            # repeatable; replaces builtins
+./harness matrix --mode=single --config model.yaml --scenario my-id
+```
+
+Each definition needs an `expect` block (the matrix rejects ones without
+assertions) and `--mode=single`. Loading is strict: an explicit `kind` and
+exactly one behavior block, duplicate IDs fail.
+
 ### Response retention acceptance
 
 ```sh
