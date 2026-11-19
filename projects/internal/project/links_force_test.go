@@ -55,33 +55,36 @@ func (f *linksFixture) pushBehind(t *testing.T) string {
 	return run(t, f.remote, "git", "rev-parse", "tp/work")
 }
 
-func TestForceOverCommitsNotSeenAsksTheUserOnTheCommitShown(t *testing.T) {
+// A lease that does not hold is an error, not a card: the model fetches,
+// rebases and calls again.
+func TestForceOverCommitsNotSeenIsAnErrorAndAsksNoOne(t *testing.T) {
 	f := newLinksFixture(t)
+	f.allowAll()
 	cs, _ := f.client(t, f.worker.ID)
 	_, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x"})
 	require.False(t, isErr)
 	theirs := f.pushBehind(t)
 
-	// The user says no: their commit is untouched, and the model is told it was the user's decision.
-	f.answer = func(Approval) (bool, string) { return false, "leave it" }
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x", "force": true})
 	require.True(t, isErr, out)
-	assert.Contains(t, out, "did not approve")
-	assert.Contains(t, out, "leave it")
-	assert.Equal(t, theirs, run(t, f.remote, "git", "rev-parse", "tp/work"))
-	require.Len(t, f.approvals, 1)
-	assert.Contains(t, f.approvals[0].Summary, "Overwrite origin's tp/work")
-	assert.Equal(t, theirs, f.approvals[0].Input["origin_at"], "the card names the commit that would be lost")
+	assert.Contains(t, out, "origin/tp/work is at "+theirs[:10], "the error names the commit that would be lost")
+	assert.Contains(t, out, "git fetch origin")
+	assert.Contains(t, out, "git said:")
+	assert.Equal(t, theirs, run(t, f.remote, "git", "rev-parse", "tp/work"), "their commit is not overwritten")
+	assert.Empty(t, f.approvals)
 
-	// The user says yes: the lease moves to that commit and the push goes through.
-	f.allowAll()
+	// After a fetch and a rebase onto it the same call goes through.
+	run(t, f.repo, "git", "fetch", "-q", "origin")
+	run(t, f.repo, "git", "reset", "-q", "--soft", "origin/tp/work") // the rewritten work, on top of theirs
+	run(t, f.repo, "git", "commit", "-qam", "work, rebased onto theirs")
 	out, isErr = f.call(t, cs, "create_pr", map[string]any{"title": "x", "force": true})
 	require.False(t, isErr, out)
 	assert.Equal(t, run(t, f.repo, "git", "rev-parse", "tp/work"), run(t, f.remote, "git", "rev-parse", "tp/work"))
 }
 
-func TestForceOnABranchOriginHasAndThisCheckoutNeverSawAsks(t *testing.T) {
+func TestForceOnABranchOriginHasAndThisCheckoutNeverSawIsAnError(t *testing.T) {
 	f := newLinksFixture(t)
+	f.allowAll()
 	other := newRepo(t)
 	run(t, other, "git", "remote", "add", "origin", f.remote)
 	run(t, other, "git", "commit", "-q", "--allow-empty", "-m", "theirs")
@@ -91,9 +94,10 @@ func TestForceOnABranchOriginHasAndThisCheckoutNeverSawAsks(t *testing.T) {
 
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x", "force": true})
 	require.True(t, isErr, out)
+	assert.Contains(t, out, "never saw the branch")
+	assert.Contains(t, out, "origin/tp/work is at "+theirs[:10])
 	assert.Equal(t, theirs, run(t, f.remote, "git", "rev-parse", "tp/work"))
-	require.Len(t, f.approvals, 1)
-	assert.Contains(t, f.approvals[0].Reason, "never saw the branch")
+	assert.Empty(t, f.approvals)
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "create-pr")
 	}

@@ -681,7 +681,7 @@ func (l *Links) mayForce(t *db.Thread, lc *linkContext) (bool, error) {
 }
 
 // pusher is the push of one head for one create_pr call: it asks the user once
-// (needs, and a lease that no longer holds) and then pushes.
+// when needs says the call is beyond the thread's own work, then pushes.
 type pusher struct {
 	l           *Links
 	t           *db.Thread
@@ -689,11 +689,10 @@ type pusher struct {
 	force       bool
 	needs       []string
 	base, title string
-	asked       bool
 }
 
 func (p *pusher) run(ctx context.Context) error {
-	if len(p.needs) > 0 && !p.asked {
+	if len(p.needs) > 0 {
 		verb := "Push"
 		if p.force {
 			verb = "Force-push (--force-with-lease)"
@@ -712,44 +711,12 @@ func (p *pusher) run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		p.asked = true
 	}
 	if !p.force {
 		return pushBranch(ctx, p.t.Cwd, p.branch, nil)
 	}
 	seen := trackedOrigin(ctx, p.t.Cwd, p.branch)
-	err := pushBranch(ctx, p.t.Cwd, p.branch, &seen)
-	var stale *staleLeaseError
-	if !errors.As(err, &stale) {
-		return err
-	}
-	// origin has commits this checkout never saw: overwriting them is the one
-	// thing the lease exists to stop, so it is the user's call, on the commit
-	// they are shown, which is the lease of the retry.
-	now := originSha(ctx, p.t.Cwd, p.branch)
-	if now == "" || now == seen {
-		return err
-	}
-	seenText := "nowhere: it never saw the branch"
-	if seen != "" {
-		seenText = shortSHA(seen)
-	}
-	if err := p.l.authorize(ctx, p.t, Approval{
-		Tool:    githubToolRule(toolCreatePR),
-		Summary: fmt.Sprintf("Overwrite origin's %s (now at %s) with this checkout's %s", p.branch, shortSHA(now), p.branch),
-		Reason:  fmt.Sprintf("origin's %s has commits this checkout has not seen (it was at %s here); a force push would lose them", p.branch, seenText),
-		Input:   map[string]any{"head": p.branch, "force": true, "origin_at": now},
-	}); err != nil {
-		return err
-	}
-	return pushBranch(ctx, p.t.Cwd, p.branch, &now)
-}
-
-func shortSHA(sha string) string {
-	if len(sha) > 8 {
-		return sha[:8]
-	}
-	return sha
+	return pushBranch(ctx, p.t.Cwd, p.branch, &seen)
 }
 
 // trackedOrigin is the commit this checkout last saw on origin's branch (its
@@ -759,18 +726,11 @@ func trackedOrigin(ctx context.Context, dir, branch string) string {
 	return strings.TrimSpace(out)
 }
 
-// originSha is the commit origin has on the branch now, asked of the remote
-// itself; empty when it has none or cannot be reached.
-func originSha(ctx context.Context, dir, branch string) string {
-	out, err := git(ctx, dir, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
-	if err != nil {
-		return ""
-	}
-	f := strings.Fields(out)
-	if len(f) == 0 {
-		return ""
-	}
-	return f[0]
+// lsRemote is what origin says about the branch ("<sha>\trefs/heads/<b>"), empty
+// when it has none or cannot be reached.
+func lsRemote(ctx context.Context, dir, branch string) string {
+	out, _ := git(ctx, dir, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	return out
 }
 
 // onOrigin is whether origin has the branch (asked of the remote itself, as the
@@ -1360,12 +1320,6 @@ func commitsAhead(ctx context.Context, dir, base, head string) (int, bool) {
 	return 0, false
 }
 
-// staleLeaseError is a force push that git refused because origin's branch is
-// not where the lease said: someone's commits would have been lost.
-type staleLeaseError struct{ msg string }
-
-func (e *staleLeaseError) Error() string { return e.msg }
-
 // pushBranch publishes one branch of the thread. The refspec names only that
 // branch and has no "+", so it can neither touch another branch nor delete one.
 // With lease nil it is a plain push, which can only fast-forward. Otherwise it
@@ -1389,7 +1343,15 @@ func pushBranch(ctx context.Context, dir, branch string, lease *string) error {
 		msg := redact(strings.TrimSpace(out.String()))
 		switch {
 		case lease != nil && (strings.Contains(msg, "stale info") || strings.Contains(msg, "[rejected]")):
-			return &staleLeaseError{fmt.Sprintf("force-pushing %s was refused: origin's branch moved since this checkout saw it. Fetch and rebase onto it: %s", branch, clip(msg, 400))}
+			seen := "never saw the branch"
+			if *lease != "" {
+				seen = "last saw it at " + (*lease)[:min(len(*lease), 10)]
+			}
+			now := "unknown"
+			if f := strings.Fields(lsRemote(ctx, dir, branch)); len(f) > 0 {
+				now = f[0][:min(len(f[0]), 10)]
+			}
+			return fmt.Errorf("force-pushing %s was refused to protect commits on origin: origin/%s is at %s, this checkout %s, so a force would overwrite commits you have not seen. Nothing was pushed. Run `git fetch origin`, look at `git log %s..origin/%s`, rebase onto origin/%s and call create_pr with force=true again. git said: %s", branch, branch, now, seen, branch, branch, branch, clip(msg, 400))
 		// Only a push that lost to newer commits earns the rebase advice; a
 		// hook or a protected branch rejects for other reasons.
 		case strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first"):
