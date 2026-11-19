@@ -39,7 +39,7 @@ TCP between them.
 | Term | Meaning |
 |------|---------|
 | **definition** | A VModel `id` / `kind` file (JSON/YAML) loaded by `spec.Load`; the contract is in [`vmodel-definitions.md`](../../.design/vmodel-definitions.md). `matrix --config` takes these. |
-| **fixture** | A captured agent request body under `testdata/fixtures/` that `replay` posts (not a definition). `--fixture` on `matrix` is a deprecated alias of `--config`. |
+| **fixture** | A captured agent request body under `testdata/fixtures/` that `replay` posts (not a definition). |
 | **virtual** upstream | The in-process `VirtualServer` mock, used by `agent --mock` and `replay --upstream virtual`. |
 | **vmodel** upstream | The seeded builtin vmodel provider dispatched in-process, used by `replay --upstream vmodel` (IDs from the default definitions). |
 | `--config` | A VModel definition list for `matrix`; a providers/credentials YAML for `agent` and `replay` (see `init-config`). |

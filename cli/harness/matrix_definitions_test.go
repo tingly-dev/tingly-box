@@ -38,19 +38,30 @@ func TestMatrixDefinitionValidation(t *testing.T) {
 	}
 }
 
-func TestMatrixConfigAndFixtureAlias(t *testing.T) {
-	for _, flag := range []string{"--config", "--fixture"} {
-		var cli CLI
-		parser, err := kong.New(&cli)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := parser.Parse([]string{"matrix", "--mode", "single", flag, "model.yaml"}); err != nil {
-			t.Fatal(err)
-		}
-		if len(cli.Matrix.Definitions) != 1 || cli.Matrix.Definitions[0] != "model.yaml" {
-			t.Fatalf("lost %s alias", flag)
-		}
+func TestMatrixConfigFlag(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parser.Parse([]string{"matrix", "--mode", "single", "--config", "model.yaml"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(cli.Matrix.Definitions) != 1 || cli.Matrix.Definitions[0] != "model.yaml" {
+		t.Fatalf("lost --config: %v", cli.Matrix.Definitions)
+	}
+}
+
+// The old `matrix --fixture` spelling is gone: definitions are loaded with
+// --config only, like `tb vmodel --config`.
+func TestMatrixFixtureFlagRemoved(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parser.Parse([]string{"matrix", "--mode", "single", "--fixture", "model.yaml"}); err == nil {
+		t.Fatal("--fixture must no longer be accepted")
 	}
 }
 

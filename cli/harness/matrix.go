@@ -22,7 +22,7 @@ import (
 //
 // --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
-	Definitions []string `kong:"name='config',aliases='fixture',help='Load a JSON/YAML model definition or list (repeatable; replaces builtins; requires --mode=single; --fixture is a deprecated alias)'"`
+	Definitions []string `kong:"name='config',help='Load a JSON/YAML model definition or list (repeatable; replaces builtins; requires --mode=single)'"`
 	Scenarios   []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
 	Sources     []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
 	Targets     []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
