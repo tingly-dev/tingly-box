@@ -98,7 +98,7 @@ Claude OAuth 链路（`ClientPool.GetAnthropicClient` → `NewClaudeClient`）�
 | **client header** | `User-Agent`、`x-app`、`X-Claude-Code-Session-Id`、`X-Stainless-*`、`anthropic-beta`、`anthropic-version`、`anthropic-dangerous-direct-browser-access`、`accept`、子 agent 头 | `internal/client/claude_client.go`（`applyClaudeCodeHeaders`，Legacy）+ `claude_version.go`（原生覆盖层）、`claude_betas.go` |
 | **system header** | `system[0]` 的 `x-anthropic-billing-header: ...` 文本块；`system[1]` 的身份 preamble | `internal/protocol/ops/request_anthropic_model.go`（`ApplyAnthropic*MetadataTransform`）、`claude_code_billing_header.go` |
 | **meta data** | `metadata.user_id` 的 JSON 串 | Legacy：`internal/protocol/metaid`；原生：`claude_code_billing_header.go::buildNativeMetadataUserID` |
-| **clean header** | 转发到**非** Claude OAuth provider 时剥掉 billing header / 隐写标记 / preamble | `internal/protocolserver/transform/transform_clean_header.go`；flag 解析见 `rule_flags.go`（Claude OAuth provider 上自动关闭） |
+| **clean header** | 转发到**非** Claude OAuth provider 时剥掉 billing header / 隐写标记 / preamble | `internal/protocolserver/servertransform/transform_clean_header.go`；flag 解析见 `rule_flags.go`（Claude OAuth provider 上自动关闭） |
 
 ---
 
@@ -483,7 +483,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | 入站 hint 采集 | `protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints` |
 | billing header 与 metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头分派（Legacy 原样）；调用方 `transform/vendor.go::isClaudeCodeOAuth` | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`billingHeaderPreservedFields`、`computeFingerprintJS`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
 | probe | `internal/probe/e2e_probe.go`（`targetIsClaudeCode` → preamble）；版本默认值的解析在 `rule_flags.go` | 见 `.design/probe.md` |
-| clean header | `protocolserver/transform/transform_clean_header.go`（未改） | — |
+| clean header | `protocolserver/servertransform/transform_clean_header.go`（未改） | — |
 
 `typ.DefaultUserAgents` 里的 2.1.86 字面量只是 `custom_user_agent` 的快选建议，与本 flag 无关，未改。
 

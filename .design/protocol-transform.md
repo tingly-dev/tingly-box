@@ -13,7 +13,7 @@ internal/protocol/
   transform/     ← Transform 接口实现；仅感知 TransformContext / 链路位置
   transform/ops/ ← 不存在；勿创建（见 §3）
 
-internal/protocolserver/transform/
+internal/protocolserver/servertransform/
   transform_*.go ← server-domain Transform；可读 ScenarioConfig / runtime.Runtime
 ```
 
@@ -23,7 +23,7 @@ internal/protocolserver/transform/
 |----|----|------|--------|
 | 纯函数 op | `protocol/ops` | 字段级 mutation；不感知链路 | SDK 类型、`protocol/` 自身 |
 | Protocol Transform | `protocol/transform` | type-switch 请求类型、调 op 或内联辅助 | `protocol/ops`、SDK 类型 |
-| Server Transform | `protocolserver/transform/transform_*.go` | 读配置 / runtime，组合 op | `protocol/ops`、`protocol/transform`、`typ`、`runtime` |
+| Server Transform | `protocolserver/servertransform/transform_*.go` | 读配置 / runtime，组合 op | `protocol/ops`、`protocol/transform`、`typ`、`runtime` |
 
 ---
 
@@ -93,7 +93,7 @@ func (t *FooTransform) Apply(ctx *TransformContext) error {
 ## 5. 不在范围内的事
 
 - **不重命名** Transform 接口或 `chain.go` 的结构。
-- **不合并** `protocol/transform/` 与 `protocolserver/transform/transform_*.go`——协议层（SDK-only）与 server-domain 层的分离有意义。
+- **不合并** `protocol/transform/` 与 `protocolserver/servertransform/transform_*.go`——协议层（SDK-only）与 server-domain 层的分离有意义。
 - **不为 MCP / runtime 依赖**的 Transform ops 化——依赖 `*runtime.Runtime` 的 mutation 不满足纯函数语义。
 - **不引入**"OpTransform 自动包装"之类的泛型 shell——现有抽象已足够，再加一层只增复杂度。
 
@@ -104,7 +104,7 @@ func (t *FooTransform) Apply(ctx *TransformContext) error {
 ```
 protocol/ops        ← 不 import server/、typ/ 以外的内部包
 protocol/transform  ← 不 import server/
-protocolserver/transform/transform_*  ← 可 import 以上两层
+protocolserver/servertransform/transform_*  ← 可 import 以上两层
 ```
 
 可用 `go vet` + `golang.org/x/tools/go/analysis/passes/slog`（或 `depguard`）做静态检查。

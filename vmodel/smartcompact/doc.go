@@ -19,7 +19,7 @@
 // of user requests and assistant responses.
 //
 // The flag-driven thinking trim (the SmartCompact scenario flag) is NOT
-// here: it lives in internal/protocolserver/transform.ThinkingCompactTransform,
+// here: it lives in internal/protocolserver/servertransform.ThinkingCompactTransform,
 // since it is a server-domain transform rather than a vmodel compression
 // strategy.
 //
