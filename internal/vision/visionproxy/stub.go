@@ -52,10 +52,3 @@ func ScenarioExt(provider, model string) map[string]interface{} {
 		},
 	}
 }
-
-// RuleWithService builds a *typ.Rule carrying a rule-level vision proxy service.
-func RuleWithService(provider, model string) *typ.Rule {
-	return &typ.Rule{Flags: typ.RuleFlags{
-		VisionProxyService: &typ.VisionProxyService{Provider: provider, Model: model},
-	}}
-}

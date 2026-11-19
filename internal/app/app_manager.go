@@ -51,13 +51,6 @@ func NewAppManager(configDir string) (*AppManager, error) {
 	return am, nil
 }
 
-// NewAppManagerWithConfig creates a new AppManager over an existing AppConfig.
-func NewAppManagerWithConfig(appConfig *appconfig.AppConfig) *AppManager {
-	am := &AppManager{configDir: appConfig.ConfigDir(), appConfig: appConfig}
-	am.once.Do(func() {})
-	return am
-}
-
 // NewLazyAppManager creates an AppManager that builds its AppConfig on first
 // use (AppConfig / GetGlobalConfig). An empty configDir means the default
 // directory. onInitError, if non-nil, is called when that build fails; the

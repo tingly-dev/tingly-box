@@ -9,7 +9,6 @@ import (
 // Type aliases to public protocol types for backward compatibility
 type APIStyle = publicprotocol.APIStyle
 type APIType = publicprotocol.APIType
-type Client = publicprotocol.Client
 type TokenUsage = publicprotocol.TokenUsage
 type OpenAIConfig = publicprotocol.OpenAIConfig
 

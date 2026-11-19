@@ -8,19 +8,6 @@ import (
 	"github.com/tiktoken-go/tokenizer"
 )
 
-func EstimateAnthropicTokens(messages []anthropic.MessageParam) int64 {
-	var total int64
-	for _, msg := range messages {
-		for _, block := range msg.Content {
-			if block.OfText != nil {
-				total += EstimateTokensString(block.OfText.Text)
-			}
-		}
-		total += 5
-	}
-	return total
-}
-
 func EstimateBetaAnthropicTokens(messages []anthropic.BetaMessageParam) int64 {
 	var total int64
 	for _, msg := range messages {
@@ -30,20 +17,6 @@ func EstimateBetaAnthropicTokens(messages []anthropic.BetaMessageParam) int64 {
 			}
 		}
 		total += 5
-	}
-	return total
-}
-
-// EstimateAnthropicBetaMessagesTokens estimates tokens for Anthropic messages
-func EstimateAnthropicBetaMessagesTokens(messages []anthropic.BetaMessageParam) int64 {
-	var total int64
-	for _, msg := range messages {
-		for _, b := range msg.Content {
-			if b.OfText != nil {
-				total += EstimateTokensString(b.OfText.Text)
-				total += 5
-			}
-		}
 	}
 	return total
 }

@@ -16,7 +16,6 @@ import (
 // Common navigation outcomes.
 var (
 	ErrCancelled = errors.New("cancelled")
-	ErrBack      = errors.New("back")
 )
 
 // Action describes how a prompt was dismissed.

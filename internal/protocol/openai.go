@@ -235,18 +235,6 @@ func flattenOutputTextContent(content gjson.Result) (string, bool) {
 // =============================================
 // These aliases provide convenient access to the native OpenAI SDK types
 
-// ResponseNewParams is an alias to the native OpenAI SDK type
-type ResponseNewParams = responses.ResponseNewParams
-
-// Response is an alias to the native OpenAI SDK type
-type Response = responses.Response
-
-// ResponseInputItemUnionParam is an alias to the native OpenAI SDK type
-type ResponseInputItemUnionParam = responses.ResponseInputItemUnionParam
-
-// ResponseNewParamsInputUnion is an alias to the native OpenAI SDK type
-type ResponseNewParamsInputUnion = responses.ResponseNewParamsInputUnion
-
 // =============================================
 // Helper Functions for Native Types
 // =============================================

@@ -55,15 +55,6 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 	return usage, nil
 }
 
-// sendResponsesEvent sends a single Responses API event as SSE.
-func sendResponsesEvent(c *gin.Context, event any, _ interface{ Flush() }) {
-	if e, ok := event.(wire.ResponsesEvent); ok {
-		OpenAIResponsesEvent(c, e.EventType(), event)
-	} else {
-		OpenAISSE(c, event)
-	}
-}
-
 // sendResponsesErrorEvent sends an error event in Responses API format.
 func sendResponsesErrorEvent(c *gin.Context, seq int, code, message string) {
 	errorEvent := wire.NewResponsesStreamErrorEvent(int64(seq), code, message)

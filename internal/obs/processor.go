@@ -9,14 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// RecordProcessor is the OTel-shaped hot-path interface.
-// Emit must be non-blocking; callers on the request goroutine must not be delayed.
-type RecordProcessor interface {
-	Emit(r *Record)
-	ForceFlush(ctx context.Context) error
-	Shutdown(ctx context.Context) error
-}
-
 // RecordExporter is called by BatchProcessor with a slice of Records to persist.
 type RecordExporter interface {
 	Export(ctx context.Context, records []*Record) error

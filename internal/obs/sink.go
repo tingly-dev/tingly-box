@@ -208,14 +208,3 @@ func (s *Sink) Close() {
 	}
 	logrus.Info("obs: recording sink closed")
 }
-
-// sanitizeModelForPath replaces invalid filename characters with hyphens.
-// Kept for any callers outside the obs package that reference it via sink.
-func sanitizeModelForPath(model string) string {
-	invalid := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
-	result := model
-	for _, char := range invalid {
-		result = strings.ReplaceAll(result, char, "-")
-	}
-	return result
-}

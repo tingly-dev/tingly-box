@@ -51,17 +51,6 @@ func NewStreamTokenCounter() (*StreamTokenCounter, error) {
 	}, nil
 }
 
-// NewStreamTokenCounterWithEncoding creates a new streaming token counter with a specific encoding.
-func NewStreamTokenCounterWithEncoding(encoding string) (*StreamTokenCounter, error) {
-	enc, err := getCodec(tokenizer.Encoding(encoding))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tokenizer %s: %w", encoding, err)
-	}
-	return &StreamTokenCounter{
-		encoder: enc,
-	}, nil
-}
-
 // countTokens counts tokens for a text string.
 func (c *StreamTokenCounter) countTokens(text string) int {
 	if text == "" {

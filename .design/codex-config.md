@@ -108,7 +108,7 @@ the "Force reasoning summaries" switch **off**. Users with a
 reasoning-capable upstream can flip it on explicitly.
 
 The same reasoning applies to the model catalog payload
-(`RenderCodexModelCatalog`): per-entry `supports_reasoning_summaries` is
+(`RenderCodexModelCatalogWithPrefs`): per-entry `supports_reasoning_summaries` is
 `false` and `default_reasoning_summary` is `"none"`, rather than the old
 `true`/`"auto"`.
 
@@ -226,7 +226,7 @@ models exist); apply response adds `catalogWritten`.
 
 | Layer | File | Role |
 |---|---|---|
-| Backend | `internal/config/apply_config.go` | `CodexPrefs`, `DefaultCodexPrefs`, `toConfig`, `ApplyCodexConfig`, `RenderCodexConfigTOML`, `RenderCodexModelCatalog`, `mergeCodexConfig` |
+| Backend | `internal/config/apply_config.go` | `CodexPrefs`, `DefaultCodexPrefs`, `toConfig`, `ApplyCodexConfig`, `RenderCodexConfigTOML`, `RenderCodexModelCatalogWithPrefs`, `mergeCodexConfig` |
 | Backend | `internal/server/module/configapply/{types,handler,routes}.go` | request/response shapes, apply + preview handlers, routes |
 | Backend | `ai/agent/codex.go` | `CodexParams.{Prefs,WriteCatalog}`, `Apply()` |
 | Backend | `internal/agent/rule_bridge.go` | CLI path (defaults + `WriteCatalog: true`) |

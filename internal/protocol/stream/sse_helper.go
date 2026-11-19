@@ -1,20 +1,5 @@
 package stream
 
-import (
-	"encoding/json"
-	"fmt"
-)
-
-func PrintChunk(chunk any) {
-	switch chunk.(type) {
-	case string:
-		fmt.Printf("%s\n", chunk)
-	default:
-		bs, _ := json.MarshalIndent(chunk, "  ", "  ")
-		fmt.Printf("%s\n", string(bs))
-	}
-}
-
 // streamState tracks the streaming conversion state
 type streamState struct {
 	textBlockIndex             int // Main output text content block

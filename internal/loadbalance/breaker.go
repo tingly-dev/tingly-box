@@ -339,11 +339,6 @@ func DefaultBreakerStore() *BreakerStore {
 	return defaultStore
 }
 
-// AllowService is a package-level convenience used by selection logic.
-func AllowService(ruleUUID, serviceID string) bool {
-	return defaultStore.Allow(ruleUUID, serviceID)
-}
-
 // RecordServiceSuccess is a package-level convenience used by dispatch.
 func RecordServiceSuccess(ruleUUID, serviceID string) {
 	defaultStore.RecordSuccess(ruleUUID, serviceID)

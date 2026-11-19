@@ -22,12 +22,6 @@ type RuntimeCaller interface {
 	GetAdvisorMaxUses() int
 }
 
-// Executor executes a single MCP tool call through the full pipeline:
-// name validation, legacy remapping, callable guard, hooks, and dispatch.
-type Executor interface {
-	Execute(ctx context.Context, call ToolCall) (context.Context, coretool.ToolResult, error)
-}
-
 // DefaultExecutor is the standard implementation of Executor.
 type DefaultExecutor struct {
 	runtime RuntimeCaller

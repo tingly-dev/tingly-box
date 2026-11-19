@@ -22,9 +22,6 @@ type BindingStore struct {
 	store SettingsLister
 }
 
-// NewBindingStore wraps a host settings store as a binding.Store.
-func NewBindingStore(store SettingsLister) *BindingStore { return &BindingStore{store: store} }
-
 // ListEnabledBindings implements binding.Store.
 func (b *BindingStore) ListEnabledBindings() ([]binding.BotInfo, error) {
 	settings, err := b.store.ListEnabledSettings()

@@ -3,9 +3,7 @@ package servertool
 import (
 	"context"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Hook prepares runtime context for a specific MCP servertool call.
@@ -62,14 +60,4 @@ func applyHooks(ctx context.Context, toolName string, messages []map[string]any,
 		}
 	}
 	return ctx
-}
-
-// ScenarioFromContext reads the scenario stored under client.ScenarioContextKey
-// (set by the protocol server's routing middleware).
-func ScenarioFromContext(ctx context.Context) (typ.RuleScenario, bool) {
-	v := ctx.Value(client.ScenarioContextKey)
-	if v == nil {
-		return "", false
-	}
-	return typ.RuleScenario(v.(string)), true
 }

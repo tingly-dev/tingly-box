@@ -32,7 +32,6 @@ var (
 	AttrTinglyProviderUUID = tracker.AttrProviderUUID
 	AttrTinglyRuleUUID     = tracker.AttrRuleUUID
 	AttrTinglyStreaming    = tracker.AttrStreaming
-	AttrTinglyUserTier     = tracker.AttrUserTier
 )
 
 // Span-only gateway attributes. These carry per-request (near-unique) values

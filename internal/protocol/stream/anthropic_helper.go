@@ -159,35 +159,6 @@ func sendThinkingSignature(c *gin.Context, index int, flusher http.Flusher) {
 	sendContentBlockDelta(c, index, anthropicSignatureDelta(GenerateObfuscationString()), flusher)
 }
 
-// closeOpenBlock closes any currently open content block, emitting signature_delta first for
-// thinking blocks. After this call the block is stopped and its state index reset to -1.
-// If no block is open this is a no-op.
-func closeOpenBlock(c *gin.Context, state *streamState, flusher http.Flusher) {
-	// Thinking block takes priority (it must be stopped before anything else)
-	if state.thinkingBlockIndex != -1 && !state.stoppedBlocks[state.thinkingBlockIndex] {
-		sendThinkingSignature(c, state.thinkingBlockIndex, flusher)
-		sendContentBlockStop(c, state, state.thinkingBlockIndex, flusher)
-		state.thinkingBlockIndex = -1
-		return
-	}
-	if state.reasoningSummaryBlockIndex != -1 && !state.stoppedBlocks[state.reasoningSummaryBlockIndex] {
-		sendThinkingSignature(c, state.reasoningSummaryBlockIndex, flusher)
-		sendContentBlockStop(c, state, state.reasoningSummaryBlockIndex, flusher)
-		state.reasoningSummaryBlockIndex = -1
-		return
-	}
-	if state.refusalBlockIndex != -1 && !state.stoppedBlocks[state.refusalBlockIndex] {
-		sendContentBlockStop(c, state, state.refusalBlockIndex, flusher)
-		state.refusalBlockIndex = -1
-		return
-	}
-	if state.textBlockIndex != -1 && !state.stoppedBlocks[state.textBlockIndex] {
-		sendContentBlockStop(c, state, state.textBlockIndex, flusher)
-		state.textBlockIndex = -1
-		return
-	}
-}
-
 // sendStopEvents sends content_block_stop events for all active blocks in index order
 func sendStopEvents(c *gin.Context, state *streamState, flusher http.Flusher) {
 	// Collect block indices to stop

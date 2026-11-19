@@ -6,17 +6,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// contentBlocksToResult converts SDK []Content to json.RawMessage
-// matching the existing mcpCallToolResult format: {"content": [...]}.
-func contentBlocksToResult(content []mcp.Content) (json.RawMessage, error) {
-	result := struct {
-		Content interface{} `json:"content,omitempty"`
-	}{
-		Content: content,
-	}
-	return json.Marshal(result)
-}
-
 // contentBlocksToTools converts SDK []*mcp.Tool to []mcpTool
 // matching the existing internal tool format.
 func contentBlocksToTools(sdkTools []*mcp.Tool) []mcpTool {

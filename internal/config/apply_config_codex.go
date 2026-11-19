@@ -509,22 +509,17 @@ const (
 	codex1MContextWindow = 1000000
 )
 
-// renderCodexModelCatalog produces the JSON payload for
+// RenderCodexModelCatalogWithPrefs produces the JSON payload for
 // ~/.codex/tingly-model-catalog.json. Each model becomes one ModelInfo entry
 // with the required fields populated using conservative defaults that match
-// the OpenAI Responses API surface (text-in/text-out, reasoning summaries on,
+// the OpenAI Responses API surface (text-in/text-out, reasoning summaries off,
 // no verbosity knob). Codex 0.124+ deserializes this into
 // `protocol::openai_models::ModelsResponse`; field names and value types must
 // stay in sync with that struct.
 //
-// The contextWindows parameter allows overriding the default context window
-// for specific models (e.g., 1M context window models). If nil, uses default.
-func RenderCodexModelCatalog(models []string, contextWindows map[string]int) ([]byte, error) {
-	return RenderCodexModelCatalogWithPrefs(models, contextWindows, nil)
-}
-
-// RenderCodexModelCatalogWithPrefs is RenderCodexModelCatalog with the
-// effective-window and auto-compact percentages taken from prefs (nil = defaults).
+// contextWindows overrides the default context window for specific models
+// (e.g. 1M-context models); nil uses the default. The effective-window and
+// auto-compact percentages are taken from prefs (nil = defaults).
 func RenderCodexModelCatalogWithPrefs(models []string, contextWindows map[string]int, prefs *CodexPrefs) ([]byte, error) {
 	effectivePct, compactPct := prefs.contextHeadroom()
 	supportsSummaries := prefs != nil && strings.TrimSpace(prefs.SupportsReasoningSummaries) == "true"

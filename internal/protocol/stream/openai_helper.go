@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 	"time"
 
@@ -107,21 +106,6 @@ func OpenAISSEDone(c *gin.Context) {
 	c.Writer.WriteString("data: [DONE]\n\n")
 }
 
-// FilterSpecialFields removes special fields that have dedicated content blocks
-// e.g., reasoning_content is handled as thinking block, not merged into text_delta
-func FilterSpecialFields(extras map[string]interface{}) map[string]interface{} {
-	if extras == nil || len(extras) == 0 {
-		return extras
-	}
-	result := make(map[string]interface{})
-	for k, v := range extras {
-		if k != OpenaiFieldReasoningContent {
-			result[k] = v
-		}
-	}
-	return result
-}
-
 // ExtractReasoningText normalizes upstream thinking text from a decoded
 // message/delta map into the DeepSeek-style reasoning_content spelling:
 // reasoning_content passes through, reasoning is taken as-is, and
@@ -202,18 +186,6 @@ func parseRawJSON(rawJSON string) map[string]interface{} {
 	return result
 }
 
-// mergeMaps merges extra fields into the base map
-func mergeMaps(base map[string]interface{}, extra map[string]interface{}) map[string]interface{} {
-	if extra == nil || len(extra) == 0 {
-		return base
-	}
-	if base == nil {
-		base = make(map[string]interface{})
-	}
-	maps.Copy(base, extra)
-	return base
-}
-
 // extractString extracts string value from interface{}, handling different types
 func extractString(v interface{}) string {
 	if v == nil {
@@ -272,9 +244,4 @@ func openaiChatSSEWriter(c *gin.Context) func(event interface{}) error {
 		OpenAISSE(c, event)
 		return nil
 	}
-}
-
-// writeSSEChunk writes a single SSE chunk — kept for callers in other files.
-func writeSSEChunk(c *gin.Context, _ interface{ Flush() }, chunk any) {
-	OpenAISSE(c, chunk)
 }
