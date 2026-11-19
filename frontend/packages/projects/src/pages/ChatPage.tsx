@@ -8,7 +8,7 @@ import { ChatActionsMenu } from '../components/ChatActionsMenu';
 import { Composer } from '../components/Composer';
 import { Markdown } from '../components/Markdown';
 import { Check, ContentCopy, ExpandMore, Refresh } from '../components/icons';
-import { useCopyFeedback } from '../hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui';
 import { useNotify } from '../hooks/useNotify';
 import type { PendingFirstMessage } from '../hooks/useStartChat';
 import { useChosenModel } from '../hooks/useStartChat';
