@@ -314,6 +314,18 @@ func (s *Store) ListThreadsByStatus(statuses ...string) ([]Thread, error) {
 	return out, err
 }
 
+// OtherThreadOnBranch returns a thread other than exceptID that was started on
+// branch in the repository at repoPath (archived ones too: the branch stays
+// theirs until the thread is deleted), or ErrNotFound.
+func (s *Store) OtherThreadOnBranch(repoPath, branch, exceptID string) (*Thread, error) {
+	var t Thread
+	err := s.db.Where("branch = ? AND repo_path = ? AND id <> ? AND agent <> ?", branch, repoPath, exceptID, AgentLLM).First(&t).Error
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return &t, nil
+}
+
 // Lineage returns a thread and its ancestors, the thread first.
 func (s *Store) Lineage(id string) ([]Thread, error) {
 	var out []Thread

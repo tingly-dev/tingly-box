@@ -57,4 +57,8 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.Contains(t, s, "with the merge tool")
 	assert.Contains(t, s, "Never merge it yourself by hand")
 	assert.NotContains(t, s, "Do not push", "a PR may be asked for, so pushing is not banned outright")
+	assert.NotContains(t, s, "touch other branches", "other local branches of the worktree are the thread's to work on")
+	assert.NotContains(t, s, "force-push,", "a rebased branch is pushed with create_pr force")
+	assert.Contains(t, s, "force=true")
+	assert.Contains(t, s, "belongs to another thread")
 }

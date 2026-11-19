@@ -164,7 +164,7 @@ func TestCreatePRNeverForcesAPush(t *testing.T) {
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x"})
 	require.True(t, isErr, out)
 	assert.Contains(t, out, "rebase")
-	assert.Contains(t, out, "a force push is not available")
+	assert.Contains(t, out, "force=true")
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "create-pr")
 	}

@@ -150,7 +150,7 @@ func TestCreatePRWithHeadNeverForcesAPush(t *testing.T) {
 
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x", "head": "feat/other"})
 	require.True(t, isErr, out)
-	assert.Contains(t, out, "a force push is not available")
+	assert.Contains(t, out, "force=true")
 	assert.Equal(t, before, run(t, f.remote, "git", "rev-parse", "feat/other"))
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "create-pr")

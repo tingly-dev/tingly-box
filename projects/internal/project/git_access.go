@@ -15,8 +15,10 @@ const permissionModeAuto = "auto"
 //   - pushing the thread's own branch is allowed, so it never asks;
 //   - the commands that publish or land work on the user's behalf (a pull
 //     request, an issue, a merge), and pushes the thread has no business
-//     making (to the base branch, forced, deleting), always ask, so the user
-//     can tap Allow in the chat or the web.
+//     making by hand (to the base branch, forced, deleting), always ask, so
+//     the user can tap Allow in the chat or the web. The thread's route for
+//     any other branch and for a rebased one is create_pr (head, force), which
+//     checks whose branch it is and leases the force.
 //
 // Rules are checked deny, ask, then allow, and run before the classifier. A
 // blanket `git push *` ask would therefore also catch the allowed own-branch
