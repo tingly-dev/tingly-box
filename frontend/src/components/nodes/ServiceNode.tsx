@@ -32,7 +32,7 @@ import ServiceNodeContent from './ServiceNodeContent.tsx';
 import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 import { useAddModelSpotlight } from './ActionAddNode.tsx';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 const ServiceNodeWrapper = styled(Box, {

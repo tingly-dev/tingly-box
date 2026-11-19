@@ -17,7 +17,7 @@ import {
     Typography,
 } from '@mui/material';
 import { Add, Refresh } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import MCPSourceEditor from './MCPSourceEditor';
 import MCPSourceDrawer from './MCPSourceDrawer';
 import MCPToolsPanel from './MCPToolsPanel';

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Box, Chip, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import ConfigRow from '@/components/ConfigRow';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { api } from '@/services/api';
 import { notify } from '@/utils/notify';

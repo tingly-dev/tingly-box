@@ -1,5 +1,5 @@
 import type { Theme } from '@mui/material/styles';
-import { lightPalette } from '@/theme/palettes/light';
+import { lightPalette } from '@tingly/ui/theme/palettes/light';
 
 // Token color palette with semantic meaning
 // These colors should be used with theme palette in components

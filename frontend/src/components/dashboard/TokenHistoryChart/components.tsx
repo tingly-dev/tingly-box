@@ -4,7 +4,7 @@ import { Box, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { getThemeChartStyles } from '../chartStyles';
 import type { LegendItemProps, ChartDataPoint } from './types';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export function LegendItem({ label, color, visible, onToggle }: LegendItemProps) {

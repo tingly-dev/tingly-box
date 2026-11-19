@@ -7,7 +7,7 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {Provider} from '@/types/provider';
 import ProviderExportButton from '@/components/ProviderExportButton';
-import {CopyIconButton} from '@/components/CopyIconButton';
+import {CopyIconButton} from '@tingly/ui/components/CopyIconButton';
 import {api} from '@/services/api';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from './provider-form-dialog/ProviderFormLayout';
 import ProtocolSlot from './provider-form-dialog/ProtocolSlot';
@@ -15,7 +15,7 @@ import ProxyUrlField from './provider-form-dialog/ProxyUrlField';
 import AccountLimitsSection from './limits/AccountLimitsSection';
 import type {Limits} from './limits/LimitsEditor';
 import {isHttpUrl} from './provider-form-dialog/validation';
-import {fontMono} from '@/theme/fonts';
+import {fontMono} from '@tingly/ui/theme/fonts';
 
 interface OAuthEditFormData {
     name: string;

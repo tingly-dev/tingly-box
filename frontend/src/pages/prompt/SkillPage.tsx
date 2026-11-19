@@ -8,8 +8,8 @@ import {
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { type SkillLocation, type Skill, type IDESource } from '@/types/prompt';
-import { PageLayout } from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import UnifiedCard from '@/components/UnifiedCard';
 import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
@@ -17,7 +17,7 @@ import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDi
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
 import DeleteSkillLocationDialog from '@/components/prompt/skill/DeleteSkillLocationDialog';
 import useNotify from '@/hooks/useNotify';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import SkillLocationsColumn from './SkillLocationsColumn';
 import SkillSkillsColumn from './SkillSkillsColumn';
 import SkillDetailColumn from './SkillDetailColumn';

@@ -3,7 +3,7 @@ import { Box, Chip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { formatLatency } from '@/components/probe/runProbe';
 import type { RunRecord } from './benchState';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // RunHistory: this session's runs as chips. Clicking one shows that result
 // AND restores the configuration that produced it — comparing two

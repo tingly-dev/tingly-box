@@ -5,7 +5,7 @@ import {useTranslation} from 'react-i18next';
 import {Box, Fab} from '@mui/material';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
-import EmptyState from '@/components/EmptyState';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';

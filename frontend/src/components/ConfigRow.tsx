@@ -1,6 +1,6 @@
 import {Box, Stack, Typography} from '@mui/material';
 import React, {type ReactNode} from 'react';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // ============================================================================

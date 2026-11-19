@@ -1,5 +1,5 @@
 import { type SxProps, type Theme } from '@mui/material/styles';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Shared style for clickable monospace text (URLs, tokens, commands).

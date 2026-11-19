@@ -20,14 +20,14 @@ import {
     VisibilityOff as VisibilityOffIcon,
 } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import { api } from '@/services/api.ts';
 import { useAuth } from '@/contexts/AuthContext.tsx';
-import { PageLayout } from '@/components/PageLayout.tsx';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
 import CardGrid from "@/components/CardGrid.tsx";
-import ConfirmDialog from '@/components/ConfirmDialog.tsx';
-import { fontMono } from '@/theme/fonts';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 

@@ -11,7 +11,7 @@ import {
     Typography,
 } from '@mui/material';
 import { ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
-import { elevation } from '@/theme/elevation';
+import { elevation } from '@tingly/ui/theme/elevation';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface AuthContextType {

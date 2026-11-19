@@ -16,7 +16,7 @@ import type { AgentApplyResult } from './agentSetup';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { api } from '@/services/api';
 import { restoreAppliedClaudeCodePrefs } from './claudeCodePrefsState';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Raw statusline script URLs in the tingly-box repo — the installers must

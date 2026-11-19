@@ -3,7 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProviderQuotaOf } from '@/contexts/ProviderQuotaContext';
 import { useTheme } from '@mui/material/styles';
-import { getStatusColor } from '@/theme/status';
+import { getStatusColor } from '@tingly/ui/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration as formatDuration, quotaRingColor, quotaRingSpinSx } from '../credential/QuotaRing';
 import {

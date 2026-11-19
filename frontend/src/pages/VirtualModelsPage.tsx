@@ -1,7 +1,7 @@
-import { PageLayout } from '@/components/PageLayout';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import VirtualModelsTable from '@/components/VirtualModelsTable';
-import EmptyState from '@/components/EmptyState';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import { Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -15,8 +15,8 @@ import { VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
 import { TeamProvider } from './contexts/TeamContext';
 import { appRoutes } from './routes/appRoutes';
-import createAppTheme from './theme';
-import { elevation } from '@/theme/elevation';
+import createAppTheme from '@tingly/ui/theme';
+import { elevation } from '@tingly/ui/theme/elevation';
 import { radius } from '@tingly/ui/theme/radius';
 
 

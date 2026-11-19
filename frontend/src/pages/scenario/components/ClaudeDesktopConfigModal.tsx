@@ -20,7 +20,7 @@ import { scrollToModelsCard } from './agentSetup';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface ClaudeDesktopConfigModalProps {

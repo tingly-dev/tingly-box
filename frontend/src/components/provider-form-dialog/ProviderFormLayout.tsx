@@ -1,5 +1,5 @@
 import {ArrowBack} from '@/components/icons';
-import DialogHeader from '@/components/DialogHeader';
+import DialogHeader from '@tingly/ui/components/DialogHeader';
 import KeyNameField from './KeyNameField';
 import {
     Box, Button, Dialog, DialogActions,

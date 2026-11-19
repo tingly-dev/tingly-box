@@ -7,7 +7,7 @@ import {
     BugReport as TroubleshootIcon,
     Key as KeyIcon,
 } from '@/components/icons';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export type GuideToolbarButton = 'connectAI' | 'newRule';

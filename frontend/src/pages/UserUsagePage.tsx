@@ -13,7 +13,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import { Refresh } from '@/components/icons';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import {
     formatNumber,

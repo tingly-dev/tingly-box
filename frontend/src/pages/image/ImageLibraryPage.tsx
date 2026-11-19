@@ -18,10 +18,10 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import UnifiedCard from '@/components/UnifiedCard';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { Add, Close, DeleteOutline, Download, Edit } from '@/components/icons';
 import { api } from '@/services/api';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
 import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';

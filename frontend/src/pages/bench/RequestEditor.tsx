@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Button, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { RawRequest } from './benchState';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // RequestEditor: what the client sends. Protocol and Content (which body,
 // Message vs a whole-body preset) are chosen in Compose now, not here

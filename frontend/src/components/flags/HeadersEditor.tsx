@@ -1,7 +1,7 @@
 import { Add as AddIcon, Delete as DeleteIcon } from '@/components/icons';
 import { Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material';
 import React, { useMemo, useState } from 'react';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // RFC 7230 header-name token characters.
 const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;

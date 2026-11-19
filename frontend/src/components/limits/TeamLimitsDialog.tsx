@@ -1,7 +1,7 @@
 import {Alert, Button, CircularProgress, Dialog, DialogActions, DialogContent, Divider, Stack} from '@mui/material';
 import {useId, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import DialogHeader from '@/components/DialogHeader';
+import DialogHeader from '@tingly/ui/components/DialogHeader';
 import {useNotify} from '@/hooks/useNotify';
 import LimitsLiveStatus from './LimitsLiveStatus';
 import PolicyLimitsFields from './PolicyLimitsFields';

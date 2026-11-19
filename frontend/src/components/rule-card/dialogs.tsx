@@ -1,5 +1,5 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, TextField } from '@mui/material';
-import ConfirmPopover from '@/components/ConfirmPopover';
+import ConfirmPopover from '@tingly/ui/components/ConfirmPopover';
 import { radius } from '@tingly/ui/theme/radius';
 
 // ============================================================================

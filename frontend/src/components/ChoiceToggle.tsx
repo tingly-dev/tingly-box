@@ -6,8 +6,8 @@
 // buttons with a green check badge on the active one.
 import { Box, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import React from 'react';
-import { controlHeight } from '@/theme/controls';
-import { fontSizes } from '@/theme/fonts';
+import { controlHeight } from '@tingly/ui/theme/controls';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // Fits the widest option in use (icon + "Docker") with room to spare.
 const OPTION_WIDTH = 84;

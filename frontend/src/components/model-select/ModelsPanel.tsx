@@ -35,9 +35,9 @@ import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
 import NewModelsSection from './NewModelsSection';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { useTheme } from '@mui/material/styles';
-import { getStatusColor } from '@/theme/status';
+import { getStatusColor } from '@tingly/ui/theme/status';
 
 // Convert ProviderModelData.quota (the generated, wire-shaped ProviderUsage —
 // its windows carry a bare `kind?: string`) to the app's narrower

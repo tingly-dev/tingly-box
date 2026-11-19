@@ -18,8 +18,8 @@ import {
     ArticleOutlined,
     HelpOutline,
 } from '@/components/icons';
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';

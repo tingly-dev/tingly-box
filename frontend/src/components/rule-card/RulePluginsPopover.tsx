@@ -3,7 +3,7 @@ import { Extension as ExtensionIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { RulePluginsList } from './RulePluginsCard';
 
 export interface RulePluginsPopoverProps {
