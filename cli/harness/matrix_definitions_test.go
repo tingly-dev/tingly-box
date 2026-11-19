@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/alecthomas/kong"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/alecthomas/kong"
 )
 
 func TestMatrixDefinitionValidation(t *testing.T) {
@@ -51,4 +52,61 @@ func TestMatrixConfigAndFixtureAlias(t *testing.T) {
 			t.Fatalf("lost %s alias", flag)
 		}
 	}
+}
+
+func TestScenariosFromDefinitions(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	two := write("two.yaml", `- id: first
+  kind: mock
+  mock: {content: One.}
+  expect: {http_status: 200, content_equals: One.}
+- id: second
+  kind: mock
+  mock: {content: Two.}
+  expect: {http_status: 200, content_equals: Two.}
+`)
+	noExpect := write("no-expect.yaml", "id: bare\nkind: mock\nmock: {content: x}\n")
+
+	t.Run("all", func(t *testing.T) {
+		got, err := scenariosFromDefinitions([]string{two}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 || got[0].Name != "first" || got[1].Name != "second" {
+			t.Fatalf("got %+v", got)
+		}
+	})
+	t.Run("only", func(t *testing.T) {
+		got, err := scenariosFromDefinitions([]string{two}, []string{"second"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].Name != "second" {
+			t.Fatalf("got %+v", got)
+		}
+	})
+	t.Run("unknown only", func(t *testing.T) {
+		_, err := scenariosFromDefinitions([]string{two}, []string{"first", "nope"})
+		if err == nil || !strings.Contains(err.Error(), `scenario "nope" not found`) {
+			t.Fatalf("got %v", err)
+		}
+	})
+	t.Run("no expect", func(t *testing.T) {
+		_, err := scenariosFromDefinitions([]string{noExpect}, nil)
+		if err == nil || !strings.Contains(err.Error(), "at least one expect") {
+			t.Fatalf("got %v", err)
+		}
+	})
+	t.Run("missing file", func(t *testing.T) {
+		if _, err := scenariosFromDefinitions([]string{filepath.Join(dir, "absent.yaml")}, nil); err == nil {
+			t.Fatal("expected an error")
+		}
+	})
 }
