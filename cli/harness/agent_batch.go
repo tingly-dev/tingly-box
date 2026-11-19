@@ -57,11 +57,7 @@ func runBatchAgentTests(useMock bool, configFile string, prompt string, writer *
 				Error:     err.Error(),
 			}
 			allResults = append(allResults, synthetic)
-			if writer != nil {
-				if aerr := writer.Append(synthetic); aerr != nil {
-					fmt.Printf("⚠️  summary append failed: %v\n", aerr)
-				}
-			}
+			appendSummary(writer, synthetic)
 		}
 		fmt.Println()
 	}
