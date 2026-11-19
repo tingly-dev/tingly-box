@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { components } from '@/client';
 import { controlApi } from '@/services/openapi';
 
@@ -23,15 +23,21 @@ const STATUS_PATHS = {
 
 /** `tool` null = this page has no readable config; nothing is fetched. */
 export function useClientConfigStatus(tool: ClientConfigTool | null, deps: unknown[]) {
-    const [status, setStatus] = useState<ClientConfigStatus | null>(null);
+    const [state, setState] = useState<{ tool: ClientConfigTool; status: ClientConfigStatus | null } | null>(null);
+    // Reads overlap (an edit, a focus and the timer can all fire at once) and
+    // can come back out of order; only the newest one may set the status, or an
+    // old "outdated" read lands after the fresh "applied" one.
+    const latest = useRef(0);
 
     const refresh = useCallback(async () => {
         if (!tool) return;
+        const seq = ++latest.current;
         const res = await controlApi((client, headers) => client.GET(STATUS_PATHS[tool], { headers }))
             .catch(() => undefined);
+        if (seq !== latest.current) return;
         // An older server without the endpoint (or an error) shows nothing
         // rather than a guess.
-        setStatus(res?.success ? res : null);
+        setState({ tool, status: res?.success ? res : null });
     }, [tool]);
 
     useEffect(() => {
@@ -52,5 +58,8 @@ export function useClientConfigStatus(tool: ClientConfigTool | null, deps: unkno
         };
     }, [refresh, tool]);
 
+    // Another tool's status, still held while this tool's first read is in
+    // flight, is not this tool's status.
+    const status = state && state.tool === tool ? state.status : null;
     return { status, refresh };
 }

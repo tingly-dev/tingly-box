@@ -147,6 +147,7 @@ Profile 本质上是"Claude Code 的一个变体"，页面结构却不同：`Sta
 | 无法检测 | 工具只能手动配置（Cursor、Xcode、Claude Desktop、Pi、VS Code），或网关与工具不在同一台机器上（团队部署） | 不显示状态，只提供指南；不假装知道 |
 
 - **可行性**：`GET /api/v1/config/claude`、`/codex`、`/dsh` 已经通过 `agent.ReadMainClaudeCodeSettings()` 等函数直接读取磁盘上的文件（`internal/server/module/configapply/handler.go`）。还需要补一个"按当前规则应该是什么"的对比：可以复用 preview 接口，或新增一个返回差异的接口。OpenCode 已有 preview、apply 和 restore 接口，读回能力待确认。
+- **只比较网关拥有的值，且应用之后必须读回「已应用」**（Codex，2026-11 修正误报）：`model` 只是默认选择，Codex 里用 `/model` 切换会改写它，所以只要它仍是某条规则的模型就不算差异；没有任何规则时不写 catalog，也就没有可比的模型列表；关掉"写入 catalog"重新应用时，会去掉上次由 tingly 写入的 `model_catalog_json` 指向（用户自己的 catalog 路径不动）；CLI 的 `agent apply codex` 与页面的应用一样带上每条规则的 1M 窗口。前端状态读取只采用最新一次请求，切换工具时不显示上一个工具的状态。
 - **替代掉的东西**：模式切换的确认框和 toast、1M 自动弹窗、改名后的沉默。这些操作都只把状态翻成"已过期"，不打断用户（P12）。重新应用永远在同一个位置（P11）。
 - **Auto Config 里的模型槽位**改为由规则推导的只读展示；需要特殊值时，走一个明确的"自定义"逃生口（见 §6）。
 
