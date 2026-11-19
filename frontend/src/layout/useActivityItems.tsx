@@ -5,9 +5,6 @@ import { OpenAI, Anthropic, Claude, Cursor, DeepSeek, OpenCode, Pi, WorkBuddy, X
 import {
     SettingsApplications,
     BarChart as IconChartBar,
-    EventNote as IconCalendarClock,
-    CalendarToday as IconCalendar,
-    Event as IconCalendarEvent,
     Add as IconPlus,
     TextSnippet as IconFileText,
     Terminal as IconTerminal,

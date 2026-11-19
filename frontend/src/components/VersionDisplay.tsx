@@ -2,7 +2,7 @@ import { Box, Tooltip, Typography } from '@mui/material';
 import { displayVersion } from '@/utils/version';
 import React, { type ReactNode } from 'react';
 import { useVersion } from '@/contexts/VersionContext';
-import { FiberManualRecord, Check, Refresh, UpgradeOutlined } from '@/components/icons';
+import { Check, Refresh, UpgradeOutlined } from '@/components/icons';
 import { elevation } from '@/theme/elevation';
 
 interface VersionDisplayProps {

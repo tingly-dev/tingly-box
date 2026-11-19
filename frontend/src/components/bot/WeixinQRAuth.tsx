@@ -9,7 +9,6 @@ import {
     Paper,
 } from '@mui/material';
 import {
-    QrCode as QrCodeIcon,
     Refresh as RefreshIcon,
     CheckCircle as CheckCircleIcon,
 } from '@/components/icons';

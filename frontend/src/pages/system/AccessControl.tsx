@@ -18,7 +18,6 @@ import {
     Warning as WarningIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
-    Security as SecurityIcon,
 } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';

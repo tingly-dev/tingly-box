@@ -16,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 import type { SmartRouting, SmartOp } from '../RoutingGraphTypes.ts';
 import { formatTimeRange } from '../rule-card/timeRange.ts';
 import {
-    ActionButtonsBox,
     NODE_LAYER_STYLES,
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,

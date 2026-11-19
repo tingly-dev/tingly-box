@@ -7,7 +7,7 @@ import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
 import EmptyState from '@/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
-import {api} from '@/services/api';
+import { api } from '@/services/api';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';
 import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';

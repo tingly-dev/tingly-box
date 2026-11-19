@@ -15,9 +15,9 @@ import {
     useTheme,
 } from '@mui/material';
 import { Close as CloseIcon } from '@/components/icons';
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TIER_GUIDE_STEPS, type GuideStep } from './diagrams';
+import { TIER_GUIDE_STEPS } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideLanguageToggle } from './GuideLanguageToggle';
 import { fontSizes } from '@/theme/fonts';

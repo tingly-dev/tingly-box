@@ -4,7 +4,6 @@ import {
 } from '@/components/icons';
 import {
     Box,
-    IconButton,
     Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
