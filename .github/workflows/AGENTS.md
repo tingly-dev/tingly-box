@@ -1,5 +1,7 @@
 # CI workflows: agent notes
 
+See [`.design/ci.md`](../../.design/ci.md) for which workflow runs when and why (PR = frontend only; Go and harness run daily; releases gate on the full harness).
+
 **After any change under `.github/workflows/` or `.github/actions/`, lint with actionlint before committing, and keep it clean.** YAML parsing alone misses bad `needs`, wrong `with:` inputs, expression errors and shell mistakes.
 
 ```bash

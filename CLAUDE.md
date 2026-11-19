@@ -30,7 +30,7 @@ Key design decisions and architecture notes are kept in `.design/`. Before imple
 
 # CI
 
-When changing `.github/workflows/` or `.github/actions/`, read `.github/workflows/AGENTS.md` first and lint with `actionlint` before committing.
+When changing `.github/workflows/` or `.github/actions/`, read `.github/workflows/AGENTS.md` first and lint with `actionlint` before committing. What runs when, and the policy for adding checks: `.design/ci.md`.
 
 # Pull Requests
 

@@ -314,7 +314,7 @@ strictly (pydantic), and accumulate streams with protocol-enforcing state
 machines. `--client` swaps the sending stack while reusing the same matrix,
 scenarios, and assertions:
 
-| `--client` | Stack | CI leg (`harness-matrix.yml`) |
+| `--client` | Stack | CI leg (`harness-template.yml`) |
 |------------|-------|-------------------------------|
 | `http` *(default)* | raw JSON over `net/http` (`client_http.go`) | `matrix-single` / `matrix-transitive` / `matrix-idempotent` / `matrix-flags` |
 | `gosdk` | official `anthropic-sdk-go` + `openai-go`, in-process (`client_gosdk.go`) | `matrix-single-gosdk` / `matrix-idempotent-gosdk` |

@@ -110,9 +110,9 @@ package integration tests.
 ### CI
 
 Every hermetic mode runs in
-[`.github/workflows/harness-matrix.yml`](../../.github/workflows/harness-matrix.yml)
-(shared leg definitions live in `harness-template.yml`, also called directly
-by `release-cli.yml` to gate releases): matrix (single / transitive / idempotent
+[`.github/workflows/harness-template.yml`](../../.github/workflows/harness-template.yml)
+(the single leg definition, called by `daily.yml` and by `release.yml` /
+`release-cli.yml` to gate releases): matrix (single / transitive / idempotent
 / flags / content_shapes / cache_controls / cache_prefix / vendor /
 servertool / thinking_limits / flag_paths), one
 matrix leg per client driver (gosdk / python / node / aisdk), `replay batch`
@@ -133,14 +133,15 @@ New matrix sections must add a leg here too — nothing enforces the mapping,
 so it silently drifts (see `cache_controls` / `cache_prefix` / `vendor`,
 which shipped without a CI leg for weeks).
 
-Triggers: `harness-matrix.yml` runs on `ci/**` pushes, PR-merge to the
-default branch, and manual dispatch, only when the protocol data plane or the
-harness itself changed (see the `paths` list in the workflow). Open PRs that
-touch those paths also get
-[`harness-pr.yml`](../../.github/workflows/harness-pr.yml): the in-process
-sections only (`matrix --mode=all`, which includes `servertool`), so a
-regression shows before merge; the toolchain-heavy client-driver legs stay
-on the triggers above.
+Triggers: the full matrix runs once a day on `main`
+([`daily.yml`](../../.github/workflows/daily.yml), skipped when `main` has not
+moved) and as the gate of every release (`release.yml`); both call
+`harness-template.yml`. It no longer runs per PR — see
+[`.design/ci.md`](../../.design/ci.md). `harness-matrix.yml` (`ci/**` pushes,
+PR-merge) and `harness-pr.yml` (in-process `matrix --mode=all` on PRs) are
+superseded and meant to be disabled; to run the harness on a branch now, use
+`workflow_dispatch` on `daily.yml`, or `go run ./cli/harness matrix --mode=all`
+locally.
 
 ### Checking a change locally
 

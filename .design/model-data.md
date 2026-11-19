@@ -56,7 +56,7 @@
 ## 合法性校验
 
 `harness catalog check`（校验逻辑在 `internal/catalog/catalog_check.go`）离线检查两份数据各自合法 + 跨 catalog 一致，
-`harness-pr.yml` 在 `internal/catalog/**` 变化时运行。维护规则见 `internal/catalog/AGENTS.md`。
+每日 CI（`daily.yml` 的 `catalog-check`）会运行它。维护规则见 `internal/catalog/AGENTS.md`。
 
 ## 数值单位
 

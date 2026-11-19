@@ -8,7 +8,7 @@
 - **是**：用**真实 agent CLI**（claude / codex / opencode）打**真实 tingly-box gateway**，跑一遍
   数据面（协议转换 + 路由 + dispatch + 真实上游）。
 - **不是 CI**：依赖开发者本机的 agent CLI，以及（真实模式下）provider 凭证。CI 侧的 hermetic
-  覆盖在 `.github/workflows/harness-matrix.yml`；本基线是它的**真实补充**——CI 保证协议函数对，
+  覆盖在 `.github/workflows/harness-template.yml`（每日 `daily.yml` 与发版门禁调用）；本基线是它的**真实补充**——CI 保证协议函数对，
   本基线保证「真实 agent 接进来真的能用」。
 
 两条路径（都在 harness 的 Tier C `agent` 命令里）：
@@ -224,7 +224,7 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 | `2` | 环境错误（CLI 缺失 / build 失败 / config 不存在）|
 
 本基线**不进 CI**（依赖本地凭证 + CLI）。CI hermetic 覆盖见
-`.github/workflows/harness-matrix.yml`（matrix / replay virtual+vmodel / lb / duo / routing，
+`.github/workflows/harness-template.yml`（matrix / replay virtual+vmodel / lb / duo / routing，
 详见 [`cli/harness/README.md`](../cli/harness/README.md) 的 `CI` 一节）；
 真实扫描留作 manual / nightly，因为需要真实凭证、结果不确定。
 
