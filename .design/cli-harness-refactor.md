@@ -103,10 +103,22 @@ edits it) and the shared `spec.LoadFiles` (F8, cross-cutting).
    `matrix --config` is the only spelling.
 3. **`provider` stub (F11).** **Decided**: deleted (#2662).
 4. **Definition files for `agent --mock` / `replay --upstream vmodel` (M5).**
-   Could accept `--config model.yaml` and serve it through a `spec.Runtime`
-   instead of builtin IDs. This is a feature, needs `internal/protocoltest`
-   changes (other thread's area). **Open**: to be discussed after the three
-   decisions above land.
+   **Open — deferred, to be discussed in a later thread.** Today only
+   `matrix --config` can run a user definition file; `agent --mock` talks to the
+   in-process VirtualServer mock and `replay --upstream vmodel` to the seeded
+   builtin provider, both by a Go-registered ID (`replayScenarios[*].defaultVModel`,
+   `replay.go:42-59`; `SetupVModelAgent`, `internal/protocoltest/agent_env.go:342`).
+   Letting them take `--config model.yaml` means compiling it through
+   `spec.New` and pointing the gateway rule at the resulting `spec.Runtime`,
+   either (a) as a generated provider served over the `vmodel://` in-process
+   dialer, or (b) through the independent `tb vmodel` listener
+   (`vmodel-definitions.md`, #2621) used as a plain OpenAI/Anthropic upstream.
+   Open questions: which of (a)/(b); which scenarios' structural assertions
+   apply to a user definition (its own `expect` block vs `Scenario.Structural`);
+   whether `agent --mock` should pass on `VirtualMockAnswerMarker` or the
+   definition's `expect`. Needs `internal/protocoltest` changes (the
+   `internal/` review thread's area). Nothing is implemented; the replay
+   default IDs are pinned by `TestReplayDefaultVModelsAreDefined` meanwhile.
 5. **LB `faults` encoding (`lb.go:80-126`).** **Decided** by #2624 to keep its
    own contract (the shorthand `[500,500,200]` + `steps`/`on_exhaust`); not
    planned to be folded into `kind: sequence`.
