@@ -13,7 +13,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import type { Provider } from '../types/provider';
+import type { Provider } from '../../types/provider';
 import { tableFrameSx } from '@tingly/ui/theme/table';
 
 // Fixed chip width so rows form an aligned grid instead of ragged

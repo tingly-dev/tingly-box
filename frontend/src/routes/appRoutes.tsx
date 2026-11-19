@@ -16,8 +16,8 @@ import OnboardingGate from './OnboardingGate';
 // Every route below this point is reached only after auth + navigation, so it
 // is lazy-loaded: each becomes its own chunk that downloads on first visit
 // instead of being bundled into the initial page load.
-const HelpPage = lazy(() => import('@/pages/HelpPage'));
-const VirtualModelsPage = lazy(() => import('@/pages/VirtualModelsPage'));
+const HelpPage = lazy(() => import('@/pages/help/HelpPage'));
+const VirtualModelsPage = lazy(() => import('@/pages/virtualModels/VirtualModelsPage'));
 const UseOpenAIPage = lazy(() => import('@/pages/scenario/UseOpenAIPage'));
 const UseAnthropicPage = lazy(() => import('@/pages/scenario/UseAnthropicPage'));
 const UseCodexPage = lazy(() => import('@/pages/scenario/UseCodexPage'));
@@ -44,19 +44,19 @@ const ImageProfilePage = lazy(() => import('@/pages/image/ImageProfilePage'));
 const ImageLibraryPage = lazy(() => import('@/pages/image/ImageLibraryPage'));
 const ImageToPromptPage = lazy(() => import('@/pages/image/ImageToPromptPage'));
 const IdeaToPromptPage = lazy(() => import('@/pages/image/IdeaToPromptPage'));
-const CredentialPage = lazy(() => import('@/pages/CredentialPage'));
+const CredentialPage = lazy(() => import('@/pages/credential/CredentialPage'));
 const System = lazy(() => import('@/pages/system/System'));
 const AccessControl = lazy(() => import('@/pages/system/AccessControl'));
 const LogsPage = lazy(() => import('@/pages/system/LogsPage'));
 const ExperimentalPage = lazy(() => import('@/pages/system/ExperimentalPage'));
 const DevelopPage = lazy(() => import('@/pages/system/DevelopPage'));
-const GuardrailsPage = lazy(() => import('@/pages/GuardrailsPage'));
+const GuardrailsPage = lazy(() => import('@/pages/guardrails/GuardrailsPage'));
 const GuardrailsRulesPage = lazy(() => import('@/pages/guardrails/RulesPage'));
 const GuardrailsCredentialsPage = lazy(() => import('@/pages/guardrails/CredentialsPage'));
 const GuardrailsGroupsPage = lazy(() => import('@/pages/guardrails/GroupsPage'));
 const GuardrailsHistoryPage = lazy(() => import('@/pages/guardrails/HistoryPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
-const UserUsagePage = lazy(() => import('@/pages/UserUsagePage'));
+const UserUsagePage = lazy(() => import('@/pages/userUsage/UserUsagePage'));
 const QuotaHistoryPage = lazy(() => import('@/pages/QuotaHistoryPage'));
 const ModelTestPage = lazy(() => import('@/pages/ModelTestPage'));
 const BenchPage = lazy(() => import('@/pages/bench/BenchPage'));

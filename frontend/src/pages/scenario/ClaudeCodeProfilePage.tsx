@@ -6,7 +6,7 @@ import AgentStatusRow, { AgentLogButton } from './components/AgentStatusRow';
 import AgentAccessSection, { useAccessExpanded } from './components/AgentAccessSection';
 import ProfileSetupDialog from './components/ProfileSetupDialog';
 import { useAgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
-import { isCredentialProvider } from '@/utils/providers';
+import { isCredentialProvider } from '@/pages/scenario/utils/providers';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, agentPageHeaderSx } from './components/ScenarioCardHeader';
 import PluginFeatures from '@/components/PluginFeatures';
@@ -47,8 +47,8 @@ import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPage
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
-import DuplicateDialog from '@/components/DuplicateDialog';
-import { suggestProfileCopyName } from '@/utils/copyName';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
+import { suggestProfileCopyName } from '@/pages/scenario/utils/copyName';
 import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
 
 const BASE_SCENARIO = 'claude_code';

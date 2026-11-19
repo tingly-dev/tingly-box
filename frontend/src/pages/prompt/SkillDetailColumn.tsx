@@ -11,7 +11,7 @@ import {
 import XMarkdown from '@ant-design/x-markdown';
 import {breaksConfig} from '@tingly/projects/transcript';
 import { type Skill, type SkillLocation } from '@/types/prompt';
-import { formatFileSize, getTwoLevelDisplayName } from '@/components/prompt/skill/skillGrouping';
+import { formatFileSize, getTwoLevelDisplayName } from '@/pages/prompt/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
 import { fontMono } from '@tingly/ui/theme/fonts';
 import { fontSizes } from '@tingly/ui/theme/fonts';

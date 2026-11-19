@@ -8,7 +8,7 @@ import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import type { EnvironmentMode } from '@/components/EnvironmentModeSwitcher';
 import { transformUrlByMode } from '@/utils/tokenUtils';
-import { type ClientConfigTool, useClientConfigStatus } from '@/hooks/useClientConfigStatus';
+import { type ClientConfigTool, useClientConfigStatus } from '@/pages/scenario/hooks/useClientConfigStatus';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
