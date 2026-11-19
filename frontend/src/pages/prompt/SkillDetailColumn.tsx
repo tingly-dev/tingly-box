@@ -9,6 +9,7 @@ import {
     Typography,
 } from '@mui/material';
 import XMarkdown from '@ant-design/x-markdown';
+import {breaksConfig} from '@tingly/projects/transcript';
 import { type Skill, type SkillLocation } from '@/types/prompt';
 import { formatFileSize, getTwoLevelDisplayName } from '@/components/prompt/skill/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
@@ -188,6 +189,7 @@ const SkillDetailColumn = ({
                             }}
                         >
                             <XMarkdown
+                                config={breaksConfig}
                                 style={{
                                     height: '100%',
                                 }}

@@ -10,6 +10,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from '../transcript/conversationStyles';
 import { remarkAutolinkBoundary } from '../transcript/autolink';
+import { remarkBreaks } from '../transcript/breaks';
 
 type RemarkPlugin = NonNullable<Options['remarkPlugins']>[number];
 
@@ -98,7 +99,7 @@ export const Markdown = memo(function Markdown({ text, conversation = false, saf
             }}
         >
             <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkAutolinkBoundary as RemarkPlugin]}
+                remarkPlugins={[remarkGfm, remarkBreaks, remarkAutolinkBoundary as RemarkPlugin]}
                 urlTransform={safe ? safeUrl : undefined}
                 components={{
                     a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,

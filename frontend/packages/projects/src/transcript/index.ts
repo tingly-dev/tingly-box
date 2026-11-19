@@ -22,3 +22,4 @@ export {TranscriptHostProvider} from './context';
 export type {Respond} from './Transcript';
 export {default as Trajectory} from './Trajectory';
 export {default as Markdown} from './Markdown';
+export {breaksConfig} from './breaks';
