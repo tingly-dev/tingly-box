@@ -832,11 +832,11 @@ source (anthropic_v1/beta, openai_chat, openai_responses)
   × client thinking level (none + minimal…max; budget for Anthropic,
                            reasoning effort for OpenAI clients)
   × client max_tokens (2048, 40000; OpenAI clients also absent)
-  × rule thinking_effort ("" / off / low / medium / high / max)
+  × rule thinking_effort ("" / off / low / medium / high / xhigh / max)
   × rule max-tokens field flag (Chat targets: none / use_max_completion_tokens
                                 / use_max_tokens)
   × streaming
-= 4200 combinations, one route (env) per source × target × rule flags
+= 4900 combinations, one route (env) per source × target × rule flags
 ```
 
 Each combination asserts properties of the request that reached the provider

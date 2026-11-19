@@ -129,7 +129,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `use_max_tokens` | bool | request | — | — | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b-post）|
 | `block_tools` | string (逗号分隔) | request | — | — | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre）|
 | `skip_usage` | bool | response | **yes** | or | 剥离回给 **OpenAI Chat 客户端**的 `usage`（流式 + 非流式；Chat / Responses / Anthropic provider，Google provider 暂未接）；为处理不了 usage chunk 的 Chat 客户端准备，Responses / Anthropic 客户端保留 usage | `shouldStripChatUsage` → `ShouldStripUsage(ctx.Extra)`（Type 3）|
-| `thinking_effort` | enum，UI 可选 `""`/`off`/`low`/`medium`/`high`/`max`（内部 `thinking.Level` 仍含 `minimal`/`xhigh`，见下方 UX 取舍）| reasoning | **yes** | override | 统一控制 extended thinking。effort 是主轴：OpenAI 侧原样下发 reasoning_effort（SDK 六级全部原生支持），Anthropic 侧下发 output_config.effort（Claude 4.5+ 原生）并附 budget_tokens 兜底（low 4K / medium 10K / high 20K / max 32K；内部值 minimal 1K / xhigh 24K 仍参与该映射），vendor 阶段按模型能力对 adaptive/budget/effort 三种方言互转（见 `request_anthropic_model.go`）；Gemini 目标同样吃这张表：Gemini 3 统一映射为 thinking_level（minimal/low/medium/high，xhigh/max 收敛到 high），Gemini 2.5 映射为 thinking_budget（flash 系列钳到 24576，见 `request_openai_gemini.go`）。空 = "By Client"（透传客户端参数）。| `transform.RuleThinkingTransform` → `ops.ApplyThinkingEffort`（Type 1b-post）|
+| `thinking_effort` | enum `""` / `off` / `low` / `medium` / `high` / `xhigh` / `max` | reasoning | **yes** | override | 控制上游 thinking effort。预算型模型使用约 4K / 10K / 20K / 24K / 32K token，受模型和请求限额约束。原生 effort 由 vendor 阶段按实际模型、协议映射。空值优先继承 Scenario 默认值，其次使用客户端设置。 | `RuleThinkingTransform` → `ApplyThinkingEffort` → `VendorTransform` |
 | `vision_proxy_service` | service_ref | vision | — | — | 通过视觉代理模型描述图片，让纯文本下游模型能处理图片输入。rule 级优先于 scenario 级。| VisionProxy 中间件（Type 1b-pre）|
 | `recording` | multi_enum（采集点多选） | observability | **yes** | override | 按选中的采集点录制该 rule 的流量：`client_request`（入站请求）/ `upstream_request`（出站请求）。响应侧点位（`upstream_response` 服务返回、`final_response` 最终返回）在值域内但**暂停**——无采集实现 / 质量不达标，选项与 emit 已注释（见 `.design/recording.md` §3.5）。逗号分隔存储；旧三档枚举值解析层兼容。rule 值覆盖 scenario 级 `recording_v2` 默认。| handler prologue 读 `typ.EffectiveRecording(rule, scenario)` 建 recorder；chain 的 StagePre/StagePost 按点位挂载；emit 按 `Has(point)` 过滤（详见 `.design/recording.md`）|
 | `session_affinity` | int (seconds) | routing | — | — | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。**rule-only**（已从 scenario plugin 移除——无 scenario 级继承）。**built-in CC / Desktop / Codex rule 默认 1800s**（`init.go` 种子 + `migrate20260610` 存量），新建 Team rule 创建时默认 1800s，其余 rule 不设即禁用，可在 Plugins 卡片按 rule 调整。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5，仅读 `rule.Flags.SessionAffinity`）|
@@ -146,6 +146,8 @@ config-only flag——只在生成 Codex 模型目录时读取，不进请求链
 规则头上的 `Compact` 芯片（滑块弹层），所以不放进 `RuleFlagRegistry`（否则 Plugins 目录会
 给它一个通用的整数输入框）。设计见 [`codex-config.md`](./codex-config.md) 的
 “Per-model auto-compact”。
+
+`xhigh` 沿用现有出站映射。上游拒绝所收到的档位时，按正常请求错误处理。
 
 ---
 
@@ -503,7 +505,7 @@ Plugins Card 操作。
 | 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
 | 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
 | `Shared` / `InheritanceMode` 嵌入 FlagSpec | ✅ | 前端单独维护共享清单 | 继承语义是 flag 固有属性，放在 registry 可信源里前端零维护 |
-| `thinking_effort` UI 选项收窄为 6 档（去掉 `minimal`/`xhigh`）| ✅ | 保留完整 8 档 | 全量档位曾是"为了完整而列全"，但 `minimal`/`xhigh` 出了 gpt-5.1+/opus-4-7+/sonnet-5/opus-5/fable-5 这几个最新模型族就会在 vendor 阶段静默折叠成 `low`/`high`/`max`（见 `internal/protocol/ops` 的 reasoning-effort tier map 与 `.design/model-data.md`），选了等于没选，是一种"伪精细"的信息噪音（ux-principles.md #5：展示具体值而不是别名）。只改 `RuleFlagRegistry()` 的 `Options` 列表与 `ThinkingEffortControl.tsx`/`ProbeControls.tsx` 的选项/ladder，`thinking.Level` 内部值集合、budget/effort 映射、vendor 转换逻辑一律不动。存量 rule 若已设为 `minimal`/`xhigh`：保留原值不做迁移，继续按原语义生效；`ThinkingEffortControl` 与 `FlagCatalogDialog` 的通用 enum 渲染都做了"值不在 Options 里则原样显示、只读不可再选"的兜底，避免把一个仍生效的 override 误显示成 "By Client"。Probe 的 `ThinkingLevel`（`internal/probe/types.go`）同步做四档改五档：加入 `max`，`minimal`/`xhigh` 依旧不收（探测 low/high/max 已覆盖折叠后的行为，没有额外信号）。|
+| `thinking_effort` UI 提供 7 档（`xhigh` 位于 `high` 和 `max` 之间） | ✅ | 完整暴露内部阶梯 | 规则、场景和 Probe 的规则 flag overlay 均可设置 `xhigh`。旧配置里的 `minimal` 仍可识别和执行。Probe 生成客户端请求的 thinking 滑块沿用自己的档位。 |
 
 ---
 
