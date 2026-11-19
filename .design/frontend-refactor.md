@@ -106,7 +106,9 @@ Files whose **only** importer area is a single page — colocate them with it (o
 - Image: `utils/{playgroundSession,promptFile,sliceParamsStore}`.
 - Help: `components/{ProvidersCard,ShortcutCard}`. System: `components/GlobalExperimentalFeatures`. VirtualModels: `components/VirtualModelsTable`. Prompt/skills: `components/prompt/skill/{DeleteSkillLocationDialog,skillGrouping}`. Bots: `components/remote-control/CollapsibleGuide`, `hooks/useBotToggle`. Projects page: `components/claudeCode/{ModelSelect,ProfileSelect,RouteStatusLine}`.
 
-`components/` has 114 entries at its top level; after moving the single-use ones it should hold only genuinely shared components (cards, dialogs, badges, graph).
+**Done (phase 3b)** for the loose single-page files in `components/`, `hooks/`, `utils/` (39 files, mechanical move via a resolver-based script that rewrote 69 import specifiers; `modulepreload` set in `dist/index.html` identical before/after). Domain folders (`components/{bot,notify,limits,claudeCode,…}`, `rule-card`, `RuleCard.tsx`) were deliberately **left**: they are cohesive families, and only their callers happen to be one page today. Also moved the top-level `CredentialPage`, `HelpPage`, `VirtualModelsPage`, `UserUsagePage`, `GuardrailsPage` into their own page folders (§3.6 for those five; `DashboardPage`, `HubPage`, `Login`, `ModelTestPage`, `QuotaHistoryPage`, `RetiredRecordingsPage` have no sibling folder and stay).
+
+`components/` had 114 entries at its top level; after moving the single-use ones it should hold only genuinely shared components (cards, dialogs, badges, graph).
 
 ### 3.3 Page code used by other pages
 

@@ -2,14 +2,14 @@ import { Alert, Box, Button, Chip, Divider, Stack, Typography } from '@mui/mater
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import CreateSharingKeyButton from '@/components/CreateSharingKeyButton';
+import CreateSharingKeyButton from '@/pages/scenario/components/CreateSharingKeyButton';
 import PageHeader from '@tingly/ui/components/PageHeader';
 import { PageLayout } from '@tingly/ui/components/PageLayout';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
 import Surface from '@tingly/ui/components/Surface';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { useNotify } from '@/hooks/useNotify';
-import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
+import { useSharingKeyActions } from '@/pages/scenario/hooks/useSharingKeyActions';
 import { api } from '@/services/api';
 import { groupByTeam, teamPath } from '@/utils/team';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';

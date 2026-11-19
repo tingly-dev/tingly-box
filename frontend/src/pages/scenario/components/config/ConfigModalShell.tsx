@@ -1,7 +1,7 @@
 import { Box, Button, CircularProgress, Dialog, DialogTitle, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { shouldIgnoreDialogClose } from '@/components/dialogClose';
+import { shouldIgnoreDialogClose } from '@/pages/scenario/components/dialogClose';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface ConfigModalTabsProps {

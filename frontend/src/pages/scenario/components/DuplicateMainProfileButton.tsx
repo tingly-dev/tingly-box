@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import DuplicateDialog from '@/components/DuplicateDialog';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
 import { Duplicate as DuplicateIcon } from '@/components/icons';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { MAIN_CONFIG_ID, useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
-import { suggestProfileCopyName } from '@/utils/copyName';
+import { suggestProfileCopyName } from '@/pages/scenario/utils/copyName';
 
 // "Duplicate as profile" on the main Claude Code page: a new profile with the
 // main configuration's model rules and flags, which then lands on it.

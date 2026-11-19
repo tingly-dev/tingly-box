@@ -1,7 +1,7 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Switch, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useCallback, useRef, useState } from 'react';
-import type { Provider } from '../types/provider';
+import type { Provider } from '../../../types/provider';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog.tsx';
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';

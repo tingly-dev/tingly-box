@@ -29,9 +29,9 @@ import {
     useRosterAxis,
 } from '@/components/dashboard';
 import type { AggregatedStat, SortField, UsageMetricLabels, ShareBarItem } from '@/components/dashboard';
-import RosterTable from './userUsage/RosterTable';
-import RosterDetailSection from './userUsage/RosterDetailSection';
-import { useUserUsageData } from './userUsage/useUserUsageData';
+import RosterTable from './RosterTable';
+import RosterDetailSection from './RosterDetailSection';
+import { useUserUsageData } from './useUserUsageData';
 import {
     getModelKey,
     getProviderKey,
@@ -45,8 +45,8 @@ import {
     fetchModelsForAccount,
     fetchAccountsForModel,
     fetchAccountsForProvider,
-} from './userUsage/userUsageModel';
-import type { TimeRange, ViewMode, UserUsageRow, PrimaryColumn } from './userUsage/userUsageModel';
+} from './userUsageModel';
+import type { TimeRange, ViewMode, UserUsageRow, PrimaryColumn } from './userUsageModel';
 import { radius } from '@tingly/ui/theme/radius';
 
 const UserUsageSkeleton = () => (

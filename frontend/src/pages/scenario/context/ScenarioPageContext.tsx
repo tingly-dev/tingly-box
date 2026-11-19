@@ -1,5 +1,5 @@
 import React, { createContext, useContext, type ReactNode } from 'react';
-import { useFunctionPanelData } from '@/hooks/useFunctionPanelData';
+import { useFunctionPanelData } from '@/pages/scenario/hooks/useFunctionPanelData';
 
 /**
  * Context for sharing modal state across scenario page components.

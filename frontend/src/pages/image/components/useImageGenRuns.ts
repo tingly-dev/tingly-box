@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
-import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
+import { loadPlaygroundSession, savePlaygroundSession } from '@/pages/image/utils/playgroundSession';
 import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';

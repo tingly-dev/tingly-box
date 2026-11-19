@@ -31,7 +31,7 @@ import { fetchBlob } from '@tingly/vision';
 import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import { api } from '@/services/api';
 import { downloadImage, slugify } from '@/utils/download';
-import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
+import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/pages/image/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
 import ImageGenGalleryDialog from './ImageGenGalleryDialog';
 import ImageGenLightbox from './ImageGenLightbox';
