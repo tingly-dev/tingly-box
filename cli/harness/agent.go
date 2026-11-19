@@ -123,9 +123,6 @@ func (a *AgentCmd) Run() error {
 		fmt.Printf("⚠️  --only-failing is ignored in --mock mode (no named entries)\n\n")
 	}
 
-	// Make the per-entry timeout visible to the executors (they read
-	// the package-level variable before launching the agent CLI).
-	agentRunTimeout = a.Timeout
 	if a.Timeout > 0 {
 		fmt.Printf("⏱  Per-entry timeout: %s\n", a.Timeout)
 	}
@@ -172,24 +169,44 @@ func (a *AgentCmd) Run() error {
 	}
 	fmt.Println()
 
+	opts := agentRunOpts{
+		prompt:  prompt,
+		timeout: a.Timeout,
+		writer:  writer,
+		skip:    skip,
+		only:    only,
+		filter:  a.Filter,
+	}
+
 	if strings.EqualFold(agentName, "batch") {
-		return runBatchAgentTests(a.Mock, a.Config, prompt, writer, skip, only, a.Filter)
+		return runBatchAgentTests(a.Mock, a.Config, opts)
 	}
 
 	var results []*RealAgentTestResult
 	var runErr error
 	if a.Config != "" {
-		results, runErr = runRealAgentTests(agentName, a.Config, prompt, writer, skip, only, a.Filter)
+		results, runErr = runRealAgentTests(agentName, a.Config, opts)
 	} else {
 		if len(a.Filter) > 0 {
 			fmt.Printf("⚠️  --filter is ignored in --mock mode (no named entries)\n\n")
 		}
-		results, runErr = runVirtualAgentTest(agentName, prompt, writer, skip)
+		results, runErr = runVirtualAgentTest(agentName, opts)
 	}
 	if len(results) > 0 {
 		printAgentSummary(results)
 	}
 	return runErr
+}
+
+// agentRunOpts is what every agent run path shares, so the runners take one
+// value instead of a growing parameter list.
+type agentRunOpts struct {
+	prompt  string                 // CLI prompt override; empty = per-entry / agent default
+	timeout time.Duration          // per-entry agent CLI timeout; 0 disables
+	writer  *summaryWriter         // durable per-row summary; may be nil
+	skip    map[resumeKey]struct{} // --resume: rows already recorded
+	only    map[resumeKey]struct{} // --only-failing: the only rows to run (real mode)
+	filter  []string               // --filter: provider names (real mode)
 }
 
 // Default test prompts for each profile type

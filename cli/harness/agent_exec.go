@@ -16,25 +16,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
-// agentRunTimeout is the max wall-clock duration for a single agent CLI
-// invocation. Set by the `--timeout` flag in newAgentCommand before any work
-// runs. A zero value disables the timeout. Exposed as a package-level var
-// (rather than threaded through every executor signature) because it's a
-// cross-cutting concern shared by all agent paths — mock, real, batch.
-var agentRunTimeout time.Duration
-
 // runAgentCmdWithTimeout runs cmd, capturing stdout+stderr into one buffer,
 // under the configured per-entry timeout. Returns the captured output, a
 // timed-out flag, and the Wait/Start error (if any). On timeout the process
 // is killed and context.DeadlineExceeded is returned as the error.
-// When agentRunTimeout <= 0 the timeout is disabled and this behaves like
+// When timeout <= 0 the timeout is disabled and this behaves like
 // cmd.CombinedOutput().
-func runAgentCmdWithTimeout(cmd *exec.Cmd) ([]byte, bool, error) {
+func runAgentCmdWithTimeout(cmd *exec.Cmd, timeout time.Duration) ([]byte, bool, error) {
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 
-	if agentRunTimeout <= 0 {
+	if timeout <= 0 {
 		err := cmd.Run()
 		return buf.Bytes(), false, err
 	}
@@ -47,7 +40,7 @@ func runAgentCmdWithTimeout(cmd *exec.Cmd) ([]byte, bool, error) {
 	go func() { done <- cmd.Wait() }()
 
 	select {
-	case <-time.After(agentRunTimeout):
+	case <-time.After(timeout):
 		_ = cmd.Process.Kill()
 		<-done // reap the goroutine so it doesn't leak
 		return buf.Bytes(), true, context.DeadlineExceeded
@@ -82,12 +75,12 @@ func appendSummary(writer *summaryWriter, r *RealAgentTestResult) {
 // finishAgentResult records the shared outcome fields of one agent CLI run —
 // the single implementation of the timeout / error / success classification
 // every executor uses.
-func finishAgentResult(result *AgentTestResult, start time.Time, output []byte, timedOut bool, err error) {
+func finishAgentResult(result *AgentTestResult, start time.Time, output []byte, timedOut bool, timeout time.Duration, err error) {
 	result.Duration = time.Since(start)
 	result.Output = string(output)
 	switch {
 	case timedOut:
-		result.Error = fmt.Sprintf("timeout after %s", agentRunTimeout)
+		result.Error = fmt.Sprintf("timeout after %s", timeout)
 		result.ExitCode = -1
 		result.TimedOut = true
 	case err != nil:
@@ -104,14 +97,14 @@ func finishAgentResult(result *AgentTestResult, start time.Time, output []byte, 
 type virtualAgent struct {
 	provider string
 	model    string
-	run      func(env *protocoltest.AgentTestEnv, model, prompt string) (*AgentTestResult, error)
+	run      func(env *protocoltest.AgentTestEnv, model, prompt string, timeout time.Duration) (*AgentTestResult, error)
 }
 
 var virtualAgents = map[protocoltest.AgentType]virtualAgent{
 	protocoltest.AgentTypeClaudeCode: {
 		provider: "virtual-claude", model: "cc",
-		run: func(env *protocoltest.AgentTestEnv, _, prompt string) (*AgentTestResult, error) {
-			return executeClaudeWithEnv(env, prompt)
+		run: func(env *protocoltest.AgentTestEnv, _, prompt string, timeout time.Duration) (*AgentTestResult, error) {
+			return executeClaudeWithEnv(env, prompt, timeout)
 		},
 	},
 	protocoltest.AgentTypeCodex:    {provider: "virtual-codex", model: "tingly-codex", run: executeCodexWithEnv},
@@ -120,7 +113,7 @@ var virtualAgents = map[protocoltest.AgentType]virtualAgent{
 
 // executeAgentCommand runs the actual agent CLI against an ephemeral gateway
 // wired to the virtual-model server.
-func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*AgentTestResult, error) {
+func executeAgentCommand(agentType protocoltest.AgentType, prompt string, timeout time.Duration) (*AgentTestResult, error) {
 	spec, ok := virtualAgents[agentType]
 	if !ok {
 		return nil, fmt.Errorf("unknown agent type: %s", agentType)
@@ -136,7 +129,7 @@ func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*Agen
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
-	return spec.run(env, spec.model, prompt)
+	return spec.run(env, spec.model, prompt, timeout)
 }
 
 // executeClaudeWithEnv writes settings.json and runs claude CLI against a pre-configured env.
@@ -145,7 +138,7 @@ func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*Agen
 // same canonical defaults the GUI quick-config seeds from — so the harness
 // exercises the real Claude Code configuration shape (telemetry flags,
 // model routing vars) rather than a hand-rolled minimal subset.
-func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string) (*AgentTestResult, error) {
+func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string, timeout time.Duration) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
 		Agent:  "claude",
@@ -191,13 +184,13 @@ func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string) (*Agent
 	cmd := exec.Command(variant.Path, "--settings", settingsPath, "-p", prompt)
 	cmd.Env = os.Environ()
 
-	output, timedOut, err := runAgentCmdWithTimeout(cmd)
-	finishAgentResult(result, start, output, timedOut, err)
+	output, timedOut, err := runAgentCmdWithTimeout(cmd, timeout)
+	finishAgentResult(result, start, output, timedOut, timeout, err)
 	return result, nil
 }
 
 // executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
-func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
+func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string, timeout time.Duration) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
 		Agent:  "codex",
@@ -249,8 +242,8 @@ wire_api = "responses"
 
 	cmd := exec.Command(binPath, "exec", "--dangerously-bypass-approvals-and-sandbox", prompt)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("CODEX_HOME=%s", codexHome))
-	output, timedOut, err := runAgentCmdWithTimeout(cmd)
-	finishAgentResult(result, start, output, timedOut, err)
+	output, timedOut, err := runAgentCmdWithTimeout(cmd, timeout)
+	finishAgentResult(result, start, output, timedOut, timeout, err)
 	return result, nil
 }
 
@@ -260,7 +253,7 @@ wire_api = "responses"
 // same logic the production `agent apply` flow uses — so the harness exercises
 // the real provider layout (provider key "tingly-box", model map shape)
 // instead of a hand-rolled variant that could drift from production.
-func executeOpenCodeWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
+func executeOpenCodeWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string, timeout time.Duration) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
 		Agent:  "opencode",
@@ -310,8 +303,8 @@ func executeOpenCodeWithEnv(env *protocoltest.AgentTestEnv, model string, prompt
 
 	cmd := exec.Command(binPath, "run", "-m", fmt.Sprintf("%s/%s", providerKey, model), prompt)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("XDG_CONFIG_HOME=%s", xdgDir))
-	output, timedOut, err := runAgentCmdWithTimeout(cmd)
-	finishAgentResult(result, start, output, timedOut, err)
+	output, timedOut, err := runAgentCmdWithTimeout(cmd, timeout)
+	finishAgentResult(result, start, output, timedOut, timeout, err)
 	return result, nil
 }
 
