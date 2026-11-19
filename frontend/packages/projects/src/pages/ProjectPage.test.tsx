@@ -23,11 +23,11 @@ const b = { id: 'b', project_id: 'p', model_override: 'sibling-choice', status: 
 function Switch() { const nav = useNavigate(); return <button onClick={() => nav('/projects/p?thread=b')}>switch</button>; }
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
-it('keeps the coordinator idle when /clear is rejected', async () => {
+it('keeps the coordinator idle when /clear is refused while it works', async () => {
     m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
         ? { project: p, threads: [], coordinator_busy: false }
         : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
-    m.post.mockResolvedValue({ error: { error: '/clear is not available for the project coordinator' }, response: new Response(null, { status: 400 }) });
+    m.post.mockResolvedValue({ error: { error: 'cannot start a new session while the coordinator is working; wait for it or stop it first: stop or wait for the current turn first' }, response: new Response(null, { status: 400 }) });
     render(<MemoryRouter initialEntries={['/projects/p']}><ProjectsHostProvider host={host}><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'new session' }));
     await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', expect.objectContaining({ body: { content: '/clear', attachments: [] } })));
@@ -35,7 +35,7 @@ it('keeps the coordinator idle when /clear is rejected', async () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-it('keeps the coordinator idle when an older server accepts /clear synchronously', async () => {
+it('keeps the coordinator idle when /clear starts a new session synchronously', async () => {
     m.get.mockImplementation(async (url: string) => ({ data: url === '/api/v1/projects/{id}'
         ? { project: p, threads: [], coordinator_busy: false }
         : url.endsWith('permission-modes') ? { modes: [] } : {}, response: new Response() }));
