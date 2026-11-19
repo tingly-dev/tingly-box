@@ -1,6 +1,6 @@
 import { Alert, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack } from '@mui/material';
 import React from 'react';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
 import { fontMono } from '@tingly/ui/theme/fonts';

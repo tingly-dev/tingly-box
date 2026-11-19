@@ -1,5 +1,5 @@
 import type { ImageProfile } from './imageProfileTypes';
-import { USE_MOCK, createWorkspaceCollection } from '../imageWorkspaceDb';
+import { USE_MOCK, createWorkspaceCollection } from './imageWorkspaceDb';
 
 // Profiles, shared by the sidebar and the profile pages, kept in the browser
 // (imageWorkspaceDb.ts). A page-free module on purpose — the sidebar imports

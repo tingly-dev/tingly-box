@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { Box, ButtonBase, IconButton, InputBase, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Add, Close } from '@/components/icons';
-import type { ProfilePrompt } from './imageProfileTypes';
+import type { ProfilePrompt } from '../../../features/image/imageProfileTypes';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {

@@ -1,4 +1,4 @@
-import { formValueToSource, type MCPSourceConfig, type MCPSourceFormValue } from './types';
+import { formValueToSource, type MCPSourceConfig, type MCPSourceFormValue } from '../../features/mcp/types';
 
 // IDs are addressing, not naming: random, never derived from user input, and
 // never reused after a delete (a sequence would re-point old commands and

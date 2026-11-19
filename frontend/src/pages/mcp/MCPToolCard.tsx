@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import MCPToolRow from './MCPToolRow';
 import { isAdvisorTool, isServerToolSource, needsSearchKey, isToolRestricted, type MCPToolPatch } from './toolPresentation';
-import type { MCPCatalogTool, MCPSourceConfig } from './types';
+import type { MCPCatalogTool, MCPSourceConfig } from '../../features/mcp/types';
 
 // One tool of a connection with its global switch. Off here means off in every profile.
 export default function MCPToolCard({

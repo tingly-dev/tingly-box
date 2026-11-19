@@ -7,7 +7,7 @@ import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { resolveActiveActivity } from '@/layout/activeActivity';
 import { useActivityItems } from '@/layout/useActivityItems';
 import type { LayoutProps } from '@/layout/types';
-import { rememberAgentPath } from '@/pages/scenario/lastAgent';
+import { rememberAgentPath } from '@/features/scenario/lastAgent';
 import { syncUiPrefs } from '@/services/uiPrefs';
 import { MobileTabBar } from './MobileTabBar';
 import { hasSubPages, subPageGroups } from './mobileSubPages';

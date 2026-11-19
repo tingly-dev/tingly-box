@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardArrowDown, Search } from '@/components/icons';
 import MCPToolCard from './MCPToolCard';
 import { isToolRestricted, type MCPToolPatch } from './toolPresentation';
-import type { MCPCatalogTool, MCPSourceConfig } from './types';
+import type { MCPCatalogTool, MCPSourceConfig } from '../../features/mcp/types';
 
 const FOLDED = 5;
 const FILTERABLE = 8;

@@ -17,7 +17,7 @@ import ScenarioPageSkeleton from '@/pages/scenario/components/ScenarioPageSkelet
 import TemplatePage from '@/pages/scenario/components/TemplatePage.tsx';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader, agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeader';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 
 const scenario = "imagegen";
 

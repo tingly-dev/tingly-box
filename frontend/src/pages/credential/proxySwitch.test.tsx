@@ -4,11 +4,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import i18n from '@/i18n';
 import { api } from '@/services/api';
 import { useProviderProxy } from '@/pages/credential/useProviderProxy';
-import { CredentialCards } from './CredentialCards';
-import { ProxySwitch } from './ProxySwitch';
+import { CredentialCards } from '../../components/credential/CredentialCards';
+import { ProxySwitch } from '../../components/credential/ProxySwitch';
 
 vi.mock('@/services/api', () => ({ api: { updateProvider: vi.fn(), getConfig: vi.fn() } }));
-vi.mock('./QuotaCell', () => ({ QuotaCell: () => null }));
+vi.mock('../../components/credential/QuotaCell', () => ({ QuotaCell: () => null }));
 
 beforeAll(async () => { await i18n.changeLanguage('en'); });
 beforeEach(() => {

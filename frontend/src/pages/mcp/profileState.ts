@@ -1,4 +1,4 @@
-import { MCP_DEFAULT_PROFILE_ID, type MCPCatalogTool, type MCPProfile, type MCPRoutingSnapshot } from './types';
+import { MCP_DEFAULT_PROFILE_ID, type MCPCatalogTool, type MCPProfile, type MCPRoutingSnapshot } from '../../features/mcp/types';
 
 export interface ProfileToolRow {
     name: string; // normalized

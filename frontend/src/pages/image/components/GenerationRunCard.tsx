@@ -17,9 +17,9 @@ import { Close, Edit, ErrorOutline, Palette, Refresh, RestartAlt, ZoomIn } from 
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_CARD } from './imageThumbnails';
-import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_CARD } from '../../../features/image/imageThumbnails';
+import type { GenerationRun, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface GenerationRunCardProps {

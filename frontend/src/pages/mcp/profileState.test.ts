@@ -7,7 +7,7 @@ import {
     removeProfileTool,
     setProfileToolOn,
 } from './profileState';
-import type { MCPCatalogTool, MCPProfile, MCPRoutingSnapshot } from './types';
+import type { MCPCatalogTool, MCPProfile, MCPRoutingSnapshot } from '../../features/mcp/types';
 
 const tool = (name: string, enabled = true, client = true) =>
     ({

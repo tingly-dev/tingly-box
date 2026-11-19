@@ -9,7 +9,7 @@ import { resolveLanguage } from '@/i18n';
 import CodeBlock from '@/components/CodeBlock';
 import { shouldIgnoreDialogClose } from '@/pages/scenario/components/dialogClose';
 import { ManualFileSection, type ManualFileTab } from './config/ManualFileSection';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { CLAUDE_CODE_DEFAULT_CO_AUTHORED_BY, CLAUDE_CODE_DEFAULT_SHOW_THINKING_SUMMARIES, coAuthoredBySettings, derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodeDefaultMode, ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './agentSetup';

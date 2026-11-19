@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SCENARIOS, getHiddenScenarios, getPinnedScenarios } from '@/pages/scenario/scenarioRegistry';
+import { SCENARIOS, getHiddenScenarios, getPinnedScenarios } from '@/features/scenario/scenarioRegistry';
 import { OpenAI, Anthropic, Claude, Cursor, DeepSeek, OpenCode, Pi, WorkBuddy, Xcode, VSCode, Codex, ClaudeDesktop } from '../components/BrandIcons';
 import {
     SettingsApplications,
@@ -33,19 +33,21 @@ import {
 import { IconLibraryPhoto as TablerLibraryPhoto, IconPhotoScan as TablerPhotoScan, IconWriting as TablerWriting } from '@tabler/icons-react';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
-import { useMCPProfiles } from '@/pages/mcp/profileStore';
-import { MCP_DEFAULT_PROFILE_ID } from '@/pages/mcp/types';
-import { useImageProfiles } from '@/pages/image/profiles/imageProfileStore';
+import { useMCPProfiles } from '@/features/mcp/profileStore';
+import { MCP_DEFAULT_PROFILE_ID } from '@/features/mcp/types';
+import { useImageProfiles } from '@/features/image/imageProfileStore';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { orderTeams, teamPath } from '@/utils/team';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
 import { useProjectsWaiting } from './useProjectsWaiting';
-import ThumbImage from '@/pages/image/components/ThumbImage';
-import { THUMB_EDGE_BADGE } from '@/pages/image/components/imageThumbnails';
+import ThumbImage from '@/features/image/ThumbImage';
+import { THUMB_EDGE_BADGE } from '@/features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 
 // The Projects sidebar body carries @tingly/projects; lazy so the package stays
-// out of the eager bundle until the Projects item is open.
+// out of the eager bundle until the Projects item is open. The one place the
+// nav reaches into pages/, as a lazy widget rather than shared state.
+// oxlint-disable-next-line no-restricted-imports
 const ProjectsNav = lazy(() => import('@/pages/projects/ProjectsNav'));
 
 const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);

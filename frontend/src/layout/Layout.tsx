@@ -15,8 +15,8 @@ import { SidebarCollapsedProvider, useSidebarCollapsed } from './useSidebarColla
 import type { ActivityItem, LayoutProps } from './types';
 import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
 import { syncUiPrefs } from '../services/uiPrefs';
-import { useHiddenScenarios, usePinnedScenarios } from '@/pages/scenario/scenarioRegistry';
-import { rememberAgentPath } from '@/pages/scenario/lastAgent';
+import { useHiddenScenarios, usePinnedScenarios } from '@/features/scenario/scenarioRegistry';
+import { rememberAgentPath } from '@/features/scenario/lastAgent';
 import { CoachMark } from '@tingly/ui';
 import { useOneTimeTip } from '@/hooks/useOneTimeTip';
 import type { NavItem } from './types';

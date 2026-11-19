@@ -45,8 +45,8 @@ import ImageModelPicker from './ImageModelPicker';
 import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
-import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
-import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/imageProfileTypes';
+import { createImageProfile, removeImageProfile, updateImageProfile } from '../../../features/image/imageProfileStore';
+import { newPromptId, type ImageProfile, type ProfilePrompt } from '../../../features/image/imageProfileTypes';
 import { PromptEditorCopyButton, PromptEditorField, PromptPanelField } from './PromptFields';
 import { usePromptFilled, usePromptStore } from './usePromptStore';
 import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
@@ -72,7 +72,7 @@ import type {
     ImportedImage,
     Quality,
     SelectedImage,
-} from './ImageGenPlayground.types';
+} from '../../../features/image/ImageGenPlayground.types';
 
 // The results strip is "what's happening right now", not a scrollback buffer —
 // dragging through dozens of past generations to find one belongs in the
