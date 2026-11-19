@@ -421,7 +421,7 @@ export default function ProjectPage() {
         />
     ) : null;
     const overviewEl = (initialTab?: OverviewTab) => (
-        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} onStatus={openStatusThreads} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
+        <OverviewPane key={initialTab} projectId={id} threads={threads} onOpen={openFromOverview} onTasks={openTasksList} libraryKey={libraryKey} selectedId={threadId} initialTab={initialTab} />
     );
     const threadInSide = !!threadEl && threadAt === 'side';
     // The side pane holds the Overview, or the open thread in its place; with the

@@ -15,7 +15,7 @@ import { radius } from '@tingly/ui/theme/radius';
 
 export type OverviewTab = 'threads' | 'library' | 'links';
 
-export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; /** Opens a thread's running tasks from its card's count pill, or all of them from the toolbar's chip. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; /** Opens a status's thread list from its group heading or column. */ onStatus?: (status: string, anchor: HTMLElement) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab }) {
+export function OverviewPane({ projectId, threads, onOpen, onTasks, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; /** Opens a thread's running tasks from its card's count pill, or all of them from the toolbar's chip. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab }) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [tab, setTab] = useState<OverviewTab>(initialTab);
@@ -66,7 +66,6 @@ export function OverviewPane({ projectId, threads, onOpen, onTasks, onStatus, li
             <Box sx={{ flex: 1, minHeight: 0, ...(tab === 'library' && { overflowY: 'auto', overflowX: 'hidden' }) }}>
                 {tab === 'threads' ? (
                     <ThreadsView scope={projectId} threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks}
-                        onGroup={onStatus && ((key, _label, anchor) => onStatus(key, anchor))}
                         countLabel={(count) => t('overview.threadCount', { count })} empty={t('overview.noThreads')}
                         bulk={{
                             resolve: (ids) => setBulk({ action: 'resolve', ids }),

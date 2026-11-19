@@ -1,10 +1,11 @@
-import { Box } from '@mui/material';
+import { useId } from 'react';
+import { Box, Collapse } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
 import type { ReactNode } from 'react';
-import { STATUS_ORDER } from '../project/threadStatus';
-import type { StatusGroup } from './StatusGroups';
-import { StatusHeading } from './StatusGroups';
+import { needsUser, STATUS_ORDER } from '../project/threadStatus';
+import type { GroupFold, StatusGroup } from './StatusGroups';
+import { GroupHeader, useFoldTimeout } from './StatusGroups';
 import { ThreadCard } from './StatusColumns';
 
 interface Props {
@@ -13,8 +14,8 @@ interface Props {
     onOpen: (id: string) => void;
     /** Opens the thread's running tasks from its card's count pill. */
     onTasks?: (threads: Thread[], anchor: HTMLElement) => void;
-    /** Opens a lane's thread list from its status heading. */
-    onStatus?: (status: string, anchor: HTMLElement) => void;
+    /** Which lanes are open, and what a click on a lane's heading does: every lane folds. */
+    fold: GroupFold;
     /** The lanes, in order, with the labels they read; by default the project's statuses. */
     groups?: StatusGroup[];
     /** Which lane a thread stands in; by default its status. */
@@ -36,14 +37,18 @@ const RAIL_AT = 640;
  * width, never more, and grows downward. Empty statuses are left out.
  *
  * Pinned threads draw as one section above every status, newest pin first.
+ * Every section folds from its heading; a folded one keeps its heading, count
+ * and, if something in it waits on the user, a dot.
  *
  * A lane per status, full width, its cards flowing left to right in as many
  * tracks as the width holds and wrapping onto further lines; in a wide pane the
  * heading moves to the left of its cards. A narrow pane is one track, a wide
  * one many, with nothing to choose.
  */
-export function StatusBoard({ threads, selectedId, onOpen, onTasks, onStatus, groups: lanes, groupOf = (th) => th.status, subtitle, pinnedIds, onTogglePin, selecting, picked, onTogglePick }: Props & { selecting?: boolean; picked?: Set<string>; onTogglePick?: (id: string) => void }) {
+export function StatusBoard({ threads, selectedId, onOpen, onTasks, fold, groups: lanes, groupOf = (th) => th.status, subtitle, pinnedIds, onTogglePin, selecting, picked, onTogglePick }: Props & { selecting?: boolean; picked?: Set<string>; onTogglePick?: (id: string) => void }) {
     const { t } = useTranslation('projects');
+    const base = useId();
+    const timeout = useFoldTimeout();
     const pinned = pinnedIds != null && onTogglePin != null ? new Set(pinnedIds) : undefined;
     const toggle = onTogglePin;
     const cards = (list: Thread[]) => list.map((th) => (
@@ -66,17 +71,24 @@ export function StatusBoard({ threads, selectedId, onOpen, onTasks, onStatus, gr
             containerType: 'inline-size', boxSizing: 'border-box', width: '100%', minWidth: 0, overflowX: 'hidden', p: 2,
             display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', alignItems: 'start',
         }}>
-            {sections.map((s, i) => (
-                <Box key={s.key} role="group" aria-label={s.label} sx={{
-                    minWidth: 0, py: 1.5, pt: i === 0 ? 0 : 1.5, borderTop: i === 0 ? 0 : 1, borderColor: 'divider',
-                    display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', columnGap: 2, rowGap: 0.75, alignItems: 'start',
-                    [`@container (min-width: ${RAIL_AT}px)`]: { gridTemplateColumns: '150px minmax(0, 1fr)' },
-                }}>
-                    <Box sx={{ pt: 0.5 }}><StatusHeading label={s.label} status={s.status} count={s.list.length}
-                        onClick={onStatus && ((e) => { e.stopPropagation(); onStatus(s.status, e.currentTarget); })} /></Box>
-                    <Box sx={{ minWidth: 0, display: 'grid', gap: 0.75, gridTemplateColumns: TRACKS }}>{cards(s.list)}</Box>
-                </Box>
-            ))}
+            {sections.map((s, i) => {
+                const open = fold.isOpen(s.key, s.list.some((th) => th.id === selectedId));
+                const bodyId = `${base}-${s.key}`;
+                return (
+                    <Box key={s.key} role="group" aria-label={s.label} sx={{
+                        minWidth: 0, py: 1.5, pt: i === 0 ? 0 : 1.5, borderTop: i === 0 ? 0 : 1, borderColor: 'divider',
+                        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', columnGap: 2, alignItems: 'start',
+                        [`@container (min-width: ${RAIL_AT}px)`]: { gridTemplateColumns: '150px minmax(0, 1fr)' },
+                    }}>
+                        <GroupHeader variant="inline" label={s.label} status={s.status} count={s.list.length}
+                            needsYou={s.list.filter((th) => needsUser(th.status) && !th.archived_at).length}
+                            open={open} onToggle={() => fold.onToggle(s.key, !open)} controls={bodyId} />
+                        <Collapse in={open} timeout={timeout} id={bodyId} sx={{ minWidth: 0 }}>
+                            <Box sx={{ minWidth: 0, pt: 0.75, display: 'grid', gap: 0.75, gridTemplateColumns: TRACKS, [`@container (min-width: ${RAIL_AT}px)`]: { pt: 0 } }}>{cards(s.list)}</Box>
+                        </Collapse>
+                    </Box>
+                );
+            })}
         </Box>
     );
 }
