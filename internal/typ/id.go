@@ -65,25 +65,6 @@ func (k ClientKey) String() string {
 // IsSessionScoped returns true when this key is bound to a specific user session.
 func (k ClientKey) IsSessionScoped() bool { return k.SessionID.Value != "" }
 
-// NewClientKey builds a ClientKey applying OAuth session-scoping rules.
-// sessionID is only included in the key when:
-//   - typ.AuthType == AuthTypeOAuth
-//   - session is not empty
-//   - session is not an IP-fallback (which would create one key per IP)
-func NewClientKey(provider *Provider, model string, session SessionID) ClientKey {
-	if provider.AuthType == AuthTypeOAuth && !session.IsEmpty() && !session.IsIPFallback() {
-		return ClientKey{
-			ProviderUUID: provider.UUID,
-			Model:        model,
-			SessionID:    session,
-		}
-	}
-	return ClientKey{
-		ProviderUUID: provider.UUID,
-		Model:        model,
-	}
-}
-
 // TransportKey uniquely identifies a cached HTTP transport.
 // The key is based on provider + session (for OAuth providers) so that:
 // - API-key providers share transports across sessions (TCP connection pool reuse)

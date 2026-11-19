@@ -39,7 +39,7 @@ func BuildClaudeCodeModelConfig(cfg *serverconfig.Config) aiagent.ClaudeCodeMode
 // derived from `model.attachment ?? false` and
 // `model.modalities?.input?.includes("image") ?? false`). tingly-box has no
 // per-model vision-capability data of its own yet, so — mirroring the same
-// conservative-but-permissive stance ApplyCodexConfig's RenderCodexModelCatalog
+// conservative-but-permissive stance ApplyCodexConfig's RenderCodexModelCatalogWithPrefs
 // already takes for Codex (input_modalities always ["text", "image"]) — every
 // model tingly-box writes into opencode.json is declared attachment-capable.
 func openCodeModelEntry(name string) map[string]interface{} {

@@ -18,14 +18,6 @@ type MCPRuntimeAdapter struct {
 	allowedSources []string // empty means allow all sources
 }
 
-// NewMCPRuntimeAdapter creates a new adapter wrapping the runtime.Runtime.
-func NewMCPRuntimeAdapter(runtime *runtime.Runtime, allowedSources ...string) *MCPRuntimeAdapter {
-	return &MCPRuntimeAdapter{
-		runtime:        runtime,
-		allowedSources: allowedSources,
-	}
-}
-
 // isSourceAllowed checks if a source ID is allowed for this adapter.
 func (a *MCPRuntimeAdapter) isSourceAllowed(sourceID string) bool {
 	if len(a.allowedSources) == 0 {
@@ -119,14 +111,4 @@ func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments
 
 func NewMCPRuntimeAdapterForClient(rt *runtime.Runtime, clientID string) *MCPRuntimeAdapter {
 	return &MCPRuntimeAdapter{runtime: rt, clientID: clientID}
-}
-
-// BuildNormalizedToolName creates a normalized tool name from source ID and tool name.
-func BuildNormalizedToolName(sourceID, toolName string) string {
-	return runtime.NormalizeToolName(sourceID, toolName)
-}
-
-// ParseNormalizedToolName parses a normalized tool name.
-func ParseNormalizedToolName(name string) (string, string, bool) {
-	return runtime.ParseNormalizedToolName(name)
 }

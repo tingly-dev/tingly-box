@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -39,24 +38,4 @@ func HandleOpenAIResponses(hc *protocol.HandleContext, resp *responses.Response)
 	}
 	hc.GinContext.Data(http.StatusOK, jsonContentType, modified)
 	return usage.FromOpenAIResponses(resp.Usage), nil
-}
-
-// HandleOpenAIChat handles OpenAI chat non-streaming response.
-// Returns (UsageStat, error)
-func HandleOpenAIChat(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {
-	responseJSON, err := json.Marshal(resp)
-	if err != nil {
-		hc.SendError(err, "api_error", "marshal_failed")
-		return protocol.ZeroTokenUsage(), err
-	}
-
-	// Rewrite the single model scalar on the raw bytes instead of decoding
-	// the whole body into a map and re-encoding it.
-	modified, err := sjson.SetBytes(responseJSON, "model", hc.ResponseModel)
-	if err != nil {
-		hc.SendError(err, "api_error", "marshal_failed")
-		return protocol.ZeroTokenUsage(), err
-	}
-	hc.GinContext.Data(http.StatusOK, jsonContentType, modified)
-	return usage.FromOpenAIChatCompletion(resp.Usage), nil
 }

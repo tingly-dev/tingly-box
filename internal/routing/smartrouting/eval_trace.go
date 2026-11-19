@@ -30,12 +30,6 @@ type RuleEvalResult struct {
 	Ops          []OpEvalResult `json:"ops,omitempty"`
 }
 
-// ServiceMatch is a lightweight, log-friendly reference to a matched service.
-type ServiceMatch struct {
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-}
-
 // TraceEvaluation evaluates rules against a context and returns the per-rule
 // trace. Callers that also need the matched services should use
 // (*Router).Evaluate to avoid iterating twice.

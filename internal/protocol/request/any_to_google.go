@@ -299,26 +299,11 @@ func ConvertAnthropicToGoogleTools(tools []anthropic.ToolUnionParam) []*genai.Fu
 	return convertAnthropicToolViewsToGoogle(tools)
 }
 
-func ConvertAnthropicToGoogleToolChoice(tc *anthropic.ToolChoiceUnionParam) *genai.ToolConfig {
-	if tc == nil {
-		return convertAnthropicToolChoiceViewToGoogle(anthropic.ToolChoiceUnionParam{})
-	}
-	return convertAnthropicToolChoiceViewToGoogle(*tc)
-}
-
 // ConvertAnthropicBetaToGoogleRequest converts Anthropic beta request to
 // Google format via the shared normalized request view.
 func ConvertAnthropicBetaToGoogleRequest(anthropicReq *anthropic.BetaMessageNewParams, defaultMaxTokens int64) (string, []*genai.Content, *genai.GenerateContentConfig) {
 	_ = defaultMaxTokens
 	return convertAnthropicViewToGoogleRequest(viewAnthropicBetaRequest(anthropicReq))
-}
-
-func ConvertAnthropicBetaToGoogleTools(tools []anthropic.BetaToolUnionParam) []*genai.FunctionDeclaration {
-	return convertAnthropicToolViewsToGoogle(viewAnthropicBetaTools(tools))
-}
-
-func ConvertAnthropicBetaToGoogleToolChoice(tc *anthropic.BetaToolChoiceUnionParam) *genai.ToolConfig {
-	return convertAnthropicToolChoiceViewToGoogle(viewAnthropicBetaToolChoice(tc))
 }
 
 // imageURLToGoogleBlob decodes an OpenAI image_url string (data: URL) into a

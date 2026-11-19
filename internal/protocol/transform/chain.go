@@ -199,13 +199,6 @@ func NewTransformContext[T RequestUnionConstraint](request T, opts ...TransformO
 	return ctx
 }
 
-// SetRequest updates the request in the context.
-// Only types satisfying RequestUnionConstraint are accepted — passing any other type
-// will result in a compile-time error.
-func SetRequest[T RequestUnionConstraint](ctx *TransformContext, req T) {
-	ctx.Request = req
-}
-
 // configExtraForMetadata builds a legacy extra map from Config fields
 // for metadata transforms that still use map[string]any.
 func (ctx *TransformContext) configExtraForMetadata() map[string]any {

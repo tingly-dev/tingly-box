@@ -468,9 +468,6 @@ func (c *openAIToAnthropicConverter) emitMessageStop() {
 	c.emitAnthropic(eventTypeMessageStop, anthropicMessageStopEvent{Type: eventTypeMessageStop})
 }
 
-// nopFlusher satisfies http.Flusher with a no-op; gin's ResponseWriter handles flushing.
-type nopFlusher struct{}
-
 // isErr is a helper to avoid errors package in this file.
 func isErr(err, target error) bool {
 	if err == nil {

@@ -5,8 +5,6 @@ const (
 	maxToolCallIDLength = 40
 )
 
-type handler func(map[string]interface{}) map[string]interface{}
-
 // truncateToolCallID ensures tool call ID doesn't exceed OpenAI's 40 character limit
 // OpenAI API requires tool_call.id to be <= 40 characters
 func truncateToolCallID(id string) string {

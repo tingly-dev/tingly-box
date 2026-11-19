@@ -61,8 +61,7 @@ Shared helpers:
 
 - `request.ParseImageURLToAnthropicSource` — splits an OpenAI `image_url.url`
   into (mediaType, data) for data: URLs, or a remote URL.
-- `request.anthropicImageToOpenAIURL` / `imageBlockToOpenAIURL` /
-  `betaImageBlockToOpenAIURL` — Anthropic image source → OpenAI URL string.
+- `request.anthropicImageToOpenAIURL` / `imageBlockToOpenAIURL` — Anthropic image source → OpenAI URL string.
 - `request.openAIImageURLToAnthropicBetaBlock` — the reverse.
 - `request.openAIToolMessageFromAnthropicToolResult` — tool_result (view) →
   OpenAI tool message, preserving image entries.

@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"strings"
-
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -52,44 +50,16 @@ func SourceToolDescriptor(source typ.MCPSourceConfig, tool SourceTool) typ.ToolD
 	}
 }
 
-func VirtualToolDescriptor(sourceID string, tool coretool.VirtualTool) typ.ToolDescriptor {
-	visibility := tool.Visibility
-	if visibility == "" {
-		visibility = typ.ToolVisibilityServer
-	}
-	return typ.ToolDescriptor{
-		Name:           tool.Name,
-		SourceID:       sourceID,
-		Visibility:     visibility,
-		Implementation: typ.ToolImplementationVirtual,
-		Provider:       SourceProvider(typ.MCPSourceConfig{ID: sourceID}),
-		Description:    tool.Description,
-	}
-}
-
 func IsServerVisibleSource(source typ.MCPSourceConfig) bool {
 	return SourceUsage(source).Gateway
-}
-
-func IsClientVisibleSource(source typ.MCPSourceConfig) bool {
-	return SourceUsage(source).Client
 }
 
 func IsServerVisibleVirtualTool(tool coretool.VirtualTool) bool {
 	return tool.Visibility == "" || tool.Visibility == typ.ToolVisibilityServer
 }
 
-func IsClientVisibleVirtualTool(tool coretool.VirtualTool) bool {
-	return tool.Visibility == typ.ToolVisibilityClient
-}
-
 // IsServerToolSource is independent of implementation: built-in web tools use
 // stdio MCP internally but have gateway-only Server Tool semantics.
 func IsServerToolSource(source typ.MCPSourceConfig) bool {
 	return source.ID == mcptools.ServerWebtoolsSourceID || SourceImplementation(source) == typ.ToolImplementationVirtual
-}
-
-func IsBuiltinSourceID(sourceID string) bool {
-	sourceID = strings.TrimSpace(sourceID)
-	return sourceID == mcptools.ServerWebtoolsSourceID || sourceID == mcptools.BuiltinWebtoolsSourceID || sourceID == mcptools.BuiltinAdvisorSourceID || sourceID == "builtin"
 }

@@ -83,22 +83,6 @@ func ConvertAnthropicBetaToOpenAIChat(bm *anthropic.BetaMessage, responseModel s
 	}
 }
 
-// HandleAnthropicV1 handles Anthropic v1 non-streaming response.
-// Returns (UsageStat, error)
-func HandleAnthropicV1(hc *protocol.HandleContext, m *anthropic.Message) (*protocol.TokenUsage, error) {
-	m.Model = anthropic.Model(hc.ResponseModel)
-	hc.GinContext.JSON(http.StatusOK, m)
-	return usage.FromAnthropicMessage(m.Usage), nil
-}
-
-// HandleAnthropicV1Beta handles Anthropic v1 beta non-streaming response.
-// Returns (UsageStat, error)
-func HandleAnthropicV1Beta(hc *protocol.HandleContext, bm *anthropic.BetaMessage) (*protocol.TokenUsage, error) {
-	bm.Model = anthropic.Model(hc.ResponseModel)
-	hc.GinContext.JSON(http.StatusOK, bm)
-	return usage.FromAnthropicBetaMessage(bm.Usage), nil
-}
-
 // WriteAnthropicMessage writes a non-streaming Anthropic message response.
 //
 // It prefers the SDK message's RawJSON, which is clean by construction — the

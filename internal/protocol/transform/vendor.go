@@ -65,10 +65,7 @@ func (t *VendorTransform) applyResponses(ctx *TransformContext, req *responses.R
 	if req == nil || req.Model == "" {
 		return req
 	}
-	// MENTION: no need to do transform here, the codex client will handle this
-	//if t.providerURL(ctx) == protocol.CodexAPIBase {
-	//	return ops.ApplyCodexResponsesTransform(req, ctx.OriginalRequest)
-	//}
+	// No transform here: the codex client handles Codex-specific Responses fixes.
 	return req
 }
 

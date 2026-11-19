@@ -61,20 +61,6 @@ func convertAnthropicInputSchemaToOpenAIParameters(properties any, required []st
 	return parameters
 }
 
-// ConvertAnthropicToolsToOpenAIWithTransformedSchema is an alias for ConvertAnthropicToolsToOpenAI
-// Schema transformation is handled by provider-specific transforms
-func ConvertAnthropicToolsToOpenAIWithTransformedSchema(tools []anthropic.ToolUnionParam) []openai.ChatCompletionToolUnionParam {
-	return ConvertAnthropicToolsToOpenAI(tools)
-}
-
-// ConvertAnthropicToolChoiceToOpenAI converts Anthropic tool_choice to OpenAI format
-func ConvertAnthropicToolChoiceToOpenAI(tc *anthropic.ToolChoiceUnionParam) openai.ChatCompletionToolChoiceOptionUnionParam {
-	if tc == nil {
-		return convertAnthropicToolChoiceViewToOpenAI(anthropic.ToolChoiceUnionParam{})
-	}
-	return convertAnthropicToolChoiceViewToOpenAI(*tc)
-}
-
 // convertToolResultContent extracts the content from a tool result block
 // The content is a list of content blocks (typically just one text block)
 func convertToolResultContent(content []anthropic.ToolResultBlockParamContentUnion) string {
@@ -131,12 +117,4 @@ func ConvertTextBlocksToString(blocks []anthropic.TextBlockParam) string {
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicAssistantMessageToOpenAI(msg anthropic.MessageParam) openai.ChatCompletionMessageParamUnion {
 	return convertAnthropicViewAssistantToOpenAI(msg.Content)
-}
-
-// convertAnthropicUserMessageToOpenAI converts Anthropic user message to OpenAI format
-// This handles text content and tool_result blocks
-// tool_result blocks in Anthropic become separate role="tool" messages in OpenAI
-// Returns a slice of messages because tool results become separate messages
-func convertAnthropicUserMessageToOpenAI(msg anthropic.MessageParam) []openai.ChatCompletionMessageParamUnion {
-	return convertAnthropicViewUserToOpenAI(msg.Content)
 }

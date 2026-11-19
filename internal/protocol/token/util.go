@@ -9,10 +9,6 @@ func EstimateTokensString(s string) int64 {
 	return int64((len(s) + 3) / 4)
 }
 
-func StringPtr(s string) *string {
-	return &s
-}
-
 // SplitIntoChunks splits content into word-based chunks for streaming.
 // Words and chunks are sliced out of the input by byte offset, so no
 // per-rune or per-word string concatenation happens.

@@ -11,19 +11,6 @@ import (
 // OpenCode config application: merge tingly-managed providers into
 // ~/.config/opencode/opencode.json while preserving user settings.
 
-// OpenCodeProviderConfig contains the provider configuration for OpenCode
-type OpenCodeProviderConfig struct {
-	Name    string                 `json:"name"`
-	NPM     string                 `json:"npm"`
-	Options map[string]interface{} `json:"options"`
-	Models  map[string]interface{} `json:"models"`
-}
-
-// OpenCodeConfigPayload contains the payload for applying OpenCode config
-type OpenCodeConfigPayload struct {
-	Provider map[string]OpenCodeProviderConfig `json:"provider"`
-}
-
 // ApplyOpenCodeConfig applies OpenCode configuration
 // It merges the provider map while preserving other providers and settings
 func ApplyOpenCodeConfig(payload map[string]interface{}) (*ApplyResult, error) {

@@ -276,7 +276,7 @@ func (a *poolVisionClient) describeViaOpenAI(ctx context.Context, provider *typ.
 
 // openAIImageURL builds the URL string OpenAI's image_url content part
 // expects: a data: URL for base64 sources, or the passthrough remote URL.
-// Mirrors betaImageBlockToOpenAIURL so both conversion paths render
+// Mirrors request.imageBlockToOpenAIURL so both conversion paths render
 // identically when the same image is sent through different transports.
 func openAIImageURL(mediaType, b64Data, remoteURL string) (string, error) {
 	switch {

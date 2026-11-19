@@ -2,11 +2,9 @@ package routing
 
 import (
 	"context"
-	"testing"
 	"time"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -215,33 +213,4 @@ func testAffinityEntry(svc *loadbalance.Service) *AffinityEntry {
 		LockedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(2 * time.Hour),
 	}
-}
-
-func TestFixtures_helpers(t *testing.T) {
-	// Verify test helpers produce valid objects
-	svc := testService("p1", "m1", true)
-	require.NotNil(t, svc)
-	require.Equal(t, "p1", svc.Provider)
-	require.Equal(t, "m1", svc.Model)
-	require.True(t, svc.Active)
-
-	p := testProvider("p1", "Provider1", true)
-	require.NotNil(t, p)
-	require.Equal(t, "p1", p.UUID)
-
-	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{svc})
-	require.NotNil(t, rule)
-	require.Equal(t, "gpt-4", rule.RequestModel)
-	require.Len(t, rule.Services, 1)
-
-	ctx := testContext(rule, "session-1")
-	require.NotNil(t, ctx)
-	require.Equal(t, "session-1", ctx.SessionID.Value)
-
-	store := newMockAffinityStore()
-	require.NotNil(t, store)
-	store.Set("rule-1", "s1", testAffinityEntry(svc))
-	entry, ok := store.Get("rule-1", "s1")
-	require.True(t, ok)
-	require.Equal(t, "m1", entry.Service.Model)
 }
