@@ -40,3 +40,25 @@ func TestFinishAgentResultClassifiesOutcome(t *testing.T) {
 		t.Fatalf("success: %+v", r)
 	}
 }
+
+// Killing the agent CLI must bound the run even when a descendant (a runtime
+// launcher, a spawned tool) inherited the output pipe and outlives it: the
+// shell below is killed at the timeout but its `sleep` keeps the pipe open.
+func TestRunAgentCmdWithTimeoutDescendantHoldsPipe(t *testing.T) {
+	old := agentKillGrace
+	agentKillGrace = 200 * time.Millisecond
+	defer func() { agentKillGrace = old }()
+
+	start := time.Now()
+	out, timedOut, err := runAgentCmdWithTimeout(exec.Command("sh", "-c", "echo started; sleep 5"), 100*time.Millisecond)
+	elapsed := time.Since(start)
+	if !timedOut || err == nil {
+		t.Fatalf("timedOut=%v err=%v", timedOut, err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("returned after %v, want shortly after the %v timeout + %v grace", elapsed, 100*time.Millisecond, agentKillGrace)
+	}
+	if !strings.Contains(string(out), "started") {
+		t.Fatalf("output captured before the kill was lost: %q", out)
+	}
+}

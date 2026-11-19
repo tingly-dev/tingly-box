@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,14 +17,40 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
+// agentKillGrace is how long a timed-out run waits for the killed process's
+// output pipe to close before giving up on it. Only the direct child is
+// killed; a descendant that inherited the pipe (a runtime launcher, a spawned
+// tool) can hold it open long after.
+var agentKillGrace = 3 * time.Second
+
+// syncBuffer is a bytes.Buffer safe to read while exec's copy goroutine may
+// still be writing, which happens when a timed-out run stops waiting on it.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]byte(nil), b.buf.Bytes()...)
+}
+
 // runAgentCmdWithTimeout runs cmd, capturing stdout+stderr into one buffer,
-// under the configured per-entry timeout. Returns the captured output, a
+// under the given per-entry timeout. Returns the captured output, a
 // timed-out flag, and the Wait/Start error (if any). On timeout the process
-// is killed and context.DeadlineExceeded is returned as the error.
+// is killed and context.DeadlineExceeded is returned as the error, after at
+// most agentKillGrace more for the output pipe to drain.
 // When timeout <= 0 the timeout is disabled and this behaves like
 // cmd.CombinedOutput().
 func runAgentCmdWithTimeout(cmd *exec.Cmd, timeout time.Duration) ([]byte, bool, error) {
-	var buf bytes.Buffer
+	var buf syncBuffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 
@@ -42,7 +69,10 @@ func runAgentCmdWithTimeout(cmd *exec.Cmd, timeout time.Duration) ([]byte, bool,
 	select {
 	case <-time.After(timeout):
 		_ = cmd.Process.Kill()
-		<-done // reap the goroutine so it doesn't leak
+		select {
+		case <-done: // reaped
+		case <-time.After(agentKillGrace): // a descendant still holds the pipe
+		}
 		return buf.Bytes(), true, context.DeadlineExceeded
 	case err := <-done:
 		return buf.Bytes(), false, err
