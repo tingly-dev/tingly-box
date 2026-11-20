@@ -1,6 +1,6 @@
 # Threads reach the coordinator through a Projects tool: `notify_coordinator`
 
-> Status: **built** (the tool, the prompts, the closed native channel, the harness scenarios); not built: the IM card, `propose_thread`, `thread_spawn`, thread-to-thread. Evidence: [../.research/cross-session-messaging.md](../.research/cross-session-messaging.md) (Claude Code 2.1.259, probed 2026-11-17; the probe script is next to it). Related: [mcp-tools.md](./mcp-tools.md) (the tool table, `ThreadOnly`), [github-tools.md](./github-tools.md) (authorization pattern), [message-channel.md](./message-channel.md), [projects-harness.md](./projects-harness.md).
+> Status: **built** (the tool, the prompts, the closed native channel, the harness scenarios); not built: `propose_thread`, `thread_spawn`, thread-to-thread. Evidence: [../.research/cross-session-messaging.md](../.research/cross-session-messaging.md) (Claude Code 2.1.259, probed 2026-11-17; the probe script is next to it). Related: [mcp-tools.md](./mcp-tools.md) (the tool table, `ThreadOnly`), [github-tools.md](./github-tools.md) (authorization pattern), [message-channel.md](./message-channel.md), [projects-harness.md](./projects-harness.md).
 >
 > Decided with the user (2026-11-17): native cross-session messaging is acceptable only **wrapped in Projects MCP tools**, never called by the model directly; and the minimal shape is the mirror of `message_thread`: **one tool, thread to coordinator.** A new thread is still started by the user, from a card.
 
@@ -54,7 +54,7 @@ Measured on 2.1.259:
 
 The thread prompt changes from "mention other work in your report" to "tell the coordinator with `notify_coordinator`; do not do it yourself".
 
-**Gap found while checking: a suggestions card never reaches IM** (`Relay.Message` handles assistant, error, thread update and decision events only), so a chat user is not shown a `propose_threads` card today either. For chat users this flow needs an IM rendering with a start button, as `decision` got one; until then the coordinator should say the proposal in text.
+A suggestions card reaches the project's chats too (`Relay.suggestions`, merged in #2692), so the flow works for chat users as well as on the web.
 
 ## Transport: Projects' own relay, not the native socket
 
@@ -122,5 +122,5 @@ Checked against the real CLI and the real server (scripted model, isolated `HOME
 1. **One tool first, `notify_coordinator`**, with new threads offered through the coordinator's existing `propose_threads` card. `propose_thread` and `thread_spawn` wait. (The user asked for this shape.)
 2. **Transport B, Projects' relay**, built; the user did not choose A when asked.
 3. **Closing the native channel** is independent of the tool; it is built with it.
-4. **IM rendering of the suggestion card** is a prerequisite for chat users and is not in this design's scope.
+4. The IM rendering of the suggestion card (a prerequisite for chat users) has since been merged by another thread (#2692).
 5. Thread to thread: designed on the same wrapper, not built.

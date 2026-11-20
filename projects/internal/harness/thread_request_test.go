@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
 )
 
 // A thread that wants another thread (design: thread-coordinator-channel.md).
@@ -103,7 +104,7 @@ func TestJourneyThreadRequestForAThreadBecomesACard(t *testing.T) {
 	}
 	require.NotNil(t, card, "the user sees a card")
 
-	_, err := w.Coord.StartSuggestions(t.Context(), w.Project.MainThreadID, card.ID, nil)
+	_, err := w.Coord.StartSuggestions(t.Context(), w.Project.MainThreadID, card.ID, nil, project.Source{})
 	require.NoError(t, err)
 	started := w.ThreadIs(renameTh, db.ThreadIdle)
 	assert.Equal(t, "suggestion", started.Origin, "the user's click started it, not the coordinator")
@@ -197,7 +198,7 @@ func TestJourneyThreadNotifyRequestBecomesACard(t *testing.T) {
 		}
 	}
 	require.NotNil(t, card, "the user sees a card")
-	_, err := w.Coord.StartSuggestions(t.Context(), w.Project.MainThreadID, card.ID, nil)
+	_, err := w.Coord.StartSuggestions(t.Context(), w.Project.MainThreadID, card.ID, nil, project.Source{})
 	require.NoError(t, err)
 	assert.Equal(t, "suggestion", w.ThreadIs(renameTh, db.ThreadReady).Origin)
 }
