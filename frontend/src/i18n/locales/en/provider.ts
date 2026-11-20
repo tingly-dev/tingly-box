@@ -276,7 +276,7 @@ export default {
     "managing_one": "Managing {{count}} credential",
     "managing_other": "Managing {{count}} credentials",
     "emptyTitle": "Connect your first AI",
-    "emptyDescription": "Sign in with a subscription you already have (Claude Code, Codex, Gemini CLI…) or paste an API key (OpenAI, Anthropic, DeepSeek…). Every credential lands here, and routing rules pick models from them.",
+    "emptyDescription": "Sign in with a subscription you already have (Claude Code, Codex…) or paste an API key (OpenAI, Anthropic, DeepSeek…). Every credential lands here, and routing rules pick models from them.",
     "sectionOAuth": "OAuth",
     "oauthProtocolLabel": "Protocol",
     "oauthProtocolDual": "Serves OpenAI and Anthropic clients natively, no translation needed",
