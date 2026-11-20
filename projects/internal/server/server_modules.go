@@ -17,13 +17,16 @@ type Deps struct {
 	Layout project.Layout
 	// Agents run thread turns; nil uses the Claude Code CLI.
 	Agents *project.Agents
+	// Sessions tunes how long the Claude Code processes stay open (not used
+	// with Agents).
+	Sessions project.SessionConfig
 }
 
 // ProjectModules builds the Projects modules (projects and their threads)
 // on host. The standalone app and an embedding host (package projects) both
 // mount exactly this set, under the same /projects paths.
 func ProjectModules(d Deps, host project.Host) ([]module.Module, *project.Service) {
-	agents := project.ClaudeAgents()
+	agents := project.ClaudeAgents(d.Sessions)
 	if d.Agents != nil {
 		agents = *d.Agents
 	}

@@ -306,6 +306,20 @@ func (s *Store) ListThreads(projectID string) ([]Thread, error) {
 	return out, err
 }
 
+// MainThreadBySession returns the main thread whose coordinator session is
+// sessionID, or ErrNotFound.
+func (s *Store) MainThreadBySession(sessionID string) (*Thread, error) {
+	var t Thread
+	if sessionID == "" {
+		return nil, ErrNotFound
+	}
+	err := s.db.Where("session_id = ? AND agent = ?", sessionID, AgentLLM).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &t, err
+}
+
 // ListThreadsByStatus returns threads in any of the given statuses across
 // all projects.
 func (s *Store) ListThreadsByStatus(statuses ...string) ([]Thread, error) {

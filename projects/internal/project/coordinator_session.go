@@ -164,7 +164,11 @@ func (s coordinatorSessionStore) appendAssistant(id string, entry engine.Entry) 
 
 func newCoordinatorSessions(c *Coordinator, host Host, tools *sessionToolsMCP, agents Agents) *coordinatorSessions {
 	s := &coordinatorSessions{c: c, host: host, tools: tools, runs: make(map[string]*coordinatorSessionRun), stopReq: map[string]bool{}, resend: map[string]bool{}}
-	s.engine = engine.New(engine.Config{Agent: agents.Service, Pool: agents.Pool, Store: coordinatorSessionStore{s}, Prompter: func(string) agentboot.Prompter { return coordinatorPrompter{} }, OnTurnEnd: func(id string, end engine.TurnEnd) {
+	coordPool := agents.CoordinatorPool
+	if coordPool == nil {
+		coordPool = agents.Pool
+	}
+	s.engine = engine.New(engine.Config{Agent: agents.Service, Pool: coordPool, Store: coordinatorSessionStore{s}, Prompter: func(string) agentboot.Prompter { return coordinatorPrompter{} }, OnTurnEnd: func(id string, end engine.TurnEnd) {
 		s.mu.Lock()
 		run := s.runs[id]
 		s.mu.Unlock()

@@ -82,7 +82,14 @@ type Options struct {
 	// Agents runs coordinator and thread turns; nil uses the Claude Code
 	// CLI. Tests pass a scripted stand-in (agentboot/engine/enginetest).
 	Agents *agentboot.AgentService
+	// Sessions tunes how long the Claude Code processes stay open between
+	// turns. The zero value takes the defaults.
+	Sessions SessionConfig
 }
+
+// SessionConfig is how long idle coordinator and thread processes stay open;
+// see the field docs.
+type SessionConfig = project.SessionConfig
 
 // App is Projects running inside a host.
 type App struct {
@@ -111,7 +118,7 @@ func New(opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	deps := server.Deps{Store: store, Layout: project.Layout{Root: root}}
+	deps := server.Deps{Store: store, Layout: project.Layout{Root: root}, Sessions: opts.Sessions}
 	if opts.Agents != nil {
 		deps.Agents = &project.Agents{Service: opts.Agents}
 	}
