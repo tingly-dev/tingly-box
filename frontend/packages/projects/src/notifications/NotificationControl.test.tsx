@@ -9,7 +9,18 @@ vi.mock('../hooks/projectListStore', () => ({
     getProjectList: () => [],
 }));
 
+const toasts: Array<[string, string | undefined]> = [];
+vi.mock('../hooks/useNotify', () => ({
+    useNotify: () => (message: string, severity?: string) => toasts.push([message, severity]),
+}));
+
 class FakeNotification {
+    static shown: Array<{ title: string; options?: NotificationOptions }> = [];
+    onclick: (() => void) | null = null;
+    constructor(title: string, options?: NotificationOptions) {
+        FakeNotification.shown.push({ title, options });
+    }
+    close() {}
     static permission: NotificationPermission = 'default';
     static asked = 0;
     static answer: NotificationPermission = 'granted';
@@ -28,6 +39,8 @@ beforeEach(() => {
     FakeNotification.permission = 'default';
     FakeNotification.asked = 0;
     FakeNotification.answer = 'granted';
+    FakeNotification.shown = [];
+    toasts.length = 0;
     window.localStorage.removeItem('tingly-project.notifications');
 });
 afterEach(() => {
@@ -81,5 +94,49 @@ describe('NotificationControl', () => {
         render(<NotificationControl />);
         expect(screen.getByText('notifyControl.unsupported')).toBeInTheDocument();
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('sends a test notification at the click, asking the browser first when it never was', async () => {
+        render(<NotificationControl />);
+        fireEvent.click(screen.getByRole('button', { name: 'notifyControl.test' }));
+        await waitFor(() => expect(FakeNotification.shown).toHaveLength(1));
+        expect(FakeNotification.asked).toBe(1);
+        expect(FakeNotification.shown[0].title).toBe('notifyControl.testTitle');
+        expect(toasts).toEqual([['notifyControl.test_sent', 'success']]);
+        // The grant arrived through the test: the control now shows it on.
+        expect(screen.getByRole('switch', { name: 'notifyControl.label' })).toBeChecked();
+    });
+
+    it('sends the test without asking again once granted, even with the switch off', async () => {
+        FakeNotification.permission = 'granted';
+        window.localStorage.setItem('tingly-project.notifications', '0');
+        render(<NotificationControl />);
+        fireEvent.click(screen.getByRole('button', { name: 'notifyControl.test' }));
+        await waitFor(() => expect(FakeNotification.shown).toHaveLength(1));
+        expect(FakeNotification.asked).toBe(0);
+    });
+
+    it('says so when the test permission is refused or dismissed, and shows nothing', async () => {
+        FakeNotification.answer = 'denied';
+        render(<NotificationControl />);
+        fireEvent.click(screen.getByRole('button', { name: 'notifyControl.test' }));
+        await waitFor(() => expect(toasts).toEqual([['notifyControl.test_denied', 'warning']]));
+        expect(FakeNotification.shown).toHaveLength(0);
+    });
+
+    it('offers no test where it cannot work', () => {
+        FakeNotification.permission = 'denied';
+        render(<NotificationControl />);
+        expect(screen.queryByRole('button', { name: 'notifyControl.test' })).not.toBeInTheDocument();
+    });
+
+    it('explains a page that is not a secure context', () => {
+        vi.stubGlobal('isSecureContext', false);
+        render(<NotificationControl />);
+        expect(screen.getByText('notifyControl.insecure')).toBeInTheDocument();
+        expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'notifyControl.test' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'notifyControl.howTo' }));
+        expect(screen.getByText('notifyControl.insecureBody')).toBeInTheDocument();
     });
 });
