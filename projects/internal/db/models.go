@@ -88,6 +88,8 @@ type Project struct {
 	Instructions    string `gorm:"type:text" json:"instructions"`
 	Repos           []Repo `gorm:"serializer:json;type:text" json:"repos"`
 	PrimaryRepoPath string `gorm:"type:text" json:"primary_repo_path,omitempty"`
+	// ThreadProfile, ThreadModel, ThreadEffort and ThreadPermissionMode are the
+	// defaults a new thread starts with: copied onto the thread, not followed.
 	// CoordinatorModel / ThreadModel are empty for "connection default".
 	// CoordinatorEffort / ThreadEffort are the thinking effort beside each of
 	// them (project.Efforts); empty for the endpoint's default.
@@ -116,6 +118,10 @@ type Project struct {
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+// DefaultThreadPermissionMode is the permission mode a thread starts in when
+// its project names none.
+const DefaultThreadPermissionMode = "acceptEdits"
 
 // DefaultMaxRunningThreads is how many threads a project runs at once until
 // its owner changes it.
@@ -197,20 +203,22 @@ type Thread struct {
 	Model string `gorm:"size:200" json:"model,omitempty"`
 	// ReportedModel is the model reported by the last turn, never a launch fallback.
 	ReportedModel string `gorm:"size:200" json:"reported_model,omitempty"`
-	// ModelOverride is a project worker's requested model; empty inherits the
-	// project's thread model. Folder threads keep their choice in Model.
+	// ProfileOverride, ModelOverride, EffortOverride and PermissionMode are a
+	// project worker's own launch settings. They are copied from the project's
+	// thread defaults when the thread starts and never read back from the
+	// project afterwards, so changing the defaults reaches only later threads.
+	// Empty model and effort mean the profile's (or connection's) default.
+	// ModelOverride is the requested model; folder threads keep theirs in Model.
+	// PermissionMode is empty only for a folder thread that follows its folder.
 	ProfileOverride *string `gorm:"size:200" json:"profile_override"`
 	ModelOverride   string  `gorm:"size:200" json:"model_override,omitempty"`
-	// EffortOverride is the next turn’s effort; empty inherits its project or CLI default.
-	EffortOverride string `gorm:"size:32" json:"effort_override,omitempty"`
-	// PermissionMode overrides the project's permission mode for this
-	// thread; a folder has no project mode, so it is a folder thread's only mode.
-	PermissionMode string `gorm:"size:40" json:"permission_mode,omitempty"`
-	LastReport     string `gorm:"type:text" json:"last_report,omitempty"`
-	CommitsAhead   int    `json:"commits_ahead"`
-	FilesChanged   int    `json:"files_changed"`
-	Uncommitted    bool   `json:"uncommitted"`
-	Turns          int    `json:"turns"`
+	EffortOverride  string  `gorm:"size:32" json:"effort_override,omitempty"`
+	PermissionMode  string  `gorm:"size:40" json:"permission_mode,omitempty"`
+	LastReport      string  `gorm:"type:text" json:"last_report,omitempty"`
+	CommitsAhead    int     `json:"commits_ahead"`
+	FilesChanged    int     `json:"files_changed"`
+	Uncommitted     bool    `json:"uncommitted"`
+	Turns           int     `json:"turns"`
 	// InputTokens is every prompt token sent, cache hits and writes included;
 	// CacheReadTokens and CacheWriteTokens say how much of it they were.
 	InputTokens      int64 `json:"input_tokens"`
@@ -242,8 +250,8 @@ type Thread struct {
 	// WorktreeFreedAt is when the thread's worktree was freed (archive). Cwd
 	// still names the old path, so restore can rebuild the worktree there.
 	WorktreeFreedAt *time.Time `json:"worktree_freed_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // Thread event kinds.

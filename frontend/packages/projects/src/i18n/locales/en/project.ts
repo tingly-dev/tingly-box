@@ -161,7 +161,7 @@ export const project = {
         worktreeHelp: 'When off, new threads share the repository directory and current branch. Their changes are visible to each other. Existing threads keep their working directories.',
         title: 'Project settings', tabGeneral: 'General', tabMemory: 'Memory', tabEnvironment: 'Environment', tabUsage: 'Usage',
         coordinatorModel: 'Coordinator model', coordinatorModelHelp: 'Runs the project conversation: routing, updates. Empty uses the connection default.',
-        threadModel: 'Default thread model', threadModelHelp: 'Used by new threads and threads without a model override (Claude Code --model). Empty uses the host default. Individual thread choices stay independent.',
+        threadModel: 'Default thread model', threadModelHelp: 'Copied to each new thread when it starts (Claude Code --model); threads already started keep their own. Empty uses the host default.',
         modelDefault: 'Connection default',
         permissionMode: 'Thread permissions',
         githubAccess: 'Issues and PRs',
