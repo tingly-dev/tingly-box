@@ -52,7 +52,7 @@ The scenario to support, concretely (from the 2.1.328 run):
 | G3 | Header names/order/casing are lost by `net/http` (`x-app`, `anthropic-version` arrive as `X-App`, `Anthropic-Version`). Value order *inside* `anthropic-beta` is kept; header-name casing/order is not. Matters for fingerprinting claims. | medium; opt-in raw tee solves it |
 | G4 | Typed body binding may reject new CC bodies before anything is recorded or answered. | unknown → must be tested; capture must be outside it |
 | G5 | Non-messages traffic (telemetry, oauth, count_tokens) gets a bare 501 and is not recorded; we cannot even list which endpoints a CC version calls. | medium |
-| G6 | No `request-id` / ratelimit response headers; `cc_prev_req` and quota behaviour cannot be observed. | medium |
+| G6 | No `request-id` / ratelimit response headers; `cc_prev_req` and quota behaviour cannot be observed. | later: only matters for multi-turn capture (non-goal now) |
 | G7 | No scripted tool-use turns → multi-request sessions (`cc_prev_*`, turn index) cannot be captured. | later (needs a definition-contract change) |
 | G8 | No standard way to launch the client safely (`env -i`, isolated HOME, onboarding seed, `-p` flags live in a prose snippet). | low: a documented recipe is enough; no script owned by us |
 | G9 | Diff / summary tooling. | **dropped**: not our job; captures are the deliverable |
