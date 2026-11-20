@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,4 +105,67 @@ func TestReplyThatAnswersNothingIsAnOrdinaryMessage(t *testing.T) {
 	assert.True(t, ok)
 	require.NoError(t, f.threads.Respond(first.ID, "first", Answer{Allow: false}))
 	require.NoError(t, f.threads.Respond(second.ID, "second", Answer{Allow: false}))
+}
+
+// Words that are not one of a request's answers do not answer it: they are an
+// ordinary message to wherever the chat talks, and the request stays open.
+func TestWordsWithoutACodeDoNotAnswerAnApprovalOrAQuestion(t *testing.T) {
+	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
+		if strings.Contains(turn.Prompt, "pick") {
+			_, err := turn.AskQuestions("q-1", map[string]any{"questions": []any{
+				map[string]any{"question": "Which database?", "options": []any{map[string]any{"label": "Postgres"}, map[string]any{"label": "SQLite"}}},
+			}})
+			return err
+		}
+		_, err := turn.Approve("req-1", "Bash", map[string]any{"command": "make deploy"})
+		return err
+	})
+	_, err := svc.BindChannel("telegram", "up", "", "", f.project.ID)
+	require.NoError(t, err)
+	deploy, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Ship", Task: "deploy", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	sink.nextPrompt(t)
+	for _, text := range []string{"not on a Friday", "sure, go ahead", "what is blocking this?"} {
+		handled, err := svc.PostFromChannel("telegram", "up", text, nil)
+		require.NoError(t, err)
+		require.True(t, handled)
+		waitMessages(t, f.store, f.project.ID, func(m []db.ThreadEvent) bool {
+			for _, e := range m {
+				if e.Kind == db.EvUser && e.Content == text {
+					return true
+				}
+			}
+			return false
+		})
+	}
+	_, ok := f.threads.PendingRequest(deploy.ID, "req-1")
+	assert.True(t, ok, "still waiting for its answer")
+	require.NoError(t, f.threads.Respond(deploy.ID, "req-1", Answer{Allow: false}))
+
+	pick, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "DB", Task: "pick", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	for range 3 {
+		if m := sink.next(t); strings.Contains(m.text, "Which database?") {
+			break
+		}
+	}
+	_, ok = f.threads.PendingRequest(pick.ID, "q-1")
+	require.True(t, ok)
+	handled, err := svc.PostFromChannel("telegram", "up", "whichever is cheaper", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	waitMessages(t, f.store, f.project.ID, func(m []db.ThreadEvent) bool {
+		for _, e := range m {
+			if e.Kind == db.EvUser && e.Content == "whichever is cheaper" {
+				return true
+			}
+		}
+		return false
+	})
+	_, ok = f.threads.PendingRequest(pick.ID, "q-1")
+	assert.True(t, ok, "a question is answered by an option or by its code")
+	handled, err = svc.PostFromChannel("telegram", "up", decisionCode("q-1")+" whichever is cheaper", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	waitStatus(t, f.store, pick.ID, db.ThreadIdle)
 }

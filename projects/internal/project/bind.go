@@ -2,6 +2,8 @@ package project
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -256,99 +258,129 @@ func (s *Service) MayAnswerChannelText(platform, chatID, text string) bool {
 	if err != nil || b.Folder != "" {
 		return false
 	}
-	for _, q := range s.Relay.awaitingAll(platform, chatID) {
-		if s.mayAnswer(b, q.threadID) != nil {
-			continue
-		}
-		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
-			if _, _, fits := decisionReply(d, q.requestID, text); fits {
-				return true
-			}
-			continue
-		}
-		if s.pendingTextRequest(q) {
-			return true
-		}
-	}
-	return false
+	return len(s.matchReplies(b, text)) > 0
 }
 
-func (s *Service) pendingTextRequest(q pendingRequest) bool {
-	ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID)
-	return ok && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk)
+// replyMatch is a request a chat's message reads as an answer to.
+type replyMatch struct {
+	pendingRequest
+	// card is set when the request is a decision card.
+	card *Decision
+	// text is the answer in the message: the message less the request's code.
+	text string
+	// explicit is set when the message started with the request's code, which
+	// names it whatever else is open.
+	explicit bool
 }
 
-// answerWaiting gives a chat's message to the request it answers. A decision
-// card takes only an option's number or label, and the card comes first so a
-// bare "1" is never read as an approval's words. A reply that starts with a
-// card's code ("a3f9 2") answers that card whatever else is open. When a bare
-// reply fits more than one open card the chat is asked which it means instead
-// of being guessed at: "2" would answer the wrong question. Otherwise the
-// oldest request that takes the reply gets it, and an open card never keeps a
-// later approval or question from being answered.
-func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, authorize func() bool) (done bool, err error) {
-	type card struct {
-		pendingRequest
-		d Decision
-	}
-	var cards []card
-	var others []pendingRequest
+// matchReplies lists the open requests a chat may answer that its message
+// answers: a message that starts with a request's code ("a3f9 not on Friday")
+// answers that request in any words; otherwise it must be one of the request's
+// own answers (an option's number or label, or y, always, n for an approval).
+// Anything else answers nothing and is an ordinary message: the one it is sent
+// to decides what it means, not a guess about which request it was for.
+func (s *Service) matchReplies(b *db.ChannelBinding, text string) []replyMatch {
+	var out []replyMatch
 	for _, q := range s.Relay.awaitingAll(b.Platform, b.ChatID) {
 		if s.mayAnswer(b, q.threadID) != nil {
 			continue
 		}
 		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
-			cards = append(cards, card{q, d})
+			if reply, explicit, fits := decisionReply(d, q.requestID, text); fits {
+				out = append(out, replyMatch{pendingRequest: q, card: &d, text: reply, explicit: explicit})
+			}
 			continue
 		}
-		others = append(others, q)
-	}
-	var named []card
-	for _, c := range cards {
-		if reply, explicit, fits := decisionReply(c.d, c.requestID, text); fits {
-			if explicit {
-				if !s.authorizeChannelAnswer(b, authorize) {
-					return true, nil
-				}
-				return s.chooseFromText(b, c.pendingRequest, c.d, reply, src)
+		ev, ok := s.Threads.PendingRequest(q.threadID, q.requestID)
+		if !ok {
+			continue
+		}
+		if rest, named := cutCode(q.requestID, text); named {
+			if rest != "" && (ev.Kind == db.EvApproval || ev.Kind == db.EvAsk) {
+				out = append(out, replyMatch{pendingRequest: q, text: rest, explicit: true})
 			}
-			named = append(named, c)
+			continue
+		}
+		if requestTakes(ev, text) {
+			out = append(out, replyMatch{pendingRequest: q, text: text})
 		}
 	}
-	switch {
-	case len(named) > 1:
-		var lines []string
-		for _, c := range named {
-			lines = append(lines, "- "+decisionCode(c.requestID)+" · "+oneLine(c.d.Question))
+	return out
+}
+
+// answerWaiting gives a chat's message to the request it answers (matchReplies).
+// A decision card comes first among the requests a bare reply fits, so "1" is
+// never read as an approval's words. When a bare reply fits more than one open
+// request the chat is asked which it means instead of being guessed at: "2"
+// would answer the wrong question. done is false when the message answers
+// nothing, and the caller sends it on as an ordinary message.
+func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, authorize func() bool) (done bool, err error) {
+	matches := s.matchReplies(b, text)
+	var chosen *replyMatch
+	for i := range matches {
+		if matches[i].explicit {
+			chosen = &matches[i]
+			break
 		}
-		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one question is waiting here, so I can't tell which one that answers. Start your reply with the question's code, like \""+
-			decisionCode(named[0].requestID)+" 1\":\n"+strings.Join(lines, "\n"))
-		return true, nil
-	case len(named) == 1:
-		if !s.authorizeChannelAnswer(b, authorize) {
+	}
+	if chosen == nil {
+		var cards, others []replyMatch
+		for _, m := range matches {
+			if m.card != nil {
+				cards = append(cards, m)
+			} else {
+				others = append(others, m)
+			}
+		}
+		group := cards
+		if len(group) == 0 {
+			group = others
+		}
+		switch len(group) {
+		case 0:
+			return false, nil
+		case 1:
+			chosen = &group[0]
+		default:
+			s.tellWhichRequest(b, group)
 			return true, nil
 		}
-		return s.chooseFromText(b, named[0].pendingRequest, named[0].d, text, src)
 	}
-	var active []pendingRequest
-	for _, q := range others {
-		if s.pendingTextRequest(q) {
-			active = append(active, q)
-		}
-	}
-	if len(active) > 1 {
-		s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one request is waiting. Use its button or open Projects in the web UI to answer the right request.")
+	if !s.authorizeChannelAnswer(b, authorize) {
 		return true, nil
 	}
-	for _, q := range active {
-		if !s.authorizeChannelAnswer(b, authorize) {
-			return true, nil
-		}
-		if done, err := s.answerFromText(q.threadID, q.requestID, text); done {
-			return true, err
-		}
+	if chosen.card != nil {
+		return s.chooseFromText(b, chosen.pendingRequest, *chosen.card, chosen.text, src)
 	}
-	return false, nil
+	return s.answerFromText(chosen.threadID, chosen.requestID, chosen.text)
+}
+
+// tellWhichRequest asks a chat whose reply fits several open requests which
+// one it answers, with the code to start the reply with.
+func (s *Service) tellWhichRequest(b *db.ChannelBinding, group []replyMatch) {
+	var lines []string
+	for _, m := range group {
+		label := ""
+		if m.card != nil {
+			label = m.card.Question
+		} else if ev, ok := s.Threads.PendingRequest(m.threadID, m.requestID); ok {
+			label = ev.Content
+		}
+		lines = append(lines, "- "+decisionCode(m.requestID)+" · "+oneLine(label))
+	}
+	what := "request"
+	if group[0].card != nil {
+		what = "question"
+	}
+	s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one "+what+" is waiting here, so I can't tell which one that answers. Start your reply with the "+what+"'s code, like \""+
+		decisionCode(group[0].requestID)+" "+firstWord(group[0].text)+"\":\n"+strings.Join(lines, "\n"))
+}
+
+func firstWord(s string) string {
+	if f := strings.Fields(s); len(f) > 0 {
+		return f[0]
+	}
+	return ""
 }
 
 func (s *Service) authorizeChannelAnswer(b *db.ChannelBinding, authorize func() bool) bool {
@@ -363,7 +395,7 @@ func (s *Service) authorizeChannelAnswer(b *db.ChannelBinding, authorize func() 
 }
 
 func decisionReply(d Decision, requestID, text string) (reply string, explicit, fits bool) {
-	if rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(text)), decisionCode(requestID)); ok && (rest == "" || strings.ContainsAny(rest[:1], " \t:,.-")) {
+	if rest, named := cutCode(requestID, text); named {
 		if _, fits := d.optionOfReply(rest); fits {
 			return rest, true, true
 		}
@@ -373,12 +405,26 @@ func decisionReply(d Decision, requestID, text string) (reply string, explicit, 
 }
 
 // decisionCode is the short code a chat can start a reply with to say which
-// open card it answers: the first four characters of the card's id.
+// open request it answers: four hex digits of the request's id (the ids of
+// the requests a thread's agent makes share their first characters).
 func decisionCode(requestID string) string {
-	if len(requestID) > 4 {
-		return strings.ToLower(requestID[:4])
+	sum := sha1.Sum([]byte(requestID))
+	return hex.EncodeToString(sum[:])[:4]
+}
+
+// cutCode reads a message that starts with the request's code, followed by
+// nothing or a separator, and returns the rest of it.
+func cutCode(requestID, text string) (rest string, ok bool) {
+	text = strings.TrimSpace(text)
+	code := decisionCode(requestID)
+	if len(text) < len(code) || !strings.EqualFold(text[:len(code)], code) {
+		return "", false
 	}
-	return strings.ToLower(requestID)
+	rest = text[len(code):]
+	if rest != "" && !strings.ContainsAny(rest[:1], " \t:,.-") {
+		return "", false
+	}
+	return strings.TrimSpace(strings.TrimLeft(rest, " \t:,.-")), true
 }
 
 // chooseFromText picks the option a chat's reply names on a decision card. A

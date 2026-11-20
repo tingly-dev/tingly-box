@@ -265,7 +265,7 @@ func TestEveryApprovalIsAskedInTheChat(t *testing.T) {
 	require.NoError(t, f.store.CreateThread(worker))
 	th := *worker
 	svc.Relay.NeedsUser(th, approvalEvent("r1"))
-	assert.Equal(t, fmt.Sprintf("Approve: Run `ls`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.\n\n[#%d Fix login]", th.Seq), sink.next(t).text)
+	assert.Equal(t, fmt.Sprintf("Approve: Run `ls`\nReply y to allow, always to allow it for this thread, or n to deny. To answer in your own words, start your reply with %s.\n\n[#%d Fix login]", decisionCode("r1"), th.Seq), sink.next(t).text)
 	svc.Relay.NeedsUser(th, approvalEvent("r2")) // each one needs its answer
 	sink.next(t)
 	threadID, requestID, ok := awaitingOf(svc.Relay, "telegram", "1")

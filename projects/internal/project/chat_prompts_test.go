@@ -259,7 +259,7 @@ func TestAQuestionIsAnsweredByReplying(t *testing.T) {
 	require.NoError(t, err)
 
 	asked := sink.next(t)
-	assert.Equal(t, "Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number or your own answer.\n\n[#1 DB]", asked.text,
+	assert.Equal(t, "Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number. To answer in your own words, start your reply with "+decisionCode("q-1")+".\n\n[#1 DB]", asked.text,
 		"a question has no buttons, even where the chat could show them")
 
 	handled, err := svc.PostFromChannel("telegram", "own", "2", nil)
@@ -277,7 +277,7 @@ func TestAChatWithoutButtonsAnswersAnApprovalByReplying(t *testing.T) {
 	assert.Equal(t, "up", sink.nextPrompt(t).chatID)
 	asked := sink.next(t)
 	assert.Equal(t, "own", asked.chatID)
-	assert.Equal(t, "Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.\n\n[#1 Ship]", asked.text)
+	assert.Equal(t, "Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, or n to deny. To answer in your own words, start your reply with "+decisionCode("req-1")+".\n\n[#1 Ship]", asked.text)
 
 	handled, err := svc.PostFromChannel("telegram", "own", "y", nil)
 	require.NoError(t, err)
@@ -286,7 +286,7 @@ func TestAChatWithoutButtonsAnswersAnApprovalByReplying(t *testing.T) {
 	assert.Equal(t, "deployed\n\n[#1 Ship]", sink.next(t).text)
 }
 
-func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
+func TestWordsAfterTheCodeDenyAnApprovalAndSayWhy(t *testing.T) {
 	var reason string
 	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
 		if !strings.Contains(turn.Prompt, "deploy") {
@@ -304,7 +304,7 @@ func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
 	startDeploy(t, f, svc)
 	sink.nextPrompt(t)
 	sink.nextPrompt(t)
-	handled, err := svc.PostFromChannel("telegram", "own", "not on a Friday", nil)
+	handled, err := svc.PostFromChannel("telegram", "own", decisionCode("req-1")+" not on a Friday", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "stopped\n\n[#1 Ship]", sink.next(t).text)

@@ -127,11 +127,13 @@ func (r *Relay) Message(e db.ThreadEvent) {
 	}
 }
 
-// decision asks the chats bound to the conversation to pick an option of a
-// decision card: with a button per option where the chat can show them,
-// otherwise as numbered text to answer by replying. The card's id is the
-// request id, so the answer goes through AnswerFromChannel and the chat's
-// next message, like any request.
+// decision asks the chats of the project to pick an option of a decision
+// card: with a button per option where the chat can show them, otherwise as
+// numbered text to answer by replying. A chat bound to the project, to its
+// conversation or to any of its threads is the project's: it hears the card
+// wherever it follows and may answer it. The card's id is the request id, so
+// the answer goes through AnswerFromChannel and the chat's next message, like
+// any request.
 func (r *Relay) decision(e db.ThreadEvent) {
 	var d Decision
 	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen != nil || len(d.Options) == 0 {
@@ -145,12 +147,17 @@ func (r *Relay) decision(e db.ThreadEvent) {
 		}
 		choices[i] = agent.Choice{Value: choiceValue(i), Label: label}
 	}
+	t, err := r.store.GetThread(e.ThreadID)
+	if err != nil {
+		return
+	}
 	r.enqueueJob(relayJob{
-		threadIDs: []string{e.ThreadID},
-		text:      d.chatText() + "\n" + d.replyHint(),
-		quote:     "Re: " + oneLine(d.Question),
-		request:   &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
-		prompt:    &agent.Prompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
+		threadIDs:        []string{e.ThreadID},
+		requestProjectID: t.ProjectID,
+		text:             d.chatText() + "\n" + d.replyHint(),
+		quote:            "Re: " + oneLine(d.Question),
+		request:          &pendingRequest{threadID: e.ThreadID, requestID: e.ID},
+		prompt:           &agent.Prompt{ThreadID: e.ThreadID, RequestID: e.ID, Text: d.chatText(), Choices: choices},
 	})
 }
 
