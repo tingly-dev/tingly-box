@@ -80,9 +80,9 @@ func (f *sessionToolsMCP) githubTools() []Tool {
 		{Name: toolMerge, ThreadOnly: true, Strict: true,
 			Description: "Merge this thread's branch on GitHub, the way the user asked. method \"squash\": push the branch, open its PR if none is open, then squash-merge that PR on GitHub (it cannot be undone; the PR stays open and is reported if GitHub refuses, for example on conflicts or required checks). method \"merge_request\": push the branch and open the PR only, leaving the merge to a reviewer. The user is asked to approve every call; use it only when they asked for the merge. Nothing is merged in the local checkout, and the branch is not deleted.",
 			Properties: map[string]any{"method": map[string]any{"type": "string", "enum": []string{MergeSquash, MergeMergeRequest}, "description": "How to merge."},
-				"message": strProp("Squash commit message (first line is the title); empty leaves it to GitHub."),
-				"title":   strProp("PR title if a PR has to be opened; default is the thread's title."),
-				"body":    strProp("PR description if a PR has to be opened; default is the thread's last report.")},
+				"message": strProp("Squash commit message (first line is the title); empty is the PR's own title with its number, and its description."),
+				"title":   strProp("PR title if a PR has to be opened; default is taken from the branch's commits, as gh pr create --fill does."),
+				"body":    strProp("PR description if a PR has to be opened; default is taken from the branch's commits.")},
 			Required: []string{"method"},
 			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct{ Method, Message, Title, Body string }) (string, error) {
 				out, err := l.Merge(ctx, t, MergeInput{Method: in.Method, Message: in.Message, Title: in.Title, Body: in.Body})

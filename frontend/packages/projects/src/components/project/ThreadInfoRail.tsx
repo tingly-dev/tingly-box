@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Box, Button, CircularProgress, Collapse, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, CircularProgress, Collapse, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type Subagent, type Thread } from '../../client';
-import { Cancel, CheckCircle, ChevronRight, DiffIcon, PlayerStop, Robot, Terminal } from '../icons';
+import { Cancel, CheckCircle, ChevronRight, PlayerStop, Robot, Terminal } from '../icons';
 import { DisclosureRow } from '../common/Disclosure';
 import { useNotify } from '../../hooks/useNotify';
 import { formatDuration, useNow } from '../workdir/BackgroundTasksPanel';
@@ -12,7 +12,7 @@ import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { timeAgo } from '../../utils/format';
 import { CopyValue, Fact, InfoRailFrame, RailCard, StatusCard, UsageCard, shortSession } from './infoRail';
 import { agentIcon, agentState } from './ThreadActivityPopover';
-import { ThreadLinksCard } from './LinksCard';
+import { ThreadIssuesCard, ThreadPrsCard } from './LinksCard';
 
 const isRunning = (task: BackgroundTaskRow) => task.status === 'running' && !task.ended;
 
@@ -112,8 +112,6 @@ interface Props {
     /** A working folder's session: no worktree branch to review; its background tasks always have a card (a project thread gets one while it has some). */
     folder: boolean;
     tasks: BackgroundTaskRow[];
-    canReview: boolean;
-    onReview: () => void;
     /** After a task was stopped, to pick up its final state. */
     onChanged: () => void;
     /** Scrolls the conversation to the call that started a task. */
@@ -135,16 +133,15 @@ interface Props {
 
 /**
  * What the open thread is, beside the conversation: where it runs, what it
- * used, what it changed and what it runs in the background. Each card
+ * used, what it opened on GitHub and what it runs in the background. Each card
  * answers one question and folds; the numbers are the ones the thread
  * already carries.
  */
-export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onChanged, onReveal, permission, configuredModel, extra, subagents, onOpenAgent, onShowAgent, sheet }: Props) {
+export function ThreadInfoRail({ thread, folder, tasks, onChanged, onReveal, permission, configuredModel, extra, subagents, onOpenAgent, onShowAgent, sheet }: Props) {
     const { t } = useTranslation('projects');
     const [showFinished, setShowFinished] = useState(false);
     const running = tasks.filter(isRunning);
     const finished = tasks.filter((x) => !isRunning(x));
-    const hasChanges = !!thread.branch || thread.commits_ahead > 0 || thread.uncommitted || !!thread.merged_at;
     const branch = thread.branch && (thread.base_branch ? `${thread.base_branch} → ${thread.branch}` : thread.branch);
     return (
         <InfoRailFrame label={t('rail.title')} sheet={sheet}>
@@ -160,18 +157,8 @@ export function ThreadInfoRail({ thread, folder, tasks, canReview, onReview, onC
             </RailCard>
             <UsageCard thread={thread} />
             {extra}
-            <ThreadLinksCard thread={thread} />
-            {hasChanges && (
-                <RailCard id="changes" title={t('rail.changes')}>
-                    {thread.merged_at
-                        ? <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('thread.mergedInto', { base: thread.base_branch })}</Typography>
-                        : thread.commits_ahead > 0
-                            ? <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>{t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}</Typography>
-                            : <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('rail.noCommits')}</Typography>}
-                    {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>{t('thread.uncommitted')}</Typography>}
-                    {canReview && <Button size="small" variant="outlined" startIcon={<DiffIcon />} onClick={onReview} sx={{ mt: 0.75 }}>{t('thread.review')}</Button>}
-                </RailCard>
-            )}
+            <ThreadPrsCard thread={thread} />
+            <ThreadIssuesCard thread={thread} />
             {tasks.length > 0 && (
                 <RailCard id="tasks" title={t('session.backgroundTasks')} aside={running.length > 0 ? t('session.tasksRunning', { count: running.length }) : undefined}>
                     {running.map((x) => <TaskLine key={x.taskId} threadId={thread.id} task={x} onChanged={onChanged} onReveal={onReveal} />)}

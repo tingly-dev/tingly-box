@@ -84,15 +84,15 @@ type MockLink = ReturnType<typeof link>
 const threads = [
     threadWithUsage({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     threadWithUsage({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18),
-        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', ci: 'failing', merge_state: 'blocked',
+        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', head: 'projects/t-cache', base: 'main', ci: 'failing', merge_state: 'blocked',
             checks: { passing: 11, failing: 2, pending: 1, failed: [{ name: 'go test ./... (race)', url: 'https://github.com/acme/payments-api/actions/runs/1' }, { name: 'lint / golangci', url: 'https://github.com/acme/payments-api/actions/runs/2' }] } }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
     threadWithUsage({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1),
-        links: [link({ number: 37, repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
+        links: [link({ number: 37, head: 'projects/t-sdk', base: 'main', repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
     // Over the project's limit: its turn waits for a free slot.
     threadWithUsage({ id: 't-queued', title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
     threadWithUsage({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
     threadWithUsage({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20),
-        links: [link({ number: 201, title: 'Add tracing spans to /charge', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
+        links: [link({ number: 201, title: 'Add tracing spans to /charge', head: 'projects/t-trace', base: 'main', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
@@ -449,18 +449,26 @@ export const projectsHandlers = [
         th.title = ((await request.json()) as { title: string }).title
         return HttpResponse.json(th)
     }),
-    http.get('/api/v1/threads/:tid/diff', ({ params }) => {
+    http.get('/api/v1/threads/:tid/prs/:number/diff', ({ params }) => {
         const th = findThread(params.tid as string)
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         return HttpResponse.json({
-            base: th.base_branch, branch: th.branch, uncommitted: '', additions: 56, deletions: 4,
+            number: Number(params.number), base: 'main', head: th.branch, source: 'local', unpushed: th.id === 't-cache' ? 1 : 0, additions: 56, deletions: 4,
             files: [
                 { path: 'internal/idempotency/redis.go', status: 'added', additions: 48, deletions: 0 },
                 { path: 'internal/idempotency/store.go', status: 'modified', additions: 8, deletions: 4 },
             ],
         })
     }),
-    http.get('/api/v1/threads/:tid/diff/file', ({ request }) => {
+    http.get('/api/v1/threads/:tid/merge/draft', ({ params }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const pr = (th.links as MockLink[] | undefined)?.find((l) => l.kind === 'pr' && l.state === 'open')
+        return HttpResponse.json(pr
+            ? { number: pr.number, source: 'pr', title: pr.title, body: 'Moves idempotency-key lookups from Postgres to Redis behind `IDEMPOTENCY_REDIS`, with a 24h TTL.' }
+            : { number: 0, source: 'commit', title: 'Retry budget with a token bucket', body: 'Caps client retries so they cannot amplify an outage.' })
+    }),
+    http.get('/api/v1/threads/:tid/prs/:number/diff/file', ({ request }) => {
         const path = new URL(request.url).searchParams.get('path') ?? ''
         return HttpResponse.json({
             path,

@@ -1741,30 +1741,6 @@ func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
 	return t, nil
 }
 
-// Diff returns a thread's changes for review.
-func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return Diff{}, err
-	}
-	if t.Branch == "" {
-		return Diff{}, errors.New("this thread has no worktree branch to review")
-	}
-	return BranchDiff(ctx, t.Cwd, t.BaseBranch, t.Branch)
-}
-
-// DiffFile returns one file of a thread's changes; see BranchFileDiff.
-func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string) (FileDiff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return FileDiff{}, err
-	}
-	if t.Branch == "" {
-		return FileDiff{}, errors.New("this thread has no worktree branch to review")
-	}
-	return BranchFileDiff(ctx, t.Cwd, t.BaseBranch, path, oldPath)
-}
-
 // Recover runs at startup: turns that were running when the process stopped
 // are gone, so their threads wait on the user to continue them.
 func (m *Threads) Recover() {

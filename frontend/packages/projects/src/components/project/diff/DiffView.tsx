@@ -22,17 +22,19 @@ const fmt = (n: number) => n.toLocaleString();
 // Parsed patches kept in memory while files are paged through.
 const KEEP_PATCHES = 6;
 
-/** A thread's changes: the file list on one side, one file's patch on the
+/** One PR's changes: the file list on one side, one file's patch on the
  * other. Nothing is rendered or fetched for a file until it is opened, so a
  * change of any size opens at once; lock files, binaries and huge diffs wait
  * behind a button. */
-export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
+export function DiffView({ threadId, number, diff }: { threadId: string; number: number; diff: Diff }) {
     const { t } = useTranslation('projects');
+    // The marks belong to the PR: another PR of the thread starts with none.
+    const viewedScope = `${threadId}#${number}`;
     const files = diff.files ?? [];
     const [query, setQuery] = useState('');
     const [hideGenerated, setHideGenerated] = useState(false);
     const [unviewedOnly, setUnviewedOnly] = useState(false);
-    const [viewed, setViewed] = useState<ViewedMap>(() => loadViewed(threadId));
+    const [viewed, setViewed] = useState<ViewedMap>(() => loadViewed(viewedScope));
     // Files whose generated/lock content was asked for.
     const [opened, setOpened] = useState<Set<string>>(() => new Set());
     const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
@@ -63,7 +65,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
         if (requested.current.has(file.path)) return;
         requested.current.add(file.path);
         setLoaded((m) => ({ ...m, [file.path]: { state: 'loading' } }));
-        unwrap(api.GET('/api/v1/threads/{id}/diff/file', { params: { path: { id: threadId }, query: { path: file.path, old_path: file.old_path || undefined } } }))
+        unwrap(api.GET('/api/v1/threads/{id}/prs/{number}/diff/file', { params: { path: { id: threadId, number }, query: { path: file.path, old_path: file.old_path || undefined } } }))
             .then((data) => {
                 const parsed = parsePatch(data.patch);
                 loadOrder.current = [...loadOrder.current.filter((p) => p !== file.path), file.path];
@@ -82,7 +84,7 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
                 requested.current.delete(file.path);
                 setLoaded((m) => ({ ...m, [file.path]: { state: 'error', message: e.message } }));
             });
-    }, [threadId]);
+    }, [threadId, number]);
 
     // Whether a file's patch is fetched without being asked for. Binary and
     // huge files are never fetched: the viewer says so and leaves it to git.
@@ -111,10 +113,10 @@ export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
             const next = { ...m };
             if (next[f.path] === viewedSignature(f)) delete next[f.path];
             else next[f.path] = viewedSignature(f);
-            saveViewed(threadId, next);
+            saveViewed(viewedScope, next);
             return next;
         });
-    }, [threadId]);
+    }, [viewedScope]);
 
     const step = useCallback((delta: 1 | -1, unviewed = false) => {
         const pos = indexes.findIndex((i) => files[i].path === selectedPath);

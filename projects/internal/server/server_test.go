@@ -515,13 +515,18 @@ func TestProjectEndToEnd(t *testing.T) {
 			Additions int    `json:"additions"`
 		} `json:"files"`
 	}
-	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/diff", nil, &diff))
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/prs/12/diff", nil, nil), "a PR the thread does not hold")
+	require.NoError(t, store.UpdateThreadLinks(th.ID, func(l []db.ThreadLink) []db.ThreadLink {
+		return append(l, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: 12, State: db.LinkStateOpen, Head: th.Branch, Base: th.BaseBranch, Role: db.LinkOpened})
+	}))
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/prs/x/diff", nil, nil))
+	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/prs/12/diff", nil, &diff))
 	require.Len(t, diff.Files, 1)
 	assert.Equal(t, "fix.txt", diff.Files[0].Path)
 	var fileDiff map[string]any
-	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/diff/file?path=fix.txt", nil, &fileDiff))
+	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/prs/12/diff/file?path=fix.txt", nil, &fileDiff))
 	assert.Contains(t, fileDiff["patch"], "+")
-	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/diff/file?path=", nil, nil))
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/prs/12/diff/file?path=", nil, nil))
 
 	for _, bad := range []any{nil, map[string]any{}, map[string]any{"method": "merge"}, map[string]any{"method": "rebase"}} {
 		require.Equal(t, 400, c.do("POST", "/threads/"+th.ID+"/merge", bad, nil), "%v", bad)

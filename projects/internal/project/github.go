@@ -83,6 +83,8 @@ type GitHub interface {
 	// Read is an issue or PR in one request: for a PR its CI and mergeability
 	// too (IsPR says which it is), and the request budget in Rate.
 	Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
+	// PRFiles lists the files of a PR (at most prFilesMax) with their patches.
+	PRFiles(ctx context.Context, r GitHubRepo, number int) ([]GitHubFile, error)
 }
 
 // ghCLI is GitHub over the host's own `gh`, signed in as the user. Every call
@@ -483,4 +485,32 @@ func foldChecks(rollup string, nodes []gqlContext, total int) (string, *db.LinkC
 		return "pending", &sum
 	}
 	return "passing", &sum
+}
+
+type ghPullFile struct {
+	Filename         string `json:"filename"`
+	PreviousFilename string `json:"previous_filename"`
+	Status           string `json:"status"`
+	Additions        int    `json:"additions"`
+	Deletions        int    `json:"deletions"`
+	Patch            string `json:"patch"`
+}
+
+func (g ghCLI) PRFiles(ctx context.Context, r GitHubRepo, number int) ([]GitHubFile, error) {
+	const perPage = 100
+	var files []GitHubFile
+	for page := 1; len(files) < prFilesMax; page++ {
+		var out []ghPullFile
+		path := fmt.Sprintf("%s/pulls/%d/files?per_page=%d&page=%d", r.path(), number, perPage, page)
+		if err := g.api(ctx, r, "GET", path, nil, &out); err != nil {
+			return nil, err
+		}
+		for _, f := range out {
+			files = append(files, GitHubFile{Path: f.Filename, OldPath: f.PreviousFilename, Status: f.Status, Additions: f.Additions, Deletions: f.Deletions, Patch: f.Patch})
+		}
+		if len(out) < perPage {
+			break
+		}
+	}
+	return files, nil
 }

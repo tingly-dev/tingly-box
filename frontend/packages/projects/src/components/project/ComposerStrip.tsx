@@ -11,6 +11,8 @@ import { folderName } from '../../utils/format';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { colorOf, keyParts, LinkIcon, stripLinks } from './linkView';
 import { peekRowSx, useLinkPeek } from './useLinkPeek';
+import { FilesButton } from './LinksCard';
+import { canShowFiles, PrDiffDialog } from './PrDiffDialog';
 import { radius } from '@tingly/ui/theme/radius';
 
 export type AutoAnswer = 'off' | 'delay' | 'now';
@@ -48,12 +50,15 @@ const LINKS_SHOWN = 3;
 const linkKey = (l: ThreadLink) => `${l.repo}/${l.kind}/${l.number}`;
 
 /** One of the thread's issues or PRs as a line of the open strip: number and title as a link to GitHub, where it stands, and the refresh and details buttons. */
-function LinkLine({ link, threadId }: { link: ThreadLink; threadId: string }) {
+function LinkLine({ link, thread }: { link: ThreadLink; thread: Thread }) {
     const { t } = useTranslation('projects');
+    const [files, setFiles] = useState(false);
+    const threadId = thread.id;
     // The strip sits above the message box, at the bottom of the screen: the details open upward.
     const peek = useLinkPeek(link, threadId, true);
     return (
-        <Row icon={<Box component="span" sx={{ display: 'inline-flex', '& svg': { mt: 0 } }}><LinkIcon link={link} /></Box>} name={t(link.kind === 'pr' ? 'strip.pr' : 'strip.issue')} action={peek.actions} boxProps={peek.row}>
+        <Row icon={<Box component="span" sx={{ display: 'inline-flex', '& svg': { mt: 0 } }}><LinkIcon link={link} /></Box>} name={t(link.kind === 'pr' ? 'strip.pr' : 'strip.issue')}
+            action={canShowFiles(link) ? <Box sx={{ display: 'flex', alignItems: 'center' }}><FilesButton link={link} onClick={() => setFiles(true)} />{peek.actions}</Box> : peek.actions} boxProps={peek.row}>
             {/* The title keeps a readable width and the state wraps under it where the strip is narrow (a phone, with its big touch buttons). */}
             <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0.75 }}>
                 <Link href={link.url.startsWith('https://') ? link.url : undefined} target="_blank" rel="noopener noreferrer" underline="hover" color="text.primary" title={`${link.repo}#${link.number} ${link.title}`}
@@ -63,6 +68,7 @@ function LinkLine({ link, threadId }: { link: ThreadLink; threadId: string }) {
                 {keyParts(link, t).map((part) => <Box key={part.text} component="span" sx={{ flexShrink: 0, color: (theme) => colorOf(theme, part.tone) }}>{part.text}</Box>)}
             </Box>
             {peek.overlay}
+            {files && <PrDiffDialog thread={thread} link={link} open onClose={() => setFiles(false)} />}
         </Row>
     );
 }
@@ -158,7 +164,7 @@ export function ComposerStrip({ thread, folder = false, onAutoAnswer, autoAt }: 
                             {thread.branch && thread.base_branch && <Box component="span" sx={{ ...clip, flexShrink: 0, color: 'text.secondary' }}>{t('thread.fromBase', { base: thread.base_branch })}</Box>}
                         </Row>
                     )}
-                    {shownLinks.map((l) => <LinkLine key={linkKey(l)} link={l} threadId={thread.id} />)}
+                    {shownLinks.map((l) => <LinkLine key={linkKey(l)} link={l} thread={thread} />)}
                     {links.length > shownLinks.length && <Box sx={{ px: 1.25, minHeight: ROW_H, display: 'flex', alignItems: 'center' }}>{t('strip.moreLinks', { count: links.length - shownLinks.length })}</Box>}
                     {showAuto && (
                         <Row icon={<AutoFixHigh sx={{ color: mode === 'off' ? undefined : 'primary.main' }} />} name={t('strip.autoAnswer.title')}>

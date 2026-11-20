@@ -1901,90 +1901,6 @@
         }
       }
     },
-    "/api/v1/threads/{id}/diff": {
-      "get": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "The thread's changes against its base branch",
-        "description": "The thread's changes against its base branch",
-        "operationId": "apiV1ThreadsIdDiffGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Diff"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/threads/{id}/diff/file": {
-      "get": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "One file of the thread's changes: its patch, left out when it is binary or too large",
-        "description": "One file of the thread's changes: its patch, left out when it is binary or too large",
-        "operationId": "apiV1ThreadsIdDiffFileGet",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Resource ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "path",
-            "in": "query",
-            "description": "File path as listed by the diff",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "old_path",
-            "in": "query",
-            "description": "Where a renamed file came from",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/threads/{id}/effort": {
       "put": {
         "tags": [
@@ -2343,6 +2259,39 @@
         }
       }
     },
+    "/api/v1/threads/{id}/merge/draft": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them",
+        "description": "The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them",
+        "operationId": "apiV1ThreadsIdMergeDraftGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeDraft"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/messages": {
       "post": {
         "tags": [
@@ -2512,6 +2461,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/prs/{number}/diff": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)",
+        "description": "The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)",
+        "operationId": "apiV1ThreadsIdPrsNumberDiffGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Numeric count",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/prs/{number}/diff/file": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "One file of a PR's changes: its patch, left out when it is binary or too large",
+        "description": "One file of a PR's changes: its patch, left out when it is binary or too large",
+        "operationId": "apiV1ThreadsIdPrsNumberDiffFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Numeric count",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path as listed by the diff",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "old_path",
+            "in": "query",
+            "description": "Where a renamed file came from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
                 }
               }
             }
@@ -3556,9 +3609,9 @@
             "type": "string",
             "description": "Field base"
           },
-          "branch": {
-            "type": "string",
-            "description": "Field branch"
+          "base_stale": {
+            "type": "boolean",
+            "description": "Field base_stale"
           },
           "deletions": {
             "type": "integer",
@@ -3577,18 +3630,33 @@
             "format": "int64",
             "description": "Field files_omitted"
           },
-          "uncommitted": {
+          "head": {
             "type": "string",
-            "description": "Field uncommitted"
+            "description": "Field head"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          },
+          "unpushed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field unpushed"
           }
         },
         "required": [
+          "number",
           "base",
-          "branch",
+          "head",
+          "source",
           "files",
           "additions",
-          "deletions",
-          "uncommitted"
+          "deletions"
         ]
       },
       "DiffFile": {
@@ -4092,6 +4160,34 @@
         "required": [
           "dir",
           "files"
+        ]
+      },
+      "MergeDraft": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "number",
+          "source",
+          "title",
+          "body"
         ]
       },
       "MergeRequest": {

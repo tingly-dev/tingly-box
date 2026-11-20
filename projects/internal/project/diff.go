@@ -14,19 +14,27 @@ import (
 	"unicode/utf8"
 )
 
-// Diff is the summary of a thread's changes for review: one entry per file,
-// without their content. A file's patch is loaded on its own (DiffFile), so a
-// change of any size opens at once and only what is read is sent.
+// Diff is the summary of one PR's changes for review: one entry per file,
+// without their content. A file's patch is loaded on its own (the file
+// endpoint), so a change of any size opens at once and only what is read is sent.
 type Diff struct {
-	Base   string     `json:"base"`
-	Branch string     `json:"branch"`
-	Files  []DiffFile `json:"files"`
+	Number int    `json:"number"`
+	Base   string `json:"base"`
+	Head   string `json:"head"`
+	// Source says where the files were read: "local" (this checkout's refs,
+	// no network) or "github" (the PR's files, when its branches are not here).
+	Source string `json:"source"`
+	// Unpushed counts the commits of the local head that origin's copy of it
+	// lacks: they are not in the PR. BaseStale is set when origin's base could
+	// not be brought up to date, so files other PRs changed on the base may show.
+	Unpushed  int        `json:"unpushed,omitempty"`
+	BaseStale bool       `json:"base_stale,omitempty"`
+	Files     []DiffFile `json:"files"`
 	// FilesOmitted counts the files past maxListedFiles that are not listed;
 	// Additions and Deletions still cover them.
-	FilesOmitted int    `json:"files_omitted,omitempty"`
-	Additions    int    `json:"additions"`
-	Deletions    int    `json:"deletions"`
-	Uncommitted  string `json:"uncommitted"`
+	FilesOmitted int `json:"files_omitted,omitempty"`
+	Additions    int `json:"additions"`
+	Deletions    int `json:"deletions"`
 }
 
 // DiffFile is one changed file of a Diff.
@@ -68,16 +76,97 @@ const (
 // than anyone reviews one by one.
 var maxListedFiles = 10000
 
-// BranchDiff summarizes base...HEAD of a worktree, plus the uncommitted
-// changes the merge will not include.
-func BranchDiff(ctx context.Context, worktree, base, branch string) (Diff, error) {
-	d := Diff{Base: base, Branch: branch, Files: []DiffFile{}}
-	// --raw and --numstat in one run: git computes the diff (and renames) once.
-	out, err := git(ctx, worktree, "diff", "--raw", "--numstat", "-z", "-M", "--no-ext-diff", base+"...HEAD")
+// errNoLocalRefs says the PR's branches are not in the checkout.
+var errNoLocalRefs = errors.New("the PR's branches are not in this checkout")
+
+// prRange is the three-dot range a PR's diff is read over: base's merge-base
+// with head, up to head, which is how GitHub shows a PR.
+type prRange struct {
+	spec string
+	// base and head are the refs it names.
+	base, head string
+}
+
+func refExists(ctx context.Context, dir, ref string) bool {
+	_, err := git(ctx, dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	return err == nil
+}
+
+// localPRRange picks the refs a PR's diff is read between: origin's copy of a
+// branch when there is one (it is what GitHub has; `git push` keeps it current),
+// else the local branch. errNoLocalRefs when either side is in neither place.
+func localPRRange(ctx context.Context, dir, base, head string) (prRange, error) {
+	pick := func(name string) string {
+		for _, ref := range []string{"refs/remotes/origin/" + name, "refs/heads/" + name} {
+			if refExists(ctx, dir, ref) {
+				return ref
+			}
+		}
+		return ""
+	}
+	if base == "" || head == "" || strings.HasPrefix(base, "-") || strings.HasPrefix(head, "-") {
+		return prRange{}, errNoLocalRefs
+	}
+	b, h := pick(base), pick(head)
+	if b == "" || h == "" {
+		return prRange{}, errNoLocalRefs
+	}
+	return prRange{spec: b + "..." + h, base: b, head: h}, nil
+}
+
+// fetchBase brings origin's copy of a branch up to date, so a diff against it
+// is the one GitHub shows. It is best effort and short: no network, no
+// credentials or no such remote leave the copy as it was, and say so.
+func fetchBase(ctx context.Context, dir, base string) bool {
+	ctx, cancel := context.WithTimeout(ctx, fetchBaseTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "fetch", "--quiet", "--no-tags", "origin", "+refs/heads/"+base+":refs/remotes/origin/"+base)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "LANGUAGE=C")
+	return cmd.Run() == nil
+}
+
+const fetchBaseTimeout = 5 * time.Second
+
+// unpushedCommits counts what the local head holds beyond origin's copy.
+func unpushedCommits(ctx context.Context, dir, head string) int {
+	local, remote := "refs/heads/"+head, "refs/remotes/origin/"+head
+	if !refExists(ctx, dir, local) || !refExists(ctx, dir, remote) {
+		return 0
+	}
+	out, err := git(ctx, dir, "rev-list", "--count", remote+".."+local)
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(out)
+	return n
+}
+
+// LocalPRDiff summarizes a PR's changes from the checkout's refs. Origin's
+// base is fetched first (briefly), so the range is the PR's own.
+func LocalPRDiff(ctx context.Context, dir string, number int, base, head string) (Diff, error) {
+	d := Diff{Number: number, Base: base, Head: head, Source: "local", Files: []DiffFile{}}
+	rng, err := localPRRange(ctx, dir, base, head)
 	if err != nil {
 		return d, err
 	}
-	d.Files = parseDiffSummary(out)
+	d.BaseStale = !fetchBase(ctx, dir, base)
+	d.Unpushed = unpushedCommits(ctx, dir, head)
+	// --raw and --numstat in one run: git computes the diff (and renames) once.
+	out, err := git(ctx, dir, "diff", "--raw", "--numstat", "-z", "-M", "--no-ext-diff", rng.spec)
+	if err != nil {
+		return d, err
+	}
+	d.setFiles(parseDiffSummary(out))
+	markGenerated(ctx, dir, d.Files)
+	return d, nil
+}
+
+// setFiles keeps the files, totals them and cuts the list at maxListedFiles.
+func (d *Diff) setFiles(files []DiffFile) {
+	d.Files = files
+	if d.Files == nil {
+		d.Files = []DiffFile{}
+	}
 	for _, f := range d.Files {
 		d.Additions += f.Additions
 		d.Deletions += f.Deletions
@@ -86,9 +175,6 @@ func BranchDiff(ctx context.Context, worktree, base, branch string) (Diff, error
 		d.FilesOmitted = len(d.Files) - maxListedFiles
 		d.Files = d.Files[:maxListedFiles]
 	}
-	markGenerated(ctx, worktree, d.Files)
-	d.Uncommitted, _ = git(ctx, worktree, "status", "--short")
-	return d, nil
 }
 
 // parseDiffSummary reads `git diff --raw --numstat -z`: the raw records come
@@ -223,19 +309,24 @@ func markGenerated(ctx context.Context, worktree string, files []DiffFile) {
 	}
 }
 
-// BranchFileDiff returns one file's patch of base...HEAD. A patch bigger than
-// maxFilePatch is not read (git is stopped at the cap) and a binary file has no
-// patch: the result says so and carries no content.
-func BranchFileDiff(ctx context.Context, worktree, base, filePath, oldPath string) (FileDiff, error) {
+// LocalPRFileDiff returns one file's patch of a PR, over the same refs as
+// LocalPRDiff (without fetching again). A patch bigger than maxFilePatch is not
+// read (git is stopped at the cap) and a binary file has no patch: the result
+// says so and carries no content.
+func LocalPRFileDiff(ctx context.Context, dir, base, head, filePath, oldPath string) (FileDiff, error) {
 	d := FileDiff{Path: filePath}
 	if filePath == "" || strings.ContainsRune(filePath, 0) || strings.ContainsRune(oldPath, 0) {
 		return d, errors.New("path is required")
 	}
-	args := []string{"--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", base + "...HEAD", "--", filePath}
+	rng, err := localPRRange(ctx, dir, base, head)
+	if err != nil {
+		return d, err
+	}
+	args := []string{"--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M", rng.spec, "--", filePath}
 	if oldPath != "" && oldPath != filePath {
 		args = append(args, oldPath)
 	}
-	out, over, err := gitCapped(ctx, worktree, maxFilePatch, args...)
+	out, over, err := gitCapped(ctx, dir, maxFilePatch, args...)
 	if err != nil {
 		return d, err
 	}

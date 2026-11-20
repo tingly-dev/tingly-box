@@ -32,6 +32,8 @@ type fakeGitHub struct {
 	// every read reports.
 	block chan struct{}
 	rate  GitHubRate
+	// prFiles are the files of each PR, as GitHub lists them.
+	prFiles map[int][]GitHubFile
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -200,6 +202,13 @@ func (g *fakeGitHub) Read(_ context.Context, r GitHubRepo, n int) (GitHubItem, e
 	}
 	it.Rate = g.rate
 	return it, err
+}
+
+func (g *fakeGitHub) PRFiles(_ context.Context, r GitHubRepo, n int) ([]GitHubFile, error) {
+	err := g.log("files %s #%d", r.Slug(), n)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.prFiles[n], err
 }
 
 func (g *fakeGitHub) set(n int, mod func(*GitHubItem)) {

@@ -10,9 +10,8 @@ import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { useTranscriptHost } from '../../transcript/context';
-import { Check, DiffIcon, PlayArrow, Settings } from '../icons';
+import { Check, PlayArrow, Settings } from '../icons';
 import { DisclosureRow } from '../common/Disclosure';
-import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { Transcript, blockAttachments, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
@@ -34,48 +33,33 @@ function parse<T>(payload: unknown): T | null {
 /**
  * A thread as one line in the conversation: its status, title, what it last
  * did and its work. The line is the thread's live state; it changes in place
- * rather than the conversation adding a note. A thread with changes to
- * review offers "Review" right here.
+ * rather than the conversation adding a note.
  */
 export function ThreadCard({ thread, onOpen, onTasks }: { thread: Thread; onOpen: (id: string) => void; /** Opens the thread's running tasks from its count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
-    const [reviewing, setReviewing] = useState(false);
-    const canReview = thread.status === 'ready' && !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at;
     return (
-        <>
-            <Box
-                role="button"
-                tabIndex={0}
-                onClick={() => onOpen(thread.id)}
-                onKeyDown={(e) => e.key === 'Enter' && onOpen(thread.id)}
-                sx={{
-                    display: 'flex', alignItems: 'center', gap: 1, minHeight: 40, px: 1.25, py: 0.5, borderRadius: radius.row, cursor: 'pointer',
-                    border: 1, borderColor: 'divider', bgcolor: 'background.paper', outline: 'none',
-                    '&:hover': { borderColor: 'text.disabled' },
-                    '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
-                }}
-            >
-                <Box component="span" title={t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
-                    <ThreadStateMark status={thread.status} queued={thread.queued} />
-                </Box>
-                <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
-                {/* On a phone the line keeps the title; the thread holds the rest. */}
-                <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
-                    <ThreadSubtitle thread={thread} />
-                </Typography>
-                <ThreadBadges thread={thread} onTasks={onTasks} />
-                {canReview && (
-                    <Button size="small" variant="outlined" startIcon={<DiffIcon />} sx={{ flexShrink: 0, py: 0.125 }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setReviewing(true);
-                        }}>
-                        {t('thread.review')}
-                    </Button>
-                )}
+        <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(thread.id)}
+            onKeyDown={(e) => e.key === 'Enter' && onOpen(thread.id)}
+            sx={{
+                display: 'flex', alignItems: 'center', gap: 1, minHeight: 40, px: 1.25, py: 0.5, borderRadius: radius.row, cursor: 'pointer',
+                border: 1, borderColor: 'divider', bgcolor: 'background.paper', outline: 'none',
+                '&:hover': { borderColor: 'text.disabled' },
+                '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
+            }}
+        >
+            <Box component="span" title={t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
+                <ThreadStateMark status={thread.status} queued={thread.queued} />
             </Box>
-            {canReview && <DiffDialog thread={thread} open={reviewing} onClose={() => setReviewing(false)} />}
-        </>
+            <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
+            {/* On a phone the line keeps the title; the thread holds the rest. */}
+            <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
+                <ThreadSubtitle thread={thread} />
+            </Typography>
+            <ThreadBadges thread={thread} onTasks={onTasks} />
+        </Box>
     );
 }
 
