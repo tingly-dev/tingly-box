@@ -254,11 +254,13 @@ func applyClaudeCodeClientHints(c *gin.Context) {
 		return
 	}
 	hints := typ.ClaudeCodeClientHints{
-		AgentID:           strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
-		ParentAgentID:     strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
-		RequestClass:      strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
-		AgentType:         strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
-		BackgroundSession: strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
+		AgentID:                strings.TrimSpace(c.GetHeader("x-claude-code-agent-id")),
+		ParentAgentID:          strings.TrimSpace(c.GetHeader("x-claude-code-parent-agent-id")),
+		RequestClass:           strings.TrimSpace(c.GetHeader("x-claude-code-request-class")),
+		AgentType:              strings.TrimSpace(c.GetHeader("x-claude-code-agent-type")),
+		BackgroundSession:      strings.TrimSpace(c.GetHeader("x-app")) == claudeXAppBackground,
+		FirstPartyRequestClass: strings.TrimSpace(c.GetHeader("x-claude-1p-request-class")),
+		PromptID:               strings.TrimSpace(c.GetHeader("x-claude-code-prompt-id")),
 	}
 	for _, v := range c.Request.Header.Values("anthropic-beta") {
 		for _, flag := range strings.Split(v, ",") {
