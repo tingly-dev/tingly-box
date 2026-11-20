@@ -220,13 +220,24 @@ func (s *persistentSession) Inject(_ context.Context, prompt string) error {
 	default:
 		return ErrSessionClosed
 	}
+	enc, ok := s.transport.(MidTurnInputEncoder)
+	if !ok {
+		return ErrInjectUnsupported
+	}
 	// A turn that ends between the check and the write leaves the message
 	// to start a turn of the agent's own; the pump tracks that like any
 	// unsolicited turn, so nothing is lost.
-	if err := s.encoder.Encode(s.transport.EncodeUserMessage(prompt)); err != nil {
+	if err := s.encoder.Encode(enc.EncodeMidTurnMessage(prompt)); err != nil {
 		return fmt.Errorf("agentboot: inject message: %w", err)
 	}
 	return nil
+}
+
+// CanInject reports whether the session's agent takes messages mid-turn,
+// whether or not a turn is running now.
+func (s *persistentSession) CanInject() bool {
+	_, ok := s.transport.(MidTurnInputEncoder)
+	return ok
 }
 
 func (s *persistentSession) SetModel(ctx context.Context, model string) error {

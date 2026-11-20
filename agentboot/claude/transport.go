@@ -112,6 +112,12 @@ func (t *Transport) EncodeUserMessage(prompt string) any {
 	}
 }
 
+// EncodeMidTurnMessage is the same user message as a turn's own: Claude Code
+// reads stdin during a turn and adds what it finds to its next model request
+// (observed, agentboot/claude/ref/live-control.md). Implements
+// [agentboot.MidTurnInputEncoder].
+func (t *Transport) EncodeMidTurnMessage(prompt string) any { return t.EncodeUserMessage(prompt) }
+
 // EncodeControlRequest converts a host-initiated request into Claude's
 // control_request wire shape. Implements [agentboot.ControlRequestEncoder].
 // Both requests are acknowledged with a control_response the transport

@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -252,6 +253,11 @@ func (e *Engine) Stop(id string) (<-chan struct{}, bool) {
 // process), so the message is a new turn for Start.
 var ErrNotInjectable = errors.New("no running turn to add the message to")
 
+// ErrAgentReadsBetweenTurns is ErrNotInjectable for a turn that does run, on
+// an agent that cannot take input while it works: the host can tell its user
+// why the message waits for the next turn.
+var ErrAgentReadsBetweenTurns = fmt.Errorf("%w: the agent reads messages only between turns", ErrNotInjectable)
+
 // Inject adds prompt to the turn id has in flight, without ending it:
 // Claude takes it up at its next step. The message is recorded as the
 // user's. Returns ErrNotInjectable when there is no such turn, for the caller
@@ -267,6 +273,9 @@ func (e *Engine) Inject(id, prompt string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
 	defer cancel()
 	if err := res.c.Inject(ctx, prompt); err != nil {
+		if errors.Is(err, agentboot.ErrInjectUnsupported) {
+			return ErrAgentReadsBetweenTurns
+		}
 		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) {
 			return ErrNotInjectable
 		}
@@ -274,6 +283,18 @@ func (e *Engine) Inject(id, prompt string) error {
 	}
 	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
 	return nil
+}
+
+// Injectable reports whether a message sent to id now would join the turn in
+// flight: a turn is running on a live process whose agent reads input
+// mid-turn. False means Inject would refuse it with ErrNotInjectable, and the
+// message waits for the next turn.
+func (e *Engine) Injectable(id string) bool {
+	e.mu.Lock()
+	_, running := e.runs[id]
+	e.mu.Unlock()
+	res, ok := e.residentFor(id)
+	return running && ok && res.c.CanInject()
 }
 
 // Release closes id's resident process so something else (a terminal) can

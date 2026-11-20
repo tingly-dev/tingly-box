@@ -1,7 +1,7 @@
 # AgentBoot: injecting messages and changing a session live (TEP #2114)
 
 Two questions about a persistent Claude Code session, answered by running the
-real CLI (`agentboot/claude/ref/live-control.md`):
+real CLI (`agentboot/claude/ref/live-control.md`, `.research/mid-turn-injection.md`):
 
 1. Can a message join a turn that is already running? **Yes.**
 2. Can model / mode / directories change without restarting? **Model and
@@ -26,6 +26,18 @@ same turn: one `TurnCompleteEvent`, session state untouched.
 - `Engine.Inject(id, prompt)` injects into the live turn and records the
   user message; `ErrNotInjectable` tells the host to `Start` a turn instead.
   Hosts that today refuse a message while busy can call it first.
+- **When the model reads it** (measured against a request-logging mock,
+  CLI 2.1.259, `.research/mid-turn-injection.md`): in the first model
+  request that starts after the write, in the same turn. That is after the
+  running tool call, after a pending approval is answered, after a
+  foreground subagent returns; a request already streaming cannot change.
+  Two messages written close together arrive as one.
+- **Capability, declared by the agent.** A transport that reads input
+  mid-turn implements `MidTurnInputEncoder` (Claude does). Without it
+  `Inject` returns `ErrInjectUnsupported`, which `Engine.Inject` reports as
+  `ErrAgentReadsBetweenTurns` (an `ErrNotInjectable`), so a host can say why
+  the message waits. `Engine.Injectable(id)` says up front whether a
+  message sent now would join the running turn.
 
 ## 2. Live control
 
