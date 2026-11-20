@@ -10,8 +10,9 @@ import (
 // protocol sub-package (anthropic, openai, ...) instantiates its own
 // Registry alias so models cannot leak across protocols.
 type GenericRegistry[T VirtualModel] struct {
-	models map[string]T
-	mu     sync.RWMutex
+	models   map[string]T
+	fallback string
+	mu       sync.RWMutex
 }
 
 // NewGenericRegistry creates an empty registry.
@@ -39,11 +40,25 @@ func (r *GenericRegistry[T]) Unregister(id string) {
 	delete(r.models, id)
 }
 
-// Get returns the virtual model for id, or the zero value of T if not registered.
+// SetFallback makes Get answer ids that are not registered with the model
+// registered under fallbackID (empty clears it). Only Get is affected: Has,
+// List and ListModels still describe the registered models, so a fallback never
+// shows up as an advertised model.
+func (r *GenericRegistry[T]) SetFallback(fallbackID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.fallback = fallbackID
+}
+
+// Get returns the virtual model for id, then the fallback model if one is set,
+// or the zero value of T if neither is registered.
 func (r *GenericRegistry[T]) Get(id string) T {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.models[id]
+	if vm, ok := r.models[id]; ok || r.fallback == "" {
+		return vm
+	}
+	return r.models[r.fallback]
 }
 
 // Has reports whether a model with the given ID is registered.

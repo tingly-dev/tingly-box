@@ -159,6 +159,8 @@ bundle 是 minified 的，符号名每版都变，靠字面量锚定：
 
 ### B2.4 动态抓包（最可信的证据）
 
+> 现在可直接用 `tb vmodel --capture <dir>` 代替下面手写的 `fake_api.py`：记录每条连接的原始字节（header 大小写/顺序、body 逐字节），用法见 `vmodel/README.md` 的 “Capturing what a real client sends” 与 `.design/vmodel-capture.md`。`env -i` / 隔离 HOME / 假 token 的要求不变。
+
 把 `ANTHROPIC_BASE_URL` 指到本地假 API，让**真实二进制**自己发请求，落盘头和 body：
 
 ```python
