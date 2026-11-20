@@ -12,7 +12,7 @@
     "build": "vite build --mode production && node scripts/precompress.mjs dist",
     "preview": "vite preview",
     "gen:api": "openapi-typescript ../openapi.json -o ./src/client/schema.d.ts",
-    "lint": "oxlint src packages && node scripts/check-style-literals.mjs",
+    "lint": "oxlint src packages && node scripts/check-style-literals.mjs && node scripts/check-api-arrays.mjs",
     "lint:fix": "oxlint src packages --fix",
     "test": "vitest run",
     "test:watch": "vitest",

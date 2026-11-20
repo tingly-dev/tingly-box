@@ -25,6 +25,12 @@ afterEach(() => {
 });
 
 describe('DiffView', () => {
+    it('shows a branch with no changes whose file list came back null, instead of crashing', () => {
+        // A diff of an unchanged branch used to be sent as `"files": null`.
+        const { container } = render(<DiffView threadId="t1" diff={{ ...diffOf([]), files: null } as unknown as Diff} />);
+        expect(container.textContent).toContain('thread.noChanges');
+    });
+
     it('windows a 5000-file list and fetches only the file it opens on, skipping generated and binary ones first', async () => {
         const files = [file('assets/a.png', { binary: true }), file('package-lock.json', { generated: true }), ...Array.from({ length: 5000 }, (_, i) => file(`src/f${String(i).padStart(4, '0')}.ts`))];
         render(<DiffView threadId="t1" diff={diffOf(files)} />);

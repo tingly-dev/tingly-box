@@ -673,7 +673,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         <Typography variant="body2">
                             {t('thread.archiveFrees', { worktree: formatBytes(report.worktree_bytes), tmp: formatBytes(report.tmp_bytes) })}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">{report.kept.join(' · ')}</Typography>
+                        <Typography variant="body2" color="text.secondary">{(report.kept ?? []).join(' · ')}</Typography>
                         {report.warnings?.length ? <Typography variant="body2" color="text.secondary">{report.warnings.join(' ')}</Typography> : null}
                     </Box>
                 ) : confirm === 'delete' ? (

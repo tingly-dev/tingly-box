@@ -988,7 +988,7 @@ func (l *Links) RefreshThread(ctx context.Context, threadID string, only *LinkRe
 	if err != nil {
 		return nil, err
 	}
-	var out []RefreshResult
+	out := []RefreshResult{}
 	found := only == nil
 	for _, k := range links {
 		if only != nil && !(k.Repo == only.Repo && k.Number == only.Number && (only.Kind == "" || k.Kind == only.Kind)) {
