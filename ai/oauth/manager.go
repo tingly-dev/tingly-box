@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -675,9 +676,18 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 	}
 
 	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
-	// codex DO NOT require client_secret
-	if issuer != ai.IssuerCodex {
+	// codex DO NOT require client_secret. The Claude Code client is public:
+	// the official CLI sends no secret at all, so neither do we.
+	switch {
+	case issuer == ai.IssuerCodex:
+	case issuer == ai.IssuerClaudeCode && config.ClientSecret == "":
+	default:
 		params["client_secret"] = config.ClientSecret
+	}
+
+	// Some issuers want the scope restated on refresh (the Claude CLI does).
+	if len(config.RefreshScopes) > 0 {
+		params["scope"] = strings.Join(config.RefreshScopes, " ")
 	}
 
 	resp, err := m.sendTokenRequest(ctx, config, config.TokenURL, params, 30*time.Second, opts)
@@ -685,6 +695,26 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 		return nil, fmt.Errorf("refresh token: %w: %v", ErrTokenExchangeFailed, err)
 	}
 	defer resp.Body.Close()
+
+	// invalid_scope on a scoped refresh means the issuer's scope set moved on
+	// (the CLI handles this the same way): ask again without a scope, which
+	// keeps the grant's original scopes.
+	if resp.StatusCode == http.StatusBadRequest && params["scope"] != "" {
+		body, _ := io.ReadAll(resp.Body)
+		if refreshErrorCode(body) == "invalid_scope" {
+			resp.Body.Close()
+			logrus.WithField("issuer", issuer).Warn("[OAuth] refresh rejected the requested scope; retrying without it")
+			delete(params, "scope")
+			resp, err = m.sendTokenRequest(ctx, config, config.TokenURL, params, 30*time.Second, opts)
+			if err != nil {
+				return nil, fmt.Errorf("refresh token: %w: %v", ErrTokenExchangeFailed, err)
+			}
+			defer resp.Body.Close()
+		} else {
+			// Not the case we retry: hand the body back to the error path below.
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+		}
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -712,6 +742,29 @@ func (m *Manager) refreshToken(ctx context.Context, issuer ai.Issuer, refreshTok
 	}
 
 	return token, nil
+}
+
+// refreshErrorCode reads the OAuth error code from a token-endpoint error body
+// ({"error":"invalid_scope",...} or the nested {"error":{"type":...}} shape).
+func refreshErrorCode(body []byte) string {
+	var flat struct {
+		Error json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(body, &flat) != nil || len(flat.Error) == 0 {
+		return ""
+	}
+	var code string
+	if json.Unmarshal(flat.Error, &code) == nil {
+		return code
+	}
+	var nested struct {
+		Type string `json:"type"`
+		Code string `json:"code"`
+	}
+	if json.Unmarshal(flat.Error, &nested) == nil {
+		return cmp.Or(nested.Code, nested.Type)
+	}
+	return ""
 }
 
 // RefreshToken refreshes an access token using a refresh token

@@ -83,13 +83,15 @@ func (h *AnthropicHook) BeforeAuth(params map[string]string) error {
 	return nil
 }
 
+// ClaudeCLIOAuthUserAgent is what the official CLI identifies itself as on its
+// OAuth calls (the same claude-cli UA as its API traffic); the token endpoint
+// is a plain JSON POST, not a browser form. Keep the version in step with
+// typ.ClaudeCodeVersionLatest (a test in internal/client pins that).
+const ClaudeCLIOAuthUserAgent = "claude-cli/2.1.328 (external, cli)"
+
 func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) error {
 	header.Set("Content-Type", "application/json")
-	header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-	header.Set("Accept", "application/json, text/plain, */*")
-	header.Set("Accept-Language", "en-US,en;q=0.9")
-	header.Set("Referer", "https://claude.ai/")
-	header.Set("Origin", "https://claude.ai")
+	header.Set("User-Agent", ClaudeCLIOAuthUserAgent)
 	return nil
 }
 

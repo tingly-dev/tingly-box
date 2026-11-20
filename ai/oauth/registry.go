@@ -9,18 +9,28 @@ import (
 func DefaultRegistry() *Registry {
 	registry := NewRegistry()
 
-	// Anthropic (Claude) OAuth - uses PKCE
-	// TokenURL verified: https://api.anthropic.com/v1/oauth/token (not console.anthropic.com)
-	// PKCE is required: code_verifier must be included in token request
+	// Anthropic (Claude) OAuth - uses PKCE.
+	//
+	// Endpoints, scopes and refresh shape follow the official Claude Code CLI
+	// (2.1.328, claude.ai-account login): authorize on claude.com/cai, token on
+	// platform.claude.com, a public client (no secret). Scopes are the CLI's
+	// login set; user:privacy_consents:write is left out because nothing here
+	// writes consent state. See .research/claude-code/2.1.328.md §4.
 	registry.Register(&ProviderConfig{
-		Type:               ai.IssuerClaudeCode,
-		DisplayName:        "Anthropic Claude Code",
-		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
-		ClientSecret:       "",                                     // No secret required for public client
-		AuthURL:            "https://claude.ai/oauth/authorize",
-		TokenURL:           "https://api.anthropic.com/v1/oauth/token", // API endpoint (verified working)
-		RedirectURL:        "",                                         // Dynamic: set to server.BaseURL + "/callback"
-		Scopes:             []string{"user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"},
+		Type:         ai.IssuerClaudeCode,
+		DisplayName:  "Anthropic Claude Code",
+		ClientID:     "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
+		ClientSecret: "",                                     // No secret required for public client
+		AuthURL:      "https://claude.com/cai/oauth/authorize",
+		TokenURL:     "https://platform.claude.com/v1/oauth/token",
+		RedirectURL:  "", // Dynamic: set to server.BaseURL + "/callback"
+		Scopes: []string{
+			"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code",
+			"user:mcp_servers", "user:file_upload", "user:plugins",
+		},
+		// The CLI refreshes with its default scope set, which has no
+		// org:create_api_key (a login-only scope).
+		RefreshScopes:      []string{"user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload", "user:plugins"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format

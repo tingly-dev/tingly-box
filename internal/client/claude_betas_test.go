@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -523,4 +524,10 @@ func TestV1ClaudeBetaSignals_ToolSearch(t *testing.T) {
 	var plain anthropic.MessageNewParams
 	require.NoError(t, json.Unmarshal([]byte(`{"model":"claude-sonnet-4-6","max_tokens":1,"messages":[],"tools":[{"name":"Read","input_schema":{"type":"object"}}]}`), &plain))
 	assert.False(t, v1ClaudeBetaSignals(context.Background(), &plain, true).ToolSearch)
+}
+
+// The OAuth calls identify as the same claude-cli release as the API traffic;
+// ai/oauth cannot import typ, so the version is pinned here.
+func TestClaudeOAuthUserAgentTracksProfile(t *testing.T) {
+	assert.Equal(t, nativeClaudeCLIUserAgent(typ.ClaudeCodeVersionLatest), oauth.ClaudeCLIOAuthUserAgent)
 }
