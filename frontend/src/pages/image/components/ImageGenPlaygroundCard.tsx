@@ -716,7 +716,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <UnifiedCard
                 size="full"
                 titleHeadingLevel={1}
-                sx={{ height: { lg: '100%' } }}
+                // Clip, not hidden: a hidden card is a scroll container, and the
+                // phone's sticky Generate would stick to the card, not the screen.
+                sx={{ height: { lg: '100%' }, ...(phone && { overflow: 'clip' }) }}
                 title={profile ? (
                     renaming ? (
                         <TextField
