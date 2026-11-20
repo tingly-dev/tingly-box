@@ -15,14 +15,19 @@ func DefaultRegistry() *Registry {
 	// PKCE client and local development redirect URIs.
 	// PKCE is required: code_verifier must be included in token request
 	registry.Register(&ProviderConfig{
-		Type:               ai.IssuerClaudeCode,
-		DisplayName:        "Anthropic Claude Code",
-		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
-		ClientSecret:       "",                                     // No secret required for public client
-		AuthURL:            "https://claude.com/cai/oauth/authorize",
-		TokenURL:           "https://platform." + "cl" + "aude.com/v1/oauth/token",
-		RedirectURL:        "", // Dynamic: set to server.BaseURL + "/callback"
-		Scopes:             []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"},
+		Type:         ai.IssuerClaudeCode,
+		DisplayName:  "Anthropic Claude Code",
+		ClientID:     "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
+		ClientSecret: "",                                     // No secret required for public client
+		AuthURL:      "https://claude.com/cai/oauth/authorize",
+		TokenURL:     "https://platform." + "cl" + "aude.com/v1/oauth/token",
+		RedirectURL:  "", // Dynamic: set to server.BaseURL + "/callback"
+		// The official CLI's login set (2.1.328). user:privacy_consents:write is
+		// left out: nothing here writes consent state.
+		Scopes: []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload", "user:plugins"},
+		// Refresh restates the CLI's default scope set, which has no
+		// org:create_api_key (a login-only scope). See .design/oauth.md.
+		RefreshScopes:      []string{"user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload", "user:plugins"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
