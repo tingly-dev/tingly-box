@@ -10,7 +10,7 @@ import {useTranslation} from 'react-i18next';
 import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
 import type {ActivityStep, CommandPayload, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
-import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
+import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, hasFiles, uniqueFiles, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import {serverNow} from '../utils/serverClock';
@@ -91,16 +91,15 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
 
 // A message that carries files is a file the agent sent (send_file): what it
 // was sent with is the file's own hover text and alt, never a message of its own.
-const sentCaptions = (message: TranscriptEntry): Record<string, string> => {
-    const caption = message.content.trim();
-    return caption ? Object.fromEntries((message.attachments ?? []).map((f) => [f.path, caption])) : {};
-};
+const sentCaptions = (messages: TranscriptEntry[]): Record<string, string> => Object.fromEntries(
+    messages.flatMap((m) => (m.content.trim() ? (m.attachments ?? []).map((f) => [f.path, m.content.trim()]) : [])),
+);
 
 const AssistantText = ({message}: {message: TranscriptEntry}) => {
     const {attachments: Attachments} = useTranscriptHost();
-    const files = message.attachments ?? [];
-    if (files.length > 0) {
-        return Attachments ? <Attachments items={files} align="flex-start" captions={sentCaptions(message)}/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>;
+    if (hasFiles(message)) {
+        const files = message.attachments ?? [];
+        return Attachments ? <Attachments items={files} align="flex-start" captions={sentCaptions([message])}/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>;
     }
     return message.content ? <Markdown content={message.content}/> : null;
 };
@@ -110,12 +109,11 @@ const AssistantText = ({message}: {message: TranscriptEntry}) => {
 const FilesGroup = ({messages}: {messages: TranscriptEntry[]}) => {
     const {t} = useTranslation();
     const {attachments: Attachments} = useTranscriptHost();
-    const files = messages.flatMap((m) => m.attachments ?? []).filter((f, i, all) => all.findIndex((x) => x.path === f.path) === i);
-    const captions = Object.assign({}, ...messages.map(sentCaptions)) as Record<string, string>;
+    const files = uniqueFiles(messages);
     return (
         <Box role="group" aria-label={t('projects.transcript.filesSent', {defaultValue: '{{count}} files sent', count: files.length})}>
             {Attachments
-                ? <Attachments items={files} align="flex-start" captions={captions}/>
+                ? <Attachments items={files} align="flex-start" captions={sentCaptions(messages)}/>
                 : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>}
         </Box>
     );
@@ -527,7 +525,7 @@ interface BlockListProps {
 // A file sent into the conversation (send_file) is an assistant message that
 // carries files.
 const isSentFile = (block: TranscriptBlock): block is Extract<TranscriptBlock, {type: 'assistant'}> =>
-    block.type === 'assistant' && (block.message.attachments?.length ?? 0) > 0;
+    block.type === 'assistant' && hasFiles(block.message);
 
 // The call that sends a file; its card is the file itself, so a run of such
 // calls between files is not worth a row of its own.

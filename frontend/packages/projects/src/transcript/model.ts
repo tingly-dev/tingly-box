@@ -367,7 +367,7 @@ export const agentStatus = (block: Extract<TranscriptBlock, {type: 'agent'}>, tu
 export const agentReport = (block: Extract<TranscriptBlock, {type: 'agent'}>): string | undefined => {
     for (let i = block.children.length - 1; i >= 0; i--) {
         const c = block.children[i];
-        if (c.type === 'assistant' && !c.message.attachments?.length && c.message.content.trim()) return c.message.content;
+        if (c.type === 'assistant' && !hasFiles(c.message) && c.message.content.trim()) return c.message.content;
     }
     return block.task?.summary;
 };
@@ -384,22 +384,20 @@ export const blockTime = (block: TranscriptBlock): string | undefined => {
     }
 };
 
-// blockAttachments is every file the loaded conversation carries, in order,
-// each path once: what a preview steps through.
-export const blockAttachments = (blocks: TranscriptBlock[]): TranscriptAttachment[] => {
+// hasFiles is whether an entry carries files: for an assistant entry, a file the
+// agent sent (send_file), whose text is its caption, not something said.
+export const hasFiles = (m: TranscriptEntry): boolean => (m.attachments?.length ?? 0) > 0;
+
+// uniqueFiles is the files of some entries in order, each path once.
+export const uniqueFiles = (messages: TranscriptEntry[]): TranscriptAttachment[] => {
     const seen = new Set<string>();
-    const files: TranscriptAttachment[] = [];
-    for (const b of blocks) {
-        if (b.type !== 'user' && b.type !== 'assistant') continue;
-        for (const a of b.message.attachments ?? []) {
-            if (!seen.has(a.path)) {
-                seen.add(a.path);
-                files.push(a);
-            }
-        }
-    }
-    return files;
+    return messages.flatMap((m) => m.attachments ?? []).filter((f) => !seen.has(f.path) && !!seen.add(f.path));
 };
+
+// blockAttachments is every file the loaded conversation carries, in order:
+// what a preview steps through.
+export const blockAttachments = (blocks: TranscriptBlock[]): TranscriptAttachment[] =>
+    uniqueFiles(blocks.flatMap((b) => (b.type === 'user' || b.type === 'assistant' ? [b.message] : [])));
 
 // firstNewBlock is the index of the first block that began after seenAt,
 // the place for a "New" divider; -1 when nothing is new or everything is
