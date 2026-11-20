@@ -12,7 +12,7 @@
 > wire 元素、官方客户端怎么生成它们、我们对齐到什么程度、哪些地方有意不对齐。结论全部来自官方 npm 包的逆向和
 > 真实二进制的抓包，可复现（§B2）。
 >
-> flag 有三个取值：空值 **Default**（解析为最新版本，当前即 2.1.280）、原生 profile **2.1.280**、**2.1.86**（Legacy 模拟，需显式选择）。先看 §B0；升版看 §B6。
+> flag 有三个取值：空值 **Default**（解析为最新版本，当前即 2.1.328）、原生 profile **2.1.328**、**2.1.86**（Legacy 模拟，需显式选择）。先看 §B0；升版看 §B6。
 
 ---
 
@@ -33,8 +33,8 @@ Anthropic 按 `User-Agent` 里的 claude-cli 版本做门控，低于要求的�
 
 | 值 | 行为 |
 |---|---|
-| `""`（Default） | 跟随 `typ.ClaudeCodeVersionLatest`，当前解析为 `2.1.280`。存量配置里没写这个字段的规则自动走这一档，无需迁移 |
-| `2.1.280` | 原生客户端 profile（§B3，2.1.280 的差异见 §B8） |
+| `""`（Default） | 跟随 `typ.ClaudeCodeVersionLatest`，当前解析为 `2.1.328`。存量配置里没写这个字段的规则自动走这一档，无需迁移 |
+| `2.1.328` | 原生客户端 profile（§B3；2.1.258→2.1.280 见 §B8，→2.1.328 见 §B9）。存量配置里写着 `2.1.280` 的规则按未知值走 Default，即最新 |
 | `2.1.86`（Legacy） | 与 flag 出现之前**逐字节相同**的 2.1.86 模拟：`claude_round_tripper.go` 的常量、静态 beta 串、随机 `cch`、按字节的 fingerprint、`\u003c` 转义都原样保留 |
 
 - 定义在 `typ.RuleFlags.ClaudeCodeVersion`（registry：`claude_code_version`，enum，`request_anthropic` 分类）；
@@ -61,23 +61,24 @@ Anthropic 按 `User-Agent` 里的 claude-cli 版本做门控，低于要求的�
 
 ✅ = 已实现并有测试；↩ = 不合成，只在入站已带时校验后保留；— = 依赖代理侧看不到的信息，无法对齐。
 
-| 类别 | 项 | Legacy（2.1.86） | 2.1.280（默认） | 备注 |
+| 类别 | 项 | Legacy（2.1.86） | 2.1.328（默认） | 备注 |
 |---|---|---|---|---|
-| client header | `User-Agent` | `claude-cli/2.1.86 (external, cli)` | ✅ `claude-cli/2.1.280 (external, cli)` | |
-| client header | `X-Stainless-Package/Runtime-Version` | `0.74.0` / `v24.3.0` | ✅ `0.112.1` / `v26.3.0` | 原生 Bun 二进制伪装的 Node 版本 |
+| client header | `User-Agent` | `claude-cli/2.1.86 (external, cli)` | ✅ `claude-cli/2.1.328 (external, cli)` | |
+| client header | `X-Stainless-Package/Runtime-Version` | `0.74.0` / `v24.3.0` | ✅ `0.128.0` / `v26.12.1` | 原生 Bun 二进制伪装的 Node 版本（Bun 1.4.4） |
 | client header | `X-Stainless-OS/Arch` | Go 的 `linux`/`amd64` | ✅ SDK 映射名 `Linux`/`x64`、`MacOS`/`arm64` | |
 | client header | `x-stainless-helper-method` | 发 `stream` | ✅ 不发 | CLI 不用 `.stream()` helper |
 | client header | `x-app` | 一律 `cli` | ✅ `cli`；入站为 `cli-bg`（后台会话）时回放 | |
 | client header | 子 agent 头 `x-claude-code-agent-id` / `-parent-agent-id` | 丢弃 | ✅ 透传 | |
 | client header | `x-claude-code-request-class` / `-agent-type` | 不发 | ✅ class 默认 `main`，两者入站回放 | 直连专属 |
-| beta | `anthropic-beta` | 固定串（含已废弃的 `token-efficient-tools`），可能两行 | ✅ 单值，逐请求合成：model 基线 + body 派生 + 入站白名单回放，按官方 push 顺序 | §B3.2 |
+| client header | `x-claude-1p-request-class` / `x-client-request-id` / `x-claude-code-prompt-id` | 不发 | ✅ 1p class 默认 `main`（入站回放）；request id 每次调用新 uuid；prompt id 只回放 | 2.1.328 新增，直连专属（§B9.3） |
+| beta | `anthropic-beta` | 固定串（含已废弃的 `token-efficient-tools`），可能两行 | ✅ 单值，逐请求合成：model 基线 + body 派生 + 入站白名单回放，按官方 push 顺序（2.1.328 顺序变了，§B9.2） | §B3.2、§B9.2 |
 | beta | `structured-outputs` 灰度分支（`tengu_tool_pear`） | — | — | 改为按 body `format` 派生 |
 | beta | count_tokens | Legacy 串 | ✅ 四项子集 | 与 CLI 相同，不含 context-1m |
-| billing header | `cc_version` 与 fingerprint | 2.1.86，按字节取字符 | ✅ 2.1.280；跳过 `<system-reminder>`；按 UTF-16 码元取字符 | §B3.3.2 |
+| billing header | `cc_version` 与 fingerprint | 2.1.86，按字节取字符 | ✅ 2.1.328（`say hi` → `.593`）；跳过 `<system-reminder>`；按 UTF-16 码元取字符 | §B3.3.2 |
 | billing header | `cc_entrypoint` | `cli` | ✅ `cli` | |
-| billing header | `cch` | 每请求随机 5 hex | ✅ 请求体 xxHash64（Zig 变体），只替换 billing header 里的占位符 | 6 组抓包逐字节复现；§B3.3.4 |
+| billing header | `cch` | 每请求随机 5 hex | ✅ 请求体 xxHash64（Zig 变体），只替换 billing header 里的占位符 | 2.1.280 的 6 组、2.1.328 的 5 组抓包都逐字节复现；§B3.3.4、§B9.5 |
 | billing header | 入站 `cc_workload` / `cc_is_subagent` | 整块覆盖 | ✅ 校验后保留 | |
-| billing header | `cc_prev_req` / `cc_prompt_id` / `cc_turn_origin` | 丢弃 | ↩ | 合成需跨请求状态（§B7） |
+| billing header | `cc_prev_req` / `cc_prompt_id` / `cc_turn_origin` | 丢弃 | ↩ | 合成需跨请求状态（§B7）；2.1.328 新增的 `cc_prompt_index` / `cc_turn_index` / `cc_prev_msg` / `cc_prev_*_index` 同样只透传 |
 | body | JSON 转义还原为 JS 形态（`\u003c` → `<`） | Go 转义 | ✅ | 也是 cch 预像必需 |
 | metadata | `device_id` / `account_uuid` 改写、`session_id` 保留 | ✅ | ✅ | |
 | metadata | `parent_session_id` | 丢弃 | ✅ 透传 | |
@@ -108,7 +109,7 @@ Claude OAuth 链路（`ClientPool.GetAnthropicClient` → `NewClaudeClient`）�
 
 ```bash
 curl -sS https://registry.npmjs.org/@anthropic-ai/claude-code | jq '.["dist-tags"]'
-V=2.1.280   # 取 latest
+V=2.1.328   # 取 latest
 curl -sSL https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-$V.tgz | tar xz
 ```
 
@@ -209,7 +210,7 @@ env -i PATH=$PATH TERM=xterm HOME=$PWD/h \
 
 ## B3. 逆向结论：官方客户端怎么生成这些字段
 
-> 抓包和符号名来自 2.1.258（与 2.1.86 对比），结论由 2.1.280 沿用；2.1.280 的差异见 §B8。
+> 抓包和符号名来自 2.1.258（与 2.1.86 对比），结论由 2.1.280 / 2.1.328 沿用；差异见 §B8（→2.1.280）、§B9（→2.1.328，以其抓包为准，beta 顺序与 `-p` 之外的结论已按它修正）。
 
 ### B3.1 Client headers（抓包，`-p` 模式，OAuth token）
 
@@ -495,7 +496,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
   `claude_code_hints_test.go`、`transform/vendor_claude_relay_test.go`。
   Legacy 护栏：`TestClaudeClient_LegacyProfileUnchanged`、`TestApplyAnthropicBetaMetadataTransform_LegacyUnchanged`。
 - **网关端到端**：`internal/protocoltest/flags.go` 的 `claude_code_version` case（`go test ./internal/protocoltest/ -run
-  TestRuleFlags/claude_code_version`，或 `harness matrix --mode=flags`）让同一请求分别以 Legacy、2.1.280 与未设置（Default）走完真实网关，
+  TestRuleFlags/claude_code_version`，或 `harness matrix --mode=flags`）让同一请求分别以 Legacy、2.1.328 与未设置（Default）走完真实网关，
   逐项断言上游收到的 UA、beta、子 agent 头、`x-app`、billing header、metadata，以及 count_tokens。升版后先跑它。
 - **抓包回放**：设 `TINGLY_CC_CAPTURE_DIR=<抓包目录>` 后，`TestRewriteClaudeCodeCCH_LiveCaptures` 对真实 body 逐字节重算 `cch`。
 - **真实上游**：唯一能证明服务端接受 `cch` 和指纹的方式。harness 的 real-provider 模式支持 Claude Code OAuth entry
@@ -526,7 +527,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
    白名单回放"。`structured-outputs` 官方受 GrowthBook 灰度，我们按 body 是否带 `format` 决定。
 5. **入站 UA 不透传**（延续 `.design/user-agent.md` 的"特种链"结论）：pinned UA 是决定性的。
 6. **stainless OS/Arch 按 SDK 映射、移除 `x-stainless-helper-method`**：两者都是真实客户端从不这样发的旧偏差。
-7. **fingerprint 按我们声称的版本重算**：客户端自己算的值从不上行，所以老客户端经过网关也会得到与 2.1.280 一致的 fp。
+7. **fingerprint 按我们声称的版本重算**：客户端自己算的值从不上行，所以老客户端经过网关也会得到与当前 profile 一致的 fp。
 8. **只保留 Legacy + 最新版本**：旧版本一旦被拒就没有用处，保留只会带来版本间门控的复杂度。
 
 ---
@@ -596,3 +597,46 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | `x-app` | `cli` / `cli-bg` | 同 | 入站 `cli-bg` 回放 |
 | preamble 三句 | 同 | 同 | 无 |
 | `-p` 请求体 | — | 新增顶层 `diagnostics:{previous_message_id:null}`（直连时） | 透传，作为 `cache-diagnosis` 的信号 |
+
+---
+
+## B9. 2.1.280 → 2.1.328 的差异（TEP #2684 第 1 步）
+
+完整分析与原始证据：`.research/claude-code/2.1.328.md`（静态读 bundle + 真实二进制 `-p` 抓包 6 组：代理/强制直连 × OAuth/API key，另有 haiku-4-5 与 opus-4-8[1m]）。
+抓包方法同 §B2.4；二进制执行会被沙箱分类器拦截，需用户明确同意后才能重试。**未覆盖**：交互式（TTY，`cc_entrypoint=cli`）、多请求会话（`cc_prev_req`）、count_tokens、子 agent / compaction 请求。
+
+### B9.1 没变的（不需要动代码）
+
+preamble 三句、fingerprint salt 与 `[4,7,20]`、`metadata.user_id` 形状、`cch` 种子与 Zig `PRIME64_4` 与预像规则、认证头形态、`x-app`、`anthropic-version`。
+`cch`：把 5 个 2.1.328 直连请求体交给 `TestRewriteClaudeCodeCCH_LiveCaptures`，逐字节复现。fingerprint：`say hi` → `2.1.328.593`（Node 与 Python 独立算过，与抓包一致）。
+
+### B9.2 变了的（已实现）
+
+| 项 | 2.1.280 | 2.1.328 | 实现 |
+|---|---|---|---|
+| UA / SDK / runtime | `claude-cli/2.1.280` / `0.112.1` / `v26.3.0` | `claude-cli/2.1.328` / **`0.128.0`** / **`v26.12.1`**（Bun 1.4.4） | `typ.ClaudeCodeVersion2_1_328`、`nativeStainless*` |
+| `thinking-token-count` | 基线里，紧跟 `interleaved-thinking` | **不在基线**：按请求在 `tool-provenance` 之后、`advanced-tool-use` 之前 push | `claudeCodeBetaEmissionOrder` |
+| `tool-provenance-2026-10-26` | 无 | OAuth 订阅 + 直连时每次都发（API key 不发） | 基线（`OAuth` 时加） |
+| `mid-conversation-system-2026-04-07` | 基线 header | 注册为"无 header"，**不再发送** | 删除常量与判断 |
+| `advanced-tool-use` | 代理 `-p` 不发 | `-p` 也发（工具集里有 `ToolSearch`） | 沿用 body 派生（`ToolSearch` / `defer_loading`） |
+| haiku-4-5 | 无 interleaved / thinking-token-count；无 `claude-code` | 有 interleaved 与 thinking-token-count；`claude-code-20250219` 在 agentic 查询时追加到 `prompt-caching-scope` 之后；无 `effort`；`thinking:{enabled,budget_tokens}` | `claudeModelSupportsInterleavedThinking` 只排除 claude-3；haiku 的 `claude-code` 仅当入站 `anthropic-beta` 自带它时加，顺序用 `claudeCodeBetaOrderFor` |
+| 原生 1M 模型（opus-4-7/4-8/5/5-5、sonnet-5/5-5、haiku-5-5、fable-5*、mythos-5*） | `[1m]` → `context-1m` | **不发 `context-1m`**，线上 model 不带 `[1m]` | `claudeNative1MModels`；入站回放也跳过 |
+| 直连专属头 | `x-claude-code-request-class`、`-agent-type` | 另有 `x-claude-1p-request-class`（默认 `main`）、`x-claude-code-prompt-id`（= `cc_prompt_id`）、`x-client-request-id`（每次新 uuid） | 前者默认 `main`/入站回放，prompt id 只回放，request id 每次生成 |
+| billing header 键 | `cc_workload … cc_turn_origin` | 另有 `cc_prompt_index` / `cc_turn_index`、`cc_prev_msg`、`cc_prev_prompt_index` / `cc_prev_turn_index`（直连）；`cc_gateway` / `cc_project(_src)` / `cc_dispatch_entrypoint` 描述入站自身路由 | 前几项加入透传白名单；后三项**有意不透传** |
+
+### B9.3 beta 实际顺序（非 haiku，抓包）
+
+`claude-code, oauth, [context-1m], interleaved, [redact-thinking], context-management, prompt-caching-scope, [per-turn-control, timing, mid-conversation-tool-changes, inline-tools], tool-provenance, thinking-token-count, advanced-tool-use, effort, thinking-binding-controls, extended-cache-ttl, cache-diagnosis`。
+`redact-thinking` 仅交互式（`-p` 不发，persona 是交互式所以发）。抓包原文与对应测试：`claude_betas_test.go` 的 `DirectCapture` / `DirectAPIKeyCapture` / `DirectHaikuCapture` / `DirectNative1MCapture`。
+
+### B9.4 观察到但有意不做
+
+- `cache_control.scope:"global"`（静态 system 块，需 `prompt-caching-scope`）：真实直连客户端会加；我们不替入站客户端改 cache 语义，保持透传。
+- `x-claude-code-sandy-plover: []`（每个直连请求都有，用途未知）：不发，等有拒绝信号再看。
+- `cc_prompt_id` / `cc_turn_origin` / `cc_prompt_index` / `cc_turn_index` 仍不合成（§B5.3）。
+
+### B9.5 验证
+
+`go test ./internal/client/ ./internal/typ/ ./internal/protocol/... ./internal/protocolserver/ ./internal/protocoltest/`；`TINGLY_CC_CAPTURE_DIR=<req*.raw 目录> go test ./internal/client/ -run LiveCaptures`。
+worktree 里 `libs/*` 子模块为空时，用 out-of-tree `GOWORK`（`replace` 指向主仓库的 `libs/`）构建。
+注意：`internal/protocol` 的 `TestAnthropicNonStreamRequest` 依赖本机 `localhost:12580` 服务，与本改动无关。

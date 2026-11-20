@@ -12,4 +12,4 @@ share an implementation contract.
 | [`.research/claude-code/`](../.research/claude-code/README.md) | Per-release analyses of the official CLI (latest: 2.1.328) with gap lists against our OAuth and request handling | Research, one file per version |
 
 The original session sections §1–§7 now live in `claude-code-session.md`;
-the original compatibility sections §B0–§B8 live in `claude-code-oauth-compat.md`.
+the original compatibility sections §B0–§B9 live in `claude-code-oauth-compat.md`.
