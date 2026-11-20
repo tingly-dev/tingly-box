@@ -19,7 +19,7 @@ func TestStartSuggestionsKeepsWhatItStartedWhenALaterOneFails(t *testing.T) {
 		{Title: "Bad", Task: "b", Base: "no-such-branch"},
 	}})})
 
-	_, err := svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, card.ID, nil)
+	_, err := svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, card.ID, nil, Source{})
 	require.Error(t, err)
 	require.Len(t, threadsOf(t, f), 1)
 
@@ -30,7 +30,7 @@ func TestStartSuggestionsKeepsWhatItStartedWhenALaterOneFails(t *testing.T) {
 	assert.NotEmpty(t, pl.Suggestions[0].ThreadID, "the started suggestion is recorded on the card")
 	assert.Empty(t, pl.Suggestions[1].ThreadID)
 
-	_, err = svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, card.ID, nil)
+	_, err = svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, card.ID, nil, Source{})
 	require.Error(t, err, "the bad one still fails")
 	assert.Len(t, threadsOf(t, f), 1, "and the good one is not started a second time")
 }

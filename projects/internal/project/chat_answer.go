@@ -1,6 +1,7 @@
 package project
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -58,7 +59,7 @@ func askItems(input map[string]any, fallback string) []askQuestion {
 func requestText(e db.ThreadEvent, p requestPayload) string {
 	switch e.Kind {
 	case db.EvApproval:
-		return approvalBody(e, p) + "\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead."
+		return approvalBody(e, p) + "\nReply y to allow, always to allow it for this thread, or n to deny. To answer in your own words, start your reply with " + decisionCode(p.RequestID) + "."
 	case db.EvAsk:
 		qs := askItems(p.Input, e.Content)
 		var lines []string
@@ -76,9 +77,9 @@ func requestText(e db.ThreadEvent, p requestPayload) string {
 				lines = append(lines, line)
 			}
 		}
-		hint := "Reply with a number or your own answer."
+		hint := "Reply with a number."
 		if len(qs) > 1 {
-			hint = "Reply with one line per question, each a number or your own answer."
+			hint = "Reply with one line per question, each a number."
 		}
 		for _, q := range qs {
 			if q.multi {
@@ -86,6 +87,7 @@ func requestText(e db.ThreadEvent, p requestPayload) string {
 				break
 			}
 		}
+		hint += " To answer in your own words, start your reply with " + decisionCode(p.RequestID) + "."
 		return strings.Join(append(lines, hint), "\n")
 	}
 	return e.Content
@@ -101,8 +103,55 @@ func approvalBody(e db.ThreadEvent, p requestPayload) string {
 	return body
 }
 
+// requestTakes reports whether a chat's message, without a request's code, is
+// one of the request's own answers: y, always or n for an approval; for a
+// question whose every part has options, an option's number or label (one
+// line per question when there are several). Words of its own need the code.
+func requestTakes(ev db.ThreadEvent, text string) bool {
+	switch ev.Kind {
+	case db.EvApproval:
+		_, ok := interaction.ApprovalChoice(text)
+		return ok
+	case db.EvAsk:
+		var p requestPayload
+		_ = json.Unmarshal([]byte(ev.Payload), &p)
+		return asksTake(askItems(p.Input, ev.Content), text)
+	}
+	return false
+}
+
+func asksTake(qs []askQuestion, text string) bool {
+	var lines []string
+	for _, l := range strings.Split(strings.TrimSpace(text), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	if len(qs) == 0 || len(lines) != len(qs) {
+		return false
+	}
+	for i, q := range qs {
+		if !optionsTake(q, lines[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// optionsTake is whether s picks options of q: a label, or numbers in range
+// (several only for a multi-select).
+func optionsTake(q askQuestion, s string) bool {
+	for _, o := range q.options {
+		if strings.EqualFold(o.label, s) {
+			return true
+		}
+	}
+	return len(q.options) > 0 && pickOptions(q, s) != s
+}
+
 // approvalReply reads a chat's reply to an approval: y, always or n; any
-// other words deny it and tell the thread what to do instead.
+// other words deny it and tell the thread what to do instead (said after the
+// request's code).
 func approvalReply(text string) Answer {
 	ans := Answer{Via: db.SourceIM}
 	choice, ok := interaction.ApprovalChoice(text)

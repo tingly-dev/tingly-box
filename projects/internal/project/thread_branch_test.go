@@ -125,7 +125,7 @@ func TestCoordinatorStartsThreadFromChosenBase(t *testing.T) {
 			sug = m
 		}
 	}
-	_, err = svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, nil)
+	_, err = svc.Coordinator.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, nil, Source{})
 	require.NoError(t, err)
 	byTitle := map[string]db.Thread{}
 	for _, th := range threadsOf(t, f) {

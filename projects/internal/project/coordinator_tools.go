@@ -129,7 +129,7 @@ func (c *Coordinator) proposeThreads(ctx context.Context, p *db.Project, in stru
 	if err := checkProposals(ctx, p, in.Threads); err != nil {
 		return "", err
 	}
-	c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvSuggestions, Payload: jsonString(suggestionsPayload{Suggestions: in.Threads})})
+	c.final(c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvSuggestions, Payload: jsonString(suggestionsPayload{Suggestions: in.Threads})}))
 	return fmt.Sprintf("proposed %d threads; the user can start them from the card", len(in.Threads)), nil
 }
 

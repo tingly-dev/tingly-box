@@ -261,14 +261,14 @@ func TestProposeThenStartSuggestions(t *testing.T) {
 			sug = m
 		}
 	}
-	updated, err := coord.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, []int{1})
+	updated, err := coord.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, []int{1}, Source{})
 	require.NoError(t, err)
 	assert.Contains(t, updated.Payload, `"thread_id"`)
 	threads := threadsOf(t, f)
 	require.Len(t, threads, 1)
 	assert.Equal(t, "B", threads[0].Title)
 
-	_, err = coord.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, nil)
+	_, err = coord.StartSuggestions(context.Background(), f.project.MainThreadID, sug.ID, nil, Source{})
 	require.NoError(t, err)
 	assert.Len(t, threadsOf(t, f), 2, "start all starts only the remaining one")
 }
