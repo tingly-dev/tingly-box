@@ -117,7 +117,7 @@ func TestWorkdirUploadPathsReachAgentOverHTTP(t *testing.T) {
 	check(atts[0], "first", "first bytes")
 	code, atts = c.upload("/threads/"+thread.ID+"/attachments", "next.txt", "next bytes")
 	require.Equal(t, 201, code)
-	require.Equal(t, 200, c.do("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "next", "attachments": []string{atts[0].Path}, "mode": "queue"}, nil))
+	require.Equal(t, 200, c.do("POST", "/threads/"+thread.ID+"/messages", map[string]any{"content": "next", "attachments": []string{atts[0].Path}, "mode": "next_turn"}, nil))
 	check(atts[0], "next", "next bytes")
 }
 

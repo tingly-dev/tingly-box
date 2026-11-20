@@ -179,6 +179,12 @@ type Thread struct {
 	// thread's process runs right now. It is read from the live process when a
 	// thread is sent out, never stored: the set dies with the process.
 	RunningTasks int `gorm:"-" json:"running_tasks"`
+	// Insertable is true while a message sent now would join the turn in
+	// flight (a turn runs on a process whose agent reads input mid-turn). It
+	// is read from the live process like RunningTasks and never stored; when
+	// it is false a message sent while the thread works waits for the next
+	// turn, whatever mode was asked for.
+	Insertable bool `gorm:"-" json:"insertable"`
 	// Links are the issues and PRs the thread touched through its tools. They
 	// are a JSON column of this row that SaveThread leaves alone: only
 	// UpdateThreadLinks and what is built on it write it.

@@ -221,9 +221,17 @@ func (s *Service) SetArchived(p *db.Project, archived bool) error {
 // Send gives a thread a message, the one way anything talks to a thread: the
 // web, an IM chat and another thread differ only in src. A main thread's
 // message goes to its project's coordinator, any other thread's to its agent.
-// Both run it after the thread's current turn, and both refuse an archived or
-// paused project. It returns the thread as it is now.
+// While a turn runs the message is inserted into it, as SendWith does by
+// default; both refuse an archived or paused project. It returns the thread
+// as it is now.
 func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attachment, src Source) (*db.Thread, error) {
+	return s.SendWith(ctx, threadID, text, atts, src, SendInsert)
+}
+
+// SendWith is Send with a mode: while a turn runs, mode says whether the
+// message is inserted into it or waits for the next turn. The project's
+// coordinator queues every message, whatever the mode.
+func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
 	t, err := s.Store.GetThread(threadID)
 	if err != nil {
 		return nil, err
@@ -236,20 +244,6 @@ func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attach
 			return nil, err
 		}
 		return s.Store.GetThread(threadID)
-	}
-	return s.Threads.Send(ctx, threadID, text, src, atts)
-}
-
-// SendWith is Send for a user in the web: while a turn runs, mode says
-// whether the message joins it, waits for it or replaces it. The coordinator
-// takes every message the same way.
-func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
-	t, err := s.Store.GetThread(threadID)
-	if err != nil {
-		return nil, err
-	}
-	if _, isCommand := personCommand(text, src, len(atts)); isCommand || t.Agent == db.AgentLLM {
-		return s.Send(ctx, threadID, text, atts, src)
 	}
 	return s.Threads.SendWith(ctx, threadID, text, atts, src, mode)
 }

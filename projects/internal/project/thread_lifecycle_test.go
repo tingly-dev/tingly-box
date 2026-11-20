@@ -41,7 +41,7 @@ func TestStopNamesWhoStoppedAndDropsQueuedMessages(t *testing.T) {
 			th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "long", Repo: "none"})
 			require.NoError(t, err)
 			waitStatus(t, f.store, th.ID, db.ThreadWorking)
-			_, err = f.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendQueue)
+			_, err = f.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendNextTurn)
 			require.NoError(t, err)
 
 			require.Len(t, chips(t, f, th.ID, "held"), 1)

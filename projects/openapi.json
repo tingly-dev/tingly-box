@@ -2348,8 +2348,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
-        "description": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "summary": "Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "description": "Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
         "operationId": "apiV1ThreadsIdMessagesPost",
         "parameters": [
           {
@@ -5203,6 +5203,10 @@
             "format": "int64",
             "description": "Field input_tokens"
           },
+          "insertable": {
+            "type": "boolean",
+            "description": "Field insertable"
+          },
           "last_report": {
             "type": "string",
             "description": "Field last_report"
@@ -5342,6 +5346,7 @@
           "task",
           "status",
           "running_tasks",
+          "insertable",
           "origin",
           "cwd",
           "profile_override",

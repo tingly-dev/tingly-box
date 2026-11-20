@@ -624,6 +624,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     )}
                     streaming={running}
                     sendModes
+                    insertable={thread.insertable !== false}
                     onStop={() => {
                         // Stop drops what was held: hand it back to the box rather than lose it.
                         if (held.length > 0) {

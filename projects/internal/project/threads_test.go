@@ -57,6 +57,13 @@ type testFixture struct {
 // newFixture runs every thread turn through script, a stand-in for Claude
 // Code (one-shot turns: no pool).
 func newFixture(t *testing.T, script func(turn *enginetest.Turn) error) *testFixture {
+	a := &enginetest.Agent{Script: script}
+	return newFixtureWith(t, a, Agents{Service: a.Service()})
+}
+
+// newFixtureWith is newFixture over the given agents (a is what the fixture
+// reports launches of).
+func newFixtureWith(t *testing.T, a *enginetest.Agent, agents Agents) *testFixture {
 	store, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
@@ -65,8 +72,7 @@ func newFixture(t *testing.T, script func(turn *enginetest.Turn) error) *testFix
 	p := &db.Project{Name: "Demo", Goal: "Ship it", Instructions: "Be careful.", Repos: []db.Repo{{Path: repo, BaseBranch: "main"}}}
 	mkProject(t, store, p)
 	require.NoError(t, layout.Ensure(p.ID))
-	a := &enginetest.Agent{Script: script}
-	th := NewThreads(store, layout, NewHub(), Agents{Service: a.Service()}, staticEnv{})
+	th := NewThreads(store, layout, NewHub(), agents, staticEnv{})
 	t.Cleanup(func() { shutdownAndSettle(th) })
 	f := &testFixture{store: store, threads: th, agent: a, project: p, repo: repo, reports: make(chan Report, 10)}
 	th.OnReport = func(rep Report) { f.reports <- rep }

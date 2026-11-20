@@ -89,10 +89,12 @@ type SendRequest struct {
 	Content string `json:"content"`
 	// Attachments are paths returned by the thread's attachments upload.
 	Attachments []string `json:"attachments,omitempty"`
-	// Mode is what a message does while a turn runs: "send" (the default)
-	// adds it to the turn, "queue" holds it until the turn ends and
-	// "stop_and_send" stops the turn first.
-	Mode string `json:"mode,omitempty" enums:"send,queue,stop_and_send"`
+	// Mode is what a message does while a turn runs: "insert" (the default)
+	// puts it into the turn at the agent's next step, "next_turn" holds it
+	// until the turn ends. An agent that cannot take input mid-turn holds an
+	// insert like a next_turn. Stopping a turn is its own call. The names
+	// used before (send, queue) are still accepted.
+	Mode string `json:"mode,omitempty" enums:"insert,next_turn"`
 }
 
 // StartSuggestionsRequest starts proposed threads; empty indexes start all.
@@ -229,7 +231,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithDescription("The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond"),
 		swagger.WithResponseModel(RequestsResponse{}))
 	api.POST("/threads/:id/messages", h.send, tag,
-		swagger.WithDescription("Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream"),
+		swagger.WithDescription("Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream"),
 		swagger.WithRequestModel(SendRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.DELETE("/threads/:id/queue/:qid", h.unqueue, tag,
@@ -382,7 +384,7 @@ func (h *Handler) thread(c *gin.Context) (*db.Thread, bool) {
 		fail(c, err)
 		return nil, false
 	}
-	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
+	h.svc.Threads.AnnotateOne(t)
 	return t, true
 }
 
@@ -523,7 +525,7 @@ func (h *Handler) send(c *gin.Context) {
 		return
 	}
 	if !rt.SendMode(req.Mode).Valid() {
-		apierr.BadRequest(c, "mode must be send, queue or stop_and_send")
+		apierr.BadRequest(c, "mode must be insert or next_turn")
 		return
 	}
 	cur, ok := h.thread(c)
@@ -541,12 +543,12 @@ func (h *Handler) send(c *gin.Context) {
 			return
 		}
 	}
-	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode))
+	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode).Canonical())
 	if err != nil {
 		fail(c, err)
 		return
 	}
-	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
+	h.svc.Threads.AnnotateOne(t)
 	c.JSON(http.StatusOK, t)
 }
 
@@ -637,7 +639,7 @@ func (h *Handler) reply(c *gin.Context, id string) {
 		fail(c, err)
 		return
 	}
-	t.RunningTasks = h.svc.Threads.RunningTasks(t.ID)
+	h.svc.Threads.AnnotateOne(t)
 	c.JSON(http.StatusOK, t)
 }
 

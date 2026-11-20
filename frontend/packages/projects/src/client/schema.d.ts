@@ -1050,8 +1050,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
-         * @description Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * @description Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream
          */
         post: operations["apiV1ThreadsIdMessagesPost"];
         delete?: never;
@@ -2377,6 +2377,8 @@ export interface components {
              * @description Field input_tokens
              */
             input_tokens: number;
+            /** @description Field insertable */
+            insertable: boolean;
             /** @description Field last_report */
             last_report?: string;
             /**
