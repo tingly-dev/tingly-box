@@ -172,3 +172,120 @@ func TestVModelInvalidPort(t *testing.T) {
 		}
 	}
 }
+
+func TestVModelCaptureFlagsParse(t *testing.T) {
+	parse := func(args ...string) VModelCmdKong {
+		var cli struct {
+			VModel VModelCmdKong `kong:"cmd,name='vmodel'"`
+		}
+		parser, err := kong.New(&cli)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := parser.Parse(append([]string{"vmodel"}, args...)); err != nil {
+			t.Fatal(err)
+		}
+		return cli.VModel
+	}
+	if c := parse(); c.Capture != "" || !c.CaptureOut || c.CaptureRequestID {
+		t.Fatalf("defaults: %+v", c)
+	}
+	if c := parse("--capture", "d", "--capture-request-id", "--no-capture-out"); c.Capture != "d" || c.CaptureOut || !c.CaptureRequestID {
+		t.Fatalf("flags: %+v", c)
+	}
+	if c := parse("--capture", "d", "--capture-out=false"); c.CaptureOut {
+		t.Fatalf("--capture-out=false: %+v", c)
+	}
+}
+
+func TestVModelCaptureRejectsMisuse(t *testing.T) {
+	if err := (&VModelCmdKong{CaptureRequestID: true}).Run(); err == nil {
+		t.Fatal("--capture-request-id without --capture accepted")
+	}
+	if err := (&VModelCmdKong{Capture: t.TempDir(), Export: filepath.Join(t.TempDir(), "x.yaml")}).Run(); err == nil {
+		t.Fatal("--export with --capture accepted")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "old"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := (&VModelCmdKong{Capture: dir, Host: "127.0.0.1"}).run(context.Background(), &bytes.Buffer{}); err == nil {
+		t.Fatal("non-empty capture directory accepted")
+	}
+}
+
+// End to end through the real command: an unknown model id still gets an
+// answer, the capture directory holds the client's exact bytes, and a
+// user-defined model keeps priority over the fallback.
+func TestVModelCapture(t *testing.T) {
+	path := vmodelConfigFile(t, `{"id":"configured","kind":"mock","mock":{"content":"configured answer"}}`)
+	dir := filepath.Join(t.TempDir(), "cap")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	cmd := VModelCmdKong{Config: []string{path}, Host: "127.0.0.1", JSON: true, Capture: dir, CaptureOut: true}
+	done := make(chan error, 1)
+	go func() { err := cmd.run(ctx, writer); writer.CloseWithError(err); done <- err }()
+	var ready vmodelReady
+	readiness := make(chan vmodelReady, 1)
+	go func() {
+		var r vmodelReady
+		if json.NewDecoder(reader).Decode(&r) == nil {
+			readiness <- r
+		}
+	}()
+	select {
+	case ready = <-readiness:
+	case err := <-done:
+		t.Fatalf("startup failed: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("readiness timeout")
+	}
+	if ready.CaptureDir != dir {
+		t.Fatalf("readiness: %+v", ready)
+	}
+
+	post := func(model string) (int, string, string) {
+		body := `{"model":"` + model + `","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}`
+		req, _ := http.NewRequest("POST", ready.URL+"/v1/messages?beta=true", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer sk-ant-oat01-fake")
+		resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b), body
+	}
+	code, got, sent := post("claude-sonnet-4-6")
+	if code != 200 || !strings.Contains(got, "ok") {
+		t.Fatalf("unknown model: %d %s", code, got)
+	}
+	if code, got, _ := post("configured"); code != 200 || !strings.Contains(got, "configured answer") {
+		t.Fatalf("configured model: %d %s", code, got)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, "raw", "conn-0001.in"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The capture holds what the client sent, not what the runtime was given.
+	if !strings.Contains(string(raw), sent) || strings.Contains(string(raw), "capture-default") {
+		t.Fatalf("raw input does not hold the client's body verbatim:\n%s", raw)
+	}
+	index, err := os.ReadFile(filepath.Join(dir, "index.jsonl"))
+	if err != nil || strings.Count(string(index), "\n") < 2 || !strings.Contains(string(index), `"/v1/messages?beta=true"`) {
+		t.Fatalf("index: %v %q", err, index)
+	}
+	for _, name := range []string{"meta.json", "raw/conn-0001.out"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

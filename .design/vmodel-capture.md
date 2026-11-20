@@ -1,6 +1,6 @@
 # VModel capture — catching what a real client sends
 
-Status: **proposal, nothing implemented.** Written after the Claude Code 2.1.328
+Status: **Phases 1–3 implemented** (`vmodel/capture`, `tb vmodel --capture`; see §6 for what was verified). Written after the Claude Code 2.1.328
 wire analysis (`.research/claude-code/2.1.328.md` §9, branch
 `tp/analyze-latest-claude-code-reque-954264`), which had to hand-write a Python
 `fake_api.py` because `tb vmodel` could not do the job. Index:
@@ -110,8 +110,8 @@ bodies, and cannot affect the response path.
   meta.json            # tb version, argv, listen URL, start time (what the runner knows is added by the caller)
   raw/conn-0001.in     # verbatim client→server bytes of TCP connection 1 (ground truth)
   raw/conn-0001.out    # verbatim server→client bytes (what we answered; on by default,
-                       # `--capture-out=false` disables; for stream/retry analysis)
-  index.jsonl          # one line per request, arrival order
+                       # `--no-capture-out` disables; for stream/retry analysis)
+  index.jsonl          # one line per request, written when its response completes
 ```
 
 An `index.jsonl` line only locates things; it carries no information that is
@@ -127,9 +127,13 @@ not already in `raw/`:
   pipeline, so the offset sampled when the previous response completes is the
   start of the next request); the last range ends at EOF. `meta`-like fields
   (`method`, `target`, `status`) are for `grep`, nothing more.
-- `seq` is dense and 1-based in request-arrival order. A request whose response
-  never completes still gets a line (`status` absent, `out` open-ended), so
-  aborted/retried calls are visible.
+- `seq` is dense and 1-based in request-**arrival** order; lines are appended
+  when the exchange ends, so with concurrent connections file order is
+  completion order — sort by `seq` (or `t`) for arrival order. A request whose
+  response never completes gets a line with `"incomplete":true` (no `status`),
+  so aborted/retried calls are visible. Bytes the HTTP server rejected before any
+  handler ran (a malformed request line) get an entry with `"unparsed":true` and
+  no `seq`.
 - Splitting a range into head and body is the reader's job (it is `\r\n\r\n`
   plus `Content-Length` / chunked); a tiny `capture.Read(dir)` helper in Go may
   do it for tests (e.g. the existing `LiveCaptures` check), but the format does
@@ -168,9 +172,12 @@ that the client does not retry or abort:
   anything else keeps the protocol-shaped 501. `/api/oauth/*` is captured if it
   ever arrives, not simulated.
 - **Typed binding** (G4): the answer path still binds `/v1/messages` into the
-  SDK type. If a real 2.1.328 body 400s there, the capture is already safe; the
-  follow-up is to let capture mode answer without binding (peek `stream`, serve
-  the default mock). Decided from evidence in Phase 1, not guessed.
+  SDK type, but this turned out not to bite: a real `claude` 2.1.259 `-p`
+  request (118 KB body) and a hand-built 2.1.328-shaped body (adaptive thinking
+  with `display`, `output_config`, `context_management`, `diagnostics`, scoped
+  1h `cache_control`) are both answered 200. A real 2.1.328 body has not been
+  tried (the binary and its captures live elsewhere); if one ever 400s the
+  capture is already safe, and the follow-up is to answer without binding.
 
 ### 3.5 Recipe (documentation, not a tool)
 
@@ -218,17 +225,34 @@ with the deferred "user definition files for agent --mock / replay" item
 
 | Phase | Content | Touches | Risk |
 | --- | --- | --- | --- |
-| **1 Raw tap** | `vmodel/capture`: conn-tee listener, handler wrapper, `index.jsonl`, `meta.json`; `tb vmodel --capture`; token-marker warning; tests (`httptest` + raw `net.Dial` client proving header case/order, duplicates, chunked body, keep-alive offsets, aborted request). | `vmodel/capture` (new), `internal/command/vmodel.go` | low |
-| **2 Answer well enough** | `capture-default` fallback for unknown models, opt-in `--capture-request-id`, `count_tokens`/telemetry stubs; try a real-shaped `/v1/messages?beta=true` body to settle G4. | `vmodel/spec/runtime.go` (option), `vmodel/virtualserver` | low–medium |
-| **3 Recipe + docs** | Replace the Python snippet in `claude-code-oauth-compat.md` §B2.4; `vmodel/README.md`; an optional Go helper `capture.Read(dir)` and point the `LiveCaptures` test at it. | docs, `internal/client` test | low |
+| **1 Raw tap ✅** | `vmodel/capture`: conn-tee listener, handler wrapper, `index.jsonl`, `meta.json`; `tb vmodel --capture`; token-marker warning; tests (`httptest` + raw `net.Dial` client proving header case/order, duplicates, chunked body, keep-alive offsets, aborted request). | `vmodel/capture` (new), `internal/command/vmodel.go` | low |
+| **2 Answer well enough ✅** | `capture-default` fallback for unknown models, opt-in `--capture-request-id`, `count_tokens`/telemetry stubs; try a real-shaped `/v1/messages?beta=true` body to settle G4. | `vmodel/capture` (`Answer`; no change to `spec`/`virtualserver`) | low |
+| **3 Recipe + docs ✅ (partly)** | `vmodel/README.md` section and a pointer from `claude-code-oauth-compat.md` §B2.4 (the Python snippet is left in place to avoid conflicting with the analysis branch). **Not done:** the optional `capture.Read(dir)` helper / pointing the `LiveCaptures` Go test at capture dirs. | docs | low |
 | later | Scripted multi-turn responses; tap behind the gateway for `harness`. | contract change / `internal/protocoltest` | medium |
 
 Recommended go-ahead: Phases 1–2 (3 is small docs). No `internal/` backend logic
 is touched; the only `internal/` file is the CLI command wiring.
 
+### Verification done
+
+- `go test -race ./vmodel/capture/` (15×): header-name casing/order, duplicate
+  headers and chunked bodies verbatim in `conn-N.in`; keep-alive ranges slice
+  each request exactly; unparsed bytes and aborted requests indexed; concurrent
+  connections; streaming flush intact; request-id opt-in; non-empty dir refused;
+  credential warning once and without the secret; unknown-model fallback for
+  Anthropic/Chat/Responses with a Claude Code-shaped body; auxiliary endpoints.
+- `go test ./internal/command -run VModel`: flag parsing (`--no-capture-out`,
+  `--capture-out=false`), misuse errors, end-to-end through `run` with the raw
+  client body asserted in the capture and not the rewritten one.
+- Real client: built `tb`, ran `claude -p "say hi"` (2.1.259, the version
+  installed here) under `env -i`, isolated `HOME`, fake OAuth token against
+  `tb vmodel --capture`. It printed the mock answer and exited 0; the capture
+  holds `HEAD /api/hello` (501) and two `POST /v1/messages?beta=true` on one
+  keep-alive connection, with `X-Stainless-*` capitalised and `anthropic-beta`
+  lower-case in the order sent — what `net/http` would have normalised.
+
 ## 7. Open questions
 
 1. Should `--capture` imply a fixed default dir under `.tmp/` when given no
-   value, or always require a path? (Proposed: require a path.)
-2. G4 is unverified until Phase 2 sees a real 2.1.328 body (the original
-   captures sit in the other thread's scratch directory, not on its branch).
+   value, or always require a path? (Implemented: a path is required.)
+2. A real 2.1.328 body has not been run through the fallback (see G4 above).
