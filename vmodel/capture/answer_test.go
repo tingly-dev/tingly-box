@@ -1,6 +1,7 @@
 package capture_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -70,8 +71,6 @@ func post(t *testing.T, url, body string) (int, string) {
 func TestUnknownModelsAreAnsweredByDefault(t *testing.T) {
 	srv, _ := captureServer(t)
 	for _, tc := range []struct{ name, path, body, want string }{
-		{"claude code body, stream", "/v1/messages?beta=true", claudeCodeBody, "fallback answer"},
-		{"anthropic plain", "/v1/messages", `{"model":"claude-haiku-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}`, "fallback answer"},
 		{"openai chat", "/v1/chat/completions", `{"model":"gpt-x","messages":[{"role":"user","content":"hi"}]}`, "fallback answer"},
 		{"openai responses", "/v1/responses", `{"model":"gpt-x","input":"hi"}`, "fallback answer"},
 		{"known model untouched", "/v1/messages", `{"model":"known","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}`, "known answer"},
@@ -99,5 +98,54 @@ func TestAuxiliaryEndpoints(t *testing.T) {
 	// /api/oauth/* is not simulated: it keeps the protocol-shaped 501.
 	if code, _ := post(t, srv.URL+"/api/oauth/org", `{}`); code != http.StatusNotImplemented {
 		t.Fatalf("oauth: %d", code)
+	}
+}
+
+// Unknown Anthropic models are answered in the real API's shape, echoing the
+// requested id. Claude Code abandons a stream whose message_start has
+// `content: null` or a "stop" stop_reason and silently retries without
+// streaming; the capture must not contain that second request.
+func TestAnthropicAnswerMatchesRealShape(t *testing.T) {
+	srv, _ := captureServer(t)
+
+	code, body := post(t, srv.URL+"/v1/messages?beta=true", claudeCodeBody)
+	if code != 200 {
+		t.Fatalf("%d %s", code, body)
+	}
+	var events []string
+	var start, delta map[string]any
+	for _, block := range strings.Split(strings.TrimSpace(body), "\n\n") {
+		lines := strings.SplitN(block, "\n", 2)
+		events = append(events, strings.TrimPrefix(lines[0], "event: "))
+		payload := map[string]any{}
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(lines[1], "data: ")), &payload); err != nil {
+			t.Fatalf("bad data in %q: %v", block, err)
+		}
+		switch payload["type"] {
+		case "message_start":
+			start = payload["message"].(map[string]any)
+		case "message_delta":
+			delta = payload["delta"].(map[string]any)
+		}
+	}
+	want := "message_start content_block_start ping content_block_delta content_block_stop message_delta message_stop"
+	if strings.Join(events, " ") != want {
+		t.Fatalf("events: %v", events)
+	}
+	if c, ok := start["content"].([]any); !ok || len(c) != 0 || start["stop_reason"] != nil || start["model"] != "claude-sonnet-4-6" {
+		t.Fatalf("message_start: %v", start)
+	}
+	if delta["stop_reason"] != "end_turn" {
+		t.Fatalf("message_delta: %v", delta)
+	}
+
+	code, body = post(t, srv.URL+"/v1/messages", `{"model":"claude-haiku-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}`)
+	var msg struct {
+		Model      string
+		StopReason string `json:"stop_reason"`
+		Content    []struct{ Text string }
+	}
+	if err := json.Unmarshal([]byte(body), &msg); err != nil || code != 200 || msg.Model != "claude-haiku-4-5" || msg.StopReason != "end_turn" || len(msg.Content) != 1 || msg.Content[0].Text != "ok" {
+		t.Fatalf("non-stream: %d %s (%v)", code, body, err)
 	}
 }

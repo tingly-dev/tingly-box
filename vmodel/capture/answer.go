@@ -20,7 +20,11 @@ const DefaultModel = "capture-default"
 //
 //   - A request for a model id for which known returns false is answered by
 //     DefaultModel instead of a 404. Only the copy next sees is rewritten; the
-//     capture keeps the client's bytes.
+//     capture keeps the client's bytes. Anthropic Messages requests are
+//     answered here, in the exact shape of the real API (see anthropic.go):
+//     the shared mock's stream (content:null, stop_reason:"stop") makes Claude
+//     Code give up on the stream and retry without streaming, which would put
+//     a second, unrepresentative request into the capture.
 //   - POST …/v1/messages/count_tokens and a few telemetry endpoints get a small
 //     fixed answer instead of the protocol-shaped 501.
 //
@@ -42,6 +46,10 @@ func Answer(next http.Handler, known func(id string) bool) http.Handler {
 			return
 		}
 		if r.Method == http.MethodPost {
+			var done bool
+			if r, done = answerAnthropic(w, r, known); done {
+				return
+			}
 			r = withFallbackModel(r, known)
 		}
 		next.ServeHTTP(w, r)

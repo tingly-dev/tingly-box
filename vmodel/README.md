@@ -206,9 +206,15 @@ credential without a "fake" marker) and keep the directory out of git.
 get an `"unparsed":true` entry.
 
 So the client finishes a normal round, capture mode answers an undefined model
-id with the built-in `capture-default` mock (definitions from `--config` still
-win; echoed `model` is `capture-default`), answers `count_tokens` and the Claude
-Code telemetry endpoints, and leaves everything else to the usual 501.
+id (definitions from `--config` still win): Anthropic Messages requests get
+a response in the real API's exact shape that echoes the requested `model`
+(a stream with `content: []`, `ping`, `stop_reason: "end_turn"`; or one JSON
+message), other protocols get the built-in `capture-default` mock. It also
+answers `count_tokens` and the Claude Code telemetry endpoints and leaves
+everything else to the usual 501. The shape matters: Claude Code abandons a
+stream whose `message_start` has `content: null` or a non-Anthropic
+`stop_reason` and silently retries without streaming, which would add a second,
+unrepresentative request to the capture.
 `--capture-request-id` adds a `request-id` response header.
 
 ```sh

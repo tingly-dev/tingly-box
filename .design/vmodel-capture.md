@@ -171,6 +171,17 @@ that the client does not retry or abort:
   `{"input_tokens": <n>}`; telemetry/event-logging/bootstrap → `200 {}`;
   anything else keeps the protocol-shaped 501. `/api/oauth/*` is captured if it
   ever arrives, not simulated.
+- **Anthropic answers are real-shaped, not the shared mock.** First run of a
+  real `claude` 2.1.329 against the shared mock showed two requests per `-p`
+  run: the streamed one, then ~90 ms later an identical `stream:false` retry on
+  the same connection. The shared mock's SSE (`content: null`, empty
+  `stop_reason` in `message_start`, `"stop"` instead of `"end_turn"`) makes
+  Claude Code drop the stream and fall back to non-streaming, so the capture
+  would contain a request a real server would never have caused. Capture mode
+  therefore answers unknown-model Anthropic Messages itself
+  (`vmodel/capture/anthropic.go`): SSE with `content: []`, `ping`, null
+  `stop_reason` then `end_turn`, echoing the requested model; or one JSON
+  message. The shared mock is left alone (its goldens and tests are others').
 - **Typed binding** (G4): the answer path still binds `/v1/messages` into the
   SDK type, but this turned out not to bite: a real `claude` 2.1.259 `-p`
   request (118 KB body) and a hand-built 2.1.328-shaped body (adaptive thinking
