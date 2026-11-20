@@ -1,9 +1,10 @@
-import {cleanup, fireEvent, render, screen, within} from '@testing-library/react';
+import {cleanup, render, screen, within} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import type {AttachmentsComponent} from './context';
 import Transcript from './Transcript';
 import type {TranscriptEntry} from './model';
 import {buildTranscript} from './model';
+import {trajectoryRows} from './trajectoryRows';
 
 vi.mock('react-i18next', () => ({useTranslation: () => ({i18n: {language: 'en'}, t: (_key: string, opts: {defaultValue: string; count?: number}) => opts.defaultValue.replace('{{count}}', String(opts.count))})}));
 afterEach(cleanup);
@@ -41,19 +42,24 @@ describe('files sent into the conversation', () => {
         expect(screen.queryByRole('group')).toBeNull();
     });
 
-    it('keeps each caption: on its file, and all of them opened under the row', () => {
+    it('keeps each caption as the file\'s own hover text, never as a message', () => {
         show([file('a.png', 'The diagram'), file('b.png'), file('c.png', 'The result')]);
         expect(screen.getByText('a.png')).toHaveAttribute('title', 'The diagram');
         expect(screen.getByText('b.png')).not.toHaveAttribute('title');
-        expect(screen.queryByText('The result', {selector: 'p'})).toBeNull();
-        fireEvent.click(screen.getByRole('button', {name: 'Captions'}));
-        expect(screen.getByText('The diagram', {selector: 'p'})).toBeInTheDocument();
-        expect(screen.getByText('The result', {selector: 'p'})).toBeInTheDocument();
+        expect(screen.getByText('c.png')).toHaveAttribute('title', 'The result');
+        expect(screen.queryByText('The diagram', {selector: 'p'})).toBeNull();
+        expect(screen.queryByRole('button', {name: 'Captions'})).toBeNull();
     });
 
-    it('draws a single file as before, its caption under it', () => {
+    it('draws a single file as its file alone, its caption only on the file', () => {
         show([file('a.png', 'The diagram')]);
         expect(screen.queryByRole('group')).toBeNull();
-        expect(screen.getByText('The diagram')).toBeInTheDocument();
+        expect(screen.getByText('a.png')).toHaveAttribute('title', 'The diagram');
+        expect(screen.queryByText('The diagram', {selector: 'p'})).toBeNull();
+    });
+
+    it('does not read a caption as something said in the trajectory', () => {
+        const rows = trajectoryRows(buildTranscript([{role: 'user', content: 'Draw it', timestamp: ''}, file('a.png', 'The diagram')]), false);
+        expect(rows.map((r) => r.title)).toEqual(['Draw it']);
     });
 });

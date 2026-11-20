@@ -23,7 +23,6 @@ export default {
       "deny": "不允许",
       "details": "详情",
       "earlierSteps": "显示更早的步骤",
-      "filesCaptions": "文件说明",
       "filesSent_one": "发送了 {{count}} 个文件",
       "filesSent_other": "发送了 {{count}} 个文件",
       "focusAgent": "单独查看",

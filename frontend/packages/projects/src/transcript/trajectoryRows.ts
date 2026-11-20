@@ -85,7 +85,7 @@ const replyIndexes = (blocks: TranscriptBlock[], live: boolean): Set<number> => 
         if (b.type === 'user') {
             if (last >= 0) replies.add(last);
             last = -1;
-        } else if (b.type === 'assistant' && b.message.content.trim()) {
+        } else if (b.type === 'assistant' && !b.message.attachments?.length && b.message.content.trim()) {
             last = i;
         }
     });
@@ -107,7 +107,8 @@ const rows = (blocks: TranscriptBlock[], out: TrajectoryRow[], state: {turn: num
                 return;
             }
             case 'assistant': {
-                const title = plainLine(b.message.content);
+                // A sent file's text is its caption, not something said.
+                const title = b.message.attachments?.length ? '' : plainLine(b.message.content);
                 if (title) out.push({kind: replies.has(i) ? 'reply' : 'note', turn: state.turn, depth, anchor: at({block: i}), title});
                 return;
             }

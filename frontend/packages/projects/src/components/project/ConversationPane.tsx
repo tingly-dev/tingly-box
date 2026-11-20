@@ -330,7 +330,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         }
     }, [threads, disabled, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, t]);
     // A user message's files, fetched against the project like a thread's.
-    const attachments = useMemo<AttachmentsComponent>(() => ({ items, align }) => <AttachmentChips owner={{ projectId }} items={items} align={align} />, [projectId]);
+    const attachments = useMemo<AttachmentsComponent>(() => ({ items, align, captions }) => <AttachmentChips owner={{ projectId }} items={items} align={align} captions={captions} />, [projectId]);
 
     useEffect(() => {
         const el = scrollRef.current;

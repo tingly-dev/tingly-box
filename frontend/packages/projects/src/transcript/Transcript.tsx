@@ -89,51 +89,34 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
     );
 };
 
+// A message that carries files is a file the agent sent (send_file): what it
+// was sent with is the file's own hover text and alt, never a message of its own.
+const sentCaptions = (message: TranscriptEntry): Record<string, string> => {
+    const caption = message.content.trim();
+    return caption ? Object.fromEntries((message.attachments ?? []).map((f) => [f.path, caption])) : {};
+};
+
 const AssistantText = ({message}: {message: TranscriptEntry}) => {
     const {attachments: Attachments} = useTranscriptHost();
     const files = message.attachments ?? [];
-    return <>
-        {files.length > 0 && (Attachments ? <Attachments items={files} align="flex-start"/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>)}
-        {message.content && <Markdown content={message.content}/>}
-    </>;
+    if (files.length > 0) {
+        return Attachments ? <Attachments items={files} align="flex-start" captions={sentCaptions(message)}/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>;
+    }
+    return message.content ? <Markdown content={message.content}/> : null;
 };
 
 // FilesGroup is the files sent one after another, as one row of thumbnails
-// instead of a message each. What each was sent with is on the file while the
-// pointer is on it, and all of it opens under the row.
+// instead of a message each. What each was sent with is on the file itself.
 const FilesGroup = ({messages}: {messages: TranscriptEntry[]}) => {
     const {t} = useTranslation();
     const {attachments: Attachments} = useTranscriptHost();
-    const [open, setOpen] = useState(false);
     const files = messages.flatMap((m) => m.attachments ?? []).filter((f, i, all) => all.findIndex((x) => x.path === f.path) === i);
-    const captions: Record<string, string> = {};
-    for (const m of messages) {
-        const caption = m.content.trim();
-        if (caption) for (const f of m.attachments ?? []) captions[f.path] = caption;
-    }
-    const captioned = messages.filter((m) => m.content.trim() !== '' && (m.attachments?.length ?? 0) > 0);
+    const captions = Object.assign({}, ...messages.map(sentCaptions)) as Record<string, string>;
     return (
         <Box role="group" aria-label={t('projects.transcript.filesSent', {defaultValue: '{{count}} files sent', count: files.length})}>
             {Attachments
                 ? <Attachments items={files} align="flex-start" captions={captions}/>
                 : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>}
-            {captioned.length > 0 && (
-                <>
-                    <RowLine open={open} onToggle={() => setOpen(!open)}>
-                        <Typography variant="caption" sx={{color: 'inherit'}}>{t('projects.transcript.filesCaptions', {defaultValue: 'Captions'})}</Typography>
-                    </RowLine>
-                    <Collapse in={open} unmountOnExit>
-                        <Stack spacing={1} sx={{pt: 0.5}}>
-                            {captioned.map((m) => (
-                                <Box key={m.id ?? m.attachments?.[0]?.path}>
-                                    <Typography variant="caption" sx={{color: 'text.secondary', display: 'block', wordBreak: 'break-all'}}>{m.attachments?.map((f) => f.name).join(', ')}</Typography>
-                                    <Markdown content={m.content}/>
-                                </Box>
-                            ))}
-                        </Stack>
-                    </Collapse>
-                </>
-            )}
         </Box>
     );
 };

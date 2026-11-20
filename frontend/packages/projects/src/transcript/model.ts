@@ -367,7 +367,7 @@ export const agentStatus = (block: Extract<TranscriptBlock, {type: 'agent'}>, tu
 export const agentReport = (block: Extract<TranscriptBlock, {type: 'agent'}>): string | undefined => {
     for (let i = block.children.length - 1; i >= 0; i--) {
         const c = block.children[i];
-        if (c.type === 'assistant' && c.message.content.trim()) return c.message.content;
+        if (c.type === 'assistant' && !c.message.attachments?.length && c.message.content.trim()) return c.message.content;
     }
     return block.task?.summary;
 };

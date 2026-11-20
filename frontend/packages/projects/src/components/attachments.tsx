@@ -78,7 +78,7 @@ function AttachmentChip({ srcOf, item, caption, onOpen }: { srcOf: (path: string
     if (kind === 'image' && src) {
         return withCaption(
             <ButtonBase onClick={() => onOpen(item)} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
-                <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
+                <Box component="img" src={src} alt={caption || item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
             </ButtonBase>,
         );
     }

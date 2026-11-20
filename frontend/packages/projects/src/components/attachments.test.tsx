@@ -133,4 +133,13 @@ describe('conversation attachments', () => {
         await within(dialog).findByRole('img', { name: 'a.png' });
         expect(screen.getAllByRole('dialog')).toHaveLength(1);
     });
+
+    it('shows what a file was sent with as its tooltip and thumbnail alt', async () => {
+        render(<AttachmentChips owner={{ threadId: 't1' }} items={[file('a.png', 'image/png')]} captions={{ 'a.png': 'The diagram' }} />);
+        const thumb = await screen.findByRole('button', { name: 'a.png' });
+        const img = await within(thumb).findByRole('img');
+        expect(img).toHaveAttribute('alt', 'The diagram');
+        fireEvent.mouseOver(thumb);
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('The diagram');
+    });
 });

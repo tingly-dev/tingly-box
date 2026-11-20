@@ -34,18 +34,23 @@ const props = (messages: ThreadEvent[]): ComponentProps<typeof ConversationPane>
 const show = (messages: ThreadEvent[]) => render(<MemoryRouter><ProjectsHostProvider host={{ paths: { list: '/projects', project: (id) => `/projects/${id}`, folder: () => '/folders' } }}><ConversationPane {...props(messages)} /></ProjectsHostProvider></MemoryRouter>);
 
 describe('files a thread sent into the conversation', () => {
-    it('shows consecutive files as one row of thumbnails, keeping each caption', async () => {
+    it('shows consecutive files as one row of thumbnails, each caption only on its file', async () => {
         show([sent('a.png', 'The diagram'), sent('b.png'), sent('c.png', 'The result')]);
         const row = await screen.findByRole('group', { name: 'projects.transcript.filesSent' });
         expect(within(row).getAllByRole('button', { name: /\.png$/ })).toHaveLength(3);
         expect(screen.getAllByRole('group', { name: 'projects.transcript.filesSent' })).toHaveLength(1);
+        // The caption is the thumbnail's alt, not a message.
+        await waitFor(() => expect(within(row).getByRole('img', { name: 'The diagram' })).toBeInTheDocument());
+        expect(screen.queryByText('The diagram')).toBeNull();
+        expect(screen.queryByText('The result')).toBeNull();
     });
 
-    it('leaves a single file as it was, with its caption under it', async () => {
+    it('shows a single file as its file, its caption only as the alt', async () => {
         show([sent('a.png', 'The diagram')]);
-        await screen.findByRole('button', { name: 'a.png' });
+        const thumb = await screen.findByRole('button', { name: 'a.png' });
         expect(screen.queryByRole('group', { name: 'projects.transcript.filesSent' })).toBeNull();
-        expect(screen.getByText('The diagram')).toBeInTheDocument();
+        await waitFor(() => expect(within(thumb).getByRole('img', { name: 'The diagram' })).toBeInTheDocument());
+        expect(screen.queryByText('The diagram')).toBeNull();
     });
 
     it('steps through every image of the conversation from a preview, across messages', async () => {
