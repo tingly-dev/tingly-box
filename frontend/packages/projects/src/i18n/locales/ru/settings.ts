@@ -80,5 +80,7 @@ export const settings: PluralDict<typeof en> = {
         notificationsScope: 'Вопрос, подтверждение, ход с ошибкой, завершённый ход, решение, которое нужно координатору.',
         notificationsBlocked: 'В браузере уведомления для этого сайта заблокированы. Разрешите их в настройках сайта и включите это снова.',
         notificationsUnsupported: 'Этот браузер не умеет показывать уведомления на рабочем столе.',
+        notificationsTest: 'Отправить тестовое уведомление',
+        notificationsInsecure: 'Браузеры разрешают уведомления только на страницах https:// и на localhost. Откройте Tingly Box через localhost (или адрес https), затем включите.',
     },
 };

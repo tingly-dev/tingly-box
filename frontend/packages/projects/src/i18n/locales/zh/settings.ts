@@ -77,5 +77,7 @@ export const settings: Dict<typeof settingsEn> = {
         notificationsScope: '包括：提问、权限批准、失败的轮次、完成的轮次、协调者请求拍板。',
         notificationsBlocked: '浏览器已拦截本站点的通知。请在本站点的浏览器设置中允许通知，然后重新打开此开关。',
         notificationsUnsupported: '当前浏览器不支持桌面通知。',
+        notificationsTest: '发送测试通知',
+        notificationsInsecure: '浏览器只允许 https:// 页面和 localhost 使用通知。请通过 localhost（或 https 地址）打开 Tingly Box，再开启。',
     },
 };

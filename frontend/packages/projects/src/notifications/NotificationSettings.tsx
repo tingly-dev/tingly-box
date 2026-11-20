@@ -5,11 +5,20 @@ import { Alert, Box, Button, CircularProgress, Paper, Typography } from '@mui/ma
 import { useTranslation } from 'react-i18next';
 import { radius } from '@tingly/ui/theme/radius';
 import { Bell } from '../components/icons';
-import { useNotifications } from './useNotifications';
+import { useNotifications, type NotificationStatus } from './useNotifications';
+
+const STATUS_LINE: Record<NotificationStatus, string> = {
+    on: 'settings.notificationsOn',
+    off: 'settings.notificationsOff',
+    ask: 'settings.notificationsAsk',
+    blocked: 'settings.notificationsOff',
+    insecure: 'settings.notificationsOff',
+    unsupported: 'settings.notificationsUnsupported',
+};
 
 export function NotificationSettingsCard() {
     const { t } = useTranslation('projects');
-    const { status, asking, turnOn, turnOff } = useNotifications();
+    const { status, asking, turnOn, turnOff, testing, sendTest } = useNotifications();
     const on = status === 'on';
 
     return (
@@ -21,13 +30,24 @@ export function NotificationSettingsCard() {
                 <Box sx={{ flex: 1 }}>
                     <Typography sx={{ color: 'text.primary' }}>{t('settings.notificationsEnable')}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        {t(status === 'unsupported' ? 'settings.notificationsUnsupported' : on ? 'settings.notificationsOn' : status === 'ask' ? 'settings.notificationsAsk' : 'settings.notificationsOff')}
+                        {t(STATUS_LINE[status])}
                     </Typography>
                     {on && <Typography variant="caption" color="text.secondary">{t('settings.notificationsScope')}</Typography>}
                 </Box>
+                {(status === 'on' || status === 'off' || status === 'ask') && (
+                    <Button
+                        variant="text"
+                        color="inherit"
+                        disabled={testing}
+                        startIcon={testing ? <CircularProgress size={14} /> : undefined}
+                        onClick={() => void sendTest()}
+                    >
+                        {t('settings.notificationsTest')}
+                    </Button>
+                )}
                 <Button
                     variant={on ? 'contained' : 'outlined'}
-                    disabled={status === 'unsupported' || status === 'blocked' || asking}
+                    disabled={status === 'unsupported' || status === 'insecure' || status === 'blocked' || asking}
                     startIcon={asking ? <CircularProgress size={14} /> : undefined}
                     onClick={() => (on ? turnOff() : void turnOn())}
                 >
@@ -35,6 +55,7 @@ export function NotificationSettingsCard() {
                 </Button>
             </Box>
             {status === 'blocked' && <Alert severity="warning" sx={{ mt: 2 }}>{t('settings.notificationsBlocked')}</Alert>}
+            {status === 'insecure' && <Alert severity="warning" sx={{ mt: 2 }}>{t('settings.notificationsInsecure')}</Alert>}
         </Paper>
     );
 }

@@ -91,10 +91,23 @@ The control is "Notifications" plus the one next step, by status:
 | `off` | the user turned it off | muted bell, switch off (turning it on asks the browser first if needed) |
 | `ask` | preferred, permission not asked yet | **Enable** — the click opens the browser's dialog; if it is dismissed the control stays here |
 | `blocked` | the browser refuses | "Blocked by browser" and **How to fix**, a popover saying to allow Notifications in the site settings |
+| `insecure` | the page is not a secure context (plain http on a LAN address) | "Needs HTTPS" and **How to fix**: browsers only allow notifications on https and localhost |
 | `unsupported` | no Notification API | the word "Not supported here", no action |
 
-The engine's behaviour is unchanged: hidden tab only, the finished-turn cooldown, one ping per thread or card, click
-deep link (`?review=`).
+**Send test** sits next to the switch in `on` / `off` / `ask` (and on the Settings card). It runs inside the click:
+asks the browser first when it never was, shows one notification at once (tag `tb-test`, whatever the tab is doing),
+and a toast says how it went — sent (with a nudge to check the OS's Do Not Disturb / Focus mode when nothing showed),
+denied, dismissed, refused by the browser. A grant that arrives through the test also starts the engine
+(`syncNotifications()`). Check order of the status: `insecure` before `unsupported`, because Firefox drops the API
+altogether on an insecure origin.
+
+**The engine only speaks when the user is not looking** (`pageIsWatched()`): the tab is hidden *or its window has lost
+focus* (a visible tab behind another app is not being watched). The finished-turn cooldown, one ping per thread or
+card, and the click deep link (`?review=`) are unchanged.
+
+**Armed at import.** `engine.stop` is `null` while not watching; it once held a placeholder function that the guard
+in `startEngine()` never recognised, so the import-time arming silently did nothing and a reloaded page with the
+permission granted stayed mute until the switch was toggled (`engine.boot.test.ts` loads a fresh module to pin it).
 
 ## Mock mode
 
@@ -105,6 +118,6 @@ deep link (`?review=`).
 `WorkspaceHomePage.test.tsx` (empty / populated / mixed / loading, recent cap, navigation targets, the one-line IM
 summary, the notifications control above every section), `NeedsYou.test.tsx` (which threads, read only for projects with
 something waiting, answering in place, open/fold, navigation, the cap), `NotificationControl.test.tsx` (each status, the
-click-only permission request), `notifications/engine.test.ts` (default on, permission arriving later, `threadLocation`),
+click-only permission request, the test notification), `notifications/engine.test.ts` (default on, permission arriving later, focus gate, `threadLocation`), `notifications/engine.boot.test.ts` (armed at page load),
 `useActivityItems.workspace.test.tsx` (the rail opens `/workspace` and stays lit on every Workspace path),
 `routes.contract.test.tsx` (`/workspace` resolves to its own page).
