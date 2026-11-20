@@ -80,7 +80,7 @@ type ThreadEnv interface {
 // Report is what a finished turn tells the coordinator.
 type Report struct {
 	Thread db.Thread
-	// Kind is finished, needs_input, failed or stalled.
+	// Kind is finished, needs_input, failed, stalled or notify.
 	Kind string
 	Text string
 }
@@ -2133,6 +2133,12 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	if req.ToolName == toolSendMessage {
+		// Decided here, never asked and never remembered: no card, no "allow
+		// for this thread" that could widen it.
+		ok, reason := sendMessageAllowed(req.Input)
+		return agentboot.ApprovalResponse{Approved: ok, Reason: reason}, nil
+	}
 	if p.m.builtinToolAllowed(p.threadID, req.ToolName) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
 	}

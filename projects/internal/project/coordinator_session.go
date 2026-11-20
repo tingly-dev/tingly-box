@@ -222,8 +222,13 @@ func (s *coordinatorSessions) launchOptions(ctx context.Context, p *db.Project, 
 	// Code otherwise defers MCP discovery behind ToolSearch, which small or
 	// compatible models may not call.
 	env = append(env, "ENABLE_TOOL_SEARCH=false")
+	// The coordinator takes no peer messages and sends none: threads reach it
+	// through notify_coordinator (native_channel.go).
+	if settings, err = s.c.layout.coordinatorSettings(p.ID, settings); err != nil {
+		return agentboot.ExecutionOptions{}, err
+	}
 	opts := agentboot.ExecutionOptions{Model: model, Effort: p.CoordinatorEffort, Env: env, SettingsPath: settings, MCPConfigPath: config, StrictMcpConfig: true, CustomSystemPrompt: coordinatorSessionPrompt,
-		AllowedTools: []string{"mcp__tingly-projects"}, DisallowedTools: []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "Task", "WebFetch", "WebSearch", "NotebookEdit", "AskUserQuestion"}}
+		AllowedTools: []string{"mcp__tingly-projects"}, DisallowedTools: []string{"Bash", "Read", "Write", "Edit", "Glob", "Grep", "Agent", "Task", "WebFetch", "WebSearch", "NotebookEdit", "AskUserQuestion", toolSendMessage, toolListAgents}}
 	return opts, nil
 }
 
