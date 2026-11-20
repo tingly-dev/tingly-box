@@ -66,6 +66,8 @@ export default function ProjectPage() {
     const { observe: observeRequest, refresh: refreshRequests, hydrated: requestsRead, review: reviewRequests } = requests;
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
+    // Whether a message sent now joins the coordinator's running turn.
+    const [insertable, setInsertable] = useState(true);
     const [worktreeMenuOpen, setWorktreeMenuOpen] = useState(false);
     const [liveTasks, setLiveTasks] = useState<BackgroundTask[]>([]);
     const openThreadId = useRef(threadId);
@@ -131,6 +133,7 @@ export default function ProjectPage() {
             setProject(d.project);
             setThreads(d.threads);
             setBusy(d.coordinator_busy);
+            setInsertable(d.coordinator_insertable ?? true);
             setCoordinator(d.coordinator);
             setQueued(d.coordinator_queued ?? 0);
             setRecovery(d.coordinator_recovery ?? '');
@@ -194,10 +197,13 @@ export default function ProjectPage() {
                 }
                 break;
             }
-            case 'coordinator':
-                setBusy((ev.data as { busy: boolean }).busy);
-                if (!(ev.data as { busy: boolean }).busy) void load();
+            case 'coordinator': {
+                const state = ev.data as { busy: boolean; insertable?: boolean };
+                setBusy(state.busy);
+                setInsertable(state.insertable ?? true);
+                if (!state.busy) void load();
                 break;
+            }
             case 'project': {
                 const d = ev.data as Project & { memory?: string };
                 if (d.memory !== undefined) setMemoryKey((k) => k + 1);
@@ -494,6 +500,7 @@ export default function ProjectPage() {
                         onLoadEarlier={conversation.loadEarlier}
                         threads={threadMap}
                         busy={busy}
+                        insertable={insertable}
                         disabled={blocked || !project || savingDefaults || !!recovery}
                         disabledReason={<>
                             {banner}
@@ -557,7 +564,7 @@ export default function ProjectPage() {
                         )}
                         onOpenThread={openThread}
                         onOpenTasks={openTasksList}
-                        onSend={async (text, attachments) => {
+                        onSend={async (text, attachments, mode) => {
                             if (projectSaving.current) return false;
                             try {
                                 if (!(text.trim() === '/clear' && attachments.length === 0) && readLocal('worktreeNoticeSeen') !== '1' && project && primary?.kind === 'git') {
@@ -574,7 +581,7 @@ export default function ProjectPage() {
                                     }
                                     writeLocal('worktreeNoticeSeen', '1');
                                 }
-                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
+                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path), mode } }));
                                 // /clear rotates the session synchronously, without a coordinator turn.
                                 if (text.trim() !== '/clear' || attachments.length > 0) setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.

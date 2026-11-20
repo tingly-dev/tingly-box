@@ -49,8 +49,7 @@ func (m *Threads) AnnotateOne(t *db.Thread) {
 // turn. It reads the live session only: no store lookup per thread.
 func (m *Threads) insertable(t *db.Thread) bool {
 	if t.Agent == db.AgentLLM {
-		// The coordinator queues every message.
-		return false
+		return m.coordinatorInsertable != nil && m.coordinatorInsertable(t)
 	}
 	m.mu.Lock()
 	sid, ok := m.sessionOfThread[t.ID]

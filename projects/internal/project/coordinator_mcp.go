@@ -31,6 +31,20 @@ func (t *coordinatorToolTurn) begin(p *db.Project, userTriggered bool) {
 	t.quiet.Store(false)
 }
 
+// adoptUser makes the turn one that must answer the user: a message of
+// theirs was inserted into it. False when the turn has already ended or ended
+// itself with no_update, so the message cannot be answered by it and must be
+// queued instead.
+func (t *coordinatorToolTurn) adoptUser() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.snapshot == nil || t.quiet.Load() {
+		return false
+	}
+	t.userTriggered = true
+	return true
+}
+
 func (t *coordinatorToolTurn) end() {
 	t.mu.Lock()
 	defer t.mu.Unlock()

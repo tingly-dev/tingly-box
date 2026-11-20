@@ -230,7 +230,8 @@ func (s *Service) Send(ctx context.Context, threadID, text string, atts []Attach
 
 // SendWith is Send with a mode: while a turn runs, mode says whether the
 // message is inserted into it or waits for the next turn. The project's
-// coordinator queues every message, whatever the mode.
+// coordinator takes both modes like any thread (an insert into its turn is
+// read at its next step; a next_turn message is queued).
 func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
 	t, err := s.Store.GetThread(threadID)
 	if err != nil {
@@ -240,7 +241,7 @@ func (s *Service) SendWith(ctx context.Context, threadID, text string, atts []At
 		return s.runCommand(ctx, t, cmd, src)
 	}
 	if t.Agent == db.AgentLLM {
-		if _, err := s.Coordinator.Post(t.ProjectID, text, atts, src); err != nil {
+		if _, err := s.Coordinator.PostWith(t.ProjectID, text, atts, src, mode); err != nil {
 			return nil, err
 		}
 		return s.Store.GetThread(threadID)
