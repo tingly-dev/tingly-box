@@ -128,6 +128,33 @@ Deliberately not done: storing the token response's `refresh_token_expires_in` (
 CLI's "account on hold" refusal to its own re-auth state (the marker string was not extracted from the bundle).
 See `.research/claude-code/2.1.328.md` §4 for the full comparison with the official flow.
 
+## Claude Code: login and refresh follow the official CLI
+
+The Claude Code issuer talks to the same endpoints, with the same shape, as the official CLI (2.1.328, claude.ai-account login;
+`ai/oauth/registry.go`, `.research/claude-code/2.1.328.md` §4). This is a direct change, not a flag.
+
+| | Before | Now |
+|---|---|---|
+| Authorize | `claude.ai/oauth/authorize` | `claude.com/cai/oauth/authorize` |
+| Token / refresh | `api.anthropic.com/v1/oauth/token` | `platform.claude.com/v1/oauth/token` |
+| Login scopes | `user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload` | plus `org:create_api_key`, `user:plugins` (the CLI's set; `user:privacy_consents:write` is left out — nothing here writes consent state) |
+| Refresh body | `client_id`, empty `client_secret` | `client_id` and `scope` (`ProviderConfig.RefreshScopes`: the CLI's default set, no login-only `org:create_api_key`); no secret — it is a public client |
+| `invalid_scope` on refresh | hard failure | retried once without `scope`, which keeps the grant's original scopes (what the CLI does) |
+| Token-call headers | Chrome UA, `Origin`/`Referer: claude.ai`, `Accept-Language` | `User-Agent: claude-cli/<profile version> (external, cli)` only; a test pins the version to `typ.ClaudeCodeVersionLatest` |
+
+Nothing else changes: PKCE, the fixed callback port 54545, JSON token requests, `state` in the exchange, re-auth in place.
+
+**What this does to existing providers.** The refresher builds its request from the registry, so stored Claude credentials are
+refreshed against `platform.claude.com` from the next tick on, with `scope` set. The CLI does the same with tokens it holds, but
+that is not proof that tokens first issued through the old host are accepted there. A refresh that fails shows up as the usual
+"Token refresh failed" with the issuer's own body (`invalid_grant` / `invalid_client` / HTML), and the fix for the user is
+re-authentication, which keeps the provider UUID. **Verify with one real login and one real refresh before merging.**
+
+**Not verified here** (needs a real account): that `claude.com/cai/oauth/authorize` accepts our fixed `localhost:54545`
+redirect (the CLI picks a free loopback port per login, so any port should be registered); that the token endpoint accepts a
+CLI user agent from a non-CLI client (the old browser headers may have been added for a bot check); and whether `scope` on refresh
+changes the scopes of the new access token.
+
 ## Re-authentication (in place)
 
 Recovery flow for a credential that has gone **permanently** invalid — refresh token
