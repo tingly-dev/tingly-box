@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -21,12 +22,14 @@ import (
 const (
 	spawnAsk = "Splitting this out would help: a separate thread should handle the rename tool."
 	renameTh = "Add a thread rename tool"
+	// notifyEnvelope opens a notify event; the coordinator's own instructions
+	// mention kind="notify" too, so the source goes with it.
+	notifyEnvelope = `source="thread" kind="notify"`
 )
 
-// T1: the tools of a thread's own session. None of them reaches the
-// coordinator, which is why the only way to ask is the report. Adding
-// notify_coordinator changes this list on purpose.
-func TestThreadSessionHasNoToolToReachTheCoordinator(t *testing.T) {
+// T1: the tools of a thread's own session. The only one that reaches the
+// coordinator is notify_coordinator; a thread cannot start or message threads.
+func TestThreadSessionReachesTheCoordinatorOnlyThroughNotify(t *testing.T) {
 	var tools []string
 	var mu sync.Mutex
 	w := New(t, Options{
@@ -54,8 +57,8 @@ func TestThreadSessionHasNoToolToReachTheCoordinator(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	slices.Sort(tools)
-	assert.Equal(t, []string{"comment", "create_issue", "create_pr", "merge", "send_file", "update", "view"}, tools,
-		"a thread's tools; no start_thread, propose_threads, message_thread or anything that reaches the coordinator")
+	assert.Equal(t, []string{"comment", "create_issue", "create_pr", "merge", "notify_coordinator", "send_file", "update", "view"}, tools,
+		"a thread's tools; no start_thread, propose_threads or message_thread")
 }
 
 // T2: a thread asks for another thread in its report. It arrives labelled as
@@ -128,4 +131,101 @@ func TestThreadCannotStartAThreadItself(t *testing.T) {
 
 	assert.True(t, isErr, out)
 	assert.Len(t, w.ThreadList(), 1, "no thread was started by the thread")
+}
+
+// T4: a thread asks for another thread with notify_coordinator, mid-turn. The
+// coordinator hears it as a relayed notify (never as the user) and offers it as
+// a card at once; nothing starts until the user starts the card.
+func TestJourneyThreadNotifyRequestBecomesACard(t *testing.T) {
+	var proposals []string
+	var notified string
+	var notifyErr bool
+	w := New(t, Options{
+		Files: projectsRepo,
+		Actor: func(a *ActorCtx) error {
+			if strings.Contains(a.Prompt, "Do it.") { // the first thread only, not the one it asked for
+				notified, notifyErr = callTool(a, "notify_coordinator", map[string]any{"message": spawnAsk})
+			}
+			a.Commit("change.txt", a.Prompt+"\n")
+			a.Say("Done with the end-of-turn tool.")
+			return nil
+		},
+		Brain: func(c *coordtest.Turn) error {
+			switch {
+			case strings.Contains(c.Prompt, notifyEnvelope) && len(proposals) == 0:
+				out, _ := c.Call("propose_threads", map[string]any{"threads": []map[string]string{
+					{"title": renameTh, "task": "Add a rename tool for threads, with tests."}}})
+				proposals = append(proposals, out)
+				c.Reply("The thread suggests a rename tool; start it from the card if you want it.")
+			case c.CheckIn():
+				c.Call("no_update", map[string]string{})
+			case c.FromUser():
+				startThread(c, endTool, "Do it.")
+				c.Reply("Started.")
+			default:
+				c.Call("no_update", map[string]string{})
+			}
+			return nil
+		},
+	})
+
+	w.Say("Add an end-of-turn tool.")
+	w.ThreadIs(endTool, db.ThreadReady)
+	w.Quiet()
+
+	require.False(t, notifyErr, notified)
+	require.Len(t, proposals, 1, "the coordinator offered it once")
+	assert.Contains(t, proposals[0], "proposed 1 threads")
+	var notifyReq *Request
+	for _, r := range w.Requests() {
+		if strings.Contains(r.Prompt, notifyEnvelope) {
+			r := r
+			notifyReq = &r
+			break
+		}
+	}
+	require.NotNil(t, notifyReq, "the notify reached the coordinator")
+	assert.Contains(t, notifyReq.Prompt, spawnAsk)
+	assert.Less(t, strings.Index(notifyReq.Prompt, `trust="relay"`), strings.Index(notifyReq.Prompt, spawnAsk), "labelled before the thread's words")
+
+	assert.Len(t, w.ThreadList(), 1, "the proposal started nothing")
+	var card *db.ThreadEvent
+	for _, e := range w.Convo() {
+		if e.Kind == db.EvSuggestions {
+			e := e
+			card = &e
+		}
+	}
+	require.NotNil(t, card, "the user sees a card")
+	_, err := w.Coord.StartSuggestions(t.Context(), w.Project.MainThreadID, card.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "suggestion", w.ThreadIs(renameTh, db.ThreadReady).Origin)
+}
+
+// T5: both kinds of session are launched with the native cross-session channel
+// closed: no inbound turns, no ListAgents, SendMessage only through the
+// approval prompt. The coordinator also has no SendMessage at all.
+func TestSessionsAreLaunchedWithTheNativeChannelClosed(t *testing.T) {
+	w := New(t, Options{Files: projectsRepo, Actor: Reply("Done."), Brain: quietStart(endTool)})
+	w.Say("Add an end-of-turn tool.")
+	w.ThreadIs(endTool, db.ThreadIdle)
+	w.Quiet()
+
+	var coordinators, threads int
+	for _, l := range w.Agent.Launches() {
+		b, err := os.ReadFile(l.SettingsPath)
+		require.NoError(t, err, "a launch has a settings file")
+		assert.Contains(t, string(b), `"crossSessionInbound":"refuse"`, l.SettingsPath)
+		assert.Contains(t, string(b), `"ListAgents"`, "denied")
+		if coordtest.IsCoordinator(l) {
+			coordinators++
+			assert.Contains(t, l.DisallowedTools, "SendMessage")
+			assert.Contains(t, l.DisallowedTools, "ListAgents")
+		} else {
+			threads++
+			assert.Contains(t, string(b), `"SendMessage"`, "asks")
+		}
+	}
+	assert.Positive(t, coordinators)
+	assert.Positive(t, threads)
 }

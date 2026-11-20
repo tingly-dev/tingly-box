@@ -82,6 +82,7 @@ func githubToolRule(tool string) string { return builtinToolsRule + "__" + tool 
 // Nothing here touches the Bash rules: `gh pr create`, `gh pr merge` and
 // `gh issue create` stay on the ask list of grantAutoGit.
 func grantBuiltinTools(doc map[string]any, p *db.Project) {
+	grantNativeChannel(doc)
 	perms := permissionsOf(doc)
 	addRules(perms, "allow", builtinToolsRule)
 	for _, tool := range alwaysAskTools {

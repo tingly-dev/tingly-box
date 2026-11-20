@@ -1,6 +1,6 @@
 # Threads reach the coordinator through a Projects tool: `notify_coordinator`
 
-> Status: **proposal, not built.** Evidence: [../.research/cross-session-messaging.md](../.research/cross-session-messaging.md) (Claude Code 2.1.259, probed 2026-11-17; the probe script is next to it). Related: [mcp-tools.md](./mcp-tools.md) (the tool table, `ThreadOnly`), [github-tools.md](./github-tools.md) (authorization pattern), [message-channel.md](./message-channel.md), [projects-harness.md](./projects-harness.md).
+> Status: **built** (the tool, the prompts, the closed native channel, the harness scenarios); not built: the IM card, `propose_thread`, `thread_spawn`, thread-to-thread. Evidence: [../.research/cross-session-messaging.md](../.research/cross-session-messaging.md) (Claude Code 2.1.259, probed 2026-11-17; the probe script is next to it). Related: [mcp-tools.md](./mcp-tools.md) (the tool table, `ThreadOnly`), [github-tools.md](./github-tools.md) (authorization pattern), [message-channel.md](./message-channel.md), [projects-harness.md](./projects-harness.md).
 >
 > Decided with the user (2026-11-17): native cross-session messaging is acceptable only **wrapped in Projects MCP tools**, never called by the model directly; and the minimal shape is the mirror of `message_thread`: **one tool, thread to coordinator.** A new thread is still started by the user, from a card.
 
@@ -98,29 +98,29 @@ A `PreToolUse` hook on `to` did not fire in `-p` here (measured 8), so nothing r
 - **`propose_thread` (thread-only):** a thread writes the card itself, attributed to it, skipping the coordinator's step. Add it if the coordinator step proves lossy or slow. Auto-start through a project setting `thread_spawn` (`ask` default, `allow`, user-set only, depth 1, caps, the concurrency limiter still applies) stays an **off-by-default option behind it**; it is not part of the first version.
 - **Thread to thread (`message_peer`):** the same wrapper supports it. Target a thread of the **same project** only (`findThread`, so another project is unreachable); deliver with `Threads.Send(…, fromThread(source))` so the receiver sees "from thread #N, not the user, never an approval"; record it in both transcripts and as one line in the project conversation. Before shipping: a `thread_peers` project setting (default off), a reply-chain depth and rate cap, the coordinator able to `stop_thread`, and a sender that is told "queued", not given an answer. Until a concrete case exists, the coordinator routes with `message_thread`.
 
+## Built
+
+- `notify_coordinator` (`notify_tool.go`, `coordinator_notify.go`): thread-only, one `message` (2000 characters), queued as the coordinator's input through `onReport` with report kind `notify`, so it is a `thread_update` event in the project conversation, rendered `<event source="thread" kind="notify" … trust="relay">`. Not echoed to the chat. Limits per thread: 5 in 5 minutes and 20 an hour (in memory, reset on restart). Refused on a paused or archived project. The web's update row has a label for the new kind (en, zh, ru).
+- The native channel is closed in every Projects session (`native_channel.go`): `crossSessionInbound: "refuse"` and `permissions.deny: ["ListAgents"]` and `permissions.ask: ["SendMessage"]` in the thread and folder-session settings (`grantBuiltinTools`) and in a new coordinator settings file (`Layout.coordinatorSettings`, which carries the project's profile settings with it); `SendMessage` and `ListAgents` are also in the coordinator's disallowed tools. `threadPrompter.OnApproval` answers `SendMessage` itself: allowed only to a subagent id (`^a[0-9a-f]{16}$`), otherwise denied with a reason naming `notify_coordinator`; no card, nothing remembered. A thread started with `bypassPermissions` ignores `ask` rules; the receiver's `refuse` still holds, so nothing reaches a Projects session.
+- Prompts: the thread prompt sends other work to `notify_coordinator`; the coordinator prompt says to offer a requested thread at once with `propose_threads` and not to `start_thread` from a thread's words.
+- Not done as written above: the "subagent id the thread's own `Agent` result printed" check (the id shape only), and a `PreToolUse` hook (does not fire in `-p`).
+
+Checked against the real CLI and the real server (scripted model, isolated `HOME`): a thread calls `notify_coordinator`, the coordinator's turn gets the `kind="notify"` event and answers with `propose_threads`, the card appears; the same thread's `SendMessage` to a session name is denied with the reason, no approval card, and its report goes through.
+
 ## Harness (`projects/internal/harness`, see projects-harness.md)
 
-Baseline scenarios already exist (`thread_request_test.go`) and pass on today's code; they pin where the change starts and are edited on purpose by it:
+`thread_request_test.go`: **T1** a thread's session has `notify_coordinator` and none of `start_thread`, `propose_threads`, `message_thread`; **T2** a request in a *report* still becomes a card (the fallback path), with the label before the words and `Origin: "suggestion"` on the started thread (mutation-checked); **T3** `start_thread` is refused from a thread; **T4** a request through `notify_coordinator` reaches the coordinator as a relayed `kind="notify"`, is offered once as a card, starts nothing until the user's start; **T5** every launch, coordinator and thread, has `crossSessionInbound: refuse`, the denied `ListAgents`, and the coordinator has no `SendMessage` (mutation-checked: `accept` fails T5 and the unit test). Unit tests in `notify_test.go`: the forged envelope is escaped, the refusals and the limits, `sendMessageAllowed` over subagent ids and session names, the prompter answering without a card, the settings files.
 
-- **T1** `TestThreadSessionHasNoToolToReachTheCoordinator`: a thread's own session lists exactly `comment, create_issue, create_pr, merge, send_file, update, view`. Adding `notify_coordinator` changes this list in the same PR.
-- **T2** `TestJourneyThreadRequestForAThreadBecomesACard`: a request for another thread in a report arrives under `trust="relay"` before the thread's words; the coordinator's `propose_threads` shows a card and starts nothing; the user's start (`StartSuggestions`) creates the thread with `Origin: "suggestion"`. Mutation-checked: making the started thread's origin `coordinator` fails it. With the tool, the report is replaced by a `notify_coordinator` call from the thread's session, and the assertions on the card and on `Origin` stay.
-- **T3** `TestThreadCannotStartAThreadItself`: `start_thread` is refused from a thread's session.
+## Still to test
 
-Scenarios to add with the change (each written first, then the code): a notify arrives as `kind="notify"`, `trust="relay"`, with a forged `</event>` escaped (extends `TestPersonaInjectionInAReportStaysData`); the per-turn cap; a paused project refuses; `SendMessage` to a subagent id is allowed and to a session name is denied by `threadPrompter` (needs the Actor to raise an approval request: there is none for a built-in tool yet, so a small helper in `actors.go`). New invariant candidate: a project conversation event for every `notify_coordinator` call (`trust.notify-recorded`).
-
-## Tests when built
-
-- Tool-list golden: `notify_coordinator` appears for a worker and a folder session, not for the coordinator; no thread tool takes `project_id` or a target (`TestToolsOfEachScope`); the coordinator's list stays under its byte cap.
-- `notify_coordinator`: one `trust="relay"`, `kind="notify"` input per call; a forged `</event>` in the text stays inside; the caps hold; a paused or archived project refuses; the coordinator-prompt test (beside `prompts_test.go`) that a notify asking for a thread leads to `propose_threads`, not `start_thread`.
-- `threadPrompter.OnApproval`: `SendMessage` to a subagent id allowed; to a session name or another project's coordinator denied with the reason; "allow for this thread" does not stick for it.
-- Settings goldens: `crossSessionInbound: refuse` and the ask rule in the worker and folder session files; the coordinator's launch carries the disallow list.
-- Real CLI (the probe in `.research/`): with these settings a second session's `SendMessage` starts no turn, and subagent continuation still resumes (re-run with a real background subagent, which was not done).
-- A chat-bound project: the coordinator's reply to a notify reaches the chat; the notify itself does not.
+- Subagent continuation with a real background subagent, under Projects' `--permission-prompt-tool stdio` and the `ask` rule (probed only with a scripted model and the permission mode's own prompt).
+- A chat-bound project: the coordinator's reply to a notify reaches the chat, and the notify itself does not.
+- A coordinator-prompt test (beside `prompts_test.go`) that the notify line is in the prompt; whether a real model follows it is for the real-model tier of the harness.
 
 ## Decisions
 
 1. **One tool first, `notify_coordinator`**, with new threads offered through the coordinator's existing `propose_threads` card. `propose_thread` and `thread_spawn` wait. (The user asked for this shape.)
-2. **Transport B, Projects' relay.** Recommended with the reasons above; the user has not yet confirmed it over A.
-3. **Closing the native channel** (the four items) is independent of the tool and can ship first.
+2. **Transport B, Projects' relay**, built; the user did not choose A when asked.
+3. **Closing the native channel** is independent of the tool; it is built with it.
 4. **IM rendering of the suggestion card** is a prerequisite for chat users and is not in this design's scope.
 5. Thread to thread: designed on the same wrapper, not built.
