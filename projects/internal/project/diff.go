@@ -77,7 +77,7 @@ const (
 var maxListedFiles = 10000
 
 // errNoLocalRefs says the PR's branches are not in the checkout.
-var errNoLocalRefs = errors.New("the PR's branches are not in this checkout")
+var errNoLocalRefs = errors.New("this PR's branches are not in this checkout, so its changes cannot be shown here: open it on GitHub")
 
 // prRange is the three-dot range a PR's diff is read over: base's merge-base
 // with head, up to head, which is how GitHub shows a PR.

@@ -153,7 +153,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 `GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询。事件流不受服务器 `WriteTimeout` 限制。原因、不变量和被否决的做法见 `live-updates.md`。
 
 ### 4.7 Review 与合并（本地版 PR）
-- 看改动按 PR：`GET /threads/:id/prs/:number/diff`（及 `/diff/file`），每个 PR 看自己的 head 相对 base，优先读本地 refs，本地没有分支时用 GitHub 的文件列表；只给打开着的 PR。取舍见 `github-tools.md` 的 “A PR's diff”。线程本身不再有“当前分支相对 base”的 diff。
+- 看改动按 PR：`GET /threads/:id/prs/:number/diff`（及 `/diff/file`），每个 PR 看自己的 head 相对 base，只读本地 refs（本地没有分支时如实说明并给 GitHub 链接；读 GitHub 文件列表的路径已实现但默认关闭）；只给打开着的 PR。取舍见 `github-tools.md` 的 “A PR's diff”。线程本身不再有“当前分支相对 base”的 diff。
 - "Merge…"：`POST /threads/:id/merge`，必填 `method`，只有两种（其他值 400）。**两种都在 GitHub 上完成，本地工作区一律不动**；实现是线程的 `merge` MCP 工具（见 `github-tools.md`）背后的同一个 `Links.Merge`，HTTP 只是它的独立调用入口（用户点击即授权）：
   - 都先推送线程分支（不强推）、找到或开出它的 PR（与 `create_pr` 同一套，已有打开的 PR 就重推并关联，不重复开），并记入线程的 Issue/PR 链接。
   - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省时与 `gh pr merge --squash` 一致：PR 的标题加 `(#编号)`，正文用 PR 的描述。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。

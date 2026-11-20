@@ -11,9 +11,11 @@ import (
 )
 
 // A PR's diff is read from this checkout's refs when they hold both of its
-// branches (no network, no token, and it is fast), and from GitHub's own list
-// of the PR's files when they do not (a branch another machine pushed, one that
-// was deleted). See .design/github-tools.md, "A PR's diff".
+// branches (no network, no token, and it is fast). When they do not (a branch
+// another machine pushed, one that was deleted) GitHub's own list of the PR's
+// files can stand in, but that is switched off (Threads.remoteDiff): it costs
+// requests, so for now the PR says its branches are not here. See
+// .design/github-tools.md, "A PR's diff".
 
 // GitHubFile is one file of a PR as GitHub lists it.
 type GitHubFile struct {
@@ -156,7 +158,7 @@ func (m *Threads) PRDiff(ctx context.Context, threadID string, number int) (Diff
 		}
 	}
 	links := m.linksOrNil()
-	if links == nil {
+	if links == nil || !m.remoteDiff {
 		return Diff{}, errNoLocalRefs
 	}
 	files, err := links.PRFiles(ctx, t, number)
@@ -183,7 +185,7 @@ func (m *Threads) PRDiffFile(ctx context.Context, threadID string, number int, p
 		}
 	}
 	links := m.linksOrNil()
-	if links == nil {
+	if links == nil || !m.remoteDiff {
 		return FileDiff{}, errNoLocalRefs
 	}
 	files, err := links.PRFiles(ctx, t, number)
