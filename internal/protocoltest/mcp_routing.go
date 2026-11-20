@@ -117,7 +117,12 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 	if (len(listed.Tools) > 0) != wantClient {
 		failures = append(failures, "SDK tools/list differs from graph")
 	}
-	result, callErr := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: remoteToolName, Arguments: map[string]any{}})
+	// The client namespaces by server (mcp__tb__…), so the gateway prefix is not repeated.
+	clientName := strings.TrimPrefix(remoteToolName, "tingly_box_mcp__")
+	if wantClient && (len(listed.Tools) != 1 || listed.Tools[0].Name != clientName) {
+		failures = append(failures, "SDK tools/list does not use the short client name")
+	}
+	result, callErr := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: clientName, Arguments: map[string]any{}})
 	if wantClient {
 		if callErr != nil || result == nil || result.IsError || calls.Load() != 1 {
 			failures = append(failures, "authorized SDK call failed")
@@ -231,9 +236,11 @@ func routingMCPAdvisorCase(t flagTB) ([]string, string) {
 	if len(tools.Tools) != 0 {
 		failures = append(failures, "Advisor exposed through SDK tools/list")
 	}
-	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "tingly_box_mcp__builtin__advisor", Arguments: map[string]any{}})
-	if err == nil && (result == nil || !result.IsError) {
-		failures = append(failures, "context-free Advisor call falsely succeeded")
+	for _, name := range []string{"builtin__advisor", "tingly_box_mcp__builtin__advisor"} {
+		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: name, Arguments: map[string]any{}})
+		if err == nil && (result == nil || !result.IsError) {
+			failures = append(failures, "context-free Advisor call falsely succeeded: "+name)
+		}
 	}
 	return failures, "Advisor available only to model loop; generic client has zero exposed tools"
 }

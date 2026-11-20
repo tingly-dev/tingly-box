@@ -53,7 +53,8 @@ func TestRoutingAndClientProbeTraverseTheAuthenticatedGateway(t *testing.T) {
 	require.NoError(t, cfg.SetServerPort(port))
 	name := "tingly_box_mcp__remote__echo"
 	listed := managementRequest(t, r, "POST", "/probe/reader", `{}`, 200)
-	require.Contains(t, listed.Body.String(), name)
+	// Clients see the short name; the probe also accepts the catalog's.
+	require.Contains(t, listed.Body.String(), `"tools":["remote__echo"]`)
 	require.Equal(t, int32(0), calls.Load(), "discovery probe must not execute a tool")
 	result := managementRequest(t, r, "POST", "/probe/reader", `{"tool_name":"`+name+`","arguments":{}}`, 200)
 	require.Contains(t, result.Body.String(), `"success":true`)
