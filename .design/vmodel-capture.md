@@ -158,21 +158,22 @@ embeds every `CLAUDE.md` and `.claude/skills` it finds. So: run the client from 
 directory with clean ancestors (the example was taken in `/dev/shm/cc/work` with
 `HOME=/dev/shm/cc/dot`), and never commit a capture as-is.
 
-Sharing is a deliberate step with its own tool, not a format feature, and it is
-kept narrow on purpose: it masks what is private about the *machine*, not what
-the client *is*. `vmodel/examples/capture/redact.py <dir>` rewrites a *copy* in
-place. It masks (a) home paths (`/home/<user>/…` → `/home/user/[REDACTED]`),
-(b) every `<system-reminder>` block except the environment, model name, token
-budget and date (kept: first line and closing tag, content → `[REDACTED]`; this
-is where skills, agent types, `CLAUDE.md` and attribution settings live), and
-(c) credential values (scheme and token kind kept). Header names, casing and
-order, the JSON structure and key order, and Claude Code's own system prompt and
-tool descriptions stay as sent; ids from a throwaway `HOME` are not private and
-stay. It recomputes `Content-Length` and the `index.jsonl` ranges and marks
-`meta.json` `"redacted": true`. Because the body changes, a `cch` in it no
-longer verifies. An earlier version also cut every long string, renumbered UUIDs
-and zeroed ids; that hid nothing private (the prompt is the client's, not the
-user's) and made the example less useful, so it was dropped.
+Sharing is a deliberate step, not a format feature, and masking is kept narrow
+on purpose: it hides what is private about the *machine*, not what the client
+*is*. The example was masked in a *copy* with a local script that is not part of
+the repo. The masking covers (a) home paths (`/home/<user>/…` →
+`/home/user/[REDACTED]`), (b) every `<system-reminder>` block except the
+environment, model name, token budget and date (kept: first line and closing
+tag, content → `[REDACTED]`; this is where skills, agent types, `CLAUDE.md` and
+attribution settings live), and (c) credential values (scheme and token kind
+kept). Header names, casing and order, the JSON structure and key order, and
+Claude Code's own system prompt and tool descriptions stay as sent; ids from a
+throwaway `HOME` are not private and stay. `Content-Length` and the
+`index.jsonl` ranges are recomputed and `meta.json` gets `"redacted": true`.
+Because the body changes, a `cch` in it no longer verifies. An earlier cut also
+truncated every long string, renumbered UUIDs and zeroed ids; that hid nothing
+private (the prompt is the client's, not the user's) and made the example less
+useful, so it was dropped.
 `vmodel/capture/example_test.go` fails if a checked-in example regains a home
 path, an unmasked reminder or a credential. The redacted copies are the example
 under `vmodel/examples/capture/` (§6).
@@ -273,7 +274,7 @@ with the deferred "user definition files for agent --mock / replay" item
 | --- | --- | --- | --- |
 | **1 Raw tap ✅** | `vmodel/capture`: conn-tee listener, handler wrapper, `index.jsonl`, `meta.json`; `tb vmodel --capture`; token-marker warning; tests (`httptest` + raw `net.Dial` client proving header case/order, duplicates, chunked body, keep-alive offsets, aborted request). | `vmodel/capture` (new), `internal/command/vmodel.go` | low |
 | **2 Answer well enough ✅** | `--fallback` / `Runtime.SetFallback` (registry-level, opt-in); `--capture` defaults it to a built-in mock; opt-in `--capture-request-id`; the Anthropic wire-shape fix in the shared handler; tests in `vmodel/spec`, `vmodel/virtualserver`, `internal/command`. | `vmodel/registry.go`, `vmodel/spec/runtime.go`, `vmodel/virtualserver/handler.go`, `internal/command/vmodel.go` | low–medium (shared Anthropic handler: `protocoltest`, `servertest`, `harness` re-run green) |
-| **3 Recipe + docs + example ✅ (partly)** | `vmodel/README.md` section, a redacted example `vmodel/examples/capture/` (two Claude Code 2.1.329 captures, `redact.py`, README, guard tests) and a pointer from `claude-code-oauth-compat.md` §B2.4 (the Python snippet is left in place to avoid conflicting with the analysis branch). **Not done:** the optional `capture.Read(dir)` helper / pointing the `LiveCaptures` Go test at capture dirs. | docs | low |
+| **3 Recipe + docs + example ✅ (partly)** | `vmodel/README.md` section, a redacted example `vmodel/examples/capture/` (two Claude Code 2.1.329 captures, README, guard tests) and a pointer from `claude-code-oauth-compat.md` §B2.4 (the Python snippet is left in place to avoid conflicting with the analysis branch). **Not done:** the optional `capture.Read(dir)` helper / pointing the `LiveCaptures` Go test at capture dirs. | docs | low |
 | later | Scripted multi-turn responses; tap behind the gateway for `harness`. | contract change / `internal/protocoltest` | medium |
 
 No `internal/` backend logic is touched; the only `internal/` file is the CLI command wiring.

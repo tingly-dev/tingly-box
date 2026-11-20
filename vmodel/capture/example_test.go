@@ -153,7 +153,7 @@ func textBlocks(v any) []string {
 	return out
 }
 
-// The example must stay shareable: if it is re-captured, run redact.py first.
+// The example must stay shareable: if it is re-captured, mask it before committing.
 // What is private here is the environment the client describes: paths, the
 // skills and agent lists, CLAUDE.md content. The client's own prompt is not.
 func TestExampleIsRedacted(t *testing.T) {

@@ -15,14 +15,13 @@ claude-code-2.1.329/
     index.jsonl          one line per request: seq, conn, byte ranges, method, target, status
     raw/conn-0001.in     the request, as the client sent it (redacted, see below)
     raw/conn-0001.out    the response, as we sent it
-redact.py               how the example was redacted
 ```
 
 **These are lightly redacted copies, not faithful captures.** A real capture is
 verbatim, and Claude Code embeds facts about its environment in the request: the
 working directory and home path, and `<system-reminder>` blocks listing the
 skills, the agent types and every `CLAUDE.md` found up the directory tree.
-`redact.py` masks exactly that and nothing else (see [what is
+The copies here were masked for exactly that and nothing else (see [what is
 redacted](#what-is-redacted)); everything else, including Claude Code's own
 system prompt and tool descriptions, is as sent.
 
@@ -93,7 +92,7 @@ Content-Length: 78915
 
 ## What is redacted
 
-`redact.py` masks what is private about the machine and leaves the rest alone:
+Only what is private about the machine was masked; the rest is as sent:
 header names, casing and order, the body's JSON structure and key order, the
 client's system prompt and tool descriptions. It recomputes `Content-Length` and
 the `index.jsonl` ranges.
@@ -133,11 +132,11 @@ tb vmodel --capture ./cap/oauth-direct --json --port 18162 &        # prints {"u
     ANTHROPIC_BASE_URL=http://127.0.0.1:18162 CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-fake \
     _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1 \
     claude -p "say hi" --model claude-sonnet-4-6 < /dev/null )
-python3 vmodel/examples/capture/redact.py ./cap/oauth-direct        # then copy the directory here
+# then mask the machine-specific parts (see above) in a copy of ./cap/oauth-direct
 ```
 
 Run the client from a working directory (and `HOME`) whose parents hold no
 `CLAUDE.md` and no `.claude/skills`: Claude Code embeds all of them in the first
 user message, so a capture taken inside your home directory contains your private
-instructions. `redact.py` masks the skills, agent types and `CLAUDE.md` reminders,
-but it cannot know everything: read the result before sharing it.
+instructions. Masking the skills, agent types and `CLAUDE.md` reminders helps, but
+it cannot cover everything: read a capture before sharing it.

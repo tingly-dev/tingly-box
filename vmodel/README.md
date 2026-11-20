@@ -31,7 +31,7 @@ vmodel/
 ├── decision/           // Decisions-endpoint models (options in, one answer out) + Registry alias
 ├── virtualserver/      // Production Gin HTTP handler + Service wiring
 ├── capture/            // `tb vmodel --capture`: raw per-connection request recorder
-├── examples/capture/   // Redacted Claude Code captures (+ redact.py) showing what it records
+├── examples/capture/   // Redacted Claude Code captures showing what it records
 └── benchmark/          // Load-test client + local server factory
     └── examples/       // Runnable server/client examples
 ```
