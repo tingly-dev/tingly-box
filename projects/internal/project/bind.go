@@ -266,6 +266,10 @@ type replyMatch struct {
 	pendingRequest
 	// card is set when the request is a decision card.
 	card *Decision
+	// suggestions is set when the request is a suggestions card; start are the
+	// proposals the message starts (nil for all).
+	suggestions []Suggestion
+	start       []int
 	// text is the answer in the message: the message less the request's code.
 	text string
 	// explicit is set when the message started with the request's code, which
@@ -288,6 +292,16 @@ func (s *Service) matchReplies(b *db.ChannelBinding, text string) []replyMatch {
 		if _, d, ok := s.Coordinator.pendingDecision(q.threadID, q.requestID); ok {
 			if reply, explicit, fits := decisionReply(d, q.requestID, text); fits {
 				out = append(out, replyMatch{pendingRequest: q, card: &d, text: reply, explicit: explicit})
+			}
+			continue
+		}
+		if _, sug, ok := s.Coordinator.pendingSuggestions(q.threadID, q.requestID); ok {
+			rest, explicit := cutCode(q.requestID, text)
+			if !explicit {
+				rest = text
+			}
+			if indexes, fits := startOfReply(len(sug), rest); fits {
+				out = append(out, replyMatch{pendingRequest: q, suggestions: sug, start: indexes, text: rest, explicit: explicit})
 			}
 			continue
 		}
@@ -326,7 +340,7 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 	if chosen == nil {
 		var cards, others []replyMatch
 		for _, m := range matches {
-			if m.card != nil {
+			if m.card != nil || m.suggestions != nil {
 				cards = append(cards, m)
 			} else {
 				others = append(others, m)
@@ -349,6 +363,10 @@ func (s *Service) answerWaiting(b *db.ChannelBinding, text string, src Source, a
 	if !s.authorizeChannelAnswer(b, authorize) {
 		return true, nil
 	}
+	if chosen.suggestions != nil {
+		_, err := s.Coordinator.StartSuggestions(context.Background(), chosen.threadID, chosen.requestID, chosen.start, src)
+		return true, err
+	}
 	if chosen.card != nil {
 		return s.chooseFromText(b, chosen.pendingRequest, *chosen.card, chosen.text, src)
 	}
@@ -363,13 +381,15 @@ func (s *Service) tellWhichRequest(b *db.ChannelBinding, group []replyMatch) {
 		label := ""
 		if m.card != nil {
 			label = m.card.Question
+		} else if m.suggestions != nil {
+			label = "start the proposed threads"
 		} else if ev, ok := s.Threads.PendingRequest(m.threadID, m.requestID); ok {
 			label = ev.Content
 		}
 		lines = append(lines, "- "+decisionCode(m.requestID)+" · "+oneLine(label))
 	}
 	what := "request"
-	if group[0].card != nil {
+	if group[0].card != nil || group[0].suggestions != nil {
 		what = "question"
 	}
 	s.Relay.tell(b.BotUUID, b.Platform, b.ChatID, "More than one "+what+" is waiting here, so I can't tell which one that answers. Start your reply with the "+what+"'s code, like \""+
@@ -573,7 +593,15 @@ func (s *Service) AnswerFromChannel(platform, chatID, threadID, requestID, value
 		}
 		return "", nil
 	}
-	if m, err := s.Store.GetThreadEvent(requestID); err == nil && m.Kind == db.EvDecision && m.ThreadID == threadID {
+	if _, _, isSuggestion := s.Coordinator.pendingSuggestions(threadID, requestID); isSuggestion {
+		indexes, ok := startOfChoice(value)
+		if !ok {
+			return "", fmt.Errorf("unknown choice %q", value)
+		}
+		_, err := s.Coordinator.StartSuggestions(context.Background(), threadID, requestID, indexes, Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID})
+		return "", err
+	}
+	if m, err := s.Store.GetThreadEvent(requestID); err == nil && (m.Kind == db.EvDecision || m.Kind == db.EvSuggestions) && m.ThreadID == threadID {
 		return "This was already answered.", nil
 	}
 	ev, ok := s.Threads.PendingRequest(threadID, requestID)

@@ -567,7 +567,7 @@ func (h *Handler) startSuggestions(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	m, err := h.svc.Coordinator.StartSuggestions(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Indexes)
+	m, err := h.svc.Coordinator.StartSuggestions(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Indexes, rt.Source{})
 	if err != nil {
 		fail(c, err)
 		return

@@ -45,6 +45,9 @@ type Coordinator struct {
 	// where the answer came from, so chats that were shown it can restate it.
 	// It must not block.
 	OnDecided func(db.ThreadEvent, Source)
+	// OnSuggested is called after proposed threads of a suggestions card are
+	// started, with the card and where the start came from. It must not block.
+	OnSuggested func(db.ThreadEvent, Source)
 
 	mu     sync.Mutex
 	queues map[string]*queue
@@ -532,7 +535,7 @@ func orNone(s string) string {
 
 // StartSuggestions starts proposed threads from a suggestions event of a main
 // thread. indexes selects which; empty starts every one not started yet.
-func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventID string, indexes []int) (*db.ThreadEvent, error) {
+func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventID string, indexes []int, src Source) (*db.ThreadEvent, error) {
 	main, err := c.store.GetThread(mainThreadID)
 	if err != nil {
 		return nil, err
@@ -577,6 +580,9 @@ func (c *Coordinator) StartSuggestions(ctx context.Context, mainThreadID, eventI
 		return nil, err
 	}
 	c.publishEvent(projectID, m)
+	if c.OnSuggested != nil {
+		c.OnSuggested(*m, src)
+	}
 	if startErr != nil {
 		return nil, startErr
 	}

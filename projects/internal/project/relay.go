@@ -121,6 +121,9 @@ func (r *Relay) Message(e db.ThreadEvent) {
 	case db.EvDecision:
 		r.decision(e)
 		return
+	case db.EvSuggestions:
+		r.suggestions(e)
+		return
 	}
 	if text != "" {
 		r.enqueue([]string{e.ThreadID}, tag, text)

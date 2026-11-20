@@ -169,3 +169,68 @@ func TestWordsWithoutACodeDoNotAnswerAnApprovalOrAQuestion(t *testing.T) {
 	require.True(t, handled)
 	waitStatus(t, f.store, pick.ID, db.ThreadIdle)
 }
+
+func proposeTwo(t *testing.T, f *testFixture, svc *Service) db.ThreadEvent {
+	t.Helper()
+	_, err := svc.Coordinator.proposeThreads(context.Background(), f.project, struct{ Threads []Suggestion }{[]Suggestion{
+		{Title: "Docs", Task: "write the docs", Repo: "none"}, {Title: "Tests", Task: "add the tests", Repo: "none"},
+	}})
+	require.NoError(t, err)
+	events, err := f.store.ListThreadEvents(f.project.MainThreadID)
+	require.NoError(t, err)
+	for _, e := range events {
+		if e.Kind == db.EvSuggestions {
+			return e
+		}
+	}
+	t.Fatal("no suggestions card was posted")
+	return db.ThreadEvent{}
+}
+
+// The coordinator's proposed threads reach a chat bound to any thread of the
+// project, which starts one with its button, and the card is restated.
+func TestProposedThreadsCanBeStartedFromAChat(t *testing.T) {
+	f, svc, sink := promptFixture(t, approveScript)
+	worker, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Quiet", Task: "write docs", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	_, err = svc.BindChannel("telegram", "own", "", worker.ID, "")
+	require.NoError(t, err)
+	before := len(threadsOf(t, f))
+
+	card := proposeTwo(t, f, svc)
+
+	m := sink.nextPrompt(t)
+	require.Equal(t, "own", m.chatID)
+	require.Equal(t, card.ID, m.p.RequestID)
+	var values []string
+	for _, c := range m.p.Choices {
+		values = append(values, c.Value)
+	}
+	assert.Equal(t, []string{"sall", "s0", "s1"}, values)
+
+	_, err = svc.AnswerFromChannel("telegram", "own", m.p.ThreadID, m.p.RequestID, "s1")
+	require.NoError(t, err)
+	assert.Contains(t, sink.nextRestate(t).text, "Started in a chat: #")
+	assert.Len(t, threadsOf(t, f), before+1)
+	reply, err := svc.AnswerFromChannel("telegram", "own", m.p.ThreadID, m.p.RequestID, "sall")
+	require.NoError(t, err)
+	assert.Empty(t, reply, "the rest can still be started")
+}
+
+func TestProposedThreadsCanBeStartedByReplying(t *testing.T) {
+	f, svc, sink := promptFixture(t, approveScript)
+	sink.plain["dt"] = true
+	_, err := svc.BindChannel("dingtalk", "dt", "", "", f.project.ID)
+	require.NoError(t, err)
+	before := len(threadsOf(t, f))
+
+	proposeTwo(t, f, svc)
+
+	asked := sink.next(t)
+	assert.Contains(t, asked.text, "1. Docs: write the docs\n2. Tests: add the tests")
+	handled, err := svc.PostFromChannel("dingtalk", "dt", "start 2", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.Len(t, threadsOf(t, f), before+1)
+	assert.Contains(t, sink.next(t).text, "Started in a chat: #")
+}
