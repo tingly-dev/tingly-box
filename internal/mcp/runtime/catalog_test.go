@@ -52,8 +52,9 @@ func TestCatalogPolicyAndStructuredResults(t *testing.T) {
 			require.NotEmpty(t, tool.OutputSchema)
 			require.Contains(t, string(tool.Annotations), "readOnlyHint")
 			require.True(t, tool.Usage.Client)
-			require.True(t, tool.Usage.Gateway)
-			require.Len(t, r.ListServerToolsForInjection(ctx), 1)
+			// A stored gateway usage is ignored: connected MCP is never injected.
+			require.False(t, tool.Usage.Gateway)
+			require.Empty(t, r.ListServerToolsForInjection(ctx))
 			result, err := r.CallTool(ctx, tool.NormalizedName, `{"q":"fail"}`)
 			require.NoError(t, err)
 			require.True(t, result.IsError)
@@ -141,14 +142,21 @@ func TestStdioCatalogResultAndHotUpdate(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGatewayInjectionDoesNotRediscoverEveryRequest(t *testing.T) {
+// A connected MCP reaches agents as an MCP server, never inside model
+// requests, whatever its stored usage, tool policy or visibility says.
+func TestConnectedMCPIsNeverInjected(t *testing.T) {
 	remote := catalogRemote(t, "http", "gw", "")
-	cfg := &typ.MCPRuntimeConfig{RequestTimeout: 1, Sources: []typ.MCPSourceConfig{{ID: "gw", Transport: "http", Endpoint: remote.URL, Usage: &typ.MCPToolUsage{Gateway: true}}}}
+	cfg := &typ.MCPRuntimeConfig{RequestTimeout: 1, Sources: []typ.MCPSourceConfig{{ID: "gw", Transport: "http", Endpoint: remote.URL, Visibility: typ.ToolVisibilityServer, Usage: &typ.MCPToolUsage{Gateway: true}, ToolPolicies: map[string]typ.MCPToolPolicy{"echo": {Usage: &typ.MCPToolUsage{Gateway: true}}}}}}
 	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer r.Close()
-	require.Len(t, r.ListServerToolsForInjection(context.Background()), 1)
-	remote.Close() // an unreachable upstream must not be probed again within the TTL
-	require.Len(t, r.ListServerToolsForInjection(context.Background()), 1)
-	r.Reconcile(context.Background())
-	require.Empty(t, r.ListServerToolsForInjection(context.Background()), "config changes invalidate the cache")
+	ctx := context.Background()
+	status, err := r.DiscoverSource(ctx, "gw")
+	require.NoError(t, err)
+	require.NotEmpty(t, status.Tools)
+	for _, tool := range status.Tools {
+		require.True(t, tool.Usage.Client, tool.Name)
+		require.False(t, tool.Usage.Gateway, tool.Name)
+		require.False(t, r.IsGatewayToolName(tool.NormalizedName), tool.Name)
+	}
+	require.Empty(t, r.ListServerToolsForInjection(ctx))
 }

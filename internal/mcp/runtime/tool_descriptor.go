@@ -84,9 +84,11 @@ func IsClientVisibleVirtualTool(tool coretool.VirtualTool) bool {
 }
 
 // IsServerToolSource is independent of implementation: built-in web tools use
-// stdio MCP internally but have gateway-only Server Tool semantics.
+// stdio MCP internally but have gateway-only Server Tool semantics. The
+// Advisor source is one by its reserved ID too, before a consultation model
+// (and with it the advisor transport) is set.
 func IsServerToolSource(source typ.MCPSourceConfig) bool {
-	return source.ID == mcptools.ServerWebtoolsSourceID || SourceImplementation(source) == typ.ToolImplementationVirtual
+	return source.ID == mcptools.ServerWebtoolsSourceID || source.ID == mcptools.BuiltinAdvisorSourceID || SourceImplementation(source) == typ.ToolImplementationVirtual
 }
 
 func IsBuiltinSourceID(sourceID string) bool {

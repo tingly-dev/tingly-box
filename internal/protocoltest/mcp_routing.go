@@ -57,7 +57,9 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 		source.Tools = []string{"another"}
 	}
 	wantClient := state != "revoked" && state != "disabled_tool" && state != "excluded_tool"
-	wantServer := serverUse && state != "disabled_tool" && state != "excluded_tool"
+	// A stored gateway usage (server_only, dual) never makes a connected MCP a
+	// model-request route: it is reached as an MCP server only.
+	wantServer := false
 	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(&typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{source, {ID: "webtools", Enabled: typ.BoolPtr(false), Transport: "stdio", Command: "tingly-box"}}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: grant}}}))
 	token := env.appConfig.GetGlobalConfig().GetUserToken()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

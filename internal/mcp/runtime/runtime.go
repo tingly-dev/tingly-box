@@ -39,8 +39,6 @@ type Runtime struct {
 	enabledNamesCache   map[string]struct{}
 	enabledNamesExpires time.Time
 	enabledNamesMu      sync.RWMutex
-	remoteToolsCache    []openai.ChatCompletionToolUnionParam
-	remoteToolsExpires  time.Time
 
 	// envRefWarnedOnce ensures unresolved environment reference warnings
 	// are only logged once per runtime instance to avoid log spam.
@@ -182,14 +180,11 @@ func (t mcpTool) schema() json.RawMessage {
 	return nil
 }
 
-// ListServerToolsForInjection returns MCP tools that should be injected into upstream model requests.
-// Injection includes gateway-only Server Tools and connected MCP tools opted in
-// for gateway usage. The request path gates the latter with the MCP flag.
+// ListServerToolsForInjection returns the tools injected into upstream model
+// requests: Tingly Box's own Server Tools only. A connected MCP is never
+// injected; agents reach it as an ordinary MCP server through a profile.
 func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.ChatCompletionToolUnionParam {
-	if r == nil {
-		return nil
-	}
-	return append(r.ListBuiltinServerToolsForInjection(ctx), r.remoteGatewayTools(ctx)...)
+	return r.ListBuiltinServerToolsForInjection(ctx)
 }
 
 // HasBuiltinServerTools reports whether any Tingly Box Server Tool would be
@@ -285,40 +280,6 @@ func (r *Runtime) ListBuiltinServerToolsForInjection(ctx context.Context) []open
 		}
 	}
 	return out
-}
-
-// remoteGatewayTools discovers gateway-eligible tools from external sources.
-// Discovery is a network round trip per source, so the result is cached.
-func (r *Runtime) remoteGatewayTools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
-	r.enabledNamesMu.RLock()
-	if r.remoteToolsCache != nil && time.Now().Before(r.remoteToolsExpires) {
-		cached := r.remoteToolsCache
-		r.enabledNamesMu.RUnlock()
-		return cached
-	}
-	r.enabledNamesMu.RUnlock()
-	remote := make([]openai.ChatCompletionToolUnionParam, 0)
-	for _, status := range r.Catalog(ctx, "gateway") {
-		for _, tool := range status.Tools {
-			if !tool.Enabled || !tool.Usage.Gateway || tool.Implementation == typ.ToolImplementationVirtual || status.SourceID == mcptools.ServerWebtoolsSourceID {
-				continue
-			}
-			params := shared.FunctionParameters{"type": "object", "properties": map[string]any{}}
-			if len(tool.InputSchema) > 0 {
-				_ = json.Unmarshal(tool.InputSchema, &params)
-			}
-			def := shared.FunctionDefinitionParam{Name: tool.NormalizedName, Parameters: params}
-			if tool.Description != "" {
-				def.Description = param.NewOpt(tool.Description)
-			}
-			remote = append(remote, openai.ChatCompletionFunctionTool(def))
-		}
-	}
-	r.enabledNamesMu.Lock()
-	r.remoteToolsCache = remote
-	r.remoteToolsExpires = time.Now().Add(remoteToolsCacheTTL)
-	r.enabledNamesMu.Unlock()
-	return remote
 }
 
 func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
@@ -705,10 +666,6 @@ func (r *Runtime) HasServerTools() bool {
 }
 
 const enabledNamesCacheTTL = 5 * time.Second
-
-// remoteToolsCacheTTL bounds how often model requests trigger upstream
-// tools/list round trips; config changes invalidate it immediately.
-const remoteToolsCacheTTL = 30 * time.Second
 
 func (r *Runtime) ListClientVisibleMCPToolNames(ctx context.Context) map[string]struct{} {
 	out := make(map[string]struct{})

@@ -29,7 +29,7 @@ func TestNativeWebToolsAreStrippedOnlyAfterServerReplacementInjection(t *testing
 	ctx := protocoltransform.NewTransformContext(native())
 	require.NoError(t, strip.Apply(ctx))
 	require.Len(t, ctx.Request.(*openai.ChatCompletionNewParams).Tools, 2, "availability alone is not injection")
-	inject := NewMCPToolInjectionTransform(rt).WithConnectedTools(func() bool { return false })
+	inject := NewMCPToolInjectionTransform(rt)
 	require.NoError(t, inject.Apply(ctx))
 	require.NoError(t, strip.Apply(ctx))
 	require.Equal(t, []string{"web_search", "tingly_box_mcp__server-webtools__mcp_web_fetch"}, extractOpenAIToolNames(ctx.Request.(*openai.ChatCompletionNewParams).Tools))
