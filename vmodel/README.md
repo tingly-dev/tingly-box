@@ -205,17 +205,19 @@ credential without a "fake" marker) and keep the directory out of git.
 `seq` is arrival order. Bytes the HTTP server rejected before any handler ran
 get an `"unparsed":true` entry.
 
-So the client finishes a normal round, capture mode answers an undefined model
-id (definitions from `--config` still win): Anthropic Messages requests get
-a response in the real API's exact shape that echoes the requested `model`
-(a stream with `content: []`, `ping`, `stop_reason: "end_turn"`; or one JSON
-message), other protocols get the built-in `capture-default` mock. It also
-answers `count_tokens` and the Claude Code telemetry endpoints and leaves
-everything else to the usual 501. The shape matters: Claude Code abandons a
-stream whose `message_start` has `content: null` or a non-Anthropic
-`stop_reason` and silently retries without streaming, which would add a second,
-unrepresentative request to the capture.
-`--capture-request-id` adds a `request-id` response header.
+Capturing does not change what vmodel answers; it only watches. Because a
+client's model ids are not known in advance, `--capture` also turns on
+`--fallback` (below) with a built-in `capture-default` mock, so the client gets
+a normal reply instead of a 404 and finishes its round. `--fallback <id>` picks
+another definition. `--capture-request-id` adds a `request-id` response header.
+
+### Serving unknown model ids
+
+`tb vmodel --fallback <id>` serves every request whose `model` no definition
+names with definition `<id>` instead of a 404 (replies echo the requested
+model; defined models always win; the fallback is not listed by `/models`; a
+protocol the fallback does not support is still a 404). Without the flag
+unknown models stay a 404.
 
 ```sh
 tb vmodel --capture ./cap --json            # prints {"url": "...", ...}

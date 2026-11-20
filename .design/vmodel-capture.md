@@ -1,6 +1,6 @@
 # VModel capture — catching what a real client sends
 
-Status: **Phases 1–3 implemented** (`vmodel/capture`, `tb vmodel --capture`; see §6 for what was verified). Written after the Claude Code 2.1.328
+Status: **Phases 1–3 implemented, answering moved into vmodel proper** (`vmodel/capture`, `tb vmodel --capture`; see §6 for what was verified). Written after the Claude Code 2.1.328
 wire analysis (`.research/claude-code/2.1.328.md` §9, branch
 `tp/analyze-latest-claude-code-reque-954264`), which had to hand-write a Python
 `fake_api.py` because `tb vmodel` could not do the job. Index:
@@ -152,43 +152,51 @@ manual, deliberate step by whoever owns it.
 
 ### 3.4 What the server answers (so the client finishes a normal round)
 
-Capture exists to observe the client, so the answer only has to be good enough
-that the client does not retry or abort:
+**Capture only watches; answering is vmodel's own job.** An earlier cut of this
+work put an Anthropic answer, a model-id rewrite and a table of Claude Code
+telemetry stubs inside `vmodel/capture`: a second, capture-only answering stack
+beside the vmodel service. It was dropped. What a capture needs from the server
+is fixed in vmodel itself:
 
-- **Unknown model ids** (G2): in capture mode a request for an id nobody
-  defined is served by a built-in `capture-default` mock (short fixed text,
-  filled `usage`) instead of 404. Explicit definitions (`--config`) still
-  match first. Implemented as an option on `spec.Runtime` that only `--capture`
-  sets, so the production `/virtual/v1/*` and the "unknown model → 404"
-  contract of `vmodel-definitions.md` are unchanged.
-- **`request-id` response header: off by default, `--capture-request-id` turns
-  it on** (`req_vmodel_<seq>`). Real Anthropic sends it and CC feeds it back as
-  the next request's `cc_prev_req` (direct mode only; bundle analysis, not run).
-  A single-turn `-p` capture never reads it, so the default stays "not sent";
-  the flag exists for multi-turn captures.
-- **Auxiliary endpoints** (G5): always captured (the tap is outermost). Answered
-  from a tiny table so the CLI proceeds — `POST /v1/messages/count_tokens` →
-  `{"input_tokens": <n>}`; telemetry/event-logging/bootstrap → `200 {}`;
-  anything else keeps the protocol-shaped 501. `/api/oauth/*` is captured if it
-  ever arrives, not simulated.
-- **Anthropic answers are real-shaped, not the shared mock.** First run of a
-  real `claude` 2.1.329 against the shared mock showed two requests per `-p`
-  run: the streamed one, then ~90 ms later an identical `stream:false` retry on
-  the same connection. The shared mock's SSE (`content: null`, empty
-  `stop_reason` in `message_start`, `"stop"` instead of `"end_turn"`) makes
-  Claude Code drop the stream and fall back to non-streaming, so the capture
-  would contain a request a real server would never have caused. Capture mode
-  therefore answers unknown-model Anthropic Messages itself
-  (`vmodel/capture/anthropic.go`): SSE with `content: []`, `ping`, null
-  `stop_reason` then `end_turn`, echoing the requested model; or one JSON
-  message. The shared mock is left alone (its goldens and tests are others').
-- **Typed binding** (G4): the answer path still binds `/v1/messages` into the
-  SDK type, but this turned out not to bite: a real `claude` 2.1.259 `-p`
-  request (118 KB body) and a hand-built 2.1.328-shaped body (adaptive thinking
-  with `display`, `output_config`, `context_management`, `diagnostics`, scoped
-  1h `cache_control`) are both answered 200. A real 2.1.328 body has not been
-  tried (the binary and its captures live elsewhere); if one ever 400s the
-  capture is already safe, and the follow-up is to answer without binding.
+- **Unknown model ids** (G2): `spec.Runtime.SetFallback(id)` and the CLI flag
+  `--fallback <id>` serve ids no definition names with a given definition
+  (registries resolve it in `Get`, so models stay unlisted and replies echo the
+  asked-for id). It is a general vmodel feature, opt-in so the "unknown model →
+  404" contract of `vmodel-definitions.md` and the production `/virtual/v1`
+  endpoint are unchanged. `--capture` turns it on by default with a built-in
+  `capture-default` mock (`ok`), so one flag is enough.
+- **Anthropic wire shape** (a real vmodel bug, not a capture feature): the
+  first run of real `claude` 2.1.329 showed every capture holding two requests,
+  the second a `stream:false` retry ~90 ms after the streamed one, caused by our
+  own answer. Replaying the handler's exact response bytes from a raw socket
+  made the client say why: `malformed_stream, StreamMalformedEventError; 3 stream
+  events received`. The handler left `index` out of `content_block_delta`
+  (`omitempty` on an `int`, so block 0 vanished); real Anthropic always sends it
+  and Claude Code rejects the stream. It is now a pointer, always sent. Three
+  smaller deviations were fixed on the way, each independently harmless as far
+  as bisecting with a scripted server showed (none retried by itself), but all
+  unlike the real API: `message_start` opened with `content: null` (now `[]`)
+  and an empty `stop_reason` (now null), there was no `ping`, and the mocks'
+  OpenAI-style `"stop"` was passed through (`stop`→`end_turn`,
+  `length`→`max_tokens`, `tool_calls`→`tool_use`, streams and plain responses).
+  This benefits every `/virtual` Anthropic client.
+- **`request-id` response header**: off by default, `--capture-request-id` adds
+  it (`req_vmodel_<seq>`, done by the tap's handler, protocol-agnostic). Real
+  Anthropic sends it and CC feeds it back as the next request's `cc_prev_req`
+  (direct mode only; bundle analysis, not run). A single-turn `-p` capture never
+  reads it; the flag exists for multi-turn captures.
+- **Auxiliary endpoints** (G5): always *captured* (the tap is outermost), still
+  answered with the protocol-shaped 501 as before. No stubs: in all real runs
+  (2.1.259, 2.1.329 with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`) the
+  client sent only `/v1/messages` (plus one `HEAD /api/hello` in 2.1.259) and
+  carried on after the 501. `count_tokens` is a real Anthropic endpoint but
+  `vmodel` deliberately answers it 501 (pinned by
+  `TestServe_UnsimulatedEndpointsReturn501`); it was not needed, so unchanged.
+- **Typed binding** (G4): the Anthropic handler binds `/v1/messages` into the
+  SDK type. This did not bite: real `claude` 2.1.259 and 2.1.329 bodies
+  (91–118 KB; adaptive thinking, `output_config`, `diagnostics`, …) and a
+  hand-built 2.1.328-shaped body are all answered 200. If a future body 400s the
+  capture is already safe.
 
 ### 3.5 Recipe (documentation, not a tool)
 
@@ -237,12 +245,11 @@ with the deferred "user definition files for agent --mock / replay" item
 | Phase | Content | Touches | Risk |
 | --- | --- | --- | --- |
 | **1 Raw tap ✅** | `vmodel/capture`: conn-tee listener, handler wrapper, `index.jsonl`, `meta.json`; `tb vmodel --capture`; token-marker warning; tests (`httptest` + raw `net.Dial` client proving header case/order, duplicates, chunked body, keep-alive offsets, aborted request). | `vmodel/capture` (new), `internal/command/vmodel.go` | low |
-| **2 Answer well enough ✅** | `capture-default` fallback for unknown models, opt-in `--capture-request-id`, `count_tokens`/telemetry stubs; try a real-shaped `/v1/messages?beta=true` body to settle G4. | `vmodel/capture` (`Answer`; no change to `spec`/`virtualserver`) | low |
+| **2 Answer well enough ✅** | `--fallback` / `Runtime.SetFallback` (registry-level, opt-in); `--capture` defaults it to a built-in mock; opt-in `--capture-request-id`; the Anthropic wire-shape fix in the shared handler; tests in `vmodel/spec`, `vmodel/virtualserver`, `internal/command`. | `vmodel/registry.go`, `vmodel/spec/runtime.go`, `vmodel/virtualserver/handler.go`, `internal/command/vmodel.go` | low–medium (shared Anthropic handler: `protocoltest`, `servertest`, `harness` re-run green) |
 | **3 Recipe + docs ✅ (partly)** | `vmodel/README.md` section and a pointer from `claude-code-oauth-compat.md` §B2.4 (the Python snippet is left in place to avoid conflicting with the analysis branch). **Not done:** the optional `capture.Read(dir)` helper / pointing the `LiveCaptures` Go test at capture dirs. | docs | low |
 | later | Scripted multi-turn responses; tap behind the gateway for `harness`. | contract change / `internal/protocoltest` | medium |
 
-Recommended go-ahead: Phases 1–2 (3 is small docs). No `internal/` backend logic
-is touched; the only `internal/` file is the CLI command wiring.
+No `internal/` backend logic is touched; the only `internal/` file is the CLI command wiring.
 
 ### Verification done
 
@@ -250,17 +257,24 @@ is touched; the only `internal/` file is the CLI command wiring.
   headers and chunked bodies verbatim in `conn-N.in`; keep-alive ranges slice
   each request exactly; unparsed bytes and aborted requests indexed; concurrent
   connections; streaming flush intact; request-id opt-in; non-empty dir refused;
-  credential warning once and without the secret; unknown-model fallback for
-  Anthropic/Chat/Responses with a Claude Code-shaped body; auxiliary endpoints.
-- `go test ./internal/command -run VModel`: flag parsing (`--no-capture-out`,
-  `--capture-out=false`), misuse errors, end-to-end through `run` with the raw
-  client body asserted in the capture and not the rewritten one.
-- Real client: built `tb`, ran `claude -p "say hi"` (2.1.259, the version
-  installed here) under `env -i`, isolated `HOME`, fake OAuth token against
-  `tb vmodel --capture`. It printed the mock answer and exited 0; the capture
-  holds `HEAD /api/hello` (501) and two `POST /v1/messages?beta=true` on one
-  keep-alive connection, with `X-Stainless-*` capitalised and `anthropic-beta`
-  lower-case in the order sent — what `net/http` would have normalised.
+  credential warning once and without the secret.
+- `vmodel/spec` (fallback: unknown ids on Anthropic/Chat/Responses with a Claude
+  Code-shaped body, defined models win, opt-in, not advertised, protocol
+  respected), `vmodel/virtualserver` (Anthropic stream shape: block index on every `content_block_*` event, `content: []`, null `stop_reason`, `ping`; stop-reason vocabulary), `internal/command -run VModel` (flags, misuse, `--fallback`,
+  end-to-end `--capture` with the client's body verbatim in the capture).
+- Regression of the shared Anthropic handler change: `internal/protocoltest`,
+  `cli/harness`, `internal/servertest`, `internal/server/...` green. Not run:
+  the matrix legs that need python/node SDK clients (not installable here).
+  Pre-existing failures unrelated to this change (identical on `main`):
+  `TestDelayProvider_TPSCaptured`, `TestServe_UnsimulatedEndpointsReturn501`,
+  `TestErrorInjection_MidStream_OpenAI_{ErrorEvent,ConnectionClose}`; and
+  `internal/protocol` `TestAnthropicNonStreamRequest` needs a gateway on :12580.
+- Real client, `env -i` + isolated `HOME` + fake tokens against
+  `tb vmodel --capture`: `claude` 2.1.259 and 2.1.329. With vmodel's own fixed handler
+  (no capture-side answering) each 2.1.329 cell (OAuth/API key × proxy/direct)
+  holds exactly one `POST /v1/messages?beta=true` (before the fix: that plus a
+  `stream:false` retry), `X-Stainless-*` capitalised and `anthropic-beta` lower-case in the
+  order sent.
 
 ## 7. Open questions
 

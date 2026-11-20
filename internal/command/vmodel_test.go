@@ -215,8 +215,8 @@ func TestVModelCaptureRejectsMisuse(t *testing.T) {
 }
 
 // End to end through the real command: an unknown model id still gets an
-// answer, the capture directory holds the client's exact bytes, and a
-// user-defined model keeps priority over the fallback.
+// answer (--capture defaults the fallback), the capture directory holds the
+// client's exact bytes, and a user-defined model keeps priority.
 func TestVModelCapture(t *testing.T) {
 	path := vmodelConfigFile(t, `{"id":"configured","kind":"mock","mock":{"content":"configured answer"}}`)
 	dir := filepath.Join(t.TempDir(), "cap")
@@ -275,8 +275,7 @@ func TestVModelCapture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The capture holds what the client sent, not what the runtime was given.
-	if !strings.Contains(string(raw), sent) || strings.Contains(string(raw), "capture-default") {
+	if !strings.Contains(string(raw), sent) {
 		t.Fatalf("raw input does not hold the client's body verbatim:\n%s", raw)
 	}
 	index, err := os.ReadFile(filepath.Join(dir, "index.jsonl"))
@@ -287,5 +286,43 @@ func TestVModelCapture(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestVModelFallback(t *testing.T) {
+	path := vmodelConfigFile(t, "- {id: known, kind: mock, mock: {content: known answer}}\n- {id: other, kind: mock, mock: {content: other answer}}\n")
+	ask := func(t *testing.T, cmd VModelCmdKong, model string) (int, string) {
+		t.Helper()
+		handler, _, err := cmd.handler()
+		if err != nil {
+			t.Fatal(err)
+		}
+		server := httptest.NewServer(handler)
+		defer server.Close()
+		resp, err := http.Post(server.URL+"/v1/chat/completions", "application/json",
+			strings.NewReader(`{"model":"`+model+`","messages":[{"role":"user","content":"hi"}]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+
+	if code, _ := ask(t, VModelCmdKong{Config: []string{path}}, "nobody"); code != http.StatusNotFound {
+		t.Fatalf("unknown model without --fallback: %d", code)
+	}
+	if code, body := ask(t, VModelCmdKong{Config: []string{path}, Fallback: "other"}, "nobody"); code != 200 || !strings.Contains(body, "other answer") {
+		t.Fatalf("--fallback other: %d %s", code, body)
+	}
+	if code, body := ask(t, VModelCmdKong{Config: []string{path}, Fallback: "other"}, "known"); code != 200 || !strings.Contains(body, "known answer") {
+		t.Fatalf("defined model must win: %d %s", code, body)
+	}
+	// An explicit --fallback beats the one --capture would pick.
+	if code, body := ask(t, VModelCmdKong{Config: []string{path}, Fallback: "other", Capture: t.TempDir()}, "nobody"); code != 200 || !strings.Contains(body, "other answer") {
+		t.Fatalf("--fallback with --capture: %d %s", code, body)
+	}
+	if _, _, err := (&VModelCmdKong{Config: []string{path}, Fallback: "missing"}).handler(); err == nil {
+		t.Fatal("undefined --fallback accepted")
 	}
 }

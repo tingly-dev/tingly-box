@@ -236,13 +236,29 @@ func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMess
 		Type:       "message",
 		Role:       "assistant",
 		Model:      req.Model,
-		StopReason: string(resp.StopReason),
+		StopReason: anthropicStopReason(string(resp.StopReason)),
 		Content:    content,
 		Usage: AnthropicUsage{
 			InputTokens:  token.EstimateBetaAnthropicTokens(req.Messages),
 			OutputTokens: token.EstimateTokensString(vmodelTextContent(resp)),
 		},
 	})
+}
+
+// anthropicStopReason maps the finish reasons shared by the mock models (the
+// OpenAI vocabulary: stop/length/tool_calls) onto Anthropic's stop_reason
+// values, which is what an Anthropic client expects to read. Values that are
+// already Anthropic's pass through.
+func anthropicStopReason(r string) string {
+	switch r {
+	case "", "stop":
+		return "end_turn"
+	case "length":
+		return "max_tokens"
+	case "tool_calls":
+		return "tool_use"
+	}
+	return r
 }
 
 func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel) {
@@ -324,20 +340,26 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 				if id == "" {
 					id = msgID
 				}
-				data, _ := json.Marshal(AnthropicStreamEvent{
-					Type: "message_start",
-					Message: &AnthropicMessageResponse{
-						ID: id, Type: "message", Role: "assistant", Model: req.Model,
-						Usage: AnthropicUsage{InputTokens: estimatedInput},
+				// Real Anthropic opens with an empty content array and a null
+				// stop_reason (both are filled in by the deltas that follow).
+				// Claude Code abandons a stream that opens with `content: null`
+				// and silently retries without streaming.
+				data, _ := json.Marshal(map[string]interface{}{
+					"type": "message_start",
+					"message": map[string]interface{}{
+						"id": id, "type": "message", "role": "assistant", "model": req.Model,
+						"content": []AnthropicContent{}, "stop_reason": nil, "stop_sequence": nil,
+						"usage": AnthropicUsage{InputTokens: estimatedInput},
 					},
 				})
 				fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data)
+				fmt.Fprint(w, "event: ping\ndata: {\"type\":\"ping\"}\n\n")
 			case anthropicvm.TextDeltaEvent:
 				streamedBytes += len(e.Text)
 				startTextBlock(e.Index)
 				data, _ := json.Marshal(AnthropicStreamEvent{
 					Type:  "content_block_delta",
-					Index: e.Index,
+					Index: &e.Index,
 					Delta: &AnthropicDelta{Type: "text_delta", Text: e.Text},
 				})
 				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
@@ -345,7 +367,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 				startThinkingBlock(e.Index)
 				data, _ := json.Marshal(AnthropicStreamEvent{
 					Type:  "content_block_delta",
-					Index: e.Index,
+					Index: &e.Index,
 					Delta: &AnthropicDelta{Type: "thinking_delta", Thinking: e.Thinking},
 				})
 				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
@@ -367,7 +389,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 				u := e.Usage
 				explicitUsage = &u
 			case anthropicvm.DoneEvent:
-				stopReason = e.StopReason
+				stopReason = anthropicStopReason(e.StopReason)
 				// Close any open content blocks before the terminal events, so
 				// the stream is start→delta(s)→stop bracketed per block.
 				stopAllBlocks()

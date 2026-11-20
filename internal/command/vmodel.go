@@ -29,7 +29,9 @@ type VModelCmdKong struct {
 	JSON   bool     `kong:"name='json',help='Print one JSON readiness record with URLs and model IDs'"`
 	Export string   `kong:"name='export',help='Export definitions to a .json or .yaml file and exit; omit --config to export the full builtin catalog'"`
 
-	Capture          string `kong:"name='capture',help='Record what clients send into this new/empty directory: verbatim bytes of every connection (raw/conn-N.in) plus index.jsonl; unknown model ids are answered by a default mock'"`
+	Fallback string `kong:"name='fallback',help='Serve request model ids that no definition names with this model ID instead of a 404; with --capture it defaults to a built-in mock'"`
+
+	Capture          string `kong:"name='capture',help='Record what clients send into this new/empty directory: verbatim bytes of every connection (raw/conn-N.in) plus index.jsonl'"`
 	CaptureOut       bool   `kong:"name='capture-out',default='true',negatable,help='With --capture, also record the bytes written back to clients (raw/conn-N.out)'"`
 	CaptureRequestID bool   `kong:"name='capture-request-id',help='With --capture, add a request-id response header (req_vmodel_<seq>) as the real API does'"`
 }
@@ -93,7 +95,11 @@ func (c *VModelCmdKong) handler() (http.Handler, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if c.Capture != "" {
+	fallback := c.Fallback
+	if fallback == "" && c.Capture != "" {
+		// Capturing observes a client whose model ids we cannot know in advance;
+		// it must still be answered so it finishes its round.
+		fallback = captureDefaultModel
 		if defs, err = withCaptureDefault(defs); err != nil {
 			return nil, nil, err
 		}
@@ -102,28 +108,27 @@ func (c *VModelCmdKong) handler() (http.Handler, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	var h http.Handler = runtime
-	if c.Capture != "" {
-		// Answer is inside the tap: the capture sees the client's request
-		// exactly as sent, whatever Answer rewrites for the runtime.
-		models := map[string]bool{}
-		for _, id := range runtime.IDs() {
-			models[id] = true
+	if fallback != "" {
+		if err := runtime.SetFallback(fallback); err != nil {
+			return nil, nil, err
 		}
-		h = capture.Answer(runtime, func(id string) bool { return id != capture.DefaultModel && models[id] })
 	}
-	return h, runtime.IDs(), nil
+	return runtime, runtime.IDs(), nil
 }
 
-// withCaptureDefault adds the model that answers unknown ids while capturing,
-// unless the user already defined one under that id.
+// captureDefaultModel answers unknown model ids while capturing, unless the
+// user names another fallback.
+const captureDefaultModel = "capture-default"
+
+// withCaptureDefault adds that model unless the user already defined one under
+// the same id.
 func withCaptureDefault(defs []spec.Definition) ([]spec.Definition, error) {
 	for _, d := range defs {
-		if d.ID == capture.DefaultModel {
+		if d.ID == captureDefaultModel {
 			return defs, nil
 		}
 	}
-	extra, err := spec.Decode([]byte("id: " + capture.DefaultModel + "\nkind: mock\nmock:\n  content: \"ok\"\n"))
+	extra, err := spec.Decode([]byte("id: " + captureDefaultModel + "\nkind: mock\nmock:\n  content: \"ok\"\n"))
 	if err != nil {
 		return nil, err
 	}
