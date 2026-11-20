@@ -6,6 +6,7 @@ package channel
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -31,6 +32,14 @@ type BindChannelRequest struct {
 	ProjectID string `json:"project_id,omitempty"`
 	// ChatTitle is an optional display name for the chat.
 	ChatTitle string `json:"chat_title,omitempty"`
+}
+
+// MuteChannelRequest mutes or unmutes a bound IM chat.
+type MuteChannelRequest struct {
+	Muted bool `json:"muted"`
+	// MutedUntil ends the mute at this time; omitted, the chat stays muted
+	// until unmuted. Ignored when unmuting.
+	MutedUntil *time.Time `json:"muted_until,omitempty"`
 }
 
 // OKResponse acknowledges an action.
@@ -60,6 +69,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.PUT("/projects/channel-bindings", h.bind, tag,
 		swagger.WithDescription("Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it"),
 		swagger.WithRequestModel(BindChannelRequest{}),
+		swagger.WithResponseModel(db.ChannelBinding{}))
+	api.PUT("/projects/channel-bindings/:id/mute", h.mute, tag,
+		swagger.WithDescription("Mute a bound IM chat (nothing is sent to it, its messages still arrive), until a time or until unmuted; or unmute it. The binding stays."),
+		swagger.WithRequestModel(MuteChannelRequest{}),
 		swagger.WithResponseModel(db.ChannelBinding{}))
 	api.DELETE("/projects/channel-bindings/:id", h.unbind, tag,
 		swagger.WithDescription("Unbind an IM chat"),
@@ -92,6 +105,22 @@ func (h *Handler) bind(c *gin.Context) {
 		apierr.BadRequest(c, err.Error())
 	default:
 		apierr.Message(c, http.StatusInternalServerError, err.Error())
+	}
+}
+
+func (h *Handler) mute(c *gin.Context) {
+	var req MuteChannelRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	b, err := h.svc.MuteChannel(c.Param("id"), req.Muted, req.MutedUntil)
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, b)
+	case errors.Is(err, rt.ErrMutePast):
+		apierr.BadRequest(c, err.Error())
+	default:
+		apierr.Store(c, err, "binding")
 	}
 }
 

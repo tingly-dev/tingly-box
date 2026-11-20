@@ -238,6 +238,9 @@ func (s *Service) status(b *db.ChannelBinding) (string, error) {
 		verbose = "on"
 	}
 	lines = append(lines, "Verbose: "+verbose)
+	if b.Muted {
+		lines = append(lines, "Muted: "+mutedWhile(b)+" (unmute on the Bind page)")
+	}
 	return strings.Join(lines, "\n"), nil
 }
 

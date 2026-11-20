@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/remote/agent"
@@ -108,6 +109,10 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		return true, errors.New("you are not authorized to send messages to this session")
 	}
 	src := Source{Kind: db.SourceIM, Platform: platform, ChatID: chatID}
+	// A muted chat still talks; it is told once that the reply stays on the web.
+	if b.MutedAt(time.Now()) {
+		s.Relay.tellMuted(b)
+	}
 	// A chat that moved to a folder, or talks for the first time, starts a
 	// thread there with this message.
 	if b.Folder != "" {

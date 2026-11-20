@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -19,7 +20,9 @@ import (
 // restated when answered. Messages go out one at a time, in the order
 // they finished. Each includes where it comes from: `[project name]` for a
 // project conversation, `[#N title]` for any other thread. A chat that turned
-// on /verbose also hears each step of its own thread's turns (Step).
+// on /verbose also hears each step of its own thread's turns (Step). A muted
+// chat hears nothing until its mute ends; a prompt it was sent before is still
+// rewritten when settled, so it offers no stale buttons.
 type Relay struct {
 	store       *db.Store
 	sink        agent.Outbox
@@ -38,6 +41,9 @@ type Relay struct {
 	// steps holds, by thread, what the thread said last in its turn: a step
 	// once a tool call follows it, the reply (sent by ThreadReply) if not.
 	steps map[string]string
+	// mutedTold are the muted chats, by chatKey, already told that their
+	// replies stay on the web, so they are told once per mute.
+	mutedTold map[string]bool
 }
 
 // pendingRequest is a request a chat was asked.
@@ -99,7 +105,7 @@ func (r *Relay) File(t db.Thread, path string, a Attachment, caption string) {
 
 // NewRelay builds the relay; sink may be nil, which makes every call a no-op.
 func NewRelay(store *db.Store, sink agent.Outbox) *Relay {
-	return &Relay{store: store, sink: sink, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}, steps: map[string]string{}}
+	return &Relay{store: store, sink: sink, sent: map[string][]sentPrompt{}, awaiting: map[string][]pendingRequest{}, steps: map[string]string{}, mutedTold: map[string]bool{}}
 }
 
 // Message relays a finished event of a main thread. User events, which the
@@ -475,6 +481,7 @@ func (r *Relay) deliver(job relayJob) {
 	if job.verbose {
 		bindings = verboseOnly(bindings)
 	}
+	bindings = audible(bindings, time.Now())
 	if len(bindings) == 0 {
 		return
 	}
@@ -545,6 +552,44 @@ func (r *Relay) deliver(job relayJob) {
 		}
 		cancel()
 	}
+}
+
+// audible drops the chats muted at now.
+func audible(bindings []db.ChannelBinding, now time.Time) []db.ChannelBinding {
+	out := bindings[:0:0]
+	for _, b := range bindings {
+		if !b.MutedAt(now) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// tellMuted tells a muted chat, the first time it writes during this mute,
+// that its replies stay on the web.
+func (r *Relay) tellMuted(b *db.ChannelBinding) {
+	if r == nil || r.sink == nil {
+		return
+	}
+	k := chatKey(b.Platform, b.ChatID)
+	r.mu.Lock()
+	told := r.mutedTold[k]
+	r.mutedTold[k] = true
+	r.mu.Unlock()
+	if !told {
+		go r.tell(b.BotUUID, b.Platform, b.ChatID, mutedReplyNotice(b))
+	}
+}
+
+// resetMuteNotice forgets that a chat was told about its mute, as its mute
+// changed.
+func (r *Relay) resetMuteNotice(platform, chatID string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	delete(r.mutedTold, chatKey(platform, chatID))
+	r.mu.Unlock()
 }
 
 func verboseOnly(bindings []db.ChannelBinding) []db.ChannelBinding {
@@ -621,7 +666,12 @@ func (r *Relay) restate(requestID, outcome string) {
 		ctx, cancel := context.WithTimeout(context.Background(), relaySendTimeout)
 		if sp.ref == "" {
 			// The chat got the question as plain text: say which question
-			// this answers, since a bare number or label does not.
+			// this answers, since a bare number or label does not. That is a
+			// new message, which a chat muted since does not get.
+			if b, err := r.store.GetChannelBinding(sp.platform, sp.chatID); err == nil && b.MutedAt(time.Now()) {
+				cancel()
+				continue
+			}
 			r.tell(sp.bot, sp.platform, sp.chatID, sp.text+"\n"+outcome)
 			cancel()
 			continue
