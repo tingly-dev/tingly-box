@@ -2018,6 +2018,8 @@ export interface components {
             coordinator?: components["schemas"]["Thread"];
             /** @description Field coordinator_busy */
             coordinator_busy: boolean;
+            /** @description Field coordinator_insertable */
+            coordinator_insertable: boolean;
             /**
              * Format: int64
              * @description Field coordinator_queued

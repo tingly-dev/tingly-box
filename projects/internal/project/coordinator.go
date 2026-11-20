@@ -260,13 +260,13 @@ func (c *Coordinator) wake(projectID string) {
 // work drains a project's queue. Wake-ups that arrive while a turn runs are
 // coalesced: each drain takes every pending input in order.
 func (c *Coordinator) work(projectID string, q *queue) {
-	c.hub.Publish(Event{Type: EventCoordinator, ProjectID: projectID, Data: map[string]bool{"busy": true}})
+	c.publishState(projectID)
 	for {
 		c.mu.Lock()
 		if !q.woken {
 			q.running = false
 			c.mu.Unlock()
-			c.hub.Publish(Event{Type: EventCoordinator, ProjectID: projectID, Data: map[string]bool{"busy": false}})
+			c.publishState(projectID)
 			return
 		}
 		q.woken = false

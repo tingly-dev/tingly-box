@@ -143,13 +143,41 @@ sender inserts by default, not only the web composer.
 - A message that joined a running turn is a `user` event with
   `injected: true`; the page shows "Claude will read this at its next step"
   until a later tool result or reply of the main conversation appears.
-- The project's coordinator (main thread) still queues every message.
+- **Coordinator (main thread).** Same two modes. `Coordinator.PostWith`
+  with insert writes the message into the coordinator turn in flight
+  (`coordinatorSessions.insert`, in the same trust envelope the queue uses,
+  event id allocated first so the model can cite it) and records it as
+  `injected`; no durable input is created, because the turn answers it. It
+  falls back to the ordinary input queue when no turn has reached the model,
+  for a compaction, a slash command, a paused/archived project, a turn that
+  already ended itself with `no_update`, or an agent that cannot take it.
+  - An insert makes the run a user turn (`adoptUser`): `no_update` is
+    refused from then on and the reply streams, so a check-in started by a
+    thread's report cannot swallow the user's message.
+  - If the turn ends before reading it, Claude Code answers in a turn of its
+    own with no run registered: `answerOutsideRun` keeps that reply as an
+    assistant event (and hands it to `OnFinal`). The flag is cleared when
+    that turn ends, when the insert fails, and when our next turn starts (a
+    coordinator has no background tools, so it starts no other turn).
+  - The page knows whether an insert would land: `coordinator_insertable` in
+    the project detail and `insertable` in the `coordinator` event, published
+    when a turn reaches the engine and when it ends.
+  - Decision answers (`Choose`) still go through the input queue.
 - Composer: Enter = insert (button tooltip says so while a turn runs); a
   menu on the send button and Alt+Enter give "send after this turn"; `mode`
   is only passed when chosen (or forced by `insertable=false`).
 
 ## Not done
 
+- **Reply to an insert the turn never read** (narrow race: the turn ends
+  between the write and its next request). Claude Code answers in a turn of
+  its own with no run and no tool turn: its text is kept, but coordinator
+  tools refuse ("No coordinator turn is active") and usage is not tallied.
+  Fix: register that unsolicited turn as a run with a tool turn.
+- **Inserted coordinator messages are not durable inputs.** If the turn
+  fails or the app restarts, the turn's input is recovered but the inserted
+  message is not replayed. Fix: record it as a coordinator input marked
+  handled by the turn it joined, recovered with it.
 - **Repeated "cannot take a message" notes.** For an agent that reads input
   only between turns, every insert (the default for chats and relays too)
   adds the note again. Fix: once per turn. No production agent has this today.

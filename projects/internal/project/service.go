@@ -89,6 +89,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
 	threads.RevokeTools = svc.sessionToolsMCP.revoke
 	coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
+	svc.Threads.coordinatorInsertable = coord.insertableMain
 	if agents.coordinatorHold != nil {
 		agents.coordinatorHold.set(svc.coordinatorNeeded)
 	}

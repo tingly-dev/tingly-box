@@ -548,7 +548,7 @@ export const projectsHandlers = [
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()
-        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: p.id === 'p-docs', coordinator_queued: p.id === 'p-docs' ? 1 : 0, coordinator: p.type === 'folder' ? undefined : coordinatorOf(p) })
+        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: p.id === 'p-docs', coordinator_insertable: p.id === 'p-docs', coordinator_queued: p.id === 'p-docs' ? 1 : 0, coordinator: p.type === 'folder' ? undefined : coordinatorOf(p) })
     }),
     http.patch('/api/v1/projects/:id', async ({ params, request }) => {
         const p = find(params.id as string)
