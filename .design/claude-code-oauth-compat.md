@@ -642,3 +642,24 @@ preamble 三句、fingerprint salt 与 `[4,7,20]`、`metadata.user_id` 形状、
 `go test ./internal/client/ ./internal/typ/ ./internal/protocol/... ./internal/protocolserver/ ./internal/protocoltest/`；`TINGLY_CC_CAPTURE_DIR=<req*.raw 目录> go test ./internal/client/ -run LiveCaptures`。
 worktree 里 `libs/*` 子模块为空时，用 out-of-tree `GOWORK`（`replace` 指向主仓库的 `libs/`）构建。
 注意：`internal/protocol` 的 `TestAnthropicNonStreamRequest` 依赖本机 `localhost:12580` 服务，与本改动无关。
+
+### B9.6 透传审计（TEP #2684 G2）
+
+SDK 的 `BetaMessageNewParams` 是固定字段表，**解码时不保留未知顶层成员**，嵌套的 `cache_control` 也一样；而 `anthropic-beta` 走白名单回放。两边各管各的，就会出现"beta 发了、字段丢了"或反过来的半转发。
+Anthropic 自己的 gateway protocol 要求网关把未知 body 字段和 beta 原样透传。探针测试（`TestClaudeClient_PassThrough*`）测出的现状与处理：
+
+| 成员 | 配对 beta | 之前 | 现在 |
+|---|---|---|---|
+| `resumption`、`program_use_case_id`、顶层 `thread` | `resumption-2026-10-08`、`program-use-case-ids-2026-09-17`、`message-threads-2026-08-12` | 字段被丢（`message-threads` beta 已回放 → 半转发） | 入站 body 里有、**且配对 beta 在最终 header 里**才回放 |
+| 顶层 `cache_control.evict_on_complete` / `.scope` | `prompt-caching-evict-2026-05-12` / `prompt-caching-scope-2026-01-05` | 被丢 | 同上，只补 SDK 类型缺的成员（`ttl`、`type` 仍走类型字段） |
+| `fallback_credit_token`、`fallbacks` | `fallback-credit-2026-06-01`、`server-side-fallback-2026-06-01/-07-01` | 字段由类型保留，beta 不在白名单 → 字段无 beta | beta 加入回放白名单 |
+| `thinking.display:"highlights"`、`thinking.block_binding`、`output_config.task_budget`、`diagnostics` | — | 类型已保留 | 回归测试锁定 |
+| `tags` | `request-tags-2026-08-21` | 丢 | **有意仍丢**：只在 gateway 登录会话出现，且协议文档要求网关在任何上游前剥掉 tags 和该 beta |
+| `safeguards` | auto mode 分类器 beta | 丢 | **有意仍丢**：只在服务端分类器（gateway 资格）会话出现；丢掉后 Claude Code 退回本地检查 |
+
+新增可回放 beta：`resumption`、`program-use-case-ids`、`advisor-tool`、`cache-keepalive`、`fallback-credit`、`server-side-fallback`（两个）、`mcp-servers`、`files-api`（后两个对应我们登录申请的 `user:mcp_servers` / `user:file_upload` scope）。
+有意**不回放**：`claude-code-side-query`、`auto-mode-classifier`、`web-search-results-only`、`environments`、`ccr-byoc`、`user-profiles`、`request-tags`、所有 `x-cc-internal-*`（语义不明或只属于 CCR / gateway 登录）。未在线上观察到的 beta，位置按 bundle 的 push 顺序估计。
+
+实现：`typ.ExtractClaudeCodeBodyExtras` 在 `/v1/messages` 解码处从原始 body 取出白名单成员（`resumption`、`program_use_case_id`、`thread`、`cache_control`），经 `ClaudeCodeClientHints.BodyExtras` 带到 Claude OAuth 原生链路；`applyClaudeCodeBodyExtras`（`claude_betas.go`）按 `claudeCodeBodyExtraBetas` / `claudeCacheControlExtraBetas` 配对表补回。非 Claude OAuth 的上游不受影响（只在 `c.native` 的 `GuardBeta` 里应用）。
+**未覆盖**：嵌套在 `system[]` / `messages[].content[]` / `tools[]` 里的 `cache_control.scope`（直连专属，代理模式不会出现）；`data_flow` 等没有已知 beta 配对的成员；v1（非 beta）路径（Claude Code 一律走 `?beta=true`）。
+

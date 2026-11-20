@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"slices"
 	"strings"
@@ -48,6 +49,15 @@ const (
 	betaThinkingResumption         = "thinking-resumption-2026-07-17"
 	betaMessageThreads             = "message-threads-2026-08-12"
 	betaToolProvenance             = "tool-provenance-2026-10-26"
+	betaResumption                 = "resumption-2026-10-08"
+	betaProgramUseCaseIDs          = "program-use-case-ids-2026-09-17"
+	betaAdvisorTool                = "advisor-tool-2026-03-01"
+	betaCacheKeepalive             = "cache-keepalive-2026-09-03"
+	betaFallbackCredit             = "fallback-credit-2026-06-01"
+	betaServerSideFallback         = "server-side-fallback-2026-06-01"
+	betaServerSideFallbackCategory = "server-side-fallback-2026-07-01"
+	betaMCPServers                 = "mcp-servers-2025-12-04"
+	betaFilesAPI                   = "files-api-2025-04-14"
 )
 
 // claudeCodeBetaEmissionOrder is the CLI's push order; the composed header
@@ -71,6 +81,8 @@ var claudeCodeBetaEmissionOrder = []string{
 	betaMidConvSystemClearAt,
 	// main query loop, in call order. thinking-token-count left the baseline
 	// in 2.1.328: it is pushed here, ahead of tool search.
+	betaProgramUseCaseIDs,
+	betaAdvisorTool,
 	betaThinkingTokenCount,
 	betaAdvancedToolUse,
 	betaToolSearchTool,
@@ -81,13 +93,21 @@ var claudeCodeBetaEmissionOrder = []string{
 	betaThinkingBindingControls,
 	betaThinkingDisplayUpdates,
 	betaThinkingResumption,
+	betaResumption,
 	betaFastMode,
 	betaAfkMode,
 	betaExtendedCacheTTL,
 	betaContextHint,
+	betaMCPServers,
+	betaFilesAPI,
 	betaPromptCachingEvict,
 	betaCacheDiagnosis,
+	betaCacheKeepalive,
 	betaMessageThreads,
+	// positions below were not observed on the wire (server-driven, rare)
+	betaFallbackCredit,
+	betaServerSideFallback,
+	betaServerSideFallbackCategory,
 }
 
 // claudeCodeBetaOrderFor returns the emission order for a model. For haiku the
@@ -136,6 +156,85 @@ var claudeCodeClientReplayableBetas = map[string]struct{}{
 	betaThinkingBindingControls:    {},
 	betaThinkingResumption:         {},
 	betaMessageThreads:             {},
+	betaResumption:                 {},
+	betaProgramUseCaseIDs:          {},
+	betaAdvisorTool:                {},
+	betaCacheKeepalive:             {},
+	betaFallbackCredit:             {},
+	betaServerSideFallback:         {},
+	betaServerSideFallbackCategory: {},
+	betaMCPServers:                 {},
+	betaFilesAPI:                   {},
+}
+
+// claudeCodeBodyExtraBetas pairs the body members the typed SDK params drop
+// with the beta that enables them. A member is replayed only when its beta is
+// in the composed header, so we never send a field without its beta (the API
+// rejects unknown inputs) nor a beta whose field we silently dropped.
+var claudeCodeBodyExtraBetas = map[string]string{
+	"resumption":          betaResumption,
+	"program_use_case_id": betaProgramUseCaseIDs,
+	"thread":              betaMessageThreads,
+}
+
+// claudeCacheControlExtraBetas pairs the cache_control members the SDK's
+// BetaCacheControlEphemeralParam lacks with their betas.
+var claudeCacheControlExtraBetas = map[string]string{
+	"evict_on_complete": betaPromptCachingEvict,
+	"scope":             betaPromptCachingScope,
+}
+
+// applyClaudeCodeBodyExtras restores the inbound body members the typed
+// params dropped, gated by their paired beta (see claudeCodeBodyExtraBetas).
+// Anthropic's gateway protocol asks proxies to pass unknown body fields
+// through unchanged; the typed SDK params would otherwise lose them.
+func applyClaudeCodeBodyExtras(req *anthropic.BetaMessageNewParams, extras map[string]json.RawMessage, betas []string) {
+	if len(extras) == 0 {
+		return
+	}
+	sent := make(map[string]struct{}, len(betas))
+	for _, b := range betas {
+		sent[b] = struct{}{}
+	}
+	fields := map[string]any{}
+	for name, beta := range claudeCodeBodyExtraBetas {
+		if raw, ok := extras[name]; ok {
+			if _, ok := sent[beta]; ok {
+				fields[name] = raw
+			}
+		}
+	}
+	if len(fields) > 0 {
+		merged := map[string]any{}
+		for k, v := range req.ExtraFields() {
+			merged[k] = v
+		}
+		for k, v := range fields {
+			merged[k] = v
+		}
+		req.SetExtraFields(merged)
+	}
+
+	// top-level cache_control: only members the SDK type lacks
+	raw, ok := extras["cache_control"]
+	if !ok || param.IsOmitted(req.CacheControl) {
+		return
+	}
+	var cc map[string]json.RawMessage
+	if json.Unmarshal(raw, &cc) != nil {
+		return
+	}
+	ccExtra := map[string]any{}
+	for name, beta := range claudeCacheControlExtraBetas {
+		if v, ok := cc[name]; ok {
+			if _, ok := sent[beta]; ok {
+				ccExtra[name] = v
+			}
+		}
+	}
+	if len(ccExtra) > 0 {
+		req.CacheControl.SetExtraFields(ccExtra)
+	}
 }
 
 // claudeCodeCountTokensBetas is the subset the CLI sends on count_tokens.

@@ -266,7 +266,9 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	}
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
 	if c.native {
-		options = append(options, c.nativeRequestOptions(ctx, betaClaudeBetaSignals(ctx, req, c.isOAuth()))...)
+		sig := betaClaudeBetaSignals(ctx, req, c.isOAuth())
+		options = append(options, c.nativeRequestOptions(ctx, sig)...)
+		applyClaudeCodeBodyExtras(req, typ.GetClaudeCodeClientHints(ctx).BodyExtras, composeClaudeCodeBetas(sig))
 		req.Betas = nil // the composed header is complete; avoid a second value
 	}
 	// Streaming responses bypass restoreBetaToolNamesInMessage, so undo the

@@ -81,6 +81,7 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 		}
 		requestModel = string(betaMessages.Model)
 		reqParams = betaMessages.BetaMessageNewParams
+		stashClaudeCodeBodyExtras(c, bodyBytes)
 
 	} else {
 		if err := json.Unmarshal(bodyBytes, messages); err != nil {
