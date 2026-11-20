@@ -52,7 +52,7 @@ The scenario to support, concretely (from the 2.1.328 run):
 | G3 | Header names/order/casing are lost by `net/http` (`x-app`, `anthropic-version` arrive as `X-App`, `Anthropic-Version`). Value order *inside* `anthropic-beta` is kept; header-name casing/order is not. Matters for fingerprinting claims. | medium; opt-in raw tee solves it |
 | G4 | Typed body binding may reject new CC bodies before anything is recorded or answered. | unknown → must be tested; capture must be outside it |
 | G5 | Non-messages traffic (telemetry, oauth, count_tokens) gets a bare 501 and is not recorded; we cannot even list which endpoints a CC version calls. | medium |
-| G6 | No `request-id` / ratelimit response headers; `cc_prev_req` and quota behaviour cannot be observed. | later: only matters for multi-turn capture (non-goal now) |
+| G6 | No `request-id` / ratelimit response headers; `cc_prev_req` and quota behaviour cannot be observed. | opt-in `--capture-request-id`; ratelimit headers later |
 | G7 | No scripted tool-use turns → multi-request sessions (`cc_prev_*`, turn index) cannot be captured. | later (needs a definition-contract change) |
 | G8 | No standard way to launch the client safely (`env -i`, isolated HOME, onboarding seed, `-p` flags live in a prose snippet). | low: a documented recipe is enough; no script owned by us |
 | G9 | Diff / summary tooling. | **dropped**: not our job; captures are the deliverable |
@@ -109,7 +109,8 @@ bodies, and cannot affect the response path.
 <dir>/
   meta.json            # tb version, argv, listen URL, start time (what the runner knows is added by the caller)
   raw/conn-0001.in     # verbatim client→server bytes of TCP connection 1 (ground truth)
-  raw/conn-0001.out    # verbatim server→client bytes (what we answered; for stream/retry analysis)
+  raw/conn-0001.out    # verbatim server→client bytes (what we answered; on by default,
+                       # `--capture-out=false` disables; for stream/retry analysis)
   index.jsonl          # one line per request, arrival order
 ```
 
@@ -156,11 +157,11 @@ that the client does not retry or abort:
   match first. Implemented as an option on `spec.Runtime` that only `--capture`
   sets, so the production `/virtual/v1/*` and the "unknown model → 404"
   contract of `vmodel-definitions.md` are unchanged.
-- **No `request-id` response header.** Real Anthropic sends it and CC feeds it
-  back as the next request's `cc_prev_req` (direct mode only; bundle analysis,
-  not run), but a single-turn `-p` capture never reads it and the 2.1.328 captures
-  worked without it. It only matters for multi-turn capture, which is a non-goal
-  here; add it together with scripted multi-turn responses.
+- **`request-id` response header: off by default, `--capture-request-id` turns
+  it on** (`req_vmodel_<seq>`). Real Anthropic sends it and CC feeds it back as
+  the next request's `cc_prev_req` (direct mode only; bundle analysis, not run).
+  A single-turn `-p` capture never reads it, so the default stays "not sent";
+  the flag exists for multi-turn captures.
 - **Auxiliary endpoints** (G5): always captured (the tap is outermost). Answered
   from a tiny table so the CLI proceeds — `POST /v1/messages/count_tokens` →
   `{"input_tokens": <n>}`; telemetry/event-logging/bootstrap → `200 {}`;
@@ -218,7 +219,7 @@ with the deferred "user definition files for agent --mock / replay" item
 | Phase | Content | Touches | Risk |
 | --- | --- | --- | --- |
 | **1 Raw tap** | `vmodel/capture`: conn-tee listener, handler wrapper, `index.jsonl`, `meta.json`; `tb vmodel --capture`; token-marker warning; tests (`httptest` + raw `net.Dial` client proving header case/order, duplicates, chunked body, keep-alive offsets, aborted request). | `vmodel/capture` (new), `internal/command/vmodel.go` | low |
-| **2 Answer well enough** | `capture-default` fallback for unknown models, `count_tokens`/telemetry stubs; try a real-shaped `/v1/messages?beta=true` body to settle G4. | `vmodel/spec/runtime.go` (option), `vmodel/virtualserver` | low–medium |
+| **2 Answer well enough** | `capture-default` fallback for unknown models, opt-in `--capture-request-id`, `count_tokens`/telemetry stubs; try a real-shaped `/v1/messages?beta=true` body to settle G4. | `vmodel/spec/runtime.go` (option), `vmodel/virtualserver` | low–medium |
 | **3 Recipe + docs** | Replace the Python snippet in `claude-code-oauth-compat.md` §B2.4; `vmodel/README.md`; an optional Go helper `capture.Read(dir)` and point the `LiveCaptures` test at it. | docs, `internal/client` test | low |
 | later | Scripted multi-turn responses; tap behind the gateway for `harness`. | contract change / `internal/protocoltest` | medium |
 
@@ -227,9 +228,7 @@ is touched; the only `internal/` file is the CLI command wiring.
 
 ## 7. Open questions
 
-1. `raw/conn-N.out` always, or behind a second flag? (Proposed: always; it is
-   what lets you see exactly what the client was answered when it retried.)
-2. Should `--capture` imply a fixed default dir under `.tmp/` when given no
+1. Should `--capture` imply a fixed default dir under `.tmp/` when given no
    value, or always require a path? (Proposed: require a path.)
-3. G4 is unverified until Phase 2 sees a real 2.1.328 body (the original
+2. G4 is unverified until Phase 2 sees a real 2.1.328 body (the original
    captures sit in the other thread's scratch directory, not on its branch).
