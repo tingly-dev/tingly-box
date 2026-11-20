@@ -32,11 +32,15 @@ func TestAnthropicHook_BeforeToken(t *testing.T) {
 	if got := header.Get("Content-Type"); got != "application/json" {
 		t.Errorf("expected Content-Type=application/json, got %q", got)
 	}
-	if got := header.Get("Origin"); got != "https://claude.ai" {
-		t.Errorf("expected Origin=https://claude.ai, got %q", got)
+	// The official CLI posts plain JSON as itself; it never pretends to be a
+	// browser on claude.ai.
+	if got := header.Get("User-Agent"); got != ClaudeCLIOAuthUserAgent {
+		t.Errorf("User-Agent = %q, want %q", got, ClaudeCLIOAuthUserAgent)
 	}
-	if header.Get("User-Agent") == "" {
-		t.Error("expected non-empty User-Agent")
+	for _, h := range []string{"Origin", "Referer", "Accept-Language"} {
+		if got := header.Get(h); got != "" {
+			t.Errorf("%s must not be sent, got %q", h, got)
+		}
 	}
 }
 
