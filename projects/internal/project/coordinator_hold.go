@@ -26,7 +26,9 @@ func (s *Service) coordinatorNeeded(sid string) bool {
 		return true
 	}
 	for i := range threads {
-		if s.Threads.atWork(&threads[i]) {
+		// A resolved thread has no process; skip the lookups below for the
+		// many threads a long-lived project accumulates.
+		if threads[i].Status != db.ThreadResolved && s.Threads.atWork(&threads[i]) {
 			return true
 		}
 	}
@@ -38,6 +40,5 @@ func (m *Threads) atWork(t *db.Thread) bool {
 	if t.Status == db.ThreadWorking || m.Running(t.ID) {
 		return true
 	}
-	sid := m.sessionOf(t.ID)
-	return sid != "" && len(m.engine.BackgroundTasks(sid)) > 0
+	return m.hasBackground(t.ID)
 }

@@ -104,7 +104,7 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 协调者和线程各有一个常驻 `claude` 进程池（`Agents.CoordinatorPool` / `Agents.Pool`），空闲超时各自配置（`project.SessionConfig`，`projects.Options.Sessions`，独立二进制的 `--thread-idle-timeout` / `--coordinator-idle-timeout`；0 取默认，负数表示不按空闲回收）。
 
 - **默认值**：线程 65 分钟（`pool.DefaultIdleTimeout`），协调者 130 分钟。Claude Code 的长 prompt cache TTL 是 1 小时（短的 5 分钟）：一小时内恢复的会话仍读到缓存，早回收只会让下一轮更贵，所以超时取略大于 1 小时。协调者等线程汇报、等用户，空闲窗口应比线程长，取线程的两倍。
-- **线程在跑，协调者不回收**：协调者发出 `start_thread` 的那一轮结束后进程是 Idle，原先 10 分钟后被池回收，线程汇报到来时只能冷恢复。现在池在回收（空闲或为腾位置）前问 `pool.Config.Hold`；`Service.coordinatorNeeded` 在项目里有线程 working（含排队）、有进行中的回合（等审批也算）或有后台任务时返回 true，进程保留，空闲计时重置——最后一个线程结束后才开始算协调者自己的空闲超时。只在等用户、没有回合在跑的线程（如重启后被中断）不挂住协调者，否则它会永远占着一个进程。
+- **线程在跑，协调者不回收**：协调者发出 `start_thread` 的那一轮结束后进程是 Idle，原先 10 分钟后被池回收，线程汇报到来时只能冷恢复。现在池在回收（空闲或为腾位置）前问 `pool.Config.Hold`；`Service.coordinatorNeeded` 在项目里有线程 working（含排队）、有进行中的回合（等审批也算）或有后台任务时返回 true，进程保留，空闲计时在每次清扫时重置（协调者池至少每分钟清扫一次，所以最后一个线程结束后，协调者自己的空闲超时从最多一分钟前开始算）。只在等用户、没有回合在跑的线程（如重启后被中断）不挂住协调者，否则它会永远占着一个进程。
 - **回收后照旧恢复**：被回收的协调者下次需要时走原有的 resume（同一 session ID），不是重启；没有新增任何重启路径。
 - **取舍**：两个池各有上限 10，所以进程总数可到 20（原先协调者和线程共用 10）；若所有空闲的协调者都被挂住，新进程拿不到位置时，`Open` 返回 `ErrFull`，该轮退回一次性进程。
 

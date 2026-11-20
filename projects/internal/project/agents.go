@@ -54,10 +54,6 @@ const (
 	DefaultCoordinatorIdleTimeout = 2 * pool.DefaultIdleTimeout
 )
 
-// maxResidentSessions is how many processes each pool keeps open at most; it
-// matches MaxRunningSessions.
-const maxResidentSessions = 10
-
 // idleTimeout is d, or def for zero; negative disables idle closing.
 func idleTimeout(d, def time.Duration) time.Duration {
 	if d == 0 {
@@ -68,12 +64,16 @@ func idleTimeout(d, def time.Duration) time.Duration {
 
 // threadPoolConfig is the pool of thread processes.
 func (c SessionConfig) threadPoolConfig() pool.Config {
-	return pool.Config{MaxSessions: maxResidentSessions, IdleTimeout: idleTimeout(c.ThreadIdleTimeout, DefaultThreadIdleTimeout)}
+	return pool.Config{MaxSessions: MaxRunningSessions, IdleTimeout: idleTimeout(c.ThreadIdleTimeout, DefaultThreadIdleTimeout)}
 }
 
 // coordinatorPoolConfig is the pool of coordinator processes.
 func (c SessionConfig) coordinatorPoolConfig(hold func(string) bool) pool.Config {
-	return pool.Config{MaxSessions: maxResidentSessions, IdleTimeout: idleTimeout(c.CoordinatorIdleTimeout, DefaultCoordinatorIdleTimeout), Hold: hold}
+	idle := idleTimeout(c.CoordinatorIdleTimeout, DefaultCoordinatorIdleTimeout)
+	// A held coordinator's idle clock restarts at each sweep, so it closes up
+	// to one sweep late once its threads are done: sweep at least every
+	// minute to keep that small against a window of hours.
+	return pool.Config{MaxSessions: MaxRunningSessions, IdleTimeout: idle, SweepInterval: min(idle/4, time.Minute), Hold: hold}
 }
 
 // lateHold is a pool's Hold whose answer is wired in after the pool exists:

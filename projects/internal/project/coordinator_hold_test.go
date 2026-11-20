@@ -83,14 +83,14 @@ func TestCoordinatorStaysOpenWhileAThreadWorks(t *testing.T) {
 	proc := &idleProcess{}
 	require.NoError(t, coordPool.Open(context.Background(), main.SessionID, proc))
 
-	// Three sweeps (the pool sweeps every second) pass over the idle
-	// coordinator while the thread works.
-	time.Sleep(3200 * time.Millisecond)
+	// Many sweeps (every 12ms) pass over the idle coordinator while the
+	// thread works.
+	time.Sleep(600 * time.Millisecond)
 	assert.False(t, proc.isClosed(), "the coordinator was closed while a thread was working")
 
 	worker.Status = db.ThreadIdle
 	require.NoError(t, store.SaveThread(worker))
-	require.Eventually(t, proc.isClosed, 5*time.Second, 50*time.Millisecond, "an idle coordinator with no thread working closes after its timeout")
+	require.Eventually(t, proc.isClosed, 5*time.Second, 20*time.Millisecond, "an idle coordinator with no thread working closes after its timeout")
 }
 
 func TestCoordinatorNeeded(t *testing.T) {
