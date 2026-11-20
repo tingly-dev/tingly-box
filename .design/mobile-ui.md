@@ -85,7 +85,7 @@ Most of these pages are one template (`TemplatePage`: header, connection card, r
 
 - **`usePhoneShell()`** (`@tingly/ui/hooks/usePhoneShell`): true inside `MobileShell`. Components switch on it, not on the viewport: `?ui=mobile` on a laptop must look like the phone, and a narrow desktop window must not. (`useIsPhone` still only decides which shell `auto` mounts.)
 - **Phone theme layer** (`@tingly/ui/theme/phone`), applied by `MobileShell` over the app theme: dialogs open as **bottom sheets** (full width, 24 px top corners, at most the visible height, actions pinned at the bottom above the home indicator); `fullScreen` dialogs stay full screen. Buttons, icon buttons, toggle buttons, tabs and menu items get a **44 px** minimum; text inputs a 44 px row and **16 px** text (no iOS zoom).
-- **Keyboard**: the shell tracks `visualViewport` and sets `--phone-viewport-height`; the shell and the sheets size to it, so the field you type in and the sheet's Save stay above the keyboard; a focused field scrolls into the middle of the page.
+- **Keyboard**: the shell tracks `visualViewport` and sets `--phone-viewport-height` (and the visible area's top); dialogs and sheets size to it, so the field you type in and the sheet's Save stay above the keyboard; a focused field scrolls into the middle of the page.
 - **Sticky actions**: a sheet's actions are its last row and never scroll away. Pages save as you change things (rules, flags, toggles), so pages have no Save bar; the few page forms with a Save (Image profile) pin it to the bottom of the page above the tab bar.
 - **Destructive actions confirm** (delete rule, delete target, revoke key, delete profile) through the existing confirm dialogs, which are sheets here.
 - **No hover-only controls**: what desktop shows on hover (a target's tier arrows, delete, limits) is in the phone rule card's row menu.
@@ -113,7 +113,7 @@ A sheet, not a page: it is opened from a dozen places, each with its own context
 └──────────────────────────┘   └──────────────────────────┘
 ```
 
-- It opens on the models of the selected provider (else the last used one); "‹ provider" goes back to the provider list. A check marks the selected provider and the selected model.
+- It opens on the models of the selected provider (else the last used one; with neither, on the provider list); "‹ provider" goes back to the provider list. A check marks the selected provider and the selected model.
 - Search stays at the top while the list scrolls; models are one column of 56 px rows (the desktop card grid, one card wide); the new / recent / starred sections stay; quota stays pinned under the list.
 - Multi-select (新建模型 → 多选) keeps its count and "添加" in the bottom bar.
 
@@ -137,11 +137,16 @@ A sheet, not a page: it is opened from a dozen places, each with its own context
 ││┌──────────────────────┐││
 │││ claude-sonnet-5  ⚡ ⋯ │││  rule: name, probe, menu
 │││ [1M: Off][Endpoint: Auto]│││
-│││ 默认                  │││
-│││ T0 ◎ OpenAI           │││  target row → model picker
-│││    gpt-5.6-sol      ⋯ │││  ⋯ = tier up/down, credential, delete
+│││ IF 1                  │││  a condition, read-only
+│││ token ge 60000        │││
+│││ deepseek-v4-pro     ⋯ │││
 │││ + 添加模型             │││
-│││ 智能条件 · 2 (桌面编辑) │││  IF steps listed, read-only
+│││ (条件请在桌面版编辑)    │││
+│││ Others · T0           │││
+│││ gpt-5.6-sol         ⋯ │││  target row → model picker
+│││ ◎ OpenAI              │││  ⋯ = tier up/down, credential, limits, delete
+│││ + 添加模型             │││
+│││ + 兜底层               │││
 ││└──────────────────────┘││
 │└────────────────────────┘│
 └──────────────────────────┘
