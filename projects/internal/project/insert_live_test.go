@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -89,6 +90,11 @@ func liveThreads(t *testing.T, fc *fakeClaude) *testFixture {
 	return newFixtureWith(t, &enginetest.Agent{}, Agents{Service: svc, Pool: pool.New(pool.Config{})})
 }
 
+func threadInsertable(f *testFixture, id string) bool {
+	th, err := f.store.GetThread(id)
+	return err == nil && f.threads.insertable(th)
+}
+
 func injectedUserEvents(t *testing.T, f *testFixture, id string) []db.ThreadEvent {
 	t.Helper()
 	events, err := f.store.ListThreadEvents(id)
@@ -113,7 +119,7 @@ func TestInsertReachesTheRunningTurnAndNextTurnWaits(t *testing.T) {
 	assert.Contains(t, fc.next(t), "first")
 	waitStatus(t, f.store, th.ID, db.ThreadWorking)
 	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
-	require.Eventually(t, func() bool { return f.threads.insertable(th.ID) }, 5*time.Second, 10*time.Millisecond,
+	require.Eventually(t, func() bool { return threadInsertable(f, th.ID) }, 5*time.Second, 10*time.Millisecond,
 		"a running turn on a resident Claude process is insertable")
 
 	_, err = f.threads.SendWith(context.Background(), th.ID, "change course", nil, Source{}, SendInsert)
@@ -147,7 +153,7 @@ func TestInsertDoesNotInterruptTheTurn(t *testing.T) {
 	fc.next(t)
 	waitStatus(t, f.store, th.ID, db.ThreadWorking)
 	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
-	require.Eventually(t, func() bool { return f.threads.insertable(th.ID) }, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return threadInsertable(f, th.ID) }, 5*time.Second, 10*time.Millisecond)
 
 	_, err = f.threads.SendWith(context.Background(), th.ID, "also", nil, Source{}, "")
 	require.NoError(t, err)
@@ -190,6 +196,11 @@ func TestInsertIntoTheCoordinatorsRunningTurn(t *testing.T) {
 	assert.Contains(t, fc.next(t), "start the work")
 	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
 	require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
+
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	svc.Threads.AnnotateOne(main)
+	assert.True(t, main.Insertable, "the main thread says its coordinator takes a message now")
 
 	_, err = svc.SendWith(context.Background(), p.MainThreadID, "use the staging repo", nil, Source{}, SendInsert)
 	require.NoError(t, err)
@@ -234,16 +245,27 @@ func TestInsertedMessageAnsweredOutsideTheTurnIsKept(t *testing.T) {
 	_, err = svc.Coordinator.Post(p.ID, "start", nil, Source{})
 	require.NoError(t, err)
 	fc.next(t)
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	require.NotEmpty(t, main.SessionID)
 	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
 	require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
 	_, err = svc.SendWith(context.Background(), p.MainThreadID, "one more thing", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	fc.next(t)
+	svc.Coordinator.sessions.mu.Lock()
+	assert.True(t, svc.Coordinator.sessions.answerOutsideRun[main.SessionID])
+	svc.Coordinator.sessions.mu.Unlock()
 
 	fc.endTurn(t, "First answer.")
 	require.Eventually(t, func() bool { return !svc.Coordinator.Busy(p.ID) }, 5*time.Second, 10*time.Millisecond)
 	// The process reads the inserted message only now, as a turn of its own.
 	fc.endTurn(t, "Answer to the late message.")
+	assert.Eventually(t, func() bool {
+		svc.Coordinator.sessions.mu.Lock()
+		defer svc.Coordinator.sessions.mu.Unlock()
+		return !svc.Coordinator.sessions.answerOutsideRun[main.SessionID]
+	}, 5*time.Second, 10*time.Millisecond, "the flag goes once that reply's turn ends")
 	require.Eventually(t, func() bool {
 		events, _ := store.ListThreadEvents(p.MainThreadID)
 		for _, e := range events {
@@ -265,7 +287,7 @@ func TestRelayedMessageInsertsIntoTheRunningTurn(t *testing.T) {
 	fc.next(t)
 	waitStatus(t, f.store, th.ID, db.ThreadWorking)
 	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
-	require.Eventually(t, func() bool { return f.threads.insertable(th.ID) }, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return threadInsertable(f, th.ID) }, 5*time.Second, 10*time.Millisecond)
 
 	_, joined, err := f.threads.sendWith(context.Background(), th.ID, "also add tests", nil, fromThread(f.project.MainThreadID), SendInsert)
 	require.NoError(t, err)
@@ -292,4 +314,65 @@ func TestChatMessageInsertsIntoTheCoordinatorsTurn(t *testing.T) {
 	_, err = svc.Send(context.Background(), p.MainThreadID, "from the chat", nil, Source{Kind: db.SourceIM, Platform: "telegram", ChatID: "c1"})
 	require.NoError(t, err)
 	assert.Contains(t, fc.next(t), "from the chat")
+}
+
+// A user's message inserted into a turn a thread's report started makes it a
+// turn that must answer the user: no_update is refused from then on, so the
+// message cannot be swallowed by a quiet check-in.
+func TestInsertIntoAReportTurnMakesItAnswerTheUser(t *testing.T) {
+	fc := newFakeClaude(t)
+	svc, _ := liveService(t, fc)
+	p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
+	require.NoError(t, err)
+	main, err := svc.Store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	// A report, not a user message, starts the turn.
+	svc.Coordinator.onReport(Report{Thread: db.Thread{ID: "w1", ProjectID: p.ID, Title: "Worker"}, Kind: ReportFinished, Text: "done"})
+	fc.next(t)
+	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+	require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
+	tools := svc.sessionToolsMCP.coordinatorTurn(main.ID)
+	require.NotNil(t, tools)
+	res, err := tools.run(svc.Store, toolNoUpdate, false, func(*db.Project) (*mcp.CallToolResult, error) { return textResult("ok", false), nil })
+	require.NoError(t, err)
+	require.False(t, res.IsError, "before the insert a report turn may end quietly")
+	tools.quiet.Store(false)
+
+	_, err = svc.SendWith(context.Background(), p.MainThreadID, "what about the tests?", nil, Source{}, SendInsert)
+	require.NoError(t, err)
+	assert.Contains(t, fc.next(t), "what about the tests?")
+	res, err = tools.run(svc.Store, toolNoUpdate, false, func(*db.Project) (*mcp.CallToolResult, error) { return textResult("ok", false), nil })
+	require.NoError(t, err)
+	assert.True(t, res.IsError, "after the insert the turn must reply to the user")
+	fc.endTurn(t, "Tests pass.")
+}
+
+// A turn that already ended itself with no_update cannot answer an insert:
+// the message is queued for a turn of its own instead.
+func TestInsertAfterNoUpdateIsQueued(t *testing.T) {
+	fc := newFakeClaude(t)
+	svc, store := liveService(t, fc)
+	p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
+	require.NoError(t, err)
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	svc.Coordinator.onReport(Report{Thread: db.Thread{ID: "w1", ProjectID: p.ID, Title: "Worker"}, Kind: ReportFinished, Text: "done"})
+	fc.next(t)
+	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+	require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
+	tools := svc.sessionToolsMCP.coordinatorTurn(main.ID)
+	_, err = tools.run(store, toolNoUpdate, false, func(*db.Project) (*mcp.CallToolResult, error) { return textResult("ok", false), nil })
+	require.NoError(t, err)
+	assert.False(t, svc.Coordinator.Insertable(p.ID), "a quiet turn takes no insert")
+
+	_, err = svc.SendWith(context.Background(), p.MainThreadID, "late question", nil, Source{}, SendInsert)
+	require.NoError(t, err)
+	select {
+	case s := <-fc.got:
+		t.Fatalf("the message reached a turn that already ended itself: %q", s)
+	case <-time.After(200 * time.Millisecond):
+	}
+	fc.endTurn(t, noUpdate)
+	assert.Contains(t, fc.next(t), "late question", "it runs as the next turn")
+	fc.endTurn(t, "Answer.")
 }

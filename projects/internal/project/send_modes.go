@@ -27,9 +27,22 @@ const (
 	SendNextTurn SendMode = "next_turn"
 )
 
+// legacyModes are the names the API used before insert / next_turn; a page
+// loaded before the rename still sends them. stop_and_send has no
+// counterpart (stopping is its own call) and stays refused.
+var legacyModes = map[SendMode]SendMode{"send": SendInsert, "queue": SendNextTurn}
+
+// Canonical is m with a legacy name replaced by the mode it now has.
+func (m SendMode) Canonical() SendMode {
+	if c, ok := legacyModes[m]; ok {
+		return c
+	}
+	return m
+}
+
 // Valid reports whether m is a known mode; the empty mode means SendInsert.
 func (m SendMode) Valid() bool {
-	switch m {
+	switch m.Canonical() {
 	case "", SendInsert, SendNextTurn:
 		return true
 	}

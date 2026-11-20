@@ -139,6 +139,9 @@ type Threads struct {
 	// backgroundCount replaces the engine's count of a thread's running
 	// background tasks; tests only.
 	backgroundCount func(threadID string) int
+	// coordinatorInsertable says whether a main thread's coordinator would
+	// take a message into its running turn; the service sets it.
+	coordinatorInsertable func(main *db.Thread) bool
 
 	mu sync.Mutex
 	// stalled holds the running threads already reported as quiet.

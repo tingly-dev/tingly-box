@@ -92,7 +92,8 @@ type SendRequest struct {
 	// Mode is what a message does while a turn runs: "insert" (the default)
 	// puts it into the turn at the agent's next step, "next_turn" holds it
 	// until the turn ends. An agent that cannot take input mid-turn holds an
-	// insert like a next_turn. Stopping a turn is its own call.
+	// insert like a next_turn. Stopping a turn is its own call. The names
+	// used before (send, queue) are still accepted.
 	Mode string `json:"mode,omitempty" enums:"insert,next_turn"`
 }
 
@@ -542,7 +543,7 @@ func (h *Handler) send(c *gin.Context) {
 			return
 		}
 	}
-	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode))
+	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode).Canonical())
 	if err != nil {
 		fail(c, err)
 		return

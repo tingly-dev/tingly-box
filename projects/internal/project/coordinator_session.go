@@ -35,6 +35,9 @@ type coordinatorSessions struct {
 	// answerOutsideRun holds the sessions that were sent a message mid-turn.
 	// If the turn ended before Claude Code read it, it answers in a turn of
 	// its own, with no run registered: that answer is kept instead of dropped.
+	// It is the only turn a coordinator starts by itself (it has no
+	// background tools), so the flag is cleared when such a turn ends, when
+	// the insert fails, and when the next turn of ours starts.
 	answerOutsideRun map[string]bool
 }
 
@@ -49,9 +52,12 @@ type coordinatorSessionRun struct {
 	threadID      string
 	projectID     string
 	userTriggered bool
-	live          *db.ThreadEvent
-	initErr       error
-	tally         turnTally
+	// tools is the turn's tool gate, so an inserted user message can make
+	// the turn one that must reply (adoptUser).
+	tools   *coordinatorToolTurn
+	live    *db.ThreadEvent
+	initErr error
+	tally   turnTally
 	// stopped records a stop the user asked for while this run was up: the
 	// turn treats its own end as deliberate instead of uncertain.
 	stopped atomic.Bool
@@ -182,6 +188,9 @@ func newCoordinatorSessions(c *Coordinator, host Host, tools *sessionToolsMCP, a
 	}
 	s.engine = engine.New(engine.Config{Agent: agents.Service, Pool: coordPool, Store: coordinatorSessionStore{s}, Prompter: func(string) agentboot.Prompter { return coordinatorPrompter{} }, OnTurnEnd: func(id string, end engine.TurnEnd) {
 		s.mu.Lock()
+		if end.Unsolicited {
+			delete(s.answerOutsideRun, id)
+		}
 		run := s.runs[id]
 		s.mu.Unlock()
 		if run != nil {
@@ -403,14 +412,21 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	s.mu.Lock()
 	delete(s.answerOutsideRun, main.SessionID)
 	s.mu.Unlock()
-	run := &coordinatorSessionRun{end: make(chan engine.TurnEnd, 1), threadID: main.ID, projectID: p.ID, userTriggered: user}
+	run := &coordinatorSessionRun{end: make(chan engine.TurnEnd, 1), threadID: main.ID, projectID: p.ID, userTriggered: user, tools: toolTurn}
 	s.mu.Lock()
 	s.runs[main.SessionID] = run
 	s.mu.Unlock()
-	defer func() { s.mu.Lock(); delete(s.runs, main.SessionID); s.mu.Unlock() }()
+	defer func() {
+		s.mu.Lock()
+		delete(s.runs, main.SessionID)
+		s.mu.Unlock()
+		s.c.publishState(p.ID)
+	}()
 	if !s.engine.Start(main.SessionID, main.Cwd, prompt.String(), main.Turns > 0, func(context.Context) agentboot.ExecutionOptions { return opts }) {
 		return fmt.Errorf("coordinator session is busy")
 	}
+	// The page learns that a message sent now joins this turn.
+	s.c.publishState(p.ID)
 	if run.stopped.Load() {
 		// The stop landed before the engine saw the turn: interrupt what it
 		// just started, and let the end below settle the run.

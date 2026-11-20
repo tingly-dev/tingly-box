@@ -138,9 +138,13 @@ func TestStopDropsChips(t *testing.T) {
 }
 
 func TestUnknownSendModeIsInvalid(t *testing.T) {
-	for _, m := range []SendMode{"later", "send", "queue", "stop_and_send"} {
+	for _, m := range []SendMode{"later", "stop_and_send"} {
 		assert.False(t, m.Valid(), m)
 	}
+	// A page loaded before the rename still sends the old names.
+	assert.Equal(t, SendInsert, SendMode("send").Canonical())
+	assert.Equal(t, SendNextTurn, SendMode("queue").Canonical())
+	assert.True(t, SendMode("queue").Valid())
 	for _, m := range []SendMode{"", SendInsert, SendNextTurn} {
 		assert.True(t, m.Valid())
 	}

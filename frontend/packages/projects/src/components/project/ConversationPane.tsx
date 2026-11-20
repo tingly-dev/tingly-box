@@ -255,6 +255,8 @@ interface Props {
     onLoadEarlier?: () => Promise<void>;
     threads: Map<string, Thread>;
     busy: boolean;
+    /** False while the coordinator's turn cannot take a message (waiting, compacting): Enter then sends for the next turn. */
+    insertable?: boolean;
     disabled: boolean;
     disabledReason?: React.ReactNode;
     /** mode is only set when the user chose one: the default inserts into the coordinator's running turn. */
@@ -279,7 +281,7 @@ interface Props {
     onStop?: () => Promise<void>;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, insertable = true, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -428,6 +430,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
                     sendModes
+                    insertable={insertable}
                     onSend={async (text, attachments, mode) => {
                         stick.current = true;
                         return mode ? onSend(text, attachments, mode) : onSend(text, attachments);
