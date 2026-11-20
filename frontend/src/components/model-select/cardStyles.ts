@@ -57,3 +57,20 @@ export const getModelCardStateStyles = (theme: Theme, isSelected: boolean) => {
         },
     };
 };
+
+// Phone shell: the grid is one column of rows — the name on the left, the
+// selected check before it, the (always visible) actions on the right.
+export const PHONE_ROW_MIN_HEIGHT = 56;
+export const phoneRowContentSx = (actions: number) => ({
+    alignItems: 'flex-start',
+    textAlign: 'left',
+    pl: 5,
+    pr: `${actions * 44 + 8}px`,
+});
+export const phoneRowCheckSx = {
+    top: '50%',
+    right: 'auto',
+    left: 12,
+    fontSize: 20,
+    transform: 'translateY(-50%)',
+};

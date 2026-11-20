@@ -1,7 +1,8 @@
 import { Add } from '@/components/icons';
 import { ButtonBase, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { getModelCardActiveColor, modelCardTransition } from './cardStyles';
+import { getModelCardActiveColor, modelCardTransition, PHONE_ROW_MIN_HEIGHT } from './cardStyles';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
@@ -12,6 +13,7 @@ interface AddCustomModelCardProps {
 // First cell of the model grid: add a model ID the provider's list doesn't
 // carry. Same footprint as a ModelCard, drawn dashed so it reads as an action.
 export default function AddCustomModelCard({ onClick }: AddCustomModelCardProps) {
+    const phone = usePhoneShell();
     return (
         <ButtonBase
             onClick={onClick}
@@ -20,7 +22,7 @@ export default function AddCustomModelCard({ onClick }: AddCustomModelCardProps)
                 const activeColor = getModelCardActiveColor(theme);
                 return {
                     width: '100%',
-                    height: 60,
+                    height: phone ? PHONE_ROW_MIN_HEIGHT : 60,
                     border: '1px dashed',
                     borderColor: theme.palette.divider,
                     borderRadius: radius.row,

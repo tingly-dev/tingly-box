@@ -111,6 +111,9 @@ export default {
     "subPages": {
       "switch": "Переключить страницу: {{title}}"
     },
+    "modelPicker": {
+      "backToProviders": "Назад к поставщикам"
+    },
     "more": {
       "title": "Ещё",
       "tab": "Ещё",

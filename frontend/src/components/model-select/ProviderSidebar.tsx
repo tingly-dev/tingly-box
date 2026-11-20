@@ -1,4 +1,4 @@
-import { CheckCircle } from '@/components/icons';
+import { CheckCircle, NavigateNext } from '@/components/icons';
 import { Box, Stack, Typography } from '@mui/material';
 import React, { useState, useMemo } from 'react';
 import type { Provider } from '../../types/provider';
@@ -7,6 +7,8 @@ import { ApiStyleBadge } from '../ApiStyleBadge';
 import SearchField from '../SearchField';
 import { ProviderLabel } from '../ProviderLogo';
 import { radius } from '@tingly/ui/theme/radius';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import { mobile } from '@tingly/ui/theme/mobile';
 
 export interface ProviderSidebarProps {
     groupedProviders: Array<{ authType: string; providers: Provider[] }>;
@@ -22,6 +24,8 @@ export function ProviderSidebar({
     onTabChange,
 }: ProviderSidebarProps) {
     const [providerSearchTerm, setProviderSearchTerm] = useState('');
+    // Phone shell: the whole sheet is this list (step one of the picker).
+    const phone = usePhoneShell();
 
     // Filter providers based on search term
     const filteredGroupedProviders = useMemo(() => {
@@ -42,8 +46,8 @@ export function ProviderSidebar({
     }, [groupedProviders, providerSearchTerm]);
     return (
         <Box sx={{
-            width: 300,
-            borderRight: 1,
+            width: phone ? '100%' : 300,
+            borderRight: phone ? 0 : 1,
             borderColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
@@ -55,7 +59,7 @@ export function ProviderSidebar({
                     placeholder="Search credentials..."
                     value={providerSearchTerm}
                     onChange={(e) => setProviderSearchTerm(e.target.value)}
-                    sx={{ width: 200 }}
+                    sx={{ width: phone ? '100%' : 200 }}
                 />
             </Box>
             {/* Vertical Navigation with Auth Type Grouping */}
@@ -106,9 +110,11 @@ export function ProviderSidebar({
                                     <Box
                                         key={provider.uuid}
                                         onClick={() => onTabChange(provider.uuid)}
+                                        role={phone ? 'button' : undefined}
                                         sx={{
                                             px: 2,
                                             py: 1.5,
+                                            ...(phone && { minHeight: mobile.rowMin, display: 'flex', alignItems: 'center' }),
                                             cursor: 'pointer',
                                             bgcolor: isSelectedTab ? 'action.selected' : 'transparent',
                                             borderLeft: 3,
@@ -161,6 +167,7 @@ export function ProviderSidebar({
                                                     <ApiStyleBadge minimal apiStyle={provider.api_style} sx={{ flexShrink: 0 }} />
                                                 )
                                             )}
+                                            {phone && <NavigateNext sx={{ color: 'text.secondary', flexShrink: 0 }} />}
                                         </Stack>
                                     </Box>
                                 );

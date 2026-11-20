@@ -99,6 +99,9 @@ export default {
     "subPages": {
       "switch": "切换{{title}}的页面"
     },
+    "modelPicker": {
+      "backToProviders": "返回凭证列表"
+    },
     "more": {
       "title": "更多",
       "tab": "更多",

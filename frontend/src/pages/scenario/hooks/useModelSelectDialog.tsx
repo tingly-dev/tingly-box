@@ -1,8 +1,9 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Switch, Typography } from '@mui/material';
+import { Button, FormControlLabel, Switch, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useCallback, useRef, useState } from 'react';
 import type { Provider } from '../../../types/provider';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog.tsx';
+import { ModelPickerDialog } from '@/components/model-select/ModelPickerDialog';
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 import api from "@/services/api.ts";
@@ -312,59 +313,19 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     // would be a new type on every render of the host page, remounting the
     // dialog (and emptying its model list) whenever the page re-renders.
     const WrappedModelSelectDialog = useStableComponent<ModelSelectDialogProps>(({ open: dialogOpen, onClose }) => (
-        <Dialog
+        <ModelPickerDialog
             open={dialogOpen}
             onClose={() => {
                 closeModelSelect();
                 onClose?.();
             }}
-            maxWidth="lg"
-            fullWidth
-            slotProps={{
-                paper: {
-                    sx: { height: '80vh' }
-                }
-            }}
-        >
-            <DialogTitle sx={{ textAlign: 'center' }}>
-                {mode === 'create-rule'
-                    ? (multiSelect ? t('templateActions.multiSelectTitle') : 'Select a model for your new rule')
-                    : mode === 'add'
-                        ? 'Connect AI'
-                        : 'Choose Model'}
-            </DialogTitle>
-            <DialogContent>
-                <ModelSelectDialog
-                    key={dialogKey}
-                    providers={providers}
-                    selectedProvider={getSelectedProvider()}
-                    selectedModel={getSelectedModel()}
-                    onSelected={handleModelSelect}
-                    isModelSelected={mode === 'create-rule' && multiSelect ? isPicked : undefined}
-                    // The multi-select switch sits on the models toolbar row; the
-                    // footer only exists while selecting, the count beside its action.
-                    toolbarEnd={mode === 'create-rule' ? (
-                        <FormControlLabel
-                            sx={{ ml: 0 }}
-                            slotProps={{ typography: { variant: 'body2' } }}
-                            control={
-                                <Switch
-                                    size="small"
-                                    checked={multiSelect}
-                                    onChange={(e) => {
-                                        setMultiSelect(e.target.checked);
-                                        setPicked([]);
-                                    }}
-                                />
-                            }
-                            label={t('templateActions.selectMultiple')}
-                        />
-                    ) : undefined}
-                    onSelectionClear={() => setModelSelectionCleared(true)}
-                />
-            </DialogContent>
-            {mode === 'create-rule' && multiSelect && (
-                <DialogActions sx={{ px: 3, py: 1.5, gap: 1, borderTop: 1, borderColor: 'divider' }}>
+            title={mode === 'create-rule'
+                ? (multiSelect ? t('templateActions.multiSelectTitle') : 'Select a model for your new rule')
+                : mode === 'add'
+                    ? 'Connect AI'
+                    : 'Choose Model'}
+            actions={mode === 'create-rule' && multiSelect ? (
+                <>
                     {picked.length > 0 && (
                         <Button size="small" onClick={() => setPicked([])}>
                             {t('templateActions.clearSelection')}
@@ -380,9 +341,38 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                     >
                         {t('templateActions.addModels', { count: picked.length })}
                     </Button>
-                </DialogActions>
-            )}
-        </Dialog>
+                </>
+            ) : undefined}
+        >
+            <ModelSelectDialog
+                key={dialogKey}
+                providers={providers}
+                selectedProvider={getSelectedProvider()}
+                selectedModel={getSelectedModel()}
+                onSelected={handleModelSelect}
+                isModelSelected={mode === 'create-rule' && multiSelect ? isPicked : undefined}
+                // The multi-select switch sits on the models toolbar row; the
+                // footer only exists while selecting, the count beside its action.
+                toolbarEnd={mode === 'create-rule' ? (
+                    <FormControlLabel
+                        sx={{ ml: 0 }}
+                        slotProps={{ typography: { variant: 'body2' } }}
+                        control={
+                            <Switch
+                                size="small"
+                                checked={multiSelect}
+                                onChange={(e) => {
+                                    setMultiSelect(e.target.checked);
+                                    setPicked([]);
+                                }}
+                            />
+                        }
+                        label={t('templateActions.selectMultiple')}
+                    />
+                ) : undefined}
+                onSelectionClear={() => setModelSelectionCleared(true)}
+            />
+        </ModelPickerDialog>
     ));
 
     return {

@@ -103,6 +103,9 @@ export default {
     "subPages": {
       "switch": "Switch page in {{title}}"
     },
+    "modelPicker": {
+      "backToProviders": "Back to providers"
+    },
     "more": {
       "title": "More",
       "tab": "More",

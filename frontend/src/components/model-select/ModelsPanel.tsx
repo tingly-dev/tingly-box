@@ -3,6 +3,7 @@ import { NavigateNext as NavigateNextIcon } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { BugReport as BugReportIcon } from '@/components/icons';
 import { Edit as EditIcon } from '@/components/icons';
+import { ArrowBack as ArrowBackIcon } from '@/components/icons';
 import {
     Box,
     Button,
@@ -38,6 +39,9 @@ import NewModelsSection from './NewModelsSection';
 import { fontMono } from '@tingly/ui/theme/fonts';
 import { useTheme } from '@mui/material/styles';
 import { getStatusColor } from '@tingly/ui/theme/status';
+import { useTranslation } from 'react-i18next';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import { ProviderLabel } from '../ProviderLogo';
 
 // Convert ProviderModelData.quota (the generated, wire-shaped ProviderUsage —
 // its windows carry a bare `kind?: string`) to the app's narrower
@@ -80,6 +84,8 @@ export interface ModelsPanelProps {
     // Open the provider edit dialog for this provider. Omitted on surfaces
     // that don't support credential editing — the button is hidden then.
     onProviderEdit?: (provider: Provider) => void;
+    // Phone shell: back to the provider list (the picker's first step).
+    onBack?: () => void;
 }
 
 export function ModelsPanel({
@@ -95,7 +101,11 @@ export function ModelsPanel({
     onCustomModelEdit,
     onCustomModelDelete,
     onProviderEdit,
+    onBack,
 }: ModelsPanelProps) {
+    const { t } = useTranslation();
+    // Phone shell: the provider and search stay on top while the one-column list scrolls.
+    const phone = usePhoneShell();
     // NOTE: this panel mounts inside ModelSelectDialog, which instantiates the
     // same collection hooks — two live instances per open dialog, kept
     // consistent by each hook's cross-instance event sync (dispatch here
@@ -270,12 +280,50 @@ export function ModelsPanel({
     }, [fetchModels]);
 
     return (
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+            {phone && (
+                <Box sx={{ flexShrink: 0, px: 1, pt: 0.5, pb: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+                    <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5 }}>
+                        {onBack && (
+                            <IconButton onClick={onBack} aria-label={t('mobile.modelPicker.backToProviders')}>
+                                <ArrowBackIcon />
+                            </IconButton>
+                        )}
+                        <Box sx={{ flex: 1, minWidth: 0, pl: onBack ? 0 : 1 }}>
+                            <ProviderLabel provider={provider} size={18}>
+                                <Typography noWrap sx={{ fontWeight: 600 }}>{provider.name}</Typography>
+                            </ProviderLabel>
+                        </Box>
+                        <IconButton
+                            onClick={() => refreshModels(provider.uuid)}
+                            disabled={isRefreshing}
+                            aria-label={isRefreshing ? 'Refreshing models…' : 'Refresh models'}
+                        >
+                            {isRefreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
+                        </IconButton>
+                        {onProviderEdit && (
+                            <IconButton onClick={() => onProviderEdit(provider)} aria-label="Edit Provider">
+                                <EditIcon />
+                            </IconButton>
+                        )}
+                    </Stack>
+                    <Box sx={{ px: 1, pt: 0.5 }}>
+                        <SearchField
+                            placeholder="Search models..."
+                            value={searchTerms[provider.uuid] || ''}
+                            onChange={(e) => handleSearchChange(provider.uuid, e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') rememberSearch(searchTerm); }}
+                            sx={{ width: '100%' }}
+                        />
+                        {toolbarEnd && <Box sx={{ pt: 1 }}>{toolbarEnd}</Box>}
+                    </Box>
+                </Box>
+            )}
             {/* Scrollable content area */}
             <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
                 <Stack spacing={2}>
                 {/* Controls */}
-                <Stack
+                {!phone && <Stack
                     direction="row"
                     spacing={2}
                     sx={{
@@ -332,7 +380,7 @@ export function ModelsPanel({
                         sx={{ width: 200 }}
                     />
                     {toolbarEnd}
-                </Stack>
+                </Stack>}
 
                 {/* Recent searches — only while the box is empty, so they never compete with live results */}
                 {!searchTerm && searchHistory.length > 0 && (

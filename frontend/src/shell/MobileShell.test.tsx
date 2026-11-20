@@ -15,6 +15,7 @@ vi.mock('@/services/uiPrefs', () => ({ syncUiPrefs: vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 import MobileShell from './MobileShell';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 const at = (path: string) => render(
     <MemoryRouter initialEntries={[path]}>
@@ -46,5 +47,25 @@ describe('MobileShell', () => {
         at('/agent/claude_code');
         expect(screen.queryByRole('link', { name: /Workspace/ })).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: /Agent/ })).toHaveClass('Mui-selected');
+    });
+
+    it('marks the document as the phone shell only while it is mounted', () => {
+        const { unmount } = at('/credentials');
+        expect(document.body).toHaveAttribute('data-shell', 'phone');
+        unmount();
+        expect(document.body).not.toHaveAttribute('data-shell');
+    });
+
+    it('tells the page it is in the phone shell', () => {
+        const Probe = () => <p>{usePhoneShell() ? 'phone' : 'desktop'}</p>;
+        render(
+            <MemoryRouter initialEntries={['/credentials']}>
+                <Routes><Route element={<MobileShell />}><Route path="*" element={<Probe />} /></Route></Routes>
+            </MemoryRouter>,
+        );
+        expect(screen.getByText('phone')).toBeInTheDocument();
+        cleanup();
+        render(<Probe />);
+        expect(screen.getByText('desktop')).toBeInTheDocument();
     });
 });

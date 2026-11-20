@@ -1,6 +1,6 @@
 # Mobile UI: a phone-native surface for Agent and the Projects workspace
 
-> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, the interface picker, and the sub-page switcher. Not yet: the workspace screens, the Agent pages, the viewport script (see Rollout).
+> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, the interface picker, the sub-page switcher, the phone layer for configuration pages and the model picker sheet. Not yet: the workspace screens, the Agent pages, the viewport script (see Rollout).
 > Prototype: `.design/mobile-prototype/index.html` (static, clickable, mock data; `?theme=dark`, `?frame=0`, deep-link states via `?s=tab,screen,thread,sheet,ptab`).
 > Audit and mockups: `pr-assets/tep-mobile/` (`raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/tep-mobile/...`).
 
@@ -64,6 +64,110 @@ Rules that hold at every size: nothing overflows horizontally (long values wrap;
 
 `BottomTabs`, `LargeTitleHeader`, `CompactHeader`, `GroupedList` / `ListRow`, `DockedActions`, `BottomSheet`, `SegmentedControl`, `Toast`, plus `useIsPhone`. Built on MUI primitives, tested with a `matchMedia` stub.
 
+## Configuration pages on a phone (Agent, Team, Image, the model picker)
+
+The shell made every page reachable (decision 11); the configuration pages themselves still rendered their desktop layout in a 390 px column: a rule graph 600+ px wide cut off on the right (the target model, the one thing you would change, was off screen), vertical one-character buttons in the rules header, connection values cut to "http://l…", a keys table wider than the screen, 30 px icon buttons, and centred desktop dialogs. This section is how those pages work in the phone shell. **Nothing here changes the desktop**: every rule below applies only inside `MobileShell`.
+
+### Pages
+
+| Section | Pages (route) | On a phone |
+|---|---|---|
+| Agent | Claude Code (`/agent/claude_code`), its profiles (`…/profile/:id`), Claude Desktop, Codex, OpenCode, Pi, WorkBuddy, DeepSeek, Xcode, VS Code, Cursor, Custom | header + status, connection rows, rules list; config dialogs (自动配置 / 配置指南) as sheets |
+| Agent · SDK | OpenAI, Anthropic, VModel, Embedding, Decisions | same template: connection rows (if any) + rules list |
+| Agent · rules | the rule card list and the rule editor (targets, tiers, plugins, conditions) on every page above, Team and Image API | phone rule card (below) |
+| Team | a Team (`/agent/team`, `/agent/team/:slug`), Team Keys (`/agent/team/keys`) | header actions, keys as a grouped list (copy / reveal / limits / move / delete), Team settings and key dialogs as sheets |
+| Image | Image API (`/image/api`), Playground (`/image/playground`), a profile (`/image/profile/:id`, `…/new`), Idea to Prompt, Image to Prompt, Library | API = the Agent template; forms one column; Library a two-column grid |
+| Model picker | the dialog that opens from a rule's target, "+ 模型", "新建模型" (and every other `ModelSelectDialog` host) | full-screen sheet, two steps (below) |
+
+### One phone layer instead of per-page phone copies
+
+Most of these pages are one template (`TemplatePage`: header, connection card, rules) and a handful of shared parts (`ConfigRow`, `UnifiedCard`, `RuleCard`, dialogs). The phone treatment lives in those shared parts and in a theme layer the shell adds, so a page gets it without a phone copy of itself:
+
+- **`usePhoneShell()`** (`@tingly/ui/hooks/usePhoneShell`): true inside `MobileShell`. Components switch on it, not on the viewport: `?ui=mobile` on a laptop must look like the phone, and a narrow desktop window must not. (`useIsPhone` still only decides which shell `auto` mounts.)
+- **Phone theme layer** (`@tingly/ui/theme/phone`), applied by `MobileShell` over the app theme: dialogs open as **bottom sheets** (full width, 24 px top corners, at most the visible height, actions pinned at the bottom above the home indicator); `fullScreen` dialogs stay full screen. Buttons, icon buttons, toggle buttons, tabs and menu items get a **44 px** minimum; text inputs a 44 px row and **16 px** text (no iOS zoom).
+- **Keyboard**: the shell tracks `visualViewport` and sets `--phone-viewport-height`; the shell and the sheets size to it, so the field you type in and the sheet's Save stay above the keyboard; a focused field scrolls into the middle of the page.
+- **Sticky actions**: a sheet's actions are its last row and never scroll away. Pages save as you change things (rules, flags, toggles), so pages have no Save bar; the few page forms with a Save (Image profile) pin it to the bottom of the page above the tab bar.
+- **Destructive actions confirm** (delete rule, delete target, revoke key, delete profile) through the existing confirm dialogs, which are sheets here.
+- **No hover-only controls**: what desktop shows on hover (a target's tier arrows, delete, limits) is in the phone rule card's row menu.
+
+### Model picker: a full-screen sheet in two steps
+
+A sheet, not a page: it is opened from a dozen places, each with its own context (which rule, which target, add or replace, one or several models), and returns to the same scroll position; a route would have to serialise all of that. It is a full-screen dialog, and the system Back closes it (it pushes a history entry while open).
+
+```
+ Step 1: providers              Step 2: models (opens here when a model is already chosen)
+┌──────────────────────────┐   ┌──────────────────────────┐
+│ ✕   选择模型              │   │ ✕   选择模型              │
+│ [🔍 搜索凭证           ]  │ ← │ ‹ OpenAI · Key       ⟳ ✎ │  ‹ = back to providers
+├──────────────────────────┤   │ [🔍 搜索模型           ]  │  sticky
+│ API Key (3)               │   ├──────────────────────────┤
+│ ◎ OpenAI           ✓  ›  │   │ 最近                      │
+│ ◎ DeepSeek            ›  │   │  gpt-5.6-sol          ✓   │  56 px rows, check = selected
+│ OAuth (2)                 │   │  gpt-5.6-luna             │
+│ ◎ Claude Code         ›  │   │ 全部 · 24                 │
+│ …                         │   │  + 自定义模型             │
+│                           │   │  gpt-5.6-terra            │
+│                           │   │  …          ‹ 1 / 3 ›     │
+│                           │   ├──────────────────────────┤
+│                           │   │ 额度  5h ▓▓▓░ 62%  ⟳     │  quota, pinned
+└──────────────────────────┘   └──────────────────────────┘
+```
+
+- It opens on the models of the selected provider (else the last used one); "‹ provider" goes back to the provider list. A check marks the selected provider and the selected model.
+- Search stays at the top while the list scrolls; models are one column of 56 px rows (the desktop card grid, one card wide); the new / recent / starred sections stay; quota stays pinned under the list.
+- Multi-select (新建模型 → 多选) keeps its count and "添加" in the bottom bar.
+
+### Agent page
+
+```
+┌──────────────────────────┐
+│ ✳ Claude Code   智能应用 ⌄│  sub-page switcher (exists)
+│ Claude Code  ⓘ ⧉          │
+│ ● 已接入 · 今日 1842 次     │
+│ [日志] [快速开始] [自动配置] │
+│┌────────────────────────┐│
+││ Base URL     ⧉ [Local|Docker]│ label row: name, copy, switch
+││ http://localhost:12580/  ││ the full value, wrapped
+││ tingly/claude_code       ││
+││ API Key            ⧉ 👁  ││
+││ mock-model-token         ││
+│└────────────────────────┘│
+│┌ 模型规则 ⓘ ─────────────┐│
+││ [⚡测试全部][🔑连接 AI][+ 新建模型]│ actions wrap under the title
+││┌──────────────────────┐││
+│││ claude-sonnet-5  ⚡ ⋯ │││  rule: name, probe, menu
+│││ [1M: Off][Endpoint: Auto]│││
+│││ 默认                  │││
+│││ T0 ◎ OpenAI           │││  target row → model picker
+│││    gpt-5.6-sol      ⋯ │││  ⋯ = tier up/down, credential, delete
+│││ + 添加模型             │││
+│││ 智能条件 · 2 (桌面编辑) │││  IF steps listed, read-only
+││└──────────────────────┘││
+│└────────────────────────┘│
+└──────────────────────────┘
+```
+
+- **Connection rows** (`ConfigRow`): the label, copy and switches (Local | Docker, 官方源 | 镜像源) on the label line, the full value wrapped below it; tapping the value copies it too.
+- **Rules header** (`UnifiedCard`): the actions wrap below the title instead of squeezing it.
+- **Phone rule card**: the rule's header (name, 1M, Endpoint, plugins, probe, "⋯" menu: enable/disable, plugins, delete) stays; the graph becomes a list: tiers T0, T1… with one row per target (provider logo, provider, model); tapping a target opens the model picker on it; its "⋯" moves it between tiers, edits the credential, sets limits, deletes it (confirmed); "+ 添加模型" per tier, "+ 备用层级" under the last. Smart conditions show as stacked IF steps, each with its targets (tap to change the model); adding or editing a condition, and reordering rules (drag), stay on the desktop (the card says so).
+- Claude Code's 使用方案 / Slots / Plugins chips wrap as they do; the profile page's 启动 | 设置 row follows the `ConfigRow` rule.
+
+### Team
+
+- A Team page is the Agent template plus the Team header (enable switch, scope, guide, limits, settings, duplicate as 44 px icon buttons that wrap) and the Team keys section.
+- **Team Keys**: per Team a grouped list instead of the table: the key's name and user, the masked key with reveal and copy, a "⋯" with limits, move to another Team, delete (confirmed); "创建令牌" stays per Team. Creating, the limits editor, moving and Team settings are sheets.
+
+### Image
+
+- Image API is the Agent template.
+- Playground, profiles, Idea to Prompt, Image to Prompt: already one column; the phone layer sizes their controls. The profile form's Save is pinned at the bottom.
+- Library: a two-column grid of thumbnails (it was one column, a screen per image).
+- Desktop-only: the inpainting canvas and drag-to-reorder references (they render, but are not tuned for touch).
+
+### Desktop-only on a phone
+
+Editing and reordering smart conditions, dragging rules, the rule flags raw editor, provider bulk editing, the routing guide animations. Their entry points stay visible where they are cheap (they open as sheets and work, just not tuned), and the rule card tells you where to go for conditions.
+
 ## Rollout
 
 0. Foundations: mobile tokens, `useIsPhone`, the shell switch (an explicit `?ui=mobile`; `auto` stays desktop until `MOBILE_AUTO` is turned on in `src/shell/uiShell.ts`), the viewport screenshot script. No change by default. *Tokens (`@tingly/ui/theme/mobile`), `useIsPhone` and the switch (`src/shell/uiShell.ts`) are in; the script is next.*
@@ -71,7 +175,7 @@ Rules that hold at every size: nothing overflows horizontally (long values wrap;
 2. Workspace home: needs-you with inline approve/answer, folded groups, projects and folders, new-task sheet.
 3. Workspace screens: project (对话 / 线程 / 文件库), folder session, thread page with docked actions, sheets, keyboard handling, master-detail at ≥ 600.
 4. Review: report + change summary, resolve, follow-up.
-5. Agent and 更多: Agent list, status, copy rows, rule sheet; Team and Credentials phone pages.
+5. Agent and 更多: Agent list, status, copy rows, rule sheet; Team and Credentials phone pages. *Configuration pages (see "Configuration pages on a phone"): the phone layer (`@tingly/ui/theme/phone`, `usePhoneShell`, `useBackToClose`) and the model picker sheet are in; the Agent, Team and Image pages follow.*
 6. Sweep and install: remaining routes, web app manifest and icons. Push notifications are a separate decision.
 
 ## Testing
