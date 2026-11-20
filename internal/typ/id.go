@@ -204,12 +204,18 @@ type ClaudeCodeClientHints struct {
 
 	FirstPartyRequestClass string // x-claude-1p-request-class
 	PromptID               string // x-claude-code-prompt-id
+
+	// BodyExtras are the inbound body members the typed SDK params cannot
+	// carry (see client.claudeCodeBodyExtraFields); raw JSON by member name.
+	// "cache_control" holds the top-level object, of which only the members
+	// the SDK type lacks are replayed.
+	BodyExtras map[string]json.RawMessage
 }
 
 // IsZero reports whether no hint was captured.
 func (h ClaudeCodeClientHints) IsZero() bool {
 	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == "" && h.RequestClass == "" && h.AgentType == "" && !h.BackgroundSession &&
-		h.FirstPartyRequestClass == "" && h.PromptID == ""
+		h.FirstPartyRequestClass == "" && h.PromptID == "" && len(h.BodyExtras) == 0
 }
 
 // ClaudeCodeClientHintsKey is the context key for ClaudeCodeClientHints.
@@ -240,3 +246,28 @@ func GetClaudeCodeClientHints(ctx context.Context) ClaudeCodeClientHints {
 // Sending the organization is opt-in: an unset (empty) flag attaches no
 // organization header at all, preserving the classic behavior.
 const ClaudeOrgIDAuto = "auto"
+
+// ClaudeCodeBodyExtraFields are the top-level request members Claude Code
+// sends that the SDK's typed params drop (they hold a fixed field list). Each
+// is replayed to a Claude OAuth upstream only together with the beta that
+// enables it (client.claudeCodeBodyExtraBetas).
+var ClaudeCodeBodyExtraFields = []string{"resumption", "program_use_case_id", "thread", "cache_control"}
+
+// ExtractClaudeCodeBodyExtras picks the ClaudeCodeBodyExtraFields present in
+// a raw Messages request body. It returns nil when none is present.
+func ExtractClaudeCodeBodyExtras(body []byte) map[string]json.RawMessage {
+	var all map[string]json.RawMessage
+	if json.Unmarshal(body, &all) != nil {
+		return nil
+	}
+	var out map[string]json.RawMessage
+	for _, name := range ClaudeCodeBodyExtraFields {
+		if v, ok := all[name]; ok && len(v) > 0 && string(v) != "null" {
+			if out == nil {
+				out = map[string]json.RawMessage{}
+			}
+			out[name] = v
+		}
+	}
+	return out
+}
