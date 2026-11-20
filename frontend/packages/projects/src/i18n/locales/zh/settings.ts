@@ -4,35 +4,43 @@ import type { settings as settingsEn } from '../en/settings';
 // Settings and admin surfaces: global settings, IM chat binding, the
 // directory picker and workdir/worktree notices.
 export const settings: Dict<typeof settingsEn> = {
-    // IM 聊天绑定到项目（TEP #2143，.design/projects-im.md）。
+    // IM 绑定到项目（TEP #2143，.design/projects-im.md）。
     im: {
         title: '绑定',
         bots_one: '{{count}} 个机器人', bots_other: '{{count}} 个机器人',
-        tags: { label: '已绑定的 IM', bind: '绑定聊天', unbind: '解绑 {{chat}}', more: '+{{count}}', manage: 'IM 聊天' },
+        tags: { label: '已绑定的 IM', bind: '绑定 IM', unbind: '解绑 {{chat}}', more: '+{{count}}', manage: 'IM' },
         place: { none: '现在没有绑定', at: '现在绑定在 {{place}}', atFolder: '现在绑定在目录 {{place}}', elsewhere: '另一个项目' },
         focus: { project: '项目', folder: '目录', coordinator: '当前与协调者对话', nextSession: '等待新会话', thread: '当前对话：#{{number}} · {{title}}', boundSession: '绑定会话：#{{number}} · {{title}}' },
         bind: {
-            title: '把聊天绑定到 {{project}}', rebind: '将改绑', blocked: '已在访问控制中停用',
-            note: '一个聊天同一时间只绑定一个地方；改绑后旧线程会保留，不会删除。',
+            title: '把 IM 绑定到 {{project}}', rebind: '将改绑', blocked: '已在访问控制中停用',
+            note: '一个 IM 同一时间只绑定一个地方；改绑后旧线程会保留，不会删除。',
             submit: '绑定', done: '{{chat}} 已绑定到 {{project}}', moved: '{{chat}} 已改绑到 {{project}}', failed: '绑定失败',
             unbound: '已解绑 {{chat}}', unbindFailed: '解绑失败',
             loadFailed: '读取绑定失败：{{error}}',
-            noBotsTitle: '还没有连接机器人', noBotsBody: '先连接一个机器人，再到这里把它的聊天绑定到项目。',
-            noChatsTitle: '没有可绑定的聊天', noChatsBody: '从想绑定的聊天里给机器人发一条消息，它就会出现在这里。', allBound: '已知的聊天都已绑定到这个项目。',
+            noBotsTitle: '还没有连接机器人', noBotsBody: '先连接一个 IM 机器人，再到这里把它绑定到项目。',
+            noChatsTitle: '没有可绑定的 IM', noChatsBody: '在想绑定的群聊或私聊里给机器人发一条消息，它就会出现在这里。', allBound: '已知的 IM 都已绑定到这个项目。',
             openSettings: '打开 IM 设置',
         },
         settings: {
-            title: '绑定', intro: '和你的项目对话的聊天机器人，以及每个聊天绑定在哪里。',
+            title: '绑定', intro: '和你的项目对话的 IM 机器人，以及它们的每个群聊、私聊绑定在哪里。',
             access: '访问控制', online: '已连接', offline: '未运行',
-            chat: '聊天', boundTo: '绑定到', status: '状态', action: '操作', notBound: '未绑定',
+            chat: '群聊 / 私聊', boundTo: '绑定到', status: '状态', action: '操作', notBound: '未绑定',
             bindAction: '绑定', rebindAction: '改绑', rebindLabel: '把 {{chat}} 改绑到其他项目或目录',
             statusOk: '可用', statusBlocked: '已停用', statusUnpaired: '等待配对',
-            noChats: '还没有聊天。给这个机器人发一条消息，聊天就会出现在这里。',
-            getStarted: '开始使用 IM', getStartedSteps: '1. 连接机器人。2. 给机器人发消息并授予访问权限。3. 在下方将聊天绑定到项目。', manageBots: '连接或管理机器人',
-            emptyTitle: '还没有 IM 机器人', emptyBody: '连接 Telegram、飞书等聊天机器人，再把它们的聊天绑定到项目。',
+            noChats: '还没有群聊或私聊。在 IM 里给这个机器人发一条消息，它就会出现在这里。',
+            getStarted: '开始使用 IM', getStartedSteps: '1. 连接机器人。2. 给机器人发消息并授予访问权限。3. 在下方把 IM 绑定到项目。', manageBots: '连接或管理机器人',
+            emptyTitle: '还没有 IM 机器人', emptyBody: '连接 Telegram、飞书等 IM 机器人，再把它们绑定到项目。',
             loadFailed: '读取机器人失败。',
             pickProject: '把 {{chat}} 绑定到', pickPlaceholder: '选择项目或目录', noProjects: '先创建一个项目或目录。',
             moveDone: '{{chat}} 已改绑到 {{project}}',
+        },
+        // 静音的 IM 仍保持绑定；静音期间不向它发送任何消息。
+        mute: {
+            action: '静音', unmute: '取消静音', muteLabel: '静音 {{chat}}', unmuteLabel: '取消静音 {{chat}}',
+            hour: '1 小时', hours8: '8 小时', tomorrow: '到明天 9:00', forever: '直到我取消',
+            until: '静音至 {{time}}', indefinite: '已静音',
+            hint: '静音期间不会向这个 IM 发送任何消息；从它发来的消息仍会送达项目。',
+            done: '已静音 {{chat}}', undone: '已取消静音 {{chat}}', failed: '静音设置失败',
         },
         deleted: '（已删除）',
         sourceFrom: '来自',

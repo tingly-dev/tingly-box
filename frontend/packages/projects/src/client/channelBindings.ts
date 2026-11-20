@@ -27,3 +27,14 @@ export async function bindChannel(req: components['schemas']['BindChannelRequest
 export async function unbindChannel(id: string): Promise<void> {
     await unwrap(api.DELETE('/api/v1/projects/channel-bindings/{id}', { params: { path: { id } } }));
 }
+
+/**
+ * Mutes a bound chat until `until` (omitted: until unmuted), or unmutes it.
+ * The binding stays; only what is sent to the chat stops.
+ */
+export async function muteChannel(id: string, muted: boolean, until?: Date): Promise<ChannelBinding> {
+    return unwrap(api.PUT('/api/v1/projects/channel-bindings/{id}/mute', {
+        params: { path: { id } },
+        body: { muted, ...(muted && until ? { muted_until: until.toISOString() } : {}) },
+    }));
+}

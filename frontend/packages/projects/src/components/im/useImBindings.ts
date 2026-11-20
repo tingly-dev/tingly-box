@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isFolder, type ProjectSummary } from '../../client';
 import { useProjectList } from '../../hooks/useProjectList';
-import { bindChannel, listChannelBindings, unbindChannel, type ChannelBinding } from '../../client/channelBindings';
+import { bindChannel, listChannelBindings, muteChannel, unbindChannel, type ChannelBinding } from '../../client/channelBindings';
 import { useProjectsHost, type ImBot, type ImChat, type ProjectsHost } from '../../host/ProjectsHost';
 
 /** Fired on window when a binding was added, moved or removed, so every view of them refreshes. */
@@ -79,9 +79,15 @@ export function useChannelBindings(enabled: boolean) {
         window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
     }, []);
 
+    const mute = useCallback(async (id: string, muted: boolean, until?: Date) => {
+        const b = await muteChannel(id, muted, until);
+        window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
+        return b;
+    }, []);
+
     const byChat = useMemo(() => new Map((bindings ?? []).map((b) => [chatKey(b.platform, b.chat_id), b])), [bindings]);
 
-    return { bindings, byChat, error, bind, unbind };
+    return { bindings, byChat, error, bind, unbind, mute };
 }
 
 /** The host's bots and the chats each has seen. Empty when the host has no IM. */
