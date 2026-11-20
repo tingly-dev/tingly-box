@@ -144,6 +144,15 @@ func (c *Conductor) Inject(ctx context.Context, prompt string) error {
 	return c.session.Inject(ctx, prompt)
 }
 
+// CanInject reports whether the session's agent takes a message while a turn
+// runs. A session that does not say is assumed to, and Inject settles it.
+func (c *Conductor) CanInject() bool {
+	if s, ok := c.session.(interface{ CanInject() bool }); ok {
+		return s.CanInject()
+	}
+	return true
+}
+
 // SetModel switches the process's model live; see [PersistentSession.SetModel].
 func (c *Conductor) SetModel(ctx context.Context, model string) error {
 	return c.session.SetModel(ctx, model)
