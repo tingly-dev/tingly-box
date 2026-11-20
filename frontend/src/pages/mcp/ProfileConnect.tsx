@@ -65,9 +65,10 @@ export default function ProfileConnect({
     useEffect(() => {
         let mounted = true;
         void getApiBaseUrl().then((url) => mounted && setBaseUrl(url));
+        // The MCP token opens the MCP endpoints only, never the control API.
         void api
-            .getToken()
-            .then((result) => mounted && result?.token && setToken(result.token))
+            .getMCPToken()
+            .then((result) => mounted && result?.data?.token && setToken(result.data.token))
             .catch(() => undefined);
         return () => {
             mounted = false;

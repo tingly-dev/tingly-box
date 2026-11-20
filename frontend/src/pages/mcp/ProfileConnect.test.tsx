@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import ProfileConnect, { registerCommands } from './ProfileConnect';
 
 vi.mock('@/utils/protocol', () => ({ getApiBaseUrl: () => Promise.resolve('http://localhost:12580') }));
-vi.mock('@/services/api', () => ({ api: { getToken: () => Promise.resolve({ token: 'tok-123' }) } }));
+// The model token must never be what an agent is given for MCP.
+vi.mock('@/services/api', () => ({
+    api: {
+        getToken: () => Promise.resolve({ token: 'tb-model-x' }),
+        getMCPToken: () => Promise.resolve({ success: true, data: { token: 'tb-mcp-123' } }),
+    },
+}));
 
 describe('ProfileConnect', () => {
     it('writes the endpoint and token into each client command', () => {
@@ -17,10 +23,11 @@ describe('ProfileConnect', () => {
         expect(Object.values(c).some((x) => x.command.includes('$(') || x.command.includes('env'))).toBe(false);
     });
 
-    it('shows the URL and the whole command, and switches client', async () => {
+    it('shows the URL and the whole command with the MCP token, and switches client', async () => {
         render(<ProfileConnect profileId="codex-dev" serverName="tb-codex-dev" />);
         expect(screen.getByText('http://localhost:12580/api/v1/mcp/codex-dev')).toBeInTheDocument();
-        await waitFor(() => expect(screen.getByTestId('mcp-connect-command')).toHaveTextContent('Bearer tok-123'));
+        await waitFor(() => expect(screen.getByTestId('mcp-connect-command')).toHaveTextContent('Bearer tb-mcp-123'));
+        expect(screen.getByTestId('mcp-connect-command')).not.toHaveTextContent('tb-model-x');
         fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
         expect(screen.getByTestId('mcp-connect-command')).toHaveTextContent('[mcp_servers.tb-codex-dev]');
     });

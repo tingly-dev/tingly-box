@@ -67,10 +67,10 @@ func (h *Handler) ProbeClient(c *gin.Context) {
 	defer cancel()
 	client := sdk.NewClient(&sdk.Implementation{Name: "tingly-route-check", Version: "1"}, nil)
 	// The destination is the configured local gateway, never a request-provided
-	// Host or URL. The management API's user authentication is reused internally.
+	// Host or URL. It authenticates with the MCP token, as an agent would.
 	session, err := client.Connect(ctx, &sdk.StreamableClientTransport{
 		Endpoint:   fmt.Sprintf("http://127.0.0.1:%d%s", h.cfg.GetServerPort(), endpoint),
-		HTTPClient: &http.Client{Transport: probeAuthTransport{base: http.DefaultTransport, token: h.cfg.GetUserToken()}},
+		HTTPClient: &http.Client{Transport: probeAuthTransport{base: http.DefaultTransport, token: h.cfg.GetMCPToken()}},
 	}, nil)
 	if err == nil {
 		defer session.Close()

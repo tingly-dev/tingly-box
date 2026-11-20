@@ -23,6 +23,9 @@ type Routes struct {
 	// and V2, for the few routes that also attach it per-route
 	// (swagger.WithMiddleware) so the generated spec records it.
 	UserAuth gin.HandlerFunc
+	// MCPAuth authenticates the MCP profile endpoints (MCP token or user
+	// token); they are mounted on Public with it.
+	MCPAuth gin.HandlerFunc
 	// Engine is for routes that live outside the swagger-managed /api groups
 	// (status line, notify hooks) and for callback routes that need their own
 	// path layout.

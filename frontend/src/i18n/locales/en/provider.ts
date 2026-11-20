@@ -474,6 +474,23 @@ export default {
       "saved": "I've Updated My Clients",
       "pullToken": "Pull latest token from server"
     },
+    "mcpToken": {
+      "title": "MCP Token (MCP Profiles)",
+      "description": "Give this token to agents (Claude Code, Codex, OpenCode) that connect to an MCP profile. It opens the MCP profile endpoints and nothing else.",
+      "resetToken": "Reset MCP Token",
+      "resetTitle": "Reset MCP Token",
+      "resetConfirm": "Are you sure you want to reset the MCP token?",
+      "resetPoints": {
+        "new": "A new random token will be generated",
+        "stop": "The old token will immediately stop working - every agent registered with it needs the new one"
+      },
+      "resetWarning": "Re-register the MCP profile in your agents after resetting.",
+      "resetCancel": "Cancel",
+      "resetConfirmButton": "Reset",
+      "resetSuccess": "MCP Token Reset Successfully",
+      "resetSuccessMessage": "Your new MCP token has been generated. Copy the registration command from the MCP profile page again.",
+      "saved": "I've Updated My Agents"
+    },
     "securityInfo": {
       "title": "Token Security",
       "description": "Understanding the difference between User Token and Model Token:",

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/rsa"
+	"crypto/subtle"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -246,6 +247,23 @@ func verifyEnterpriseContextJWT(cfg *config.Config, rawToken string) (*enterpris
 		Tier:         strings.TrimSpace(tier),
 		JTI:          strings.TrimSpace(jti),
 	}, nil
+}
+
+// MCPAuthMiddleware authenticates the MCP profile endpoints. It accepts the
+// MCP token, which is good for nothing else, so an agent can be given it
+// without the control API; any other credential goes to userAuth, which
+// already grants everything.
+func (am *AuthMiddleware) MCPAuthMiddleware(userAuth gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		scheme, token, ok := strings.Cut(c.GetHeader("Authorization"), " ")
+		if ok && scheme == "Bearer" && am.config != nil {
+			if want := am.config.GetMCPToken(); want != "" && subtle.ConstantTimeCompare([]byte(token), []byte(want)) == 1 {
+				c.Next()
+				return
+			}
+		}
+		userAuth(c)
+	}
 }
 
 // UserAuthMiddleware middleware for UI and control API authentication

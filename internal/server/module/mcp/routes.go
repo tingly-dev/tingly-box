@@ -91,23 +91,29 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithResponseModel(local.ExecuteToolResponse{}),
 	)
 
-	// MCP Transport endpoints for local mode
-	// These handle HTTP/SSE connections from external MCP clients
+	// MCP Transport endpoints: what an agent connects to. They sit outside the
+	// user-authenticated group so the MCP token, which opens nothing else,
+	// is enough (rt.MCPAuth also accepts the user token).
 	if transportHandler != nil {
-		router.POST("/mcp/:client_name", transportHandler.HandleMCP,
+		public, auth := rt.Public, swagger.WithMiddleware(rt.MCPAuth)
+		if rt.MCPAuth == nil || public == nil {
+			// Hosts that do not provide MCP auth keep the user-authenticated group.
+			public, auth = router, func(*swagger.RouteConfig) {}
+		}
+		public.POST("/mcp/:client_name", transportHandler.HandleMCP, auth,
 			swagger.WithDescription("MCP HTTP transport endpoint"),
 			swagger.WithTags("mcp-transport"),
 		)
 		// Some MCP clients perform GET-based health checks or negotiate streamable HTTP on the base endpoint.
 		// Keep GET on the same path to maximize compatibility.
-		router.GET("/mcp/:client_name", transportHandler.HandleMCP,
+		public.GET("/mcp/:client_name", transportHandler.HandleMCP, auth,
 			swagger.WithDescription("MCP HTTP transport endpoint (GET compatibility)"),
 			swagger.WithTags("mcp-transport"),
 		)
 
-		router.DELETE("/mcp/:client_name", transportHandler.HandleMCP, swagger.WithTags("mcp-transport"))
+		public.DELETE("/mcp/:client_name", transportHandler.HandleMCP, auth, swagger.WithTags("mcp-transport"))
 
-		router.GET("/mcp/:client_name/stream", transportHandler.HandleMCPStream,
+		public.GET("/mcp/:client_name/stream", transportHandler.HandleMCPStream, auth,
 			swagger.WithDescription("MCP SSE transport endpoint"),
 			swagger.WithTags("mcp-transport"),
 		)

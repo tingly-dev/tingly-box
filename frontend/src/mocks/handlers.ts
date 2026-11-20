@@ -2756,6 +2756,17 @@ export const handlers = [
         })
     }),
 
+    http.get('/api/v1/auth/mcp-token', () => {
+        return HttpResponse.json({ success: true, data: { token: 'tb-mcp-mock-token' } })
+    }),
+
+    http.post('/api/v1/auth/mcp-token/reset', () => {
+        return HttpResponse.json({
+            success: true,
+            data: { token: `tb-mcp-mock-token-${Math.random().toString(36).slice(2, 14)}` },
+        })
+    }),
+
     http.get('/api/v1/rules', ({ request }) => {
         const url = new URL(request.url)
         const scenario = url.searchParams.get('scenario')
