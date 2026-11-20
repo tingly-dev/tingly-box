@@ -97,6 +97,11 @@ const (
 // what makes it a thread: its queue, the per-project limit, approvals in the
 // thread view, and the report to the coordinator after each turn.
 type Threads struct {
+	// remoteDiff lets a PR's diff be read from GitHub when its branches are not in
+	// the checkout. Off: that read costs requests and a token, so for now such a PR
+	// says so and links to GitHub (see "A PR's diff" in github-tools.md).
+	remoteDiff bool
+
 	// links opens a thread's merge request; it is read when needed because the
 	// service may swap its GitHub.
 	links  func() *Links
@@ -1747,30 +1752,6 @@ func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
 	}
 	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
 	return t, nil
-}
-
-// Diff returns a thread's changes for review.
-func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return Diff{}, err
-	}
-	if t.Branch == "" {
-		return Diff{}, errors.New("this thread has no worktree branch to review")
-	}
-	return BranchDiff(ctx, t.Cwd, t.BaseBranch, t.Branch)
-}
-
-// DiffFile returns one file of a thread's changes; see BranchFileDiff.
-func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string) (FileDiff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return FileDiff{}, err
-	}
-	if t.Branch == "" {
-		return FileDiff{}, errors.New("this thread has no worktree branch to review")
-	}
-	return BranchFileDiff(ctx, t.Cwd, t.BaseBranch, path, oldPath)
 }
 
 // Recover runs at startup: turns that were running when the process stopped

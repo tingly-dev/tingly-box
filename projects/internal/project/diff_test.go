@@ -58,7 +58,7 @@ func diffRepo(t *testing.T) string {
 
 func TestBranchDiffSummarizesFilesWithoutContent(t *testing.T) {
 	dir := diffRepo(t)
-	d, err := BranchDiff(context.Background(), dir, "main", "feature")
+	d, err := LocalPRDiff(context.Background(), dir, 7, "main", "feature")
 	require.NoError(t, err)
 	by := map[string]DiffFile{}
 	for _, f := range d.Files {
@@ -79,7 +79,7 @@ func TestBranchDiffSummarizesFilesWithoutContent(t *testing.T) {
 func TestBranchDiffHonoursLinguistGenerated(t *testing.T) {
 	dir := diffRepo(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("keep.txt linguist-generated\n"), 0o644))
-	d, err := BranchDiff(context.Background(), dir, "main", "feature")
+	d, err := LocalPRDiff(context.Background(), dir, 7, "main", "feature")
 	require.NoError(t, err)
 	for _, f := range d.Files {
 		if f.Path == "keep.txt" {
@@ -88,43 +88,43 @@ func TestBranchDiffHonoursLinguistGenerated(t *testing.T) {
 	}
 }
 
-func TestBranchFileDiffSkipsWhatIsTooLargeOrBinary(t *testing.T) {
+func TestPRFileDiffSkipsWhatIsTooLargeOrBinary(t *testing.T) {
 	dir := diffRepo(t)
 	ctx := context.Background()
 
-	small, err := BranchFileDiff(ctx, dir, "main", "keep.txt", "")
+	small, err := LocalPRFileDiff(ctx, dir, "main", "feature", "keep.txt", "")
 	require.NoError(t, err)
 	assert.Contains(t, small.Patch, "+added")
 	assert.False(t, small.TooLarge)
 
-	big, err := BranchFileDiff(ctx, dir, "main", "big.txt", "")
+	big, err := LocalPRFileDiff(ctx, dir, "main", "feature", "big.txt", "")
 	require.NoError(t, err)
 	assert.True(t, big.TooLarge)
 	assert.Empty(t, big.Patch, "an over-size patch is not sent, and cannot be asked for")
 
-	bin, err := BranchFileDiff(ctx, dir, "main", "pic.bin", "")
+	bin, err := LocalPRFileDiff(ctx, dir, "main", "feature", "pic.bin", "")
 	require.NoError(t, err)
 	assert.True(t, bin.Binary)
 	assert.Empty(t, bin.Patch)
 }
 
-func TestBranchFileDiffRenameAndPathspecs(t *testing.T) {
+func TestPRFileDiffRenameAndPathspecs(t *testing.T) {
 	dir := diffRepo(t)
 	ctx := context.Background()
-	ren, err := BranchFileDiff(ctx, dir, "main", "new/moved.txt", "old/moved.txt")
+	ren, err := LocalPRFileDiff(ctx, dir, "main", "feature", "new/moved.txt", "old/moved.txt")
 	require.NoError(t, err)
 	assert.Contains(t, ren.Patch, "rename from old/moved.txt")
 	assert.Contains(t, ren.Patch, "+tail")
 
 	// A name that starts with a dash, or looks like pathspec magic, is a file name.
-	dash, err := BranchFileDiff(ctx, dir, "main", "-weird.txt", "")
+	dash, err := LocalPRFileDiff(ctx, dir, "main", "feature", "-weird.txt", "")
 	require.NoError(t, err)
 	assert.Contains(t, dash.Patch, "+y")
-	none, err := BranchFileDiff(ctx, dir, "main", ":(top)*", "")
+	none, err := LocalPRFileDiff(ctx, dir, "main", "feature", ":(top)*", "")
 	require.NoError(t, err)
 	assert.Empty(t, none.Patch)
 
-	_, err = BranchFileDiff(ctx, dir, "main", "", "")
+	_, err = LocalPRFileDiff(ctx, dir, "main", "feature", "", "")
 	assert.Error(t, err)
 }
 
@@ -147,12 +147,12 @@ func TestCutLongLines(t *testing.T) {
 	assert.True(t, strings.HasSuffix(got, "chars]"))
 }
 
-func TestBranchFileDiffShortensLongLines(t *testing.T) {
+func TestPRFileDiffShortensLongLines(t *testing.T) {
 	dir := diffRepo(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "min.js"), []byte("var a=["+strings.Repeat("1,", 50000)+"];\n"), 0o644))
 	run(t, dir, "git", "add", ".")
 	run(t, dir, "git", "commit", "-qm", "bundle")
-	d, err := BranchFileDiff(context.Background(), dir, "main", "min.js", "")
+	d, err := LocalPRFileDiff(context.Background(), dir, "main", "feature", "min.js", "")
 	require.NoError(t, err)
 	assert.False(t, d.TooLarge)
 	assert.Equal(t, 1, d.LinesCut)
@@ -164,7 +164,7 @@ func TestBranchDiffListsAtMostMaxFiles(t *testing.T) {
 	old := maxListedFiles
 	maxListedFiles = 3
 	t.Cleanup(func() { maxListedFiles = old })
-	d, err := BranchDiff(context.Background(), dir, "main", "feature")
+	d, err := LocalPRDiff(context.Background(), dir, 7, "main", "feature")
 	require.NoError(t, err)
 	assert.Len(t, d.Files, 3)
 	assert.Equal(t, 5, d.FilesOmitted)
@@ -177,11 +177,123 @@ func TestBranchDiffOfAnUnchangedBranchListsNoFilesAsAnEmptyList(t *testing.T) {
 	dir := diffRepo(t)
 	run(t, dir, "git", "checkout", "-q", "main")
 	run(t, dir, "git", "checkout", "-qb", "same")
-	d, err := BranchDiff(context.Background(), dir, "main", "same")
+	d, err := LocalPRDiff(context.Background(), dir, 7, "main", "same")
 	require.NoError(t, err)
 	assert.NotNil(t, d.Files)
 	assert.Empty(t, d.Files)
 	b, err := json.Marshal(d)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"files":[]`)
+}
+
+// originOf gives the repository a bare origin that both branches are pushed to.
+func originOf(t *testing.T, dir string) string {
+	t.Helper()
+	remote := t.TempDir()
+	run(t, remote, "git", "init", "-q", "--bare", "-b", "main")
+	run(t, dir, "git", "remote", "add", "origin", remote)
+	run(t, dir, "git", "push", "-q", "origin", "main", "feature")
+	return remote
+}
+
+func TestLocalPRDiffReadsOriginsCopiesAndSaysWhatIsNotInThePR(t *testing.T) {
+	dir := diffRepo(t)
+	originOf(t, dir)
+	ctx := context.Background()
+
+	d, err := LocalPRDiff(ctx, dir, 7, "main", "feature")
+	require.NoError(t, err)
+	assert.Equal(t, "local", d.Source)
+	assert.False(t, d.BaseStale, "origin's base was fetched")
+	assert.Zero(t, d.Unpushed)
+	assert.Len(t, d.Files, 8)
+
+	// A commit that was not pushed is not in the PR: the diff stays what GitHub has, and says so.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "later.txt"), []byte("l\n"), 0o644))
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-qm", "later")
+	d, err = LocalPRDiff(ctx, dir, 7, "main", "feature")
+	require.NoError(t, err)
+	assert.Equal(t, 1, d.Unpushed)
+	assert.Len(t, d.Files, 8, "the unpushed file is not listed")
+	_, err = LocalPRFileDiff(ctx, dir, "main", "feature", "keep.txt", "")
+	require.NoError(t, err)
+}
+
+func TestLocalPRDiffUsesTheBaseOriginHasNow(t *testing.T) {
+	dir := diffRepo(t)
+	remote := originOf(t, dir)
+	// Someone else moved main on GitHub; a stale origin/main would list their file in this PR.
+	other := t.TempDir()
+	run(t, other, "git", "clone", "-q", "-b", "main", remote, ".")
+	run(t, other, "git", "config", "user.email", "a@b.c")
+	run(t, other, "git", "config", "user.name", "t")
+	require.NoError(t, os.WriteFile(filepath.Join(other, "keep.txt"), []byte("keep\n"), 0o644))
+	run(t, other, "git", "commit", "-qam", "main moved")
+	run(t, other, "git", "push", "-q", "origin", "main")
+
+	d, err := LocalPRDiff(context.Background(), dir, 7, "main", "feature")
+	require.NoError(t, err)
+	assert.False(t, d.BaseStale)
+	assert.Equal(t, run(t, remote, "git", "rev-parse", "main"), run(t, dir, "git", "rev-parse", "refs/remotes/origin/main"), "origin's base was brought up to date")
+	assert.Len(t, d.Files, 8, "the range starts at the merge-base, so the PR's files are the same")
+}
+
+func TestLocalPRDiffOfAStackIsEachPRsOwn(t *testing.T) {
+	dir := diffRepo(t)
+	run(t, dir, "git", "checkout", "-qb", "feature-2")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "second.txt"), []byte("2\n"), 0o644))
+	run(t, dir, "git", "add", ".")
+	run(t, dir, "git", "commit", "-qm", "second")
+	d, err := LocalPRDiff(context.Background(), dir, 8, "feature", "feature-2")
+	require.NoError(t, err)
+	require.Len(t, d.Files, 1)
+	assert.Equal(t, "second.txt", d.Files[0].Path)
+	assert.True(t, d.BaseStale, "no origin: the base is the local branch, and the diff says it could not be refreshed")
+}
+
+func TestLocalPRDiffWithoutTheBranchesAsksForTheRemote(t *testing.T) {
+	dir := diffRepo(t)
+	for _, c := range [][2]string{{"main", "gone"}, {"gone", "feature"}, {"", "feature"}, {"-x", "feature"}} {
+		_, err := LocalPRDiff(context.Background(), dir, 7, c[0], c[1])
+		assert.ErrorIs(t, err, errNoLocalRefs, "%v", c)
+		_, err = LocalPRFileDiff(context.Background(), dir, c[0], c[1], "keep.txt", "")
+		assert.ErrorIs(t, err, errNoLocalRefs, "%v", c)
+	}
+}
+
+func TestRemotePRDiffFromGitHubsFiles(t *testing.T) {
+	files := []GitHubFile{
+		{Path: "a.go", Status: "modified", Additions: 2, Deletions: 1, Patch: "@@ -1,2 +1,3 @@\n x\n-y\n+z\n+w"},
+		{Path: "new/b.go", OldPath: "old/b.go", Status: "renamed", Additions: 1, Patch: "@@ -1 +1,2 @@\n x\n+y"},
+		{Path: "gone.txt", Status: "removed", Deletions: 3, Patch: "@@ -1,3 +0,0 @@\n-a\n-b\n-c"},
+		{Path: "pic.png", Status: "added"},
+		{Path: "huge.txt", Status: "modified", Additions: 90000},
+		{Path: "package-lock.json", Status: "modified", Additions: 1, Patch: "@@ -1 +1 @@\n-a\n+b"},
+	}
+	d := remotePRDiff(7, "main", "feature", files)
+	assert.Equal(t, "github", d.Source)
+	assert.Equal(t, 90004, d.Additions)
+	require.Len(t, d.Files, 6)
+	assert.Equal(t, "deleted", d.Files[2].Status)
+	assert.True(t, d.Files[3].Binary)
+	assert.False(t, d.Files[4].Binary, "a file with changes and no patch is too large, not binary")
+	assert.True(t, d.Files[5].Generated)
+
+	fd, err := remotePRFileDiff(files, "new/b.go")
+	require.NoError(t, err)
+	assert.Contains(t, fd.Patch, "diff --git a/old/b.go b/new/b.go")
+	assert.Contains(t, fd.Patch, "@@ -1 +1,2 @@")
+	assert.True(t, strings.HasSuffix(fd.Patch, "+y\n"))
+	big, _ := remotePRFileDiff(files, "huge.txt")
+	assert.True(t, big.TooLarge)
+	bin, _ := remotePRFileDiff(files, "pic.png")
+	assert.True(t, bin.Binary)
+	_, err = remotePRFileDiff(files, "nope")
+	assert.Error(t, err)
+
+	empty := remotePRDiff(7, "main", "feature", nil)
+	b, err := json.Marshal(empty)
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"files":[]`)
 }

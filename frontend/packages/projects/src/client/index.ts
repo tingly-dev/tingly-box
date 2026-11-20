@@ -15,6 +15,7 @@ export type Thread = S['Thread'];
 export type CleanupReport = S['CleanupResponse']['report'];
 export type ThreadLink = S['ThreadLink'];
 export type LinkChecks = S['LinkChecks'];
+export type MergeDraft = S['MergeDraft'];
 export type RefreshLinks = S['RefreshLinksResponse'];
 export type ThreadEvent = S['ThreadEvent'];
 export type Subagent = S['Subagent'];

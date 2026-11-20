@@ -1,16 +1,34 @@
-import { Box, Link, Stack } from '@mui/material';
+import { useState } from 'react';
+import { Box, Button, IconButton, Link, Stack, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Thread, ThreadLink } from '../../client';
 import { timeAgo } from '../../utils/format';
+import { DiffIcon, Merge } from '../icons';
 import { RailCard } from './infoRail';
+import { MergeDialog, openMergeRequest } from './MergeDialog';
+import { canShowFiles, PrDiffDialog } from './PrDiffDialog';
 import { colorOf, linkParts, LinkIcon } from './linkView';
 import { peekRowSx, useLinkPeek } from './useLinkPeek';
 
+/** The button that opens a PR's changes, beside its refresh and details buttons. */
+export function FilesButton({ link, onClick }: { link: ThreadLink; onClick: () => void }) {
+    const { t } = useTranslation('projects');
+    return (
+        <Tooltip title={t('links.files')}>
+            <IconButton size="small" aria-label={t('links.filesOf', { ref: `${link.repo}#${link.number}` })} onClick={onClick}
+                sx={{ p: 0.25, color: 'text.secondary', '@media (pointer: coarse)': { minWidth: 36, minHeight: 36 } }}>
+                <DiffIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+        </Tooltip>
+    );
+}
+
 /** One issue or PR: its number and title as a link to GitHub, and under it
  * where it stands and how old that reading is. At the row's end, a refresh and
- * a details button (`useLinkPeek`). */
-export function LinkRow({ link, threadId, owner, onOpenOwner }: { link: ThreadLink; threadId?: string; owner?: string; onOpenOwner?: () => void }) {
+ * a details button (`useLinkPeek`), and, for a PR whose changes can be read,
+ * the button that opens them (`onFiles`). */
+export function LinkRow({ link, threadId, owner, onOpenOwner, onFiles }: { link: ThreadLink; threadId?: string; owner?: string; onOpenOwner?: () => void; onFiles?: () => void }) {
     const { t, i18n } = useTranslation('projects');
     const parts = linkParts(link, t);
     const age = timeAgo(link.refreshed_at, i18n.language);
@@ -36,23 +54,58 @@ export function LinkRow({ link, threadId, owner, onOpenOwner }: { link: ThreadLi
                         : link.state === 'open' && age && <Box component="span" title={t('links.readTitle')}>{age}</Box>}
                 </Box>
             </Box>
-            <Box sx={{ mt: '-2px', display: 'flex' }}>{peek.actions}</Box>
+            <Box sx={{ mt: '-2px', display: 'flex', alignItems: 'center' }}>
+                {onFiles && <FilesButton link={link} onClick={onFiles} />}
+                {peek.actions}
+            </Box>
             {peek.overlay}
         </Stack>
     );
 }
 
-/** A thread's issues and PRs, in the thread's info rail. Absent when the
- * thread has touched none. */
-export function ThreadLinksCard({ thread }: { thread: Thread }) {
+/** A thread's issues, in the thread's info rail. Absent when it touched none. */
+export function ThreadIssuesCard({ thread }: { thread: Thread }) {
     const { t } = useTranslation('projects');
-    const links = thread.links ?? [];
-    if (links.length === 0) return null;
+    const issues = (thread.links ?? []).filter((l) => l.kind === 'issue');
+    if (issues.length === 0) return null;
     return (
-        <RailCard id="links" title={t('links.title')} aside={String(links.length)}>
+        <RailCard id="issues" title={t('links.issues')} aside={String(issues.length)}>
             <Box sx={{ mx: -0.25 }}>
-                {links.map((link) => <LinkRow key={`${link.repo}/${link.kind}/${link.number}`} link={link} threadId={thread.id} />)}
+                {issues.map((link) => <LinkRow key={`${link.repo}/${link.kind}/${link.number}`} link={link} threadId={thread.id} />)}
             </Box>
+        </RailCard>
+    );
+}
+
+/**
+ * A thread's PRs, in the thread's info rail: each with its own changes one
+ * button away. A branch with commits and no open PR has one row of its own: how
+ * far it is ahead, and "Merge…" (open a PR, or squash it) in place of the PR it
+ * does not have yet.
+ */
+export function ThreadPrsCard({ thread }: { thread: Thread }) {
+    const { t } = useTranslation('projects');
+    const prs = (thread.links ?? []).filter((l) => l.kind === 'pr');
+    const [showing, setShowing] = useState<ThreadLink | null>(null);
+    const [merging, setMerging] = useState(false);
+    const canOpen = !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at && !openMergeRequest(thread);
+    if (prs.length === 0 && !canOpen) return null;
+    return (
+        <RailCard id="prs" title={t('links.prs')} aside={prs.length > 0 ? String(prs.length) : undefined}>
+            <Box sx={{ mx: -0.25 }}>
+                {prs.map((link) => <LinkRow key={`${link.repo}/${link.kind}/${link.number}`} link={link} threadId={thread.id} onFiles={canShowFiles(link) ? () => setShowing(link) : undefined} />)}
+            </Box>
+            {canOpen && (
+                <Box sx={{ pt: prs.length > 0 ? 0.75 : 0, borderTop: prs.length > 0 ? 1 : 0, borderColor: 'divider' }}>
+                    <Typography sx={{ fontSize: fontSizes.sm, color: 'text.primary' }}>
+                        {t('links.noPr', { base: thread.base_branch })} · {t('thread.commits', { count: thread.commits_ahead })} · {t('thread.files', { count: thread.files_changed })}
+                    </Typography>
+                    {thread.uncommitted && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('thread.uncommitted')}</Typography>}
+                    <Button size="small" variant="outlined" startIcon={<Merge />} onClick={() => setMerging(true)} sx={{ mt: 0.75 }}>{t('thread.mergeIt')}</Button>
+                    <MergeDialog thread={thread} open={merging} onClose={() => setMerging(false)} onMerged={() => setMerging(false)} />
+                </Box>
+            )}
+            {showing && <PrDiffDialog thread={thread} link={showing} open onClose={() => setShowing(null)} />}
         </RailCard>
     );
 }

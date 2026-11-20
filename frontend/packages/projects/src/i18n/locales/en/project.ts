@@ -90,7 +90,7 @@ export const project = {
             settled: 'Already answered elsewhere — nothing is waiting on that one any more.',
             cleared: 'Nothing is waiting on you here any more.',
         },
-        review: 'Review changes', resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
+        resolve: 'Mark resolved', reopen: 'Reopen', showTask: 'Show task', hideTask: 'Hide task',
         archive: 'Archive', archiveConfirm: 'Archive this thread?',
         archiveFrees: 'This frees about {{worktree}} of worktree and {{tmp}} of scratch. Restore rebuilds the worktree from the branch.',
         restore: 'Restore', delete: 'Delete permanently', deleteConfirm: 'Delete this thread for good?',
@@ -106,7 +106,8 @@ export const project = {
         mergeIt: 'Merge…', mergedInto: 'Merged into {{base}}', merged: 'Squash-merged {{branch}} into {{base}} on GitHub', mergedBadge: 'Merged',
         merge: {
             title: 'Merge this thread', squash: 'Squash', squashHint: 'Squash-merge the PR on GitHub into {{base}}', mr: 'Merge request (PR)', mrHint: 'Open a PR on GitHub and leave the merge for later',
-            message: 'Commit message', prTitle: 'PR title', prBody: 'PR description',
+            commitTitle: 'Commit title', commitBody: 'Commit description', prTitle: 'PR title', prBody: 'PR description',
+            from: { pr: 'Starts from PR #{{number}}\'s title and description on GitHub, the way gh pr merge takes them. Edit them if you like.', commit: 'Starts from the branch\'s commit, the way gh pr create --fill takes it. It becomes the PR\'s title and description, then the squash commit\'s.', commits: 'Starts from the branch\'s commits, the way gh pr create --fill takes them. It becomes the PR\'s title and description, then the squash commit\'s.' },
             squashNote: 'Pushes {{branch}} to origin, opens a PR into {{base}} if none is open, and squash-merges it on GitHub with gh. This cannot be undone from here. Your local checkout is not changed: pull {{base}} to get the merge.',
             mrNote: 'Pushes {{branch}} to origin and opens the PR with gh; nothing is merged yet. Your checkout is not touched, and the thread stays open until the PR is merged.',
             mrExisting: 'PR #{{number}} is already open for this branch. Its latest commits are pushed to it and no second PR is made. A squash merges this PR.',
@@ -114,7 +115,11 @@ export const project = {
             mrOpened: 'Opened a PR for {{branch}} into {{base}}', mrKept: 'Pushed {{branch}} to its open PR',
         },
         noChanges: 'No committed changes.',
-        uncommittedWarn: 'The thread left uncommitted changes in its worktree; they are not part of the merge:',
+        prDiff: {
+            fromGitHub: 'This PR\'s branches are not in this checkout, so its changes come from GitHub.',
+            unpushed_one: '{{count}} commit on this checkout\'s branch is not pushed, so it is not in the PR and not shown here.', unpushed_other: '{{count}} commits on this checkout\'s branch are not pushed, so they are not in the PR and not shown here.',
+            baseStale: 'Could not bring origin/{{base}} up to date, so files other PRs changed on {{base}} may show here.',
+        },
         diff: {
             filterPlaceholder: 'Filter files…', hideGenerated: 'Hide generated', unviewedOnly: 'Unviewed only',
             progress: '{{viewed}} of {{total}} viewed', noMatch: 'No files match.', selectFile: 'Select a file to see its changes.',

@@ -38,8 +38,8 @@ GitHub's own MCP server went the same way after starting with one tool per actio
 
 `merge` is the one tool that cannot be taken back, so it follows different rules from the other five:
 
-- **Two methods, both on GitHub.** `squash` pushes the branch, finds or opens its PR (the `create_pr` code), then `PUT pulls/N/merge` with `merge_method: squash` and the pushed head `sha` (GitHub refuses if the head moved). `merge_request` stops after the PR is open. Nothing is merged in the local checkout and the branch is not deleted. If GitHub refuses the merge (conflicts, required checks, protection rules, a draft) the error says so and the PR stays open and linked.
-- **The same code serves the user's Merge button.** `Links.Merge` is the implementation; the tool calls it from a thread's turn, and `POST /threads/:id/merge` (the Review dialog) calls it as an independent entry point, where the click is the user's approval. The thread is resolved only by the endpoint: from inside its own turn a thread cannot close itself, so after a tool merge the thread stays as it is, the record says `merged`, and a later Merge click only closes the thread (GitHub is not asked again).
+- **Two methods, both on GitHub.** `squash` pushes the branch, finds or opens its PR (the `create_pr` code), then `PUT pulls/N/merge` with `merge_method: squash` (an empty `message` is worded as `gh pr merge --squash` words it: the PR's title and `(#N)`, and its description) and the pushed head `sha` (GitHub refuses if the head moved). `merge_request` stops after the PR is open. Nothing is merged in the local checkout and the branch is not deleted. If GitHub refuses the merge (conflicts, required checks, protection rules, a draft) the error says so and the PR stays open and linked.
+- **The same code serves the user's Merge button.** `Links.Merge` is the implementation; the tool calls it from a thread's turn, and `POST /threads/:id/merge` (the Merge dialog) calls it as an independent entry point, where the click is the user's approval. The thread is resolved only by the endpoint: from inside its own turn a thread cannot close itself, so after a tool merge the thread stays as it is, the record says `merged`, and a later Merge click only closes the thread (GitHub is not asked again).
 - **Every call asks the user.** `alwaysAskTools` lists `merge`: `grantBuiltinTools` writes an `ask` rule for it in every project and permission mode (it wins over the server-wide allow), and the approval prompt never answers for it (`builtinToolAllowed`), so a card reaches the user whatever `thread_github_access` says. The prompt tells the thread to merge only when the user asked, with this tool, and never by hand. Not probed against the real CLI in `bypassPermissions` mode, where Claude Code may skip `ask` rules; the "carries the user's own message ids" form in `mcp-tools.md` (Later) is the stronger check if that matters.
 - Still true: no close, no reopen, no delete branch, no force push.
 
@@ -202,9 +202,41 @@ The sweep keeps open items fresh; a person looking at a row can also ask. This a
 - **Always publish.** The sweep stays silent for an unchanged reading; a manual refresh publishes the `thread` event even when only `refreshed_at` moved, because "read just now" is what the person asked to see. Clients never merge: the event replaces the thread, and the server is the only writer of the records.
 - **What the record gains** (optional, filled by the next read; old records simply lack it): for an open PR `checks`: counts `passing`/`failing`/`pending` and the failing ones by name and URL, at most 5 (`more` counts the rest). Nothing else was added: a person deciding whether to act needs what failed, whether it can merge and how old the reading is.
 
+## A PR's diff
+
+The thread's own "branch against base" diff is gone; a diff is always one PR's, head against base (`GET /threads/:id/prs/:number/diff`, and `/diff/file?path=` for one patch). The server finds the branches from the thread's link record (`head`/`base` as GitHub last said); the client never names a ref. Only a PR of the thread that is **open** has one: a merged or closed PR has nothing left to review, and a record that GitHub has not been read about yet has no branches to diff.
+
+**Local only for now; GitHub's list is built but switched off.**
+
+| | local `git diff base...head` | GitHub `pulls/N/files` |
+| --- | --- | --- |
+| cost | no network, no token, one `git diff` | one request per 100 files (cap 3000), gh signed in, counts against the request budget |
+| exactness | `refs/remotes/origin/<head>` is what GitHub has (a push keeps it current); the local branch may be ahead | exactly the PR |
+| big PRs | per-file loading, 512 KiB patch cap, long lines shortened, lock and generated files folded | no `patch` on big files; capped at 3000 files |
+| gone | a deleted or never-fetched branch has no ref | still there while the PR is open |
+
+The rule: read `refs/remotes/origin/<head>` (else the local branch) against `refs/remotes/origin/<base>` (else the local base). When either side is in neither place (another machine pushed it, the branch was deleted) the answer is an error that says so, and the dialog's "Open on GitHub" is the way on. The GitHub read (`GitHub.PRFiles`, cached for two minutes so that opening one file after another asks once; the answer would say `source: github`) is implemented and tested but off: `Threads.remoteDiff` is false, because it costs requests, a token and rate budget. Turning it on is that one field (a project or server setting later, if it is wanted). On the local path:
+
+- origin's base is fetched first, briefly (5 s, no prompt, best effort), because a stale `origin/main` makes files other PRs changed on `main` show up; if the fetch fails the answer carries `base_stale`.
+- commits the local head holds beyond `origin/<head>` are not in the PR: `unpushed` says how many and the dialog says they are not shown, instead of quietly showing more than GitHub does.
+
+The dialog (`PrDiffDialog`) shows these notes above the existing file list and patch viewer, "Open on GitHub", and, for the PR of the thread's own branch, **Merge…**. Merging a PR other than the thread's own branch is not offered (the merge works on the thread's branch).
+
+### The words of a merge
+
+`gh pr create --fill` and `gh pr merge` set the model for the Merge dialog (`GET /threads/:id/merge/draft`): the dialog never composes text of its own.
+
+- **A PR is open**: the PR's own title and description, read from GitHub when the dialog opens. A squash starts from `title (#N)` and the description, the way `gh pr merge --squash` words its commit; the fields are editable, and a squash with them untouched sends exactly that.
+- **No PR yet**: one commit gives its subject and body; several give the branch name spelled out (`fix-the-bug` → "Fix the bug") and a list of their subjects, as `gh pr create --fill` does. The fields word the PR that is opened, and a squash then takes the PR's title and `(#N)` and its description. The thread's last report is no longer used for a PR body.
+- The `merge` tool's `title`/`body` default the same way, and an empty `message` is the PR's own title with its number, and its description.
+- If the draft cannot be read the dialog still works, starting from the thread's title.
+
+Not done: `gh pr create` also reads the repository's PR template when it is not asked to fill; the draft does not.
+
 ## Display
 
-- **Thread rail** (`ThreadInfoRail`, the expanded status area): a new "Issues & PRs" card after Changes, listing each record: icon, `#number title`, state chip, and for a PR its CI and merge state; a row opens the URL. Shown only when the thread has records. Reading age in the tooltip; "could not refresh" when `last_error` is set.
+- **Thread rail** (`ThreadInfoRail`, the expanded status area): two cards after the host's cards, **Pull requests** and **Issues**, one record per row: icon, `#number title`, state chip, and for a PR its CI and merge state; a row opens the URL. A card is shown only when the thread has records of its kind. Reading age in the tooltip; "could not refresh" when `last_error` is set. The old Changes card (commits, files, Review) is gone: a PR row carries a **Files changed** button instead (see [A PR's diff](#a-prs-diff)). A branch with commits and no open PR of its own has one row in the Pull requests card in place of the PR it lacks: "No PR yet · ahead of main · N commits · M files" and **Merge…**.
+- **The composer strip** (`ComposerStrip`) lists the same rows, PRs first, and gives an open PR the same Files changed button, so a narrow layout without the rail reaches the diff too.
 - **Coordinator's Status tab**: a card with all records of the project's threads, newest first, each with the thread's title, so "which PRs are open and how are they doing" is one place.
 - **Narrow layouts** that have no rail keep the header chips; a link count chip is not added in batch 1.
 - Project settings dialog: one select, "Issues and PRs: allowed (default) / ask each time"; its help text says the default and that the other Projects tools are not affected. `PATCH /projects/{id}` takes `thread_github_access` (`ask` or `allow`, anything else is a 400).

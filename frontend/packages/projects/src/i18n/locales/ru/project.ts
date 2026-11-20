@@ -93,7 +93,7 @@ export const project: PluralDict<typeof en> = {
             settled: 'Уже отвечено в другом месте — этот запрос больше ничего не ждёт.',
             cleared: 'Здесь вас больше ничего не ждёт.',
         },
-        review: 'Проверить изменения', resolve: 'Отметить решённым', reopen: 'Открыть заново', showTask: 'Показать задачу', hideTask: 'Скрыть задачу',
+        resolve: 'Отметить решённым', reopen: 'Открыть заново', showTask: 'Показать задачу', hideTask: 'Скрыть задачу',
         archive: 'В архив', archiveConfirm: 'Архивировать этот поток?',
         archiveFrees: 'Освободится около {{worktree}} worktree и {{tmp}} временных файлов. Restore восстановит worktree из ветки.',
         restore: 'Вернуть', delete: 'Удалить навсегда', deleteConfirm: 'Удалить этот поток навсегда?',
@@ -109,7 +109,8 @@ export const project: PluralDict<typeof en> = {
         mergeIt: 'Влить…', mergedInto: 'Влит в {{base}}', merged: '{{branch}} влита в {{base}} на GitHub (squash)', mergedBadge: 'Влит',
         merge: {
             title: 'Влить этот поток', squash: 'Squash', squashHint: 'Влить PR в {{base}} на GitHub через squash', mr: 'Merge request (PR)', mrHint: 'Открыть PR на GitHub, влить позже',
-            message: 'Сообщение коммита', prTitle: 'Заголовок PR', prBody: 'Описание PR',
+            commitTitle: 'Заголовок коммита', commitBody: 'Описание коммита', prTitle: 'Заголовок PR', prBody: 'Описание PR',
+            from: { pr: 'За основу взяты заголовок и описание PR #{{number}} на GitHub, как их берёт gh pr merge. Их можно изменить.', commit: 'За основу взят единственный коммит ветки, как его берёт gh pr create --fill. Он станет заголовком и описанием PR, затем сообщением squash-коммита.', commits: 'За основу взяты коммиты ветки, как их берёт gh pr create --fill. Они станут заголовком и описанием PR, затем сообщением squash-коммита.' },
             squashNote: 'Отправляет {{branch}} в origin, открывает PR в {{base}}, если его нет, и вливает его на GitHub через squash с помощью gh. Отсюда это не отменить. Ваша локальная копия не меняется: чтобы получить слияние, обновите {{base}}.',
             mrNote: 'Отправляет {{branch}} в origin и открывает PR через gh; пока ничего не вливается. Ваша копия не меняется, а поток остаётся открытым, пока PR не влит.',
             mrExisting: 'Для этой ветки уже открыт PR #{{number}}. В него отправятся последние коммиты, второй PR не создаётся. Squash вливает этот PR.',
@@ -117,7 +118,11 @@ export const project: PluralDict<typeof en> = {
             mrOpened: 'Открыт PR для {{branch}} в {{base}}', mrKept: '{{branch}} отправлена в уже открытый PR',
         },
         noChanges: 'Нет зафиксированных изменений.',
-        uncommittedWarn: 'Поток оставил в своём worktree незафиксированные изменения; в слияние они не входят:',
+        prDiff: {
+            fromGitHub: 'Веток этого PR нет в локальной копии, поэтому изменения взяты с GitHub.',
+            unpushed_one: '{{count}} коммит ветки в этой копии не отправлен, поэтому его нет в PR и здесь он не показан.', unpushed_few: '{{count}} коммита ветки в этой копии не отправлены, поэтому их нет в PR и здесь они не показаны.', unpushed_many: '{{count}} коммитов ветки в этой копии не отправлены, поэтому их нет в PR и здесь они не показаны.', unpushed_other: '{{count}} коммита ветки в этой копии не отправлены, поэтому их нет в PR и здесь они не показаны.',
+            baseStale: 'Не удалось обновить origin/{{base}}, поэтому здесь могут быть файлы других PR, влитых в {{base}}.',
+        },
         diff: {
             filterPlaceholder: 'Фильтр файлов…', hideGenerated: 'Скрыть сгенерированные', unviewedOnly: 'Только непросмотренные',
             progress: 'Просмотрено {{viewed}} из {{total}}', noMatch: 'Подходящих файлов нет.', selectFile: 'Выберите файл, чтобы увидеть изменения.',

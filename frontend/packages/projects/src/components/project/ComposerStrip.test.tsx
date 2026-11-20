@@ -80,6 +80,17 @@ describe('ComposerStrip', () => {
             expect(within(strip).getByRole('button', { name: /links\.detailsOf/ })).toHaveAttribute('aria-haspopup', 'dialog');
         });
 
+        it('offers an open PR\'s changes on its line, and nothing of the kind on an issue or a finished PR', () => {
+            const th = thread({ branch: 'tb/fix', links: [
+                link({ head: 'tb/fix', base: 'main' }),
+                link({ number: 13, title: 'Done', state: 'merged', head: 'x', base: 'main' }),
+                link({ kind: 'issue', number: 3, title: 'Flaky', url: 'https://github.com/acme/w/issues/3' }),
+            ] });
+            render(<ComposerStrip thread={th} onAutoAnswer={vi.fn()} />);
+            fireEvent.click(screen.getByRole('button', { name: 'strip.expand' }));
+            expect(screen.getAllByRole('button', { name: /links\.filesOf/ })).toHaveLength(1);
+        });
+
         it('puts an open PR first, then an open issue, then what finished, and keeps the strip short', () => {
             const th = thread({ links: [
                 link({ number: 1, state: 'merged', title: 'Old', created_at: at(10) }),

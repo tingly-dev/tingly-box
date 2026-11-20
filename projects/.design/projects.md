@@ -157,10 +157,10 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 `GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询。事件流不受服务器 `WriteTimeout` 限制。原因、不变量和被否决的做法见 `live-updates.md`。
 
 ### 4.7 Review 与合并（本地版 PR）
-- `GET /projects/:id/threads/:tid/diff`：`git diff <base>...<branch>`（+ 未提交改动提示）。
+- 看改动按 PR：`GET /threads/:id/prs/:number/diff`（及 `/diff/file`），每个 PR 看自己的 head 相对 base，只读本地 refs（本地没有分支时如实说明并给 GitHub 链接；读 GitHub 文件列表的路径已实现但默认关闭）；只给打开着的 PR。取舍见 `github-tools.md` 的 “A PR's diff”。线程本身不再有“当前分支相对 base”的 diff。
 - "Merge…"：`POST /threads/:id/merge`，必填 `method`，只有两种（其他值 400）。**两种都在 GitHub 上完成，本地工作区一律不动**；实现是线程的 `merge` MCP 工具（见 `github-tools.md`）背后的同一个 `Links.Merge`，HTTP 只是它的独立调用入口（用户点击即授权）：
   - 都先推送线程分支（不强推）、找到或开出它的 PR（与 `create_pr` 同一套，已有打开的 PR 就重推并关联，不重复开），并记入线程的 Issue/PR 链接。
-  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省交给 GitHub。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。
+  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省时与 `gh pr merge --squash` 一致：PR 的标题加 `(#编号)`，正文用 PR 的描述。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。
   - `merge_request`：只开 PR，不合并；**线程不会 resolved**（分支要等 PR 合并才算合并）。
   - 没有 origin、origin 不是 github.com、gh 缺失或未登录都如实报错；没有 GitHub 远端的仓库因此无法从这里合并。
   - 前端：Review 对话框里的 "Merge…" 打开 `MergeDialog`：两个选项各一行说明，随后是对应字段（squash：提交信息；PR：标题、描述）；最近一次的选择按项目记在本机 localStorage（`merge-method.<project id>`，失败的方法不记）。
@@ -168,7 +168,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 ## 5. UI
 
-- **项目页**：左侧项目对话（消息、线程卡片、提议卡片、输入框）；右侧 **Overview**（Threads 按状态分组 / Library / Memory 入口），点线程卡片或行 → 右侧切到线程详情（过程、审批、diff、操作、线程输入框）。头部：名称、收藏、Overview 开关（等你处理时有小红点）、设置。
+- **项目页**：左侧项目对话（消息、线程卡片、提议卡片、输入框）；右侧 **Overview**（Threads 按状态分组 / Library / Memory 入口），点线程卡片或行 → 右侧切到线程详情（过程、审批、PR 与其改动、操作、线程输入框）。头部：名称、收藏、Overview 开关（等你处理时有小红点）、设置。
 - **输入框上方的信息面板**：线程和工作目录会话的输入框正上方一块面板，回答“在哪跑、哪个分支、会不会等我”，一条信息占一行（图标、名称、值、行尾操作）：文件夹（完整路径，长了保留结尾；复制 `cd`）、当前分支（项目线程是 worktree 分支，会话读文件夹当前分支，每轮结束刷新；复制分支名）、自动回答（点值切换）。面板可折叠（默认折叠，按浏览器记住）；折叠时只露当下最相关的一条，其余记成 “+N”：先是不需要用户也会发生的事（等待中的问题几点自动回答，将来 CI 失败），再是会变的状态（当前分支，将来 PR / CI），文件夹路径只在没有别的可露时才露。这样宽屏窄栏都只占一行，加信息也不会把这一行越撑越长。路径和分支只在这里出现，不再在线程头部重复；以后的 PR / CI 等信息再加一行即可。
 - **项目设置**：General（名称、Goal、协调者模型、线程模型、权限模式、Pause / Archive / Delete）、Memory（Instructions + 记忆文件）、Environment（仓库）、Usage。
 - **新建项目**：名称必填，Goal、仓库（本地路径，即时校验是否 git 仓库并显示当前分支）可选。

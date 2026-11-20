@@ -176,10 +176,11 @@ type MergeRequest struct {
 	// Method is "squash" (squash-merge the thread's PR on GitHub, opening it
 	// first if needed) or "merge_request" (push the branch and open the PR only).
 	Method string `json:"method" binding:"required,oneof=squash merge_request" enums:"squash,merge_request"`
-	// Message is the squash commit's message; empty leaves it to GitHub.
+	// Message is the squash commit's message (first line is the title); empty
+	// is the PR's own title with its number, and its description.
 	Message string `json:"message,omitempty"`
-	// Title and Body describe the PR when one is opened; empty means the
-	// thread's title and its last report.
+	// Title and Body describe the PR when one is opened; empty is taken from
+	// the branch's commits, as `gh pr create --fill` does.
 	Title string `json:"title,omitempty"`
 	Body  string `json:"body,omitempty"`
 }
@@ -313,15 +314,18 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/threads/:id/attachments/file", h.downloadAttachment, tag,
 		swagger.WithDescription("Download an attachment of the thread"),
 		swagger.WithQuery("path", "string", "Path returned by the upload"))
-	api.GET("/threads/:id/diff", h.diff, tag,
-		swagger.WithDescription("The thread's changes against its base branch"),
+	api.GET("/threads/:id/prs/:number/diff", h.prDiff, tag,
+		swagger.WithDescription("The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)"),
 		swagger.WithResponseModel(rt.Diff{}))
+	api.GET("/threads/:id/merge/draft", h.mergeDraft, tag,
+		swagger.WithDescription("The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them"),
+		swagger.WithResponseModel(rt.MergeDraft{}))
 	api.POST("/threads/:id/links/refresh", h.refreshLinks, tag,
 		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
 		swagger.WithRequestModel(RefreshLinksRequest{}),
 		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
-	api.GET("/threads/:id/diff/file", h.diffFile, tag,
-		swagger.WithDescription("One file of the thread's changes: its patch, left out when it is binary or too large"),
+	api.GET("/threads/:id/prs/:number/diff/file", h.prDiffFile, tag,
+		swagger.WithDescription("One file of a PR's changes: its patch, left out when it is binary or too large"),
 		swagger.WithQuery("path", "string", "File path as listed by the diff"),
 		swagger.WithQuery("old_path", "string", "Where a renamed file came from"),
 		swagger.WithResponseModel(rt.FileDiff{}))
@@ -761,12 +765,25 @@ func (h *Handler) reopen(c *gin.Context) {
 	c.JSON(http.StatusOK, t)
 }
 
-func (h *Handler) diff(c *gin.Context) {
+func prNumber(c *gin.Context) (int, bool) {
+	n, err := strconv.Atoi(c.Param("number"))
+	if err != nil || n <= 0 {
+		apierr.BadRequest(c, "number must be a PR number")
+		return 0, false
+	}
+	return n, true
+}
+
+func (h *Handler) prDiff(c *gin.Context) {
 	cur, ok := h.thread(c)
 	if !ok {
 		return
 	}
-	d, err := h.svc.Threads.Diff(c.Request.Context(), cur.ID)
+	n, ok := prNumber(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.PRDiff(c.Request.Context(), cur.ID, n)
 	if err != nil {
 		fail(c, err)
 		return
@@ -774,12 +791,29 @@ func (h *Handler) diff(c *gin.Context) {
 	c.JSON(http.StatusOK, d)
 }
 
-func (h *Handler) diffFile(c *gin.Context) {
+func (h *Handler) prDiffFile(c *gin.Context) {
 	cur, ok := h.thread(c)
 	if !ok {
 		return
 	}
-	d, err := h.svc.Threads.DiffFile(c.Request.Context(), cur.ID, c.Query("path"), c.Query("old_path"))
+	n, ok := prNumber(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.PRDiffFile(c.Request.Context(), cur.ID, n, c.Query("path"), c.Query("old_path"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
+func (h *Handler) mergeDraft(c *gin.Context) {
+	cur, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.MergeDraft(c.Request.Context(), cur.ID)
 	if err != nil {
 		fail(c, err)
 		return

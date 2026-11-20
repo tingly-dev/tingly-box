@@ -93,7 +93,7 @@ export const project: Dict<typeof projectEn> = {
             settled: '已在别处处理——这一项不再需要回应。',
             cleared: '这里已没有等你处理的事项。',
         },
-        review: 'Review 改动', resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
+        resolve: '标记为已解决', reopen: '重新打开', showTask: '查看任务', hideTask: '收起任务',
         archive: '归档', archiveConfirm: '归档这个线程？',
         archiveFrees: '将释放约 {{worktree}} 的 worktree 和 {{tmp}} 的临时文件。Restore 可从分支重建 worktree。',
         restore: '恢复', delete: '永久删除', deleteConfirm: '永久删除这个线程？',
@@ -109,7 +109,8 @@ export const project: Dict<typeof projectEn> = {
         mergeIt: '合并…', mergedInto: '已合并进 {{base}}', merged: '已在 GitHub 上把 {{branch}} squash 合并进 {{base}}', mergedBadge: '已合并',
         merge: {
             title: '合并这个线程', squash: 'Squash', squashHint: '在 GitHub 上把 PR squash 合并进 {{base}}', mr: 'Merge request（PR）', mrHint: '在 GitHub 上开 PR，合并留到之后',
-            message: '提交信息', prTitle: 'PR 标题', prBody: 'PR 描述',
+            commitTitle: '提交标题', commitBody: '提交描述', prTitle: 'PR 标题', prBody: 'PR 描述',
+            from: { pr: '以 GitHub 上 PR #{{number}} 的标题和描述为起点，与 gh pr merge 一致。可以修改。', commit: '以分支上这一个提交为起点，与 gh pr create --fill 一致。它会成为 PR 的标题和描述，再成为 squash 提交的说明。', commits: '以分支上的这些提交为起点，与 gh pr create --fill 一致。它会成为 PR 的标题和描述，再成为 squash 提交的说明。' },
             squashNote: '把 {{branch}} 推送到 origin；若没有打开的 PR，就向 {{base}} 开一个，并用 gh 在 GitHub 上 squash 合并。这里无法撤销。你本地的工作区不会变：要拿到合并结果，请自行拉取 {{base}}。',
             mrNote: '把 {{branch}} 推送到 origin，并用 gh 开 PR；此时不合并。不会动你的工作区；在 PR 合并之前，线程保持打开。',
             mrExisting: '这个分支已有打开的 PR #{{number}}。会把最新提交推送上去，不会再开第二个 PR。squash 会合并这个 PR。',
@@ -117,7 +118,11 @@ export const project: Dict<typeof projectEn> = {
             mrOpened: '已为 {{branch}} 向 {{base}} 开了 PR', mrKept: '已把 {{branch}} 推送到它已打开的 PR',
         },
         noChanges: '没有已提交的改动。',
-        uncommittedWarn: '线程在 worktree 里留下了未提交的改动，它们不在本次合并中：',
+        prDiff: {
+            fromGitHub: '这个 PR 的分支不在本机，所以改动来自 GitHub。',
+            unpushed_one: '本机分支上有 {{count}} 个提交还没推送，不在 PR 里，所以这里不显示。', unpushed_other: '本机分支上有 {{count}} 个提交还没推送，不在 PR 里，所以这里不显示。',
+            baseStale: '没能把 origin/{{base}} 更新到最新，{{base}} 上其他 PR 的改动可能混进来。',
+        },
         diff: {
             filterPlaceholder: '筛选文件…', hideGenerated: '隐藏生成文件', unviewedOnly: '仅未查看',
             progress: '已查看 {{viewed}} / {{total}}', noMatch: '没有匹配的文件。', selectFile: '选择一个文件查看改动。',
