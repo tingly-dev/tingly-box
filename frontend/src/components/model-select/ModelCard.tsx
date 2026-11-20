@@ -119,7 +119,7 @@ export default function ModelCard({
                     <CircularProgress size={20} />
                 ) : (
                     <>
-                        <Tooltip title={model} arrow disableInteractive>
+                        <Tooltip title={phone ? '' : model} arrow disableInteractive>
                             <Typography
                                 variant="body2"
                                 sx={{
