@@ -28,12 +28,12 @@ func TestComposeClaudeCodeBetas_Sonnet46OAuthCapture(t *testing.T) {
 		EffortSet:  true,
 		CacheTTL1h: true,
 	})
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,extended-cache-ttl-2025-04-11", joinBetas(got))
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,effort-2025-11-24,extended-cache-ttl-2025-04-11", joinBetas(got))
 }
 
 func TestComposeClaudeCodeBetas_APIKeyHasNoOAuth(t *testing.T) {
 	got := composeClaudeCodeBetas(claudeBetaSignals{Model: "claude-sonnet-4-6", EffortSet: true})
-	assert.Equal(t, "claude-code-20250219,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24", joinBetas(got))
+	assert.Equal(t, "claude-code-20250219,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,effort-2025-11-24", joinBetas(got))
 }
 
 func TestComposeClaudeCodeBetas_ModelFamilies(t *testing.T) {
@@ -41,17 +41,18 @@ func TestComposeClaudeCodeBetas_ModelFamilies(t *testing.T) {
 		model string
 		want  string
 	}{
-		// haiku: no claude-code flag, haiku-4-5 has no interleaved thinking
-		{"claude-haiku-4-5-20251001", "oauth-2025-04-20,context-management-2025-06-27,prompt-caching-scope-2026-01-05"},
+		// haiku (no claude-code unless the inbound client is agentic); since
+		// 2.1.328 haiku-4-5 has interleaved thinking and thinking-token-count
+		{"claude-haiku-4-5-20251001", "oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13"},
 		// claude-3 family: nothing model-gated survives
-		{"claude-3-5-haiku-20241022", "oauth-2025-04-20,prompt-caching-scope-2026-01-05"},
+		{"claude-3-5-haiku-20241022", "oauth-2025-04-20,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26"},
 		// opus 4.6: same shape as sonnet 4.6
-		{"claude-opus-4-6", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05"},
-		// 5-series: mid-conversation-system joins the baseline
-		{"claude-sonnet-5", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07"},
-		{"claude-fable-5-1", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07"},
+		{"claude-opus-4-6", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13"},
+		// 5-series: mid-conversation-system has no header since 2.1.328
+		{"claude-sonnet-5", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13"},
+		{"claude-fable-5-1", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13"},
 		// [1m] marker and snapshot dates are ignored for capability checks
-		{"claude-opus-4-6[1m]", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05"},
+		{"claude-opus-4-6[1m]", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -66,8 +67,20 @@ func TestComposeClaudeCodeBetas_Context1MSitsAfterOAuth(t *testing.T) {
 	assert.Equal(t, []string{betaClaudeCode, betaOAuth, betaContext1M, betaInterleavedThinking}, got[:4])
 }
 
-// Direct first-party capture: thinking adaptive, ToolSearch + deferred tools,
-// diagnostics in the body.
+// withoutRedact drops redact-thinking: the captures are -p runs, our persona
+// is the interactive terminal that sends it.
+func withoutRedact(betas []string) string {
+	out := make([]string, 0, len(betas))
+	for _, b := range betas {
+		if b != betaRedactThinking {
+			out = append(out, b)
+		}
+	}
+	return joinBetas(out)
+}
+
+// Direct first-party captures of 2.1.328 (-p, OAuth, fake API): thinking
+// adaptive, ToolSearch + deferred tools, diagnostics in the body.
 func TestComposeClaudeCodeBetas_DirectCapture(t *testing.T) {
 	got := composeClaudeCodeBetas(claudeBetaSignals{
 		Model:          "claude-sonnet-4-6",
@@ -78,14 +91,52 @@ func TestComposeClaudeCodeBetas_DirectCapture(t *testing.T) {
 		ThinkingActive: true,
 		Diagnostics:    true,
 	})
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07", joinBetas(got))
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07", withoutRedact(got))
+}
+
+// Direct capture, API key: no oauth, no tool-provenance, no extended TTL.
+func TestComposeClaudeCodeBetas_DirectAPIKeyCapture(t *testing.T) {
+	got := composeClaudeCodeBetas(claudeBetaSignals{
+		Model: "claude-sonnet-4-6", EffortSet: true, ToolSearch: true, ThinkingActive: true, Diagnostics: true,
+	})
+	assert.Equal(t, "claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,cache-diagnosis-2026-04-07", withoutRedact(got))
+}
+
+// Direct capture, haiku-4-5 main thread: claude-code follows
+// prompt-caching-scope (the inbound client proves the query is agentic by
+// sending it), no effort for haiku, thinking with a budget.
+func TestComposeClaudeCodeBetas_DirectHaikuCapture(t *testing.T) {
+	got := composeClaudeCodeBetas(claudeBetaSignals{
+		Model: "claude-haiku-4-5", OAuth: true, CacheTTL1h: true, ToolSearch: true, ThinkingActive: true, Diagnostics: true,
+		ClientBetas: []string{betaClaudeCode},
+	})
+	assert.Equal(t, "oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07", withoutRedact(got))
+
+	// A haiku side query (no claude-code inbound) stays without it.
+	got = composeClaudeCodeBetas(claudeBetaSignals{Model: "claude-haiku-4-5", OAuth: true})
+	assert.NotContains(t, got, betaClaudeCode)
+}
+
+// Direct capture, opus-4-8[1m]: the window is native, so no context-1m even
+// when requested; mid-conversation-tool-changes is replayed from the client.
+func TestComposeClaudeCodeBetas_DirectNative1MCapture(t *testing.T) {
+	got := composeClaudeCodeBetas(claudeBetaSignals{
+		Model: "claude-opus-4-8[1m]", OAuth: true, Context1M: true, EffortSet: true, CacheTTL1h: true, ToolSearch: true,
+		ThinkingActive: true, Diagnostics: true,
+		ClientBetas: []string{betaContext1M, betaMidConversationToolChanges},
+	})
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-tool-changes-2026-07-01,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07", withoutRedact(got))
+
+	// Not native: sonnet-4-6[1m] keeps the beta.
+	got = composeClaudeCodeBetas(claudeBetaSignals{Model: "claude-sonnet-4-6[1m]", OAuth: true, Context1M: true})
+	assert.Contains(t, got, betaContext1M)
 }
 
 // Replayed client flags land in the CLI's emission order.
 func TestComposeClaudeCodeBetas_ReplayedFlagsInEmissionOrder(t *testing.T) {
 	client := []string{"timing-2026-09-09", "inline-tools-2026-09-15", "mid-conversation-system-clear-at-2026-08-21", "dangerous-tool-use-2026-09-03", "thinking-binding-controls-2026-08-01", "thinking-resumption-2026-07-17", "message-threads-2026-08-12", "per-turn-control-2026-07-01"}
 	sig := claudeBetaSignals{Model: "claude-sonnet-4-6", OAuth: true, ThinkingActive: true, Diagnostics: true, ClientBetas: client}
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,timing-2026-09-09,inline-tools-2026-09-15,mid-conversation-system-clear-at-2026-08-21,dangerous-tool-use-2026-09-03,thinking-binding-controls-2026-08-01,thinking-resumption-2026-07-17,cache-diagnosis-2026-04-07,message-threads-2026-08-12", joinBetas(composeClaudeCodeBetas(sig)))
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,timing-2026-09-09,inline-tools-2026-09-15,tool-provenance-2026-10-26,mid-conversation-system-clear-at-2026-08-21,thinking-token-count-2026-05-13,dangerous-tool-use-2026-09-03,thinking-binding-controls-2026-08-01,thinking-resumption-2026-07-17,cache-diagnosis-2026-04-07,message-threads-2026-08-12", joinBetas(composeClaudeCodeBetas(sig)))
 }
 
 func TestComposeClaudeCodeBetas_BodyDerivedFlagsInEmissionOrder(t *testing.T) {
@@ -102,7 +153,7 @@ func TestComposeClaudeCodeBetas_BodyDerivedFlagsInEmissionOrder(t *testing.T) {
 	})
 	tail := got[7:]
 	assert.Equal(t, []string{
-		betaAdvancedToolUse, betaEffort, betaTaskBudgets, betaStructuredOutputs, betaThinkingDisplayUpdates,
+		betaThinkingTokenCount, betaAdvancedToolUse, betaEffort, betaTaskBudgets, betaStructuredOutputs, betaThinkingDisplayUpdates,
 		betaFastMode, betaExtendedCacheTTL,
 	}, tail)
 }
@@ -120,7 +171,7 @@ func TestComposeClaudeCodeBetas_ClientReplayIsAllowlisted(t *testing.T) {
 			" fast-mode-2026-02-01 ",      // whitespace tolerated
 		},
 	})
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,fast-mode-2026-02-01,afk-mode-2026-01-31", joinBetas(got))
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,fast-mode-2026-02-01,afk-mode-2026-01-31", joinBetas(got))
 }
 
 func TestFilterClaudeCodeCountTokensBetas(t *testing.T) {
@@ -266,6 +317,9 @@ func TestClaudeClient_WireHeaders(t *testing.T) {
 		Betas:         []string{"per-turn-control-2026-07-01", "message-batches-2024-09-24"},
 		AgentID:       "agent-7",
 		ParentAgentID: "agent-main",
+
+		FirstPartyRequestClass: "background-task",
+		PromptID:               "569cda3b-ee9e-4129-a332-48aed6b554a3",
 	})
 	c := newTestClaudeClient(t, ctx, srv.URL)
 
@@ -279,18 +333,18 @@ func TestClaudeClient_WireHeaders(t *testing.T) {
 	// client per-turn-control replayed, client message-batches dropped.
 	betas := captured.Values("Anthropic-Beta")
 	require.Len(t, betas, 1, "anthropic-beta must be a single header value, got %v", betas)
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,context-1m-2025-08-07,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,effort-2025-11-24", betas[0])
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,context-1m-2025-08-07,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,effort-2025-11-24", betas[0])
 	assert.Equal(t, 1, strings.Count(betas[0], "context-1m-2025-08-07"))
 
-	assert.Equal(t, "claude-cli/2.1.280 (external, cli)", captured.Get("User-Agent"))
+	assert.Equal(t, "claude-cli/2.1.328 (external, cli)", captured.Get("User-Agent"))
 	assert.Equal(t, "cli", captured.Get("X-App"))
 	assert.Equal(t, "main", captured.Get("X-Claude-Code-Request-Class"))
 	assert.Equal(t, "11111111-2222-3333-4444-555555555555", captured.Get("X-Claude-Code-Session-Id"))
 	assert.Equal(t, "Bearer sk-ant-oat01-testtoken", captured.Get("Authorization"))
 	assert.Equal(t, "true", captured.Get("Anthropic-Dangerous-Direct-Browser-Access"))
 	assert.Equal(t, "2023-06-01", captured.Get("Anthropic-Version"))
-	assert.Equal(t, "0.112.1", captured.Get("X-Stainless-Package-Version"))
-	assert.Equal(t, "v26.3.0", captured.Get("X-Stainless-Runtime-Version"))
+	assert.Equal(t, "0.128.0", captured.Get("X-Stainless-Package-Version"))
+	assert.Equal(t, "v26.12.1", captured.Get("X-Stainless-Runtime-Version"))
 	assert.Equal(t, "node", captured.Get("X-Stainless-Runtime"))
 	assert.Equal(t, "js", captured.Get("X-Stainless-Lang"))
 	assert.Equal(t, "0", captured.Get("X-Stainless-Retry-Count"))
@@ -300,6 +354,8 @@ func TestClaudeClient_WireHeaders(t *testing.T) {
 	assert.Empty(t, captured.Get("X-Stainless-Helper-Method"), "the CLI does not use the .stream() helper")
 	assert.Equal(t, "agent-7", captured.Get("X-Claude-Code-Agent-Id"))
 	assert.Equal(t, "agent-main", captured.Get("X-Claude-Code-Parent-Agent-Id"))
+	assert.Equal(t, "background-task", captured.Get("X-Claude-1p-Request-Class"), "inbound 1p class replayed")
+	assert.Equal(t, "569cda3b-ee9e-4129-a332-48aed6b554a3", captured.Get("X-Claude-Code-Prompt-Id"), "inbound prompt id replayed")
 	assert.Empty(t, captured.Get("Anthropic-Organization-Id"))
 }
 
@@ -315,7 +371,16 @@ func TestClaudeClient_WireHeaders_NoHintsNoAgentHeaders(t *testing.T) {
 
 	assert.Empty(t, captured.Get("X-Claude-Code-Agent-Id"))
 	assert.Empty(t, captured.Get("X-Claude-Code-Parent-Agent-Id"))
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24", captured.Get("Anthropic-Beta"))
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,effort-2025-11-24", captured.Get("Anthropic-Beta"))
+	// 2.1.328 direct persona: first-party class defaults to main, a fresh
+	// request id per call, no prompt id (not synthesized).
+	assert.Equal(t, "main", captured.Get("X-Claude-1p-Request-Class"))
+	assert.Empty(t, captured.Get("X-Claude-Code-Prompt-Id"))
+	first := captured.Get("X-Client-Request-Id")
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, first)
+	_, err = c.BetaMessagesNew(ctx, betaRequestWithMetadata())
+	require.NoError(t, err)
+	assert.NotEqual(t, first, captured.Get("X-Client-Request-Id"), "request id is per call")
 }
 
 func TestClaudeClient_CountTokensBetaSubset(t *testing.T) {
@@ -403,14 +468,14 @@ func TestClaudeClient_WireHintHeaders(t *testing.T) {
 	_, err := c.BetaMessagesNew(ctx, req)
 	require.NoError(t, err)
 
-	assert.Equal(t, "claude-cli/2.1.280 (external, cli)", captured.Get("User-Agent"))
-	assert.Equal(t, "0.112.1", captured.Get("X-Stainless-Package-Version"))
-	assert.Equal(t, "v26.3.0", captured.Get("X-Stainless-Runtime-Version"))
+	assert.Equal(t, "claude-cli/2.1.328 (external, cli)", captured.Get("User-Agent"))
+	assert.Equal(t, "0.128.0", captured.Get("X-Stainless-Package-Version"))
+	assert.Equal(t, "v26.12.1", captured.Get("X-Stainless-Runtime-Version"))
 	assert.Equal(t, "subagent", captured.Get("X-Claude-Code-Request-Class"))
 	assert.Equal(t, "explore", captured.Get("X-Claude-Code-Agent-Type"))
 	betas := captured.Values("Anthropic-Beta")
 	require.Len(t, betas, 1)
-	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,thinking-binding-controls-2026-08-01,thinking-resumption-2026-07-17", betas[0])
+	assert.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,tool-provenance-2026-10-26,thinking-token-count-2026-05-13,effort-2025-11-24,thinking-binding-controls-2026-08-01,thinking-resumption-2026-07-17", betas[0])
 
 	// Invalid class falls back to the main thread; no agent type.
 	ctx2 := typ.WithClaudeCodeClientHints(context.Background(), typ.ClaudeCodeClientHints{RequestClass: "Bad Class"})

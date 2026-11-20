@@ -331,14 +331,14 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "claude_code_version",
 			Label:           "Claude Code version",
-			Description:     "Which Claude Code release the Claude OAuth chain impersonates upstream (headers, anthropic-beta, billing header, metadata). \"Default\" follows the latest release Anthropic accepts (currently 2.1.280, the native client); \"2.1.86\" keeps the legacy emulation. Claude OAuth providers only.",
+			Description:     "Which Claude Code release the Claude OAuth chain impersonates upstream (headers, anthropic-beta, billing header, metadata). \"Default\" follows the latest release Anthropic accepts (currently 2.1.328, the native client); \"2.1.86\" keeps the legacy emulation. Claude OAuth providers only.",
 			Type:            FlagTypeEnum,
 			Category:        FlagCategoryRequestAnthropic,
 			Shared:          true,
 			InheritanceMode: "override",
 			Options: []FlagOption{
 				{Value: ClaudeCodeVersionDefault, Label: "Default (latest: " + ClaudeCodeVersionLatest + ")"},
-				{Value: ClaudeCodeVersion2_1_280, Label: "2.1.280 (native client)"},
+				{Value: ClaudeCodeVersion2_1_328, Label: "2.1.328 (native client)"},
 				{Value: ClaudeCodeVersionLegacy, Label: "2.1.86 (legacy emulation)"},
 			},
 		},

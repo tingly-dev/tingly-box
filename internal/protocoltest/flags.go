@@ -725,7 +725,7 @@ func baseRuleFlagCases() []flagCase {
 
 		// ── claude_code_version ──────────────────────────────────────────────
 		// On the real Claude OAuth path: unset follows the default (latest
-		// native client); "2.1.86" keeps the legacy emulation; "2.1.280"
+		// native client); "2.1.86" keeps the legacy emulation; "2.1.328"
 		// re-signs the request as the native client (.design/claude-code-oauth-compat.md
 		// §B0–§B8).
 		{key: "claude_code_version", run: func(t flagTB, env *TestEnv) {
@@ -753,7 +753,7 @@ func baseRuleFlagCases() []flagCase {
 				_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 			}
 			addRule("pv-flag-ccver-legacy", typ.ClaudeCodeVersionLegacy)
-			addRule("pv-flag-ccver-280", typ.ClaudeCodeVersion2_1_280)
+			addRule("pv-flag-ccver-328", typ.ClaudeCodeVersion2_1_328)
 			addRule("pv-flag-ccver-default", typ.ClaudeCodeVersionDefault)
 
 			type upstream struct {
@@ -839,21 +839,21 @@ func baseRuleFlagCases() []flagCase {
 				t.Errorf("legacy metadata must not carry parent_session_id: %v", legacy.meta)
 			}
 
-			// 2.1.280: native client identity.
-			native := send("pv-flag-ccver-280")
-			if got := native.headers.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+			// 2.1.328: native client identity.
+			native := send("pv-flag-ccver-328")
+			if got := native.headers.Get("User-Agent"); got != "claude-cli/2.1.328 (external, cli)" {
 				t.Errorf("native User-Agent = %q", got)
 			}
 			// Inbound per-turn flag replayed, foreign message-batches dropped.
 			if got := native.headers.Values("Anthropic-Beta"); len(got) != 1 {
 				t.Errorf("anthropic-beta must be one header value, got %v", got)
-			} else if want := "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01"; got[0] != want {
+			} else if want := "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,tool-provenance-2026-10-26,thinking-token-count-2026-05-13"; got[0] != want {
 				t.Errorf("anthropic-beta =\n  %s\nwant\n  %s", got[0], want)
 			}
-			if got := native.headers.Get("X-Stainless-Package-Version"); got != "0.112.1" {
+			if got := native.headers.Get("X-Stainless-Package-Version"); got != "0.128.0" {
 				t.Errorf("X-Stainless-Package-Version = %q", got)
 			}
-			if got := native.headers.Get("X-Stainless-Runtime-Version"); got != "v26.3.0" {
+			if got := native.headers.Get("X-Stainless-Runtime-Version"); got != "v26.12.1" {
 				t.Errorf("X-Stainless-Runtime-Version = %q", got)
 			}
 			if got := native.headers.Get("X-Stainless-Helper-Method"); got != "" {
@@ -878,7 +878,7 @@ func baseRuleFlagCases() []flagCase {
 				t.Fatalf("system blocks = %d, want 2 (billing header rebuilt in place): %v", len(native.system), native.system)
 			}
 			// cch algorithm is pinned in internal/client/claude_cch_test.go.
-			if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.31f; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`); !want.MatchString(native.system[0]) {
+			if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.328\.593; cc_entrypoint=cli; cch=[0-9a-f]{5}; cc_is_subagent=true;$`); !want.MatchString(native.system[0]) {
 				t.Errorf("native billing header = %q", native.system[0])
 			}
 			if strings.Contains(native.system[0], "cch=00000;") {
@@ -945,8 +945,8 @@ func baseRuleFlagCases() []flagCase {
 			if got, want := countTokens("pv-flag-ccver-ct-default", typ.ClaudeCodeVersionDefault).Get("User-Agent"), "claude-cli/"+typ.ClaudeCodeVersionLatest+" (external, cli)"; got != want {
 				t.Errorf("default count_tokens User-Agent = %q, want %q", got, want)
 			}
-			ct := countTokens("pv-flag-ccver-ct-280", typ.ClaudeCodeVersion2_1_280)
-			if got := ct.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+			ct := countTokens("pv-flag-ccver-ct-328", typ.ClaudeCodeVersion2_1_328)
+			if got := ct.Get("User-Agent"); got != "claude-cli/2.1.328 (external, cli)" {
 				t.Errorf("native count_tokens User-Agent = %q", got)
 			}
 			if got := ct.Values("Anthropic-Beta"); len(got) != 1 || got[0] != "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27" {

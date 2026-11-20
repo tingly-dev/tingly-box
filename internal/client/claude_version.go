@@ -9,6 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -17,13 +18,16 @@ import (
 // .design/claude-code-oauth-compat.md.
 
 const (
-	nativeStainlessRuntimeVersion = "v26.3.0" // Bun's Node-compat version
-	nativeStainlessPackageVersion = "0.112.1"
+	nativeStainlessRuntimeVersion = "v26.12.1" // Bun 1.4.4's Node-compat version
+	nativeStainlessPackageVersion = "0.128.0"
 
-	claudeRequestClassHeader = "x-claude-code-request-class"
-	claudeAgentTypeHeader    = "x-claude-code-agent-type"
-	claudeRequestClassMain   = "main"
-	claudeXAppBackground     = "cli-bg" // x-app of a background session
+	claudeRequestClassHeader    = "x-claude-code-request-class"
+	claude1PRequestClassHeader  = "x-claude-1p-request-class"
+	claudePromptIDHeader        = "x-claude-code-prompt-id"
+	claudeClientRequestIDHeader = "x-client-request-id"
+	claudeAgentTypeHeader       = "x-claude-code-agent-type"
+	claudeRequestClassMain      = "main"
+	claudeXAppBackground        = "cli-bg" // x-app of a background session
 )
 
 // nativeClaudeCLIUserAgent matches cc_entrypoint=cli.
@@ -42,6 +46,9 @@ func claudeCodeNativeVersion(ctx context.Context) string {
 
 // claudeHintHeaderValueRe bounds replayed hint header values.
 var claudeHintHeaderValueRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+
+// claudePromptIDRe bounds a replayed x-claude-code-prompt-id (a uuid).
+var claudePromptIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // stainlessOSName maps GOOS to the JS SDK's X-Stainless-OS value.
 func stainlessOSName(goos string) string {
@@ -123,6 +130,17 @@ func (c *ClaudeClient) nativeRequestOptions(ctx context.Context, sig claudeBetaS
 		class = hints.RequestClass
 	}
 	options = append(options, anthropicOption.WithHeader(claudeRequestClassHeader, class))
+	// 2.1.328 direct clients also send the first-party class (default main),
+	// the prompt id (replayed only) and a fresh request id per call.
+	class1P := claudeRequestClassMain
+	if claudeHintHeaderValueRe.MatchString(hints.FirstPartyRequestClass) {
+		class1P = hints.FirstPartyRequestClass
+	}
+	options = append(options, anthropicOption.WithHeader(claude1PRequestClassHeader, class1P))
+	if claudePromptIDRe.MatchString(hints.PromptID) {
+		options = append(options, anthropicOption.WithHeader(claudePromptIDHeader, hints.PromptID))
+	}
+	options = append(options, anthropicOption.WithHeader(claudeClientRequestIDHeader, uuid.NewString()))
 	if claudeHintHeaderValueRe.MatchString(hints.AgentType) {
 		options = append(options, anthropicOption.WithHeader(claudeAgentTypeHeader, hints.AgentType))
 	}

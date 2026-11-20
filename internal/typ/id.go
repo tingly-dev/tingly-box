@@ -201,11 +201,15 @@ type ClaudeCodeClientHints struct {
 	RequestClass      string   // x-claude-code-request-class
 	AgentType         string   // x-claude-code-agent-type
 	BackgroundSession bool     // x-app: cli-bg
+
+	FirstPartyRequestClass string // x-claude-1p-request-class
+	PromptID               string // x-claude-code-prompt-id
 }
 
 // IsZero reports whether no hint was captured.
 func (h ClaudeCodeClientHints) IsZero() bool {
-	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == "" && h.RequestClass == "" && h.AgentType == "" && !h.BackgroundSession
+	return len(h.Betas) == 0 && h.AgentID == "" && h.ParentAgentID == "" && h.RequestClass == "" && h.AgentType == "" && !h.BackgroundSession &&
+		h.FirstPartyRequestClass == "" && h.PromptID == ""
 }
 
 // ClaudeCodeClientHintsKey is the context key for ClaudeCodeClientHints.
