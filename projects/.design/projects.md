@@ -86,6 +86,10 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - 项目对话 = 主线程（`agent=llm`）的 `thread_events`：kind(user|assistant|thread_started|suggestions|thread_update|error)，没有 role，由 kind 推出。旧的 `project_messages` 表迁移后只读保留一个版本。
 - 线程回报（`thread_update`）照常传给协调者；对话里按发生的先后各占一条很淡的折叠行（状态、线程名、结果，点开看回报正文），线程卡片只负责实时状态；对话下方有前端开关可隐藏这些行（仅存本机 localStorage）。
 - `threads`: id, project_id(必填), parent_id, seq(项目内序号，主线程为 0), agent(llm|claude-code), title, task, status, wait_reason, repo_path, base_branch, branch, cwd, session_id, model, last_report, commits_ahead, files_changed, input/output tokens, origin(coordinator|suggestion|user), timestamps, resolved_at。
+- **线程自己的启动设置**（`profile_override` / `model_override` / `effort_override` / `permission_mode`）：线程创建时（`Threads.Start`）从项目当前的 `thread_profile` / `thread_model` / `thread_effort` / `thread_permission_mode` **复制**到线程行上，之后每一轮、`--resume`、终端接管（Handoff）都只读线程自己的值，不再回看项目。所以改项目的“线程默认设置”只影响之后新建的线程；单个线程在自己面板里的修改也只改它自己。空的模型/effort 表示该 profile（或连接）的默认值，不再表示“跟随项目”；“项目默认”选项（`SetWorkerProfile inherit`、`SetPermissionMode("")`）是**一次性重新复制**项目当前的值，不是链接。字段名保留 `*_override` 只是为了接口兼容。
+  - 起因：#2274 起这些字段为空即“继承项目”，于是项目默认一改，所有没单独设置过的老线程（含已运行的）下一轮都跟着变，会话中途换模型还会让 prompt cache 失效。
+  - 迁移（`db.pinThreadSettings`，只跑一次，标记 `migrations.thread_settings_pinned`）：以前“跟随”的线程拿到**迁移时**项目的当前值（创建时的值从未存过，这是能得到的最接近的值）；线程自己已设的 profile / 模型 / 权限模式保留；协调者主线程不动。空的 effort 与“跟随”无法区分，同样取项目值。folder 线程只补权限模式（它们的模型和 profile 本来就存在线程上）。
+  - 模型 / profile 变更与 prompt cache：线程自己改模型仍走 `set_model`，缓存失效是用户显式换模型的代价；现在不会再被项目设置的改动连带触发。
 - `thread_events`: 线程过程。kind(user|assistant|tool_use|tool_result|approval|ask|system|error|report|thread_started|suggestions|thread_update), content, payload, source(空=网页|im|thread|system), source_ref, source_platform, source_chat_id, created_at。
 - 新线程的目录是 `threads/<thread-id>/`（旧线程保留 `cwd` 里记的 `worktrees/...`）。
 

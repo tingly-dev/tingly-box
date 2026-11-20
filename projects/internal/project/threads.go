@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,7 +68,7 @@ const MaxRunningSessions = 10
 
 // Default permission mode threads run in: edits are accepted, anything else
 // that needs approval waits on the user in the thread.
-const DefaultPermissionMode = "acceptEdits"
+const DefaultPermissionMode = db.DefaultThreadPermissionMode
 
 // ThreadEnv supplies what threads need from the global settings: the
 // environment pointing Claude Code at the configured gateway, and the model
@@ -395,8 +395,8 @@ func (m *Threads) prompter(threadID string) *threadPrompter {
 	return p
 }
 
-// threadPermissionMode is the mode a thread's turns run in: its own, else
-// its project's.
+// threadPermissionMode is the mode a thread's turns run in: its own, else its
+// project's (a row from before threads pinned their mode).
 func threadPermissionMode(p *db.Project, t *db.Thread) string {
 	if t.PermissionMode != "" {
 		return t.PermissionMode
@@ -410,6 +410,16 @@ func queuedNote(p *db.Project) string {
 		return fmt.Sprintf("Queued: %d folder threads are already running.", n)
 	}
 	return fmt.Sprintf("Queued: %d threads are already running in this project (its limit). It starts when one finishes.", n)
+}
+
+// pinThreadDefaults copies the project's current thread defaults onto t, so
+// the thread keeps them when the project's change.
+func pinThreadDefaults(p *db.Project, t *db.Thread) {
+	profile := p.ThreadProfile
+	t.ProfileOverride = &profile
+	t.ModelOverride = p.ThreadModel
+	t.EffortOverride = p.ThreadEffort
+	t.PermissionMode = permissionMode(p)
 }
 
 func permissionMode(p *db.Project) string {
@@ -568,6 +578,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 		Origin:    spec.Origin,
 		SessionID: uuid.NewString(),
 	}
+	pinThreadDefaults(p, t)
 	repo, err := pickRepo(p, spec.Repo)
 	if err != nil {
 		return nil, err
@@ -881,7 +892,7 @@ var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
 func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread, p *db.Project, folder bool) (model string, opts agentboot.ExecutionOptions, err error) {
 	env, defModel, settings := m.launchEnv(ctx, t, folder)
 	if !folder {
-		profile := workerProfile(p, t)
+		profile := workerProfile(t)
 		if l, ok := m.env.(Launcher); ok && profile != "" {
 			env, settings, err = l.LaunchEnv(ctx, profile)
 			if err == nil {
@@ -901,22 +912,16 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 			return "", opts, errors.New("profile unavailable")
 		}
 	}
-	// A worker's observed Model is history, not its launch choice. Only an
-	// explicit override pins it instead of following the project's default.
+	// A worker's observed Model is history, not its launch choice: its own
+	// ModelOverride is, and the project's default is not consulted again.
 	model = t.Model
 	if !folder {
 		model = t.ModelOverride
-		if model == "" && t.ProfileOverride == nil {
-			model = p.ThreadModel
-		}
 	}
 	if model == "" {
 		model = defModel
 	}
 	effort := t.EffortOverride
-	if effort == "" && !folder {
-		effort = p.ThreadEffort
-	}
 	env = m.withTmpEnv(env, p, t)
 	opts = agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if m.SessionToolsConfig != nil {

@@ -109,7 +109,7 @@ func TestWriteSettingsLeavesAnUnchangedFileAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, os.SameFile(before, same), "identical content is not rewritten")
 
-	f.project.ThreadPermissionMode = "auto"
+	th.PermissionMode = "auto"
 	require.NoError(t, f.threads.writeSettings(f.project, th))
 	changed, err := os.Stat(path)
 	require.NoError(t, err)

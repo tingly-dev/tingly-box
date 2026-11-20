@@ -22,7 +22,7 @@ import (
 // PermissionModes lists the Claude Code permission modes a session can run in.
 var PermissionModes = []string{"default", "acceptEdits", "auto", "plan", "dontAsk", "bypassPermissions"}
 
-// ValidPermissionMode reports whether m is empty (inherit) or a known mode.
+// ValidPermissionMode reports whether m is empty (reset to the default) or a known mode.
 func ValidPermissionMode(m string) bool {
 	if m == "" {
 		return true
@@ -146,6 +146,9 @@ func (m *Threads) startFolderThread(spec FolderThreadSpec, beforeStart func(*db.
 		Model: model, EffortOverride: spec.Effort, PermissionMode: spec.PermissionMode, Profile: profile,
 		HeadBranch: HeadBranch(context.Background(), folder),
 	}
+	if t.PermissionMode == "" {
+		t.PermissionMode = permissionMode(p)
+	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
 	}
@@ -163,12 +166,22 @@ func (m *Threads) startFolderThread(spec FolderThreadSpec, beforeStart func(*db.
 
 // SetPermissionMode saves the mode for the thread's next started turn.
 // The engine applies it live then, or reopens with --resume if that fails.
+// Empty resets the thread to its project's (or folder's) current mode: a
+// copy, not a link.
 func (m *Threads) SetPermissionMode(id, mode string) (*db.Thread, error) {
 	if !ValidPermissionMode(mode) {
 		return nil, ErrBadPermission
 	}
-	if _, err := m.store.GetThread(id); err != nil {
+	t, err := m.store.GetThread(id)
+	if err != nil {
 		return nil, err
+	}
+	if mode == "" && t.Agent != db.AgentLLM {
+		p, err := m.store.GetProject(t.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		mode = permissionMode(p)
 	}
 	out, err := m.update(id, func(t *db.Thread) { t.PermissionMode = mode })
 	if err == nil {

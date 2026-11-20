@@ -164,7 +164,7 @@ export const project: Dict<typeof projectEn> = {
         worktreeHelp: '关闭后，新线程共享仓库目录和当前分支，彼此可以看到对方的更改。已有线程保留原工作目录。',
         title: '项目设置', tabGeneral: '通用', tabMemory: '记忆', tabEnvironment: '环境', tabUsage: '用量',
         coordinatorModel: '协调者模型', coordinatorModelHelp: '负责项目对话：路由与更新。留空使用连接的默认模型。',
-        threadModel: '线程默认模型', threadModelHelp: '新线程及未设置模型覆盖的线程使用（Claude Code --model）。留空使用宿主默认模型。单个线程的选择保持独立。',
+        threadModel: '线程默认模型', threadModelHelp: '新线程创建时复制此值（Claude Code --model），已有线程保持各自的模型不受影响。留空使用宿主默认模型。',
         modelDefault: '连接默认',
         permissionMode: '线程权限',
         githubAccess: 'Issue 与 PR',

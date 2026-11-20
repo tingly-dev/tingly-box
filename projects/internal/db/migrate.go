@@ -22,6 +22,10 @@ import (
 // migrationMarker is the settings key set once the move has been committed.
 const migrationMarker = "migrations.unified_threads"
 
+// pinnedSettingsMarker is the settings key set once every existing thread
+// carries its own profile, model, effort and permission mode.
+const pinnedSettingsMarker = "migrations.thread_settings_pinned"
+
 // CanonicalPath is a folder path in the one spelling Projects stores: cleaned
 // (no trailing slash, no "." or ".."), with symlinks resolved when the path
 // exists.
@@ -184,11 +188,47 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 			return err
 		}
 	}
+	if err = pinThreadSettings(tx); err != nil {
+		return fmt.Errorf("pin thread settings: %w", err)
+	}
 	// Events written before updated_at existed (or moved in above) were last written when created.
 	if err = tx.Exec("UPDATE thread_events SET updated_at = created_at WHERE updated_at IS NULL").Error; err != nil {
 		return err
 	}
 	return tx.Commit().Error
+}
+
+// pinThreadSettings is the one-shot move from threads that follow their
+// project's thread defaults to threads that own their settings (see Thread.
+// ProfileOverride). A thread that followed gets the project's value as it is
+// now: the best that can be known, since what it had when it started was never
+// stored. Later changes to the defaults then stop reaching it. A thread that
+// already pinned a field, such as a profile or a model chosen in its own panel,
+// keeps it. An empty model or effort was indistinguishable from "follow", so it
+// takes the project's value too.
+func pinThreadSettings(tx *gorm.DB) error {
+	var n int64
+	tx.Raw("SELECT COUNT(*) FROM settings WHERE key = ?", pinnedSettingsMarker).Scan(&n)
+	if n > 0 {
+		return nil
+	}
+	workers := "agent <> '" + AgentLLM + "' AND project_id IN (SELECT id FROM projects WHERE type = '" + ProjectProject + "')"
+	own := func(col string) string {
+		return "COALESCE((SELECT " + col + " FROM projects WHERE projects.id = threads.project_id), '')"
+	}
+	for _, q := range []string{
+		// The model goes before the profile: a thread with a profile of its own
+		// chose its model (or the profile's default) with it.
+		"UPDATE threads SET model_override = " + own("thread_model") + " WHERE " + workers + " AND profile_override IS NULL AND COALESCE(model_override, '') = ''",
+		"UPDATE threads SET effort_override = " + own("thread_effort") + " WHERE " + workers + " AND COALESCE(effort_override, '') = ''",
+		"UPDATE threads SET profile_override = " + own("thread_profile") + " WHERE " + workers + " AND profile_override IS NULL",
+		"UPDATE threads SET permission_mode = COALESCE(NULLIF((SELECT thread_permission_mode FROM projects WHERE projects.id = threads.project_id), ''), '" + DefaultThreadPermissionMode + "') WHERE agent <> '" + AgentLLM + "' AND COALESCE(permission_mode, '') = ''",
+	} {
+		if err := tx.Exec(q).Error; err != nil {
+			return err
+		}
+	}
+	return tx.Exec("INSERT INTO settings (key, value, updated_at) VALUES (?, '1', ?)", pinnedSettingsMarker, time.Now()).Error
 }
 
 func count(tx *gorm.DB, query string, args ...any) int64 {

@@ -14,7 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
-func TestWorkerLaunchReadsDefaultsAndOverridesAfterWaitingForCapacity(t *testing.T) {
+func TestWorkerLaunchKeepsDefaultsOfItsStartAfterWaitingForCapacity(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
 	const limit = 2
 	f.project.MaxRunningThreads = limit
@@ -53,8 +53,8 @@ func TestWorkerLaunchReadsDefaultsAndOverridesAfterWaitingForCapacity(t *testing
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	launches := f.agent.Launches()
-	assert.Equal(t, "fresh-default", launches[0].Model)
-	assert.Equal(t, "auto", launches[0].PermissionMode)
+	assert.Equal(t, "default-model", launches[0].Model, "the project's later default does not reach a thread that already started")
+	assert.Equal(t, "acceptEdits", launches[0].PermissionMode)
 }
 
 func TestWorkerHandoffUsesConfiguredModelNotLastObservedModel(t *testing.T) {
@@ -69,10 +69,13 @@ func TestWorkerHandoffUsesConfiguredModelNotLastObservedModel(t *testing.T) {
 	require.NoError(t, err)
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	cmd, err := f.threads.Handoff(th.ID)
+	require.NoError(t, err)
+	assert.Contains(t, cmd, "--model project-default", "the thread's model was copied from the project when it started")
 
 	_, err = f.threads.SetModel(context.Background(), th.ID, "chosen-override")
 	require.NoError(t, err)
-	cmd, err := f.threads.Handoff(th.ID)
+	cmd, err = f.threads.Handoff(th.ID)
 	require.NoError(t, err)
 	assert.Contains(t, cmd, "--model chosen-override")
 	assert.NotContains(t, cmd, "observed-model")
@@ -81,7 +84,7 @@ func TestWorkerHandoffUsesConfiguredModelNotLastObservedModel(t *testing.T) {
 	require.NoError(t, err)
 	cmd, err = f.threads.Handoff(th.ID)
 	require.NoError(t, err)
-	assert.Contains(t, cmd, "--model project-default")
+	assert.NotContains(t, cmd, "--model", "empty is the profile's own default model")
 	assert.NotContains(t, cmd, "observed-model")
 }
 
@@ -123,26 +126,28 @@ func TestWorkerModelOverrideIsIndependentAndSurvivesSettlement(t *testing.T) {
 	assert.Equal(t, "auto", p.ThreadPermissionMode)
 	sibling, err := f.store.GetThread(second.ID)
 	require.NoError(t, err)
-	assert.Empty(t, sibling.ModelOverride)
-	assert.Empty(t, sibling.PermissionMode)
+	assert.Equal(t, "project-model", sibling.ModelOverride, "a thread's settings are its own copy of the defaults")
+	assert.Equal(t, "auto", sibling.PermissionMode)
 
 	// An observed model is history, not a request for the next turn.
 	got.Model = "observed-provider-model"
 	require.NoError(t, f.store.SaveThread(got))
 	_, err = f.threads.SetModel(context.Background(), first.ID, "")
 	require.NoError(t, err)
-	_, err = f.threads.SetPermissionMode(first.ID, "")
-	require.NoError(t, err)
 	p.ThreadModel = "new-project-model"
 	p.ThreadPermissionMode = "default"
 	require.NoError(t, f.store.SaveProject(p))
+	// Resetting the mode copies the project's current one; it does not link to it.
+	_, err = f.threads.SetPermissionMode(first.ID, "")
+	require.NoError(t, err)
 	_, err = f.threads.Send(context.Background(), first.ID, "inherit again", Source{}, nil)
 	require.NoError(t, err)
 	f.report(t)
 	got = waitStatus(t, f.store, first.ID, db.ThreadIdle)
 	assert.Empty(t, got.ModelOverride)
+	assert.Equal(t, "default", got.PermissionMode)
 	launches = f.agent.Launches()
-	assert.Equal(t, "new-project-model", launches[len(launches)-1].Model)
+	assert.Equal(t, "default-model", launches[len(launches)-1].Model, "empty is the connection's default, not the project's")
 	assert.Equal(t, "default", launches[len(launches)-1].PermissionMode)
 }
 
@@ -161,7 +166,7 @@ func TestWorkerReportedModelDoesNotUseLaunchFallback(t *testing.T) {
 	assert.Empty(t, got.ReportedModel)
 }
 
-func TestThreadEffortInheritsAndOverridesPerTurn(t *testing.T) {
+func TestThreadEffortIsItsOwnAndOverridesPerTurn(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
 	f.project.ThreadEffort = "medium"
 	require.NoError(t, f.store.SaveProject(f.project))
@@ -183,12 +188,12 @@ func TestThreadEffortInheritsAndOverridesPerTurn(t *testing.T) {
 	require.NoError(t, err)
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
-	assert.Equal(t, "medium", f.agent.Launches()[2].Effort)
+	assert.Empty(t, f.agent.Launches()[2].Effort, "empty is the endpoint's default, not the project's")
 	_, err = f.threads.SetEffort(th.ID, "invalid")
 	require.Error(t, err)
 }
 
-func TestWorkerProfileInheritanceAndOverride(t *testing.T) {
+func TestWorkerProfileIsPinnedAtStartAndResetCopiesTheProjects(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
 	work := filepath.Join(t.TempDir(), "work.json")
 	require.NoError(t, os.WriteFile(work, []byte(`{"env":{"X":"profile"},"permissions":{"allow":["Read"],"additionalDirectories":["/data"]}}`), 0600))
@@ -206,9 +211,15 @@ func TestWorkerProfileInheritanceAndOverride(t *testing.T) {
 	assert.Contains(t, string(data), `"allow":["Read","Read(//`)
 	assert.Contains(t, string(data), `/data`)
 	assert.Contains(t, string(data), f.threads.layout.MemoryDir(f.project.ID))
+	require.NotNil(t, th.ProfileOverride)
+	assert.Equal(t, "work", *th.ProfileOverride)
+	p, err := f.store.GetProject(f.project.ID)
+	require.NoError(t, err)
+	p.ThreadProfile, p.ThreadModel = "other", "other-model"
+	require.NoError(t, f.store.SaveProject(p))
 	cmd, err := f.threads.Handoff(th.ID)
 	require.NoError(t, err)
-	assert.Contains(t, cmd, "tb profile work")
+	assert.Contains(t, cmd, "tb profile work", "a later project default does not move the thread")
 	saved, err := f.threads.SetWorkerProfile(context.Background(), th.ID, "", false)
 	require.NoError(t, err)
 	require.NotNil(t, saved.ProfileOverride)
@@ -218,7 +229,9 @@ func TestWorkerProfileInheritanceAndOverride(t *testing.T) {
 	assert.Contains(t, cmd, "tb cc")
 	saved, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "", true)
 	require.NoError(t, err)
-	assert.Nil(t, saved.ProfileOverride)
+	require.NotNil(t, saved.ProfileOverride)
+	assert.Equal(t, "other", *saved.ProfileOverride, "reset copies the project's current profile")
+	assert.Equal(t, "other-model", saved.ModelOverride)
 	_, err = f.threads.SetWorkerProfile(context.Background(), th.ID, "missing", false)
 	assert.Error(t, err)
 }

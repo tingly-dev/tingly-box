@@ -10,7 +10,7 @@ export const session = {
         worktreeMode: 'Thread workspace',
         workspace: { worktree: 'Separate worktree', shared: 'Shared directory' },
         model: 'Model', permissions: 'Permissions', projectDefault: 'Project default', defaultModel: 'Default model', defaultPermissions: 'Default permissions',
-        defaults: 'Project thread defaults', defaultsHelp: 'Used by new threads and existing threads without an override. Individual thread choices do not change these defaults.',
+        defaults: 'Project thread defaults', defaultsHelp: 'Copied to each new thread when it starts. Threads already started keep their own settings, and a thread\'s own choices do not change these defaults.',
         nextTurn: 'Launch settings apply on the next started turn. Send now joins the current turn; use After this turn or Stop and send for a new turn.',
         modelNextTurn: 'Changes apply next turn',
         modelUnknown: 'Not yet recorded',
