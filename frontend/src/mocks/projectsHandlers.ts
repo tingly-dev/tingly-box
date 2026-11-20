@@ -69,7 +69,9 @@ const thread = (o: Partial<Record<string, unknown>> & { id: string; title: strin
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
     model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), session_id: `${(o.id as string).length.toString(16).padStart(2, '0')}c9d5e7a-4b1e-4f7a-9d0e-5a2b7c3d8e9f`,
-    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0,
+    // A turn that has started takes messages mid-turn; one still waiting for a project slot cannot.
+    insertable: o.status === 'working' && !o.queued, ...o,
 })
 // A worker owns the launch settings copied from its project's defaults when it started.
 const pinned = (projectId: string) => {
@@ -240,7 +242,7 @@ const session = (o: Partial<Record<string, unknown>> & { id: string; title: stri
     project_id: folderId(o.cwd), seq: 1, agent: 'claude-code', origin: 'user', permission_mode: '' as string | undefined, profile: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
     uncommitted: false, model: '' as string | undefined, repo_path: '', base_branch: '', branch: '', session_id: o.id,
     created_at: ago(120), updated_at: ago(8),
-    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, insertable: o.status === 'working', ...o,
 })
 const sessionWithUsage = (o: Parameters<typeof session>[0]) => { const t = session(o); return { ...t, ...usageOf(t), ...o } }
 

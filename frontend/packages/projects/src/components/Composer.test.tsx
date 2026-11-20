@@ -110,18 +110,32 @@ describe('Composer send modes', () => {
         expect(send).toHaveBeenCalledExactlyOnceWith('change course', []);
     });
 
-    it('sends after the turn on Alt+Enter, and offers both choices in the menu', async () => {
+    it('sends for the next turn on Alt+Enter', async () => {
         const send = running();
         await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter', altKey: true }));
-        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'queue');
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'next_turn');
     });
 
-    it('stops and sends from the menu', async () => {
+    it('offers exactly insert and next turn in the menu, and no way to stop-and-send', async () => {
         const send = running();
         fireEvent.click(screen.getByRole('button', { name: 'composer.sendOptions' }));
-        expect(screen.getByText('composer.sendQueue')).toBeInTheDocument();
-        await act(async () => fireEvent.click(screen.getByText('composer.sendStop')));
-        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'stop_and_send');
+        expect(screen.getByText('composer.sendInsert')).toBeInTheDocument();
+        expect(screen.getByText('composer.sendNextTurnLabel')).toBeInTheDocument();
+        expect(screen.queryByText('composer.sendStop')).not.toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getByText('composer.sendInsert')));
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'insert');
+    });
+
+    it('falls back to the next turn, and says so, when the running turn cannot take input', async () => {
+        const send = vi.fn().mockResolvedValue(true);
+        render(<Composer placeholder="Reply" streaming sendWhileStreaming sendModes insertable={false} onStop={vi.fn()} onSend={send} />);
+        fireEvent.change(screen.getByPlaceholderText('Reply'), { target: { value: 'later' } });
+        await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('later', [], 'next_turn');
+        fireEvent.change(screen.getByPlaceholderText('Reply'), { target: { value: 'again' } });
+        fireEvent.click(screen.getByRole('button', { name: 'composer.sendOptions' }));
+        expect(screen.getByRole('menuitem', { name: /composer.sendInsert/ })).toHaveAttribute('aria-disabled', 'true');
+        expect(screen.getByText('composer.sendInsertUnavailable')).toBeInTheDocument();
     });
 
     it('shows no menu, and ignores Alt+Enter, when no turn runs or the host did not opt in', async () => {

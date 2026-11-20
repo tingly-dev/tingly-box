@@ -11,7 +11,7 @@
   description: List the project's threads, including old and archived ones the thread table in your prompt leaves out. Capped like ls output: when too many match, the oldest are hidden and you are told to narrow it.
   schema: {"properties":{"contains":{"description":"Optional. Only threads whose title, task or last report contains this text.","type":"string"},"limit":{"description":"How many threads, up to 40. Default 20.","type":"integer"},"status":{"description":"Optional. Only threads with this status, e.g. working, waiting, ready, resolved.","type":"string"}},"type":"object"}
 [coordinator] message_thread
-  description: Send a message to an existing thread (follow-up work, an answer to its question). It runs after the thread's current turn.
+  description: Send a message to an existing thread (follow-up work, an answer to its question). While the thread works, it is added to the running turn and read at the thread's next step (so it can change course); an idle thread starts a turn on it.
   schema: {"properties":{"cite":{"description":"Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved.","items":{"type":"string"},"type":"array"},"message":{"description":"What to tell the thread.","type":"string"},"thread_id":{"description":"Thread id (the 8-character prefix is enough).","type":"string"}},"required":["thread_id","message"],"type":"object"}
 [coordinator] no_update
   description: End this turn without posting anything to the user. Use it when a thread update or settings change needs no message. Call it instead of replying with text.

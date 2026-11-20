@@ -31,10 +31,12 @@ interface Pending {
 }
 
 /**
- * How a message meets a running turn. The default (no mode) joins the turn,
- * as in Claude Code; the other two are picked per message from the send menu.
+ * How a message meets a running turn. "insert" (the default, sent with no
+ * mode) puts it into the turn: the model reads it at its next step, after the
+ * running tool call. "next_turn" holds it until the turn ends. Stopping a
+ * turn is the Stop button, not a way of sending.
  */
-export type SendMode = 'queue' | 'stop_and_send';
+export type SendMode = 'insert' | 'next_turn';
 
 export interface ComposerProps {
     /**
@@ -58,11 +60,17 @@ export interface ComposerProps {
     /** Send stays available while a turn runs (the host adds it to the turn, or queues it). */
     sendWhileStreaming?: boolean;
     /**
-     * While a turn runs, the send button gets a menu to send "after this turn"
-     * or "stop and send" instead (Alt+Enter is "after this turn"). The host
-     * must honour the mode passed to onSend.
+     * While a turn runs, the send button gets a menu to choose between
+     * inserting into the turn and sending after it (Alt+Enter is "next
+     * turn"). The host must honour the mode passed to onSend.
      */
     sendModes?: boolean;
+    /**
+     * False when the running turn cannot take a message mid-turn (its agent
+     * reads input only between turns): Enter then sends for the next turn and
+     * the menu says why Insert is off. Default true.
+     */
+    insertable?: boolean;
     disabled?: boolean;
     /** False holds Send while the text can still be edited (e.g. no folder picked yet). */
     canSubmit?: boolean;
@@ -117,7 +125,7 @@ export interface ComposerProps {
  * Enter (confirming a candidate) never sends, and a send never runs twice.
  */
 export function Composer({
-    onSend, attach, attachBlocked, onAttachmentsChange, streaming, onStop, sendWhileStreaming, sendModes, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
+    onSend, attach, attachBlocked, onAttachmentsChange, streaming, onStop, sendWhileStreaming, sendModes, insertable = true, disabled, canSubmit = true, placeholder, autoFocus, model, onModelChange, modelLabel, effort, onEffortChange, effortLabel, modelSource,
     context, contextCollapsible = false, contextLabel, leftSlot, compactToolbar = false, minRows = 1, seed, keepUntilSent, text: controlled, onTextChange, onAccepted, keysHint, slashCommands,
 }: ComposerProps) {
     const { t } = useTranslation('projects');
@@ -249,11 +257,14 @@ export function Composer({
     // While a turn runs, Send shows next to Stop once there is something to send.
     const showSend = !showStop || (sendWhileStreaming && hasContent);
 
+    // A turn is running and the host offers modes: the button says what Enter does.
+    const modesAvailable = sendModes && streaming && sendWhileStreaming && showSend;
+    const sendTitle = !modesAvailable ? t('composer.send') : insertable ? t('composer.insert') : t('composer.sendNextTurn');
     const sendButton = showSend && (
-        <ControlTooltip title={t('composer.send')}>
+        <ControlTooltip title={sendTitle}>
             <span>
                 <IconButton
-                    onClick={() => void submit()}
+                    onClick={() => void submit(modesAvailable && !insertable ? 'next_turn' : undefined)}
                     disabled={!canSend}
                     size="small"
                     aria-label={t('composer.sendShort')}
@@ -269,7 +280,6 @@ export function Composer({
             </span>
         </ControlTooltip>
     );
-    const modesAvailable = sendModes && streaming && sendWhileStreaming && showSend;
     const modeButton = modesAvailable && (
         <>
             <ControlTooltip title={t('composer.sendOptions')} suppressed={!!modeMenu}>
@@ -287,11 +297,11 @@ export function Composer({
                 </span>
             </ControlTooltip>
             <Menu anchorEl={modeMenu} open={!!modeMenu} onClose={() => setModeMenu(null)} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-                <MenuItem onClick={() => { setModeMenu(null); void submit('queue'); }}>
-                    <ListItemText primary={t('composer.sendQueue')} secondary={t('composer.sendQueueHint')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
+                <MenuItem disabled={!insertable} onClick={() => { setModeMenu(null); void submit('insert'); }}>
+                    <ListItemText primary={t('composer.sendInsert')} secondary={t(insertable ? 'composer.sendInsertHint' : 'composer.sendInsertUnavailable')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
                 </MenuItem>
-                <MenuItem onClick={() => { setModeMenu(null); void submit('stop_and_send'); }}>
-                    <ListItemText primary={t('composer.sendStop')} secondary={t('composer.sendStopHint')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
+                <MenuItem onClick={() => { setModeMenu(null); void submit('next_turn'); }}>
+                    <ListItemText primary={t('composer.sendNextTurnLabel')} secondary={t('composer.sendNextTurnHint')} slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }} />
                 </MenuItem>
             </Menu>
         </>
@@ -407,7 +417,7 @@ export function Composer({
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && (!mobile || e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
-                    void submit(e.altKey && modesAvailable ? 'queue' : undefined);
+                    void submit(modesAvailable && (e.altKey || !insertable) ? 'next_turn' : undefined);
                 }
             }}
             sx={{ fontSize: fontSizes.base, lineHeight: 1.65, color: 'text.primary', ...(inline && { py: 0.5 }) }}
