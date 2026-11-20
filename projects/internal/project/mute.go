@@ -85,5 +85,50 @@ func sameTime(a, b *time.Time) bool {
 // mutedReplyNotice is what a muted chat is told the first time it writes
 // during a mute: its message went through, but the reply will not come here.
 func mutedReplyNotice(b *db.ChannelBinding) string {
-	return "This chat is muted " + mutedWhile(b) + ". Your message reached Projects; replies stay on the web until you unmute it on the Bind page."
+	return "This chat is muted " + mutedWhile(b) + ". Your message reached Projects; replies stay on the web. Send /unmute, or unmute it on the Bind page, to hear them here."
+}
+
+// muteUsage is the reply to /mute with an argument it does not take.
+const muteUsage = "Usage: /mute [1h|8h|tomorrow] (no time: until /unmute)"
+
+// muteTomorrowHour is the hour (server time) "/mute tomorrow" ends at, as
+// the web's "until tomorrow 9:00".
+const muteTomorrowHour = 9
+
+// muteFromChat runs /mute: no arg mutes until /unmute, a duration ("1h",
+// "8h", "90m") or "tomorrow" until then. The reply says the resulting state,
+// so the chat is not told again when it next writes.
+func (s *Service) muteFromChat(b *db.ChannelBinding, arg string) (string, error) {
+	var until *time.Time
+	now := time.Now()
+	switch arg = strings.ToLower(strings.TrimSpace(arg)); arg {
+	case "":
+	case "tomorrow":
+		t := time.Date(now.Year(), now.Month(), now.Day()+1, muteTomorrowHour, 0, 0, 0, now.Location())
+		until = &t
+	default:
+		d, err := time.ParseDuration(arg)
+		if err != nil || d <= 0 {
+			return muteUsage, nil
+		}
+		t := now.Add(d)
+		until = &t
+	}
+	nb, err := s.MuteChannel(b.ID, true, until)
+	if err != nil {
+		return "", err
+	}
+	s.Relay.toldMuted(nb.Platform, nb.ChatID)
+	return "Muted " + mutedWhile(nb) + ": nothing is sent here until then; your messages still reach Projects. /unmute to hear replies again.", nil
+}
+
+// unmuteFromChat runs /unmute.
+func (s *Service) unmuteFromChat(b *db.ChannelBinding) (string, error) {
+	if !b.Muted {
+		return "This chat is not muted.", nil
+	}
+	if _, err := s.MuteChannel(b.ID, false, nil); err != nil {
+		return "", err
+	}
+	return "Unmuted: replies and updates come here again.", nil
 }

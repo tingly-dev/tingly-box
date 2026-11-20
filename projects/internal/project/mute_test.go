@@ -125,3 +125,51 @@ func TestAMuteThatRunsOutLetsTheChatHearAgain(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, got.Muted, "a mute that ran out reads as unmuted")
 }
+
+func TestAChatMutesAndUnmutesItself(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	_, err := svc.BindChannel("telegram", "42", "Me", "", f.project.ID)
+	require.NoError(t, err)
+
+	_, reply, err := svc.ChannelCommand("telegram", "42", ChatMute, "soon")
+	require.NoError(t, err)
+	assert.Equal(t, muteUsage, reply)
+
+	before := time.Now()
+	handled, reply, err := svc.ChannelCommand("telegram", "42", ChatMute, "8h")
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.True(t, strings.HasPrefix(reply, "Muted until "), reply)
+	assert.Contains(t, reply, "/unmute")
+	b, err := f.store.GetChannelBinding("telegram", "42")
+	require.NoError(t, err)
+	require.True(t, b.Muted)
+	require.NotNil(t, b.MutedUntil)
+	assert.WithinDuration(t, before.Add(8*time.Hour), *b.MutedUntil, 5*time.Second)
+
+	// It said so already: writing next is not answered with the notice.
+	svc.Relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvAssistant, Content: "quiet"})
+	_, err = svc.PostFromChannel("telegram", "42", "hello", nil)
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, f.project.MainThreadID)
+	sink.none(t)
+
+	_, reply, err = svc.ChannelCommand("telegram", "42", ChatMute, "")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "Muted until unmuted")
+	_, reply, err = svc.ChannelCommand("telegram", "42", ChatMute, "tomorrow")
+	require.NoError(t, err)
+	b, err = f.store.GetChannelBinding("telegram", "42")
+	require.NoError(t, err)
+	require.NotNil(t, b.MutedUntil)
+	assert.Equal(t, 9, b.MutedUntil.Local().Hour(), reply)
+
+	_, reply, err = svc.ChannelCommand("telegram", "42", ChatUnmute, "")
+	require.NoError(t, err)
+	assert.Equal(t, "Unmuted: replies and updates come here again.", reply)
+	_, reply, err = svc.ChannelCommand("telegram", "42", ChatUnmute, "")
+	require.NoError(t, err)
+	assert.Equal(t, "This chat is not muted.", reply)
+	svc.Relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvAssistant, Content: "loud"})
+	assert.Equal(t, "loud\n\n[Demo]", sink.next(t).text)
+}

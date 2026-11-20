@@ -581,6 +581,16 @@ func (r *Relay) tellMuted(b *db.ChannelBinding) {
 	}
 }
 
+// toldMuted records that a chat already knows it is muted (it muted itself).
+func (r *Relay) toldMuted(platform, chatID string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.mutedTold[chatKey(platform, chatID)] = true
+	r.mu.Unlock()
+}
+
 // resetMuteNotice forgets that a chat was told about its mute, as its mute
 // changed.
 func (r *Relay) resetMuteNotice(platform, chatID string) {

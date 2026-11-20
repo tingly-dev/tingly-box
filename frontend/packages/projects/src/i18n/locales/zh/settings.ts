@@ -39,7 +39,7 @@ export const settings: Dict<typeof settingsEn> = {
             action: '静音', unmute: '取消静音', muteLabel: '静音 {{chat}}', unmuteLabel: '取消静音 {{chat}}',
             hour: '1 小时', hours8: '8 小时', tomorrow: '到明天 9:00', forever: '直到我取消',
             until: '静音至 {{time}}', indefinite: '已静音',
-            hint: '静音期间不会向这个 IM 发送任何消息；从它发来的消息仍会送达项目。',
+            hint: '静音期间不会向这个 IM 发送任何消息；从它发来的消息仍会送达项目。在 IM 里发 /unmute 也能取消。',
             done: '已静音 {{chat}}', undone: '已取消静音 {{chat}}', failed: '静音设置失败',
         },
         deleted: '（已删除）',

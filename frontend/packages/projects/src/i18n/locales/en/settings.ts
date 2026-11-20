@@ -36,7 +36,7 @@ export const settings = {
             action: 'Mute', unmute: 'Unmute', muteLabel: 'Mute {{chat}}', unmuteLabel: 'Unmute {{chat}}',
             hour: 'For 1 hour', hours8: 'For 8 hours', tomorrow: 'Until tomorrow 9:00', forever: 'Until I unmute',
             until: 'Muted until {{time}}', indefinite: 'Muted',
-            hint: 'Nothing is sent to a muted IM. Its messages still reach Projects.',
+            hint: 'Nothing is sent to a muted IM. Its messages still reach Projects. Sending /unmute there also ends it.',
             done: '{{chat}} muted', undone: '{{chat}} unmuted', failed: 'Could not change the mute',
         },
         deleted: '(deleted)',

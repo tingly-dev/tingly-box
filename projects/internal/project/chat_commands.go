@@ -37,6 +37,10 @@ const (
 	// ChatCompact compacts the conversation of the chat's session; the result
 	// comes back as the session's next reply.
 	ChatCompact = agent.CommandCompact
+	// ChatMute stops what is sent to the chat, for "1h", "8h", "tomorrow" or
+	// until ChatUnmute; ChatUnmute ends it.
+	ChatMute   = agent.CommandMute
+	ChatUnmute = agent.CommandUnmute
 )
 
 // yoloMode is the permission mode /yolo turns on.
@@ -64,6 +68,12 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 		return true, reply, err
 	case ChatStatus:
 		reply, err := s.status(b)
+		return true, reply, err
+	case ChatMute:
+		reply, err := s.muteFromChat(b, arg)
+		return true, reply, err
+	case ChatUnmute:
+		reply, err := s.unmuteFromChat(b)
 		return true, reply, err
 	}
 	if b.Folder != "" {
@@ -239,7 +249,7 @@ func (s *Service) status(b *db.ChannelBinding) (string, error) {
 	}
 	lines = append(lines, "Verbose: "+verbose)
 	if b.Muted {
-		lines = append(lines, "Muted: "+mutedWhile(b)+" (unmute on the Bind page)")
+		lines = append(lines, "Muted: "+mutedWhile(b)+" (/unmute to hear replies again)")
 	}
 	return strings.Join(lines, "\n"), nil
 }
