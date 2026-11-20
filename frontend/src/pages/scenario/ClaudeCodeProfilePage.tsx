@@ -51,6 +51,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
 import { suggestProfileCopyName } from '@/pages/scenario/utils/copyName';
 import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -74,6 +75,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const { profileId } = useParams<{ profileId: string }>();
     const navigate = useNavigate();
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const scenario = `${BASE_SCENARIO}:${profileId}`;
 
     const {
@@ -226,8 +228,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                 // The profile's alias is its name: "Claude Code - ds". Rename / delete act on
                 // that name, so they sit right next to it rather than among the page actions.
                 title={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: phone ? 0 : 1, minWidth: 0, ...(phone && { flexWrap: 'wrap' }) }}>
+                        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', ...(phone && { mr: 0.5 }) }}>
                             {`Claude Code - ${currentProfile?.name || profileId}`}
                         </Box>
                         <Tooltip title={`Base URL: ${baseUrl}/tingly/${scenario}`}>

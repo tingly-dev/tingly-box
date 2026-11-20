@@ -2,6 +2,7 @@ import {Box, Stack, Typography} from '@mui/material';
 import React, {type ReactNode} from 'react';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 // ============================================================================
 // Types
@@ -35,32 +36,36 @@ const TabButton: React.FC<{
     label: string;
     isActive: boolean;
     onClick: () => void;
-}> = ({label, isActive, onClick}) => (
-    <Box
-        onClick={onClick}
-        sx={{
-            px: 1.5,
-            py: 0.5,
-            fontSize: fontSizes.md,
-            // Keep fontWeight fixed so the label's rendered width never
-            // changes on selection — toggling font-weight here shifts every
-            // tab/separator to its right. Fake the bold via text-shadow
-            // instead, which affects stroke, not glyph metrics.
-            fontWeight: 500,
-            color: isActive ? 'text.primary' : 'text.secondary',
-            textShadow: isActive ? '0 0 0.4px currentColor, 0 0 0.4px currentColor' : 'none',
-            cursor: 'pointer',
-            userSelect: 'none',
-            transition: 'all 0.15s ease-in-out',
-            '&:hover': {
-                backgroundColor: 'action.hover',
-                borderRadius: radius.chip,
-            },
-        }}
-    >
-        {label}
-    </Box>
-);
+}> = ({label, isActive, onClick}) => {
+    const phone = usePhoneShell();
+    return (
+        <Box
+            onClick={onClick}
+            sx={{
+                px: 1.5,
+                py: 0.5,
+                fontSize: fontSizes.md,
+                // Keep fontWeight fixed so the label's rendered width never
+                // changes on selection — toggling font-weight here shifts every
+                // tab/separator to its right. Fake the bold via text-shadow
+                // instead, which affects stroke, not glyph metrics.
+                fontWeight: 500,
+                ...(phone && {whiteSpace: 'nowrap'}),
+                color: isActive ? 'text.primary' : 'text.secondary',
+                textShadow: isActive ? '0 0 0.4px currentColor, 0 0 0.4px currentColor' : 'none',
+                cursor: 'pointer',
+                userSelect: 'none',
+                transition: 'all 0.15s ease-in-out',
+                '&:hover': {
+                    backgroundColor: 'action.hover',
+                    borderRadius: radius.chip,
+                },
+            }}
+        >
+            {label}
+        </Box>
+    );
+};
 
 // ============================================================================
 // Main Component
@@ -88,6 +93,7 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
                                                     }) => {
     // Get current tab data
     const currentTab = tabs.find(t => t.key === activeTab) || tabs[0];
+    const phone = usePhoneShell();
 
     // Build left side: tabs with | separator
     const leftContent = (
@@ -114,6 +120,30 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
             maxWidth: { xs: '100%', sm: '100%', md: '100%', lg: '100%', xl: 1200 }
           }
         : { maxWidth };
+
+    // Phone shell: the label, copy and switches share the first line; the
+    // value gets the full width below, wrapped instead of cut to "http://l…".
+    if (phone) {
+        return (
+            <Box sx={{display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: 1, width: '100%'}}>
+                <Box sx={{minWidth: 0}}>{leftContent}</Box>
+                {currentTab?.actions ? (
+                    <Stack direction="row" spacing={0.5} sx={{justifySelf: 'end', alignItems: 'center'}}>
+                        {currentTab.actions}
+                    </Stack>
+                ) : <span />}
+                <Box
+                    sx={{
+                        gridColumn: '1 / -1',
+                        minWidth: 0,
+                        '& .MuiTypography-root': {whiteSpace: 'normal', overflowWrap: 'anywhere', overflow: 'visible', textOverflow: 'clip'},
+                    }}
+                >
+                    {currentTab?.content}
+                </Box>
+            </Box>
+        );
+    }
 
     return (
         <Box

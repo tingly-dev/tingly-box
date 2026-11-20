@@ -225,6 +225,10 @@ export default {
       "loadBalance": "负载均衡",
       "fallbackTier": "兜底层"
     },
+    "phone": {
+      "conditionsOnDesktop": "添加和编辑条件请在桌面版进行。",
+      "targetActions": "模型操作"
+    },
     "guideDiagrams": {
       "empty": { "description": "示例规则" },
       "single-provider": { "description": "单提供商规则" },

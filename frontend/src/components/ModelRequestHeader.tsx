@@ -28,9 +28,11 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import type {OpenAIEndpointSelection} from '@/hooks/useResponsesToggle';
 import {CodexCompactChip} from '@/components/rule-card/CodexCompactChip';
 import { radius } from '@tingly/ui/theme/radius';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
+const HEADER_PADDING_X_PHONE = 12;
 const HEADER_PADDING_Y = 6;
 // Fixed (not just minimum) width for the "name + edit icon" slot, so the
 // controls that follow (1M, Endpoint, …) line up at the same x-position
@@ -67,15 +69,16 @@ const highlightedStrategyButtonSx = (theme: Theme) => ({
 });
 
 const HeaderContainer = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'collapsible',
-})<{ collapsible?: boolean }>(({ collapsible, theme }) => ({
+    shouldForwardProp: (prop) => prop !== 'collapsible' && prop !== 'phone',
+})<{ collapsible?: boolean; phone?: boolean }>(({ collapsible, phone, theme }) => ({
     display: 'flex',
     // The actions stay at the right of the first row; at narrow widths it is
     // the title section that wraps (its controls drop to a second row).
     flexWrap: 'nowrap' as const,
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    padding: `${HEADER_PADDING_Y}px ${HEADER_PADDING_X}px`,
+    // The phone shell keeps the width for the name and its chips.
+    padding: `${HEADER_PADDING_Y}px ${phone ? HEADER_PADDING_X_PHONE : HEADER_PADDING_X}px`,
     gap: 4,
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
@@ -176,6 +179,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onPluginsClick,
 }) => {
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
     const [contextMenuAnchor, setContextMenuAnchor] = useState<HTMLElement | null>(null);
@@ -508,6 +512,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     return (
         <HeaderContainer
             collapsible={collapsible}
+            phone={phone}
             sx={sx}
             onClick={onClick}
         >

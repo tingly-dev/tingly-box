@@ -24,6 +24,7 @@ import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInt
 import {useScenarioPageModal} from '@/features/scenario/ScenarioPageContext';
 import {ROUTING_GUIDE_SEEN_KEY} from '@/utils/onboardingFlags';
 import {ProviderQuotaProvider} from '@/contexts/ProviderQuotaContext';
+import {usePhoneShell} from '@tingly/ui/hooks/usePhoneShell';
 
 // First-run education: the Direct routing guide auto-opens once per user (new
 // and existing), then never again — the toolbar "?" stays as the manual
@@ -86,6 +87,8 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     const onRuleDelete = props.onRuleDelete ?? internalData.handleRuleDelete;
 
     const navigate = useNavigate();
+    // Dragging rules stays on the desktop (.design/mobile-ui.md); "Pin to top" still works.
+    const phone = usePhoneShell();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     // Per-page collapse state of every rule, remembered across navigation and reload.
     const expandedStorageKey = `tingly:rule-expanded:${props.scenario ?? 'default'}`;
@@ -403,11 +406,12 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             // for the initial mount scroll position).
                             const anchorUuid = newRuleUuid ?? rules[rules.length - 1]?.uuid;
                             const reorderEnabled = allowReorder && rules.length > 1;
+                            const dragEnabled = reorderEnabled && !phone;
 
                             return (
                                 <SortableRuleList
                                     rules={rules}
-                                    enabled={reorderEnabled}
+                                    enabled={dragEnabled}
                                     anchorUuid={anchorUuid}
                                     anchorRef={lastRuleRef}
                                     onReorder={commitOrder}
