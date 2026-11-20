@@ -313,6 +313,17 @@ func TestMergeRequestDefaultsTitleAndBodyFromTheCommits(t *testing.T) {
 	assert.Contains(t, gh.called(), fmt.Sprintf(`create-pr acme/widgets %q head=%s base=main draft=false`, subject, th.Branch))
 }
 
+// A description given without a title is kept; only the title comes from the commits.
+func TestMergeRequestKeepsAGivenBodyWithoutATitle(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest, Body: "Written by hand."})
+	require.NoError(t, err)
+	require.Len(t, got.Links, 1)
+	gh.mu.Lock()
+	defer gh.mu.Unlock()
+	assert.Equal(t, "Written by hand.", gh.items[got.Links[0].Number].Body)
+}
+
 func TestMergeRequestLinksAnExistingPRInsteadOfOpeningAnother(t *testing.T) {
 	f, th, gh, _ := mergeFixture(t)
 	existing := gh.add(db.LinkPR, "Already open", func(it *GitHubItem) { it.Head, it.Base = th.Branch, "main" })

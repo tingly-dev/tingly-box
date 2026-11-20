@@ -141,25 +141,35 @@ func (m *Threads) linksOrNil() *Links {
 	return m.links()
 }
 
-// PRDiff returns the changes of one of a thread's open PRs.
-func (m *Threads) PRDiff(ctx context.Context, threadID string, number int) (Diff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return Diff{}, err
+// prDiffSource finds one of a thread's open PRs and where its diff is read:
+// the checkout when it holds both branches (dir), else GitHub when that read
+// is switched on (links), else errNoLocalRefs.
+func (m *Threads) prDiffSource(ctx context.Context, threadID string, number int) (t *db.Thread, k db.ThreadLink, links *Links, err error) {
+	if t, err = m.store.GetThread(threadID); err != nil {
+		return nil, k, nil, err
 	}
-	k, err := prOf(t, number)
-	if err != nil {
-		return Diff{}, err
+	if k, err = prOf(t, number); err != nil {
+		return nil, k, nil, err
 	}
 	if t.Cwd != "" {
-		d, err := LocalPRDiff(ctx, t.Cwd, number, k.Base, k.Head)
-		if !errors.Is(err, errNoLocalRefs) {
-			return d, err
+		if _, err = localPRRange(ctx, t.Cwd, k.Base, k.Head); err == nil {
+			return t, k, nil, nil
 		}
 	}
-	links := m.linksOrNil()
-	if links == nil || !m.remoteDiff {
-		return Diff{}, errNoLocalRefs
+	if links = m.linksOrNil(); links == nil || !m.remoteDiff {
+		return nil, k, nil, errNoLocalRefs
+	}
+	return t, k, links, nil
+}
+
+// PRDiff returns the changes of one of a thread's open PRs.
+func (m *Threads) PRDiff(ctx context.Context, threadID string, number int) (Diff, error) {
+	t, k, links, err := m.prDiffSource(ctx, threadID, number)
+	if err != nil {
+		return Diff{}, err
+	}
+	if links == nil {
+		return LocalPRDiff(ctx, t.Cwd, number, k.Base, k.Head)
 	}
 	files, err := links.PRFiles(ctx, t, number)
 	if err != nil {
@@ -170,23 +180,12 @@ func (m *Threads) PRDiff(ctx context.Context, threadID string, number int) (Diff
 
 // PRDiffFile returns one file of one of a thread's open PRs.
 func (m *Threads) PRDiffFile(ctx context.Context, threadID string, number int, path, oldPath string) (FileDiff, error) {
-	t, err := m.store.GetThread(threadID)
+	t, k, links, err := m.prDiffSource(ctx, threadID, number)
 	if err != nil {
 		return FileDiff{}, err
 	}
-	k, err := prOf(t, number)
-	if err != nil {
-		return FileDiff{}, err
-	}
-	if t.Cwd != "" {
-		d, err := LocalPRFileDiff(ctx, t.Cwd, k.Base, k.Head, path, oldPath)
-		if !errors.Is(err, errNoLocalRefs) {
-			return d, err
-		}
-	}
-	links := m.linksOrNil()
-	if links == nil || !m.remoteDiff {
-		return FileDiff{}, errNoLocalRefs
+	if links == nil {
+		return LocalPRFileDiff(ctx, t.Cwd, k.Base, k.Head, path, oldPath)
 	}
 	files, err := links.PRFiles(ctx, t, number)
 	if err != nil {
@@ -218,7 +217,8 @@ func (m *Threads) MergeDraft(ctx context.Context, threadID string) (MergeDraft, 
 	}
 	for _, k := range t.Links {
 		if k.Kind == db.LinkPR && k.State == db.LinkStateOpen && k.Head == t.Branch {
-			if links := m.linksOrNil(); links != nil {
+			// The description is not recorded, so GitHub is asked, unless its budget is spent.
+			if links := m.linksOrNil(); links != nil && links.pausedUntil().IsZero() {
 				if repo, err := repoOfLink(&k); err == nil {
 					if _, it, err := links.read(ctx, repo, k.Number); err == nil && it.IsPR {
 						return MergeDraft{Number: k.Number, Source: "pr", Title: it.Title, Body: strings.TrimSpace(it.Body)}, nil
@@ -237,22 +237,21 @@ func (m *Threads) MergeDraft(ctx context.Context, threadID string) (MergeDraft, 
 // way `gh pr create --fill` does: one commit gives its subject and body; several
 // give the branch name, spelled out, and a list of their subjects.
 func fillPR(ctx context.Context, t *db.Thread) (title, body, source string) {
+	if t.BaseBranch == "" {
+		return t.Title, "", "commits"
+	}
 	var subjects, bodies []string
+	// The base may only be on origin (a checkout that never made it locally).
 	for _, ref := range []string{t.BaseBranch, "origin/" + t.BaseBranch} {
-		if t.BaseBranch == "" {
-			break
-		}
 		out, err := git(ctx, t.Cwd, "log", "--reverse", "--format=%s%x1f%b%x1e", ref+"..refs/heads/"+t.Branch)
 		if err != nil {
 			continue
 		}
 		for _, rec := range strings.Split(out, "\x1e") {
-			rec = strings.Trim(rec, "\n")
-			if rec == "" {
-				continue
+			if rec = strings.Trim(rec, "\n"); rec != "" {
+				s, b, _ := strings.Cut(rec, "\x1f")
+				subjects, bodies = append(subjects, strings.TrimSpace(s)), append(bodies, strings.TrimSpace(b))
 			}
-			s, b, _ := strings.Cut(rec, "\x1f")
-			subjects, bodies = append(subjects, strings.TrimSpace(s)), append(bodies, strings.TrimSpace(b))
 		}
 		break
 	}

@@ -111,10 +111,4 @@ describe('ThreadPrsCard', () => {
         render(<ThreadPrsCard thread={thread([link({})], { commits_ahead: 2, files_changed: 3 })} />);
         expect(screen.queryByRole('button', { name: 'thread.mergeIt' })).not.toBeInTheDocument();
     });
-
-    it('says a thread without PR links was merged when it was', () => {
-        render(<ThreadPrsCard thread={thread([], { merged_at: now, commits_ahead: 2 })} />);
-        expect(screen.getByText('thread.mergedInto')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'thread.mergeIt' })).not.toBeInTheDocument();
-    });
 });

@@ -331,7 +331,11 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 		title = strings.TrimSpace(title)
 	}
 	if title == "" {
-		title, body, _ = fillPR(ctx, t)
+		var filled string
+		title, filled, _ = fillPR(ctx, t)
+		if strings.TrimSpace(body) == "" {
+			body = filled
+		}
 	}
 	r, err := l.createPR(ctx, t, title, body, "", "", false, false)
 	if err != nil {

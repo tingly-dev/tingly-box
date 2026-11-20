@@ -6,7 +6,7 @@ import type { Thread, ThreadLink } from '../../client';
 import { timeAgo } from '../../utils/format';
 import { DiffIcon, Merge } from '../icons';
 import { RailCard } from './infoRail';
-import { MergeDialog } from './MergeDialog';
+import { MergeDialog, openMergeRequest } from './MergeDialog';
 import { canShowFiles, PrDiffDialog } from './PrDiffDialog';
 import { colorOf, linkParts, LinkIcon } from './linkView';
 import { peekRowSx, useLinkPeek } from './useLinkPeek';
@@ -88,10 +88,8 @@ export function ThreadPrsCard({ thread }: { thread: Thread }) {
     const prs = (thread.links ?? []).filter((l) => l.kind === 'pr');
     const [showing, setShowing] = useState<ThreadLink | null>(null);
     const [merging, setMerging] = useState(false);
-    const hasOpenPr = prs.some((l) => l.state === 'open' && l.head === thread.branch);
-    const canOpen = !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at && !hasOpenPr;
-    const mergedWithoutPr = !!thread.merged_at && prs.length === 0;
-    if (prs.length === 0 && !canOpen && !mergedWithoutPr) return null;
+    const canOpen = !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at && !openMergeRequest(thread);
+    if (prs.length === 0 && !canOpen) return null;
     return (
         <RailCard id="prs" title={t('links.prs')} aside={prs.length > 0 ? String(prs.length) : undefined}>
             <Box sx={{ mx: -0.25 }}>
@@ -107,7 +105,6 @@ export function ThreadPrsCard({ thread }: { thread: Thread }) {
                     <MergeDialog thread={thread} open={merging} onClose={() => setMerging(false)} onMerged={() => setMerging(false)} />
                 </Box>
             )}
-            {mergedWithoutPr && <Typography sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{t('thread.mergedInto', { base: thread.base_branch })}</Typography>}
             {showing && <PrDiffDialog thread={thread} link={showing} open onClose={() => setShowing(null)} />}
         </RailCard>
     );
