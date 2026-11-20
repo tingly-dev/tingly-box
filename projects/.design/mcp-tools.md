@@ -26,7 +26,7 @@ Tools today: one table. The coordinator's 13 tools are `Coordinator.coordinatorT
 
 Gates every coordinator call passes (`coordinatorToolTurn.run`): schema validation, an active turn, project not paused or archived, project settings unchanged since the turn began, `no_update` refused on a user-triggered turn. Trust: text from others is wrapped in `envelope(trustRelay, …)`; `message_thread` takes `cite` (ids of the user's own messages) checked by `quoteUser`.
 
-Actions only the web UI or HTTP can do (a selection, with the method they end in): stop (`Threads.Stop`), retry (`Retry`), reopen (`Reopen`), permission mode / model / effort / auto-answer (`sessions.go:166`, `launch.go`), diff (`Diff`), merge (`Merge`, `threads.go:1340`), project settings such as the concurrency limit (inline in `project/handler.go:448`, no service method), library delete (`Layout.RemoveLibraryFile`), channel bindings, usage. Not in Projects at all: push and PR. Most thread actions are already clean `Threads` methods; the project `PATCH` handler is the exception.
+Actions only the web UI or HTTP can do (a selection, with the method they end in): stop (`Threads.Stop`), retry (`Retry`), reopen (`Reopen`), permission mode / model / effort / auto-answer (`sessions.go:166`, `launch.go`), a PR's diff (`PRDiff`), merge (`Merge`, `threads.go:1340`), project settings such as the concurrency limit (inline in `project/handler.go:448`, no service method), library delete (`Layout.RemoveLibraryFile`), channel bindings, usage. Not in Projects at all: push and PR. Most thread actions are already clean `Threads` methods; the project `PATCH` handler is the exception.
 
 ## The thread lifecycle, and why stop + reopen come before the other thread tools
 

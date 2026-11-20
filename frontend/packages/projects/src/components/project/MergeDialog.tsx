@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Dialog, DialogActions, DialogContent, TextField, Typography, Box } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, Skeleton, TextField, Typography, Box } from '@mui/material';
 import { DialogHeader } from '@tingly/ui';
 import { useTranslation } from 'react-i18next';
-import { api, unwrap, type Thread } from '../../client';
+import { api, unwrap, type MergeDraft, type Thread } from '../../client';
 import { useNotify } from '../../hooks/useNotify';
 import { readLocal, writeLocal } from '../../utils/storage';
 import { Merge, PullRequest } from '../icons';
@@ -24,30 +24,47 @@ export function openMergeRequest(thread: Thread) {
     return (thread.links ?? []).find((l) => l.kind === 'pr' && l.state === 'open' && l.head === thread.branch);
 }
 
+/** The squash commit's words, as `gh pr merge` takes them: the PR's title and its number, and its description. */
+export const squashTitle = (title: string, number: number) => `${title} (#${number})`;
+
 /**
- * How a thread's branch is merged: squashed into its base in the checkout, or
+ * How a thread's branch is merged: squashed into its base on GitHub, or
  * offered as a PR from the pushed branch. Exactly these two, the last pick
- * remembered per project.
+ * remembered per project. The words start from the PR's own (read from GitHub
+ * now) or, before there is a PR, from the branch's commits, the way
+ * `gh pr create --fill` takes them; every field can be edited.
  */
 export function MergeDialog({ thread, open, onClose, onMerged }: { thread: Thread; open: boolean; onClose: () => void; onMerged: () => void }) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const [method, setMethod] = useState<MergeMethod>('squash');
-    const [message, setMessage] = useState('');
+    const [draft, setDraft] = useState<MergeDraft | null>(null);
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const existing = openMergeRequest(thread);
+    // With an open PR a squash words the commit; without one the fields word the PR it will open (and so the commit).
+    const wordsCommit = method === 'squash' && !!draft?.number;
 
     useEffect(() => {
         if (!open) return;
         setMethod(rememberedMethod(thread.project_id));
-        setMessage(thread.title);
-        setTitle(thread.title);
-        setBody(thread.last_report ?? '');
         setError(null);
-    }, [open, thread.project_id, thread.title, thread.last_report]);
+        setDraft(null);
+        let live = true;
+        unwrap(api.GET('/api/v1/threads/{id}/merge/draft', { params: { path: { id: thread.id } } }))
+            .then((d) => { if (live) setDraft(d); })
+            // A draft that cannot be read must not block the merge: the thread's own title starts it.
+            .catch(() => { if (live) setDraft({ number: 0, source: 'commits', title: thread.title, body: '' }); });
+        return () => { live = false; };
+    }, [open, thread.id, thread.project_id, thread.title]);
+
+    useEffect(() => {
+        if (!draft) return;
+        setTitle(wordsCommit ? squashTitle(draft.title, draft.number) : draft.title);
+        setBody(draft.body);
+    }, [draft, wordsCommit]);
 
     const choices: Choice[] = [
         { key: 'squash', lead: <Merge sx={{ fontSize: 22, color: 'text.secondary' }} />, title: t('thread.merge.squash'), subtitle: t('thread.merge.squashHint', { base: thread.base_branch }) },
@@ -58,7 +75,8 @@ export function MergeDialog({ thread, open, onClose, onMerged }: { thread: Threa
         setBusy(true);
         setError(null);
         try {
-            const req = method === 'squash' ? { method, message } : { method, title, body };
+            const message = body.trim() ? `${title.trim()}\n\n${body.trim()}` : title.trim();
+            const req = wordsCommit ? { method, message } : method === 'squash' || !existing ? { method, title, body } : { method };
             await unwrap(api.POST('/api/v1/threads/{id}/merge', { params: { path: { id: thread.id } }, body: req }));
             writeLocal(methodKey(thread.project_id), method);
             notify(method === 'squash'
@@ -72,24 +90,24 @@ export function MergeDialog({ thread, open, onClose, onMerged }: { thread: Threa
         }
     };
 
-    const canSubmit = method === 'squash' ? message.trim() !== '' : !!existing || title.trim() !== '';
+    const fields = method === 'squash' || !existing;
+    const canSubmit = !!draft && (!fields || title.trim() !== '');
     return (
         <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth aria-labelledby="merge-title">
             <DialogHeader titleId="merge-title" title={t('thread.merge.title')} closeLabel={t('common.close')} onClose={onClose} closeDisabled={busy} />
             <DialogContent sx={{ pt: 0.5 }}>
                 <ChoiceList items={choices} value={method} onChange={(k) => setMethod(k as MergeMethod)} label={t('thread.merge.title')} />
                 <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {method === 'squash' && (
-                        <TextField label={t('thread.merge.message')} value={message} onChange={(e) => setMessage(e.target.value)} multiline minRows={2} maxRows={8} fullWidth size="small" />
+                    {!draft && <Skeleton variant="rounded" height={120} />}
+                    {draft && fields && (
+                        <>
+                            <TextField label={t(wordsCommit ? 'thread.merge.commitTitle' : 'thread.merge.prTitle')} value={title} onChange={(e) => setTitle(e.target.value)} fullWidth size="small" />
+                            <TextField label={t(wordsCommit ? 'thread.merge.commitBody' : 'thread.merge.prBody')} value={body} onChange={(e) => setBody(e.target.value)} multiline minRows={3} maxRows={8} fullWidth size="small" />
+                            <Typography variant="caption" color="text.secondary">{t(`thread.merge.from.${draft.source}`, { number: draft.number })}</Typography>
+                        </>
                     )}
                     {method === 'merge_request' && existing && (
                         <Alert severity="info">{t('thread.merge.mrExisting', { number: existing.number })}</Alert>
-                    )}
-                    {method === 'merge_request' && !existing && (
-                        <>
-                            <TextField label={t('thread.merge.prTitle')} value={title} onChange={(e) => setTitle(e.target.value)} fullWidth size="small" />
-                            <TextField label={t('thread.merge.prBody')} value={body} onChange={(e) => setBody(e.target.value)} multiline minRows={3} maxRows={8} fullWidth size="small" />
-                        </>
                     )}
                     <Typography variant="caption" color="text.secondary">
                         {t(method === 'squash' ? 'thread.merge.squashNote' : 'thread.merge.mrNote', { branch: thread.branch, base: thread.base_branch })}

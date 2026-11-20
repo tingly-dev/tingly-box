@@ -13,10 +13,9 @@ import { HeldMessages, heldMessages } from './HeldMessages';
 import { AttachmentChips, AttachmentGallery, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, DiffIcon, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
+import { ArrowBack, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens } from '../../utils/format';
-import { DiffDialog } from './DiffDialog';
 import { ComposerStrip } from './ComposerStrip';
 import { ThreadInfoRail } from './ThreadInfoRail';
 import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
@@ -112,7 +111,6 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
 export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
-    const [diffOpen, setDiffOpen] = useState(false);
     // Where the rail does not fit beside the conversation (a thread in a narrow pane), the Details button swaps the conversation for the same cards in place.
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
@@ -402,7 +400,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     if (!thread) {
         return <Box sx={{ p: 2 }}><Skeleton height={40} /><Skeleton variant="rounded" height={200} /></Box>;
     }
-    const canReview = !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at;
     // Only show the model reported by the last turn. The legacy model field
     // can hold a configured launch value when no model was reported.
     const observedModel = thread.reported_model;
@@ -422,13 +419,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
                         : <ThreadTitle title={thread.title} onSave={saveTitle} />}
-                    {canReview && (
-                        <Tooltip title={t('thread.review')}>
-                            <IconButton size="small" aria-label={t('thread.review')} onClick={() => setDiffOpen(true)} sx={{ flexShrink: 0 }}>
-                                <DiffIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
                     {/* While work runs in the background it names itself. */}
                     {liveTasks.length > 0 && !rail && (
                         <Tooltip title={t('session.backgroundTasks')}>
@@ -534,8 +524,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         thread={thread}
                         folder={session}
                         tasks={tasks}
-                        canReview={canReview}
-                        onReview={() => { setDetailsOpen(false); setDiffOpen(true); }}
                         onChanged={() => onRefresh?.()}
                         onReveal={(call) => { setDetailsOpen(false); void openInChat({ call }); }}
                         subagents={subagents}
@@ -652,7 +640,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {belowComposer}
                 </Box>
             </Box>
-            <DiffDialog thread={thread} open={diffOpen} onClose={() => setDiffOpen(false)} />
             {hasTasks && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
@@ -705,8 +692,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 thread={thread}
                 folder={session}
                 tasks={tasks}
-                canReview={canReview}
-                onReview={() => setDiffOpen(true)}
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
                 subagents={subagents}
