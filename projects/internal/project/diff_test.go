@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -168,4 +169,19 @@ func TestBranchDiffListsAtMostMaxFiles(t *testing.T) {
 	assert.Len(t, d.Files, 3)
 	assert.Equal(t, 5, d.FilesOmitted)
 	assert.Equal(t, 30000+1+1+10+1+1, d.Additions, "the totals still cover every file")
+}
+
+// The review dialog reads files.length, so a branch with no changes lists
+// [] and not null.
+func TestBranchDiffOfAnUnchangedBranchListsNoFilesAsAnEmptyList(t *testing.T) {
+	dir := diffRepo(t)
+	run(t, dir, "git", "checkout", "-q", "main")
+	run(t, dir, "git", "checkout", "-qb", "same")
+	d, err := BranchDiff(context.Background(), dir, "main", "same")
+	require.NoError(t, err)
+	assert.NotNil(t, d.Files)
+	assert.Empty(t, d.Files)
+	b, err := json.Marshal(d)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"files":[]`)
 }

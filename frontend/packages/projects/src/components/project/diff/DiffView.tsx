@@ -28,7 +28,7 @@ const KEEP_PATCHES = 6;
  * behind a button. */
 export function DiffView({ threadId, diff }: { threadId: string; diff: Diff }) {
     const { t } = useTranslation('projects');
-    const files = diff.files;
+    const files = diff.files ?? [];
     const [query, setQuery] = useState('');
     const [hideGenerated, setHideGenerated] = useState(false);
     const [unviewedOnly, setUnviewedOnly] = useState(false);

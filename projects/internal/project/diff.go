@@ -96,7 +96,7 @@ func BranchDiff(ctx context.Context, worktree, base, branch string) (Diff, error
 // then the numstat ones ("add\tdel\tpath", or "add\tdel\t" then the two paths).
 func parseDiffSummary(out string) []DiffFile {
 	toks := strings.Split(out, "\x00")
-	var files []DiffFile
+	files := []DiffFile{}
 	byPath := map[string]int{}
 	i := 0
 	for ; i < len(toks) && strings.HasPrefix(toks[i], ":"); i++ {

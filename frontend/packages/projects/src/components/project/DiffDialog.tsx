@@ -44,7 +44,7 @@ export function DiffDialog({ thread, open, onClose }: { thread: Thread; open: bo
             <DialogActions sx={{ px: 3, py: 1.5 }}>
                 <Box sx={{ flex: 1 }} />
                 <Button onClick={onClose} color="inherit">{t('common.close')}</Button>
-                <Button variant="contained" startIcon={<Merge />} disabled={!diff || !diff.files.length} onClick={() => setMerging(true)}>{t('thread.mergeIt')}</Button>
+                <Button variant="contained" startIcon={<Merge />} disabled={!diff || !(diff.files ?? []).length} onClick={() => setMerging(true)}>{t('thread.mergeIt')}</Button>
             </DialogActions>
             <MergeDialog thread={thread} open={merging} onClose={() => setMerging(false)} onMerged={() => { setMerging(false); onClose(); }} />
         </Dialog>
