@@ -350,6 +350,16 @@ func (s *Store) Lineage(id string) ([]Thread, error) {
 // AddThreadEvent appends to a thread's transcript.
 func (s *Store) AddThreadEvent(e *ThreadEvent) error {
 	e.ID = newID()
+	return s.AddThreadEventAs(e)
+}
+
+// NewEventID is an id for an event whose text must name it before it is saved
+// (AddThreadEventAs).
+func (s *Store) NewEventID() string { return newID() }
+
+// AddThreadEventAs is AddThreadEvent for an event that already has its id
+// from NewEventID.
+func (s *Store) AddThreadEventAs(e *ThreadEvent) error {
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now()
 	}

@@ -107,7 +107,7 @@ describe('Composer send options', () => {
         fireEvent.mouseDown(trigger);
         fireEvent.click(trigger);
         await waitFor(() => expect(tip()).not.toBeInTheDocument());
-        expect(screen.getByText('composer.sendQueue')).toBeVisible();
+        expect(screen.getByText('composer.sendNextTurnLabel')).toBeVisible();
 
         fireEvent.mouseOver(trigger);
         await stillHidden();

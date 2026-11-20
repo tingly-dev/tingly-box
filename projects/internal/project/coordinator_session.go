@@ -32,6 +32,10 @@ type coordinatorSessions struct {
 	// resend holds the projects whose conversation was compacted: their next
 	// turn gets the project context again, in case the summary dropped it.
 	resend map[string]bool
+	// answerOutsideRun holds the sessions that were sent a message mid-turn.
+	// If the turn ended before Claude Code read it, it answers in a turn of
+	// its own, with no run registered: that answer is kept instead of dropped.
+	answerOutsideRun map[string]bool
 }
 
 // errStopTurn says the user stopped the turn on purpose: unlike a failure or
@@ -150,7 +154,15 @@ func (s coordinatorSessionStore) Append(id string, entry engine.Entry) {
 func (s coordinatorSessionStore) appendAssistant(id string, entry engine.Entry) {
 	s.sessions.mu.Lock()
 	defer s.sessions.mu.Unlock()
-	if run := s.sessions.runs[id]; run != nil {
+	if run := s.sessions.runs[id]; run == nil {
+		// A turn Claude Code started by itself, to answer a message inserted
+		// into the turn that ended before reading it: the user is waiting for
+		// this reply.
+		if main, err := s.sessions.c.store.MainThreadBySession(id); err == nil && s.sessions.answerOutsideRun[id] &&
+			!strings.HasPrefix(strings.TrimSpace(entry.Content), noUpdate) {
+			s.sessions.c.final(s.sessions.c.addEvent(main.ProjectID, &db.ThreadEvent{Kind: db.EvAssistant, Content: entry.Content}))
+		}
+	} else {
 		run.text = append(run.text, entry.Content)
 		if run.userTriggered && !strings.HasPrefix(strings.TrimSpace(entry.Content), noUpdate) {
 			if run.live == nil {
@@ -163,7 +175,7 @@ func (s coordinatorSessionStore) appendAssistant(id string, entry engine.Entry) 
 }
 
 func newCoordinatorSessions(c *Coordinator, host Host, tools *sessionToolsMCP, agents Agents) *coordinatorSessions {
-	s := &coordinatorSessions{c: c, host: host, tools: tools, runs: make(map[string]*coordinatorSessionRun), stopReq: map[string]bool{}, resend: map[string]bool{}}
+	s := &coordinatorSessions{c: c, host: host, tools: tools, runs: make(map[string]*coordinatorSessionRun), stopReq: map[string]bool{}, resend: map[string]bool{}, answerOutsideRun: map[string]bool{}}
 	coordPool := agents.CoordinatorPool
 	if coordPool == nil {
 		coordPool = agents.Pool
@@ -388,6 +400,9 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	delete(s.answerOutsideRun, main.SessionID)
+	s.mu.Unlock()
 	run := &coordinatorSessionRun{end: make(chan engine.TurnEnd, 1), threadID: main.ID, projectID: p.ID, userTriggered: user}
 	s.mu.Lock()
 	s.runs[main.SessionID] = run

@@ -39,11 +39,25 @@ func (m *Threads) republish(threadID string) {
 	}
 }
 
-// Annotate fills in each thread's RunningTasks from the live processes.
+// AnnotateOne is Annotate for a single thread.
+func (m *Threads) AnnotateOne(t *db.Thread) {
+	t.RunningTasks = m.RunningTasks(t.ID)
+	t.Insertable = m.insertable(t.ID)
+}
+
+// insertable reports whether a message sent to the thread now would join its
+// running turn.
+func (m *Threads) insertable(threadID string) bool {
+	return m.engine != nil && m.engine.Injectable(m.sessionOf(threadID))
+}
+
+// Annotate fills in each thread's RunningTasks and Insertable from the live
+// processes.
 // Everything that sends threads out (the API, events, the coordinator's
 // view) goes through it, so a count means the same everywhere.
 func (m *Threads) Annotate(ts []db.Thread) {
 	for i := range ts {
+		ts[i].Insertable = m.insertable(ts[i].ID)
 		if m.backgroundCount != nil {
 			ts[i].RunningTasks = m.backgroundCount(ts[i].ID)
 		} else {

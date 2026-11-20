@@ -105,6 +105,9 @@ func TestEngine_InjectJoinsTheRunningTurn(t *testing.T) {
 	if first := next(t, p.in); first["type"] != "user" {
 		t.Fatalf("first message = %v", first)
 	}
+	if !e.Injectable("id") {
+		t.Fatal("a running turn on a Claude process must be injectable")
+	}
 	if err := e.Inject("id", "also this"); err != nil {
 		t.Fatalf("Inject: %v", err)
 	}
@@ -120,6 +123,9 @@ func TestEngine_InjectJoinsTheRunningTurn(t *testing.T) {
 		t.Fatalf("started %d processes, want 1", len(p.factory.Starts()))
 	}
 	// Nothing runs now: there is no turn to join.
+	if e.Injectable("id") {
+		t.Fatal("no turn runs, so nothing is injectable")
+	}
 	if err := e.Inject("id", "late"); err == nil {
 		t.Fatal("Inject with no turn running must not succeed")
 	}

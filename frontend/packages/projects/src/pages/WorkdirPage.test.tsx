@@ -127,7 +127,7 @@ describe('WorkdirPage live transcript', () => {
         expect(input).toHaveValue('continue');
         await act(async () => finish({ data: { ...thread, permission_mode: 'plan' }, response: new Response() }));
         fireEvent.keyDown(input, { key: 'Enter', altKey: true });
-        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', { params: { path: { id: 't1' } }, body: { content: 'continue', attachments: [], mode: 'queue' } }));
+        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', { params: { path: { id: 't1' } }, body: { content: 'continue', attachments: [], mode: 'next_turn' } }));
     });
 
     // The real hub sends thread_event only on /projects/{id}/events; the

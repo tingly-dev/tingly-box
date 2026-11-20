@@ -267,13 +267,25 @@ func (e *Engine) Inject(id, prompt string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
 	defer cancel()
 	if err := res.c.Inject(ctx, prompt); err != nil {
-		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) {
+		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) || errors.Is(err, agentboot.ErrInjectUnsupported) {
 			return ErrNotInjectable
 		}
 		return err
 	}
 	e.store.Append(id, Entry{Role: "user", Content: prompt, Timestamp: time.Now()})
 	return nil
+}
+
+// Injectable reports whether a message sent to id now would join the turn in
+// flight: a turn is running on a live process whose agent reads input
+// mid-turn. False means Inject would refuse it with ErrNotInjectable, and the
+// message waits for the next turn.
+func (e *Engine) Injectable(id string) bool {
+	e.mu.Lock()
+	_, running := e.runs[id]
+	e.mu.Unlock()
+	res, ok := e.residentFor(id)
+	return running && ok && res.c.CanInject()
 }
 
 // Release closes id's resident process so something else (a terminal) can

@@ -125,7 +125,7 @@ func TestCompactRunsAsTheThreadsTurnAndLeavesOneCard(t *testing.T) {
 	before, err := f.store.GetThread(th.ID)
 	require.NoError(t, err)
 
-	_, err = svc.SendWith(context.Background(), th.ID, "/compact keep the API notes", nil, Source{}, SendNow)
+	_, err = svc.SendWith(context.Background(), th.ID, "/compact keep the API notes", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	waitQuiet(t, f, svc, th.ID)
 
@@ -167,7 +167,7 @@ func TestCompactIsNotReportedToTheCoordinator(t *testing.T) {
 	}
 	waitQuiet(t, f, svc, w.ID)
 
-	_, err = svc.SendWith(context.Background(), w.ID, "/compact", nil, Source{}, SendNow)
+	_, err = svc.SendWith(context.Background(), w.ID, "/compact", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	waitQuiet(t, f, svc, w.ID)
 	commandCard(t, f, w.ID)
@@ -297,7 +297,7 @@ func TestUnsupportedCommandsAreRefusedNotSent(t *testing.T) {
 	f, svc, _, th := commandFixture(t, ca)
 
 	for _, text := range []string{"/new", "/model opus", "/usage"} {
-		_, err := svc.SendWith(context.Background(), th.ID, text, nil, Source{}, SendNow)
+		_, err := svc.SendWith(context.Background(), th.ID, text, nil, Source{}, SendInsert)
 		var unsupported *ErrCommandUnsupported
 		require.ErrorAs(t, err, &unsupported, text)
 		_, err = svc.Send(context.Background(), th.ID, text, nil, Source{Kind: db.SourceIM, Platform: "telegram", ChatID: "fold"})
@@ -311,7 +311,7 @@ func TestTextThatOnlyStartsWithASlashIsSentAsText(t *testing.T) {
 	ca := &commandAgent{}
 	f, svc, _, th := commandFixture(t, ca)
 
-	_, err := svc.SendWith(context.Background(), th.ID, "/etc/hosts is broken", nil, Source{}, SendNow)
+	_, err := svc.SendWith(context.Background(), th.ID, "/etc/hosts is broken", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	waitQuiet(t, f, svc, th.ID)
 	assert.Equal(t, []string{"go", " /etc/hosts is broken"}, ca.sent(), "a leading space keeps the agent from reading a command")
@@ -339,11 +339,11 @@ func TestCompactWaitsForTheRunningTurn(t *testing.T) {
 	ca := &commandAgent{gate: make(chan struct{})}
 	f, svc, _, th := commandFixture(t, ca)
 
-	_, err := svc.SendWith(context.Background(), th.ID, "work", nil, Source{}, SendNow)
+	_, err := svc.SendWith(context.Background(), th.ID, "work", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { return len(ca.sent()) == 2 }, 5*time.Second, 5*time.Millisecond)
 
-	_, err = svc.SendWith(context.Background(), th.ID, "/compact", nil, Source{}, SendNow)
+	_, err = svc.SendWith(context.Background(), th.ID, "/compact", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	chips := eventsOf(t, f, th.ID, db.EvQueued)
 	require.Len(t, chips, 1, "while a turn runs the command waits as a chip, it is never injected into the turn")

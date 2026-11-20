@@ -557,7 +557,7 @@ export default function ProjectPage() {
                         )}
                         onOpenThread={openThread}
                         onOpenTasks={openTasksList}
-                        onSend={async (text, attachments) => {
+                        onSend={async (text, attachments, mode) => {
                             if (projectSaving.current) return false;
                             try {
                                 if (!(text.trim() === '/clear' && attachments.length === 0) && readLocal('worktreeNoticeSeen') !== '1' && project && primary?.kind === 'git') {
@@ -574,7 +574,7 @@ export default function ProjectPage() {
                                     }
                                     writeLocal('worktreeNoticeSeen', '1');
                                 }
-                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path) } }));
+                                await unwrap(api.POST('/api/v1/threads/{id}/messages', { params: { path: { id: mainThreadId } }, body: { content: text, attachments: attachments.map((a) => a.path), mode } }));
                                 // /clear rotates the session synchronously, without a coordinator turn.
                                 if (text.trim() !== '/clear' || attachments.length > 0) setBusy(true);
                                 // The message shows at once; the reply streams in over the event stream.

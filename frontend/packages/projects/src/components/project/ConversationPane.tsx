@@ -6,6 +6,7 @@ import type { Attachment, Thread, ThreadEvent } from '../../client';
 import { ImSourceBadge } from '../im/ImSourceBadge';
 import { AttachmentChips, AttachmentGallery, uploadAttachments } from '../attachments';
 import { ThreadComposer } from '../ThreadComposer';
+import type { SendMode } from '../Composer';
 import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
@@ -256,7 +257,8 @@ interface Props {
     busy: boolean;
     disabled: boolean;
     disabledReason?: React.ReactNode;
-    onSend: (text: string, attachments: Attachment[]) => Promise<boolean>;
+    /** mode is only set when the user chose one: the default inserts into the coordinator's running turn. */
+    onSend: (text: string, attachments: Attachment[], mode?: SendMode) => Promise<boolean>;
     /** The conversation's own thread: its draft is kept under this id. */
     threadId: string;
     /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
@@ -425,9 +427,10 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     modelSource="projects"
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
-                    onSend={async (text, attachments) => {
+                    sendModes
+                    onSend={async (text, attachments, mode) => {
                         stick.current = true;
-                        return onSend(text, attachments);
+                        return mode ? onSend(text, attachments, mode) : onSend(text, attachments);
                     }}
                 />
                 </Box>

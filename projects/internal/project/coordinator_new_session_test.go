@@ -27,7 +27,7 @@ func TestCoordinatorClearStartsFreshSessionAndKeepsTheConversation(t *testing.T)
 	eventsBefore, err := f.store.ListThreadEvents(before.ID)
 	require.NoError(t, err)
 
-	got, err := svc.SendWith(context.Background(), before.ID, "/clear", nil, Source{}, SendNow)
+	got, err := svc.SendWith(context.Background(), before.ID, "/clear", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	require.NotEqual(t, before.SessionID, got.SessionID)
 	require.Zero(t, got.Turns)
@@ -87,7 +87,7 @@ func TestCoordinatorClearIsRefusedWhileItWorks(t *testing.T) {
 	require.NoError(t, err)
 	events, err := f.store.ListThreadEvents(before.ID)
 	require.NoError(t, err)
-	for _, mode := range []SendMode{SendNow, SendQueue, SendStopAndSend} {
+	for _, mode := range []SendMode{SendInsert, SendNextTurn} {
 		_, err := svc.SendWith(context.Background(), before.ID, "/clear", nil, Source{}, mode)
 		require.ErrorIs(t, err, ErrBusy)
 		require.ErrorContains(t, err, "cannot start a new session")
@@ -101,7 +101,7 @@ func TestCoordinatorClearIsRefusedWhileItWorks(t *testing.T) {
 
 	close(release)
 	require.Eventually(t, settled(f, svc, 2, &seen), 5*time.Second, 10*time.Millisecond)
-	_, err = svc.SendWith(context.Background(), before.ID, "/clear", nil, Source{}, SendNow)
+	_, err = svc.SendWith(context.Background(), before.ID, "/clear", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 }
 
@@ -109,7 +109,7 @@ func TestCoordinatorClearRefusesArgumentsAndAnInterruptedInput(t *testing.T) {
 	var seen prompts
 	f, svc := newServiceFixture(t, testHost{}, nil, func(c *coordtest.Turn) error { seen.add(c); c.Reply("answer"); return nil })
 	main := f.project.MainThreadID
-	_, err := svc.SendWith(context.Background(), main, "/clear now", nil, Source{}, SendNow)
+	_, err := svc.SendWith(context.Background(), main, "/clear now", nil, Source{}, SendInsert)
 	require.ErrorContains(t, err, "does not take arguments")
 	require.Empty(t, seen.all())
 
@@ -118,7 +118,7 @@ func TestCoordinatorClearRefusesArgumentsAndAnInterruptedInput(t *testing.T) {
 	input, err := f.store.ClaimCoordinatorInput(f.project.ID)
 	require.NoError(t, err)
 	require.NoError(t, f.store.FinishCoordinatorInput(input.ID, false))
-	_, err = svc.SendWith(context.Background(), main, "/clear", nil, Source{}, SendNow)
+	_, err = svc.SendWith(context.Background(), main, "/clear", nil, Source{}, SendInsert)
 	require.ErrorIs(t, err, ErrBusy)
 	require.ErrorContains(t, err, "recovery")
 }
@@ -126,6 +126,6 @@ func TestCoordinatorClearRefusesArgumentsAndAnInterruptedInput(t *testing.T) {
 func TestCoordinatorClearFollowsTheProjectState(t *testing.T) {
 	f, svc := newServiceFixture(t, testHost{}, nil, nil)
 	require.NoError(t, svc.SetPaused(f.project, true))
-	_, err := svc.SendWith(context.Background(), f.project.MainThreadID, "/clear", nil, Source{}, SendNow)
+	_, err := svc.SendWith(context.Background(), f.project.MainThreadID, "/clear", nil, Source{}, SendInsert)
 	require.ErrorIs(t, err, ErrPaused)
 }

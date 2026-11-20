@@ -4,34 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"time"
 
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
 // SendMode is how a user's message meets a turn that is already running
 // (.design/agentboot-live-control.md §3). With no turn running every mode is
-// a plain send.
+// a plain send. Interrupting a turn is not a way of sending: it is Stop.
 type SendMode string
 
 const (
-	// SendNow is the default, as in Claude Code: the message joins the running
-	// turn and is read at Claude's next step, or runs as the next turn if the
-	// turn ends first. If it cannot join, it is held like SendQueue.
-	SendNow SendMode = "send"
-	// SendQueue holds the message until the turn ends; until then it is a
+	// SendInsert is the default: the message joins the running turn and the
+	// model reads it at its next step (the next model request, after the
+	// running tool call returns), or it runs as the next turn if the turn
+	// ends first. If the turn cannot take it (the agent reads no input
+	// mid-turn, or the turn is still waiting for a project slot), it is held
+	// like SendNextTurn.
+	SendInsert SendMode = "insert"
+	// SendNextTurn holds the message until the turn ends; until then it is a
 	// chip the user can take back.
-	SendQueue SendMode = "queue"
-	// SendStopAndSend interrupts the turn and sends the message after it.
-	SendStopAndSend SendMode = "stop_and_send"
+	SendNextTurn SendMode = "next_turn"
 )
 
-// Valid reports whether m is a known mode; the empty mode means SendNow.
+// Valid reports whether m is a known mode; the empty mode means SendInsert.
 func (m SendMode) Valid() bool {
 	switch m {
-	case "", SendNow, SendQueue, SendStopAndSend:
+	case "", SendInsert, SendNextTurn:
 		return true
 	}
 	return false
@@ -46,22 +45,11 @@ func (m *Threads) SendWith(ctx context.Context, threadID, text string, atts []At
 		return nil, err
 	}
 	q := queued{text: text, src: src, atts: atts}
-	switch mode {
-	case SendQueue:
+	if mode == SendNextTurn {
 		q.held = true
-	case SendStopAndSend:
-		if done := m.stop(threadID, Source{}); done != nil {
-			select {
-			case <-done:
-			case <-time.After(agentboot.SessionCloseTimeout):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	default:
-		if m.inject(threadID, q) {
-			return m.store.GetThread(threadID)
-		}
+	} else if m.inject(threadID, q) {
+		return m.store.GetThread(threadID)
+	} else {
 		q.held = true
 	}
 	m.enqueue(threadID, q)
@@ -80,9 +68,15 @@ func (m *Threads) inject(threadID string, q queued) bool {
 		return false
 	}
 	prompt := m.threadPrompt(q, p, t)
-	if err := m.engine.Inject(m.sessionOf(threadID), prompt); err != nil {
-		if !errors.Is(err, engine.ErrNotInjectable) {
+	sid := m.sessionOf(threadID)
+	if err := m.engine.Inject(sid, prompt); err != nil {
+		switch {
+		case !errors.Is(err, engine.ErrNotInjectable):
 			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "could not add the message to the running turn: " + err.Error()})
+		case m.engine.Busy(sid) && !m.engine.Injectable(sid):
+			// A turn runs but its agent reads nothing while it works: say so,
+			// instead of leaving the user to wonder why it was not read yet.
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "this agent cannot take a message while it works; it will read yours after the current turn"})
 		}
 		return false
 	}
