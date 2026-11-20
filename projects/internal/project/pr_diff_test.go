@@ -39,8 +39,23 @@ func TestPRDiffOfAFinishedOrUnknownPRIsRefused(t *testing.T) {
 	}
 }
 
-func TestPRDiffOfABranchNotHereComesFromGitHubOnce(t *testing.T) {
+// With GitHub's read switched off (the default), a PR whose branches are not
+// here says so and GitHub is not asked.
+func TestPRDiffOfABranchNotHereIsRefusedWithoutAskingGitHub(t *testing.T) {
 	f, th, gh, _ := mergeFixture(t)
+	require.NoError(t, f.store.UpdateThreadLinks(th.ID, func(l []db.ThreadLink) []db.ThreadLink {
+		return append(l, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: 12, State: db.LinkStateOpen, Head: "someone-elses", Base: "main", Role: db.LinkOpened})
+	}))
+	_, err := f.threads.PRDiff(context.Background(), th.ID, 12)
+	assert.ErrorIs(t, err, errNoLocalRefs)
+	_, err = f.threads.PRDiffFile(context.Background(), th.ID, 12, "a.go", "")
+	assert.ErrorIs(t, err, errNoLocalRefs)
+	assert.Empty(t, gh.called(), "GitHub is not asked")
+}
+
+func TestPRDiffOfABranchNotHereComesFromGitHubOnceWhenSwitchedOn(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	f.threads.remoteDiff = true
 	gh.prFiles = map[int][]GitHubFile{12: {
 		{Path: "a.go", Status: "modified", Additions: 1, Deletions: 1, Patch: "@@ -1 +1 @@\n-a\n+b"},
 		{Path: "b.go", Status: "added", Additions: 1, Patch: "@@ -0,0 +1 @@\n+c"},

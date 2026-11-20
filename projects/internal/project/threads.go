@@ -97,6 +97,11 @@ const (
 // what makes it a thread: its queue, the per-project limit, approvals in the
 // thread view, and the report to the coordinator after each turn.
 type Threads struct {
+	// remoteDiff lets a PR's diff be read from GitHub when its branches are not in
+	// the checkout. Off: that read costs requests and a token, so for now such a PR
+	// says so and links to GitHub (see "A PR's diff" in github-tools.md).
+	remoteDiff bool
+
 	// links opens a thread's merge request; it is read when needed because the
 	// service may swap its GitHub.
 	links  func() *Links

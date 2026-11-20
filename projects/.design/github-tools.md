@@ -206,7 +206,7 @@ The sweep keeps open items fresh; a person looking at a row can also ask. This a
 
 The thread's own "branch against base" diff is gone; a diff is always one PR's, head against base (`GET /threads/:id/prs/:number/diff`, and `/diff/file?path=` for one patch). The server finds the branches from the thread's link record (`head`/`base` as GitHub last said); the client never names a ref. Only a PR of the thread that is **open** has one: a merged or closed PR has nothing left to review, and a record that GitHub has not been read about yet has no branches to diff.
 
-**Local first, GitHub as the fallback.**
+**Local only for now; GitHub's list is built but switched off.**
 
 | | local `git diff base...head` | GitHub `pulls/N/files` |
 | --- | --- | --- |
@@ -215,7 +215,7 @@ The thread's own "branch against base" diff is gone; a diff is always one PR's, 
 | big PRs | per-file loading, 512 KiB patch cap, long lines shortened, lock and generated files folded | no `patch` on big files; capped at 3000 files |
 | gone | a deleted or never-fetched branch has no ref | still there while the PR is open |
 
-The rule: read `refs/remotes/origin/<head>` (else the local branch) against `refs/remotes/origin/<base>` (else the local base); when either side is in neither place (another machine pushed it, the branch was deleted), read GitHub's list of the PR's files, cached for two minutes so that opening one file after another asks once. The answer says which (`source: local | github`). On the local path:
+The rule: read `refs/remotes/origin/<head>` (else the local branch) against `refs/remotes/origin/<base>` (else the local base). When either side is in neither place (another machine pushed it, the branch was deleted) the answer is an error that says so, and the dialog's "Open on GitHub" is the way on. The GitHub read (`GitHub.PRFiles`, cached for two minutes so that opening one file after another asks once; the answer would say `source: github`) is implemented and tested but off: `Threads.remoteDiff` is false, because it costs requests, a token and rate budget. Turning it on is that one field (a project or server setting later, if it is wanted). On the local path:
 
 - origin's base is fetched first, briefly (5 s, no prompt, best effort), because a stale `origin/main` makes files other PRs changed on `main` show up; if the fetch fails the answer carries `base_stale`.
 - commits the local head holds beyond `origin/<head>` are not in the PR: `unpushed` says how many and the dialog says they are not shown, instead of quietly showing more than GitHub does.
