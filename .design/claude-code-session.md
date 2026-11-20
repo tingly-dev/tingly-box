@@ -499,6 +499,8 @@ agents only — each may spawn subagents of its own, so 10 is a conservative
 retention budget on top-level sessions, not a hard ceiling on total
 processes. Not yet a tunable setting (§6 P3).
 
+*Update (Projects).* `pool.Config.IdleTimeout` is the tunable; the pool applies no default (zero disables), and `pool.DefaultIdleTimeout` (65 min, just over the 1 h prompt-cache TTL) is what hosts that have no better number take. `Config.Hold(key)` lets the host veto closing an idle entry (idle sweep and capacity eviction alike) when something outside the session still needs it; it runs outside the pool's lock, and a held entry's idle clock restarts. Projects runs two pools (threads, coordinators) with their own timeouts and uses `Hold` so a coordinator is not closed while its project's threads work — see `projects/.design/coordinator-session.md` "进程生命周期".
+
 This should be **opt-in** (a bot/profile setting, not a global default) for
 at least the first shipped iteration — see §6 phasing and
 `.design/ux-principles.md` §5/§6 (smart defaults over toggles; but a change
