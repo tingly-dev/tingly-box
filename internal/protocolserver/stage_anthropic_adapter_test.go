@@ -194,6 +194,9 @@ func runStageAnthropic(t *testing.T, s scenario.Scenario, clientProtocol protoco
 	recorder := &closeNotifyRecorder{httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/tingly/anthropic/v1/messages", nil)
+	// The route puts the Anthropic error conventions in front of every
+	// handler; the adapter is mounted behind the same chain.
+	c.Writer = &anthropicErrorWriter{ResponseWriter: c.Writer}
 	ph := &ProtocolHandler{}
 	ph.ServeStageAnthropic(c, endpoint, StageAnthropicAttempt{
 		Client:        clientProtocol,

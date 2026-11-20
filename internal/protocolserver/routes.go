@@ -38,6 +38,12 @@ func (ph *ProtocolHandler) debugHeaderGuard(c *gin.Context) {
 // modelAuthChain builds the standard per-route handler prefix: modelAuth
 // itself, then debugHeaderGuard (which depends on modelAuth having already
 // set the auth-kind context key), then any route-specific middleware.
+// anthropicAuthChain is modelAuthChain for the Anthropic-protocol endpoints:
+// the error conventions wrap everything after them, including model auth.
+func (ph *ProtocolHandler) anthropicAuthChain(modelAuth gin.HandlerFunc, extra ...gin.HandlerFunc) []gin.HandlerFunc {
+	return append([]gin.HandlerFunc{anthropicErrorConventions}, ph.modelAuthChain(modelAuth, extra...)...)
+}
+
 func (ph *ProtocolHandler) modelAuthChain(modelAuth gin.HandlerFunc, extra ...gin.HandlerFunc) []gin.HandlerFunc {
 	chain := make([]gin.HandlerFunc, 0, 2+len(extra))
 	chain = append(chain, modelAuth, ph.debugHeaderGuard)
@@ -97,9 +103,9 @@ func (ph *ProtocolHandler) SetupMixinEndpoints(group *gin.RouterGroup, modelAuth
 	group.GET("/responses/:id", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationResponses), ph.HandleResponsesGet)...)
 
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleAnthropicMessages)...)
+	group.POST("/messages", ph.anthropicAuthChain(modelAuth, ph.teamScopeMiddleware, ph.HandleAnthropicMessages)...)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, ph.AnthropicCountTokens)...)
+	group.POST("/messages/count_tokens", ph.anthropicAuthChain(modelAuth, ph.teamScopeMiddleware, ph.AnthropicCountTokens)...)
 
 	// Embeddings endpoint (OpenAI compatible)
 	group.POST("/embeddings", ph.modelAuthChain(modelAuth, ph.teamScopeMiddleware, DeclareOperation(OperationEmbeddings), ph.HandleOpenAIEmbeddings)...)
@@ -143,9 +149,9 @@ func (ph *ProtocolHandler) SetupOpenAIEndpoints(group *gin.RouterGroup, modelAut
 // SetupAnthropicEndpoints registers the Anthropic-only endpoint set on group.
 func (ph *ProtocolHandler) SetupAnthropicEndpoints(group *gin.RouterGroup, modelAuth gin.HandlerFunc) {
 	// Chat completions endpoint (Anthropic compatible)
-	group.POST("/messages", ph.modelAuthChain(modelAuth, ph.HandleAnthropicMessages)...)
+	group.POST("/messages", ph.anthropicAuthChain(modelAuth, ph.HandleAnthropicMessages)...)
 	// Count tokens endpoint (Anthropic compatible)
-	group.POST("/messages/count_tokens", ph.modelAuthChain(modelAuth, ph.AnthropicCountTokens)...)
+	group.POST("/messages/count_tokens", ph.anthropicAuthChain(modelAuth, ph.AnthropicCountTokens)...)
 	// Models endpoint (Anthropic compatible)
-	group.GET("/models", ph.modelAuthChain(modelAuth, ph.HandleAnthropicListModels)...)
+	group.GET("/models", ph.anthropicAuthChain(modelAuth, ph.HandleAnthropicListModels)...)
 }

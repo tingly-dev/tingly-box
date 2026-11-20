@@ -663,3 +663,17 @@ Anthropic 自己的 gateway protocol 要求网关把未知 body 字段和 beta �
 实现：`typ.ExtractClaudeCodeBodyExtras` 在 `/v1/messages` 解码处从原始 body 取出白名单成员（`resumption`、`program_use_case_id`、`thread`、`cache_control`），经 `ClaudeCodeClientHints.BodyExtras` 带到 Claude OAuth 原生链路；`applyClaudeCodeBodyExtras`（`claude_betas.go`）按 `claudeCodeBodyExtraBetas` / `claudeCacheControlExtraBetas` 配对表补回。非 Claude OAuth 的上游不受影响（只在 `c.native` 的 `GuardBeta` 里应用）。
 **未覆盖**：嵌套在 `system[]` / `messages[].content[]` / `tools[]` 里的 `cache_control.scope`（直连专属，代理模式不会出现）；`data_flow` 等没有已知 beta 配对的成员；v1（非 beta）路径（Claude Code 一律走 `?beta=true`）。
 
+### B9.7 网关错误约定（TEP #2684 G4）
+
+Claude Code 内嵌的 gateway protocol 文档对网关的错误有两条硬约定：错误体用 Anthropic 信封 `{"type":"error","error":{"type","message"}}`；终态错误带 `x-should-retry: false`，否则 CC 对 401 会按退避重试约 3 分钟，对 501 再问一次才放弃。
+网关自己的错误（约 60 处 `ErrorResponse` + 鉴权中间件）原先是 `{"error":{...}}`，缺外层 `type`，也不带该头。
+
+处理点只有一个：`anthropicErrorConventions`（`internal/protocolserver/anthropic_errors.go`），挂在 Anthropic 协议端点（`/messages`、`/messages/count_tokens`，以及 Anthropic-only 分组的 `/models`）链首，位于模型鉴权**之前**，所以 401 也覆盖。它包装 `ResponseWriter`：
+
+- `status >= 400` 且是 JSON、含 `error` 对象、没有顶层 `type` 的单次写入 → 补 `"type":"error"`；已有 `type`（上游原样转发的 Anthropic 错误）不动；非 JSON 不动。
+- 终态状态码 → 设 `x-should-retry: false`：除 408 / 409 / 429 之外的 4xx，加 501。5xx（含 529）保持可重试。上游或上层已经设了该头则不覆盖。
+- 流式成功响应（200）不受影响。
+
+没做：429 的 `Retry-After`（限额路径 `writeSelectionError` 已设；上游 429 透传的头不在这里改）、`anthropic-ratelimit-unified-*`（G5/G6）、OpenAI 路由（形状不同，不加外层 `type`）。
+golden（`internal/protocoltest/testdata/golden/wire/anthropic_*`）里 Anthropic 入口的错误体多了 `,"type":"error"`，已重生成。
+
