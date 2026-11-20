@@ -69,6 +69,8 @@ const thread = (o: Partial<Record<string, unknown>> & { id: string; title: strin
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
     model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), session_id: `${(o.id as string).length.toString(16).padStart(2, '0')}c9d5e7a-4b1e-4f7a-9d0e-5a2b7c3d8e9f`,
+    // A worker owns the launch settings it was copied from its project's defaults when it started.
+    profile_override: '', model_override: 'claude-haiku-4-5', effort_override: 'high', permission_mode: 'acceptEdits',
     cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
 })
 const threadWithUsage = (o: Parameters<typeof thread>[0]) => { const t = thread(o); return { ...t, ...usageOf(t), ...o } }
@@ -417,7 +419,7 @@ export const projectsHandlers = [
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         const body = (await request.json()) as { profile: string; inherit?: boolean }
-        if (th.parent_id) { th.profile_override = body.inherit ? null : body.profile; th.model_override = '' }
+        if (th.parent_id) { th.profile_override = body.inherit ? '' : body.profile; th.model_override = body.inherit ? 'claude-haiku-4-5' : '' }
         else th.profile = body.profile
         return HttpResponse.json(th)
     }),
