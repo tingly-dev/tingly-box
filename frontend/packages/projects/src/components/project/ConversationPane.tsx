@@ -4,7 +4,7 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
 import { ImSourceBadge } from '../im/ImSourceBadge';
-import { AttachmentChips, uploadAttachments } from '../attachments';
+import { AttachmentChips, AttachmentGallery, uploadAttachments } from '../attachments';
 import { ThreadComposer } from '../ThreadComposer';
 import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
@@ -15,7 +15,7 @@ import { DisclosureRow } from '../common/Disclosure';
 import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
-import { Transcript, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
+import { Transcript, blockAttachments, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
 import { threadTranscript } from './threadTranscript';
 import { radius } from '@tingly/ui/theme/radius';
 import { readLocal, writeLocal } from '../../utils/storage';
@@ -297,6 +297,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         () => buildTranscript(threadTranscript(messages, busy, (e) => e.source === 'thread' ? t('thread.fromCoordinator') : undefined).entries),
         [messages, busy, t],
     );
+    // Every file in the conversation, which a preview steps through.
+    const galleryFiles = useMemo(() => blockAttachments(blocks), [blocks]);
     const renderCustom = useMemo(() => (message: TranscriptEntry) => {
         switch (message.kind) {
             case 'thread_started': {
@@ -369,6 +371,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                         </Box>
                     )}
                     {messages.length > 0 && (
+                        <AttachmentGallery owner={{ projectId }} files={galleryFiles}>
                         <Transcript
                             blocks={blocks}
                             detail={detail}
@@ -379,6 +382,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                             messageSource={(message) => message.imSource ? <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} /> : null}
                             renderCustom={renderCustom}
                         />
+                        </AttachmentGallery>
                     )}
                 </Box>
             </Box>

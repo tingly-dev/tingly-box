@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AttachmentChips } from './attachments';
+import { AttachmentChips, AttachmentGallery } from './attachments';
 import { PREVIEW_LIMIT } from './project/LibraryPreview';
 
 const m = vi.hoisted(() => ({ fetch: vi.fn(), notify: vi.fn() }));
@@ -109,5 +109,28 @@ describe('conversation attachments', () => {
         expect(chip).toBeDisabled();
         fireEvent.click(chip);
         expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('steps through the images of every message when the conversation shares one preview', async () => {
+        const first = [file('a.png', 'image/png')];
+        const second = [file('b.png', 'image/png')];
+        render(
+            <AttachmentGallery owner={{ threadId: 't1' }} files={[...first, ...second]}>
+                <AttachmentChips owner={{ threadId: 't1' }} items={first} />
+                <AttachmentChips owner={{ threadId: 't1' }} items={second} />
+            </AttachmentGallery>,
+        );
+        const thumb = await screen.findByRole('button', { name: 'a.png' });
+        await waitFor(() => expect(within(thumb).getByRole('img')).toBeInTheDocument());
+        fireEvent.click(thumb);
+        const dialog = await screen.findByRole('dialog');
+        await within(dialog).findByRole('img', { name: 'a.png' });
+        expect(within(dialog).getByText('1 / 2')).toBeInTheDocument();
+        fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+        await within(dialog).findByRole('img', { name: 'b.png' });
+        expect(within(dialog).getByText('2 / 2')).toBeInTheDocument();
+        fireEvent.keyDown(dialog, { key: 'ArrowUp' });
+        await within(dialog).findByRole('img', { name: 'a.png' });
+        expect(screen.getAllByRole('dialog')).toHaveLength(1);
     });
 });

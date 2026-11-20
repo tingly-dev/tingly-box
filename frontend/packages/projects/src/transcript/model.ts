@@ -384,6 +384,23 @@ export const blockTime = (block: TranscriptBlock): string | undefined => {
     }
 };
 
+// blockAttachments is every file the loaded conversation carries, in order,
+// each path once: what a preview steps through.
+export const blockAttachments = (blocks: TranscriptBlock[]): TranscriptAttachment[] => {
+    const seen = new Set<string>();
+    const files: TranscriptAttachment[] = [];
+    for (const b of blocks) {
+        if (b.type !== 'user' && b.type !== 'assistant') continue;
+        for (const a of b.message.attachments ?? []) {
+            if (!seen.has(a.path)) {
+                seen.add(a.path);
+                files.push(a);
+            }
+        }
+    }
+    return files;
+};
+
 // firstNewBlock is the index of the first block that began after seenAt,
 // the place for a "New" divider; -1 when nothing is new or everything is
 // (a divider above the whole transcript says nothing).

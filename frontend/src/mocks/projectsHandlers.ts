@@ -196,8 +196,14 @@ const messages = [
     msg('m6', 'thread_started', '', 29, { thread_ids: ['t-sdk'] }),
     msg('m7', 'thread_update', '', 18, { thread_id: 't-cache', title: 'Cache idempotency keys in Redis', kind: 'finished' }),
     msg('m7a', 'user', 'Cross-thread message: Redis validation finished; load-test details are in the thread report.', 17, undefined, { source: 'thread', source_ref: 't-cache' }),
+    // Files the threads sent into the conversation (send_file): in a row they read as one.
+    msg('m7b', 'file', 'p99 before and after the pool change', 16.5, { attachments: [{ name: 'p99.png', path: 'outputs/load-test-2026-10-14/charts/p99.png', type: 'image/png', size: 54_300 }] }),
+    msg('m7c', 'file', 'Throughput at the same load', 16.4, { attachments: [{ name: 'throughput.png', path: 'outputs/load-test-2026-10-14/charts/throughput.png', type: 'image/png', size: 61_870 }] }),
+    msg('m7d', 'file', '', 16.3, { attachments: [{ name: 'p99-by-route.png', path: 'outputs/load-test-2026-10-14/charts/p99-by-route.png', type: 'image/png', size: 48_120 }] }),
+    msg('m7e', 'file', 'The full report', 16.2, { attachments: [{ name: 'report.md', path: 'outputs/load-test-2026-10-14/report.md', type: 'text/markdown', size: 4_812 }] }),
     msg('m8', 'thread_update', '', 4, { thread_id: 't-pool', title: 'Tune the DB connection pool', kind: 'needs_input' }),
     msg('m9', 'assistant', 'The Redis change is ready for review, and the tracing work is merged. Next, approve or deny the staging benchmark in the pool thread; I will keep the retry-budget work separate until its tests finish.', 3),
+    msg('m9a', 'file', 'Pool saturation during the last run', 3.5, { attachments: [{ name: 'pool-saturation.png', path: 'outputs/pool-saturation.png', type: 'image/png', size: 40_220 }] }),
 ]
 
 const library = [

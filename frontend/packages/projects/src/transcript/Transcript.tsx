@@ -98,6 +98,46 @@ const AssistantText = ({message}: {message: TranscriptEntry}) => {
     </>;
 };
 
+// FilesGroup is the files sent one after another, as one row of thumbnails
+// instead of a message each. What each was sent with is on the file while the
+// pointer is on it, and all of it opens under the row.
+const FilesGroup = ({messages}: {messages: TranscriptEntry[]}) => {
+    const {t} = useTranslation();
+    const {attachments: Attachments} = useTranscriptHost();
+    const [open, setOpen] = useState(false);
+    const files = messages.flatMap((m) => m.attachments ?? []).filter((f, i, all) => all.findIndex((x) => x.path === f.path) === i);
+    const captions: Record<string, string> = {};
+    for (const m of messages) {
+        const caption = m.content.trim();
+        if (caption) for (const f of m.attachments ?? []) captions[f.path] = caption;
+    }
+    const captioned = messages.filter((m) => m.content.trim() !== '' && (m.attachments?.length ?? 0) > 0);
+    return (
+        <Box role="group" aria-label={t('projects.transcript.filesSent', {defaultValue: '{{count}} files sent', count: files.length})}>
+            {Attachments
+                ? <Attachments items={files} align="flex-start" captions={captions}/>
+                : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>}
+            {captioned.length > 0 && (
+                <>
+                    <RowLine open={open} onToggle={() => setOpen(!open)}>
+                        <Typography variant="caption" sx={{color: 'inherit'}}>{t('projects.transcript.filesCaptions', {defaultValue: 'Captions'})}</Typography>
+                    </RowLine>
+                    <Collapse in={open} unmountOnExit>
+                        <Stack spacing={1} sx={{pt: 0.5}}>
+                            {captioned.map((m) => (
+                                <Box key={m.id ?? m.attachments?.[0]?.path}>
+                                    <Typography variant="caption" sx={{color: 'text.secondary', display: 'block', wordBreak: 'break-all'}}>{m.attachments?.map((f) => f.name).join(', ')}</Typography>
+                                    <Markdown content={m.content}/>
+                                </Box>
+                            ))}
+                        </Stack>
+                    </Collapse>
+                </>
+            )}
+        </Box>
+    );
+};
+
 const formatDuration = (ms: number): string => {
     const sec = Math.round(ms / 1000);
     return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
@@ -501,12 +541,32 @@ interface BlockListProps {
     timeMarked?: boolean;
 }
 
+// A file sent into the conversation (send_file) is an assistant message that
+// carries files.
+const isSentFile = (block: TranscriptBlock): block is Extract<TranscriptBlock, {type: 'assistant'}> =>
+    block.type === 'assistant' && (block.message.attachments?.length ?? 0) > 0;
+
+// The call that sends a file; its card is the file itself, so a run of such
+// calls between files is not worth a row of its own.
+const isSendFileCall = (name: string) => /(^|__)send_file$/.test(name);
+const isSendFileRun = (block: TranscriptBlock): boolean =>
+    block.type === 'activity' && block.steps.length > 0 && block.steps.every((s) => s.type === 'tool' && isSendFileCall(s.name));
+
+interface ShownBlock {
+    block: TranscriptBlock;
+    index: number;
+    last: boolean;
+    // Files sent one after another, drawn together as one row; block is the first of them.
+    files?: TranscriptEntry[];
+}
+
 // shownBlocks is what a list renders: a settled approval that its call's row
 // already reports is left out, and the calls on either side of it read as
-// one run again. Each block keeps its index (the trajectory's anchor) and
-// whether it ends the list (the live one).
-const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): {block: TranscriptBlock; index: number; last: boolean}[] => {
-    const out: {block: TranscriptBlock; index: number; last: boolean}[] = [];
+// one run again. Files sent one after another (with only their own send calls
+// between) become one entry. Each block keeps its index (the trajectory's
+// anchor) and whether it ends the list (the live one).
+const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): ShownBlock[] => {
+    const out: ShownBlock[] = [];
     blocks.forEach((original, index) => {
         const block = detail === 'concise' ? conciseBlock(original) : original;
         if (!block) return;
@@ -514,6 +574,17 @@ const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detai
         if (detail === 'detailed' && block.type === 'request' && block.toolId && block.message.request_id !== pendingRequestId) {
             if (last && out.length > 0) out[out.length - 1].last = true;
             return;
+        }
+        if (isSentFile(block)) {
+            // Look past the send calls between two files.
+            let at = out.length - 1;
+            if (at > 0 && isSendFileRun(out[at].block) && isSentFile(out[at - 1].block)) at--;
+            const previous = out[at];
+            if (previous && isSentFile(previous.block)) {
+                out.splice(at + 1, out.length - at - 1);
+                out[at] = {...previous, files: [...(previous.files ?? [previous.block.message]), block.message], last};
+                return;
+            }
         }
         const previous = out[out.length - 1];
         if (block.type === 'activity' && previous?.block.type === 'activity') {
@@ -539,12 +610,13 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
     // A merged run of calls keeps its first index, so the divider goes
     // before the first item at or past newFrom.
     const dividerAt = newFrom >= 0 ? items.find((x) => x.index >= newFrom)?.index : undefined;
-    const render = ({block: b, index: i, last}: (typeof items)[number], at: number) => {
+    const render = ({block: b, index: i, last, files}: ShownBlock, at: number) => {
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
                     return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><UserBubble message={b.message}/></Box>;
                 case 'assistant':
+                    if (files) return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><FilesGroup messages={files}/></Box>;
                     return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><AssistantText message={b.message}/></Box>;
                 case 'activity':
                     return <ActivityRun key={i} steps={b.steps} live={working && last} hold={holdsPending(items[at + 1]?.block, pendingRequestId)} expandAll={expandAll} pendingRequestId={pendingRequestId}/>;
