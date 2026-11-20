@@ -44,6 +44,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
 import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
+import ClaudeCodeMCPRow from './components/ClaudeCodeMCPRow';
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
 import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -438,6 +439,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         pt:1 so the gaps match the card's edge rhythm. */}
                     <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
                     <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
+                    <ClaudeCodeMCPRow scenario={BASE_SCENARIO} profileId={profileId || ''} />
                   </Box>
                 </AgentAccessSection>
             <CardGrid>

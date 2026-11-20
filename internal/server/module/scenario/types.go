@@ -41,6 +41,9 @@ type ProfileDuplicateRequest struct {
 type ProfileUpdateRequest struct {
 	Name    string `json:"name,omitempty"`
 	Unified *bool  `json:"unified,omitempty"` // Pointer to distinguish zero from unset; nil = no change
+	// MCPProfile is the MCP profile a Claude Code profile's launches connect
+	// to ("" = none); nil = no change.
+	MCPProfile *string `json:"mcp_profile,omitempty"`
 }
 
 // ProfileClaudeConfigRequest is the complete desired typed configuration for

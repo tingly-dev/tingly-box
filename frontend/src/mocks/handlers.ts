@@ -3142,9 +3142,11 @@ export const handlers = [
                         tools: ['query'],
                     },
                 ],
+                profiles: [{ id: 'prof-1a2b3c4d', name: 'Work repos', tools: [] }],
                 request_timeout: 30000,
                 strip_disabled_mcp_tools: true,
             },
+            enabled: true,
         })
     }),
 
@@ -4382,6 +4384,7 @@ export const handlers = [
         if (body.name !== undefined) profile.name = body.name
         if (body.description !== undefined) profile.description = body.description
         if (body.unified !== undefined) profile.unified = body.unified
+        if (body.mcp_profile !== undefined) (profile as any).mcp_profile = body.mcp_profile
         profile.updated_at = new Date().toISOString()
 
         return HttpResponse.json({

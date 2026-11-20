@@ -1,6 +1,7 @@
 package command
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -46,5 +47,17 @@ func TestMatchProfileInput(t *testing.T) {
 		if (err != nil) != c.wantErr || got != c.want {
 			t.Errorf("%q: got (%q, %v), want (%q, err=%v)", c.in, got, err, c.want, c.wantErr)
 		}
+	}
+}
+
+func TestCCExecArgsKeepsMCPConfigAwayFromThePrompt(t *testing.T) {
+	got := ccExecArgs("/p/mcp.json", "/p/settings.json", []string{"fix the bug"})
+	want := []string{"--mcp-config", "/p/mcp.json", "--settings", "/p/settings.json", "fix the bug"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("args = %q, want %q", got, want)
+	}
+	got = ccExecArgs("", "/p/settings.json", nil)
+	if !slices.Equal(got, []string{"--settings", "/p/settings.json"}) {
+		t.Fatalf("args without MCP = %q", got)
 	}
 }

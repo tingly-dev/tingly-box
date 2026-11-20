@@ -63,6 +63,14 @@ export const profileApi = {
         }));
     },
 
+    // The MCP profile a Claude Code profile's launches connect to; '' is none.
+    setProfileMCPProfile: async (scenario: string, id: string, mcpProfile: string): Promise<any> =>
+        controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/profiles/{id}', {
+            headers,
+            params: {path: {scenario, id}},
+            body: {mcp_profile: mcpProfile},
+        })),
+
     deleteProfile: async (scenario: string, id: string): Promise<any> => {
         return controlApi((client, headers) => client.DELETE('/api/v1/scenario/{scenario}/profiles/{id}', {
             headers,
