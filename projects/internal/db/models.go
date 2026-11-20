@@ -52,8 +52,13 @@ func (p *Project) PrimaryRepo() *Repo {
 	return &p.Repos[0]
 }
 
-// ApplyDirectoryDefaults materializes legacy defaults in memory only.
+// ApplyDirectoryDefaults materializes legacy defaults in memory only. A
+// project with no directories gets an empty list, not nil, so it reaches the
+// web client as [] and not null.
 func (p *Project) ApplyDirectoryDefaults() {
+	if p.Repos == nil {
+		p.Repos = []Repo{}
+	}
 	for i, r := range p.Repos {
 		p.Repos[i] = p.EffectiveRepo(r)
 	}
