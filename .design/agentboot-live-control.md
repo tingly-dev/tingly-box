@@ -145,10 +145,12 @@ subagent delays it until that finishes.
   an assistant event (and hands it to `OnFinal`) instead of dropping it.
   Trade-off: an inserted message is not a durable coordinator input, so a
   crash mid-turn leaves it with the turn's own recovery card, not its own.
-- Not changed (needs a product decision, see the PR): messages the
-  *coordinator* sends to a thread (`message_thread`), a thread's relays,
-  IM chat and bound-chat messages still go through `Threads.Send` and run
-  after the current turn.
+- **Every sender inserts by default** (decided by the user, 2026-11-20): the
+  web composer, IM chats (`Service.Send`, including bound chats) and the
+  coordinator's `message_thread` all go through `SendWith` with insert; a
+  relay keeps its coordinator note. `message_thread` tells the coordinator
+  how it went ("sent into the thread's running turn" / "queued"). Decision
+  answers (`Choose`) still go through the coordinator's input queue.
 - Composer: Enter = insert (button tooltip says so while a turn runs); a
   menu on the send button and Alt+Enter give "send after this turn"; `mode`
   is only passed when chosen (or forced by `insertable=false`).

@@ -254,3 +254,42 @@ func TestInsertedMessageAnsweredOutsideTheTurnIsKept(t *testing.T) {
 		return false
 	}, 5*time.Second, 10*time.Millisecond)
 }
+
+// What the coordinator relays to a thread joins the running turn too, with
+// the note that says it is the coordinator's, and the tool says how it went.
+func TestRelayedMessageInsertsIntoTheRunningTurn(t *testing.T) {
+	fc := newFakeClaude(t)
+	f := liveThreads(t, fc)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "first"})
+	require.NoError(t, err)
+	fc.next(t)
+	waitStatus(t, f.store, th.ID, db.ThreadWorking)
+	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+	require.Eventually(t, func() bool { return f.threads.insertable(th.ID) }, 5*time.Second, 10*time.Millisecond)
+
+	_, joined, err := f.threads.sendWith(context.Background(), th.ID, "also add tests", nil, fromThread(f.project.MainThreadID), SendInsert)
+	require.NoError(t, err)
+	assert.True(t, joined)
+	got := fc.next(t)
+	assert.Contains(t, got, "also add tests")
+	assert.Contains(t, got, coordinatorNote, "a relayed message keeps its note")
+	assert.Empty(t, chips(t, f, th.ID, "held"))
+}
+
+// A message typed in an IM chat to the project conversation is inserted into
+// the coordinator's running turn like one typed on the web.
+func TestChatMessageInsertsIntoTheCoordinatorsTurn(t *testing.T) {
+	fc := newFakeClaude(t)
+	svc, _ := liveService(t, fc)
+	p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
+	require.NoError(t, err)
+	_, err = svc.Coordinator.Post(p.ID, "start", nil, Source{})
+	require.NoError(t, err)
+	fc.next(t)
+	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+	require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
+
+	_, err = svc.Send(context.Background(), p.MainThreadID, "from the chat", nil, Source{Kind: db.SourceIM, Platform: "telegram", ChatID: "c1"})
+	require.NoError(t, err)
+	assert.Contains(t, fc.next(t), "from the chat")
+}

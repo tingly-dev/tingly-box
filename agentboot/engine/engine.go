@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -252,6 +253,11 @@ func (e *Engine) Stop(id string) (<-chan struct{}, bool) {
 // process), so the message is a new turn for Start.
 var ErrNotInjectable = errors.New("no running turn to add the message to")
 
+// ErrAgentReadsBetweenTurns is ErrNotInjectable for a turn that does run, on
+// an agent that cannot take input while it works: the host can tell its user
+// why the message waits for the next turn.
+var ErrAgentReadsBetweenTurns = fmt.Errorf("%w: the agent reads messages only between turns", ErrNotInjectable)
+
 // Inject adds prompt to the turn id has in flight, without ending it:
 // Claude takes it up at its next step. The message is recorded as the
 // user's. Returns ErrNotInjectable when there is no such turn, for the caller
@@ -267,7 +273,10 @@ func (e *Engine) Inject(id, prompt string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
 	defer cancel()
 	if err := res.c.Inject(ctx, prompt); err != nil {
-		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) || errors.Is(err, agentboot.ErrInjectUnsupported) {
+		if errors.Is(err, agentboot.ErrInjectUnsupported) {
+			return ErrAgentReadsBetweenTurns
+		}
+		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) {
 			return ErrNotInjectable
 		}
 		return err

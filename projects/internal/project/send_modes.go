@@ -36,24 +36,33 @@ func (m SendMode) Valid() bool {
 	return false
 }
 
-// SendWith sends a user's message the way mode says.
+// SendWith sends a message the way mode says.
 func (m *Threads) SendWith(ctx context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, error) {
+	t, _, err := m.sendWith(ctx, threadID, text, atts, src, mode)
+	return t, err
+}
+
+// sendWith is SendWith that also says whether the message joined a running
+// turn (so a caller can tell its own user how it was delivered).
+func (m *Threads) sendWith(_ context.Context, threadID, text string, atts []Attachment, src Source, mode SendMode) (*db.Thread, bool, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
 	if _, err := m.sendable(threadID); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	q := queued{text: text, src: src, atts: atts}
-	if mode == SendNextTurn {
+	q := queued{text: text, src: src, atts: atts, relayed: src.Kind == db.SourceThread}
+	joined := false
+	if mode == SendNextTurn || !m.inject(threadID, q) {
 		q.held = true
-	} else if m.inject(threadID, q) {
-		return m.store.GetThread(threadID)
 	} else {
-		q.held = true
+		joined = true
 	}
-	m.enqueue(threadID, q)
-	return m.store.GetThread(threadID)
+	if !joined {
+		m.enqueue(threadID, q)
+	}
+	t, err := m.store.GetThread(threadID)
+	return t, joined, err
 }
 
 // inject adds q to the turn in flight. False means it could not join (no
@@ -73,7 +82,7 @@ func (m *Threads) inject(threadID string, q queued) bool {
 		switch {
 		case !errors.Is(err, engine.ErrNotInjectable):
 			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "could not add the message to the running turn: " + err.Error()})
-		case m.engine.Busy(sid) && !m.engine.Injectable(sid):
+		case errors.Is(err, engine.ErrAgentReadsBetweenTurns):
 			// A turn runs but its agent reads nothing while it works: say so,
 			// instead of leaving the user to wonder why it was not read yet.
 			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "this agent cannot take a message while it works; it will read yours after the current turn"})
