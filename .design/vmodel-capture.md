@@ -24,7 +24,7 @@ The scenario to support, concretely (from the 2.1.328 run):
 3. keep, per request: header values **as sent**, the body **byte for byte**
    (`cch` is computed over the exact bytes), and the arrival order;
 4. let the CLI finish a normal round so it does not retry or error;
-5. turn the result into a version-to-version diff.
+5. hand the captures to whoever analyses them (diffing is out of scope here).
 
 ## 1. Current state (read from the code, not run)
 
@@ -53,232 +53,183 @@ The scenario to support, concretely (from the 2.1.328 run):
 | G4 | Typed body binding may reject new CC bodies before anything is recorded or answered. | unknown → must be tested; capture must be outside it |
 | G5 | Non-messages traffic (telemetry, oauth, count_tokens) gets a bare 501 and is not recorded; we cannot even list which endpoints a CC version calls. | medium |
 | G6 | No `request-id` / ratelimit response headers; `cc_prev_req` and quota behaviour cannot be observed. | medium |
-| G7 | No scripted tool-use turns → multi-request sessions (`cc_prev_*`, turn index, tool results) cannot be captured. §7 of the CC notes lists these as still open. | medium |
-| G8 | No standard runner: `env -i`, isolated HOME, `hasCompletedOnboarding` seed, matrix, per-cell outputs and the `-p` flags live in a prose snippet. | high (the recurring cost) |
-| G9 | No diff/summary tooling; §9 was hand-assembled from `dict(headers)` dumps. | high (the recurring cost) |
-| G10 | Capture format is ad hoc (`req.json`, `req*.raw` for the Go `LiveCaptures` test); nothing connects it to recording/replay fixtures. | low–medium |
+| G7 | No scripted tool-use turns → multi-request sessions (`cc_prev_*`, turn index) cannot be captured. | later (needs a definition-contract change) |
+| G8 | No standard way to launch the client safely (`env -i`, isolated HOME, onboarding seed, `-p` flags live in a prose snippet). | low: a documented recipe is enough; no script owned by us |
+| G9 | Diff / summary tooling. | **dropped**: not our job; captures are the deliverable |
+| G10 | Capture format is ad hoc (`req.json`, `req*.raw`). | medium: one raw-first format |
 | G11 | Real OAuth login/refresh endpoint capture; real-server response capture (forwarding). | out of scope here (see non-goals) |
 
 Not gaps: serving Anthropic/OpenAI/Responses protocols, standalone lifecycle,
 `--json` readiness, strict definition loading.
 
+
 ## 3. Decision
 
-Add capture to the **existing** `tb vmodel` as one flag, keeping the "no extra
-`serve` command" rule of `vmodel-definitions.md`:
+**Raw first.** The capture's ground truth is the exact bytes the client put on
+the TCP connection. Everything else (parsed headers, a JSON index) is a
+convenience derived from, and never a replacement for, those bytes. Nothing is
+decoded, canonicalized, re-ordered, redacted or pretty-printed in the capture
+files.
+
+One flag on the **existing** command (keeps the "no extra `serve` command" rule
+of `vmodel-definitions.md`):
 
 ```sh
 tb vmodel --capture ./cap/oauth-direct-sonnet [--config models.yaml] [--json]
 ```
 
-Three small parts, each independently useful:
+Scope is deliberately small: a capture tap, an unknown-model fallback so the
+client gets a normal answer, and a recipe. No diffing, summarizing, report
+generation or committed-evidence format.
 
-1. **A capture tap** (`vmodel/capture`, a new package that imports nothing from
-   `internal/`): an `http.Handler` wrapper placed **outermost**, so it sees
-   every request before routing or body binding, including 404/501s and bodies
-   the typed parser would reject (G1, G4, G5).
-2. **A capture-mode fallback**: with `--capture`, a model id nobody defined is
-   served by a built-in default mock instead of 404 (G2). Explicit definitions
-   still match first, so `--config` can script specific models.
-3. **A standard runner + summarizer** under `script/cc-capture/` (G8, G9).
+### 3.1 The tap
 
-Why not extend what exists:
+New package `vmodel/capture` (imports nothing from `internal/`), wired in
+`internal/command/vmodel.go` only:
 
-- `obs.Record` is the gateway's pipeline record, shaped for the UI/JSONL
-  exporters (decoded body map, `map[string]string` headers). Making it
-  byte-exact would change a model other code relies on and still would not record
-  *non-gateway* requests. Capture is a different observation point (the server
-  side of a wire), so it gets its own small type. The convergence point is
-  `recording.md` Phase 3 (wire `recordTransport`): when that lands, it can emit
-  the same `Exchange` lines. Not coupled now.
-- `benchmark`'s recorder is last-per-path by design (assertion helper). It can
-  later be rebuilt on the append-only tap; not required here.
+- A `net.Listener` wrapper whose `Accept` returns a `net.Conn` that tees every
+  `Read` into `raw/conn-NNNN.in` (append-only, flushed per read). This sits
+  *below* `net/http`, so header-name casing, header order, duplicate headers,
+  the exact request line, chunked framing and `Expect: 100-continue` are all
+  preserved; nothing the typed body binding or the router does can lose or
+  reject a capture (G1, G3, G4, G5). Plain HTTP only (clients are pointed at
+  `http://127.0.0.1`); TLS interception is a non-goal.
+- An `http.Handler` wrapper (outermost) that, per request, appends one line to
+  `index.jsonl` pointing into the raw files, and tees the response.
 
-### 3.1 Capture directory (the format)
+Why a TCP tee rather than re-serializing in the handler: Go's `net/http`
+canonicalizes header names and gives an unordered map; re-serializing would
+fabricate a request that never existed, which is exactly what the capture must
+not do. The tee needs no HTTP parsing, is correct for keep-alive and chunked
+bodies, and cannot affect the response path.
+
+### 3.2 Layout
 
 ```
 <dir>/
-  meta.json          # tool version, argv, listen URL, definition ids, start time;
-                     # the runner adds label, client argv, client version, env allowlist
-  requests.jsonl     # one Exchange per line, arrival order (seq is dense, 1-based)
-  bodies/0001.req    # request body, verbatim bytes (never decoded/rewritten)
-  bodies/0001.res    # response body as served (SSE stays SSE)
-  raw/conn-0003.in   # only with --capture-raw: every inbound byte of that TCP connection
+  meta.json            # tb version, argv, listen URL, start time (what the runner knows is added by the caller)
+  raw/conn-0001.in     # verbatim client→server bytes of TCP connection 1 (ground truth)
+  raw/conn-0001.out    # verbatim server→client bytes (what we answered; for stream/retry analysis)
+  index.jsonl          # one line per request, arrival order
 ```
 
-An `Exchange` line:
+An `index.jsonl` line only locates things; it carries no information that is
+not already in `raw/`:
 
 ```json
-{"seq":1,"t":"2026-11-20T10:00:00.123Z","conn":3,
- "method":"POST","target":"/v1/messages?beta=true","proto":"HTTP/1.1","host":"127.0.0.1:18091",
- "req_headers":[["User-Agent","claude-cli/2.1.328 (external, sdk-cli)"],["Authorization","Bearer sk-ant-oat01-…[redacted len=24]"]],
- "req_body":{"file":"bodies/0001.req","bytes":90112,"sha256":"…"},
- "route":{"format":"anthropic","model":"claude-sonnet-4-6","stream":true},
- "served_by":"capture-default",
- "res":{"status":200,"headers":[["Content-Type","text/event-stream"],["request-id","req_vmodel_0001"]],
-        "body":{"file":"bodies/0001.res","bytes":812},"ttfb_ms":3,"dur_ms":9}}
+{"seq":1,"t":"2026-11-20T10:00:00.123Z","conn":1,"in":[0,90311],"out":[0,1204],
+ "method":"POST","target":"/v1/messages?beta=true","status":200}
 ```
 
-Choices and why:
+- `in` / `out` are byte ranges in `conn-N.in` / `conn-N.out`. A request starts
+  where the previous exchange on that connection ended (HTTP/1.1 clients do not
+  pipeline, so the offset sampled when the previous response completes is the
+  start of the next request); the last range ends at EOF. `meta`-like fields
+  (`method`, `target`, `status`) are for `grep`, nothing more.
+- `seq` is dense and 1-based in request-arrival order. A request whose response
+  never completes still gets a line (`status` absent, `out` open-ended), so
+  aborted/retried calls are visible.
+- Splitting a range into head and body is the reader's job (it is `\r\n\r\n`
+  plus `Content-Length` / chunked); a tiny `capture.Read(dir)` helper in Go may
+  do it for tests (e.g. the existing `LiveCaptures` check), but the format does
+  not depend on it.
 
-- **JSONL + side files**, not one JSON per request: arrival order is the file
-  order, `grep`/`jq -c` work, and the 90 KB bodies stay out of the index. Bodies
-  are plain files so `sha256sum`, `diff` and the existing
-  `TINGLY_CC_CAPTURE_DIR` Go test (`req*.raw`) can read them with a trivial
-  rename/glob change.
-- **Headers as an ordered pair list**, not a map: duplicates and the order Go saw
-  are kept. Names are Go-canonicalized in this layer (G3); exact casing/order
-  is what `--capture-raw` is for.
-- **`--capture-raw` is a plain TCP tee** (wrap `net.Conn.Read`, append to
-  `conn-N.in`): no HTTP re-parsing, correct for chunked bodies and keep-alive,
-  and it is the only way to prove header-name casing/order as sent. Opt-in
-  because it also stores credentials unredacted. Plain HTTP only (clients are
-  pointed at `http://127.0.0.1`); TLS interception is out of scope.
-- **`route` is best-effort** (peeks `model` and `stream` with a lenient JSON
-  decode); `null` when the body is not JSON. It never influences serving.
-- **Response side matches the recording shape.** `res.body` + status + headers
-  is what `spec.Definition` kind `recording` already stores (`raw_body` /
-  `raw_stream`). A later `tb vmodel --from-capture <dir> --export rec.yaml` is a
-  mechanical conversion (not part of the first phases): captured request →
-  harness replay fixture body, captured response → recording definition. That is
-  the "unified with recording/replay" link; no new definition kind.
-- **Concurrency**: `seq` is assigned when the request head is accepted under a
-  mutex; the index line is written when the response completes (so streams that
-  never finish still get a line with `res.error`). Writes are append + flush per
-  exchange; the tap adds no behavior to the response path (it tees the writer).
+### 3.3 No redaction in the files
 
-### 3.2 Redaction
+"Most raw" and redaction conflict, and raw wins: tokens, `device_id`,
+`session_id` and local paths stay in the files. The mitigation is operational,
+not in the format: the capture directory is scratch (default under the
+gitignored `.tmp/`, never committed), and the documented recipe only ever uses
+a fake token and an isolated `HOME`. As a guard, `tb vmodel --capture` prints a
+warning (does not alter anything) when it sees an `Authorization` / `x-api-key`
+value that does not carry an obvious fake marker. Sharing a capture is then a
+manual, deliberate step by whoever owns it.
 
-Principle: **never alter bytes you will analyze; keep secrets out of what gets
-committed.**
+### 3.4 What the server answers (so the client finishes a normal round)
 
-- `requests.jsonl` header values for `Authorization`, `x-api-key`, `Cookie`,
-  `Proxy-Authorization` are replaced by `<scheme/prefix up to 14 chars>…[redacted
-  len=N]`. Prefix and length are enough to see the token kind (`sk-ant-oat01-`
-  vs `sk-ant-api03-`). `--capture-unredacted` disables it (needed only if the
-  value itself is under test).
-- Bodies and `raw/` are verbatim, because `cch`, fingerprints and byte-exact
-  checks depend on them. They contain a local path, `device_id`, `session_id`.
-  So capture dirs are **scratch**, kept outside the repo (default under
-  `$TMPDIR`/`.tmp/`, gitignored), and the standard runner only ever uses a fake
-  token and an isolated `HOME`.
-- What gets committed is the **sanitized summary** (3.4), produced by the
-  summarizer, never the raw dir. The research doc previously said the same
-  ("raw captures are in the thread scratch dir, not committed").
+Capture exists to observe the client, so the answer only has to be good enough
+that the client does not retry or abort:
 
-### 3.3 What the server answers in capture mode
-
-- **Default mock for unknown models** (G2): a built-in definition
-  `capture-default` (`kind: mock`, short fixed text, `usage` filled) matched for
-  any model id on the chat/messages/responses/google routes when no explicit
-  definition matches. Implemented as a fallback in `spec.Runtime` guarded by an
-  option that only `--capture` sets, so the production `/virtual/v1/*` and the
-  strict "unknown model → 404" test contracts (`vmodel-definitions.md`) are
-  untouched.
+- **Unknown model ids** (G2): in capture mode a request for an id nobody
+  defined is served by a built-in `capture-default` mock (short fixed text,
+  filled `usage`) instead of 404. Explicit definitions (`--config`) still
+  match first. Implemented as an option on `spec.Runtime` that only `--capture`
+  sets, so the production `/virtual/v1/*` and the "unknown model → 404"
+  contract of `vmodel-definitions.md` are unchanged.
 - **`request-id` response header** on Anthropic responses in capture mode
-  (`req_vmodel_<seq>`), so CC's direct mode can emit `cc_prev_req` on turn 2
-  (G6). Whether to add it to all vmodel Anthropic responses is a separate,
-  small call (real Anthropic always sends it); not forced here.
-- **Auxiliary endpoints** (G5): recorded always; answered from a small
-  built-in table so CC proceeds — `POST /v1/messages/count_tokens` →
-  `{"input_tokens": <len/4>}`, telemetry/event-logging/bootstrap → `200 {}`,
-  everything else keeps the protocol-shaped 501. `/api/oauth/*` is *recorded*
-  but not simulated (non-goal below).
-- **Tool-use scripting** (G7): extend `sequence` steps to optionally reference a
-  mock (`step.mock: {tool_calls: […]}`) — turn 1 returns `tool_use`, turn 2
-  `end_turn`. This is a change to the shared definition contract, so it is
-  its own phase and needs the user's go-ahead; the first captures do not need it.
-- **Typed binding (G4)** stays as is for the answer path. If a real 2.1.328 body
-  is rejected, the exchange is still captured (tap is outside) and the CLI sees
-  400. The fix would then be to loosen binding for capture mode (answer without
-  binding: peek `stream` and serve the default mock) — decided from evidence in
-  Phase 1, not guessed now.
+  (`req_vmodel_<seq>`), because CC feeds it back as the next request's
+  `cc_prev_req` (direct mode) (G6).
+- **Auxiliary endpoints** (G5): always captured (the tap is outermost). Answered
+  from a tiny table so the CLI proceeds — `POST /v1/messages/count_tokens` →
+  `{"input_tokens": <n>}`; telemetry/event-logging/bootstrap → `200 {}`;
+  anything else keeps the protocol-shaped 501. `/api/oauth/*` is captured if it
+  ever arrives, not simulated.
+- **Typed binding** (G4): the answer path still binds `/v1/messages` into the
+  SDK type. If a real 2.1.328 body 400s there, the capture is already safe; the
+  follow-up is to let capture mode answer without binding (peek `stream`, serve
+  the default mock). Decided from evidence in Phase 1, not guessed.
 
-### 3.4 Standard capture procedure for a new CC release
+### 3.5 Recipe (documentation, not a tool)
 
-`script/cc-capture/` (the repo has no `script/` yet; `tests/` and `.research/`
-hold the nearest precedents — directory name follows the user's convention):
+Documented in `.design/claude-code-oauth-compat.md` §B2.4 (replacing the Python
+`fake_api.py`) and in `vmodel/README.md`; the existing rules stay the same:
 
-| Script | Job |
-| --- | --- |
-| `run.sh --bin <claude> --out <dir> [--cells cells.txt] [--prompt "say hi"]` | For each cell, in a fresh isolated `HOME` (seeded with `{"hasCompletedOnboarding":true}`): start `tb vmodel --capture <out>/<cell> --json`, read the URL, run the CLI under `env -i PATH=… TERM=xterm HOME=… CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1 DISABLE_AUTOUPDATER=1 ANTHROPIC_BASE_URL=<url> <auth env> [_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1] claude -p … --model <m> < /dev/null`, stop vmodel, write `meta.json` (CLI `--version`, cell, exact env list). `--dry-run` prints the plan. One vmodel process per cell keeps cells separate without URL tricks that would change the wire path. |
-| `cells.txt` | Default matrix: `{oauth,apikey} × {proxy,direct} × {sonnet-4-6}` plus `{haiku-4-5, opus-4-8[1m]}` on direct OAuth — the 6 cells of 2.1.328 §9, one line each. Auth is a fake token (`sk-ant-oat01-fake…` / `sk-ant-api03-fake…`). |
-| `summarize.py <out> [--prev <prev-summary.json>]` | Reads `requests.jsonl`+bodies of `POST /v1/messages` per cell and emits (a) `summary.json`: identity headers, ordered `anthropic-beta` list, direct-only headers, billing-header fields in order, body top-level keys, `system` block shapes (lengths, cache_control), tool names, `metadata.user_id` key shapes, endpoints seen, with tokens/paths/uuids masked; (b) the §9-style markdown tables; (c) with `--prev`, a diff (added/removed/reordered betas and headers) — the "what changed since last version" section. |
+```sh
+tb vmodel --capture "$OUT" --json            # prints {"url": "...", ...}
+env -i PATH="$PATH" TERM=xterm HOME="$ISO_HOME" \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 \
+    DISABLE_ERROR_REPORTING=1 DISABLE_AUTOUPDATER=1 \
+    ANTHROPIC_BASE_URL="$URL" CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-fake \
+    [_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1] \
+    claude -p "say hi" --model claude-sonnet-4-6 < /dev/null
+```
 
-Output lands where the research notes already live:
-`.research/claude-code/<ver>.md` §9 is generated/pasted from (b), and
-`.research/claude-code/<ver>.capture.json` (the sanitized `summary.json`, tens
-of KB at most) is the committed evidence and the `--prev` input next time. Raw
-dirs stay in scratch. The Go check stays as it is: `TINGLY_CC_CAPTURE_DIR=<cell
-dir> go test ./internal/client/ -run LiveCaptures`, with the test adjusted to
-read `bodies/*.req` of `/v1/messages` exchanges (or the runner exports
-`req*.raw` copies; pick in Phase 3).
-
-Hard rules baked into the runner (each one bit the 2.1.328 run): always
-`env -i`; always isolated `HOME`; refuse a real-looking token (`sk-ant-…` not
-ending in the fake marker) unless `--allow-real-token`; never touch `~/.claude`
-or `~/.tingly-box`.
+`env -i`, an isolated `HOME` (with `{"hasCompletedOnboarding":true}`) and a fake
+token are mandatory (each one bit the 2.1.328 run). One `tb vmodel` process per
+matrix cell keeps captures separate. Whether to wrap this in a script is left to
+whoever runs the matrix; we do not own one.
 
 ## 4. Relationship to harness / replay
 
-- `harness agent --mock` answers "does the gateway work with this CLI"
-  (CLI → gateway → vmodel). It stays as is. Capture answers "what does the CLI
-  send" (CLI → vmodel). Different questions, different topology; do not merge.
-- If someone wants "what does *tingly* send upstream for this CLI", the in-process
-  VirtualServer behind the gateway can wear the same tap: expose
-  `capture.Wrap(handler, dir)` and let `harness agent --mock --capture <dir>` (and
-  `replay --upstream vmodel`) use it. That is the seam to the deferred item
-  "user definition files for agent --mock / replay" (`cli-harness-refactor.md`
-  §5.4, open): both need harness to accept a vmodel definition/option, so they
-  should be decided together. Not in the first phases; needs `internal/protocoltest`
-  changes while another thread is reviewing `internal/`.
-- Captured **requests** become replay fixtures (body bytes as-is), captured
-  **responses** become `recording` definitions: the two conversions in 3.1.
+`harness agent --mock` (CLI → gateway → vmodel) answers "does the gateway work
+with this CLI"; capture (CLI → vmodel) answers "what does the CLI send". Different
+topology, not merged. Because raw requests are plain HTTP bytes, a captured
+request body can be fed to `harness replay` as a fixture body by hand; automating
+that, or putting the tap behind the gateway's in-process VirtualServer, belongs
+with the deferred "user definition files for agent --mock / replay" item
+(`cli-harness-refactor.md` §5.4) and is not part of this work.
 
-## 5. Non-goals (and the cheaper alternative)
+## 5. Non-goals
 
-- **OAuth login/refresh capture** (G11). Stock CC talks TLS to
-  `platform.claude.com`; a local plain-HTTP server cannot stand in, and URL
-  override is allow-listed. Needs a TLS-intercepting proxy with a trusted CA
-  (`NODE_EXTRA_CA_CERTS`), a different tool. The bearer-token **inference**
-  request shape — the part that matters for tingly's OAuth upstream — is fully
-  covered with `CLAUDE_CODE_OAUTH_TOKEN=<fake>`.
-- **Forward/record mode** (reverse-proxy to the real API to record real response
-  headers such as `request-id`, `anthropic-ratelimit-*`). Valuable, but it needs
-  real credentials and sends traffic out; deliberately deferred, to be proposed
-  separately with its own consent/redaction story. Until then the
-  response-header facts come from bundle analysis.
-- **Interactive (TTY) mode** capture (`cc_entrypoint=cli`, `redact-thinking`): needs a
-  pty driver; the runner is `-p` only for now.
-- A new capture definition `kind` or a second file contract: none added.
+- Diffing, summarizing or reporting on captures; a committed evidence format.
+- OAuth login/refresh capture: stock CC talks TLS to `platform.claude.com`; a
+  plain-HTTP local server cannot stand in and the URL override is allow-listed.
+  Needs a TLS-intercepting proxy; different tool. The bearer-token *inference*
+  request is fully covered with `CLAUDE_CODE_OAUTH_TOKEN=<fake>`.
+- Forward/record mode (proxying to the real API to keep real response headers):
+  needs real credentials and outbound traffic; separate proposal if ever wanted.
+- Interactive (TTY) capture, scripted multi-turn tool-use responses (a change
+  to the `sequence` definition contract), TLS, response-body decoding.
 
 ## 6. Phased plan
 
-Each phase is independently shippable, vet/test green, and ends with the
-runner (when it exists) still working.
-
 | Phase | Content | Touches | Risk |
 | --- | --- | --- | --- |
-| **1 Tap + fallback** | `vmodel/capture` (Exchange, JSONL/bodies writer, header redaction, tests with `httptest`); `tb vmodel --capture <dir>`; unknown-model fallback to `capture-default`; `request-id`; `count_tokens`/telemetry stubs; record-before-bind. Verify with a hand-fed real-shaped `/v1/messages?beta=true` body (resolves G4) and a scripted client. | `vmodel/capture` (new), `vmodel/spec/runtime.go`, `internal/command/vmodel.go` | low–medium (Runtime option; no `internal/` backend logic) |
-| **2 Runner + summarizer** | `script/cc-capture/{run.sh,cells.txt,summarize.py}`, `--dry-run`, safety rules; re-run the 2.1.328 six cells and diff against §9 as the acceptance test; commit `<ver>.capture.json`; update `.research/claude-code/README.md` method + `claude-code-oauth-compat.md` §B6 step 3 to call the runner. Requires running the real `claude` binary in an isolated env. | `script/`, docs | low |
-| **3 Raw tee + Go test bridge** | `--capture-raw` TCP tee; `LiveCaptures` reads capture dirs; `--capture-unredacted`. | `vmodel/capture`, `internal/client` test | low |
-| **4 Multi-turn scripts** | `sequence` steps with mocks / tool calls; second-request capture (`cc_prev_req`, turn index, tool results) cell in the runner. Changes the definition contract → design review + update `vmodel-definitions.md`/`vmodel-sequence.md`. | `vmodel/sequence.go`, `vmodel/spec` | medium |
-| **5 Conversions + harness seam** | `--from-capture … --export` (request → fixture, response → recording); `capture.Wrap` for `harness agent --mock/replay`, together with the deferred definition-file item. | `vmodel/spec`, `cli/harness`, `internal/protocoltest` | medium |
+| **1 Raw tap** | `vmodel/capture`: conn-tee listener, handler wrapper, `index.jsonl`, `meta.json`; `tb vmodel --capture`; token-marker warning; tests (`httptest` + raw `net.Dial` client proving header case/order, duplicates, chunked body, keep-alive offsets, aborted request). | `vmodel/capture` (new), `internal/command/vmodel.go` | low |
+| **2 Answer well enough** | `capture-default` fallback for unknown models, `request-id`, `count_tokens`/telemetry stubs; try a real-shaped `/v1/messages?beta=true` body to settle G4. | `vmodel/spec/runtime.go` (option), `vmodel/virtualserver` | low–medium |
+| **3 Recipe + docs** | Replace the Python snippet in `claude-code-oauth-compat.md` §B2.4; `vmodel/README.md`; an optional Go helper `capture.Read(dir)` and point the `LiveCaptures` test at it. | docs, `internal/client` test | low |
+| later | Scripted multi-turn responses; tap behind the gateway for `harness`. | contract change / `internal/protocoltest` | medium |
 
-Recommended scope for the first go-ahead: **Phases 1–2** — they remove the
-hand-written `fake_api.py` and make the next CC bump a one-command capture +
-diff. Phases 3–5 only on demand.
+Recommended go-ahead: Phases 1–2 (3 is small docs). No `internal/` backend logic
+is touched; the only `internal/` file is the CLI command wiring.
 
 ## 7. Open questions
 
-1. `request-id` on all vmodel Anthropic responses, or capture mode only? (Default
-   proposed: capture mode only; it is cheap to widen later.)
-2. Where should the committed summary live: `.research/claude-code/<ver>.capture.json`
-   (proposed, next to the analysis) or under `.design/`?
-3. Directory name for scripts: `script/cc-capture/` (user convention; no `script/`
-   exists in this repo yet) vs extending `tests/`.
-4. Is the unverified typed-binding risk (G4) acceptable to resolve in Phase 1,
-   or should it be probed first with a captured 2.1.328 body from the other
-   thread (it is in that thread's scratch dir, not on the branch)?
-5. Whether `CLAUDE_CODE_CUSTOM_OAUTH_URL` admits `localhost` (would shrink the
-   OAuth non-goal) — a one-line probe once the runner exists.
+1. `request-id` on all vmodel Anthropic responses or capture mode only
+   (proposed: capture only).
+2. `raw/conn-N.out` always, or behind a second flag? (Proposed: always; it is
+   what lets you see exactly what the client was answered when it retried.)
+3. Should `--capture` imply a fixed default dir under `.tmp/` when given no
+   value, or always require a path? (Proposed: require a path.)
+4. G4 is unverified until Phase 2 sees a real 2.1.328 body (the original
+   captures sit in the other thread's scratch directory, not on its branch).
