@@ -1,6 +1,6 @@
 # Mobile UI: a phone-native surface for Agent and the Projects workspace
 
-> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, the interface picker, the sub-page switcher, the phone layer for configuration pages, the model picker sheet and the Agent and Team configuration pages. Not yet: the workspace screens, the Image pages, the viewport script (see Rollout).
+> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, the interface picker, the sub-page switcher, the phone layer for configuration pages, the model picker sheet and the Agent, Team and Image configuration pages. Not yet: the workspace screens, the viewport script (see Rollout).
 > Prototype: `.design/mobile-prototype/index.html` (static, clickable, mock data; `?theme=dark`, `?frame=0`, deep-link states via `?s=tab,screen,thread,sheet,ptab`).
 > Audit and mockups: `pr-assets/tep-mobile/` (`raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/tep-mobile/...`).
 
@@ -84,9 +84,9 @@ The shell made every page reachable (decision 11); the configuration pages thems
 Most of these pages are one template (`TemplatePage`: header, connection card, rules) and a handful of shared parts (`ConfigRow`, `UnifiedCard`, `RuleCard`, dialogs). The phone treatment lives in those shared parts and in a theme layer the shell adds, so a page gets it without a phone copy of itself:
 
 - **`usePhoneShell()`** (`@tingly/ui/hooks/usePhoneShell`): true inside `MobileShell`. Components switch on it, not on the viewport: `?ui=mobile` on a laptop must look like the phone, and a narrow desktop window must not. (`useIsPhone` still only decides which shell `auto` mounts.)
-- **Phone theme layer** (`@tingly/ui/theme/phone`), applied by `MobileShell` over the app theme: dialogs open as **bottom sheets** (full width, 24 px top corners, at most the visible height, actions pinned at the bottom above the home indicator); `fullScreen` dialogs stay full screen. Buttons, icon buttons, toggle buttons, tabs and menu items get a **44 px** minimum; text inputs a 44 px row and **16 px** text (no iOS zoom).
+- **Phone theme layer** (`@tingly/ui/theme/phone`), applied by `MobileShell` over the app theme: dialogs open as **bottom sheets** (full width, 24 px top corners, at most the visible height, actions pinned at the bottom above the home indicator); `fullScreen` dialogs stay full screen. Buttons, icon buttons, toggle buttons, tabs and menu items get a **44 px** minimum; text inputs a 44 px row and **16 px** text (no iOS zoom); a small control drawn over something else (a thumbnail's remove ×) opts out with `PHONE_COMPACT_CLASS`, since a 44 px button would cover what it sits on.
 - **Keyboard**: the shell tracks `visualViewport` and sets `--phone-viewport-height` (and the visible area's top); dialogs and sheets size to it, so the field you type in and the sheet's Save stay above the keyboard; a focused field scrolls into the middle of the page.
-- **Sticky actions**: a sheet's actions are its last row and never scroll away. Pages save as you change things (rules, flags, toggles), so pages have no Save bar; the few page forms with a Save (Image profile) pin it to the bottom of the page above the tab bar.
+- **Sticky actions**: a sheet's actions are its last row and never scroll away. Pages save as you change things (rules, flags, toggles, Image profiles), so pages have no Save bar; a page whose main action sits under a long form (Image's Generate) keeps it stuck to the bottom of the screen while the form scrolls.
 - **Destructive actions confirm** (delete rule, delete target, revoke key, delete profile) through the existing confirm dialogs, which are sheets here.
 - **No hover-only controls**: what desktop shows on hover (a target's tier arrows, delete, limits) is in the phone rule card's row menu.
 
@@ -165,8 +165,8 @@ A sheet, not a page: it is opened from a dozen places, each with its own context
 ### Image
 
 - Image API is the Agent template.
-- Playground, profiles, Idea to Prompt, Image to Prompt: already one column; the phone layer sizes their controls. The profile form's Save is pinned at the bottom.
-- Library: a two-column grid of thumbnails (it was one column, a screen per image).
+- Playground, profiles, Idea to Prompt, Image to Prompt: already one column; the phone layer sizes their controls. The prompt field's buttons (copy, snippet, open file, expand) take a row above the text instead of a column beside it, and Generate stays at the bottom of the screen while the form scrolls.
+- Library: a two-column grid of thumbnails (it was one column, a screen per image); deleting a snippet asks first (desktop keeps one tap).
 - Desktop-only: the inpainting canvas and drag-to-reorder references (they render, but are not tuned for touch).
 
 ### Desktop-only on a phone
@@ -180,7 +180,7 @@ Editing and reordering smart conditions, dragging rules, the rule flags raw edit
 2. Workspace home: needs-you with inline approve/answer, folded groups, projects and folders, new-task sheet.
 3. Workspace screens: project (对话 / 线程 / 文件库), folder session, thread page with docked actions, sheets, keyboard handling, master-detail at ≥ 600.
 4. Review: report + change summary, resolve, follow-up.
-5. Agent and 更多: Agent list, status, copy rows, rule sheet; Team and Credentials phone pages. *Configuration pages (see "Configuration pages on a phone"): the phone layer (`@tingly/ui/theme/phone`, `usePhoneShell`, `useBackToClose`), the model picker sheet and the Agent pages (stacked `ConfigRow`, wrapping `UnifiedCard` headers, `PhoneRuleTargets` in place of the graph) and the Team pages (`SharingKeysList` in place of the keys table and grid rows) are in; the Image pages follow.*
+5. Agent and 更多: Agent list, status, copy rows, rule sheet; Team and Credentials phone pages. *Configuration pages (see "Configuration pages on a phone"): the phone layer (`@tingly/ui/theme/phone`, `usePhoneShell`, `useBackToClose`), the model picker sheet and the Agent pages (stacked `ConfigRow`, wrapping `UnifiedCard` headers, `PhoneRuleTargets` in place of the graph) the Team pages (`SharingKeysList` in place of the keys table and grid rows) and the Image pages (prompt toolbar row, sticky Generate, two-column Library) are in.*
 6. Sweep and install: remaining routes, web app manifest and icons. Push notifications are a separate decision.
 
 ## Testing

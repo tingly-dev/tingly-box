@@ -73,6 +73,7 @@ import type {
     Quality,
     SelectedImage,
 } from '../../../features/image/ImageGenPlayground.types';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 // The results strip is "what's happening right now", not a scrollback buffer —
 // dragging through dozens of past generations to find one belongs in the
@@ -138,6 +139,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     profile,
 }) => {
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const navigate = useNavigate();
     // The picker's order, so the default is the first pair it shows.
     const models = useMemo(() => imageModelOptions(rules).map((option) => option.requestModel), [rules]);
@@ -1029,7 +1031,8 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                         </Box>
 
                         <Tooltip title={t('playground.submitShortcut', { defaultValue: '⌘/Ctrl + Enter to generate' })} placement="top">
-                        <span>
+                        {/* Phone shell: Generate stays in reach while the form above it scrolls. */}
+                        <Box component="span" sx={phone ? { display: 'block', position: 'sticky', bottom: 8, zIndex: 2 } : undefined}>
                         <Button
                             variant="contained"
                             size="large"
@@ -1050,7 +1053,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     })
                                     : t('playground.generate', { defaultValue: 'Generate' })}
                         </Button>
-                        </span>
+                        </Box>
                         </Tooltip>
                     </Stack>
 

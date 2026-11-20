@@ -9,6 +9,7 @@ import type { SketchLayers } from './SketchCanvasDialog';
 import ThumbImage from '../../../features/image/ThumbImage';
 import { THUMB_EDGE_BADGE } from '../../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
+import { PHONE_COMPACT_CLASS } from '@tingly/ui/theme/phone';
 
 const LibraryPhoto = tablerMui(IconLibraryPhoto);
 
@@ -192,6 +193,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 >
                     <IconButton
                         size="small"
+                        className={PHONE_COMPACT_CLASS}
                         onClick={(event) => { event.stopPropagation(); onEditMask(); }}
                         aria-label={image.mask
                             ? t('playground.mask.editAction', { defaultValue: 'Edit mask' })
@@ -214,6 +216,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
                     <IconButton
                         size="small"
+                        className={PHONE_COMPACT_CLASS}
                         onClick={(event) => { event.stopPropagation(); onEditSketch(); }}
                         aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
                         sx={{ ...overlayActionSx(20), position: 'absolute', bottom: 2, right: 2 }}
@@ -224,6 +227,8 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
             )}
             <IconButton
                 size="small"
+                // Drawn over the thumbnail: a 44px phone target would cover it.
+                className={PHONE_COMPACT_CLASS}
                 onClick={(event) => { event.stopPropagation(); onRemove(); }}
                 aria-label={t('playground.removeReferenceImage', { defaultValue: 'Remove reference image {{number}}', number: index + 1 })}
                 sx={{ ...overlayActionSx(20), position: 'absolute', top: -6, right: -6 }}
