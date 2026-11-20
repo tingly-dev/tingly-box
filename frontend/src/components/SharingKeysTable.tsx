@@ -19,6 +19,8 @@ import { fontMono } from '@tingly/ui/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { radius } from '@tingly/ui/theme/radius';
 import { tableFrameSx } from '@tingly/ui/theme/table';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import SharingKeysList from './SharingKeysList';
 
 export interface SharingKey {
     token_id: string;
@@ -65,6 +67,23 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
 }) => {
     const { t } = useTranslation();
     const colSpan = 7;
+    // Phone shell: a grouped list instead of a table wider than the screen.
+    const phone = usePhoneShell();
+    if (phone && !loading) {
+        return (
+            <SharingKeysList
+                tokens={tokens}
+                visibleTokens={visibleTokens}
+                onToggleVisibility={onToggleVisibility}
+                onCopy={onCopy}
+                onToggleEnabled={onToggleEnabled}
+                onDelete={onDelete}
+                onMove={onMove}
+                onLimits={onLimits}
+                limitedUserIds={limitedUserIds}
+            />
+        );
+    }
 
     return (
         <TableContainer sx={tableFrameSx}>

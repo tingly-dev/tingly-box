@@ -314,6 +314,9 @@ export default {
     "copyButton": "Copy Token"
   },
   "sharingKeys": {
+    "phone": {
+      "keyActions": "Actions for {{name}}"
+    },
     "title": "Team Keys",
     "titleForTeam": "Team Keys · {{team}}",
     "createToken": "Create Token",

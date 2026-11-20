@@ -316,6 +316,9 @@ export default {
     "copyButton": "Копировать токен"
   },
   "sharingKeys": {
+    "phone": {
+      "keyActions": "Действия для {{name}}"
+    },
     "title": "Ключи команд",
     "titleForTeam": "Ключи команды · {{team}}",
     "createToken": "Создать токен",

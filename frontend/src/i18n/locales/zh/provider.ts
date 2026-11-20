@@ -313,6 +313,9 @@ export default {
     "copyButton": "复制令牌"
   },
   "sharingKeys": {
+    "phone": {
+      "keyActions": "{{name}} 的操作"
+    },
     "title": "Team 密钥",
     "titleForTeam": "Team 密钥 · {{team}}",
     "createToken": "创建令牌",

@@ -19,12 +19,15 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
 import { radius } from '@tingly/ui/theme/radius';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import SharingKeysList from '@/components/SharingKeysList';
 
 const PREF_KEY = 'team-keys-overview-expanded';
 
 // Same right-edge room for the fold chevron as the connection card below
 // (AgentAccessSection), so the two cards' rows and chevrons line up.
 const CHEVRON_GUTTER = 6;
+const PHONE_CHEVRON_GUTTER = 4;
 
 /**
  * Whether the Team page's key card is open. Folded by default; once the
@@ -78,6 +81,9 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
     team, keys, loading, expanded, onToggle, actions, onCreate,
 }) => {
     const { t } = useTranslation();
+    // Phone shell: the keys are a grouped list (SharingKeysList), not grid rows.
+    const phone = usePhoneShell();
+    const gutter = phone ? PHONE_CHEVRON_GUTTER : CHEVRON_GUTTER;
     const label = t(expanded ? 'sharingKeys.overview.collapse' : 'sharingKeys.overview.expand');
     const iconButtonSx = { p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } };
 
@@ -110,7 +116,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
     );
 
     const summaryRow = (
-        <Box sx={{ pt: 1, pb: 1, pr: CHEVRON_GUTTER }}>
+        <Box sx={{ pt: 1, pb: 1, pr: gutter }}>
             <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                 <Box sx={{ px: 2, py: 0.5 }}>
                     <ConfigRow
@@ -181,12 +187,14 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                 </ButtonBase>
             )}
             <Collapse in={expanded} timeout={0} unmountOnExit>
-                <Box sx={{ pb: 1, pr: CHEVRON_GUTTER }}>
+                <Box sx={{ pb: 1, pr: gutter }}>
                     <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH, px: 2 }}>
                         {!loading && keys.length === 0 ? (
                             <Typography variant="body2" sx={{ color: 'text.secondary', px: 1.5, pb: 0.5 }}>
                                 {t('sharingKeys.overview.empty')}
                             </Typography>
+                        ) : phone ? (
+                            <SharingKeysList tokens={keys} {...actions} />
                         ) : (
                             // Capped so a Team with many keys scrolls inside the card
                             // instead of pushing the rules below off the page.

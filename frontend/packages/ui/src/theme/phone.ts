@@ -67,6 +67,8 @@ export const phoneShellStyles: CSSObject = {
     },
     '& .MuiDialogActions-root': {
       flexWrap: 'wrap',
+      paddingLeft: '16px',
+      paddingRight: '16px',
       paddingBottom: `calc(12px + ${safeAreaBottom})`,
     },
   },
