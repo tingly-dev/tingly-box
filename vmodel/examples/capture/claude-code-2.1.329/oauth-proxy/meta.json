@@ -1,0 +1,37 @@
+{
+  "argv": [
+    "tb",
+    "vmodel",
+    "--capture",
+    "./cap/oauth-proxy",
+    "--json",
+    "--port",
+    "18161"
+  ],
+  "capture_out": true,
+  "capture_request_id": false,
+  "created_at": "2026-11-20T08:15:49.813680516Z",
+  "models": [
+    "ask-confirmation",
+    "ask-user-question",
+    "capture-default",
+    "claude-code-compact",
+    "claude-code-strategy",
+    "compact-round-files",
+    "compact-round-only",
+    "decision-first",
+    "decision-stable",
+    "echo-model",
+    "virtual-claude-3",
+    "virtual-fail-429",
+    "virtual-fail-500",
+    "virtual-fail-midstream-cleaneof",
+    "virtual-fail-midstream-close",
+    "virtual-fail-midstream-event",
+    "virtual-gpt-4",
+    "virtual-sequence-429",
+    "web-search-example"
+  ],
+  "url": "http://127.0.0.1:18161",
+  "redacted": true
+}

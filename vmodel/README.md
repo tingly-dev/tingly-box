@@ -30,6 +30,8 @@ vmodel/
 ├── openai/             // OpenAI Chat-protocol models + Registry alias
 ├── decision/           // Decisions-endpoint models (options in, one answer out) + Registry alias
 ├── virtualserver/      // Production Gin HTTP handler + Service wiring
+├── capture/            // `tb vmodel --capture`: raw per-connection request recorder
+├── examples/capture/   // Redacted Claude Code captures (+ redact.py) showing what it records
 └── benchmark/          // Load-test client + local server factory
     └── examples/       // Runnable server/client examples
 ```
@@ -211,6 +213,10 @@ client's model ids are not known in advance, `--capture` also turns on
 a normal reply instead of a 404 and finishes its round. `--fallback <id>` picks
 another definition. `--capture-request-id` adds a `request-id` response header.
 
+A real, redacted capture of Claude Code 2.1.329 (proxy and direct) is checked in
+under [`examples/capture/`](examples/capture/README.md), with a walk-through of
+what it shows and the script that redacted it.
+
 ### Serving unknown model ids
 
 `tb vmodel --fallback <id>` serves every request whose `model` no definition
@@ -230,7 +236,10 @@ env -i PATH="$PATH" TERM=xterm HOME="$ISO_HOME" \
 
 `env -i`, an isolated `HOME` (containing `{"hasCompletedOnboarding":true}`)
 and a fake token are mandatory: the host environment would otherwise leak into
-the wire (`CLAUDE_CODE_ENTRYPOINT`, real tokens). Add
+the wire (`CLAUDE_CODE_ENTRYPOINT`, real tokens). Also run the client from a
+directory whose parents hold no `CLAUDE.md` and no `.claude/skills`: Claude Code
+embeds all of them in the first user message, so a capture taken under your home
+directory contains your private instructions. Add
 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` to see the direct-to-Anthropic
 shape. Plain HTTP only; the OAuth login/refresh endpoints (TLS, fixed hosts)
 cannot be captured this way.
