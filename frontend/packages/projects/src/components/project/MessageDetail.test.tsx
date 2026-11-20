@@ -8,7 +8,7 @@ import { readLocal, writeLocal } from '../../utils/storage';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('../Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div>{text}</div> }));
-vi.mock('../attachments', () => ({ AttachmentChips: ({ items }: { items: { name: string }[] }) => <div>{items.map((item) => <button key={item.name}>{item.name}</button>)}</div>, uploadAttachments: vi.fn() }));
+vi.mock('../attachments', () => ({ AttachmentChips: ({ items }: { items: { name: string }[] }) => <div>{items.map((item) => <button key={item.name}>{item.name}</button>)}</div>, AttachmentGallery: ({ children }: { children: unknown }) => <>{children}</>, uploadAttachments: vi.fn() }));
 vi.mock('../ThreadComposer', () => ({ ThreadComposer: ({ onSend, context, onModelChange }: { onSend: (text: string, files: []) => Promise<boolean>; context?: React.ReactNode; onModelChange?: (model: string) => void }) => <div>{context}<button onClick={() => onModelChange?.('next-model')}>Switch model</button><button onClick={() => void onSend('New message', [])}>Send message</button></div> }));
 
 beforeEach(() => localStorage.clear());

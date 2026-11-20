@@ -23,6 +23,8 @@ export default {
       "deny": "Deny",
       "details": "Details",
       "earlierSteps": "Show earlier steps",
+      "filesSent_one": "{{count}} file sent",
+      "filesSent_other": "{{count}} files sent",
       "focusAgent": "Open on its own",
       "input": "Input",
       "loadingSteps": "Loading steps…",

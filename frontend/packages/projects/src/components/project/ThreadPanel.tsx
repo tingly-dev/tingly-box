@@ -5,12 +5,12 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap, type Attachment, type BackgroundTask, type CleanupReport, type Subagent, type Thread, type ThreadEvent } from '../../client';
-import { buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
+import { blockAttachments, buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
 import { ControlTooltip } from '../ControlTooltip';
 import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
 import { HeldMessages, heldMessages } from './HeldMessages';
-import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
+import { AttachmentChips, AttachmentGallery, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
 import { ArrowBack, DiffIcon, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
@@ -167,7 +167,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // A folder thread has no branch to review or merge; its uploads are its own.
     const session = folder;
     const owner = useMemo<AttachOwner>(() => (session ? { threadId } : { projectId }), [session, projectId, threadId]);
-    const Attachments = useMemo(() => ({ items, align }: { items: Attachment[]; align?: 'flex-start' | 'flex-end' }) => <AttachmentChips owner={owner} items={items} align={align} />, [owner]);
+    const Attachments = useMemo(() => ({ items, align, captions }: { items: Attachment[]; align?: 'flex-start' | 'flex-end'; captions?: Record<string, string> }) => <AttachmentChips owner={owner} items={items} align={align} captions={captions} />, [owner]);
     const ops = useMemo(() => threadOps(threadId), [threadId]);
     const composer = useRef<ThreadComposerHandle>(null);
     // Messages held for after the running turn.
@@ -196,6 +196,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         const { entries, pendingRequestId } = threadTranscript(events ?? [], running, (e) => e.source === 'thread' ? coordinator : undefined);
         return { blocks: buildTranscript(entries), pendingRequestId };
     }, [events, running, coordinator]);
+    // Every file in the conversation, which a preview steps through.
+    const galleryFiles = useMemo(() => blockAttachments(blocks), [blocks]);
 
     // Load the older progress calls separately so a long conversation's
     // paginated transcript does not lose its current checklist.
@@ -571,6 +573,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 <Box sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
                 {!focused && events !== null && more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                 {focused && focusSteps?.loaded && focusSteps.more && host && <LoadEarlier scrollRef={scrollRef} label={t('subagents.earlier')} onLoad={() => host.load(focused, true)} />}
+                <AttachmentGallery owner={owner} files={galleryFiles}>
                 {events === null || (focused && !focusBlock)
                     ? <Skeleton variant="rounded" height={120} />
                     : focused && focusBlock
@@ -578,6 +581,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     : view === 'chat'
                         ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
+                </AttachmentGallery>
                 </Box>
             </Box>
 

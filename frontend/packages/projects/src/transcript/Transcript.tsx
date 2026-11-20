@@ -10,7 +10,7 @@ import {useTranslation} from 'react-i18next';
 import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
 import type {ActivityStep, CommandPayload, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
-import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
+import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, hasFiles, uniqueFiles, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
 import {serverNow} from '../utils/serverClock';
@@ -89,13 +89,34 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
     );
 };
 
+// A message that carries files is a file the agent sent (send_file): what it
+// was sent with is the file's own hover text and alt, never a message of its own.
+const sentCaptions = (messages: TranscriptEntry[]): Record<string, string> => Object.fromEntries(
+    messages.flatMap((m) => (m.content.trim() ? (m.attachments ?? []).map((f) => [f.path, m.content.trim()]) : [])),
+);
+
 const AssistantText = ({message}: {message: TranscriptEntry}) => {
     const {attachments: Attachments} = useTranscriptHost();
-    const files = message.attachments ?? [];
-    return <>
-        {files.length > 0 && (Attachments ? <Attachments items={files} align="flex-start"/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>)}
-        {message.content && <Markdown content={message.content}/>}
-    </>;
+    if (hasFiles(message)) {
+        const files = message.attachments ?? [];
+        return Attachments ? <Attachments items={files} align="flex-start" captions={sentCaptions([message])}/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>;
+    }
+    return message.content ? <Markdown content={message.content}/> : null;
+};
+
+// FilesGroup is the files sent one after another, as one row of thumbnails
+// instead of a message each. What each was sent with is on the file itself.
+const FilesGroup = ({messages}: {messages: TranscriptEntry[]}) => {
+    const {t} = useTranslation();
+    const {attachments: Attachments} = useTranscriptHost();
+    const files = uniqueFiles(messages);
+    return (
+        <Box role="group" aria-label={t('projects.transcript.filesSent', {defaultValue: '{{count}} files sent', count: files.length})}>
+            {Attachments
+                ? <Attachments items={files} align="flex-start" captions={sentCaptions(messages)}/>
+                : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>}
+        </Box>
+    );
 };
 
 const formatDuration = (ms: number): string => {
@@ -501,12 +522,32 @@ interface BlockListProps {
     timeMarked?: boolean;
 }
 
+// A file sent into the conversation (send_file) is an assistant message that
+// carries files.
+const isSentFile = (block: TranscriptBlock): block is Extract<TranscriptBlock, {type: 'assistant'}> =>
+    block.type === 'assistant' && hasFiles(block.message);
+
+// The call that sends a file; its card is the file itself, so a run of such
+// calls between files is not worth a row of its own.
+const isSendFileCall = (name: string) => /(^|__)send_file$/.test(name);
+const isSendFileRun = (block: TranscriptBlock): boolean =>
+    block.type === 'activity' && block.steps.length > 0 && block.steps.every((s) => s.type === 'tool' && isSendFileCall(s.name));
+
+interface ShownBlock {
+    block: TranscriptBlock;
+    index: number;
+    last: boolean;
+    // Files sent one after another, drawn together as one row; block is the first of them.
+    files?: TranscriptEntry[];
+}
+
 // shownBlocks is what a list renders: a settled approval that its call's row
 // already reports is left out, and the calls on either side of it read as
-// one run again. Each block keeps its index (the trajectory's anchor) and
-// whether it ends the list (the live one).
-const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): {block: TranscriptBlock; index: number; last: boolean}[] => {
-    const out: {block: TranscriptBlock; index: number; last: boolean}[] = [];
+// one run again. Files sent one after another (with only their own send calls
+// between) become one entry. Each block keeps its index (the trajectory's
+// anchor) and whether it ends the list (the live one).
+const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): ShownBlock[] => {
+    const out: ShownBlock[] = [];
     blocks.forEach((original, index) => {
         const block = detail === 'concise' ? conciseBlock(original) : original;
         if (!block) return;
@@ -514,6 +555,17 @@ const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detai
         if (detail === 'detailed' && block.type === 'request' && block.toolId && block.message.request_id !== pendingRequestId) {
             if (last && out.length > 0) out[out.length - 1].last = true;
             return;
+        }
+        if (isSentFile(block)) {
+            // Look past the send calls between two files.
+            let at = out.length - 1;
+            if (at > 0 && isSendFileRun(out[at].block) && isSentFile(out[at - 1].block)) at--;
+            const previous = out[at];
+            if (previous && isSentFile(previous.block)) {
+                out.splice(at + 1, out.length - at - 1);
+                out[at] = {...previous, files: [...(previous.files ?? [previous.block.message]), block.message], last};
+                return;
+            }
         }
         const previous = out[out.length - 1];
         if (block.type === 'activity' && previous?.block.type === 'activity') {
@@ -539,12 +591,13 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
     // A merged run of calls keeps its first index, so the divider goes
     // before the first item at or past newFrom.
     const dividerAt = newFrom >= 0 ? items.find((x) => x.index >= newFrom)?.index : undefined;
-    const render = ({block: b, index: i, last}: (typeof items)[number], at: number) => {
+    const render = ({block: b, index: i, last, files}: ShownBlock, at: number) => {
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
                     return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><UserBubble message={b.message}/></Box>;
                 case 'assistant':
+                    if (files) return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><FilesGroup messages={files}/></Box>;
                     return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><AssistantText message={b.message}/></Box>;
                 case 'activity':
                     return <ActivityRun key={i} steps={b.steps} live={working && last} hold={holdsPending(items[at + 1]?.block, pendingRequestId)} expandAll={expandAll} pendingRequestId={pendingRequestId}/>;
