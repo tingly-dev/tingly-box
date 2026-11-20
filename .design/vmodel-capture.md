@@ -152,25 +152,30 @@ not carry an obvious fake marker.
 **What a capture can hold without anyone meaning it.** The first real capture of
 Claude Code 2.1.329 taken from a scratch directory under the author's home
 contained the absolute paths (home directory and project ids), the contents of
-the user's `~/CLAUDE.md` as a `<system-reminder>`, the user's whole private
-skills list and agent types (Claude Code walks up from the working directory and
-embeds every `CLAUDE.md` and `.claude/skills` it finds), plus tens of KB of
-Claude Code's own system prompt and tool descriptions. So: run the client from a
+the user's `~/CLAUDE.md` as a `<system-reminder>`, and the user's whole private
+skills list and agent types: Claude Code walks up from the working directory and
+embeds every `CLAUDE.md` and `.claude/skills` it finds. So: run the client from a
 directory with clean ancestors (the example was taken in `/dev/shm/cc/work` with
-`HOME=/dev/shm/cc/home`), and never commit a capture as-is.
+`HOME=/dev/shm/cc/dot`), and never commit a capture as-is.
 
-Sharing is a deliberate step with its own tool, not a format feature:
-`vmodel/examples/capture/redact.py <dir>` rewrites a *copy* in place. It keeps
-header names, casing and order and the body's JSON structure, and changes:
-credentials to scheme+kind, UUIDs to numbered placeholders, `device_id` to
-zeros, `cch` to `xxxxx` (the hash no longer matches the redacted body), absolute
-paths, and every JSON string over 120 characters to a 60-character stub with its
-length (the prompt, tool descriptions and reminders), then recomputes
-`Content-Length` and the `index.jsonl` ranges and marks `meta.json`
-`"redacted": true`. `vmodel/capture/example_test.go` fails if a checked-in
-example regains a path, a `CLAUDE.md`, a real-looking id, a credential, or long
-prompt text. The redacted copies are the example under
-`vmodel/examples/capture/` (§6).
+Sharing is a deliberate step with its own tool, not a format feature, and it is
+kept narrow on purpose: it masks what is private about the *machine*, not what
+the client *is*. `vmodel/examples/capture/redact.py <dir>` rewrites a *copy* in
+place. It masks (a) home paths (`/home/<user>/…` → `/home/user/[REDACTED]`),
+(b) every `<system-reminder>` block except the environment, model name, token
+budget and date (kept: first line and closing tag, content → `[REDACTED]`; this
+is where skills, agent types, `CLAUDE.md` and attribution settings live), and
+(c) credential values (scheme and token kind kept). Header names, casing and
+order, the JSON structure and key order, and Claude Code's own system prompt and
+tool descriptions stay as sent; ids from a throwaway `HOME` are not private and
+stay. It recomputes `Content-Length` and the `index.jsonl` ranges and marks
+`meta.json` `"redacted": true`. Because the body changes, a `cch` in it no
+longer verifies. An earlier version also cut every long string, renumbered UUIDs
+and zeroed ids; that hid nothing private (the prompt is the client's, not the
+user's) and made the example less useful, so it was dropped.
+`vmodel/capture/example_test.go` fails if a checked-in example regains a home
+path, an unmasked reminder or a credential. The redacted copies are the example
+under `vmodel/examples/capture/` (§6).
 
 ### 3.4 What the server answers (so the client finishes a normal round)
 

@@ -18,11 +18,13 @@ claude-code-2.1.329/
 redact.py               how the example was redacted
 ```
 
-**These are redacted copies, not faithful captures.** A real capture is verbatim
-and contains credentials, device/session ids and whatever the client embeds in
-its prompt (the working directory, and every `CLAUDE.md` and skill found up the
-directory tree). `redact.py` was run over both before they were checked in; it
-changes only the request side. See [what is redacted](#what-is-redacted).
+**These are lightly redacted copies, not faithful captures.** A real capture is
+verbatim, and Claude Code embeds facts about its environment in the request: the
+working directory and home path, and `<system-reminder>` blocks listing the
+skills, the agent types and every `CLAUDE.md` found up the directory tree.
+`redact.py` masks exactly that and nothing else (see [what is
+redacted](#what-is-redacted)); everything else, including Claude Code's own
+system prompt and tool descriptions, is as sent.
 
 ## Read one
 
@@ -40,10 +42,10 @@ value is cut here only for width):
 ```
 POST /v1/messages?beta=true HTTP/1.1
 Accept: application/json
-Authorization: Bearer sk-ant-oat01-[redacted]
+Authorization: Bearer sk-ant-oat01-[REDACTED]
 Content-Type: application/json
 User-Agent: claude-cli/2.1.329 (external, sdk-cli)
-X-Claude-Code-Session-Id: 00000000-0000-4000-8000-000000000001
+X-Claude-Code-Session-Id: 24bc0780-4faf-4003-9022-f3ab59a89433
 X-Stainless-Arch: x64
 X-Stainless-Lang: js
 X-Stainless-OS: Linux
@@ -57,14 +59,14 @@ anthropic-dangerous-direct-browser-access: true
 anthropic-version: 2023-06-01
 x-app: cli
 x-claude-1p-request-class: main
-x-claude-code-prompt-id: 00000000-0000-4000-8000-000000000002
+x-claude-code-prompt-id: 4cbe247f-8724-4d02-92db-93b5e521ba12
 x-claude-code-request-class: main
 x-claude-code-sandy-plover: []
-x-client-request-id: 00000000-0000-4000-8000-000000000003
+x-client-request-id: 4ead72de-daab-4e50-82df-d846299c9ac2
 Connection: keep-alive
-Host: 127.0.0.1:18162
+Host: 127.0.0.1:18182
 Accept-Encoding: gzip, deflate, br, zstd
-Content-Length: 12144
+Content-Length: 78915
 ```
 
 ## What only a raw capture shows
@@ -91,32 +93,42 @@ Content-Length: 12144
 
 ## What is redacted
 
-`redact.py` keeps header names, casing and order and the body's JSON structure
-and key order, and recomputes `Content-Length` and the `index.jsonl` ranges.
+`redact.py` masks what is private about the machine and leaves the rest alone:
+header names, casing and order, the body's JSON structure and key order, the
+client's system prompt and tool descriptions. It recomputes `Content-Length` and
+the `index.jsonl` ranges.
 
-- **Credentials**: `Authorization` / `x-api-key` keep only the scheme and token kind
-  (`Bearer sk-ant-oat01-[redacted]`). The token used was a fake one anyway.
-- **Ids**: every UUID becomes `00000000-0000-4000-8000-0000000000NN`, numbered by
-  first appearance (so the prompt id repeated in a header and in the billing
-  header still matches); the 64-hex `device_id` becomes zeros.
-- **`cch`** becomes `xxxxx`: it is a hash of the exact body, which no longer matches.
-- **Paths** under `/home`, `/Users`, `/root`, `/dev/shm`, `/tmp` are replaced.
-- **Long text**: every JSON string over 120 characters is cut to its first 60
-  characters plus `…[redacted N chars]`. That is Claude Code's own system prompt,
-  tool descriptions and the `<system-reminder>` blocks (environment, skills,
-  agent types). The shapes, tool names and cache-control markers stay; the
-  proprietary text does not. The unredacted bodies were about 88 KB.
-- `raw/conn-N.out` (our own answer) and timestamps are left as they were.
+- **Paths**: `/home/<user>/…` and `/Users/<user>/…` become `/home/user/[REDACTED]`.
+  (This example ran under `/dev/shm`, so there was nothing to mask there.)
+- **Environment reminders**: a `<system-reminder>` block is kept whole only if it
+  is the environment, the model name, the token budget or the date. Any other
+  one (skills, agent types, deferred tools, `CLAUDE.md`, attribution settings)
+  keeps its first line and closing tag and its content becomes `[REDACTED]`:
+
+  ```
+  <system-reminder>
+  The following skills are available for use with the Skill tool:
+  [REDACTED]
+  </system-reminder>
+  ```
+- **Credentials**: `Authorization` / `x-api-key` keep the scheme and token kind:
+  `Bearer sk-ant-oat01-[REDACTED]`. The token used was a fake one anyway.
+
+Not masked, deliberately: the device id, session id and request ids (random
+values generated for a throwaway `HOME`), and `cch`. Because the body changed,
+the `cch` hash in the direct billing header no longer verifies against it.
+`raw/conn-N.out` (our own answer) and timestamps are as recorded.
 
 `vmodel/capture/example_test.go` checks the example against its index, the header
-casing/order, the proxy/direct differences and that nothing above has crept back.
+casing/order and the proxy/direct differences, and fails if a home path, an
+unmasked reminder or a credential comes back.
 
 ## How these were made
 
 ```sh
-mkdir -p /dev/shm/cc/home /dev/shm/cc/work && echo '{"hasCompletedOnboarding":true}' > /dev/shm/cc/home/.claude.json
+mkdir -p /dev/shm/cc/dot /dev/shm/cc/work && echo '{"hasCompletedOnboarding":true}' > /dev/shm/cc/dot/.claude.json
 tb vmodel --capture ./cap/oauth-direct --json --port 18162 &        # prints {"url": ...}
-( cd /dev/shm/cc/work && env -i PATH="$PATH" TERM=xterm HOME=/dev/shm/cc/home \
+( cd /dev/shm/cc/work && env -i PATH="$PATH" TERM=xterm HOME=/dev/shm/cc/dot \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1 DISABLE_AUTOUPDATER=1 \
     ANTHROPIC_BASE_URL=http://127.0.0.1:18162 CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-fake \
     _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1 \
@@ -127,5 +139,5 @@ python3 vmodel/examples/capture/redact.py ./cap/oauth-direct        # then copy 
 Run the client from a working directory (and `HOME`) whose parents hold no
 `CLAUDE.md` and no `.claude/skills`: Claude Code embeds all of them in the first
 user message, so a capture taken inside your home directory contains your private
-instructions. `redact.py` cuts that text, but do not rely on it for secrets: look
-at the capture before sharing it.
+instructions. `redact.py` masks the skills, agent types and `CLAUDE.md` reminders,
+but it cannot know everything: read the result before sharing it.

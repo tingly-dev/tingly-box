@@ -120,45 +120,46 @@ func TestExampleProxyVersusDirect(t *testing.T) {
 			t.Errorf("%s should be a direct-only header", h)
 		}
 	}
-	if strings.Contains(proxyBody, "cch=") || !strings.Contains(directBody, "cch=xxxxx;") {
-		t.Error("cch should appear in the direct billing header only (redacted to xxxxx)")
+	if strings.Contains(proxyBody, "cch=") || !regexp.MustCompile(`cch=[0-9a-f]{5};`).MatchString(directBody) {
+		t.Error("cch should appear in the direct billing header only")
 	}
 	if strings.Contains(proxyHead, "prompt-caching-scope") || !strings.Contains(directHead, "prompt-caching-scope") {
 		t.Error("prompt-caching-scope should be a direct-only beta")
 	}
 }
 
-var (
-	hex64       = regexp.MustCompile(`[0-9a-fA-F]{64}`)
-	anyUUID     = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
-	placeholder = regexp.MustCompile(`^00000000-0000-4000-8000-\d{12}$`)
-	secretToken = regexp.MustCompile(`sk-ant-[a-z]+\d*-?(\S{0,12})`)
-)
+// Reminder kinds that carry nothing private and are kept whole; every other
+// <system-reminder> block must be reduced to its first line plus [REDACTED].
+var harmlessReminders = []string{"# Environment\n", "You are powered by the model named", "<total_tokens>", "Today's date is"}
 
-// longStrings returns every JSON string value longer than n characters.
-func longStrings(v any, n int) []string {
+var secretToken = regexp.MustCompile(`sk-ant-[a-z]+\d*-?(\S{0,12})`)
+
+// textBlocks returns every {"type":"text","text":…} string in a JSON document.
+func textBlocks(v any) []string {
 	var out []string
 	switch v := v.(type) {
-	case string:
-		if len([]rune(v)) > n {
-			out = append(out, v[:40])
-		}
 	case []any:
 		for _, e := range v {
-			out = append(out, longStrings(e, n)...)
+			out = append(out, textBlocks(e)...)
 		}
 	case map[string]any:
+		if s, ok := v["text"].(string); ok && v["type"] == "text" {
+			out = append(out, s)
+		}
 		for _, e := range v {
-			out = append(out, longStrings(e, n)...)
+			out = append(out, textBlocks(e)...)
 		}
 	}
 	return out
 }
 
 // The example must stay shareable: if it is re-captured, run redact.py first.
+// What is private here is the environment the client describes: paths, the
+// skills and agent lists, CLAUDE.md content. The client's own prompt is not.
 func TestExampleIsRedacted(t *testing.T) {
+	homePath := regexp.MustCompile(`/(?:home|Users)/([^\s"\\/]*)`)
 	err := filepath.Walk(filepath.Dir(exampleDir), func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || strings.HasSuffix(path, ".py") || strings.HasSuffix(path, ".md") || strings.HasSuffix(path, ".gitattributes") {
+		if err != nil || info.IsDir() || !strings.Contains(path, "claude-code-") {
 			return err
 		}
 		data, err := os.ReadFile(path)
@@ -166,40 +167,48 @@ func TestExampleIsRedacted(t *testing.T) {
 			return err
 		}
 		text := string(data)
-		for _, bad := range []string{"/home/", "/Users/", "/root/", "/dev/shm", "/tmp/", "CLAUDE.md", "x0079"} {
-			if strings.Contains(text, bad) {
-				t.Errorf("%s contains %q", path, bad)
-			}
+		if strings.Contains(text, "x0079") {
+			t.Errorf("%s names the machine's user", path)
 		}
-		for _, h := range hex64.FindAllString(text, -1) {
-			if strings.Trim(h, "0") != "" {
-				t.Errorf("%s contains a 64-hex id %s…", path, h[:8])
-			}
-		}
-		if !strings.HasSuffix(path, "index.jsonl") && !strings.HasSuffix(path, "meta.json") && !strings.Contains(path, ".out") {
-			for _, u := range anyUUID.FindAllString(text, -1) {
-				if !placeholder.MatchString(u) {
-					t.Errorf("%s contains a real-looking uuid %s", path, u)
-				}
-			}
-			for _, m := range secretToken.FindAllStringSubmatch(text, -1) {
-				if !strings.HasPrefix(m[1], "[redacted]") {
-					t.Errorf("%s contains a credential: %q", path, m[0])
-				}
-			}
-			if strings.Contains(path, filepath.Join("raw", "conn-0001.in")) {
-				_, body, _ := strings.Cut(text, "\r\n\r\n")
-				var doc any
-				if err := json.Unmarshal([]byte(body), &doc); err != nil {
-					t.Errorf("%s: body not JSON: %v", path, err)
-				}
-				if long := longStrings(doc, 200); len(long) > 0 {
-					t.Errorf("%s still has long prompt/tool text: %q", path, long)
-				}
+		for _, m := range homePath.FindAllStringSubmatch(text, -1) {
+			if m[1] != "user" {
+				t.Errorf("%s contains home path %q", path, m[0])
 			}
 		}
 		if strings.HasSuffix(path, "meta.json") && !strings.Contains(text, `"redacted": true`) {
 			t.Errorf("%s is not marked redacted", path)
+		}
+		if !strings.HasSuffix(path, "conn-0001.in") {
+			return nil
+		}
+		for _, m := range secretToken.FindAllStringSubmatch(text, -1) {
+			if !strings.HasPrefix(m[1], "[REDACTED]") {
+				t.Errorf("%s contains a credential: %q", path, m[0])
+			}
+		}
+		_, body, _ := strings.Cut(text, "\r\n\r\n")
+		var doc any
+		if err := json.Unmarshal([]byte(body), &doc); err != nil {
+			t.Errorf("%s: body not JSON: %v", path, err)
+			return nil
+		}
+		reminders := 0
+		for _, block := range textBlocks(doc) {
+			if !strings.HasPrefix(block, "<system-reminder>") {
+				continue
+			}
+			reminders++
+			inner := strings.TrimLeft(strings.TrimPrefix(block, "<system-reminder>"), "\n")
+			harmless := false
+			for _, h := range harmlessReminders {
+				harmless = harmless || strings.HasPrefix(inner, h)
+			}
+			if !harmless && !strings.HasSuffix(block, "\n[REDACTED]\n</system-reminder>") {
+				t.Errorf("%s: reminder not masked: %.80q", path, block)
+			}
+		}
+		if reminders == 0 {
+			t.Errorf("%s: no <system-reminder> blocks found; did the capture format change?", path)
 		}
 		return nil
 	})

@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
-"""Redact a `tb vmodel --capture` directory in place so it can be shared.
+"""Mask what is private in a `tb vmodel --capture` directory, in place.
 
-A capture is verbatim on purpose, so it holds whatever the client put on the
-wire: credentials, device and session ids, local paths, and the client's own
-long prompt/tool text. This rewrites the request side (raw/conn-N.in) with
-these rules and fixes up what depends on lengths (Content-Length, index.jsonl
-byte ranges), leaving header names, casing and order, and the body's JSON
-structure and key order untouched:
+A capture is verbatim on purpose, so next to the wire facts it holds whatever
+the client embedded about its environment. For Claude Code that is the working
+directory and home path, and the `<system-reminder>` blocks of its first user
+message: the skills list, agent types, every CLAUDE.md found up the directory
+tree, git/attribution settings. This masks exactly that and nothing else, so
+the example still shows the client's own system prompt, tool descriptions,
+headers and body as sent:
 
-  * Authorization / x-api-key / Proxy-Authorization / Cookie values keep only
-    their scheme and token-kind prefix:  Bearer sk-ant-oat01-[redacted]
-  * every UUID becomes 00000000-0000-4000-8000-0000000000NN, numbered by first
-    appearance, so "same value" relationships (a prompt id in a header and in
-    the billing header) still show;
-  * 64-hex ids (device_id) become zeros; `cch=<5 hex>` becomes `cch=xxxxx`
-    (it is a hash of the body, which no longer matches);
-  * absolute paths under /home, /Users, /root, /dev/shm, /tmp become /work
-    (cwd) or /home/user;
-  * every JSON string longer than 120 characters is cut to its first 60
-    characters plus "…[redacted N chars]": that is the client's static system
-    prompt and tool descriptions, which bulk the capture up and are not ours.
-    Two short wire facts are exempt: the `x-anthropic-billing-header: …` system
-    block and `metadata.user_id` (their ids are already redacted above).
+  * absolute paths under /home/<user> and /Users/<user> keep their depth but
+    lose the user and everything below it:  /home/user/[REDACTED]
+  * a `<system-reminder>` text block is kept only if it is one of the known
+    harmless kinds (environment, model name, token budget, date); any other one
+    keeps its first line and its closing tag, its content becomes [REDACTED]:
 
-raw/conn-N.out (what the server answered) is left alone. meta.json gets
-"redacted": true. The result is NOT a faithful capture any more (cch cannot be
-verified from it); redact a copy, never the original.
+        <system-reminder>\\nThe following skills are available for use with the Skill tool:\\n[REDACTED]\\n</system-reminder>
+
+  * Authorization / x-api-key / Proxy-Authorization / Cookie values keep their
+    scheme and token kind:  Bearer sk-ant-oat01-[REDACTED]
+
+Header names, casing and order and the body's JSON structure and key order are
+untouched; Content-Length and the index.jsonl byte ranges are recomputed.
+raw/conn-N.out (what the server answered) and timestamps are left as they were.
+meta.json gets "redacted": true. The result is NOT a faithful capture any more:
+the body changed, so a `cch=` hash in it no longer verifies. Redact a copy,
+never the original, and still read the result before sharing it.
 
     python3 redact.py <capture-dir>
 """
@@ -34,75 +34,79 @@ import os
 import re
 import sys
 
+MARK = "[REDACTED]"
 SECRET_HEADERS = {"authorization", "x-api-key", "proxy-authorization", "cookie"}
-UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-HEX64 = re.compile(r"\b[0-9a-fA-F]{64}\b")
-CCH = re.compile(r"cch=[0-9a-f]{5}")
-PATH = re.compile(r"/(?:home|Users|root|dev/shm|tmp)/[^\s\"\\`']*")
-LONG = 120
-KEEP = 60
+# /home/alice/project/x  ->  /home/user/[REDACTED]
+HOME_PATH = re.compile(r"/(home|Users)/[^\s\"\\`'<>:;,)]+")
+# Claude Code's per-project state dirs encode the cwd with dashes: -home-alice-project
+DASH_PATH = re.compile(r"-(home|Users)-[A-Za-z0-9_.\-]+")
+# Reminder kinds that carry nothing private; matched against the text after the tag.
+HARMLESS = (
+    "# Environment\n",
+    "You are powered by the model named",
+    "<total_tokens>",
+    "Today's date is",
+)
+REMINDER = "<system-reminder>"
+REMINDER_END = "</system-reminder>"
 
 
 class Redactor:
-    def __init__(self):
-        self.uuids = {}
-
-    def uuid(self, m):
-        key = m.group(0).lower()
-        if key not in self.uuids:
-            self.uuids[key] = "00000000-0000-4000-8000-%012d" % (len(self.uuids) + 1)
-        return self.uuids[key]
-
-    def text(self, s):
-        s = UUID.sub(self.uuid, s)
-        s = HEX64.sub("0" * 64, s)
-        s = CCH.sub("cch=xxxxx", s)
-        s = PATH.sub(lambda m: "/work" if m.group(0).rstrip("/").endswith("work") else "/home/user", s)
-        return s
+    def path(self, s):
+        s = HOME_PATH.sub(lambda m: "/%s/user/%s" % (m.group(1), MARK), s)
+        return DASH_PATH.sub(lambda m: "-%s-user-%s" % (m.group(1), MARK), s)
 
     def secret(self, value):
         scheme, _, token = value.partition(" ")
         if not token:
             scheme, token = "", value
         kind = token[:13]  # sk-ant-oat01- / sk-ant-api03-
-        return (scheme + " " if scheme else "") + kind + "[redacted]"
+        return (scheme + " " if scheme else "") + kind + MARK
 
-    def walk(self, node, key=None):
+    def reminder(self, text):
+        if not (text.startswith(REMINDER) and text.rstrip().endswith(REMINDER_END)):
+            return text
+        inner = text[len(REMINDER):].lstrip("\n")
+        if inner.startswith(HARMLESS):
+            return text
+        first = inner.split("\n", 1)[0]
+        return "%s\n%s\n%s\n%s" % (REMINDER, first, MARK, REMINDER_END)
+
+    def walk(self, node):
         if isinstance(node, dict):
-            return {k: self.walk(v, k) for k, v in node.items()}
+            if node.get("type") == "text" and isinstance(node.get("text"), str):
+                node = dict(node, text=self.reminder(node["text"]))
+            return {k: self.walk(v) for k, v in node.items()}
         if isinstance(node, list):
             return [self.walk(v) for v in node]
         if isinstance(node, str):
-            node = self.text(node)
-            if key == "user_id" or node.startswith("x-anthropic-billing-header:"):
-                return node
-            if len(node) > LONG:
-                return "%s…[redacted %d chars]" % (node[:KEEP], len(node))
+            return self.path(node)
         return node
 
     def request(self, raw):
         head, sep, body = raw.partition(b"\r\n\r\n")
         lines = head.decode("latin-1").split("\r\n")
-        out = [self.text(lines[0])]
+        out = [self.path(lines[0])]
         clen = None
-        for i, line in enumerate(lines[1:], 1):
+        for line in lines[1:]:
             name, colon, value = line.partition(":")
             if not colon:
                 out.append(line)
                 continue
             value = value.strip()
-            if name.lower() in SECRET_HEADERS:
-                value = self.secret(value)
-            else:
-                value = self.text(value)
+            value = self.secret(value) if name.lower() in SECRET_HEADERS else self.path(value)
             if name.lower() == "content-length":
                 clen = len(out)
             out.append("%s: %s" % (name, value))
         try:
             doc = json.loads(body)
         except ValueError:
-            body = self.text(body.decode("latin-1")).encode("latin-1")
+            body = self.path(body.decode("latin-1")).encode("latin-1")
         else:
+            compact = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode()
+            if compact != body:
+                sys.stderr.write("warning: body is not byte-identical after re-serialising "
+                                 "(formatting differs from the original)\n")
             body = json.dumps(self.walk(doc), ensure_ascii=False, separators=(",", ":")).encode()
         if clen is not None:
             out[clen] = "%s: %d" % (out[clen].split(":")[0], len(body))
