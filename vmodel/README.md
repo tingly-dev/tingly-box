@@ -244,6 +244,40 @@ directory contains your private instructions. Add
 shape. Plain HTTP only; the OAuth login/refresh endpoints (TLS, fixed hosts)
 cannot be captured this way.
 
+### Scripted conversations (`kind: script`)
+
+A `script` definition is a scene of conversations, not one model: tracks of
+predefined replies that real agent clients (Claude Code, the Projects
+coordinator and its threads, subagents) run against, many at once. A request
+continues the track whose earlier reply it carries (our `tool_use` ids and
+texts come back verbatim), a new conversation binds to a track by selector, and
+anything nothing expects fails the run. Engine: [`script/`](script/); design:
+[`.design/vmodel-script.md`](../.design/vmodel-script.md).
+
+```yaml
+id: scene
+kind: script
+script:
+  tracks:
+    main:
+      bind: {class: [main], last_text_contains: "say hi"}
+      steps:
+        - reply:
+            tool_calls: [{id: echo, name: Bash, arguments: {command: "echo hi"}, expect_result: {contains: hi}}]
+        - reply: {content: "DONE"}
+```
+
+```sh
+tb vmodel --config scene.yaml --fallback scene --json   # readiness lists "scripts"
+curl -X POST $URL/_vmodel/scripts/scene/signals/go       # release after: [signal:go]
+curl "$URL/_vmodel/scripts/scene/served?step=main.1"     # wait for a step
+curl -X POST $URL/_vmodel/scripts/scene/finish           # final report
+```
+
+On shutdown every script is finished, its report printed, and the command
+fails if a script failed; with `--capture` the report and trace are kept as
+`script-<id>.json` beside the capture.
+
 See [the unified definition contract](spec/README.md) for all kinds,
 per-protocol recording payloads, exact `raw_body`/`raw_stream` preservation,
 native endpoint assertions, custom Go factories and migration boundaries.

@@ -21,6 +21,7 @@ import (
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
 	"github.com/tingly-dev/tingly-box/vmodel/decision"
 	"github.com/tingly-dev/tingly-box/vmodel/openai"
+	"github.com/tingly-dev/tingly-box/vmodel/script"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -85,6 +86,7 @@ type Runtime struct {
 	definitions map[string]Definition
 	wire        map[string]scenario.Scenario
 	protocols   map[string]map[scenario.ResponseFormat]bool
+	scripts     map[string]*script.Engine
 	fallback    string
 }
 
@@ -108,7 +110,7 @@ func NewWithCatalog(defs []Definition, catalog *Catalog) (*Runtime, error) {
 	if catalog == nil {
 		catalog = NewCatalog()
 	}
-	r := &Runtime{service: virtualserver.NewEmptyService(), definitions: map[string]Definition{}, wire: map[string]scenario.Scenario{}, protocols: map[string]map[scenario.ResponseFormat]bool{}}
+	r := &Runtime{service: virtualserver.NewEmptyService(), definitions: map[string]Definition{}, wire: map[string]scenario.Scenario{}, protocols: map[string]map[scenario.ResponseFormat]bool{}, scripts: map[string]*script.Engine{}}
 	for _, original := range defs {
 		// Normalize a copy, including nested config, so factories can be reused.
 		raw, err := json.Marshal(original)
@@ -160,6 +162,13 @@ func NewWithCatalog(defs []Definition, catalog *Catalog) (*Runtime, error) {
 				return nil, fmt.Errorf("unknown transform %q", d.Transform.Builtin)
 			}
 			err = addChat(&anthropicAlias{VirtualModel: source, id: d.ID, name: d.Name}, nil)
+		case Script:
+			var engine *script.Engine
+			engine, err = script.New(d.ID, d.Script)
+			if err == nil {
+				r.scripts[d.ID] = engine
+				supported[scenario.FormatAnthropic] = true
+			}
 		case Recording:
 			var sc scenario.Scenario
 			sc, err = scenario.BuildRecording(scenario.Scenario{Name: d.ID, Description: d.Description, Assertions: d.Expect.Assertions(), Structural: d.Structural.Assertions(), Tags: d.Tags, SkipTransitive: d.SkipTransitive}, d.Responses)
@@ -290,6 +299,13 @@ func (r *Runtime) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 200, map[string]string{"status": "ready"})
 		return
 	}
+	if strings.HasPrefix(req.URL.Path, scriptControlPrefix) {
+		r.serveScriptControl(w, req)
+		return
+	}
+	if req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/v1/messages/count_tokens") && r.serveScriptCountTokens(w, req) {
+		return
+	}
 	if req.Method == http.MethodGet && (strings.HasSuffix(req.URL.Path, "/models")) {
 		switch req.URL.Path {
 		case "/v1/models", "/openai/v1/models", "/anthropic/v1/models", "/v1beta/models":
@@ -368,6 +384,10 @@ func (r *Runtime) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	u.Path = path
 	clone.URL = &u
 	clone.Body = io.NopCloser(bytes.NewReader(body))
+	if engine, ok := r.scripts[id]; ok {
+		engine.ServeHTTP(w, clone)
+		return
+	}
 	if sc, ok := r.wire[id]; ok {
 		builder := sc.MockResponses[format]
 		var streaming bool
@@ -417,6 +437,9 @@ func (r *Runtime) Scenario(id string) (scenario.Scenario, error) {
 	d, ok := r.definitions[id]
 	if !ok {
 		return scenario.Scenario{}, fmt.Errorf("unknown model %q", id)
+	}
+	if d.Kind == Script {
+		return scenario.Scenario{}, fmt.Errorf("%s is a script: it is served to agent clients, not run in the matrix", id)
 	}
 	if sc, ok := r.wire[id]; ok {
 		if d.Description != "" {

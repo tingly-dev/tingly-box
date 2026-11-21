@@ -44,10 +44,11 @@ func vmodelConfigFile(t *testing.T, contents string) string {
 func TestVModelConfiguredHTTP(t *testing.T) {
 	path := vmodelConfigFile(t, "id: configured\nkind: mock\nmock: {content: configured response}\n")
 	cmd := VModelCmdKong{Config: []string{path}}
-	handler, ids, err := cmd.handler()
+	handler, err := cmd.handler()
 	if err != nil {
 		t.Fatal(err)
 	}
+	ids := handler.IDs()
 	if len(ids) != 1 || ids[0] != "configured" {
 		t.Fatalf("unexpected models: %v", ids)
 	}
@@ -101,17 +102,18 @@ func TestVModelConfiguredHTTP(t *testing.T) {
 
 func TestVModelConfigValidationAndDefaults(t *testing.T) {
 	path := vmodelConfigFile(t, "id: duplicate\nkind: mock\nmock: {content: hi}\n")
-	if _, _, err := (&VModelCmdKong{Config: []string{path, path}}).handler(); err == nil {
+	if _, err := (&VModelCmdKong{Config: []string{path, path}}).handler(); err == nil {
 		t.Fatal("accepted duplicate model")
 	}
 	invalid := vmodelConfigFile(t, "id: invalid\ncontnet: typo\n")
-	if _, _, err := (&VModelCmdKong{Config: []string{invalid}}).handler(); err == nil {
+	if _, err := (&VModelCmdKong{Config: []string{invalid}}).handler(); err == nil {
 		t.Fatal("accepted invalid config")
 	}
-	_, ids, err := (&VModelCmdKong{}).handler()
+	runtime, err := (&VModelCmdKong{}).handler()
 	if err != nil {
 		t.Fatal(err)
 	}
+	ids := runtime.IDs()
 	if len(ids) == 0 {
 		t.Fatal("no builtin models")
 	}
@@ -293,7 +295,7 @@ func TestVModelFallback(t *testing.T) {
 	path := vmodelConfigFile(t, "- {id: known, kind: mock, mock: {content: known answer}}\n- {id: other, kind: mock, mock: {content: other answer}}\n")
 	ask := func(t *testing.T, cmd VModelCmdKong, model string) (int, string) {
 		t.Helper()
-		handler, _, err := cmd.handler()
+		handler, err := cmd.handler()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -322,7 +324,48 @@ func TestVModelFallback(t *testing.T) {
 	if code, body := ask(t, VModelCmdKong{Config: []string{path}, Fallback: "other", Capture: t.TempDir()}, "nobody"); code != 200 || !strings.Contains(body, "other answer") {
 		t.Fatalf("--fallback with --capture: %d %s", code, body)
 	}
-	if _, _, err := (&VModelCmdKong{Config: []string{path}, Fallback: "missing"}).handler(); err == nil {
+	if _, err := (&VModelCmdKong{Config: []string{path}, Fallback: "missing"}).handler(); err == nil {
 		t.Fatal("undefined --fallback accepted")
+	}
+}
+
+func TestVModelScriptReportsOnShutdown(t *testing.T) {
+	path := vmodelConfigFile(t, "id: scene\nkind: script\nscript:\n  tracks:\n    main:\n      bind: {}\n      steps: [{id: hello, reply: {content: hi}}, {id: never, reply: {content: x}}]\n")
+	dir := filepath.Join(t.TempDir(), "cap")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	cmd := VModelCmdKong{Config: []string{path}, Fallback: "scene", Capture: dir, CaptureOut: true, Host: "127.0.0.1", JSON: true}
+	done := make(chan error, 1)
+	go func() { err := cmd.run(ctx, writer); writer.CloseWithError(err); done <- err }()
+	var ready vmodelReady
+	if err := json.NewDecoder(reader).Decode(&ready); err != nil {
+		t.Fatal(err)
+	}
+	if len(ready.Scripts) != 1 || ready.Scripts[0] != "scene" {
+		t.Fatalf("readiness: %+v", ready)
+	}
+	resp, err := http.Post(ready.AnthropicBaseURL+"/v1/messages?beta=true", "application/json",
+		strings.NewReader(`{"model":"claude-sonnet-4-6","max_tokens":10,"tools":[{"name":"Bash"}],"messages":[{"role":"user","content":"hi"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(body), `"text":"hi"`) {
+		t.Fatalf("script answer %d: %s", resp.StatusCode, body)
+	}
+	cancel()
+	err = <-done
+	if err == nil || !strings.Contains(err.Error(), "script scene failed") {
+		t.Fatalf("shutdown error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "script-scene.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"unconsumed"`) || !strings.Contains(string(data), `"via": "bind"`) {
+		t.Fatalf("report: %s", data)
 	}
 }
