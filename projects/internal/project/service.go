@@ -131,19 +131,10 @@ func (s *Service) Start(ctx context.Context) {
 		}
 	}()
 	go func() {
-		tick := time.NewTicker(time.Hour)
-		defer tick.Stop()
-		for {
-			s.Threads.AutoResolve(7 * 24 * time.Hour)
-			select {
-			case <-ctx.Done():
-				shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				s.Stop(shutdown)
-				cancel()
-				return
-			case <-tick.C:
-			}
-		}
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		s.Stop(shutdown)
+		cancel()
 	}()
 }
 

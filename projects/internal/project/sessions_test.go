@@ -134,16 +134,6 @@ func TestSessionApprovalsMessagesAndModeChange(t *testing.T) {
 	assert.Equal(t, db.ThreadIdle, reopened.Status)
 }
 
-func TestSessionIsNeverAutoArchived(t *testing.T) {
-	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("ok", 1, 1); return nil })
-	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "hi"})
-	require.NoError(t, err)
-	waitStatus(t, f.store, s.ID, db.ThreadIdle)
-	f.threads.AutoResolve(-time.Hour)
-	got, _ := f.store.GetThread(s.ID)
-	assert.Equal(t, db.ThreadIdle, got.Status)
-}
-
 func TestFolderIsArchivedNotRemoved(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error {
 		_, err := turn.Approve("r", "Bash", map[string]any{"command": "ls"})

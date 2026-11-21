@@ -201,7 +201,7 @@ func TestMergeNeedsOneOfTwoMethods(t *testing.T) {
 // origin that git pushes to a local bare repository, and a fake GitHub.
 func mergeFixture(t *testing.T) (*testFixture, *db.Thread, *fakeGitHub, string) {
 	t.Helper()
-	f := newFixture(t, func(turn *enginetest.Turn) error {
+	return mergeFixtureWith(t, func(turn *enginetest.Turn) error {
 		dir := turn.Opts.ProjectPath
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("x\n"), 0o644))
 		run(t, dir, "git", "add", ".")
@@ -209,6 +209,13 @@ func mergeFixture(t *testing.T) (*testFixture, *db.Thread, *fakeGitHub, string) 
 		turn.Say("Added feature.txt.", 1, 1)
 		return nil
 	})
+}
+
+// mergeFixtureWith is mergeFixture with the thread's turns run by script; the
+// first turn must commit something.
+func mergeFixtureWith(t *testing.T, script func(turn *enginetest.Turn) error) (*testFixture, *db.Thread, *fakeGitHub, string) {
+	t.Helper()
+	f := newFixture(t, script)
 	remote := t.TempDir()
 	run(t, remote, "git", "init", "-q", "--bare", "-b", "main")
 	run(t, f.repo, "git", "remote", "add", "origin", "https://github.com/acme/widgets.git")
@@ -224,7 +231,7 @@ func mergeFixture(t *testing.T) (*testFixture, *db.Thread, *fakeGitHub, string) 
 	return f, th, gh, remote
 }
 
-func TestSquashMergesThePROnGitHubAndResolvesTheThread(t *testing.T) {
+func TestSquashMergesThePROnGitHubAndLeavesTheThreadOpen(t *testing.T) {
 	f, th, gh, remote := mergeFixture(t)
 	head := run(t, f.repo, "git", "rev-parse", "HEAD")
 	sha := run(t, f.repo, "git", "rev-parse", th.Branch)
@@ -235,7 +242,8 @@ func TestSquashMergesThePROnGitHubAndResolvesTheThread(t *testing.T) {
 	calls := strings.Join(gh.called(), "\n")
 	assert.Contains(t, calls, fmt.Sprintf(`create-pr acme/widgets "Add the feature" head=%s base=main draft=false`, th.Branch), "a PR is opened first, titled by the message")
 	assert.Contains(t, calls, fmt.Sprintf(`squash-pr acme/widgets #11 sha=%s title="Add the feature" message="Body."`, sha), "then squash-merged at the pushed commit")
-	assert.Equal(t, db.ThreadResolved, got.Status)
+	assert.Equal(t, db.ThreadIdle, got.Status, "merged work rests: nothing waits for review, and the user decides whether the thread is done")
+	assert.Nil(t, got.ResolvedAt)
 	assert.NotNil(t, got.MergedAt)
 	require.Len(t, got.Links, 1)
 	assert.Equal(t, db.LinkStateMerged, got.Links[0].State)
@@ -255,7 +263,7 @@ func TestSquashMergesAnAlreadyOpenPR(t *testing.T) {
 	assert.NotContains(t, calls, "create-pr", "no second PR")
 	assert.Contains(t, calls, fmt.Sprintf("squash-pr acme/widgets #%d", existing.Number))
 	assert.Contains(t, calls, `title="Already open (#11)" message=""`, "an empty message is the PR's own title and number, and its description, as gh pr merge words it")
-	assert.Equal(t, db.ThreadResolved, got.Status)
+	assert.Equal(t, db.ThreadIdle, got.Status)
 }
 
 func TestSquashRefusedByGitHubLeavesThePROpenAndTheThreadAlone(t *testing.T) {
@@ -273,7 +281,7 @@ func TestSquashRefusedByGitHubLeavesThePROpenAndTheThreadAlone(t *testing.T) {
 	assert.Equal(t, db.LinkStateOpen, got.Links[0].State)
 }
 
-func TestSquashAfterTheMergeToolOnlyClosesTheThread(t *testing.T) {
+func TestSquashAfterTheMergeToolOnlyRecordsTheMerge(t *testing.T) {
 	f, th, gh, _ := mergeFixture(t)
 	_, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
 	require.NoError(t, err)
@@ -283,7 +291,8 @@ func TestSquashAfterTheMergeToolOnlyClosesTheThread(t *testing.T) {
 
 	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
 	require.NoError(t, err)
-	assert.Equal(t, db.ThreadResolved, got.Status)
+	assert.Equal(t, db.ThreadIdle, got.Status)
+	assert.NotNil(t, got.MergedAt)
 	assert.Len(t, gh.called(), before, "GitHub is not asked again")
 	_, err = f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
 	assert.ErrorContains(t, err, "already merged")

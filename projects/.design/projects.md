@@ -102,9 +102,9 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 | `working` | 一轮在跑、排队等槽位，或后台任务在跑 | Working |
 | `waiting` | 有待回答的审批/提问；或上一轮以 `NEEDS_INPUT:` 结尾；或重启时正在跑、问题已过期、建 worktree 失败（`wait_reason` 说明发消息继续） | **Waiting on you** |
 | `failed` | 上一轮出错（`wait_reason` 以 `Failed` 开头）；Retry 或发消息继续 | Failed |
-| `ready` | 歇着（一轮结束或被停下），分支上有没从 Overview 合并过的提交 | Ready for review |
+| `ready` | 歇着（一轮结束或被停下），分支上有没从 Overview 合并过的提交（合并后的新提交也算） | Ready for review |
 | `idle` | 歇着，无待审内容 | Idle |
-| `resolved` | 用户标记 / Merge 对话框合并后 / idle 一周无活动且没有开着的 PR 和未提交改动；协调者在用户说了或已合并时 | Resolved（可重开） |
+| `resolved` | 只由用户关闭（线程菜单、批量、Archive）；协调者只在用户要求时。系统不自动关闭，合并也不关闭 | Resolved（可重开） |
 
 （官方的 Landing 对应"PR 已批准排队合并"，本地合并是同步动作，MVP 不需要该状态。）
 
@@ -163,7 +163,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - 看改动按 PR：`GET /threads/:id/prs/:number/diff`（及 `/diff/file`），每个 PR 看自己的 head 相对 base，只读本地 refs（本地没有分支时如实说明并给 GitHub 链接；读 GitHub 文件列表的路径已实现但默认关闭）；只给打开着的 PR。取舍见 `github-tools.md` 的 “A PR's diff”。线程本身不再有“当前分支相对 base”的 diff。
 - "Merge…"：`POST /threads/:id/merge`，必填 `method`，只有两种（其他值 400）。**两种都在 GitHub 上完成，本地工作区一律不动**；实现是线程的 `merge` MCP 工具（见 `github-tools.md`）背后的同一个 `Links.Merge`，HTTP 只是它的独立调用入口（用户点击即授权）：
   - 都先推送线程分支（不强推）、找到或开出它的 PR（与 `create_pr` 同一套，已有打开的 PR 就重推并关联，不重复开），并记入线程的 Issue/PR 链接。
-  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省时与 `gh pr merge --squash` 一致：PR 的标题加 `(#编号)`，正文用 PR 的描述。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。
+  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省时与 `gh pr merge --squash` 一致：PR 的标题加 `(#编号)`，正文用 PR 的描述。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后 PR 记为 merged，线程记 `merged_at` 并按歇着规则回到 idle，**不关闭**（是否做完由用户决定，见 [thread-lifecycle.md](thread-lifecycle.md)），分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并且分支之后没有新提交，只记 `merged_at`，不再请求 GitHub；合并后的新提交会再开 PR 合并。
   - `merge_request`：只开 PR，不合并；**线程不会 resolved**（分支要等 PR 合并才算合并）。
   - 没有 origin、origin 不是 github.com、gh 缺失或未登录都如实报错；没有 GitHub 远端的仓库因此无法从这里合并。
   - 前端：Review 对话框里的 "Merge…" 打开 `MergeDialog`：两个选项各一行说明，随后是对应字段（squash：提交信息；PR：标题、描述）；最近一次的选择按项目记在本机 localStorage（`merge-method.<project id>`，失败的方法不记）。

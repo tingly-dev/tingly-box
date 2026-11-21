@@ -1323,6 +1323,11 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		case t.Model == "":
 			t.Model = tally.launchModel
 		}
+		// Commits made after a merge from the Overview are not merged: the
+		// branch is no longer what was merged.
+		if t.MergedAt != nil && stats.CommitsAhead > t.CommitsAhead {
+			t.MergedAt = nil
+		}
 		t.CommitsAhead, t.FilesChanged, t.Uncommitted = stats.CommitsAhead, stats.FilesChanged, stats.Uncommitted
 		if session {
 			t.HeadBranch = head
@@ -1576,8 +1581,7 @@ func (m *Threads) endProcess(threadID string) {
 	m.engine.Evict(m.sessionOf(threadID))
 }
 
-// close is the one way a thread becomes resolved (Resolve, a merge from the
-// Overview, Archive): the status and resolved time, whatever mark adds to the
+// close is the one way a thread becomes resolved (Resolve, Archive): the status and resolved time, whatever mark adds to the
 // same save, then what only an open thread holds — its chats go back to the
 // parent, its scratch directory and its tool URL go. The caller holds the
 // lifecycle lock and has called endProcess. See .design/thread-lifecycle.md.
@@ -1729,9 +1733,10 @@ type MergeSpec struct {
 var ErrBadMergeMethod = errors.New(`method must be "squash" or "merge_request"`)
 
 // Merge merges a thread's branch on GitHub the way spec says (Links.Merge does
-// the GitHub side; the thread's merge tool calls the same). A squash resolves
-// the thread; a merge request leaves it as it is: the branch is not merged
-// until the PR is.
+// the GitHub side; the thread's merge tool calls the same). A squash records
+// the branch merged; a merge request leaves it as it is: the branch is not
+// merged until the PR is. Neither closes the thread: whether anything is left
+// to do is the user's call (.design/thread-lifecycle.md).
 func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*db.Thread, error) {
 	if spec.Method != MergeSquash && spec.Method != MergeMergeRequest {
 		return nil, ErrBadMergeMethod
@@ -1749,14 +1754,12 @@ func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*
 	if m.Running(threadID) {
 		return nil, errors.New("the thread is still working; wait for it to finish or stop it")
 	}
-	// A merge tool call may have merged it already: only the thread is left to close.
-	for _, k := range t.Links {
-		if k.Kind == db.LinkPR && k.State == db.LinkStateMerged && k.Head == t.Branch {
-			if spec.Method == MergeMergeRequest {
-				return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
-			}
-			return m.resolveMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
+	// A merge tool call may have merged it already: only the record is left.
+	if k := mergedAsPushed(t); k != nil {
+		if spec.Method == MergeMergeRequest {
+			return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
 		}
+		return m.markMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
 	}
 	var links *Links
 	if m.links != nil {
@@ -1771,18 +1774,48 @@ func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*
 	}
 	switch {
 	case out.Merged:
-		return m.resolveMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
+		return m.markMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
 	case out.Existed:
 		return m.noteLinks(threadID, fmt.Sprintf("PR #%d is already open for %s; the branch was pushed again: %s", out.Item.Number, t.Branch, out.Item.URL))
 	}
 	return m.noteLinks(threadID, fmt.Sprintf("Opened PR #%d for %s into %s: %s", out.Item.Number, t.Branch, t.BaseBranch, out.Item.URL))
 }
 
-// resolveMerged marks the thread's branch merged and closes the thread, as
-// Resolve does. Merge holds the lifecycle lock and has checked no turn runs.
-func (m *Threads) resolveMerged(threadID, note string) (*db.Thread, error) {
-	m.endProcess(threadID)
-	t, err := m.close(threadID, func(t *db.Thread, now time.Time) { t.MergedAt = &now })
+// mergedAsPushed is the thread's merged PR when that merge holds the branch as
+// it stands: a PR of the branch is merged, none is open, and the local branch
+// has nothing origin does not (the merge pushed it). Commits made after the
+// merge make it nil, so they are merged again rather than called merged.
+func mergedAsPushed(t *db.Thread) *db.ThreadLink {
+	var merged *db.ThreadLink
+	for i, k := range t.Links {
+		if k.Kind != db.LinkPR || k.Head != t.Branch {
+			continue
+		}
+		switch k.State {
+		case db.LinkStateOpen:
+			return nil
+		case db.LinkStateMerged:
+			merged = &t.Links[i]
+		}
+	}
+	if merged == nil || !branchPushed(t.RepoPath, t.Branch) {
+		return nil
+	}
+	return merged
+}
+
+// markMerged records the thread's branch merged from the Overview and notes
+// it. The thread stays open: a resting one rests again (merged work is not
+// waiting for review), one that waits on the user still does. Merge holds
+// the lifecycle lock and has checked no turn runs.
+func (m *Threads) markMerged(threadID, note string) (*db.Thread, error) {
+	t, err := m.update(threadID, func(t *db.Thread) {
+		now := time.Now()
+		t.MergedAt = &now
+		if t.Status == db.ThreadReady || t.Status == db.ThreadIdle {
+			t.Status = db.RestingStatus(t)
+		}
+	})
 	if err == nil {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
 	}
@@ -1849,44 +1882,6 @@ func (m *Threads) Recover() {
 			_, _ = m.update(t.ID, func(t *db.Thread) { t.WaitReason = expiredReason })
 		}
 	}
-}
-
-// AutoResolve resolves project threads that have been idle for maxIdle, as
-// the official Overview does. It only tidies away what is finished: a thread
-// with a PR of its own still open, or with changes it never committed, is left
-// for the user. Folder threads are archived by hand.
-func (m *Threads) AutoResolve(maxIdle time.Duration) {
-	threads, err := m.store.ListThreadsByStatus(db.ThreadIdle)
-	if err != nil {
-		return
-	}
-	for _, t := range threads {
-		if m.isFolder(t.ProjectID) || time.Since(t.UpdatedAt) <= maxIdle || hasOpenPR(&t) || uncommittedNow(&t) {
-			continue
-		}
-		_, _ = m.Resolve(t.ID)
-	}
-}
-
-// hasOpenPR reports whether the thread opened a PR that is still open.
-func hasOpenPR(t *db.Thread) bool {
-	for _, k := range t.Links {
-		if k.Kind == db.LinkPR && k.Role == db.LinkOpened && k.State == db.LinkStateOpen {
-			return true
-		}
-	}
-	return false
-}
-
-// uncommittedNow reports whether the thread's own worktree has changes that
-// were never committed, read now rather than from the last turn's figures.
-// A thread without a branch works in a shared directory, whose changes are
-// not its own.
-func uncommittedNow(t *db.Thread) bool {
-	if t.Branch == "" || t.Cwd == "" || t.WorktreeFreedAt != nil {
-		return false
-	}
-	return Stats(context.Background(), t.Cwd, t.BaseBranch).Uncommitted
 }
 
 func firstLine(s string, n int) string {

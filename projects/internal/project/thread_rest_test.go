@@ -2,9 +2,10 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,8 +16,8 @@ import (
 )
 
 // The thread lifecycle of .design/thread-lifecycle.md: one rule for where a
-// thread rests, one way to close it, a 7-day rule that only tidies away
-// finished threads, and no waiting reason that names a dead question.
+// thread rests, a merge that never closes the thread, and no waiting reason
+// that names a dead question. Nothing but the user closes a thread.
 
 func TestRestingStatusIsOneRule(t *testing.T) {
 	merged := time.Now()
@@ -90,58 +91,6 @@ func TestAThreadMergedFromTheOverviewRestsIdleAfterEveryPath(t *testing.T) {
 	assert.Equal(t, 1, got.CommitsAhead, "a turn's end agrees with Reopen: merged work is not waiting for review")
 }
 
-func TestMergeFromTheOverviewClosesTheThreadLikeResolve(t *testing.T) {
-	f, th, _, _ := mergeFixture(t)
-	var mu sync.Mutex
-	var revoked []string
-	f.threads.RevokeTools = func(id string) { mu.Lock(); revoked = append(revoked, id); mu.Unlock() }
-
-	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
-	require.NoError(t, err)
-	assert.Equal(t, db.ThreadResolved, got.Status)
-	assert.NotNil(t, got.ResolvedAt)
-	mu.Lock()
-	defer mu.Unlock()
-	assert.Equal(t, []string{th.ID}, revoked, "a merged thread's tool URL goes, as on every close")
-	assert.NoDirExists(t, f.threads.layout.TmpDir(th.ProjectID, th.ID))
-}
-
-func TestAutoResolveOnlyTidiesAwayFinishedThreads(t *testing.T) {
-	f := newFixture(t, func(turn *enginetest.Turn) error { return nil })
-	idle := func(title string, mut func(*db.Thread)) *db.Thread {
-		th := &db.Thread{ProjectID: f.project.ID, ParentID: f.project.MainThreadID, Agent: db.AgentClaudeCode, Title: title, Status: db.ThreadIdle}
-		if mut != nil {
-			mut(th)
-		}
-		require.NoError(t, f.store.CreateThread(th))
-		return th
-	}
-	done := idle("answered a question", nil)
-	withPR := idle("opened a PR", nil)
-	require.NoError(t, f.store.UpdateThreadLinks(withPR.ID, func(ls []db.ThreadLink) []db.ThreadLink {
-		return append(ls, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: 7, Role: db.LinkOpened, State: db.LinkStateOpen})
-	}))
-	// Its own worktree, with a change never committed; the last turn's
-	// figures said clean, the worktree says otherwise.
-	wt := filepath.Join(t.TempDir(), "wt")
-	run(t, f.repo, "git", "worktree", "add", "-q", "-b", "tp/dirty", wt, "main")
-	require.NoError(t, os.WriteFile(filepath.Join(wt, "draft.txt"), []byte("wip\n"), 0o644))
-	dirty := idle("left changes", func(th *db.Thread) {
-		th.RepoPath, th.Cwd, th.Branch, th.BaseBranch = f.repo, wt, "tp/dirty", "main"
-	})
-
-	f.threads.AutoResolve(-time.Hour)
-
-	for _, c := range []struct {
-		th   *db.Thread
-		want string
-	}{{done, db.ThreadResolved}, {withPR, db.ThreadIdle}, {dirty, db.ThreadIdle}} {
-		got, err := f.store.GetThread(c.th.ID)
-		require.NoError(t, err)
-		assert.Equal(t, c.want, got.Status, c.th.Title)
-	}
-}
-
 func TestRecoverDoesNotLeaveADeadQuestionAsTheWaitingReason(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { return nil })
 	mk := func(reason string) *db.Thread {
@@ -162,4 +111,60 @@ func TestRecoverDoesNotLeaveADeadQuestionAsTheWaitingReason(t *testing.T) {
 	got, err = f.store.GetThread(needsInput.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Which of the two layouts?", got.WaitReason, "a NEEDS_INPUT question survives a restart")
+}
+
+// commitEachTurn commits a new file on every turn.
+func commitEachTurn(t *testing.T) func(turn *enginetest.Turn) error {
+	n := 0
+	return func(turn *enginetest.Turn) error {
+		n++
+		dir := turn.Opts.ProjectPath
+		name := fmt.Sprintf("step%d.txt", n)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("x\n"), 0o644))
+		run(t, dir, "git", "add", ".")
+		run(t, dir, "git", "commit", "-qm", name)
+		turn.Say("Committed "+name+".", 1, 1)
+		return nil
+	}
+}
+
+func TestAMergeLeavesTheThreadOpenAndItsLaterWorkIsMergedAgain(t *testing.T) {
+	f, th, gh, _ := mergeFixtureWith(t, commitEachTurn(t))
+	var revoked []string
+	f.threads.RevokeTools = func(id string) { revoked = append(revoked, id) }
+
+	merged, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadIdle, merged.Status, "merged work is not waiting for review")
+	assert.Nil(t, merged.ResolvedAt, "a merge never closes the thread")
+	assert.NotNil(t, merged.MergedAt)
+	assert.Empty(t, revoked, "the thread keeps its tools: it can be asked for more")
+
+	// More work on the same branch: it is not merged, and reads so.
+	_, err = f.threads.Send(context.Background(), th.ID, "one more step", Source{}, nil)
+	require.NoError(t, err)
+	f.report(t)
+	more := waitStatus(t, f.store, th.ID, db.ThreadReady)
+	assert.Nil(t, more.MergedAt, "commits after the merge are not merged")
+	assert.Equal(t, 2, more.CommitsAhead)
+
+	// Merging again lands them: a new PR, not "already merged".
+	before := len(gh.called())
+	again, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.NoError(t, err)
+	calls := strings.Join(gh.called()[before:], "\n")
+	assert.Contains(t, calls, "create-pr", "the later commits get their own PR")
+	assert.Contains(t, calls, "squash-pr")
+	assert.NotNil(t, again.MergedAt)
+	assert.Equal(t, db.ThreadIdle, again.Status)
+}
+
+func TestAMergeLeavesAThreadThatWaitsOnTheUserWaiting(t *testing.T) {
+	f, th, _, _ := mergeFixture(t)
+	_, err := f.threads.update(th.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadWaiting, "Which name?" })
+	require.NoError(t, err)
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadWaiting, got.Status, "the question is still open")
+	assert.NotNil(t, got.MergedAt)
 }

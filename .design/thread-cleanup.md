@@ -151,7 +151,7 @@ Delete（只接受已归档线程）：
 
 ### 3.6 自动策略（可选，默认关）
 
-项目设置 `auto_archive_days`（0 = 关）。复用 `service.go:129` 已有的每小时 ticker：对 resolved 且已合并（Links 里 `merged`）超过 N 天、干净、不在运行的线程，自动 Archive，并在线程里记 “Archived automatically”。**只归档，永不删除**；任何 blocker 都跳过。
+项目设置 `auto_archive_days`（0 = 关）。只作用于用户已经 resolve 的线程，不关闭任何线程（系统不自动关闭线程，见 `projects/.design/thread-lifecycle.md`）。复用 `service.go:129` 已有的每小时 ticker：对 resolved 且已合并（Links 里 `merged`）超过 N 天、干净、不在运行的线程，自动 Archive，并在线程里记 “Archived automatically”。**只归档，永不删除**；任何 blocker 都跳过。
 
 ### 3.7 API
 
