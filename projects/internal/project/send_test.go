@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,9 @@ func TestSendRecordsWhereAMessageCameFrom(t *testing.T) {
 	} {
 		_, err := svc.Send(context.Background(), th.ID, "msg", nil, src)
 		require.NoError(t, err)
+		// The thread reads idle until the turn has started, so wait for the
+		// turn itself to be over.
+		require.Eventually(t, func() bool { return !f.threads.Running(th.ID) }, 5*time.Second, 5*time.Millisecond)
 		waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	}
 

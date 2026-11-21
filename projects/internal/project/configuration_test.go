@@ -309,6 +309,12 @@ func TestConfigurationChangeDuringResponseRejectsStaleToolsAndUsesNewModel(t *te
 			c.Reply("Settings changed; re-planning.")
 			return nil
 		}
+		if strings.Contains(c.Prompt, "Coordinator check-in") {
+			// The started thread's report: starting another thread here would
+			// report again, and again.
+			c.Call("no_update", map[string]string{"reason": "nothing to add"})
+			return nil
+		}
 		c.Call("start_thread", map[string]string{"title": "Updated plan", "task": "continue in the replacement repository"})
 		c.Reply("Started.")
 		return nil
