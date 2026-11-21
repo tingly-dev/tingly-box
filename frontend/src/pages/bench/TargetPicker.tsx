@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import type { BenchTarget } from './benchState';
 import type { TargetCatalog } from './useTargetCatalog';
+import { ModelPickerDialog } from '@/components/model-select/ModelPickerDialog';
 
 // TargetPicker: the same card-based provider→model picker the routing graph
 // already trained users on (ModelSelectDialog — left rail of providers,
@@ -53,12 +54,9 @@ export const TargetPicker: React.FC<{
                         ? t('bench.targetEmpty', { defaultValue: 'Pick a provider model to start.' })
                         : ' '}
             </Typography>
-            <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg" fullWidth slotProps={{ paper: { sx: { height: '80vh' } } }}>
-                <DialogTitle sx={{ textAlign: 'center' }}>{t('bench.targetDialogTitle', { defaultValue: 'Choose a provider & model' })}</DialogTitle>
-                <DialogContent>
-                    <ModelSelectDialog providers={catalog.providers} selectedProvider={value?.providerUuid} selectedModel={value?.model} onSelected={handleSelected} />
-                </DialogContent>
-            </Dialog>
+            <ModelPickerDialog open={open} onClose={() => setOpen(false)} title={t('bench.targetDialogTitle', { defaultValue: 'Choose a provider & model' })}>
+                <ModelSelectDialog providers={catalog.providers} selectedProvider={value?.providerUuid} selectedModel={value?.model} onSelected={handleSelected} />
+            </ModelPickerDialog>
         </Box>
     );
 };

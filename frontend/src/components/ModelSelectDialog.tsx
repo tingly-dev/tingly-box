@@ -9,7 +9,11 @@ import { useRecentModels } from '@/hooks/useRecentModels';
 import { useProviderEditDialog } from '@/hooks/useProviderEditDialog';
 import { ModelSelectProvider, useModelSelectContext } from '@/contexts/ModelSelectContext';
 import type { Provider } from '@/types/provider';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 import { ProviderSidebar, ModelsPanel, CustomModelDialog } from './model-select';
+
+// The phone lists models in one column: a page is a screenful or two.
+const PHONE_MODELS_PER_PAGE = 30;
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -61,6 +65,10 @@ function ModelSelectTabInner({
         }
     }, [fetchProviderModels]);
     const gridLayout = useGridLayout();
+    // Phone shell: one column, two steps — the providers, then one provider's
+    // models. It opens on the models when there is a provider to show.
+    const phone = usePhoneShell();
+    const [phoneStep, setPhoneStep] = useState<'providers' | 'models'>('models');
     const {
         internalCurrentTab,
         setInternalCurrentTab,
@@ -124,11 +132,11 @@ function ModelSelectTabInner({
         ?? internalCurrentTab
         ?? (selectedProvider && selectedModel ? selectedProvider : undefined)
         ?? (lastProvider || undefined);
-    const currentTab = flattenedProviders.some(p => p.uuid === requestedTab)
-        ? requestedTab
-        : flattenedProviders[0]?.uuid;
+    const requestedExists = flattenedProviders.some(p => p.uuid === requestedTab);
+    const currentTab = requestedExists ? requestedTab : flattenedProviders[0]?.uuid;
 
     const handleTabChange = useCallback(async (providerUuid: string) => {
+        setPhoneStep('models');
         if (externalActiveTab === undefined) {
             setInternalCurrentTab(providerUuid);
         }
@@ -228,18 +236,24 @@ function ModelSelectTabInner({
         }
     }, [selectedProvider, lastProvider, flattenedProviders, externalActiveTab, onProviderChange, setInternalCurrentTab, fetchModels]);
 
-    return (
-        <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%' }}>
-            {/* Left Sidebar - Vertical Tabs */}
-            <ProviderSidebar
-                groupedProviders={groupedProviders}
-                currentTab={currentTab}
-                selectedProvider={selectedProvider}
-                onTabChange={handleTabChange}
-            />
+    // A provider was asked for (a selection, the last used one, or a tap) — otherwise start from the list.
+    const showProviders = phone && !singleProvider && (phoneStep === 'providers' || !requestedExists);
 
-            {/* Right Panel - Tab Content */}
-            {currentTab && (() => {
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', minHeight: 0 }}>
+            {/* Left Sidebar - Vertical Tabs (the phone's first step) */}
+            {(!phone || showProviders) && (
+                <ProviderSidebar
+                    groupedProviders={groupedProviders}
+                    // On the phone's list, only a provider actually asked for is marked.
+                    currentTab={phone && !requestedExists ? undefined : currentTab}
+                    selectedProvider={selectedProvider}
+                    onTabChange={handleTabChange}
+                />
+            )}
+
+            {/* Right Panel - Tab Content (the phone's second step) */}
+            {currentTab && !showProviders && (() => {
                 const currentProvider = flattenedProviders.find(p => p.uuid === currentTab);
                 if (!currentProvider) return null;
 
@@ -256,12 +270,13 @@ function ModelSelectTabInner({
                             ? (model) => isModelSelected(currentProvider.uuid, model)
                             : undefined}
                         toolbarEnd={toolbarEnd}
-                        columns={gridLayout.columns}
-                        modelsPerPage={gridLayout.modelsPerPage}
+                        columns={phone ? 1 : gridLayout.columns}
+                        modelsPerPage={phone ? PHONE_MODELS_PER_PAGE : gridLayout.modelsPerPage}
                         onModelSelect={handleModelSelect}
                         onCustomModelEdit={handleCustomModelEdit}
                         onCustomModelDelete={handleDeleteCustomModel}
                         onProviderEdit={(provider) => editProvider(provider.uuid)}
+                        onBack={phone && !singleProvider ? () => setPhoneStep('providers') : undefined}
                     />
                 );
             })()}

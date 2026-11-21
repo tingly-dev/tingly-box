@@ -40,6 +40,7 @@ import HeadersEditor from '@/components/flags/HeadersEditor';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha } from '@mui/material/styles';
 import { radius } from '@tingly/ui/theme/radius';
+import { ModelPickerDialog } from '@/components/model-select/ModelPickerDialog';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -520,19 +521,11 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                 </Button>
             </DialogActions>
             {/* Service picker for service_ref flags (e.g. vision_proxy_service). */}
-            <Dialog
+            <ModelPickerDialog
                 open={pickerKey !== null}
                 onClose={() => setPickerKey(null)}
-                maxWidth="lg"
-                fullWidth
-                slotProps={{
-                    paper: { sx: { height: '80vh' } }
-                }}
+                title={<Typography variant="h6" component="span">Pick Vision Proxy Model</Typography>}
             >
-                <DialogTitle sx={{ textAlign: 'center' }}>
-                    <Typography variant="h6">Pick Vision Proxy Model</Typography>
-                </DialogTitle>
-                <DialogContent>
                     {pickerKey !== null && (
                         <ModelSelectDialog
                             providers={providers || []}
@@ -550,8 +543,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                             }}
                         />
                     )}
-                </DialogContent>
-            </Dialog>
+            </ModelPickerDialog>
         </Dialog>
     );
 };

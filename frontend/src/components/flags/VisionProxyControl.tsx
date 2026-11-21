@@ -2,9 +2,6 @@ import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/comp
 import {
     Box,
     Button,
-    Dialog,
-    DialogContent,
-    DialogTitle,
     ListItemText,
     Menu,
     MenuItem,
@@ -16,6 +13,7 @@ import ModelSelectDialog from '../ModelSelectDialog';
 import type { ProviderSelectTabOption } from '../ModelSelectDialog';
 import type { Provider } from '@/types/provider';
 import {pluginControlStateStyles} from './pluginControlStyles';
+import { ModelPickerDialog } from '@/components/model-select/ModelPickerDialog';
 
 export interface VisionService {
     provider: string;
@@ -92,19 +90,11 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     {isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
             </Menu>
-            <Dialog
+            <ModelPickerDialog
                 open={pickerOpen}
                 onClose={() => setPickerOpen(false)}
-                maxWidth="lg"
-                fullWidth
-                slotProps={{
-                    paper: { sx: { height: '80vh' } }
-                }}
+                title={<Typography variant="h6" component="span">Pick Vision Proxy Model</Typography>}
             >
-                <DialogTitle sx={{ textAlign: 'center' }}>
-                    <Typography variant="h6">Pick Vision Proxy Model</Typography>
-                </DialogTitle>
-                <DialogContent>
                     <ModelSelectDialog
                         providers={providers}
                         selectedProvider={value?.provider}
@@ -118,8 +108,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                             setPickerOpen(false);
                         }}
                     />
-                </DialogContent>
-            </Dialog>
+            </ModelPickerDialog>
         </>
     );
 };

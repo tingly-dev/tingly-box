@@ -1,4 +1,4 @@
-import { Box } from '@mui/material';
+import { Box, GlobalStyles } from '@mui/material';
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -9,10 +9,13 @@ import { useActivityItems } from '@/layout/useActivityItems';
 import type { LayoutProps } from '@/layout/types';
 import { rememberAgentPath } from '@/features/scenario/lastAgent';
 import { syncUiPrefs } from '@/services/uiPrefs';
+import { PhoneShellContext } from '@tingly/ui/hooks/usePhoneShell';
+import { phoneShellStyles } from '@tingly/ui/theme/phone';
 import { MobileTabBar } from './MobileTabBar';
 import { hasSubPages, subPageGroups } from './mobileSubPages';
 import { activeTab, buildTabs } from './mobileTabs';
 import { SubPageSwitcher } from './SubPageSwitcher';
+import { usePhoneShellBody } from './usePhoneShellBody';
 
 // Workspace pages lay themselves out edge to edge; every other page is a
 // padded, scrolling column. (Same split as the desktop Layout.)
@@ -27,6 +30,7 @@ export default function MobileShell({ children }: LayoutProps) {
 
     useEffect(() => { void syncUiPrefs(); }, []);
     useEffect(() => { rememberAgentPath(pathname); }, [pathname]);
+    usePhoneShellBody();
 
     const tabs = useMemo(
         () => buildTabs(items, { label: t('mobile.more.tab'), icon: <MoreHoriz sx={{ fontSize: 22 }} /> }, enableProjects),
@@ -39,17 +43,20 @@ export default function MobileShell({ children }: LayoutProps) {
     const subPages = subPageGroups(activity, pathname);
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', bgcolor: 'background.default' }}>
-            {activity && hasSubPages(subPages) && <SubPageSwitcher title={activity.label} groups={subPages} />}
-            <Box
-                component="main"
-                sx={isWorkspacePath(pathname)
-                    ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
-                    : { flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', px: 2, py: 2 }}
-            >
-                {children ?? <Outlet />}
+        <PhoneShellContext.Provider value>
+            <GlobalStyles styles={phoneShellStyles} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', bgcolor: 'background.default' }}>
+                {activity && hasSubPages(subPages) && <SubPageSwitcher title={activity.label} groups={subPages} />}
+                <Box
+                    component="main"
+                    sx={isWorkspacePath(pathname)
+                        ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+                        : { flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', px: 2, py: 2 }}
+                >
+                    {children ?? <Outlet />}
+                </Box>
+                <MobileTabBar tabs={tabs} active={active} />
             </Box>
-            <MobileTabBar tabs={tabs} active={active} />
-        </Box>
+        </PhoneShellContext.Provider>
     );
 }
