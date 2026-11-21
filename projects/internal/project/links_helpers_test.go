@@ -230,6 +230,10 @@ type linksFixture struct {
 	remote string
 	repo   string
 	events []string
+	// approvals are what the tools asked the user; answer is what the user
+	// says (by default no, with no reason).
+	approvals []Approval
+	answer    func(Approval) (bool, string)
 }
 
 func newLinksFixture(t *testing.T) *linksFixture {
@@ -254,6 +258,14 @@ func newLinksFixture(t *testing.T) *linksFixture {
 	lf.clock = &now
 	lf.links = NewLinks(f.store, gh, func(id string) { lf.events = append(lf.events, id) })
 	lf.links.now = func() time.Time { return *lf.clock }
+	lf.links.approve = func(_ context.Context, _ string, a Approval) (bool, string, error) {
+		lf.approvals = append(lf.approvals, a)
+		if lf.answer == nil {
+			return false, "", nil
+		}
+		ok, why := lf.answer(a)
+		return ok, why, nil
+	}
 	f.svc.Links = lf.links
 	return lf
 }
@@ -290,3 +302,6 @@ func (f *linksFixture) remoteBranches(t *testing.T) []string {
 	t.Helper()
 	return strings.Fields(strings.ReplaceAll(run(t, f.remote, "git", "branch", "--format=%(refname:short)"), "*", ""))
 }
+
+// allowAll makes the user allow everything the tools ask.
+func (f *linksFixture) allowAll() { f.answer = func(Approval) (bool, string) { return true, "" } }

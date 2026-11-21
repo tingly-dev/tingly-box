@@ -143,7 +143,7 @@ Listed so the direction is visible, not as a commitment. Each needs its own smal
 
 Never for a model: create, delete, pause or archive a project; `repos`; the coordinator's own profile, model or effort; answering a worker's permission request; choosing a decision card; uploads and downloads.
 
-Push and PR creation, issues and the record of them are in [github-tools.md](./github-tools.md): five thread-only tools that act on the thread's own repository and branch with the host's `gh` login. Close and force-push are still out of scope; merge exists only as the thread's `merge` tool, which always asks.
+Push and PR creation, issues and the record of them are in [github-tools.md](./github-tools.md): five thread-only tools that act on the thread's own repository and branch with the host's `gh` login. Close is still out of scope, and force exists only as `create_pr`'s leased `force` (beyond the thread's own branches the user is asked); merge exists only as the thread's `merge` tool, which always asks.
 
 Every tool of this server runs in a thread without an approval card: the thread's settings file allows the whole `mcp__tingly-projects` server and the thread's approval prompt answers any call that still reaches it (the coordinator's prompter does the same). Only the four tools that publish on GitHub can be opted out, per project; the reasoning and the probe are under Authorization in `github-tools.md`. A future tool that is irreversible must not rely on this blanket allow: it needs the approval rule above, and its own `ask` rule so that it wins over the allow.
 
