@@ -1,12 +1,15 @@
 # VModel script — 预定义脚本驱动真实 agent 的端到端测试
 
-状态：**提案（只有设计，未实现）**。索引：[`vmodel.md`](./vmodel.md)。相关：
+状态：**设计已获用户认可（2026-11-21），分 PR 实施中**（§9）。索引：[`vmodel.md`](./vmodel.md)。相关：
 [`vmodel-definitions.md`](./vmodel-definitions.md)、[`vmodel-sequence.md`](./vmodel-sequence.md)、
 [`vmodel-capture.md`](./vmodel-capture.md)、[`cli-harness-refactor.md`](./cli-harness-refactor.md) §5.4、
-[`projects/.design/projects-harness.md`](../projects/.design/projects-harness.md)。
+[`projects/.design/projects-harness.md`](../projects/.design/projects-harness.md)、
+实测：[`.research/projects-wire-probe.md`](../.research/projects-wire-probe.md)。
 
-标注：**[决定]** 用户已确认；**[建议]** 本文推荐、待用户确认；**[待定]** 需要用户决定（见 §10）。
-本文所有条目目前都是 [建议] 或 [待定]。
+**分工（用户决定）**：`script` 是 vmodel 的一种用法和扩展——通用引擎（轨道、路由、同步、断言、
+trace、控制接口）在 vmodel；具体应用——Projects 的旅程文件、拉起真实 Projects + 真实 claude、
+对 Projects 状态的断言——在 tingly-project 里，作为它 harness 的一部分，用一条 CLI 命令直接运行
+（§5）。§10 记录了每个原待定点的决定和理由。
 
 ## 0. 问题
 
@@ -57,30 +60,32 @@
 
 ## 2. 请求匹配
 
-### 2.1 可用的信号（真实 Claude Code 2.1.329 capture 里看到的）
+### 2.1 可用的信号
 
-来自 `vmodel/examples/capture/claude-code-2.1.329/oauth-direct/raw/conn-0001.in` 和
-`.design/claude-code-oauth-compat.md`：
+来自 `vmodel/examples/capture/claude-code-2.1.329/oauth-direct/raw/conn-0001.in`、
+`.design/claude-code-oauth-compat.md`，以及真实 Projects + 真实 claude 2.1.259 的实测
+（[`.research/projects-wire-probe.md`](../.research/projects-wire-probe.md)，下表"实测"列）：
 
-| 信号 | 位置 | 用途 | 可靠性 |
+| 信号 | 位置 | 用途 | 实测（2.1.259，经代理） |
 | --- | --- | --- | --- |
-| 最后一条 assistant 消息里的 `tool_use` id / 文本 | body `messages` | **续接**：哪条轨道、第几步 | 高：id 是我们铸的 |
-| `x-claude-code-request-class`：`main` / `subagent` / `auxiliary` / `compaction` / `workflow` | header | 区分主循环、子 agent、辅助、压缩 | 直连时总发；经代理（自定义 `ANTHROPIC_BASE_URL`）只在 env `CLAUDE_CODE_GATEWAY_HINT_HEADERS` 打开时发（compat 文档，静态分析，**未实测**） |
-| `x-claude-code-agent-type` | header | 子 agent 类型 | 同上，仅 `agent:*` 来源 |
-| `X-Claude-Code-Session-Id`、`metadata.user_id.session_id` | header / body | 诊断、同一进程的请求分组 | 子 agent 是否共用父 session id **未验证** |
-| `x-claude-code-prompt-id` | header | 同一用户回合的请求分组 | 未验证语义 |
-| `system` 文本 | body | 绑定：Projects 给线程追加 `You are a thread in the project …`、`Your task: <title>`、`You are on branch <branch> … (<cwd>)`（`projects/internal/project/prompts.go` `threadSystemPrompt`）；协调者有自己的 prompt | 高，但内容随 Projects 改动 |
-| `tools` 名字集合 | body | 绑定与断言：协调者有 `mcp__tingly-projects__start_thread`，线程有 `…__notify_coordinator`，辅助请求通常没有工具 | 高 |
-| 首条用户消息 | body | 绑定：子 agent 的 prompt、用户的第一句话 | 高 |
-| `model` | body | 辅助请求常用 haiku 类 id | 中 |
+| 最后一条 assistant 消息里的 `tool_use` id / 文本 | body `messages` | **续接**：哪条轨道、第几步 | 每个后续请求都原样带回，跨协调者回合也是 |
+| `x-claude-code-request-class` / `-agent-type` | header | 区分主循环、子 agent、辅助、压缩 | **不发**（设了 `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` 也不发）；只当作可选信号 |
+| `system[0]` 计费行 `x-anthropic-billing-header: …; cc_is_subagent=true;` | body | 子 agent 标识 | 子 agent 的请求带 `cc_is_subagent=true` |
+| `X-Claude-Code-Session-Id`、`metadata.user_id.session_id` | header / body | 诊断、区分进程 | 两者相同；协调者、线程各一个；**子 agent 用父线程的** |
+| `system` 文本 | body | 绑定：协调者 "You are the project coordinator"；线程 `Your task: <title>`、`in your own worktree (<cwd>)`（`threadSystemPrompt`） | 如此 |
+| `tools` 名字集合 | body | 绑定与断言：协调者 33 个含 `mcp__tingly-projects__start_thread`；线程 35 个；子 agent 21 个 | 如此 |
+| 首条 / 最后一条用户消息 | body | 绑定：子 agent 的首条消息就是我们发出的 `prompt`；协调者的输入是 `<event … kind="check-in">` 信封 | 如此；`messages` 里夹着 `role: "system"` 的条目，取"最后一条用户消息"必须跳过它们 |
+| `model` | body | 辅助请求常用 haiku 类 id | 全是配置的默认 id |
 
 ### 2.2 路由算法（每个 `/v1/messages` 请求）
 
 ```
 0  count_tokens 等非消息端点 → 脚本级固定回答（不是步骤）
-1  class ← request-class 头；没有时启发式：无 tools → auxiliary，否则 main
+   先去掉 messages 里 role=system 的条目（实测 2.1.259 会插入）
+1  class ← request-class 头；没有时（实测总是没有）：计费行含 cc_is_subagent=true → subagent；
+   无 tools → auxiliary；否则 main
 2  续接：取最后一条 assistant 消息，按 tool_use id（精确）或文本（全等）查发出索引
-     命中 (T, k) 且 class 属于 T 接受的类别（默认 main/subagent）
+     命中 (T, k)
        → 位置 k+1；若 k+1 已被消费且本次请求的"新尾部"（最后一条 assistant 之后的消息）
          与当时相同 → 重试（§2.5）
      对压缩：首条用户消息里含有某条轨道 compaction 步骤发出的摘要文本 → 续接那条轨道
@@ -95,10 +100,13 @@
 - 续接优先于 class 头：协调者第二个回合（一条 check-in 进来）是"同一对话的新用户消息"，
   历史里有我们第一回合的回答，自然落回协调者轨道；不需要任何 session 关联。
 - **分叉的辅助请求**是主要风险：CLI 的某些辅助请求（提示建议、会话记忆提取等）会复制主对话
-  历史，按第 2 步会被误认成主轨道的下一步。防线依次是 request-class 头（测试运行时总是设
-  `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`）、轨道的 system 指纹（第一次绑定时记下 system 的哈希，
-  之后 system 不同的请求不算这条轨道）、最后才是背景规则。哪些辅助请求会出现、头是否在代理模式下
-  真的发出，第一阶段先实测再定（§9 P1 第 1 项），不靠猜。
+  历史，按第 2 步会被误认成主轨道的下一步。防线依次是 class（头或计费行）、轨道的工具集合
+  （绑定时记下工具名集合的指纹，之后工具集合不同的请求不算这条轨道——辅助请求通常不带工具）、
+  最后才是背景规则。实测在 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` 下一个辅助请求都没有
+  （每个 CLI 进程只有一次 `HEAD /api/hello`），所以严格模式可行。
+- **后台子 agent 会多出回合**（实测）：`Agent` 默认在后台跑，父对话立即拿到"已启动"的
+  tool_result 继续走；子 agent 结束时父对话收到一条 `<task-notification>` 用户消息，多出一个回合
+  （于是多一次汇报、多一次协调者 check-in）。脚本里就是父轨道多写一步。
 - 文本全等可能撞车（两条轨道发出同一句话）：加载时校验，撞车的纯文本步骤报警告；运行时再用
   绑定时记下的 session id 消歧。
 
@@ -137,7 +145,7 @@
 
 ### 3.1 复用 vmodel spec：`kind: script`
 
-[建议] 脚本是 `spec.Definition` 信封里的一个新 kind，不另起文件格式：
+**决定**：脚本是 `spec.Definition` 信封里的一个新 kind，不另起文件格式：
 
 - 一个加载器（`spec.Load`）、一个 CLI（`tb vmodel --config`）、严格校验、id 唯一；
 - 运行时状态（绑定表、各轨道游标、发出索引）跟 `sequence` 游标一样属于一次 `spec.New` 的
@@ -150,7 +158,7 @@
 
 取舍：
 
-| | `kind: script`（建议） | 独立文档类型 + `--scenario` |
+| | `kind: script`（采用） | 独立文档类型 + `--scenario` |
 | --- | --- | --- |
 | 加载/校验/导出 | 复用 | 另写一套 |
 | 与 capture、fallback 组合 | 现成 | 要重新接 |
@@ -178,7 +186,6 @@ script:
   tracks:
     <track-id>:
       bind: <selector>         # 认领新对话；派生轨道可省略（§2.3）
-      accept: [main]           # 接受的 request class，默认 [main, subagent]
       capture: {<var>: <extractor>}   # 绑定时从第一个请求取值
       steps:
         - id: <step-id>        # 可省略，省略时为序号；被 after/spawns/expect_result 引用时必填
@@ -198,8 +205,8 @@ script:
             stream_chunks: [...]
             delay: 0s
             error: {status: 529}
-          hold: {before: stop, until: signal:<name>}
-          compact: false       # true：这是对 compaction 请求的回答，发出的文本进摘要索引
+          hold: {before: stop, until: signal:<name>}   # 之后的 PR
+          compact: false       # 之后的 PR：对 compaction 请求的回答，发出的文本进摘要索引
 ```
 
 **选择器**（`bind`、`when`、`expect`、背景规则的 `when` 共用一套谓词，全部是"包含/正则/存在"，
@@ -207,10 +214,11 @@ script:
 
 | 谓词 | 含义 |
 | --- | --- |
-| `class: [..]` | request class（§2.2 第 1 步） |
+| `class: [..]` | `main` / `subagent` / `auxiliary`（§2.2 第 1 步） |
 | `model: <regex>` | 请求的 model id |
 | `system_contains` / `system_regex` | system 文本 |
-| `first_user_contains` / `last_user_contains` / `..._regex` | 首条 / 最后一条用户消息的文本（不含 tool_result） |
+| `first_user_contains` / `last_user_contains` / `..._regex` | 首条 / 最后一条用户消息的文本（不含 tool_result，跳过 role=system） |
+| `last_text_contains` | 最后一条用户消息的**最后一个文本块**：协调者的输入信封总在那里（实测："check-in" 这个词也出现在第一回合的项目上下文里，整条消息包含匹配会误判） |
 | `tools_include` / `tools_exclude` | 工具名集合；名字以 `*` 结尾按前缀，以 `__name` 写可按后缀匹配 MCP 前缀 |
 | `has_tool_result: <step>.<call>` | 本次请求带回了某次调用的结果 |
 | `header: {name: regex}` | 请求头 |
@@ -271,105 +279,125 @@ require.True(t, rep.OK(), rep.String())
 排序按（轨道, 步骤），不按到达时间——跨轨道的到达顺序本来就不确定，不应该让报告每次都不同。
 
 `tb vmodel --config s.yaml` 下：收到 SIGTERM/中断时写报告，有失败就以非零退出；`--json` 的就绪
-输出里列出轨道。外部驱动（非 Go）需要的 `signal` / `wait` 控制接口放第二阶段（§9）。
+输出里列出脚本。外部驱动（tingly-project 的 runner，§5）用 HTTP 控制接口：
+
+| 接口 | 作用 |
+| --- | --- |
+| `POST /_vmodel/scripts/{id}/signals/{name}` | 发信号（放行 `after: signal:<name>`） |
+| `GET /_vmodel/scripts/{id}/served?track=&step=&timeout=30s` | 等到某一步已送出；超时 408 |
+| `GET /_vmodel/scripts/{id}/report` | 当前报告（不结束） |
+| `POST /_vmodel/scripts/{id}/finish` | 结束：之后的请求都算失败，返回最终报告 |
+
+路径以 `/_vmodel/` 开头，不会和任何协议路由冲突；只在加载了 script 时存在。
 
 ## 5. 驱动 Projects：真实进程 + 真实 CLI 的旅程
 
-### 5.1 拓扑
+### 5.1 分工与拓扑
 
 ```
-Go 测试（根模块）
- ├─ script.Serve ── 127.0.0.1:A ◄── claude（协调者 session）   ┐ 都是 Projects 拉起的
- │   (+ capture)                ◄── claude（线程 A / B …）    ┘ 真实 CLI
- ├─ 启动 bin/tingly-project --port B --data-dir D（env -i、隔离 HOME/CLAUDE_CONFIG_DIR）
- │    PUT /settings：base_url = http://127.0.0.1:A（Anthropic 风格）
- └─ 驱动：通过 Projects 的 HTTP API 扮演用户（发消息、点审批、回答决策卡、等事件）
+tingly-project harness run <journey>            （projects 模块，Projects 自己的 harness）
+ ├─ 起 `tingly-box vmodel --config <journey 里的 model> --fallback <id> --json [--capture]`
+ │      └─ 127.0.0.1:A ◄── claude（协调者 session）   ┐ 都由下面的 Projects 拉起，真实 CLI
+ │                     ◄── claude（线程 / 子 agent）   ┘
+ ├─ 起 `tingly-project serve --port B --data-dir D`（自己这个二进制；隔离 HOME/CLAUDE_CONFIG_DIR）
+ │      PUT /settings：base_url = http://127.0.0.1:A
+ ├─ 按旅程的 steps 扮演用户：发消息、等审批卡并回答、选决策卡、等线程状态、发信号
+ │      （Projects HTTP API + vmodel 控制接口 /_vmodel/scripts/...）
+ └─ 收尾：POST /_vmodel/scripts/{id}/finish 取报告，加上 Projects 侧断言的结果，打印并以退出码表示
 ```
 
-- 模型服务器直接作为 CLI 的上游（`ThreadEnv` 把连接的 `base_url` 写成 `ANTHROPIC_BASE_URL`，
-  `projects/internal/server/module/settings/settings.go`），中间不经过 tb 网关：网关会改写 body/头，
-  它有自己的测试（`cli/harness agent --mock`）。经网关的拓扑放第三阶段。
-- CLI 继承 Projects 进程的环境（`agentboot/claude/environment.go` 用 `os.Environ()`），所以在
-  Projects 进程上设 `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`、
-  `DISABLE_TELEMETRY=1`、`DISABLE_AUTOUPDATER=1`，并且 `HOME`、`CLAUDE_CONFIG_DIR` 指到临时目录
-  （同一 config dir 的 CLI 会互相看见，项目记忆 cc-native-peer-messaging）。绝不碰真实
+- **vmodel 管引擎，tingly-project 管应用**（用户决定）。`projects` 不能 import 根模块
+  （`task projects:boundary`），所以 runner 把 `tingly-box vmodel` 当一个**进程**拉起，只经 HTTP
+  说话（模型请求 + 控制接口）；Projects 也作为进程被拉起（就是 `tingly-project` 自己），和用户真实
+  使用时一样。runner 用 `--tb <path>` 找 `tingly-box`（默认在 PATH 里找 `tingly-box`；全局装的
+  npm `tb` 可能是没有 `vmodel` 命令的旧版，找到了也会先检查）。
+- 模型服务器直接作为 CLI 的上游（`ThreadEnv` 把连接的 `base_url` 写成 `ANTHROPIC_BASE_URL`），
+  不经过 tb 网关：网关会改写 body/头，它有自己的测试（`cli/harness agent --mock`）。经网关放第三阶段。
+- CLI 继承 Projects 进程的环境（`agentboot/claude/environment.go` 用 `os.Environ()`）。runner 给
+  Projects 一个从零开始的环境：`PATH`、`HOME=<work>/home`（预置 `{"hasCompletedOnboarding":true}`）、
+  `CLAUDE_CONFIG_DIR=<work>/home/.claude`（同一 config dir 的 CLI 会互相看见，项目记忆
+  cc-native-peer-messaging）、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`、`DISABLE_TELEMETRY=1`、
+  `DISABLE_AUTOUPDATER=1`、`DISABLE_ERROR_REPORTING=1`、git 身份、假 key。绝不碰真实
   `~/.tingly-box`、`~/.claude`。
-- 为什么在根模块：`projects` 不能 import 根模块（`task projects:boundary`），而 script 引擎在
-  `vmodel`（根模块）里；Projects 作为**进程**被拉起，不需要 import。仓库用的是本地 git 仓库，
-  需要 GitHub 的工具（`create_pr`）沿用 `github_tools_test.go` 的做法：origin 经 `insteadOf`
-  指向本地裸仓库，GitHub API 是替身。
-- 测试需要本机 `claude`；没有就 `t.Skip`，像 `harness-agent-testing.md` 的真实补充测试一样，
-  不进默认 CI（§10 待定 2）。
+- **工作目录要有干净的祖先**（实测）：Claude Code 从工作目录往上找 `CLAUDE.md` 和 `.claude/skills`，
+  放在用户 home 下面会把用户自己的文件带进请求。runner 默认用 `os.TempDir()` 下的新目录，
+  `--work-dir` 可改；祖先目录里有 `CLAUDE.md` 或 `.claude` 时打警告。
+- 需要本机 `claude`；没有就报错退出（命令行）或跳过（Go 测试）。不进默认 CI（§10 第 2 条）。
+- 需要 GitHub 的工具（`create_pr`）之后沿用 `github_tools_test.go` 的做法：origin 经 `insteadOf`
+  指向本地裸仓库。
 
-### 5.2 例子：协调者开线程 → 线程写文件 → 提交要审批 → 用户批准 → 汇报 → 协调者转述
+### 5.2 旅程文件（tingly-project）
 
-对应 `projects/showcase/e2e-demo` 的流程（单线程版）；`mock_anthropic.py` 里的启发式
-在这里都变成声明。协调者的项目上下文是放在第一回合的**用户消息**里的
-（`coordinator_session.go` 拼接 `coordinatorSystemPrompt`），所以协调者按工具集合绑定。
+一份 YAML 就是一条旅程：项目怎么建、模型一端的脚本（一个完整的 vmodel 定义，原样交给
+`tingly-box vmodel`）、用户一端做什么、最后断言什么。内置旅程用 `go:embed` 打进二进制
+（`tingly-project harness list` 列出，`run <名字>` 运行），也可以给一个文件路径。
 
 ```yaml
-id: projects-one-thread
-kind: script
-protocols: [anthropic]
-script:
-  background:
-    - id: side
-      when: {class: [auxiliary]}
-      reply: {content: "{}"}
-  tracks:
-    coordinator:
-      bind: {tools_include: ["__start_thread"], first_user_contains: "project coordinator"}
-      steps:
-        - id: plan
-          expect: {last_user_contains: "加一个 CHANGELOG", tools_exclude: [SendMessage, ListAgents]}
-          reply:
-            tool_calls:
-              - id: start
-                name: mcp__tingly-projects__start_thread
-                arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md with an Unreleased section and commit it."}
-                spawns: thread
-                expect_result: {is_error: false}
-        - id: started
-          reply: {content: "开了一个线程：Add CHANGELOG。"}
-        - id: report
-          expect: {last_user_contains: 'kind="check-in"', all: [{last_user_contains: "CHANGELOG.md"}]}
-          reply: {content: "Add CHANGELOG 已提交到自己的分支，等你审阅。"}
-    thread:
-      bind: {system_contains: "Your task: Add CHANGELOG", tools_include: ["__notify_coordinator"]}
-      capture:
-        cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
-      steps:
-        - id: write
-          reply:
-            tool_calls:
-              - {name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n\n## Unreleased\n"},
-                 expect_result: {is_error: false}}
-        - id: commit
-          reply:
-            content: Now commit it.
-            tool_calls:
-              - {name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'"},
-                 expect_result: {is_error: false}}       # 被拒时这里是 is_error: true
-        - id: done
-          reply: {content: "Added CHANGELOG.md and committed it; git log -1 shows the commit."}
+name: one-thread
+description: 协调者开一个线程；线程写文件、提交要审批、被允许、汇报；协调者转述
+project:
+  name: Demo
+  goal: Ship the demo app
+  files: {README.md: "demo\n"}
+model:                              # vmodel 定义（kind: script），§3
+  id: projects-one-thread
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            expect: {last_text_contains: "Add a CHANGELOG", tools_exclude: [SendMessage, ListAgents]}
+            reply:
+              tool_calls:
+                - id: start
+                  name: mcp__tingly-projects__start_thread
+                  arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md with an Unreleased section and commit it."}
+                  spawns: thread
+                  expect_result: {contains: "started thread"}
+          - id: started
+            reply: {content: "Started one thread: Add CHANGELOG."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is committed on its branch and waits for review."}
+      thread:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: write
+            reply:
+              content: I'll create CHANGELOG.md.
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n\n## Unreleased\n"},
+                   expect_result: {is_error: false}}
+          - id: commit
+            reply:
+              content: Now commit it.
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'"},
+                   expect_result: {is_error: false}}       # 拒绝时这里是 is_error: true
+          - id: done
+            reply: {content: "Added CHANGELOG.md and committed it; git log -1 shows the commit."}
+steps:                              # 用户一端，按顺序
+  - say: Add a CHANGELOG please.
+  - approve: {thread: Add CHANGELOG}                 # 等这个线程的审批卡，允许一次
+  - wait: {thread: Add CHANGELOG, status: ready}
+  - served: {track: coordinator, step: report}       # 等模型一端送出某一步
+expect:                             # 结束时 Projects 侧的断言
+  threads: 1
+  thread: {Add CHANGELOG: {status: ready, commits_ahead: 1, branch_prefix: "tp/"}}
+  conversation_contains: ["waits for review"]
 ```
 
-```go
-func TestProjectsOneThread(t *testing.T) {
-	s := script.Load(t, "testdata/projects-one-thread.yaml")
-	srv := s.Serve(t, script.Capture(t.TempDir()))
-	p := projectse2e.Start(t, projectse2e.Options{ModelURL: srv.URL}) // 隔离 HOME、临时仓库、建项目
-	p.Say("加一个 CHANGELOG")
-	s.WaitServed(t, "thread", "commit")
-	p.Approve(t, p.WaitApproval(t, "Add CHANGELOG"))   // 审批卡出现在线程里，用户点"允许"
-	p.WaitThread(t, "Add CHANGELOG", "ready")
-	s.WaitServed(t, "coordinator", "report")
-	require.True(t, s.Finish().OK())
-	th := p.Thread(t, "Add CHANGELOG")
-	assert.Equal(t, 1, th.CommitsAhead)                // Projects 自己的状态也断言
-	assert.Contains(t, p.AssistantTexts(t), "等你审阅")
-}
-```
+用户一端的动作（第一批）：`say`（发到项目对话）、`message`（发到某线程，`mode: insert|next_turn`）、
+`approve` / `deny`（等审批卡）、`choose`（决策卡选项）、`start_suggestions`、`wait`（线程状态）、
+`served`（模型一端某步已送出）、`signal`（给模型一端发信号）。每个等待都有超时（默认 60s）。
+
+运行结果：一张表（每步通过/失败）+ 脚本报告（未匹配、未消费、断言失败）+ Projects 侧断言；
+工作目录里留下 `model.yaml`、`vmodel` 的 trace / capture、Projects 的 `server.log`，失败时不删。
 
 模型一端断言"系统给了模型什么"（工具集合、信封、tool_result）；驱动一端断言"系统留下了什么"
 （线程状态、提交、卡片、事件、记忆、PR 记录）。两边合起来才是一条旅程。
@@ -382,8 +410,8 @@ func TestProjectsOneThread(t *testing.T) {
 | 线程调 MCP 工具（`notify_coordinator`、`create_pr`、`update`…） | 线程轨道发出调用，`expect_result` 断言结果 | 事件、PR 记录、协调者收到的信封 |
 | 审批卡 | 发出需要审批的 Bash；`expect_result.is_error` 区分批准/拒绝 | 等卡片、点允许/拒绝 |
 | 决策卡 / `propose_threads` | 协调者发出调用；用户回答后下一回合的用户消息里有回答 | 等卡片、选择 |
-| 消息插入（运行中发消息） | `hold: {before: stop, until: signal:sent}`；下一步 `expect: last_user_contains: "while you were working"` | 发消息，确认已写入后 `Signal("sent")` |
-| 子 agent | `Agent` 调用 + `spawns`，子轨道 `accept: [subagent]` | — |
+| 消息插入（运行中发消息） | `hold: {before: stop, until: signal:sent}`；下一步 `expect: last_user_contains: "while you were working"` | `message` 后 `signal: sent` |
+| 子 agent | `Agent` 调用 + `spawns`，子轨道 `bind: {class: [subagent]}`；父轨道为后台完成通知多写一步（实测） | — |
 | 压缩 | `compact: true` 的步骤回答 compaction 请求 | 触发 `/compact`（`coordinator_compact.go`） |
 | 模型失败 | `error: {status: 529}` / 中途断流 | 回合失败显示、队列继续 |
 | IM | 与上面相同 | 需要假的 IM 平台（第三阶段） |
@@ -396,7 +424,7 @@ func TestProjectsOneThread(t *testing.T) {
 | 假进程 `process.FakeFactory` | stream-json 回放 | 假 | 毫秒 | CI | agentboot 进程层 |
 | **wire（本文）** | 脚本模型 | **真实** | 秒到几十秒 | 手动 / 夜间 / CC 升级时 | CLI 与 Projects 的真实接线：MCP、权限提示、stdin 插入、`--disallowedTools`、`crossSessionInbound`、usage、真实请求形状 |
 
-[建议] 不统一成一种：Brain 是带进程内工具调用的 Go 闭包，脚本是数据，硬统一会让两边都变差。
+**决定**：补充，不统一成一种。Brain 是带进程内工具调用的 Go 闭包，脚本是数据，硬统一会让两边都变差。
 共享的是**旅程清单**：wire 档挑进程内档已有的旅程（J1 新工作→线程→汇报、审批、通知通道、
 GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内绿、真实红"的情况。
 `projects-harness.md` §4 原来设想的"vmodel 序列模型 + 带工具调用的步骤"由本文取代。
@@ -423,42 +451,45 @@ GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内
 | `sequence` | 不改。它是"上游的全局状态"，script 是"每条对话的状态"，语义不同 |
 | `--fallback` | 让所有 model id 进脚本；`strict: false` 时也是未匹配请求的去处 |
 | `--capture` | 套在外面，trace 与 `index.jsonl` 共用 `seq` |
-| `cli/harness agent --mock` | 拓扑不同（经网关）。`agent --mock --config script.yaml` 正好是 `cli-harness-refactor.md` §5.4 那个延后项的一种答案，但那需要用户决定，本文不替它做决定 |
-| `projects/internal/harness` | 补充（§5.4） |
+| `cli/harness agent --mock` | 拓扑不同（经网关）。`agent --mock --config script.yaml` 是 `cli-harness-refactor.md` §5.4 那个延后项的一种答案；那一项仍等用户讨论，本系列不碰 |
+| `projects/internal/harness` | 补充（§5.4）；真实档的 runner 放在它旁边（`projects/internal/harness/live`） |
 | `e2e-demo/mock_anthropic.py`、`run.sh` | 第一阶段的第一条场景就是它的流程；之后可以用脚本替换 `mock_anthropic.py`（`run.sh` 已过时，修它是另一件事） |
 | `.research/inject-probe/probe.py` | 以后的协议探针直接写成脚本（`hold` + trace 覆盖了它手写的部分） |
 
 ## 8. 否决的做法
 
 - **全局到达顺序（扩展 `sequence` 加工具调用）**：并发下错配，正是问题本身。
-- **只按 session 头路由**：代理模式下头默认不发；子 agent 是否共用 session 未知；就算能分组，
-  也给不出"走到第几步"。只作诊断和消歧。
+- **只按 session 头路由**：实测子 agent 和父线程共用 session id；就算能分组，也给不出"走到第几步"。
+  只作诊断和消歧。
 - **录真实会话再回放**：每次 CC 升级 prompt 都变，录的东西很快对不上；还要真凭证和外网。
   capture 只用于看清 CLI 发了什么。
 - **脚本语言（Starlark/JS）或状态机分支**：我们的回答决定了对话走向，一条对话里唯一的不确定来自
   外部（tool_result 内容、插入的消息、信封），用 `when` + `optional` 就够；真不够时用有名字的 Go 回调。
-- **每个场景一个 Python mock**（现状）：不能复用，没有断言、没有覆盖检查、没有 trace。
+- **每个场景一个 Python mock**（现状）：不能复用，没有断言、没有覆盖检查、没有 trace。实测时
+  探针自己就犯了一次"取 `messages[-1]`"的错，让协调者连开了 4 个线程（`.research/projects-wire-probe.md` 第 5 条）。
+- **runner 放根模块、Go 测试驱动**（本文初稿）：用户决定应用细节归 tingly-project，并且要能用命令直接跑。
+- **tingly-project 直接 import vmodel 引擎**：越过模块边界；把引擎搬成独立模块代价大，收益只是省一个进程。
 
-## 9. 分阶段计划
+## 9. 分阶段计划（堆叠 PR，从低风险开始）
 
-每个阶段一个（或一串小的）PR，先写用例再写代码。
-
-| 阶段 | 内容 | 不做 |
+| PR | 内容 | 验证 |
 | --- | --- | --- |
-| **P1 最小可用** | 1) 实测：用 `tb vmodel --capture`（`strict: false` 的草稿脚本）跑一遍单线程旅程，记下真实出现的 request class、头（`CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` 在代理模式下是否生效）、辅助请求种类、协调者/线程的绑定文本，写进 `.research/`；据此定下 §2.2 的启发式。2) `vmodel/script`：Go 结构 + `kind: script` 加载与校验；路由（续接索引、bind、背景规则、严格未匹配）；轨道内顺序、`when`/`optional`/`repeat`；`expect`、`expect_result`、`capture` + `{{var}}`；`after`（轨道间）+ `signal`；确定性 id；`count_tokens`；`Finish()` 报告 + `trace.jsonl`；只做 Anthropic Messages（流式 + 非流式）。3) `tb vmodel --config` 能服务它，退出时写报告、失败非零。4) 根模块的 e2e 测试包 + 一个 Projects 驱动小工具（拉起 `tingly-project`、发消息、等审批卡并批准、读线程状态），跑 §5.2 那条旅程；没有 `claude` 就 skip。 | 子 agent、压缩、流中扣住、控制 HTTP 接口、声明式驱动、OpenAI 协议、经网关、IM |
-| **P2 覆盖 Projects 功能** | `spawns` 用于 `Agent` 子 agent 和并行工具调用；`compact` 步骤；`hold`（流中扣住）→ 消息插入旅程；错误注入与重试规则；无序步骤组（`unordered: [..]`，组内各步靠 `when` 区分，用于"两条汇报谁先到都行"）；`trace.md`；`tb vmodel` 的控制接口（`POST /_vmodel/script/signal/<name>`、`GET …/wait?step=`），让非 Go 驱动也能用；旅程：两个并行线程、`notify_coordinator` → `propose_threads` 卡、决策卡、`create_pr`（本地裸仓库）、审批拒绝 | 经网关、IM |
-| **P3 扩展** | 经 tb 网关的拓扑（tb 内嵌 Projects，provider 指向脚本服务器）；IM（假平台）；OpenAI Responses（codex）；视 Go 驱动的重复程度决定要不要声明式 `drive:`；`cli/harness agent --mock --config`（需用户先决定 §5.4） | — |
+| **1 实测 + 设计** | 本文按用户的分工改写；`.research/projects-wire-probe.md` + 探针（真实 Projects + 真实 claude 2.1.259 + 记录型脚本 mock） | 两次实测跑通（单线程、带子 agent），结论写进 §2 |
+| **2 `vmodel/script` 引擎** | Go 结构与校验；路由（续接索引、bind、`spawns` 守卫、背景规则、严格未匹配、重试重放）；轨道内顺序、`when`/`optional`；`expect`、`expect_result`、`capture` + `{{var}}`；`after`（步骤 / 信号）；确定性 id；Anthropic 流式与非流式回答、预置错误；`count_tokens`；报告与 trace；Go API（`Signal`、`WaitServed`、`Finish`） | 单元测试：并发两条轨道交错、子 agent、重试、未匹配、未消费、断言失败、after 超时 |
+| **3 vmodel 接入** | `spec` 新 kind `script`（加载、导出、`--fallback` 指向它）；`Runtime` 把指向 script 的请求交给它（含 `count_tokens`）；控制接口 `/_vmodel/scripts/...`；`tingly-box vmodel` 退出时写报告 | spec 与 CLI 测试；真实 claude `-p` 打一条两步脚本 |
+| **4 tingly-project harness** | `projects/internal/harness/live`：旅程文件、runner（拉起 vmodel 与 Projects、隔离环境、用户动作、Projects 侧断言、结果表）；`tingly-project harness run|list`；第一条内置旅程 `one-thread`（§5.2） | runner 单元测试（用假的 vmodel/Projects 端点）；真实运行 `one-thread` |
+| 之后 | `hold`（流中扣住）→ 消息插入旅程；并行线程、`notify_coordinator` → `propose_threads`、决策卡、`create_pr`、审批拒绝、压缩；无序步骤组；`trace.md`；经网关；IM；OpenAI Responses | 每条先写旅程 |
 
-P1 的规模估计：`vmodel/script` 是主体（路由 + 校验 + 报告），回答生成全部复用；Projects 驱动
-只覆盖一条旅程用到的几个 API。P1 结束时 `mock_anthropic.py` 的流程可以完全用脚本表达，作为验收。
+## 10. 原待定点的决定
 
-## 10. 需要用户决定的点
+| # | 问题 | 决定 | 理由 |
+| --- | --- | --- | --- |
+| 1 | 格式 | `kind: script` 放进 vmodel spec 信封 | 用户认可设计并说明"是 vmodel 的用法和扩展" |
+| 2 | 进不进 CI | 先不进默认 CI；手动、夜间或 Claude Code 升级时跑 | 需要真实 `claude` CLI，CI 里没有；以后加进 CI 是纯增量，不影响格式 |
+| 3 | 未匹配请求 | 默认严格失败（400 + 报告）；`strict: false` 只在写脚本时用 | 测试要的是"有没有意外"；实测在关闭非必要流量时没有辅助请求，严格可行 |
+| 4 | 拓扑 | Projects 和 vmodel 都作为独立进程，模型直连 | 与真实使用一致；跨模块边界只走 HTTP |
+| 5 | 放哪 | 引擎在 `vmodel/script`；旅程与 runner 在 `projects/internal/harness/live`，命令 `tingly-project harness run|list` | 用户决定；`harness` 与现有 `internal/harness` 同名同义，`run`/`list` 是最少的动词 |
+| 6 | 与进程内 harness 的关系 | 补充，旅程名对齐，不强制两档都有 | 两档回答的问题不同（§5.4） |
+| 7 | "Pro" 指什么 | Projects | 协调者转述确认 |
 
-1. **格式**：`kind: script` 放进 vmodel spec 信封（建议），还是独立文档类型 + `--scenario`。
-2. **运行档位**：wire 档只手动 / 夜间 / CC 升级时跑（建议，像 `harness-agent-testing.md`），
-   还是进 CI（要在 CI 里装 `claude` CLI；不需要 API key，但每条旅程几十秒）。
-3. **未匹配请求的默认**：严格失败（建议，测试用）+ `strict: false` 写脚本时用，还是默认宽松。
-4. **P1 的拓扑**：独立 `tingly-project` 进程、模型服务器直连（建议），还是一开始就走 tb 内嵌 + 网关。
-5. **e2e 测试放哪**：根模块新包（例如 `internal/projectse2e`，建议），还是 `cli/harness` 的新子命令。
-6. **与进程内 harness 的关系**：补充、只对齐旅程名（建议），还是要求某些旅程两档都必须有。
-7. 原话里"精准的去测试Pro"本文理解为 **Projects**；若指别的（例如 Pro 版功能），范围要改。
+仍需用户的：无阻塞项。以后若要把真实档加进 CI（要在 CI 镜像里装 `claude`），再单独决定。
