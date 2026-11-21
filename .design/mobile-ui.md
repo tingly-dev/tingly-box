@@ -1,6 +1,6 @@
 # Mobile UI: a phone-native surface for Agent and the Projects workspace
 
-> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, the interface picker, the sub-page switcher, the phone layer for configuration pages, the model picker sheet and the Agent configuration pages. Not yet: the workspace screens, the Team and Image pages, the viewport script (see Rollout).
+> Status: **in progress** (TEP-2558, issue #2558). Rolled out as stacked PRs, all behind an explicit opt-in (`?ui=mobile`, or 界面 in Settings); nothing changes by default. Implemented so far: tokens, `useIsPhone`, the shell preference, the phone shell with the 更多 page, the interface picker, the sub-page switcher, the phone layer for configuration pages, the model picker sheet and the Agent and Team configuration pages. Not yet: the workspace screens, the Image pages, the viewport script (see Rollout).
 > Prototype: `.design/mobile-prototype/index.html` (static, clickable, mock data; `?theme=dark`, `?frame=0`, deep-link states via `?s=tab,screen,thread,sheet,ptab`).
 > Audit and mockups: `pr-assets/tep-mobile/` (`raw.githubusercontent.com/tingly-dev/tingly-box/pr-assets/tep-mobile/...`).
 
@@ -180,7 +180,7 @@ Editing and reordering smart conditions, dragging rules, the rule flags raw edit
 2. Workspace home: needs-you with inline approve/answer, folded groups, projects and folders, new-task sheet.
 3. Workspace screens: project (对话 / 线程 / 文件库), folder session, thread page with docked actions, sheets, keyboard handling, master-detail at ≥ 600.
 4. Review: report + change summary, resolve, follow-up.
-5. Agent and 更多: Agent list, status, copy rows, rule sheet; Team and Credentials phone pages. *Configuration pages (see "Configuration pages on a phone"): the phone layer (`@tingly/ui/theme/phone`, `usePhoneShell`, `useBackToClose`), the model picker sheet and the Agent pages (stacked `ConfigRow`, wrapping `UnifiedCard` headers, `PhoneRuleTargets` in place of the graph) are in; the Team and Image pages follow.*
+5. Agent and 更多: Agent list, status, copy rows, rule sheet; Team and Credentials phone pages. *Configuration pages (see "Configuration pages on a phone"): the phone layer (`@tingly/ui/theme/phone`, `usePhoneShell`, `useBackToClose`), the model picker sheet and the Agent pages (stacked `ConfigRow`, wrapping `UnifiedCard` headers, `PhoneRuleTargets` in place of the graph) and the Team pages (`SharingKeysList` in place of the keys table and grid rows) are in; the Image pages follow.*
 6. Sweep and install: remaining routes, web app manifest and icons. Push notifications are a separate decision.
 
 ## Testing

@@ -13,6 +13,7 @@ import { useSharingKeyActions } from '@/pages/scenario/hooks/useSharingKeyAction
 import { api } from '@/services/api';
 import { groupByTeam, teamPath } from '@/utils/team';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 /**
  * Every Sharing Key on this instance, grouped by the Team it belongs to.
@@ -22,6 +23,7 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
  */
 const TeamKeysPage = () => {
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const notify = useNotify();
     const { teams, loading: teamsLoading } = useTeamContext();
     const [keys, setKeys] = useState<SharingKey[]>([]);
@@ -85,7 +87,8 @@ const TeamKeysPage = () => {
                                         {!team.enabled && (
                                             <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: fontSizes.micro }} />
                                         )}
-                                        <Box sx={{ flex: 1 }} />
+                                        {/* Phone shell: the Team's actions get their own line, the same in every group. */}
+                                        <Box sx={phone ? { flexBasis: '100%', height: 0 } : { flex: 1 }} />
                                         <Button component={Link} to={teamPath(team)} size="small">
                                             {t('sharingKeys.openTeam')}
                                         </Button>

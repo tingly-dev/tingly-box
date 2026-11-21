@@ -34,9 +34,11 @@ import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import {usePhoneShell} from '@tingly/ui/hooks/usePhoneShell';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();
+    const phone = usePhoneShell();
     const notify = useNotify();
     const navigate = useNavigate();
     const {teamSlug} = useParams<{teamSlug: string}>();
@@ -161,8 +163,8 @@ const UseTeamPageContent: React.FC = () => {
                         // the switch and looks-in sit on the right; status text wraps under
                         // the title. The Team's keys are managed in the card right below.
                         title={(
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 0}}>
-                                <Box component="span" sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: phone ? 0 : 1, minWidth: 0, ...(phone && {flexWrap: 'wrap'})}}>
+                                <Box component="span" sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', ...(phone && {mr: 0.5})}}>
                                     {t('layout.nav.useTeam', {defaultValue: 'Team'})} - {currentTeam.name}
                                 </Box>
                                 <Tooltip
