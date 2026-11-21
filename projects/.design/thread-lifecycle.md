@@ -1,138 +1,254 @@
-# 线程生命周期：顶层设计
+# 线程生命周期：状态机顶层设计
 
-状态：**设计（记录现状）**，2026-11-21，main @ 66a564d30。
+> 状态：**现行设计**（2026-11-21）。线程的状态、转移、谁能关闭线程，以本文为准。
+> 改状态、加入口、加后台规则之前先改本文，再改代码；代码与本文不符时按缺陷处理。
+>
+> 相关文档：
+> - [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)：本设计落地前的代码现状图，每条转移的行号、判定树、实测结果、缺口 G1–G14。
+> - `projects.md` §4.3：本文的摘要。
+> - [`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)：归档和删除（释放 worktree、删分支）。
+> - `mcp-tools.md`：工具 URL 的发放和收回；`github-tools.md`：PR 记录（Links）。
 
-线程的状态、转移、谁能关闭线程，以本文为准。本文只记录**已有的**状态和行为，给出它们的含义和规则，不新增状态和行为。合并相关的新需求（例如 PR 合并后自动关闭）本轮不做。以后要改状态、加入口、加后台规则，先改本文。
+## 1 目的与原则
 
-- 每条转移的代码位置、判定树、实测结果：[thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)。
-- `projects.md` §4.3 是本文的摘要。
-- 归档和删除（释放 worktree、删分支）：[`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)。
+一个线程是一段 Claude Code 会话加上它的工作区。用户在 Overview 上靠状态回答三个问题：**谁在干活、谁在等我、什么做完了等我看**。状态机只为回答这三个问题服务。
 
-## 1 状态
+四条原则，后文每条规则都能追到其中一条：
 
-只有一个状态字段 `Status`，取下面六个值之一。其余字段是附加信息，不决定状态（例外见 §1.2）。
+1. **一个状态回答一个用户问题。** 同一个状态不同时表示两件事；显示的状态只由已记录的事实决定，不由“走了哪条路”决定。
+2. **一个规则只写一处。** 同一个判断（例如“歇着时是 ready 还是 idle”）只有一个函数，所有路径都调用它。
+3. **关闭可撤销，不删工作。** 关闭只收起会话；worktree、分支、对话记录都保留，Reopen 即恢复。
+4. **系统只收拾做完的。** 系统可以替用户关掉一个空闲且没有剩余工作的线程，不能关掉还有活的线程。线程不能关闭自己。
 
-| 状态 | 含义 | 进入方式 | Overview 分组 |
-|---|---|---|---|
-| `working` | 一轮在跑；或在排队等并发槽位（`Queued`）；或后台任务在跑 | 新线程、发消息、回答、Retry、后台任务开始 | Working |
-| `waiting` | 需要用户才能继续，`WaitReason` 写明原因 | 待答的审批 / 提问；上一轮末行 `NEEDS_INPUT:`；重启时正在跑；建 worktree 失败 | Waiting on you |
-| `failed` | 上一轮出错，`WaitReason` 以 `Failed` 开头 | 轮次出错、profile 不可用、会话启动失败 | Failed |
-| `ready` | 歇着，分支上有领先 base 的提交 | 一轮正常结束且 `CommitsAhead > 0` | Ready for review |
-| `idle` | 歇着，没有领先的提交；或被停下 | 一轮正常结束且无提交；Stop | Idle |
-| `resolved` | 已关闭，`ResolvedAt` 有值；可重开 | §3 的关闭入口 | Resolved |
+## 2 模型
 
-### 1.1 附加信息（不改变状态）
+### 2.1 状态字段
 
-| 字段 | 含义 |
+线程只有一个状态字段 `Status`，取六个值之一：
+
+| 值 | 一句话 |
 |---|---|
-| `CommitsAhead` · `FilesChanged` · `Uncommitted` | 每轮结束时用 git 对本地 base 读一次 |
-| `Links` | 线程用工具碰过的 PR / issue 及其 GitHub 状态；后台每分钟刷新，只更新记录本身 |
-| `MergedAt` | 通过 Merge 对话框 squash 合并的时间 |
-| `ArchivedAt` · `WorktreeFreedAt` | 归档；与状态正交（`thread-cleanup.md`） |
-| `Queued` · `RunningTasks` | 排队等槽位；后台任务数 |
+| `working` | 在干活 |
+| `waiting` | 在等用户 |
+| `failed` | 上一轮出错了 |
+| `ready` | 歇着，有提交等审阅 |
+| `idle` | 歇着，没有要审阅的 |
+| `resolved` | 已关闭 |
 
-### 1.2 歇着时选 ready 还是 idle
+`ready` 和 `idle` 合称**歇着**：没有一轮在跑，也不在等用户。
 
-一轮正常结束、后台任务也结束时，`CommitsAhead > 0` 选 ready，否则选 idle（`restingStatus`）。另有两处在此基础上还看 `MergedAt`，有合并时间的选 idle：Reopen 和 `/clear`。
+### 2.2 事实（决定或解释状态，但不是状态）
 
-## 2 生命周期
+| 字段 | 是什么 | 谁写 |
+|---|---|---|
+| `CommitsAhead` · `FilesChanged` · `Uncommitted` | 分支相对**本地** base 的提交数、改动文件数、是否有未提交改动 | 每轮结束时用 git 读（`Stats`） |
+| `MergedAt` | 从 Overview 的 Merge 对话框 squash 合并的时间 | 只有 Merge 对话框 |
+| `ResolvedAt` | 关闭时间 | 只有关闭（§6） |
+| `WaitReason` | waiting / failed 的原因，给用户看 | 写 waiting / failed 的地方 |
+| `Links` | 线程用工具碰过的 PR / issue，及其 GitHub 状态 | 只有 Links（后台每分钟刷新开着的） |
+| `Queued` · `RunningTasks` | 在排队等并发槽位；后台任务数（从活进程读，不入库） | 线程调度 |
+
+`ArchivedAt`（归档）与状态正交：它只表示“收起来不看”，不改状态，不在本文范围（见 `thread-cleanup.md`）。
+
+## 3 状态契约
+
+| 状态 | 回答的问题 | 契约 | 用户的下一步 | Overview 分组 |
+|---|---|---|---|---|
+| `working` | 它在干活吗？ | 一轮在跑；或在排队等槽位（`Queued`）；或后台任务在跑 | 等；Stop | Working |
+| `waiting` | 它在等我吗？ | 需要用户才能继续，`WaitReason` 必有内容，并且说清用户该做什么 | 回答问题，或发一条消息 | Waiting on you |
+| `failed` | 它出事了吗？ | 上一轮出错，`WaitReason` 以 `Failed` 开头 | Retry；或发一条消息 | Failed |
+| `ready` | 有东西等我审阅吗？ | 歇着，且 `RestingStatus` 为 ready（§3.1） | 看 diff、开 PR、合并 | Ready for review |
+| `idle` | — | 歇着，且 `RestingStatus` 为 idle | 发消息；Resolve | Idle |
+| `resolved` | 它结束了吗？ | `ResolvedAt` 有值；没有进程，工具 URL 已收回 | Reopen | Resolved |
+
+### 3.1 歇着规则（唯一）
+
+```go
+// db.RestingStatus
+ready  ⇐ CommitsAhead > 0 && MergedAt == nil
+idle   ⇐ 其余
+```
+
+分支上有没从 Overview 合并过的提交，就是有东西等审阅。所有让线程歇下来的路径都调用它：一轮正常结束、Stop、后台任务结束、Reopen、`/clear`、文件夹会话归档。
+
+`MergedAt` 只记 Merge 对话框的合并。PR 在 GitHub 上合并、或线程自己用 `merge` 工具合并，都不改它，线程照样是 ready，由用户关闭（§11）。
+
+### 3.2 waiting 与 failed 的分界
+
+- **waiting**：线程停在“用户做一件事就能接着走”的地方。三种来源：
+  - 待答的审批 / 提问（进程活着，用户回答即继续）；
+  - 上一轮最后一行是 `NEEDS_INPUT: <问题>`；
+  - 没有问题可答、但发一条消息就能继续：重启时这一轮正在跑；重启时待答的问题已过期；建 worktree 失败。这时 `WaitReason` 必须写明“Send a message to continue”，不能留着一个答不了的问题。
+- **failed**：上一轮以错误结束（轮次出错、profile 不可用、会话启动失败）。Retry 在原处重跑这一轮；重跑依赖本进程记得这次失败，重启后只能发消息继续（§11）。
+
+不做超时：一个在等用户的线程，等多久都还在等用户，系统不替用户关掉它。
+
+## 4 状态图
 
 ```mermaid
 stateDiagram-v2
-    [*] --> working: 新线程
-    working --> waiting: 提问 · NEEDS_INPUT · 重启时在跑 · 建 worktree 失败
+    [*] --> working: 创建
+    working --> waiting: 提问 · NEEDS_INPUT
     working --> failed: 出错 · 启动失败
-    working --> ready: 正常结束，有提交
-    working --> idle: 正常结束，无提交 · Stop
+    working --> resting: 正常结束 · Stop
     waiting --> working: 回答 · 发消息
     failed --> working: Retry · 发消息
-    ready --> working: 发消息 · 后台任务开始
-    idle --> working: 发消息 · 后台任务开始
-    waiting --> ready: /clear
-    waiting --> idle: /clear
-    failed --> ready: /clear
-    failed --> idle: /clear
-    working --> resolved: 关闭（§3）
+    resting --> working: 发消息 · 后台任务开始
+    waiting --> resting: /clear
+    failed --> resting: /clear
+    state resting {
+        ready
+        idle
+    }
+    note right of resting: 进入时由 RestingStatus 选 ready 或 idle
+    working --> waiting: 重启（Recover）
+    working --> resolved: 关闭
     waiting --> resolved: 关闭
     failed --> resolved: 关闭
-    ready --> resolved: 关闭
-    idle --> resolved: 关闭 · 7 天无活动
-    resolved --> ready: Reopen
-    resolved --> idle: Reopen
+    resting --> resolved: 关闭 · 7 天无活动（仅 idle）
+    resolved --> resting: Reopen
 ```
 
 一条线程依次经过四个阶段：
 
-1. **创建**：协调者 `start_thread`、用户采纳提议卡、用户新建、IM 新会话。线程从 working 开始。
-2. **运行**：在 working 与 waiting / failed 之间往返，直到一轮正常结束。
-3. **歇着**：ready 或 idle。发消息、后台任务开始都会回到 working。
-4. **关闭**：resolved。发给它的消息一律拒绝（“reopen it first”），重开后回到歇着。
+1. **创建**：协调者 `start_thread`、用户采纳提议卡、用户新建、IM 开新会话。从 working 开始。
+2. **运行**：在 working 与 waiting / failed 之间往返，直到一轮正常结束或被停下。
+3. **歇着**：ready 或 idle。发消息、后台任务开始都回到 working。
+4. **关闭**：resolved。发给它的消息一律拒绝（`ErrResolved`：“reopen it first”）；Reopen 后回到歇着。
 
-## 3 谁能关闭线程
+## 5 转移表（完整）
 
-| 谁 | 入口 | 条件 | 依据 |
+表外没有别的转移。加一行先改这里。
+
+| # | 从 | 到 | 触发 | 写状态的函数 |
+|---|---|---|---|---|
+| T1 | — | working | 创建线程 | `Threads.Start`、`startFolderThread` |
+| T2 | working | waiting | 审批 / 提问挂起 | `threadPrompter.wait` |
+| T3 | working | waiting | 末行 `NEEDS_INPUT:`（项目线程） | `settle` |
+| T4 | working | failed | 轮次出错；profile 不可用；会话启动失败 | `settle`、`turnLaunch`、`startFolderThread` |
+| T5 | working | 歇着 | 一轮正常结束且后台任务也结束；Stop | `settle`、`stoppedBeforeTurn`、`release`（后台报告）→ `RestingStatus` |
+| T6 | waiting | working | 回答审批 / 提问 | `threadPrompter.wait`（收到回答后） |
+| T7 | waiting · failed · 歇着 | working | 发消息（网页、IM、协调者 `message_thread`）；Retry（仅 failed） | engine `SetRunning`；`Retry` |
+| T8 | 歇着 ⇄ working | | 后台任务在歇着的线程里开始 / 全部结束 | `syncBackground` → `RestingStatus` |
+| T9 | waiting · failed | 歇着 | `/clear` 开新会话 | `db.RotateThreadSession` → `RestingStatus` |
+| T10 | working | waiting | 重启时这一轮正在跑 | `Recover` |
+| T11 | waiting | waiting | 重启时待答的问题过期：原因改写为可继续的说明 | `Recover` |
+| T12 | working | waiting | 创建时建 worktree 失败（这一轮还没开始） | `Threads.Start` |
+| C1–C5 | 任何非 resolved | resolved | 关闭（§6） | `close` |
+| O1 | resolved | 歇着 | Reopen | `Reopen` → `RestingStatus` |
+
+## 6 关闭与重开
+
+### 6.1 谁能关闭
+
+| # | 谁 | 入口 | 条件 |
 |---|---|---|---|
-| 用户 | 线程菜单 Resolve；看板多选批量 Resolve | 无 | 用户是线程的主人 |
-| 用户 | 项目线程 Archive（关闭并释放 worktree） | 不在跑、不在排队、没有未提交改动 | `thread-cleanup.md` |
-| 用户 | Merge 对话框 squash 合并成功 | 线程不在跑 | 合并本身就是用户的决定 |
-| 协调者 | `resolve_thread` | 工具本身不检查；规则写在工具描述里：用户说了，或者工作已合并 | 协调者替用户执行，不替用户决定 |
-| 系统 | 每小时检查 | 项目线程、`idle`、7 天没有更新 | 清理被遗忘的空闲线程 |
+| C1 | 用户 | 线程菜单 Resolve；看板多选批量 Resolve | 无 |
+| C2 | 用户 | 项目线程 Archive（关闭并释放 worktree） | 不在跑、不在排队、没有未提交改动（`thread-cleanup.md`） |
+| C3 | 用户 | Merge 对话框 squash 合并成功 | 线程不在跑；同时写 `MergedAt` |
+| C4 | 协调者 | `resolve_thread` | 工具描述的规则：用户说了，或工作已合并。工具本身不检查（§11） |
+| C5 | 系统 | 每小时一次（`AutoResolve`） | 项目线程 · `idle` · 7 天没有更新 · 自己开的 PR 没有还开着的 · worktree 没有未提交改动 |
 
-线程**不能**关闭自己：做完是用户的验收。线程用 `merge` 工具合并自己的 PR 后保持原状态，由用户关闭（`github-tools.md`）。
+线程**不能**关闭自己：做完是用户的验收，线程只知道自己交了什么。线程用 `merge` 工具合并了自己的 PR，仍由用户关闭（`github-tools.md`）。
 
-**重开**只有用户能做（线程菜单 Reopen）。协调者没有重开工具。
+**重开**（O1）只有用户能做：线程菜单 Reopen。协调者没有重开工具。
 
-### 3.1 关闭做什么，不做什么
+### 6.2 关闭做什么（唯一路径）
 
-关闭**可撤销，不删工作**：worktree、分支、对话记录都保留，Reopen 即恢复。
+所有关闭入口都经过同两个函数，副作用完全一致：
 
-| 入口 | 停当前一轮 | 回收进程 | 收回工具 URL | IM 绑定 | 删 `.tmp/<thread>` | 写 `MergedAt` |
-|---|---|---|---|---|---|---|
-| Resolve（用户、协调者、7 天） | 是 | 是 | 是 | 交还父线程 | 是 | 否 |
-| Merge 对话框 | 不在跑才能合并 | 否 | 否 | 交还父线程 | 是 | 是 |
-| Archive | 是 | 是 | 是 | 交还父线程 | 是 | 否（另释放 worktree） |
+```
+endProcess(t)   停当前一轮（等它收尾，最多 SessionCloseTimeout）→ 回收进程
+close(t, mark)  写 resolved + ResolvedAt（已有则保留）+ mark 的附加字段，一次保存
+                → IM 绑定交还父线程 → 删 library/.tmp/<thread> → 收回工具 URL
+```
 
-Reopen：清空 `ResolvedAt`，按 §1.2 回到 ready 或 idle，记一条 “Reopened.”。进程和工具 URL 在下一轮重新建立；IM 绑定不迁回，`@N` 仍可直达。
+调用方持有线程的 lifecycle 锁，期间不会有新会话启动。各入口只在 `mark` 里加自己的字段：
 
-## 4 通知
+| 入口 | mark | 额外 |
+|---|---|---|
+| Resolve（C1、C4、C5） | — | — |
+| Merge 对话框（C3） | `MergedAt` | 记一条系统事件（合并了哪个 PR） |
+| Archive（C2） | `ArchivedAt`、`WorktreeFreedAt` | 保存前释放 worktree；记一条系统事件 |
+
+不删的：worktree（Archive 除外）、分支、对话记录、Library 的上传和产出。
+
+### 6.3 重开做什么
+
+`Reopen`：只对 resolved 的线程生效（其他状态原样返回，不写任何东西）；清空 `ResolvedAt`，按 `RestingStatus` 回到 ready 或 idle，记一条 “Reopened.”。进程和工具 URL 在下一轮重新建立；IM 绑定不迁回，`@N` 仍可直达。项目主线程不能重开（`ErrNotWorker`）。
+
+## 7 系统规则
+
+系统只在两个时刻改状态，都不需要用户在场：
+
+| 时刻 | 规则 | 依据 |
+|---|---|---|
+| 启动（`Recover`） | working → waiting，原因 “Interrupted when tingly-project stopped. Send a message to continue.”；待答的审批 / 提问标为 expired，线程原因改为 “The question expired when tingly-project stopped. Send a message to continue.”；排队中的消息丢弃 | §3.2：留在 waiting，但原因说清能做什么 |
+| 每小时（`AutoResolve`） | C5 | 原则 4 |
+
+另有每分钟的 `CheckStalled`：working 且 20 分钟无活动时报告协调者，**不改状态**。
+
+## 8 通知
 
 | 转移 | 协调者 | IM 聊天 |
 |---|---|---|
-| 一轮正常结束 | 收到报告（finished） | 协调者在线时由它回复；离线时推 “Finished: …” |
-| 进入 waiting（NEEDS_INPUT） | 收到报告（needs_input） | 推 “Needs you … Reply with @N” |
-| 进入 waiting（审批 / 提问） | 不收 | 推审批 / 提问卡 |
-| 进入 failed | 收到报告（failed） | 推 “Failed: …” |
-| 20 分钟无活动 | 收到 stalled（状态不变） | 不推 |
-| 关闭、重开 | 不收；下一轮从线程列表看到 | 不推 |
+| 一轮正常结束（T5） | 收到报告 finished | 协调者在线时由它回复；离线时推 “Finished: …” |
+| NEEDS_INPUT（T3） | 收到报告 needs_input | 推 “Needs you … Reply with @N” |
+| 审批 / 提问（T2） | 不收 | 推审批 / 提问卡 |
+| 出错（T4） | 收到报告 failed | 推 “Failed: …” |
+| 20 分钟无活动 | 收到 stalled | 不推 |
+| 关闭、重开、重启 | 不收；下一轮从线程列表看到 | 不推 |
 
-## 5 文件夹会话的差异
+## 9 其他线程种类
 
-文件夹会话使用同一套状态，有三点不同：
+| | 项目线程 | 文件夹会话 | 项目主线程（协调者） |
+|---|---|---|---|
+| 状态机 | 本文 | 本文，差异如下 | 不适用 |
+| NEEDS_INPUT | 是 | 否：一轮结束直接歇着 | — |
+| 7 天自动关闭 | 是 | 否：由用户收尾 | — |
+| Archive | 关闭并释放 worktree | 只加标志，不关闭；working / waiting 改为歇着，其余保留（failed 仍 failed） | — |
+| 给已关闭的线程发消息 | 拒绝 | IM 发来时在同一文件夹开新会话；网页拒绝 | — |
 
-- 没有 `NEEDS_INPUT`：一轮结束直接 ready 或 idle。
-- 没有 7 天自动关闭，由用户收尾。
-- Archive 只加标志、不关闭：working、waiting 变 idle（没有可回答的请求了），其余状态保留（failed 仍是 failed）。IM 给已关闭或已归档的会话发消息时，会在同一文件夹开一个新会话。
+项目主线程的显示状态由协调者队列推出（`coordinatorView`：忙时 working，有中断的输入待决定时 waiting，否则 idle），从不 resolved。
 
-项目主线程（协调者）不走本状态机：它的显示状态由协调者队列推出（`coordinatorView`），永远不会 resolved。
+## 10 不变量
 
-## 6 已知的不一致
+harness 在每个场景结束时检查（`internal/harness/invariants.go`）：
 
-下面几处是现有行为和 §1 的含义对不上。这里只记录，不在本文里改；要修哪一处，由用户决定后另开 PR，修法只用已有的状态和规则。编号对应 pencil §11。
+| 名字 | 规则 |
+|---|---|
+| `status.resolved-consistent` | resolved ⇔ `ResolvedAt` 有值 |
+| `status.rests-by-one-rule` | ready / idle 的线程，状态等于 `RestingStatus` |
+| `status.ready-has-commits` | ready 的线程分支上有提交 |
+| `wait.has-reason` | waiting 的线程有原因 |
 
-| # | 不一致 | 只用已有规则的修法 |
+单元测试（`thread_rest_test.go`）覆盖本文的每条规则：歇着规则、Stop 后有提交是 ready、Merge 对话框合并过的线程无论 Reopen 还是新一轮都是 idle、Merge 对话框的关闭和 Resolve 一样收回工具 URL、7 天规则跳过开着的 PR 和未提交改动、重启后不留答不了的问题。每条都做过变异检查：把对应改动退回，测试失败。
+
+## 11 已知限制与暂缓
+
+**已知限制**（现有行为，本文不改）：
+
+- Retry 只认本进程记得的失败。重启后 failed 线程的 Retry 会报 “the thread has no failed turn to retry”，只能发消息继续。
+- `CommitsAhead` 对本地 base 计算。GitHub 上 squash 合并后，本地 base 不变，线程仍显示 ready。
+
+**暂缓**（新需求，本轮不引入；要做先改本文的模型）：
+
+- PR 在 GitHub 上合并、或线程用 `merge` 工具合并后，线程自动关闭（pencil G1、G2；ready 不参与 7 天规则，G3）。
+- 协调者关闭前由工具检查剩余工作（G5）；协调者的重开工具（G6）。
+- 线程声明“做完了”（G12）。
+- 关闭时通知协调者和 IM（G13）。
+- 建 worktree 失败改记 failed（G9）：要先让 Retry 对没跑过的轮次有意义。
+
+## 12 本次合理化（2026-11-21）
+
+落地前的代码与上面的设计有五处不一致，已按设计改正，只用已有的状态和规则：
+
+| 缺口 | 之前 | 现在 |
 |---|---|---|
-| G7 | 重启时正在跑的线程记成 waiting，但没有问题可答；Retry 只认 failed，用户只能另发一条消息 | 记成 failed |
-| G8 | 重启后待答的审批已标过期，线程仍是 waiting “Approve: …”，这个问题已经答不了 | 记成 failed |
-| G9 | 建 worktree 失败记成 waiting | 记成 failed |
-| G10 | Stop 后一律 idle，有提交也不进 ready（与 §1.2 不同） | Stop 后也按 §1.2 选 |
-| G11 | 选 ready 还是 idle 有两种算法：轮次结束只看提交，Reopen 和 `/clear` 还看 `MergedAt` | 统一成一个函数 |
-| G14 | Merge 对话框的关闭不回收进程、不收回工具 URL，与其余关闭入口不同 | 和 Resolve 走同一段关闭代码 |
-| G4 | 7 天自动关闭不看开着的 PR 和未提交改动，没做完的活会被关掉 | 跳过这两种线程 |
+| G10 | Stop 后一律 idle，有提交也不进 ready | Stop 后按 `RestingStatus` |
+| G11 | ready / idle 有两种算法：轮次结束只看提交，Reopen 和 `/clear` 还看 `MergedAt` | 一个 `db.RestingStatus`，八处调用 |
+| G14 | Merge 对话框的关闭不回收进程、不收回工具 URL | Resolve、Merge 对话框、Archive 共用 `endProcess` + `close` |
+| G4 | 7 天规则会关掉有开着的 PR 或未提交改动的线程 | 跳过这两种 |
+| G8 | 重启后问题已过期，线程原因仍是 “Approve: …” | 原因改为可继续的说明 |
 
-**本轮不处理（新需求，暂不引入）**：
-
-- PR 在 GitHub 上合并，或线程用 `merge` 工具合并后，线程不会自动关闭（G1、G2，以及 ready 不参与 7 天规则的 G3）。
-- 协调者的关闭条件只写在提示词里，工具不检查（G5）。
-- 协调者没有重开工具（G6）。
-- 线程无法声明“做完了”（G12）。
-- 关闭不通知协调者和 IM（G13）。
+G7（重启中断）保留 waiting：发一条消息即可继续，符合 §3.2；改成 failed 会出现一个重启后用不了的 Retry 按钮。

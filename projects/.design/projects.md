@@ -100,11 +100,11 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 | 状态 | 进入条件 | Overview 分组 |
 |---|---|---|
 | `working` | 一轮在跑、排队等槽位，或后台任务在跑 | Working |
-| `waiting` | 有待回答的审批/提问；或上一轮以 `NEEDS_INPUT:` 结尾；或重启时正在跑、建 worktree 失败（`wait_reason` 说明） | **Waiting on you** |
+| `waiting` | 有待回答的审批/提问；或上一轮以 `NEEDS_INPUT:` 结尾；或重启时正在跑、问题已过期、建 worktree 失败（`wait_reason` 说明发消息继续） | **Waiting on you** |
 | `failed` | 上一轮出错（`wait_reason` 以 `Failed` 开头）；Retry 或发消息继续 | Failed |
-| `ready` | 一轮结束，分支上有领先于基线的提交 | Ready for review |
-| `idle` | 一轮结束，无待审内容；或被停下 | Idle |
-| `resolved` | 用户标记 / Merge 对话框合并后 / idle 一周无活动；协调者在用户说了或已合并时 | Resolved（可重开） |
+| `ready` | 歇着（一轮结束或被停下），分支上有没从 Overview 合并过的提交 | Ready for review |
+| `idle` | 歇着，无待审内容 | Idle |
+| `resolved` | 用户标记 / Merge 对话框合并后 / idle 一周无活动且没有开着的 PR 和未提交改动；协调者在用户说了或已合并时 | Resolved（可重开） |
 
 （官方的 Landing 对应"PR 已批准排队合并"，本地合并是同步动作，MVP 不需要该状态。）
 
