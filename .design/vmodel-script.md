@@ -476,10 +476,10 @@ GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内
 
 | PR | 内容 | 验证 |
 | --- | --- | --- |
-| **1 实测 + 设计** | 本文按用户的分工改写；`.research/projects-wire-probe.md` + 探针（真实 Projects + 真实 claude 2.1.259 + 记录型脚本 mock） | 两次实测跑通（单线程、带子 agent），结论写进 §2 |
-| **2 `vmodel/script` 引擎** | Go 结构与校验；路由（续接索引、bind、`spawns` 守卫、背景规则、严格未匹配、重试重放）；轨道内顺序、`when`/`optional`；`expect`、`expect_result`、`capture` + `{{var}}`；`after`（步骤 / 信号）；确定性 id；Anthropic 流式与非流式回答、预置错误；`count_tokens`；报告与 trace；Go API（`Signal`、`WaitServed`、`Finish`） | 单元测试：并发两条轨道交错、子 agent、重试、未匹配、未消费、断言失败、after 超时 |
-| **3 vmodel 接入** | `spec` 新 kind `script`（加载、导出、`--fallback` 指向它）；`Runtime` 把指向 script 的请求交给它（含 `count_tokens`）；控制接口 `/_vmodel/scripts/...`；`tingly-box vmodel` 退出时写报告 | spec 与 CLI 测试；真实 claude `-p` 打一条两步脚本 |
-| **4 tingly-project harness** | `projects/internal/harness/live`：旅程文件、runner（拉起 vmodel 与 Projects、隔离环境、用户动作、Projects 侧断言、结果表）；`tingly-project harness run|list`；第一条内置旅程 `one-thread`（§5.2） | runner 单元测试（用假的 vmodel/Projects 端点）；真实运行 `one-thread` |
+| **1 实测 + 设计** ✅ #2721 | 本文按用户的分工改写；`.research/projects-wire-probe.md` + 探针（真实 Projects + 真实 claude 2.1.259 + 记录型脚本 mock） | 两次实测跑通（单线程、带子 agent），结论写进 §2 |
+| **2 `vmodel/script` 引擎** ✅ #2722 | Go 结构与校验；路由（续接索引、bind、`spawns` 守卫、背景规则、严格未匹配、重试重放）；轨道内顺序、`when`/`optional`；`expect`、`expect_result`、`capture` + `{{var}}`；`after`（步骤 / 信号）；确定性 id；Anthropic 流式与非流式回答、预置错误；`count_tokens`；报告与 trace；Go API（`Signal`、`WaitServed`、`Finish`） | 单元测试：并发两条轨道交错、子 agent、重试、未匹配、未消费、断言失败、after 超时 |
+| **3 vmodel 接入** ✅ #2723 | `spec` 新 kind `script`（加载、导出、`--fallback` 指向它）；`Runtime` 把指向 script 的请求交给它（含 `count_tokens`）；控制接口 `/_vmodel/scripts/...`；`tingly-box vmodel` 退出时写报告 | spec 与 CLI 测试；真实 claude `-p` 打一条两步脚本 |
+| **4 tingly-project harness** ✅ | `projects/internal/harness/live`：旅程文件、runner（拉起 vmodel 与 Projects、隔离环境、用户动作、Projects 侧断言、结果表）；`tingly-project harness run|list`；第一条内置旅程 `one-thread`（§5.2） | runner 单元测试（用假的 vmodel/Projects 端点）；真实运行 `one-thread` 通过（6 个模型请求、5 项检查全过、线程 1 个提交）；故意改坏的副本报出两处失败、退出码 1 |
 | 之后 | `hold`（流中扣住）→ 消息插入旅程；并行线程、`notify_coordinator` → `propose_threads`、决策卡、`create_pr`、审批拒绝、压缩；无序步骤组；`trace.md`；经网关；IM；OpenAI Responses | 每条先写旅程 |
 
 ## 10. 原待定点的决定
