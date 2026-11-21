@@ -154,11 +154,26 @@ sender inserts by default, not only the web composer.
   - An insert makes the run a user turn (`adoptUser`): `no_update` is
     refused from then on and the reply streams, so a check-in started by a
     thread's report cannot swallow the user's message.
-  - If the turn ends before reading it, Claude Code answers in a turn of its
-    own with no run registered: `answerOutsideRun` keeps that reply as an
-    assistant event (and hands it to `OnFinal`). The flag is cleared when
-    that turn ends, when the insert fails, and when our next turn starts (a
-    coordinator has no background tools, so it starts no other turn).
+  - If the turn ends before reading it (the insert landed while the last
+    reply was streaming), Claude Code answers in a turn of its own. That turn
+    becomes a coordinator run (`startFollowUp`, on the engine's
+    `OnUnsolicitedTurn`, called before the turn claims the session): the
+    tool turn opens again (`begin` numbers turns, so the ending turn's `end`
+    cannot close the new one), the reply streams and is kept (`OnFinal`),
+    usage is tallied, and `Busy` covers it. `answerOutsideRun` only says
+    whether that turn answers the user (no_update refused); a coordinator has
+    no background tools, so every turn Claude Code starts by itself answers
+    input written as a turn ended and is taken up the same way.
+  - The queue waits for that follow-up instead of failing on a busy
+    session: a turn of ours waits for it before starting, and one that loses
+    the race (`Start` refused, or `NotSent` because the process began its
+    own turn first) waits for the follow-up and runs again. The follow-up
+    takes the session's run slot; the run it replaced still gets its own end
+    (`OnTurnEnd` routes by `Unsolicited`). Covered by
+    `TestInsertedMessageAnsweredOutsideTheTurnIsActedOn` and
+    `TestQueuedMessageWaitsForTheFollowUpTurn` (fake process), and with the
+    real CLI by the harness journey `insert-at-turn-end` (formerly
+    `known-gap-insert-at-turn-end`).
   - The page knows whether an insert would land: `coordinator_insertable` in
     the project detail and `insertable` in the `coordinator` event, published
     when a turn reaches the engine and when it ends.
@@ -169,11 +184,6 @@ sender inserts by default, not only the web composer.
 
 ## Not done
 
-- **Reply to an insert the turn never read** (narrow race: the turn ends
-  between the write and its next request). Claude Code answers in a turn of
-  its own with no run and no tool turn: its text is kept, but coordinator
-  tools refuse ("No coordinator turn is active") and usage is not tallied.
-  Fix: register that unsolicited turn as a run with a tool turn.
 - **Inserted coordinator messages are not durable inputs.** If the turn
   fails or the app restarts, the turn's input is recovered but the inserted
   message is not replayed. Fix: record it as a coordinator input marked
