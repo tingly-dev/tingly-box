@@ -27,6 +27,8 @@ import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
 import {useResponsesToggle} from '@/hooks/useResponsesToggle';
 import { overlay } from '@tingly/ui/theme/overlay';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import { PhoneRuleTargets } from '@/components/rule-card/PhoneRuleTargets';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -206,6 +208,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                         }) => {
     const {t} = useTranslation();
     const isExpanded = !collapsible || expanded;
+    // Phone shell: no room for the graph — the rule's targets are a list.
+    const phone = usePhoneShell();
 
     // Ref for the scrollable container
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -624,6 +628,22 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
             {/* Graph Content */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                {phone ? (
+                    <PhoneRuleTargets
+                        record={record}
+                        providers={providers}
+                        active={active}
+                        saving={saving}
+                        onServiceNodeClick={onServiceNodeClick}
+                        onEditProvider={onEditProvider}
+                        onTierChange={onTierChange}
+                        onLimitsChange={onLimitsChange}
+                        onDeleteService={onDeleteService}
+                        onAddService={onAddService}
+                        onAddServiceToSmartRule={onAddServiceToSmartRule}
+                        onDeleteServiceFromSmartRule={onDeleteServiceFromSmartRule}
+                    />
+                ) : (
                 <CardContent sx={{pt: 0, pb: 0.25, '&:last-child': {pb: 0.25}}}>
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph row: scrollable graph + pinned extensions card */}
@@ -662,6 +682,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         </Box>
                     </Stack>
                 </CardContent>
+                )}
             </Collapse>
         </StyledCard>
     );

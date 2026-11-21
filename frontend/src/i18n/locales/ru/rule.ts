@@ -225,6 +225,10 @@ export default {
       "loadBalance": "Балансировка",
       "fallbackTier": "Резервный уровень"
     },
+    "phone": {
+      "conditionsOnDesktop": "Условия добавляются и редактируются в настольной версии.",
+      "targetActions": "Действия с моделью"
+    },
     "guideDiagrams": {
       "empty": { "description": "Пример правила" },
       "single-provider": { "description": "Правило с одним провайдером" },

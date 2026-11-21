@@ -225,6 +225,10 @@ export default {
       "loadBalance": "Load balance",
       "fallbackTier": "Fallback tier"
     },
+    "phone": {
+      "conditionsOnDesktop": "Adding and editing conditions is on the desktop.",
+      "targetActions": "Model actions"
+    },
     "guideDiagrams": {
       "empty": { "description": "Example rule" },
       "single-provider": { "description": "Single provider rule" },
