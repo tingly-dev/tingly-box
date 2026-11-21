@@ -215,6 +215,7 @@ func mergeFixture(t *testing.T) (*testFixture, *db.Thread, *fakeGitHub, string) 
 	run(t, f.repo, "git", "config", "url."+remote+".insteadOf", "https://github.com/acme/widgets.git")
 	run(t, f.repo, "git", "push", "-q", "origin", "main")
 	gh := newFakeGitHub()
+	gh.gitURL = remote
 	links := NewLinks(f.store, gh, f.threads.republish)
 	f.threads.links = func() *Links { return links }
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Add feature", Task: "add feature.txt"})

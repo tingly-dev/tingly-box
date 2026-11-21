@@ -121,7 +121,8 @@ func fetchBase(ctx context.Context, dir, base string) bool {
 	ctx, cancel := context.WithTimeout(ctx, fetchBaseTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "fetch", "--quiet", "--no-tags", "origin", "+refs/heads/"+base+":refs/remotes/origin/"+base)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "LANGUAGE=C")
+	// Origin as the user set it up, but SSH may not wait for a key's passphrase.
+	cmd.Env = nonInteractiveEnv(ctx, dir)
 	return cmd.Run() == nil
 }
 

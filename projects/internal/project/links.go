@@ -1,13 +1,9 @@
 package project
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,6 +100,8 @@ type linkContext struct {
 	repo GitHubRepo
 	// head is the branch the thread's work is on; empty outside a branch.
 	head string
+	// git is how a push reaches the repository; set by the calls that push.
+	git githubRemote
 }
 
 // resolve finds the thread's GitHub repository (its origin) and branch.
@@ -111,11 +109,7 @@ func (l *Links) resolve(ctx context.Context, t *db.Thread) (*linkContext, error)
 	if t.Cwd == "" {
 		return nil, errors.New("this thread has no working directory, so there is no repository to use")
 	}
-	remote, err := git(ctx, t.Cwd, "config", "--get", "remote.origin.url")
-	if err != nil {
-		return nil, errors.New("this thread's repository has no origin remote")
-	}
-	repo, err := parseGitHubRemote(remote)
+	repo, err := originRepo(ctx, t.Cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -126,30 +120,22 @@ func (l *Links) resolve(ctx context.Context, t *db.Thread) (*linkContext, error)
 	return &linkContext{t: t, repo: repo, head: head}, nil
 }
 
-// parseGitHubRemote reads owner and name from a github.com remote URL in any
-// of its spellings. Credentials in the URL are dropped, never kept or shown.
-func parseGitHubRemote(remote string) (GitHubRepo, error) {
-	remote = strings.TrimSpace(remote)
-	var host, path string
-	switch {
-	case strings.Contains(remote, "://"):
-		u, err := url.Parse(remote)
-		if err != nil {
-			return GitHubRepo{}, errors.New("origin is not a GitHub repository")
-		}
-		host, path = u.Hostname(), u.Path
-	case strings.Contains(remote, "@") && strings.Contains(remote, ":"):
-		// scp-like: git@github.com:owner/name.git
-		rest := remote[strings.Index(remote, "@")+1:]
-		host, path, _ = strings.Cut(rest, ":")
-	default:
-		return GitHubRepo{}, errors.New("origin is not a GitHub repository")
+// remote is how the tools' git reaches the thread's repository: over https
+// with the tools' credential, not over origin (see githubRemote).
+func (l *Links) remote(ctx context.Context, repo GitHubRepo) (githubRemote, error) {
+	auth, ok := l.gh.(GitHubAuth)
+	if !ok {
+		return githubRemote{}, ErrGitHubUnavailable
 	}
-	parts := strings.Split(strings.Trim(strings.TrimSuffix(strings.Trim(path, "/"), ".git"), "/"), "/")
-	if !strings.EqualFold(host, "github.com") || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return GitHubRepo{}, errors.New("origin is not a github.com repository; the issue and PR tools only work with github.com")
+	cred, err := auth.Credential(ctx, repo)
+	if err != nil {
+		return githubRemote{}, err
 	}
-	return GitHubRepo{Owner: parts[0], Name: parts[1]}, nil
+	gr := githubRemote{repo: repo, cred: cred, url: repo.URL() + ".git"}
+	if u, ok := l.gh.(gitURLer); ok {
+		gr.url = u.GitURL(repo)
+	}
+	return gr, nil
 }
 
 // checkLength refuses text longer than max characters.
@@ -421,6 +407,9 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 	if lc.head == "" {
 		return prResult{}, errors.New("this thread is not on a branch (detached HEAD or no repository): commit your work to a branch first")
 	}
+	if lc.git, err = l.remote(ctx, lc.repo); err != nil {
+		return prResult{}, err
+	}
 	def, err := l.gh.DefaultBranch(ctx, lc.repo)
 	if err != nil {
 		return prResult{}, err
@@ -457,13 +446,13 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 	closed := l.settleClosed(ctx, t, lc.repo, lc.head)
 	// Before anything is pushed: a base that GitHub does not have fails the PR
 	// after its head is already published, and this call never pushes the base.
-	if !onOrigin(ctx, t.Cwd, base) {
+	if !onOrigin(ctx, t.Cwd, lc.git, base) {
 		return prResult{}, fmt.Errorf("base branch %s is not on GitHub: open its PR with create_pr first (that pushes it), or choose a base that is", base)
 	}
 	if n, ok := commitsAhead(ctx, t.Cwd, base, lc.head); ok && n == 0 {
 		return prResult{}, fmt.Errorf("branch %s has no commit beyond %s: commit your work first", lc.head, base)
 	}
-	if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
+	if err := pushBranch(ctx, t.Cwd, lc.git, lc.head); err != nil {
 		return prResult{}, err
 	}
 	it, err := l.gh.CreatePR(ctx, lc.repo, strings.TrimSpace(title), body, lc.head, base, draft)
@@ -500,14 +489,14 @@ func (l *Links) openPR(ctx context.Context, t *db.Thread, lc *linkContext, exist
 			if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
 				return prResult{}, bad
 			}
-			if !onOrigin(ctx, t.Cwd, base) {
+			if !onOrigin(ctx, t.Cwd, lc.git, base) {
 				return prResult{}, fmt.Errorf("base branch %s is not on GitHub: open its PR with create_pr first (that pushes it), or choose a base that is", base)
 			}
 			newBase = &base
 		}
 	}
 	// Publish what the thread has done since: the PR is its branch.
-	if err := pushBranch(ctx, t.Cwd, lc.head); err != nil {
+	if err := pushBranch(ctx, t.Cwd, lc.git, lc.head); err != nil {
 		return prResult{}, err
 	}
 	if newTitle != nil || newBody != nil || newBase != nil {
@@ -592,12 +581,12 @@ func (l *Links) rivalOf(t *db.Thread, repo GitHubRepo, it GitHubItem) *db.Thread
 	return nil
 }
 
-// onOrigin is whether origin has the branch (asked of the remote itself, as the
-// push would be). A remote that cannot be reached counts as having it: the
-// push or GitHub then says what is wrong.
-func onOrigin(ctx context.Context, dir, branch string) bool {
-	out, err := git(ctx, dir, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
-	return err != nil || strings.TrimSpace(out) != ""
+// onOrigin is whether GitHub has the branch (asked of the repository itself,
+// the way the push goes). A repository that cannot be reached counts as having
+// it: the push or GitHub then says what is wrong.
+func onOrigin(ctx context.Context, dir string, gr githubRemote, branch string) bool {
+	out, err := gr.run(ctx, dir, time.Minute, "ls-remote", "--heads", gr.url, "refs/heads/"+branch)
+	return err != nil || out != ""
 }
 
 // Update changes the title and description of an issue, or the title,
@@ -1136,27 +1125,41 @@ func commitsAhead(ctx context.Context, dir, base, head string) (int, bool) {
 	return 0, false
 }
 
-// pushBranch publishes the thread's own branch. The refspec names only that
-// branch and has no "+", so it can neither touch another branch nor force.
-func pushBranch(ctx context.Context, dir, branch string) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	spec := "refs/heads/" + branch + ":refs/heads/" + branch
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "push", "origin", spec)
-	// A push may never wait for a password.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "LANGUAGE=C")
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
-	if err := cmd.Run(); err != nil {
-		msg := redact(strings.TrimSpace(out.String()))
+// pushBranch publishes the thread's own branch to GitHub the tools' way (gr:
+// https, the tools' credential, none of the user's git setup), not over
+// origin; origin's remote-tracking branch is then moved as a push to origin
+// would. The refspec names only that branch's commit and has no "+", so it can
+// neither touch another branch nor force.
+func pushBranch(ctx context.Context, dir string, gr githubRemote, branch string) error {
+	sha, err := git(ctx, dir, "rev-parse", "--verify", "refs/heads/"+branch+"^{commit}")
+	if err != nil {
+		return fmt.Errorf("pushing %s failed: %w", branch, err)
+	}
+	if msg, err := gr.run(ctx, dir, 2*time.Minute, "push", "--quiet", gr.url, sha+":refs/heads/"+branch); err != nil {
+		if msg == "" {
+			msg = err.Error()
+		}
 		// Only a push that lost to newer commits earns the rebase advice; a
 		// hook or a protected branch rejects for other reasons.
 		if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") {
-			return fmt.Errorf("pushing %s was rejected because origin has commits it does not: rebase onto origin/%s and try again (a force push is not available): %s", branch, branch, clip(msg, 400))
+			return fmt.Errorf("pushing %s was rejected because GitHub has commits it does not: rebase onto origin/%s and try again (a force push is not available): %s", branch, branch, clip(msg, 400))
+		}
+		if strings.Contains(msg, "Authentication failed") || strings.Contains(msg, "could not read Username") || strings.Contains(msg, "returned error: 403") {
+			return fmt.Errorf("pushing %s failed: GitHub did not accept the %s sign-in for it (the user can run `gh auth login`, or `gh auth refresh -s repo`): %s", branch, orGH(gr.cred.Source), clip(msg, 400))
 		}
 		return fmt.Errorf("pushing %s failed: %s", branch, clip(msg, 600))
 	}
+	if _, err := git(ctx, dir, "update-ref", "refs/remotes/origin/"+branch, sha); err != nil {
+		logrus.WithError(err).Warn("projects: cannot move origin's tracking branch after a push")
+	}
 	return nil
+}
+
+func orGH(source string) string {
+	if source == "" {
+		return "gh"
+	}
+	return source
 }
 
 // linksNote is the short form of a thread's links for a line in a list:
