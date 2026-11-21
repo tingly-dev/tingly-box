@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -12,7 +13,13 @@ import (
 func (e *Engine) checkStep(ts *trackState, st *Step, r *request, seq int) []Check {
 	var checks []Check
 	results := r.toolResults()
-	for id, b := range results {
+	ids := make([]string, 0, len(results))
+	for id := range results {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		b := results[id]
 		em, ok := e.emitted[id]
 		if !ok || e.checked[id] || em.track != ts.name {
 			continue
