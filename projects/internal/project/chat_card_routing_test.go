@@ -144,11 +144,9 @@ func TestWordsWithoutACodeDoNotAnswerAnApprovalOrAQuestion(t *testing.T) {
 
 	pick, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "DB", Task: "pick", Repo: "none", Origin: "coordinator"})
 	require.NoError(t, err)
-	for range 3 {
-		if m := sink.next(t); strings.Contains(m.text, "Which database?") {
-			break
-		}
-	}
+	// The coordinator's echoes of the words above may arrive before or after
+	// the question.
+	sink.nextContaining(t, "Which database?")
 	_, ok = f.threads.PendingRequest(pick.ID, "q-1")
 	require.True(t, ok)
 	handled, err := svc.PostFromChannel("telegram", "up", "whichever is cheaper", nil)
