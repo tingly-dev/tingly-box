@@ -1,0 +1,52 @@
+name: decision
+description: >
+  The coordinator asks the user to pick the first release version on a decision
+  card, the user picks one, and the coordinator saves the choice to project
+  memory.
+project:
+  name: Demo
+  goal: Ship the demo app
+model:
+  id: decision
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__request_decision"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: ask
+            expect: {last_text_contains: "Which version"}
+            reply:
+              tool_calls:
+                - id: card
+                  name: mcp__tingly-projects__request_decision
+                  arguments:
+                    question: Pick the version of the first release
+                    options:
+                      - {label: "0.1", consequence: "Signals an early, unstable release."}
+                      - {label: "1.0", consequence: "Promises a stable API from day one."}
+                    recommended: 0
+                    reason: The app has no users yet.
+                  expect_result: {contains: "asked the user", is_error: false}
+          - id: asked
+            reply: {content: "I put the choice on a card."}
+          - id: picked
+            # The pick arrives as the user's own message: the label alone.
+            expect: {last_text_contains: "1.0"}
+            reply:
+              tool_calls:
+                - id: save
+                  name: mcp__tingly-projects__remember
+                  arguments: {topic: release-version, content: "The first release is 1.0.", summary: "First release version: 1.0"}
+                  expect_result: {contains: "saved to memory", is_error: false}
+          - id: noted
+            reply: {content: "Noted: the first release is 1.0."}
+steps:
+  - say: Which version should the first release be?
+  - choose: {option: 1}
+  - served: coordinator.noted
+expect:
+  threads: 0
+  memory_contains: ["The first release is 1.0."]
+  conversation_contains: ["Noted: the first release is 1.0."]

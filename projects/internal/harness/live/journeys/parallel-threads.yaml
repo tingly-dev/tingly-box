@@ -1,0 +1,88 @@
+name: parallel-threads
+description: >
+  One message with two tasks becomes two threads that work at the same time,
+  each asking to commit. The second report is held until the coordinator has
+  answered the first, so the coordinator sees two check-ins in a fixed order.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+    go.mod: "module demo\n\ngo 1.22\n"
+model:
+  id: parallel-threads
+  kind: script
+  protocols: [anthropic]
+  script:
+    hold_timeout: 90s
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            expect: {last_text_contains: "Two things"}
+            reply:
+              tool_calls:
+                - id: changelog
+                  name: mcp__tingly-projects__start_thread
+                  arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md and commit it."}
+                  spawns: changelog
+                  expect_result: {contains: "started thread"}
+                - id: greet
+                  name: mcp__tingly-projects__start_thread
+                  arguments: {title: Add greeting helper, task: "Add Greet(name) in greet.go and commit it."}
+                  spawns: greet
+                  expect_result: {contains: "started thread"}
+          - id: started
+            reply: {content: "Started two threads: Add CHANGELOG and Add greeting helper."}
+          - id: report-changelog
+            expect: {last_text_contains: "CHANGELOG.md"}
+            reply: {content: "Add CHANGELOG is ready for review."}
+          - id: report-greet
+            expect: {last_text_contains: "greet.go"}
+            reply: {content: "Add greeting helper is ready for review too."}
+      changelog:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: write
+            reply:
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n"}, expect_result: {is_error: false}}
+          - id: commit
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'", description: Commit}, expect_result: {is_error: false}}
+          - id: done
+            reply: {content: "Added CHANGELOG.md and committed it."}
+      greet:
+        bind: {system_contains: "Your task: Add greeting helper"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: write
+            reply:
+              tool_calls:
+                - id: write
+                  name: Write
+                  arguments: {file_path: "{{cwd}}/greet.go", content: "package demo\n\n// Greet greets name.\nfunc Greet(name string) string { return \"Hello, \" + name }\n"}
+                  expect_result: {is_error: false}
+          - id: commit
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add greet.go && git commit -qm 'Add Greet'", description: Commit}, expect_result: {is_error: false}}
+          - id: done
+            after: [coordinator.report-changelog]
+            reply: {content: "Added Greet in greet.go and committed it."}
+steps:
+  - say: "Two things: add a CHANGELOG, and add a Greet(name) helper."
+  - approve: {thread: Add CHANGELOG}
+  - approve: {thread: Add greeting helper}
+  - served: coordinator.report-greet
+expect:
+  threads: 2
+  thread:
+    Add CHANGELOG: {status: ready, commits_ahead: 1}
+    Add greeting helper: {status: ready, commits_ahead: 1}
+  conversation_contains: ["Started two threads", "ready for review too"]

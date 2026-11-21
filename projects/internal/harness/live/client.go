@@ -209,6 +209,93 @@ func (p *projects) answer(ctx context.Context, title string, allow bool, scope s
 	return card.Content, err
 }
 
+// card waits for the newest card of kind on the project conversation that
+// open says is still open.
+func (p *projects) card(ctx context.Context, kind string, open func(payload string) bool) (event, error) {
+	var found event
+	err := poll(ctx, "a "+kind+" card", func() (bool, string, error) {
+		evs, err := p.events(ctx, p.project.MainThreadID)
+		if err != nil {
+			return false, "", err
+		}
+		for i := len(evs) - 1; i >= 0; i-- {
+			if evs[i].Kind == kind && open(evs[i].Payload) {
+				found = evs[i]
+				return true, "", nil
+			}
+		}
+		return false, fmt.Sprintf("%d conversation events", len(evs)), nil
+	})
+	return found, err
+}
+
+func (p *projects) startSuggestions(ctx context.Context, indexes []int) (string, error) {
+	card, err := p.card(ctx, "suggestions", func(payload string) bool {
+		var pl struct {
+			Suggestions []struct {
+				ThreadID string `json:"thread_id"`
+			} `json:"suggestions"`
+		}
+		if json.Unmarshal([]byte(payload), &pl) != nil {
+			return false
+		}
+		for _, s := range pl.Suggestions {
+			if s.ThreadID == "" {
+				return true
+			}
+		}
+		return false
+	})
+	if err != nil {
+		return "", err
+	}
+	_, err = p.do(ctx, http.MethodPost, "/api/v1/threads/"+p.project.MainThreadID+"/events/"+card.ID+"/start", map[string]any{"indexes": indexes}, nil)
+	return "", err
+}
+
+func (p *projects) choose(ctx context.Context, option int) (string, error) {
+	var question string
+	card, err := p.card(ctx, "decision", func(payload string) bool {
+		var d struct {
+			Question string `json:"question"`
+			Chosen   *int   `json:"chosen"`
+		}
+		if json.Unmarshal([]byte(payload), &d) != nil || d.Chosen != nil {
+			return false
+		}
+		question = d.Question
+		return true
+	})
+	if err != nil {
+		return "", err
+	}
+	_, err = p.do(ctx, http.MethodPost, "/api/v1/threads/"+p.project.MainThreadID+"/events/"+card.ID+"/choose", map[string]any{"index": option}, nil)
+	return question, err
+}
+
+// memory is every project memory file, concatenated.
+func (p *projects) memory(ctx context.Context) (string, error) {
+	var list struct {
+		Files []struct {
+			Name string `json:"name"`
+		} `json:"files"`
+	}
+	if _, err := p.do(ctx, http.MethodGet, "/api/v1/projects/"+p.project.ID+"/memory", nil, &list); err != nil {
+		return "", err
+	}
+	var all strings.Builder
+	for _, f := range list.Files {
+		var file struct {
+			Content string `json:"content"`
+		}
+		if _, err := p.do(ctx, http.MethodGet, "/api/v1/projects/"+p.project.ID+"/memory/"+url.PathEscape(f.Name), nil, &file); err != nil {
+			return "", err
+		}
+		all.WriteString(file.Content + "\n")
+	}
+	return all.String(), nil
+}
+
 // settle waits until the coordinator and every thread are idle.
 func (p *projects) settle(ctx context.Context) error {
 	return poll(ctx, "the project to settle", func() (bool, string, error) {
@@ -235,9 +322,10 @@ type model struct {
 	id string
 }
 
-func (m *model) served(ctx context.Context, step string, timeout time.Duration) error {
+// wait waits until a step was served or reached on the model side.
+func (m *model) wait(ctx context.Context, what, step string, timeout time.Duration) error {
 	q := url.Values{"step": {step}, "timeout": {timeout.String()}}
-	_, err := m.do(ctx, http.MethodGet, "/_vmodel/scripts/"+url.PathEscape(m.id)+"/served?"+q.Encode(), nil, nil)
+	_, err := m.do(ctx, http.MethodGet, "/_vmodel/scripts/"+url.PathEscape(m.id)+"/"+what+"?"+q.Encode(), nil, nil)
 	return err
 }
 

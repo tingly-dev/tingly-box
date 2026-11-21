@@ -22,6 +22,7 @@ type Engine struct {
 	checked  map[string]bool       // tool_use ids whose expect_result ran
 	signals  map[string]bool
 	served   map[string]bool // "track.step" written to a client
+	reached  map[string]bool // "track.step" claimed by a request (maybe still held)
 	bgCount  map[string]int
 	failures []Issue
 	warnings []Issue
@@ -67,7 +68,7 @@ func New(id string, s *Script) (*Engine, error) {
 	e := &Engine{
 		id: id, s: s, changed: make(chan struct{}),
 		tracks: map[string]*trackState{}, emitted: map[string]emission{}, texts: map[string][]emission{},
-		checked: map[string]bool{}, signals: map[string]bool{}, served: map[string]bool{}, bgCount: map[string]int{},
+		checked: map[string]bool{}, signals: map[string]bool{}, served: map[string]bool{}, reached: map[string]bool{}, bgCount: map[string]int{},
 	}
 	for _, name := range s.TrackNames() {
 		e.tracks[name] = &trackState{name: name, t: s.Tracks[name], vars: map[string]string{}}
@@ -106,19 +107,30 @@ func (e *Engine) Signal(name string) {
 
 // WaitServed blocks until the step "track.step" was answered.
 func (e *Engine) WaitServed(ctx context.Context, ref string) error {
+	return e.wait(ctx, ref, e.served, "served")
+}
+
+// WaitReached blocks until a request claimed the step "track.step"; its
+// reply may still be held by after. A driver uses it to act while the client
+// is waiting for that reply.
+func (e *Engine) WaitReached(ctx context.Context, ref string) error {
+	return e.wait(ctx, ref, e.reached, "reached")
+}
+
+func (e *Engine) wait(ctx context.Context, ref string, set map[string]bool, what string) error {
 	if _, ok := e.s.step(ref); !ok {
 		return fmt.Errorf("no step %s", ref)
 	}
 	for {
 		e.mu.Lock()
-		done, ch := e.served[ref], e.changed
+		done, ch := set[ref], e.changed
 		e.mu.Unlock()
 		if done {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("step %s not served: %w", ref, ctx.Err())
+			return fmt.Errorf("step %s not %s: %w", ref, what, ctx.Err())
 		case <-ch:
 		}
 	}

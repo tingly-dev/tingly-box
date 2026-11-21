@@ -494,7 +494,18 @@ GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内
 | **3 vmodel 接入** ✅ #2723 | `spec` 新 kind `script`（加载、导出、`--fallback` 指向它）；`Runtime` 把指向 script 的请求交给它（含 `count_tokens`）；控制接口 `/_vmodel/scripts/...`；`tingly-box vmodel` 退出时写报告 | spec 与 CLI 测试；真实 claude `-p` 打一条两步脚本 |
 | **4 tingly-project harness** ✅ | `projects/internal/harness/live`：旅程文件、runner（拉起 vmodel 与 Projects、隔离环境、用户动作、Projects 侧断言、结果表）；`tingly-project harness run|list`；第一条内置旅程 `one-thread`（§5.2） | runner 单元测试（用假的 vmodel/Projects 端点）；真实运行 `one-thread` 通过（6 个模型请求、5 项检查全过、线程 1 个提交）；故意改坏的副本报出两处失败、退出码 1 |
 | **5 隔离与观察** | 运行目录 + 标记、XDG/TMPDIR 隔离、`harness runs|open|clean`、`run --open` | 单元测试；真实 `run --open` 后用无头浏览器截图（项目页、工具调用展开） |
+| **6 协调者一侧的旅程** | 用户动作 `start_suggestions`、`choose`、`settle`、`reached`（引擎 `WaitReached` + 控制接口 `reached`）；断言 `memory_contains`；旅程 `decision`、`propose-and-start`、`parallel-threads`、`follow-up`、`known-gap-insert-at-turn-end` | 全部真实跑通；`known-gap-…` 稳定复现一个缺口（见下） |
 | 之后 | `hold`（流中扣住）→ 消息插入旅程；并行线程、`notify_coordinator` → `propose_threads`、决策卡、`create_pr`、审批拒绝、压缩；无序步骤组；`trace.md`；经网关；IM；OpenAI Responses | 每条先写旅程 |
+
+### 9.1 旅程找到的问题
+
+- **回合收尾时插入的用户消息拿不到工具**（`known-gap-insert-at-turn-end`）：用户在协调者正在产出最后一段回复时
+  发消息，消息被插进这个回合（`coordinator_insert.go` 的 `answerOutsideRun`）；Claude Code 在 Projects 跟踪的
+  回合结束后自己再开一个回合来回答它，这个回合里 Projects 的 MCP 工具一律回 "No coordinator turn is active."
+  （`coordinator_mcp.go`），于是"开个线程"之类的请求没有被执行。旅程按现状断言这个错误；修好后把
+  `coordinator.act` 的 `expect_result` 改成线程已开。`follow-up` 起初也撞上了它（驱动在协调者汇报刚送出时就说话），
+  所以加了 `settle`：等协调者和线程都空闲再说下一句。
+- `served` 只说明模型的回复已写出，不说明 Claude Code 的回合已结束；需要"回合结束后"语义的地方用 `settle`。
 
 ## 10. 原待定点的决定
 

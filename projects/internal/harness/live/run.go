@@ -163,7 +163,15 @@ func act(ctx context.Context, p *projects, m *model, a Action, timeout time.Dura
 	case a.Wait != nil:
 		return "", p.waitStatus(ctx, a.Wait.Thread, a.Wait.Status)
 	case a.Served != "":
-		return "", m.served(ctx, a.Served, timeout)
+		return "", m.wait(ctx, "served", a.Served, timeout)
+	case a.Reached != "":
+		return "", m.wait(ctx, "reached", a.Reached, timeout)
+	case a.StartSuggestions != nil:
+		return p.startSuggestions(ctx, a.StartSuggestions.Indexes)
+	case a.Choose != nil:
+		return p.choose(ctx, a.Choose.Option)
+	case a.Settle:
+		return "", p.settle(ctx)
 	}
 	return "", m.signal(ctx, a.Signal)
 }
@@ -196,6 +204,17 @@ func expectations(ctx context.Context, p *projects, e Expect) []string {
 		}
 		if want.BranchPrefix != "" && !strings.HasPrefix(got.Branch, want.BranchPrefix) {
 			fails = append(fails, fmt.Sprintf("%s is on branch %q, want prefix %q", quote(title), got.Branch, want.BranchPrefix))
+		}
+	}
+	if len(e.MemoryContains) > 0 {
+		all, err := p.memory(ctx)
+		if err != nil {
+			return append(fails, err.Error())
+		}
+		for _, want := range e.MemoryContains {
+			if !strings.Contains(all, want) {
+				fails = append(fails, fmt.Sprintf("no memory file contains %q", want))
+			}
 		}
 	}
 	if len(e.ConversationContains) > 0 {
