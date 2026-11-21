@@ -53,6 +53,8 @@ type Action struct {
 	// Approve and Deny answer the next approval card of a thread.
 	Approve *ApprovalAction `yaml:"approve"`
 	Deny    *ApprovalAction `yaml:"deny"`
+	// Answer answers the next question card of a thread (AskUserQuestion).
+	Answer *AnswerAction `yaml:"answer"`
 	// Wait waits for a thread status.
 	Wait *WaitAction `yaml:"wait"`
 	// Served waits until the model side answered a step ("track.step").
@@ -95,6 +97,11 @@ type ApprovalAction struct {
 	Scope string `yaml:"scope"`
 }
 
+type AnswerAction struct {
+	Thread string `yaml:"thread"`
+	Text   string `yaml:"text"`
+}
+
 type WaitAction struct {
 	Thread string `yaml:"thread"`
 	Status string `yaml:"status"`
@@ -107,12 +114,18 @@ type Expect struct {
 	ConversationContains []string                `yaml:"conversation_contains"`
 	// MemoryContains are texts some project memory file must contain.
 	MemoryContains []string `yaml:"memory_contains"`
+	// ConversationEvents are the least numbers of project conversation
+	// events by kind (suggestions, decision, thread_update, ...).
+	ConversationEvents map[string]int `yaml:"conversation_events"`
 }
 
 type ThreadExpect struct {
 	Status       string `yaml:"status"`
 	CommitsAhead *int   `yaml:"commits_ahead"`
 	BranchPrefix string `yaml:"branch_prefix"`
+	// Events are the least numbers of the thread's own events by kind
+	// (file, approval, ask, tool_use, ...).
+	Events map[string]int `yaml:"events"`
 }
 
 // Decode reads a journey, rejecting unknown fields.
@@ -172,13 +185,13 @@ func (j *Journey) ModelID() string { id, _ := j.Model["id"].(string); return id 
 
 func (a Action) validate() error {
 	n := 0
-	for _, set := range []bool{a.Say != "", a.Message != nil, a.Approve != nil, a.Deny != nil, a.Wait != nil, a.Served != "", a.Reached != "", a.Signal != "", a.StartSuggestions != nil, a.Choose != nil, a.Settle} {
+	for _, set := range []bool{a.Say != "", a.Message != nil, a.Approve != nil, a.Deny != nil, a.Answer != nil, a.Wait != nil, a.Served != "", a.Reached != "", a.Signal != "", a.StartSuggestions != nil, a.Choose != nil, a.Settle} {
 		if set {
 			n++
 		}
 	}
 	if n != 1 {
-		return fmt.Errorf("set exactly one of say, message, approve, deny, wait, served, reached, signal, start_suggestions, choose, settle")
+		return fmt.Errorf("set exactly one of say, message, approve, deny, answer, wait, served, reached, signal, start_suggestions, choose, settle")
 	}
 	switch {
 	case a.Message != nil && (a.Message.Thread == "" || a.Message.Content == ""):
@@ -187,6 +200,8 @@ func (a Action) validate() error {
 		return fmt.Errorf("message.mode is insert or next_turn")
 	case a.Approve != nil && a.Approve.Thread == "", a.Deny != nil && a.Deny.Thread == "":
 		return fmt.Errorf("approve/deny needs thread")
+	case a.Answer != nil && (a.Answer.Thread == "" || a.Answer.Text == ""):
+		return fmt.Errorf("answer needs thread and text")
 	case a.Wait != nil && (a.Wait.Thread == "" || a.Wait.Status == ""):
 		return fmt.Errorf("wait needs thread and status")
 	case a.Served != "" && !strings.Contains(a.Served, "."), a.Reached != "" && !strings.Contains(a.Reached, "."):
@@ -206,6 +221,8 @@ func (a Action) String() string {
 		return "approve " + a.Approve.Thread
 	case a.Deny != nil:
 		return "deny " + a.Deny.Thread
+	case a.Answer != nil:
+		return "answer " + a.Answer.Thread + " " + quote(a.Answer.Text)
 	case a.Wait != nil:
 		return "wait " + a.Wait.Thread + " " + a.Wait.Status
 	case a.Served != "":

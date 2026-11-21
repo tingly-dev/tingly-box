@@ -171,30 +171,30 @@ func (p *projects) waitStatus(ctx context.Context, title, status string) error {
 	})
 }
 
-// answer waits for the thread's next approval card and answers it.
-func (p *projects) answer(ctx context.Context, title string, allow bool, scope string) (string, error) {
+// respond waits for the thread's next open request of kind (approval or ask)
+// and answers it with body.
+func (p *projects) respond(ctx context.Context, title, kind string, body map[string]any) (string, error) {
 	t, err := p.thread(ctx, title)
 	if err != nil {
 		return "", err
 	}
-	if scope == "" {
-		scope = "once"
-	}
 	var card event
-	err = poll(ctx, "an approval card in "+quote(title), func() (bool, string, error) {
+	err = poll(ctx, "a "+kind+" card in "+quote(title), func() (bool, string, error) {
 		var out struct {
 			Requests []event `json:"requests"`
 		}
 		if _, err := p.do(ctx, http.MethodGet, "/api/v1/threads/"+t.ID+"/requests", nil, &out); err != nil {
 			return false, "", err
 		}
+		var kinds []string
 		for _, r := range out.Requests {
-			if r.Kind == "approval" {
+			if r.Kind == kind {
 				card = r
 				return true, "", nil
 			}
+			kinds = append(kinds, r.Kind)
 		}
-		return false, fmt.Sprintf("%d open requests", len(out.Requests)), nil
+		return false, fmt.Sprintf("open requests %v", kinds), nil
 	})
 	if err != nil {
 		return "", err
@@ -203,9 +203,10 @@ func (p *projects) answer(ctx context.Context, title string, allow bool, scope s
 		RequestID string `json:"request_id"`
 	}
 	if err := json.Unmarshal([]byte(card.Payload), &payload); err != nil || payload.RequestID == "" {
-		return "", fmt.Errorf("approval card without request_id: %s", card.Payload)
+		return "", fmt.Errorf("%s card without request_id: %s", kind, card.Payload)
 	}
-	_, err = p.do(ctx, http.MethodPost, "/api/v1/threads/"+t.ID+"/respond", map[string]any{"request_id": payload.RequestID, "allow": allow, "scope": scope}, nil)
+	body["request_id"] = payload.RequestID
+	_, err = p.do(ctx, http.MethodPost, "/api/v1/threads/"+t.ID+"/respond", body, nil)
 	return card.Content, err
 }
 

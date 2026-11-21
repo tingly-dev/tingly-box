@@ -112,21 +112,24 @@ type Background struct {
 
 // Match is a predicate on a request. Every set field must hold.
 type Match struct {
-	Class             []string          `json:"class,omitempty"`
-	Model             string            `json:"model,omitempty"`
-	SystemContains    string            `json:"system_contains,omitempty"`
-	SystemRegex       string            `json:"system_regex,omitempty"`
-	FirstUserContains string            `json:"first_user_contains,omitempty"`
-	LastUserContains  string            `json:"last_user_contains,omitempty"`
-	LastUserRegex     string            `json:"last_user_regex,omitempty"`
-	LastTextContains  string            `json:"last_text_contains,omitempty"`
-	ToolsInclude      []string          `json:"tools_include,omitempty"`
-	ToolsExclude      []string          `json:"tools_exclude,omitempty"`
-	HasToolResult     string            `json:"has_tool_result,omitempty"`
-	Header            map[string]string `json:"header,omitempty"`
-	All               []*Match          `json:"all,omitempty"`
-	Any               []*Match          `json:"any,omitempty"`
-	Not               *Match            `json:"not,omitempty"`
+	Class             []string `json:"class,omitempty"`
+	Model             string   `json:"model,omitempty"`
+	SystemContains    string   `json:"system_contains,omitempty"`
+	SystemRegex       string   `json:"system_regex,omitempty"`
+	FirstUserContains string   `json:"first_user_contains,omitempty"`
+	LastUserContains  string   `json:"last_user_contains,omitempty"`
+	LastUserRegex     string   `json:"last_user_regex,omitempty"`
+	LastTextContains  string   `json:"last_text_contains,omitempty"`
+	// InsertedContains matches a message the user wrote while the turn ran:
+	// Claude Code puts it in a role "system" entry after our last reply.
+	InsertedContains string            `json:"inserted_contains,omitempty"`
+	ToolsInclude     []string          `json:"tools_include,omitempty"`
+	ToolsExclude     []string          `json:"tools_exclude,omitempty"`
+	HasToolResult    string            `json:"has_tool_result,omitempty"`
+	Header           map[string]string `json:"header,omitempty"`
+	All              []*Match          `json:"all,omitempty"`
+	Any              []*Match          `json:"any,omitempty"`
+	Not              *Match            `json:"not,omitempty"`
 }
 
 // ResultMatch is a predicate on a tool result.

@@ -1,0 +1,59 @@
+name: thread-tools
+description: >
+  A thread uses its own tools: create_pr is refused without a GitHub origin,
+  send_file publishes a file, and the commit it asks for is denied by the
+  user; it reports what happened and nothing is committed.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: thread-tools
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - {id: start, name: mcp__tingly-projects__start_thread, arguments: {title: Write release notes, task: "Write release notes, share them, commit them and open a PR."}, spawns: thread, expect_result: {contains: "started thread"}}
+          - id: started
+            reply: {content: "Started Write release notes."}
+          - id: report
+            expect: {last_text_contains: "denied"}
+            reply: {content: "Write release notes could not commit: you denied it. The notes are shared in the thread."}
+      thread:
+        bind: {system_contains: "Your task: Write release notes", tools_include: ["__create_pr", "__send_file"]}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: pr
+            reply:
+              tool_calls:
+                - {id: pr, name: mcp__tingly-projects__create_pr, arguments: {title: "docs: release notes"}, expect_result: {is_error: true}}
+          - id: write
+            reply:
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/NOTES.md", content: "# Release notes\n\n- First release.\n"}, expect_result: {is_error: false}}
+          - id: share
+            reply:
+              tool_calls:
+                - {id: send, name: mcp__tingly-projects__send_file, arguments: {path: "{{cwd}}/NOTES.md", caption: Release notes draft}, expect_result: {is_error: false}}
+          - id: commit
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add NOTES.md && git commit -qm 'Add release notes'", description: Commit}, expect_result: {is_error: true}}
+          - id: done
+            reply: {content: "Wrote NOTES.md and shared it, but the commit was denied, so nothing is on the branch; create_pr is not available without a GitHub origin."}
+steps:
+  - say: Write release notes and open a PR.
+  - deny: {thread: Write release notes}
+  - served: coordinator.report
+expect:
+  thread:
+    Write release notes: {commits_ahead: 0, events: {file: 1, approval: 1}}
+  conversation_contains: ["could not commit"]
