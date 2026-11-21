@@ -37,3 +37,17 @@ func ParseNormalizedToolName(name string) (string, string, bool) {
 	}
 	return parts[0], parts[1], true
 }
+
+// ClientToolName is the name an MCP client is shown for a normalized tool.
+// Clients already namespace a server's tools (Claude Code: mcp__<server>__),
+// so the gateway prefix would only repeat it and push names past the 64
+// characters models accept.
+func ClientToolName(normalized string) string {
+	return strings.TrimPrefix(normalized, normalizedPrefix)
+}
+
+// ToolNameFromClient is the normalized name of a tool an MCP client calls by
+// the name ClientToolName gave it.
+func ToolNameFromClient(name string) string {
+	return normalizedPrefix + name
+}

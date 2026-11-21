@@ -90,6 +90,10 @@ func (h *Handler) ProbeClient(c *gin.Context) {
 			params.Cursor = listed.NextCursor
 		}
 		if err == nil && request.ToolName != "" {
+			// The client sees short names; the catalog's normalized name is accepted too.
+			if coretool.IsNormalizedToolName(request.ToolName) {
+				request.ToolName = coretool.ClientToolName(request.ToolName)
+			}
 			allowed := false
 			for _, name := range response.Tools {
 				if name == request.ToolName {

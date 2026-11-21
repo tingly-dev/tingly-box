@@ -66,7 +66,7 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 			}
 
 			tools = append(tools, MCPTool{
-				Name:         normalizedName,
+				Name:         coretool.ClientToolName(normalizedName),
 				Description:  t.Description,
 				InputSchema:  inputSchema,
 				OutputSchema: t.OutputSchema,
@@ -78,11 +78,12 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 	return tools, nil
 }
 
-// CallTool executes a tool by name.
+// CallTool executes a tool by the name ListTools gave it.
 func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments map[string]any) (coretool.ToolResult, error) {
 	if a.runtime == nil {
 		return coretool.ToolResult{}, fmt.Errorf("runtime not initialized")
 	}
+	name = coretool.ToolNameFromClient(name)
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(name)
 	if !ok {
 		return coretool.ToolResult{}, fmt.Errorf("invalid normalized tool name: %s", name)
