@@ -106,6 +106,13 @@ Projects 创建每个 Thread 时已构造 `agentboot.ExecutionOptions`；可以�
 - 发送时按现有绑定查找 IM 目标，经 `imchannel.SendFile`（`remote/channel/imchannel/imchannel.go`）把本地文件以 `file://` 附件交给 imbot 适配器。支持上传的平台见下表；Slack / Discord / WhatsApp 没有真实上传，返回明确的投递错误，Web 中的文件仍保留。失败会写日志（`projects: send file to IM chat`）并在 Thread 中显示错误消息，目前没有逐目标投递状态或重试。
 - 已覆盖 MCP 协议调用、文件持久化、路径约束及 Tingly 渠道的文件内容和改绑场景，以及各适配器对模拟平台 API 的发送请求（见下表“状态”）。真实 Claude 模型调用及除飞书 / Web 外各平台的实际上传仍需在有相应凭据的环境验证。
 
+## Web 对话中的展示
+
+- **连续发送合并为一行**：对话里一条接一条发布的文件（中间只隔着它们自己的 `send_file` 调用）合并为一组，缩略图/文件卡片横排、可换行；单个文件保持文件本身的样子。其间别的话、别的工具调用会把它们分开。合并只发生在渲染层（`Transcript` 的 `shownBlocks`），不改动事务记录。
+- **说明（caption）不是消息正文**：`send_file` 的说明只作为附件自身的悬停提示（统一的 Tooltip）和缩略图的 `alt`，不在对话里渲染成文字，单个文件和成组都一样；轨迹视图也不把它当作“说过的话”。宿主传给 `Attachments` 的 `captions`（路径 → 说明）必须一路传到 `AttachmentChips`，否则悬停提示会悄悄丢失。
+- **图片预览跨消息切换**：整段对话共用一个预览（`AttachmentGallery`，由线程面板与项目对话各自包住 Transcript），其图片序列是已加载的整段对话里所有图片，左右/上下键与页眉按钮都在整段对话内切换，而不止当前消息。没有 `AttachmentGallery` 时（独立使用 `AttachmentChips`）仍只在该消息自己的文件中切换。
+- 历史：#2437 让 Library 目录内的图片可键盘切换，#2476 让聊天附件复用同一预览，但每条消息各有一个预览、序列只含该条消息的图片；`send_file` 每次一条消息，因此始终只有 1 张可切——这是未覆盖的场景，不是近期重构的回归。对话分页加载时，序列只含已加载的部分。
+
 ## 各平台状态（IM 适配器）
 
 IM 侧约定：适配器收到 `Media[0]`（`image` 或 `document`，URL 为绝对路径的 `file://`）和可选说明文字，必须自己上传并发送；说明文字作为附件之后的单独消息发送（飞书、钉钉、微信、企业微信的附件消息都不带说明）。适配器任何一步失败都返回错误，不能把 URL 占位或空操作当作成功。`imchannel.SendFile` 用 `fileUploadPlatforms` 白名单拒绝尚无真实上传的平台。

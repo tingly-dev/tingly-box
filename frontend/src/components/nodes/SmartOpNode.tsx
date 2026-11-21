@@ -16,12 +16,11 @@ import { useTranslation } from 'react-i18next';
 import type { SmartRouting, SmartOp } from '../RoutingGraphTypes.ts';
 import { formatTimeRange } from '../rule-card/timeRange.ts';
 import {
-    ActionButtonsBox,
     NODE_LAYER_STYLES,
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface SmartNodeProps {

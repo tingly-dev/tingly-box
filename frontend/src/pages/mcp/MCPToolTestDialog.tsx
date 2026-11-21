@@ -4,7 +4,7 @@ import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, 
 import { api } from '@/services/api';
 import MCPToolParameters from './MCPToolParameters';
 import { isServerWebtoolsSource } from './toolPresentation';
-import type { MCPCatalogTool } from './types';
+import type { MCPCatalogTool } from '../../features/mcp/types';
 
 export default function MCPToolTestDialog({
     tool,

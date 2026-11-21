@@ -40,6 +40,9 @@ type Links struct {
 	rateMu       sync.Mutex
 	rate         GitHubRate
 	projectAsked map[string]time.Time
+	// files are the files of the PRs whose diff was asked for, for prFilesCacheFor.
+	filesMu sync.Mutex
+	files   map[string]prFilesEntry
 }
 
 // Refresh timing (see the design doc): an open item is read again after
@@ -91,7 +94,7 @@ func NewLinks(store *db.Store, gh GitHub, changed func(threadID string)) *Links 
 	if gh == nil {
 		gh = ghCLI{}
 	}
-	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}, reading: map[string]bool{}, projectAsked: map[string]time.Time{}}
+	return &Links{store: store, gh: gh, changed: changed, now: time.Now, views: map[string]viewed{}, reading: map[string]bool{}, projectAsked: map[string]time.Time{}, files: map[string]prFilesEntry{}}
 }
 
 // linkContext is where a thread's call lands: decided from the thread, never
@@ -321,17 +324,17 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 	if err := checkLength("message", in.Message, bodyMax); err != nil {
 		return MergeOutcome{}, err
 	}
+	// A new PR is worded the way `gh pr create --fill` would: from the commits.
 	title, body := strings.TrimSpace(in.Title), in.Body
 	if title == "" {
 		title, _, _ = strings.Cut(strings.TrimSpace(in.Message), "\n")
 		title = strings.TrimSpace(title)
 	}
 	if title == "" {
-		title = t.Title
-	}
-	if strings.TrimSpace(body) == "" {
-		if body = strings.TrimSpace(t.LastReport); body == "" {
-			body = strings.TrimSpace(t.Task)
+		var filled string
+		title, filled, _ = fillPR(ctx, t)
+		if strings.TrimSpace(body) == "" {
+			body = filled
 		}
 	}
 	r, err := l.createPR(ctx, t, title, body, "", "", false, false)
@@ -348,6 +351,10 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 	}
 	msgTitle, msgBody, _ := strings.Cut(strings.TrimSpace(in.Message), "\n")
 	msgTitle, msgBody = strings.TrimSpace(msgTitle), strings.TrimSpace(msgBody)
+	if msgTitle == "" {
+		// As `gh pr merge --squash` words it: the PR's title and (#number), and its description.
+		msgTitle, msgBody = fmt.Sprintf("%s (#%d)", r.item.Title, r.item.Number), strings.TrimSpace(r.item.Body)
+	}
 	if err := l.gh.SquashPR(ctx, r.repo, r.item.Number, sha, msgTitle, msgBody); err != nil {
 		return out, fmt.Errorf("PR #%d (%s) is open but was not merged, and stays open: %w", r.item.Number, r.item.URL, err)
 	}
@@ -988,7 +995,7 @@ func (l *Links) RefreshThread(ctx context.Context, threadID string, only *LinkRe
 	if err != nil {
 		return nil, err
 	}
-	var out []RefreshResult
+	out := []RefreshResult{}
 	found := only == nil
 	for _, k := range links {
 		if only != nil && !(k.Repo == only.Repo && k.Number == only.Number && (only.Kind == "" || k.Kind == only.Kind)) {

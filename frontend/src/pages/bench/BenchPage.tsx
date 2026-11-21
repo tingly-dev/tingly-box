@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Button, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { HelpOutline, PlayArrow as RunIcon, TestPipe as BenchIcon } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import PageHeader from '@/components/PageHeader';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import api from '@/services/api';
 import type { FlagSpec, RuleFlagsApi } from '@/components/RoutingGraphTypes';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
@@ -33,7 +33,7 @@ import { RequestEditor } from './RequestEditor';
 import { PayloadPanel } from './PayloadPanel';
 import { RunHistory } from './RunHistory';
 import { MESSAGE_ID, matchTemplateId, templatesForProtocol } from './contentOptions';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { overlay } from '@tingly/ui/theme/overlay';
 

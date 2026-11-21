@@ -46,15 +46,6 @@ export function useProjectEvents(projectId: string, onEvent: (ev: ProjectEvent) 
 }
 
 /**
- * Every project's live events in one stream (the sidebar's and the folder
- * page's); streamed coordinator text is left out. Each event carries its
- * `project_id`.
- */
-export function useAllProjectEvents(onEvent: (ev: ProjectEvent) => void, onOpen?: () => void, enabled = true) {
-    useEventStream(enabled ? '/api/v1/projects/events' : '', onEvent, onOpen);
-}
-
-/**
  * Opens a live event stream outside React, reconnecting when it drops, and
  * returns the function that closes it. onOpen runs on every reconnect.
  */

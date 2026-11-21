@@ -41,8 +41,11 @@ type ProjectDetailResponse struct {
 	Threads []db.Thread     `json:"threads"`
 	Counts  db.ThreadCounts `json:"counts"`
 	// CoordinatorBusy is true while the coordinator is working on a turn.
-	CoordinatorBusy     bool   `json:"coordinator_busy"`
-	CoordinatorRecovery string `json:"coordinator_recovery,omitempty"`
+	CoordinatorBusy bool `json:"coordinator_busy"`
+	// CoordinatorInsertable is true while a message sent now would join the
+	// coordinator's running turn rather than wait for the next one.
+	CoordinatorInsertable bool   `json:"coordinator_insertable"`
+	CoordinatorRecovery   string `json:"coordinator_recovery,omitempty"`
 	// Coordinator is the project's main thread: the conversation's session,
 	// with its turns, token use and context fill, for the status panel.
 	Coordinator *db.Thread `json:"coordinator,omitempty"`
@@ -540,7 +543,7 @@ func (h *Handler) get(c *gin.Context) {
 		}
 	}
 	busy := h.svc.Coordinator.Busy(p.ID)
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: projectView(*p), Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: projectView(*p), Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorInsertable: h.svc.Coordinator.Insertable(p.ID), CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
 }
 
 // coordinatorView gives the main thread a thread's own status, so the page reads

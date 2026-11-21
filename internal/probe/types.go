@@ -197,11 +197,8 @@ func (p ProbeProtocol) Family() protocol.APIStyle {
 // knob (Anthropic budget_tokens, OpenAI reasoning_effort, Gemini
 // thinking_budget) via thinking.BudgetMapping / the effort value.
 //
-// Mirrors the rule flag's thinking_effort options (.design/rule-flags.md):
-// low/medium/high/max. "minimal"/"xhigh" are deliberately excluded — outside
-// a handful of the newest OpenAI/Anthropic models they collapse onto
-// low/high/max anyway, so probing them wouldn't exercise anything the
-// low/high/max probes don't already cover.
+// This controls the generated client request. Rule flag overrides use the
+// independent FlagOverlay and its registry options.
 type ThinkingLevel = thinking.Level
 
 const (

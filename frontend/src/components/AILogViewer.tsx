@@ -30,7 +30,7 @@ import { holdNew, reconcile, sameRow } from '@/components/logHold';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatLogTime } from '@/utils/datetime';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export interface ModelRequestSummary {

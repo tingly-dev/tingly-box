@@ -17,14 +17,14 @@ import {
     Typography,
 } from '@mui/material';
 import { Add, Refresh } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import MCPSourceEditor from './MCPSourceEditor';
 import MCPSourceDrawer from './MCPSourceDrawer';
 import MCPToolsPanel from './MCPToolsPanel';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
 import { nextMCPId } from './workspaceState';
 import { useMCPWorkspace } from './useMCPWorkspace';
-import { defaultMCPSourceFormValue, formValueToSource, githubSourceFormValue } from './types';
+import { defaultMCPSourceFormValue, formValueToSource, githubSourceFormValue } from '../../features/mcp/types';
 import { isServerToolSource } from './toolPresentation';
 
 // Every connected MCP and its tools: connect any MCP, switch each tool globally.

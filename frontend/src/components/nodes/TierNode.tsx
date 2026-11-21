@@ -3,7 +3,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip.tsx';
 import { getRouteGraphBorderColor, PROVIDER_NODE_STYLES } from './styles.tsx';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface TierNodeProps {
     priority: number;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material';
-import type { MCPProfile } from './types';
+import type { MCPProfile } from '../../features/mcp/types';
 
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
 

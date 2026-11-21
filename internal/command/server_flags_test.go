@@ -5,6 +5,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/command/options"
+	"github.com/tingly-dev/tingly-box/internal/config"
 )
 
 // ServerFlagsKong.Resolve is the one flag resolver behind both the CLI's
@@ -48,7 +49,7 @@ func TestServerFlagsKongResolve(t *testing.T) {
 	})
 
 	t.Run("projects dir: default, explicit is remembered, restart keeps it", func(t *testing.T) {
-		def := options.DefaultProjectsDir(appConfig.ConfigDir())
+		def := config.DefaultProjectsDir(appConfig.ConfigDir())
 		if got := (ServerFlagsKong{}).Resolve(appConfig, options.StartFlags{}).ProjectsDir; got != def {
 			t.Errorf("ProjectsDir = %q, want default %q", got, def)
 		}

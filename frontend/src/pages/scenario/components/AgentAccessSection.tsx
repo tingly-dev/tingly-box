@@ -2,7 +2,7 @@ import { Box, ButtonBase, Card, Collapse, Tooltip, Typography } from '@mui/mater
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import ConfigRow from '@/components/ConfigRow';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
 import { radius } from '@tingly/ui/theme/radius';

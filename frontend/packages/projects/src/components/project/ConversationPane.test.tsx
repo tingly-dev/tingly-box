@@ -170,6 +170,15 @@ describe('conversation presentation', () => {
         expect(p.onSend).toHaveBeenCalledWith('Hello', []);
     });
 
+    it('offers the coordinator the send modes, and passes on whether its turn takes a message now', async () => {
+        const p = { ...props(), busy: true, insertable: false };
+        show(p);
+        const configured = composer.mock.calls.at(-1)?.[0] as { sendModes?: boolean; insertable?: boolean; onSend: (text: string, attachments: [], mode?: string) => Promise<boolean> };
+        expect(configured).toMatchObject({ sendModes: true, insertable: false });
+        await configured.onSend('later', [], 'next_turn');
+        expect(p.onSend).toHaveBeenCalledWith('later', [], 'next_turn');
+    });
+
     it('renders the coordinator tool calls as the shared tool rows a thread gets', () => {
         const messages = [
             event('user', 'Start work.'),

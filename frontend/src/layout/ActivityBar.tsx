@@ -26,9 +26,9 @@ import { useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem } from './types';
 import { PreferencesMenu } from './PreferencesMenu';
 import { QuotaMenu } from './QuotaMenu';
-import { CoachMark } from '@/components/CoachMark';
+import { CoachMark } from '@tingly/ui';
 import { useOneTimeTip } from '@/hooks/useOneTimeTip';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // Power-ups moved off the /agent page into the user menu's submenu; a
 // one-time callout on the user button says where they went.

@@ -69,9 +69,16 @@ const thread = (o: Partial<Record<string, unknown>> & { id: string; title: strin
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
     model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), session_id: `${(o.id as string).length.toString(16).padStart(2, '0')}c9d5e7a-4b1e-4f7a-9d0e-5a2b7c3d8e9f`,
-    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0,
+    // A turn that has started takes messages mid-turn; one still waiting for a project slot cannot.
+    insertable: o.status === 'working' && !o.queued, ...o,
 })
-const threadWithUsage = (o: Parameters<typeof thread>[0]) => { const t = thread(o); return { ...t, ...usageOf(t), ...o } }
+// A worker owns the launch settings copied from its project's defaults when it started.
+const pinned = (projectId: string) => {
+    const p = projects.find((x) => x.id === projectId)
+    return { profile_override: '', model_override: p?.thread_model ?? '', effort_override: p?.thread_effort ?? '', permission_mode: p?.thread_permission_mode || 'acceptEdits' }
+}
+const threadWithUsage = (o: Parameters<typeof thread>[0]) => { const t = { ...thread(o), ...pinned((o.project_id as string | undefined) ?? 'p-latency') }; return { ...t, ...usageOf(t), ...o } }
 
 // Issues and PRs a thread opened through its tools, as the server last read them.
 const link = (o: Partial<Record<string, unknown>> & { number: number; title: string }) => ({
@@ -84,15 +91,15 @@ type MockLink = ReturnType<typeof link>
 const threads = [
     threadWithUsage({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     threadWithUsage({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18),
-        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', ci: 'failing', merge_state: 'blocked',
+        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', head: 'projects/t-cache', base: 'main', ci: 'failing', merge_state: 'blocked',
             checks: { passing: 11, failing: 2, pending: 1, failed: [{ name: 'go test ./... (race)', url: 'https://github.com/acme/payments-api/actions/runs/1' }, { name: 'lint / golangci', url: 'https://github.com/acme/payments-api/actions/runs/2' }] } }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
     threadWithUsage({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1),
-        links: [link({ number: 37, repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
+        links: [link({ number: 37, head: 'projects/t-sdk', base: 'main', repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
     // Over the project's limit: its turn waits for a free slot.
     threadWithUsage({ id: 't-queued', title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
     threadWithUsage({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
     threadWithUsage({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20),
-        links: [link({ number: 201, title: 'Add tracing spans to /charge', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
+        links: [link({ number: 201, title: 'Add tracing spans to /charge', head: 'projects/t-trace', base: 'main', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
@@ -196,8 +203,14 @@ const messages = [
     msg('m6', 'thread_started', '', 29, { thread_ids: ['t-sdk'] }),
     msg('m7', 'thread_update', '', 18, { thread_id: 't-cache', title: 'Cache idempotency keys in Redis', kind: 'finished' }),
     msg('m7a', 'user', 'Cross-thread message: Redis validation finished; load-test details are in the thread report.', 17, undefined, { source: 'thread', source_ref: 't-cache' }),
+    // Files the threads sent into the conversation (send_file): in a row they read as one.
+    msg('m7b', 'file', 'p99 before and after the pool change', 16.5, { attachments: [{ name: 'p99.png', path: 'outputs/load-test-2026-10-14/charts/p99.png', type: 'image/png', size: 54_300 }] }),
+    msg('m7c', 'file', 'Throughput at the same load', 16.4, { attachments: [{ name: 'throughput.png', path: 'outputs/load-test-2026-10-14/charts/throughput.png', type: 'image/png', size: 61_870 }] }),
+    msg('m7d', 'file', '', 16.3, { attachments: [{ name: 'p99-by-route.png', path: 'outputs/load-test-2026-10-14/charts/p99-by-route.png', type: 'image/png', size: 48_120 }] }),
+    msg('m7e', 'file', 'The full report', 16.2, { attachments: [{ name: 'report.md', path: 'outputs/load-test-2026-10-14/report.md', type: 'text/markdown', size: 4_812 }] }),
     msg('m8', 'thread_update', '', 4, { thread_id: 't-pool', title: 'Tune the DB connection pool', kind: 'needs_input' }),
     msg('m9', 'assistant', 'The Redis change is ready for review, and the tracing work is merged. Next, approve or deny the staging benchmark in the pool thread; I will keep the retry-budget work separate until its tests finish.', 3),
+    msg('m9a', 'file', 'Pool saturation during the last run', 3.5, { attachments: [{ name: 'pool-saturation.png', path: 'outputs/pool-saturation.png', type: 'image/png', size: 40_220 }] }),
 ]
 
 const library = [
@@ -229,7 +242,7 @@ const session = (o: Partial<Record<string, unknown>> & { id: string; title: stri
     project_id: folderId(o.cwd), seq: 1, agent: 'claude-code', origin: 'user', permission_mode: '' as string | undefined, profile: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
     uncommitted: false, model: '' as string | undefined, repo_path: '', base_branch: '', branch: '', session_id: o.id,
     created_at: ago(120), updated_at: ago(8),
-    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, ...o,
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, insertable: o.status === 'working', ...o,
 })
 const sessionWithUsage = (o: Parameters<typeof session>[0]) => { const t = session(o); return { ...t, ...usageOf(t), ...o } }
 
@@ -430,7 +443,10 @@ export const projectsHandlers = [
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         const body = (await request.json()) as { profile: string; inherit?: boolean }
-        if (th.parent_id) { th.profile_override = body.inherit ? null : body.profile; th.model_override = '' }
+        if (th.parent_id) {
+            const project = projects.find((x) => x.id === th.project_id)
+            th.profile_override = body.inherit ? '' : body.profile; th.model_override = body.inherit ? project?.thread_model ?? '' : ''
+        }
         else th.profile = body.profile
         return HttpResponse.json(th)
     }),
@@ -456,18 +472,26 @@ export const projectsHandlers = [
         th.title = ((await request.json()) as { title: string }).title
         return HttpResponse.json(th)
     }),
-    http.get('/api/v1/threads/:tid/diff', ({ params }) => {
+    http.get('/api/v1/threads/:tid/prs/:number/diff', ({ params }) => {
         const th = findThread(params.tid as string)
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         return HttpResponse.json({
-            base: th.base_branch, branch: th.branch, uncommitted: '', additions: 56, deletions: 4,
+            number: Number(params.number), base: 'main', head: th.branch, source: 'local', unpushed: th.id === 't-cache' ? 1 : 0, additions: 56, deletions: 4,
             files: [
                 { path: 'internal/idempotency/redis.go', status: 'added', additions: 48, deletions: 0 },
                 { path: 'internal/idempotency/store.go', status: 'modified', additions: 8, deletions: 4 },
             ],
         })
     }),
-    http.get('/api/v1/threads/:tid/diff/file', ({ request }) => {
+    http.get('/api/v1/threads/:tid/merge/draft', ({ params }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const pr = (th.links as MockLink[] | undefined)?.find((l) => l.kind === 'pr' && l.state === 'open')
+        return HttpResponse.json(pr
+            ? { number: pr.number, source: 'pr', title: pr.title, body: 'Moves idempotency-key lookups from Postgres to Redis behind `IDEMPOTENCY_REDIS`, with a 24h TTL.' }
+            : { number: 0, source: 'commit', title: 'Retry budget with a token bucket', body: 'Caps client retries so they cannot amplify an outage.' })
+    }),
+    http.get('/api/v1/threads/:tid/prs/:number/diff/file', ({ request }) => {
         const path = new URL(request.url).searchParams.get('path') ?? ''
         return HttpResponse.json({
             path,
@@ -545,7 +569,7 @@ export const projectsHandlers = [
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()
-        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: p.id === 'p-docs', coordinator_queued: p.id === 'p-docs' ? 1 : 0, coordinator: p.type === 'folder' ? undefined : coordinatorOf(p) })
+        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: p.id === 'p-docs', coordinator_insertable: p.id === 'p-docs', coordinator_queued: p.id === 'p-docs' ? 1 : 0, coordinator: p.type === 'folder' ? undefined : coordinatorOf(p) })
     }),
     http.patch('/api/v1/projects/:id', async ({ params, request }) => {
         const p = find(params.id as string)

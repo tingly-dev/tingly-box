@@ -190,26 +190,19 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
-			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (low 4K / medium 10K / high 20K / max 32K).",
+			Description:     "Thinking effort for this route. By Client inherits the scenario setting when configured. Off requests that the model disable thinking. Levels use the existing provider mappings, and upstreams may reject unsupported settings. On budget-based models, Low through Max target about 4K, 10K, 20K, 24K, and 32K tokens.",
 			Type:            FlagTypeEnum,
 			Category:        FlagCategoryReasoning,
 			Shared:          true,
 			InheritanceMode: "override",
-			// "minimal" and "xhigh" are deliberately not offered here: outside a
-			// handful of the newest OpenAI/Anthropic models they silently
-			// collapse onto "low"/"high"/"max" anyway (see the reasoning-effort
-			// tier maps in internal/protocol/ops and .design/model-data.md), so
-			// exposing them as distinct choices was mostly a false promise of
-			// precision. Both remain valid thinking.Level values — existing
-			// rules already set to "minimal"/"xhigh" keep working, they're just
-			// not offered to new selections.
 			Options: []FlagOption{
-				{Value: "", Label: "By Client"},
-				{Value: "off", Label: "Off"},
-				{Value: "low", Label: "Low (~4K tokens)"},
-				{Value: "medium", Label: "Medium (~10K tokens)"},
-				{Value: "high", Label: "High (~20K tokens)"},
-				{Value: "max", Label: "Max (~32K tokens)"},
+				{Value: ThinkingEffortDefault, Label: "By Client"},
+				{Value: ThinkingEffortOff, Label: "Off"},
+				{Value: ThinkingEffortLow, Label: "Low"},
+				{Value: ThinkingEffortMedium, Label: "Medium"},
+				{Value: ThinkingEffortHigh, Label: "High"},
+				{Value: ThinkingEffortXHigh, Label: "XHigh"},
+				{Value: ThinkingEffortMax, Label: "Max"},
 			},
 		},
 		// ── Vision ─────────────────────────────────────────────────────────

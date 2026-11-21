@@ -15,7 +15,7 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { radius } from '@tingly/ui/theme/radius';
 import { tableFrameSx } from '@tingly/ui/theme/table';

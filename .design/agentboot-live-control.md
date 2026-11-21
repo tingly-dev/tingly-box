@@ -1,7 +1,7 @@
 # AgentBoot: injecting messages and changing a session live (TEP #2114)
 
 Two questions about a persistent Claude Code session, answered by running the
-real CLI (`agentboot/claude/ref/live-control.md`):
+real CLI (`agentboot/claude/ref/live-control.md`, `.research/mid-turn-injection.md`):
 
 1. Can a message join a turn that is already running? **Yes.**
 2. Can model / mode / directories change without restarting? **Model and
@@ -26,6 +26,18 @@ same turn: one `TurnCompleteEvent`, session state untouched.
 - `Engine.Inject(id, prompt)` injects into the live turn and records the
   user message; `ErrNotInjectable` tells the host to `Start` a turn instead.
   Hosts that today refuse a message while busy can call it first.
+- **When the model reads it** (measured against a request-logging mock,
+  CLI 2.1.259, `.research/mid-turn-injection.md`): in the first model
+  request that starts after the write, in the same turn. That is after the
+  running tool call, after a pending approval is answered, after a
+  foreground subagent returns; a request already streaming cannot change.
+  Two messages written close together arrive as one.
+- **Capability, declared by the agent.** A transport that reads input
+  mid-turn implements `MidTurnInputEncoder` (Claude does). Without it
+  `Inject` returns `ErrInjectUnsupported`, which `Engine.Inject` reports as
+  `ErrAgentReadsBetweenTurns` (an `ErrNotInjectable`), so a host can say why
+  the message waits. `Engine.Injectable(id)` says up front whether a
+  message sent now would join the running turn.
 
 ## 2. Live control
 
@@ -85,82 +97,90 @@ means the mode itself requires the prompt. `ApprovalRequestEvent.Reason`
 carries it, and Projects stores it in the approval event's `reason` (the web
 card does not show it yet).
 
-## 3. Composer: steer and queue (proposal, not built)
+## 3. Composer: insert and next turn
 
 What the two tools do when a message is sent mid-turn:
 
 | | Claude Code | Codex |
 | --- | --- | --- |
 | Default | queue, drained into the model request at the next step boundary (after the running tool call); leftovers run as the next turn | queue as a follow-up for the next turn |
-| Into the running turn | the default path itself (observed, `ref/live-control.md`) | explicit per-message **Steer** (`turn/steer` with `expectedTurnId`), at the next step boundary |
+| Into the running turn | the default path itself (§1) | explicit per-message **Steer** (`turn/steer` with `expectedTurnId`), at the next step boundary |
 | Edit before it goes | up-arrow edits queued messages | queued chip, can be promoted or removed |
-| Known friction | none reported | Enter/Tab swapped between versions; users had to Ctrl+C to send "now" (openai/codex#13595); request for a "steer by default" toggle (#32709) |
 
 Neither can cut a running tool call short: "now" always means "at the next
 step". Only Stop does that. So there are two real intents, not three:
-*change course in this turn* (steer) and *do this afterwards* (queue).
+*change course in this turn* (insert) and *do this afterwards* (next turn).
 
-Decision (YZ, 2026-10-19): the default is Claude Code's behaviour, and the
-user can choose another at send time.
+Decided (YZ, 2026-10-19): the default is Claude Code's behaviour; the user can
+choose the other at send time. Revised (2026-11-20): the two modes are named
+for what they do, **insert** (default) and **next_turn**; "stop and send" is
+dropped as a send mode (interrupting is the Stop button, which also hands
+held messages back to the box). Decided by the user the same day: every
+sender inserts by default, not only the web composer.
 
-Checked on CLI 2.1.302 (`ref/live-control.md`): a message written mid-turn is
-read at the next step boundary; if the turn ends first (a reply with no tool
-call), the CLI runs it as the next turn by itself. So the default needs no
-client-side branching: one send, and the CLI decides step or next turn.
+### As built
 
-One composer, no mode setting:
-
-- **Send (Enter), the default.** Idle: a normal turn. Running: `Engine.Inject`.
-  The message appears in the transcript at once, marked "Claude will read it
-  at its next step" until the next assistant step shows it was taken up. If
-  the turn ended first, the CLI's own next turn starts and the transcript
-  shows it as a turn start. Irrevocable once sent, which the mark says.
-- **Choose another way at send time**, only while a turn runs, from a menu on
-  the send button (and a key, e.g. Alt+Enter), per message, never sticky:
-  - **After this turn**: the host holds the message as an editable, removable
-    chip above the composer and sends it as a normal turn when the session is
-    idle. Chips survive Stop.
-  - **Stop and send**: interrupt, then send, so nobody has to Ctrl+C and
-    retype.
-- **Fallbacks are silent and honest.** If the session cannot take an injection
-  (`ErrNotInjectable`, a non-steerable turn, an agent without steering), Send
-  becomes a held chip with a one-line reason.
-- Host API: `POST message {mode: send|queue|stop_and_send}` (default `send`),
-  `GET` / `PATCH` / `DELETE` queue items. A Codex backend maps `send` while
-  running to `turn/steer` (`expectedTurnId`; on a race or on review / compact
-  turns fall back to a held chip).
-- Stop discards held chips and the page puts their text back in the box, so
-  nothing typed is lost and nothing is sent behind a Stop (revised from "chips
-  survive Stop": sending queued messages right after the user pressed Stop
-  would be a surprise).
-- Gap to close in the engine: between a turn's `result` and the CLI's own next
-  turn's `init` the session reads Idle, so a host `Send` in that instant could
-  start a second turn. `Inject`-then-`Send` fallback must tolerate
-  `ErrTurnInFlight` (it already surfaces as `NotSent`).
-
-### As built (Projects)
-
-- `POST /threads/{id}/messages` takes `mode` (`send` default, `queue`,
-  `stop_and_send`); `DELETE /threads/{id}/queue/{qid}` takes a held message
-  back. Every thread is addressed the same way; a main thread's messages go to
-  the coordinator, which ignores the mode.
-- A held message is a thread event of kind `queued` (state `held`, then `sent`
-  or `removed`), so it streams and reloads like the rest of the transcript. It
-  becomes an ordinary `user` event only when its turn starts. Chips left over
-  from a previous run are marked removed at startup (`Recover`).
-- A message that joined a running turn is a `user` event with `injected: true`;
-  the page shows "Claude will read this at its next step" on it until a later
-  tool result or reply of the main conversation appears, or the turn ends.
-- `send` falls back to a held message when the engine cannot inject: a
-  one-shot turn, a turn still waiting for a project slot, or a failed write
-  (the last also leaves a note in the transcript).
-- Composer: Enter = default send; a menu on the send button and Alt+Enter give
-  "after this turn" and "stop and send"; `mode` is only passed when chosen.
-- Not covered by an automated browser run: the page was checked with component
-  tests, not a screenshot.
+- `POST /threads/{id}/messages` takes `mode` (`insert` default,
+  `next_turn`). The old names `send` / `queue` are accepted as aliases (a
+  page loaded before the rename); `stop_and_send` is refused (400).
+  `DELETE /threads/{id}/queue/{qid}` takes a held message back.
+- **Every sender inserts by default**: the web composer, IM chats
+  (`Service.Send`, including bound chats) and the coordinator's
+  `message_thread` all go through `SendWith` with insert; a relay keeps its
+  coordinator note. `message_thread` tells the coordinator how it went
+  ("sent into the thread's running turn" / "queued").
+- Threads carry `insertable` (read live from `Engine.Injectable`, never
+  stored, like `running_tasks`).
+- **Fallback is honest.** An insert that cannot join (agent without the
+  capability, turn still waiting for a project slot, one-shot turn, failed
+  write) is held like next_turn. When the turn runs but the agent reads
+  input only between turns, a transcript note says so. The composer reads
+  `insertable === false`: Enter then sends `next_turn`, the menu shows
+  Insert disabled with the reason.
+- A held message is a `queued` thread event (`held`, then `sent` or
+  `removed`); it becomes a `user` event only when its turn starts. Chips left
+  over from a previous run are marked removed at startup (`Recover`).
+- A message that joined a running turn is a `user` event with
+  `injected: true`; the page shows "Claude will read this at its next step"
+  until a later tool result or reply of the main conversation appears.
+- **Coordinator (main thread).** Same two modes. `Coordinator.PostWith`
+  with insert writes the message into the coordinator turn in flight
+  (`coordinatorSessions.insert`, in the same trust envelope the queue uses,
+  event id allocated first so the model can cite it) and records it as
+  `injected`; no durable input is created, because the turn answers it. It
+  falls back to the ordinary input queue when no turn has reached the model,
+  for a compaction, a slash command, a paused/archived project, a turn that
+  already ended itself with `no_update`, or an agent that cannot take it.
+  - An insert makes the run a user turn (`adoptUser`): `no_update` is
+    refused from then on and the reply streams, so a check-in started by a
+    thread's report cannot swallow the user's message.
+  - If the turn ends before reading it, Claude Code answers in a turn of its
+    own with no run registered: `answerOutsideRun` keeps that reply as an
+    assistant event (and hands it to `OnFinal`). The flag is cleared when
+    that turn ends, when the insert fails, and when our next turn starts (a
+    coordinator has no background tools, so it starts no other turn).
+  - The page knows whether an insert would land: `coordinator_insertable` in
+    the project detail and `insertable` in the `coordinator` event, published
+    when a turn reaches the engine and when it ends.
+  - Decision answers (`Choose`) still go through the input queue.
+- Composer: Enter = insert (button tooltip says so while a turn runs); a
+  menu on the send button and Alt+Enter give "send after this turn"; `mode`
+  is only passed when chosen (or forced by `insertable=false`).
 
 ## Not done
 
+- **Reply to an insert the turn never read** (narrow race: the turn ends
+  between the write and its next request). Claude Code answers in a turn of
+  its own with no run and no tool turn: its text is kept, but coordinator
+  tools refuse ("No coordinator turn is active") and usage is not tallied.
+  Fix: register that unsolicited turn as a run with a tool turn.
+- **Inserted coordinator messages are not durable inputs.** If the turn
+  fails or the app restarts, the turn's input is recovered but the inserted
+  message is not replayed. Fix: record it as a coordinator input marked
+  handled by the turn it joined, recovered with it.
+- **Repeated "cannot take a message" notes.** For an agent that reads input
+  only between turns, every insert (the default for chats and relays too)
+  adds the note again. Fix: once per turn. No production agent has this today.
 - Directories chosen outside a permission prompt still restart.
 - `set_max_thinking_tokens`, MCP control requests: the CLI has them, nothing
   in AgentBoot needs them yet.

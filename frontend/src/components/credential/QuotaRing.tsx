@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Theme } from '@mui/material/styles';
-import { getStatusColor, quotaTone } from '@/theme/status';
+import { getStatusColor, quotaTone } from '@tingly/ui/theme/status';
 
 /** Traffic-light color for a remaining share, shared by every quota ring. */
 export function quotaRingColor(theme: Theme, remaining: number): string {

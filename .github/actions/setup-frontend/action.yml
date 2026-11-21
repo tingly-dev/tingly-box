@@ -2,7 +2,7 @@ name: Set up frontend
 description: >-
   Node + pnpm (corepack), a cached pnpm store, `pnpm install --frozen-lockfile`
   and `pnpm gen:api` (the client types from the committed openapi.json) in
-  frontend/. Shared by build-frontend.yml and verify-compile.yml so the release
+  frontend/. Shared by build-frontend.yml and verify-frontend.yml so the release
   and the PR check install and generate the same way. Needs a checkout.
 inputs:
   node-version:

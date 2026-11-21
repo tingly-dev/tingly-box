@@ -4,7 +4,7 @@ import { Alert, Box, Button, Card, Chip, CircularProgress, Stack, Typography } f
 import MCPToolList from './MCPToolList';
 import MCPToolTestDialog from './MCPToolTestDialog';
 import { connectionSummary, isBuiltinSource, isServerToolSource, isServerWebtoolsSource, toolPolicyPatch, toolsPolicyPatch, type MCPToolPatch } from './toolPresentation';
-import type { MCPCatalogTool, MCPRouteSource, MCPSourceConfig } from './types';
+import type { MCPCatalogTool, MCPRouteSource, MCPSourceConfig } from '../../features/mcp/types';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Every connection and Server Tool in one list. The applied routing snapshot is

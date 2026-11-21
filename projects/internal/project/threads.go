@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,7 +68,7 @@ const MaxRunningSessions = 10
 
 // Default permission mode threads run in: edits are accepted, anything else
 // that needs approval waits on the user in the thread.
-const DefaultPermissionMode = "acceptEdits"
+const DefaultPermissionMode = db.DefaultThreadPermissionMode
 
 // ThreadEnv supplies what threads need from the global settings: the
 // environment pointing Claude Code at the configured gateway, and the model
@@ -80,7 +80,7 @@ type ThreadEnv interface {
 // Report is what a finished turn tells the coordinator.
 type Report struct {
 	Thread db.Thread
-	// Kind is finished, needs_input, failed or stalled.
+	// Kind is finished, needs_input, failed, stalled or notify.
 	Kind string
 	Text string
 }
@@ -97,6 +97,11 @@ const (
 // what makes it a thread: its queue, the per-project limit, approvals in the
 // thread view, and the report to the coordinator after each turn.
 type Threads struct {
+	// remoteDiff lets a PR's diff be read from GitHub when its branches are not in
+	// the checkout. Off: that read costs requests and a token, so for now such a PR
+	// says so and links to GitHub (see "A PR's diff" in github-tools.md).
+	remoteDiff bool
+
 	// links opens a thread's merge request; it is read when needed because the
 	// service may swap its GitHub.
 	links  func() *Links
@@ -139,6 +144,9 @@ type Threads struct {
 	// backgroundCount replaces the engine's count of a thread's running
 	// background tasks; tests only.
 	backgroundCount func(threadID string) int
+	// coordinatorInsertable says whether a main thread's coordinator would
+	// take a message into its running turn; the service sets it.
+	coordinatorInsertable func(main *db.Thread) bool
 
 	mu sync.Mutex
 	// stalled holds the running threads already reported as quiet.
@@ -395,8 +403,8 @@ func (m *Threads) prompter(threadID string) *threadPrompter {
 	return p
 }
 
-// threadPermissionMode is the mode a thread's turns run in: its own, else
-// its project's.
+// threadPermissionMode is the mode a thread's turns run in: its own, else its
+// project's (a row from before threads pinned their mode).
 func threadPermissionMode(p *db.Project, t *db.Thread) string {
 	if t.PermissionMode != "" {
 		return t.PermissionMode
@@ -410,6 +418,16 @@ func queuedNote(p *db.Project) string {
 		return fmt.Sprintf("Queued: %d folder threads are already running.", n)
 	}
 	return fmt.Sprintf("Queued: %d threads are already running in this project (its limit). It starts when one finishes.", n)
+}
+
+// pinThreadDefaults copies the project's current thread defaults onto t, so
+// the thread keeps them when the project's change.
+func pinThreadDefaults(p *db.Project, t *db.Thread) {
+	profile := p.ThreadProfile
+	t.ProfileOverride = &profile
+	t.ModelOverride = p.ThreadModel
+	t.EffortOverride = p.ThreadEffort
+	t.PermissionMode = permissionMode(p)
 }
 
 func permissionMode(p *db.Project) string {
@@ -471,7 +489,7 @@ func (m *Threads) rowLock(threadID string) *sync.Mutex {
 
 // publish tells open pages a thread changed, with its project's fresh counts.
 func (m *Threads) publish(t *db.Thread) {
-	t.RunningTasks = m.RunningTasks(t.ID)
+	m.AnnotateOne(t)
 	ev := Event{Type: EventThread, ProjectID: t.ProjectID, Data: t}
 	if c, err := m.store.ProjectThreadCounts(t.ProjectID); err == nil {
 		ev.Threads = &c
@@ -568,6 +586,7 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 		Origin:    spec.Origin,
 		SessionID: uuid.NewString(),
 	}
+	pinThreadDefaults(p, t)
 	repo, err := pickRepo(p, spec.Repo)
 	if err != nil {
 		return nil, err
@@ -881,7 +900,7 @@ var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
 func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread, p *db.Project, folder bool) (model string, opts agentboot.ExecutionOptions, err error) {
 	env, defModel, settings := m.launchEnv(ctx, t, folder)
 	if !folder {
-		profile := workerProfile(p, t)
+		profile := workerProfile(t)
 		if l, ok := m.env.(Launcher); ok && profile != "" {
 			env, settings, err = l.LaunchEnv(ctx, profile)
 			if err == nil {
@@ -901,22 +920,16 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 			return "", opts, errors.New("profile unavailable")
 		}
 	}
-	// A worker's observed Model is history, not its launch choice. Only an
-	// explicit override pins it instead of following the project's default.
+	// A worker's observed Model is history, not its launch choice: its own
+	// ModelOverride is, and the project's default is not consulted again.
 	model = t.Model
 	if !folder {
 		model = t.ModelOverride
-		if model == "" && t.ProfileOverride == nil {
-			model = p.ThreadModel
-		}
 	}
 	if model == "" {
 		model = defModel
 	}
 	effort := t.EffortOverride
-	if effort == "" && !folder {
-		effort = p.ThreadEffort
-	}
 	env = m.withTmpEnv(env, p, t)
 	opts = agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
 	if m.SessionToolsConfig != nil {
@@ -1741,30 +1754,6 @@ func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
 	return t, nil
 }
 
-// Diff returns a thread's changes for review.
-func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return Diff{}, err
-	}
-	if t.Branch == "" {
-		return Diff{}, errors.New("this thread has no worktree branch to review")
-	}
-	return BranchDiff(ctx, t.Cwd, t.BaseBranch, t.Branch)
-}
-
-// DiffFile returns one file of a thread's changes; see BranchFileDiff.
-func (m *Threads) DiffFile(ctx context.Context, threadID, path, oldPath string) (FileDiff, error) {
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return FileDiff{}, err
-	}
-	if t.Branch == "" {
-		return FileDiff{}, errors.New("this thread has no worktree branch to review")
-	}
-	return BranchFileDiff(ctx, t.Cwd, t.BaseBranch, path, oldPath)
-}
-
 // Recover runs at startup: turns that were running when the process stopped
 // are gone, so their threads wait on the user to continue them.
 func (m *Threads) Recover() {
@@ -2133,6 +2122,12 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	if req.ToolName == toolSendMessage {
+		// Decided here, never asked and never remembered: no card, no "allow
+		// for this thread" that could widen it.
+		ok, reason := sendMessageAllowed(req.Input)
+		return agentboot.ApprovalResponse{Approved: ok, Reason: reason}, nil
+	}
 	if p.m.builtinToolAllowed(p.threadID, req.ToolName) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
 	}

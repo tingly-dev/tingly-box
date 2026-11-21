@@ -18,7 +18,7 @@ import {
     IconButton,
 } from '@mui/material';
 import { useState } from 'react';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface ImportResultItem {
     uuid: string;

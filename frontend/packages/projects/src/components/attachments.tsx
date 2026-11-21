@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, ButtonBase, Typography } from '@mui/material';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Box, ButtonBase, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { apiFetch, type Attachment } from '../client';
 import { Description } from './icons';
@@ -67,20 +67,22 @@ function useStoredFile(srcOf: (path: string) => string, path: string, enabled: b
     return url;
 }
 
-function AttachmentChip({ srcOf, item, onOpen }: { srcOf: (path: string) => string; item: Attachment; onOpen: (item: Attachment) => void }) {
+function AttachmentChip({ srcOf, item, caption, onOpen }: { srcOf: (path: string) => string; item: Attachment; caption?: string; onOpen: (item: Attachment) => void }) {
     const { t } = useTranslation('projects');
     // The same allowlist the library tree goes by, so everything previewable there previews here too.
     const kind = previewKind(item.name);
     const src = useStoredFile(srcOf, item.path, kind === 'image');
     const gone = src === null;
+    // What the file was sent with, while the pointer is on it. The span keeps the tooltip working over a disabled chip.
+    const withCaption = (chip: ReactNode) => (caption ? <Tooltip title={caption}><Box component="span" sx={{ display: 'inline-flex' }}>{chip}</Box></Tooltip> : chip);
     if (kind === 'image' && src) {
-        return (
+        return withCaption(
             <ButtonBase onClick={() => onOpen(item)} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
-                <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
-            </ButtonBase>
+                <Box component="img" src={src} alt={caption || item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
+            </ButtonBase>,
         );
     }
-    return (
+    return withCaption(
         <ButtonBase
             onClick={() => (kind ? onOpen(item) : void openStored(srcOf(item.path)))}
             disabled={gone}
@@ -89,31 +91,59 @@ function AttachmentChip({ srcOf, item, onOpen }: { srcOf: (path: string) => stri
             <Description fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
             <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>{gone ? t('attachments.removed', { name: item.name }) : item.name}</Typography>
             {!gone && <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>{formatSize(item.size)}</Typography>}
-        </ButtonBase>
+        </ButtonBase>,
+    );
+}
+
+/** Where an owner's stored files are read from. */
+const useSrcOf = ({ threadId, projectId, draftFolderId }: AttachOwner) => useCallback((path: string) => (threadId
+    ? `/api/v1/threads/${threadId}/attachments/file?path=${encodeURIComponent(path)}`
+    : `/api/v1/projects/${projectId ?? draftFolderId ?? ''}/library/file?path=${encodeURIComponent(path)}`),
+    [threadId, projectId, draftFolderId]);
+
+/** The previewed file, and the images its next and previous step to; closed when `file` is null. */
+function PreviewDialog({ srcOf, files, file, onOpen, onClose }: { srcOf: (path: string) => string; files: Attachment[]; file: PreviewFile | null; onOpen: (file: PreviewFile) => void; onClose: () => void }) {
+    const notify = useNotify();
+    // The images among the files, in order: the preview steps through them like through a library folder.
+    const images = useMemo(() => files.filter((a) => previewKind(a.name) === 'image').map(({ path, name, size }) => ({ path, name, size })), [files]);
+    const download = (path: string) => {
+        const name = files.find((a) => a.path === path)?.name ?? path.split('/').pop() ?? path;
+        void saveFile(srcOf(path), name, (m) => notify(m, 'error'));
+    };
+    return <LibraryPreview srcOf={srcOf} file={file} siblings={images} onNavigate={onOpen} onClose={onClose} onDownload={download} />;
+}
+
+const GalleryContext = createContext<((file: PreviewFile) => void) | null>(null);
+
+/**
+ * One preview for a whole conversation: every chip below opens it, and its
+ * images are all the images of `files` (the conversation's, however many
+ * messages they came in), so Left/Right step from one message's image to the
+ * next one's. Without it a chip previews alone, among its own message's files.
+ */
+export function AttachmentGallery({ owner, files, children }: { owner: AttachOwner; files: Attachment[]; children: ReactNode }) {
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
+    const srcOf = useSrcOf(owner);
+    const close = useCallback(() => setPreview(null), []);
+    return (
+        <GalleryContext.Provider value={setPreview}>
+            {children}
+            <PreviewDialog srcOf={srcOf} files={files} file={preview} onOpen={setPreview} onClose={close} />
+        </GalleryContext.Provider>
     );
 }
 
 /** The files a sent message carries: thumbnails for images, a preview chip for the kinds the library previews (Markdown included), a plain download for the rest. */
-export function AttachmentChips({ owner, items, align = 'flex-end' }: { owner: AttachOwner; items: Attachment[]; align?: 'flex-start' | 'flex-end' }) {
-    const notify = useNotify();
+export function AttachmentChips({ owner, items, align = 'flex-end', captions }: { owner: AttachOwner; items: Attachment[]; align?: 'flex-start' | 'flex-end'; captions?: Record<string, string> }) {
+    const gallery = useContext(GalleryContext);
     const [preview, setPreview] = useState<PreviewFile | null>(null);
-    const { threadId, projectId, draftFolderId } = owner;
     // Stable across renders, so a re-render of the chips does not refetch the open preview.
-    const srcOf = useCallback((path: string) => (threadId
-        ? `/api/v1/threads/${threadId}/attachments/file?path=${encodeURIComponent(path)}`
-        : `/api/v1/projects/${projectId ?? draftFolderId ?? ''}/library/file?path=${encodeURIComponent(path)}`),
-        [threadId, projectId, draftFolderId]);
-    // The images among the attachments, in order: the preview steps through them like through a library folder.
-    const images = useMemo(() => items.filter((a) => previewKind(a.name) === 'image').map(({ path, name, size }) => ({ path, name, size })), [items]);
-    const download = (path: string) => {
-        const name = items.find((a) => a.path === path)?.name ?? path.split('/').pop() ?? path;
-        void saveFile(srcOf(path), name, (m) => notify(m, 'error'));
-    };
+    const srcOf = useSrcOf(owner);
     if (items.length === 0) return null;
     return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, justifyContent: align, mb: 0.75 }}>
-            {items.map((a) => <AttachmentChip key={a.path} srcOf={srcOf} item={a} onOpen={setPreview} />)}
-            <LibraryPreview srcOf={srcOf} file={preview} siblings={images} onNavigate={setPreview} onClose={() => setPreview(null)} onDownload={download} />
+            {items.map((a) => <AttachmentChip key={a.path} srcOf={srcOf} item={a} caption={captions?.[a.path]} onOpen={gallery ?? setPreview} />)}
+            {!gallery && <PreviewDialog srcOf={srcOf} files={items} file={preview} onOpen={setPreview} onClose={() => setPreview(null)} />}
         </Box>
     );
 }

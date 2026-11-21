@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { resultSrc, runImage } from './imageGenSession';
-import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
 
 // One frame of the lightbox filmstrip: a run's originals and its outputs in
 // arrival order.

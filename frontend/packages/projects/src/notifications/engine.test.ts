@@ -38,6 +38,9 @@ const navigate = vi.fn();
 const visible = (v: 'visible' | 'hidden') => Object.defineProperty(document, 'visibilityState', { value: v, configurable: true });
 // jsdom has no window.focus; keep its "not implemented" noise out.
 window.focus = () => undefined;
+// jsdom's document is never focused; tests say when the window has it.
+let focused = true;
+document.hasFocus = () => focused;
 
 import {
     FINISHED_COOLDOWN_MS,
@@ -72,6 +75,7 @@ beforeEach(() => {
         paths: { project: (id) => `/p/${id}`, folder: (p) => `/f?path=${p}` },
     });
     visible('visible');
+    focused = true;
     setNotificationsEnabled(true);
 });
 
@@ -161,6 +165,13 @@ describe('thread notifications', () => {
         emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'failed', wait_reason: 'Failed: no' }) });
         expect(FakeNotification.instances).toHaveLength(1);
         expect(FakeNotification.instances[0].options.body).toBe('Failed: no');
+    });
+
+    it('a visible tab whose window lost focus still notifies', () => {
+        emit({ type: 'thread', project_id: 'p1', data: thread({}) });
+        focused = false;
+        emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'waiting', wait_reason: 'behind another window' }) });
+        expect(FakeNotification.instances).toHaveLength(1);
     });
 
     it('finished reports the turn, at most once per cooldown', () => {

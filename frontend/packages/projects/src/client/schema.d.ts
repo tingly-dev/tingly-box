@@ -880,46 +880,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/{id}/diff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The thread's changes against its base branch
-         * @description The thread's changes against its base branch
-         */
-        get: operations["apiV1ThreadsIdDiffGet"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/threads/{id}/diff/file": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * One file of the thread's changes: its patch, left out when it is binary or too large
-         * @description One file of the thread's changes: its patch, left out when it is binary or too large
-         */
-        get: operations["apiV1ThreadsIdDiffFileGet"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/{id}/effort": {
         parameters: {
             query?: never;
@@ -1060,6 +1020,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/merge/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them
+         * @description The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them
+         */
+        get: operations["apiV1ThreadsIdMergeDraftGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/messages": {
         parameters: {
             query?: never;
@@ -1070,8 +1050,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
-         * @description Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * @description Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream
          */
         post: operations["apiV1ThreadsIdMessagesPost"];
         delete?: never;
@@ -1133,6 +1113,46 @@ export interface paths {
          * @description Set the launch profile of a folder thread's next turn (hosts with profiles only)
          */
         put: operations["apiV1ThreadsIdProfilePut"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/prs/{number}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)
+         * @description The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)
+         */
+        get: operations["apiV1ThreadsIdPrsNumberDiffGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/prs/{number}/diff/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file of a PR's changes: its patch, left out when it is binary or too large
+         * @description One file of a PR's changes: its patch, left out when it is binary or too large
+         */
+        get: operations["apiV1ThreadsIdPrsNumberDiffFileGet"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1637,8 +1657,8 @@ export interface components {
             additions: number;
             /** @description Field base */
             base: string;
-            /** @description Field branch */
-            branch: string;
+            /** @description Field base_stale */
+            base_stale?: boolean;
             /**
              * Format: int64
              * @description Field deletions
@@ -1651,8 +1671,20 @@ export interface components {
              * @description Field files_omitted
              */
             files_omitted?: number;
-            /** @description Field uncommitted */
-            uncommitted: string;
+            /** @description Field head */
+            head: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field source */
+            source: string;
+            /**
+             * Format: int64
+             * @description Field unpushed
+             */
+            unpushed?: number;
         };
         DiffFile: {
             /**
@@ -1878,6 +1910,19 @@ export interface components {
             /** @description Field files */
             files: components["schemas"]["MemoryFile"][];
         };
+        MergeDraft: {
+            /** @description Field body */
+            body: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field source */
+            source: string;
+            /** @description Field title */
+            title: string;
+        };
         MergeRequest: {
             /** @description Field body */
             body?: string;
@@ -2054,6 +2099,8 @@ export interface components {
             coordinator?: components["schemas"]["Thread"];
             /** @description Field coordinator_busy */
             coordinator_busy: boolean;
+            /** @description Field coordinator_insertable */
+            coordinator_insertable: boolean;
             /**
              * Format: int64
              * @description Field coordinator_queued
@@ -2413,6 +2460,8 @@ export interface components {
              * @description Field input_tokens
              */
             input_tokens: number;
+            /** @description Field insertable */
+            insertable: boolean;
             /** @description Field last_report */
             last_report?: string;
             /**
@@ -4110,57 +4159,6 @@ export interface operations {
             };
         };
     };
-    apiV1ThreadsIdDiffGet: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Resource ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Diff"];
-                };
-            };
-        };
-    };
-    apiV1ThreadsIdDiffFileGet: {
-        parameters: {
-            query?: {
-                /** @description File path as listed by the diff */
-                path?: string;
-                /** @description Where a renamed file came from */
-                old_path?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Resource ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileDiff"];
-                };
-            };
-        };
-    };
     apiV1ThreadsIdEffortPut: {
         parameters: {
             query?: never;
@@ -4364,6 +4362,29 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdMergeDraftGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeDraft"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdMessagesPost: {
         parameters: {
             query?: never;
@@ -4472,6 +4493,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdPrsNumberDiffGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Numeric count */
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Diff"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdPrsNumberDiffFileGet: {
+        parameters: {
+            query?: {
+                /** @description File path as listed by the diff */
+                path?: string;
+                /** @description Where a renamed file came from */
+                old_path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Numeric count */
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
                 };
             };
         };

@@ -15,12 +15,12 @@ import {
 } from '@mui/material';
 import React, { useState } from 'react';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { scrollToModelsCard } from './agentSetup';
 import Context1MChangeBanner from './Context1MChangeBanner';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import api from '@/services/api';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface ClaudeDesktopConfigModalProps {

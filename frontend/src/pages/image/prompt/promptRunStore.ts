@@ -1,6 +1,6 @@
 import i18n from '@/i18n';
 import { getOpenAIClient } from '@/services/modelApi';
-import { createWorkspaceCollection, type Collection } from '../imageWorkspaceDb';
+import { createWorkspaceCollection, type Collection } from '../../../features/image/imageWorkspaceDb';
 import { cleanPromptReply } from './imagePromptTemplates';
 
 // The scenario both prompt tools (Image to Prompt, Idea to Prompt) send

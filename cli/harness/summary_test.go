@@ -108,7 +108,7 @@ func TestLoadFailedKeysMissingFile(t *testing.T) {
 
 func TestOnlyFailingFlagParses(t *testing.T) {
 	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"agent", "claude", "--config", "x.yaml", "--only-failing"}); err != nil {
+	if _, err := parser.Parse([]string{"agent", "claude", "--providers", "x.yaml", "--only-failing"}); err != nil {
 		t.Fatalf("parse failed: %v", err)
 	}
 	if !cli.Agent.OnlyFailing {

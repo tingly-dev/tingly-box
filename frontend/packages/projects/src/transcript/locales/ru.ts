@@ -23,6 +23,8 @@ export default {
       "deny": "Запретить",
       "details": "Подробности",
       "earlierSteps": "Показать более ранние шаги",
+      "filesSent_one": "Отправлен {{count}} файл",
+      "filesSent_other": "Отправлено файлов: {{count}}",
       "focusAgent": "Открыть отдельно",
       "input": "Ввод",
       "loadingSteps": "Загрузка шагов…",

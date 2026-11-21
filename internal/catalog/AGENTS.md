@@ -23,7 +23,7 @@ go test ./internal/catalog/
 go run ./cli/harness catalog check
 ```
 
-CI (`harness-pr.yml`) runs `catalog check` on `internal/catalog/**` changes.
+The daily CI (`daily.yml`, job `catalog-check`) runs `catalog check`; run it locally when you touch `internal/catalog/**`.
 
 ## New check rules
 

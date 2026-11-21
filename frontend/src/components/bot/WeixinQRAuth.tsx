@@ -9,7 +9,6 @@ import {
     Paper,
 } from '@mui/material';
 import {
-    QrCode as QrCodeIcon,
     Refresh as RefreshIcon,
     CheckCircle as CheckCircleIcon,
 } from '@/components/icons';
@@ -28,17 +27,6 @@ interface WeixinQRAuthProps {
 }
 
 type QRState = 'idle' | 'loading' | 'show_qr' | 'scanned' | 'confirmed' | 'expired' | 'error';
-
-interface QRStartResponse {
-    qrcode_id: string;
-    qrcode_data: string;
-    expires_in: number;
-}
-
-interface QRStatusResponse {
-    status: string;
-    error?: string;
-}
 
 export const WeixinQRAuth: React.FC<WeixinQRAuthProps> = ({ botUUID, platform, botName, onComplete }) => {
     const { t } = useTranslation();

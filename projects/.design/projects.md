@@ -86,6 +86,10 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - 项目对话 = 主线程（`agent=llm`）的 `thread_events`：kind(user|assistant|thread_started|suggestions|thread_update|error)，没有 role，由 kind 推出。旧的 `project_messages` 表迁移后只读保留一个版本。
 - 线程回报（`thread_update`）照常传给协调者；对话里按发生的先后各占一条很淡的折叠行（状态、线程名、结果，点开看回报正文），线程卡片只负责实时状态；对话下方有前端开关可隐藏这些行（仅存本机 localStorage）。
 - `threads`: id, project_id(必填), parent_id, seq(项目内序号，主线程为 0), agent(llm|claude-code), title, task, status, wait_reason, repo_path, base_branch, branch, cwd, session_id, model, last_report, commits_ahead, files_changed, input/output tokens, origin(coordinator|suggestion|user), timestamps, resolved_at。
+- **线程自己的启动设置**（`profile_override` / `model_override` / `effort_override` / `permission_mode`）：线程创建时（`Threads.Start`）从项目当前的 `thread_profile` / `thread_model` / `thread_effort` / `thread_permission_mode` **复制**到线程行上，之后每一轮、`--resume`、终端接管（Handoff）都只读线程自己的值，不再回看项目。所以改项目的“线程默认设置”只影响之后新建的线程；单个线程在自己面板里的修改也只改它自己。空的模型/effort 表示该 profile（或连接）的默认值，不再表示“跟随项目”；“项目默认”选项（`SetWorkerProfile inherit`、`SetPermissionMode("")`）是**一次性重新复制**项目当前的值，不是链接。字段名保留 `*_override` 只是为了接口兼容。
+  - 起因：#2274 起这些字段为空即“继承项目”，于是项目默认一改，所有没单独设置过的老线程（含已运行的）下一轮都跟着变，会话中途换模型还会让 prompt cache 失效。
+  - 迁移（`db.pinThreadSettings`，只跑一次，标记 `migrations.thread_settings_pinned`）：以前“跟随”的线程拿到**迁移时**项目的当前值（创建时的值从未存过，这是能得到的最接近的值）；线程自己已设的 profile / 模型 / 权限模式保留；协调者主线程不动。空的 effort 与“跟随”无法区分，同样取项目值。folder 线程只补权限模式（它们的模型和 profile 本来就存在线程上）。
+  - 模型 / profile 变更与 prompt cache：线程自己改模型仍走 `set_model`，缓存失效是用户显式换模型的代价；现在不会再被项目设置的改动连带触发。
 - `thread_events`: 线程过程。kind(user|assistant|tool_use|tool_result|approval|ask|system|error|report|thread_started|suggestions|thread_update), content, payload, source(空=网页|im|thread|system), source_ref, source_platform, source_chat_id, created_at。
 - 新线程的目录是 `threads/<thread-id>/`（旧线程保留 `cwd` 里记的 `worktrees/...`）。
 
@@ -103,7 +107,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 ### 4.4 线程运行
 - 线程用 `agentboot/engine` 跑，和原来 Tingly Box 的 Desk 是同一个会话引擎（Desk 现已并入 Projects，成为工作目录）（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
-- **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。**改设置不重启进程**：模型和权限模式用 `set_model` / `set_permission_mode` 控制请求即时切换；线程设置文件里的权限规则（`permissions`、`autoMode`）在下一轮开始前用 `apply_flag_settings` 控制请求推送给存活的进程（`agentboot/engine` 的 `applyLive`），启动签名不再包含它们。进程拒绝推送（太旧的 CLI）时不重启，规则等进程下次自然启动（空闲回收后）再生效，下一轮会再试一次。只有环境变量、网关、profile 的其余设置、MCP 配置这类启动时才读的内容变了才重启。详见 `message-channel.md` 的“设置怎么应用”。
+- **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，默认空闲 65 分钟回收，可用 `--thread-idle-timeout` 或 `projects.Options.Sessions` 配置，之后的轮次带 `--resume` 重开；协调者的常驻进程另有一个池和更长的空闲时间，见 `coordinator-session.md` 的“进程生命周期”）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。**改设置不重启进程**：模型和权限模式用 `set_model` / `set_permission_mode` 控制请求即时切换；线程设置文件里的权限规则（`permissions`、`autoMode`）在下一轮开始前用 `apply_flag_settings` 控制请求推送给存活的进程（`agentboot/engine` 的 `applyLive`），启动签名不再包含它们。进程拒绝推送（太旧的 CLI）时不重启，规则等进程下次自然启动（空闲回收后）再生效，下一轮会再试一次。只有环境变量、网关、profile 的其余设置、MCP 配置这类启动时才读的内容变了才重启。详见 `message-channel.md` 的“设置怎么应用”。
 - **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤带上所属的 Agent 调用（`parent`）一起存下，主对话分页不含它们，打开子代理时再读；思考不显示；后台任务结束时留一行系统事件。
 - 测试用 `agentboot/engine/enginetest` 的脚本替身，另有一个用 agentboot fixture 跑真实 Claude 驱动的用例。
 - **工作区**：项目目录可混合 Git 与普通目录，每项独立选择工作区模式；主目录是新线程默认目录，普通目录只能 shared。无目录时使用 scratch。兼容及详细语义见 [workspace.md](workspace.md)「项目目录与逐目录模式」。
@@ -131,7 +135,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - **连接**：全局连接为 Anthropic 风格时，线程继承它（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`），即默认走 Tingly Box；否则用本机 `claude` 自己的登录。
 - **权限模式**：默认 `acceptEdits`（编辑自动通过，命令等需审批 → Waiting on you）；项目设置可改为 `auto` / `bypassPermissions`。
 - **审批**：prompter 把请求记为线程事件、线程进入 `waiting`、阻塞等待用户在线程里回答（权限审批不超时）；"本线程同类都允许"按工具名记住。
-- **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 5 分钟后按推荐项回答（早于常驻进程 10 分钟的空闲回收，免得回答时进程已被收掉），`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
+- **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 5 分钟后按推荐项回答（早于常驻进程的空闲回收（默认 65 分钟），免得回答时进程已被收掉），`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
 - **消息排队**：线程忙时收到的消息（用户或协调者）排队，当前轮结束后依次执行。
 - **一轮结束后**：读取 git 状态（领先提交数、改动文件数）→ 定状态 → 记一条 `report` 事件 → 通知协调者。
 
@@ -153,10 +157,10 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 `GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询。事件流不受服务器 `WriteTimeout` 限制。原因、不变量和被否决的做法见 `live-updates.md`。
 
 ### 4.7 Review 与合并（本地版 PR）
-- `GET /projects/:id/threads/:tid/diff`：`git diff <base>...<branch>`（+ 未提交改动提示）。
+- 看改动按 PR：`GET /threads/:id/prs/:number/diff`（及 `/diff/file`），每个 PR 看自己的 head 相对 base，只读本地 refs（本地没有分支时如实说明并给 GitHub 链接；读 GitHub 文件列表的路径已实现但默认关闭）；只给打开着的 PR。取舍见 `github-tools.md` 的 “A PR's diff”。线程本身不再有“当前分支相对 base”的 diff。
 - "Merge…"：`POST /threads/:id/merge`，必填 `method`，只有两种（其他值 400）。**两种都在 GitHub 上完成，本地工作区一律不动**；实现是线程的 `merge` MCP 工具（见 `github-tools.md`）背后的同一个 `Links.Merge`，HTTP 只是它的独立调用入口（用户点击即授权）：
   - 都先推送线程分支（不强推）、找到或开出它的 PR（与 `create_pr` 同一套，已有打开的 PR 就重推并关联，不重复开），并记入线程的 Issue/PR 链接。
-  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省交给 GitHub。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。
+  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省时与 `gh pr merge --squash` 一致：PR 的标题加 `(#编号)`，正文用 PR 的描述。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后线程 → `resolved`，PR 记为 merged，分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并，则只关闭线程，不再请求 GitHub。
   - `merge_request`：只开 PR，不合并；**线程不会 resolved**（分支要等 PR 合并才算合并）。
   - 没有 origin、origin 不是 github.com、gh 缺失或未登录都如实报错；没有 GitHub 远端的仓库因此无法从这里合并。
   - 前端：Review 对话框里的 "Merge…" 打开 `MergeDialog`：两个选项各一行说明，随后是对应字段（squash：提交信息；PR：标题、描述）；最近一次的选择按项目记在本机 localStorage（`merge-method.<project id>`，失败的方法不记）。
@@ -164,7 +168,7 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 ## 5. UI
 
-- **项目页**：左侧项目对话（消息、线程卡片、提议卡片、输入框）；右侧 **Overview**（Threads 按状态分组 / Library / Memory 入口），点线程卡片或行 → 右侧切到线程详情（过程、审批、diff、操作、线程输入框）。头部：名称、收藏、Overview 开关（等你处理时有小红点）、设置。
+- **项目页**：左侧项目对话（消息、线程卡片、提议卡片、输入框）；右侧 **Overview**（Threads 按状态分组 / Library / Memory 入口），点线程卡片或行 → 右侧切到线程详情（过程、审批、PR 与其改动、操作、线程输入框）。头部：名称、收藏、Overview 开关（等你处理时有小红点）、设置。
 - **输入框上方的信息面板**：线程和工作目录会话的输入框正上方一块面板，回答“在哪跑、哪个分支、会不会等我”，一条信息占一行（图标、名称、值、行尾操作）：文件夹（完整路径，长了保留结尾；复制 `cd`）、当前分支（项目线程是 worktree 分支，会话读文件夹当前分支，每轮结束刷新；复制分支名）、自动回答（点值切换）。面板可折叠（默认折叠，按浏览器记住）；折叠时只露当下最相关的一条，其余记成 “+N”：先是不需要用户也会发生的事（等待中的问题几点自动回答，将来 CI 失败），再是会变的状态（当前分支，将来 PR / CI），文件夹路径只在没有别的可露时才露。这样宽屏窄栏都只占一行，加信息也不会把这一行越撑越长。路径和分支只在这里出现，不再在线程头部重复；以后的 PR / CI 等信息再加一行即可。
 - **项目设置**：General（名称、Goal、协调者模型、线程模型、权限模式、Pause / Archive / Delete）、Memory（Instructions + 记忆文件）、Environment（仓库）、Usage。
 - **新建项目**：名称必填，Goal、仓库（本地路径，即时校验是否 git 仓库并显示当前分支）可选。

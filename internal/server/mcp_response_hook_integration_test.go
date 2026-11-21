@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
-	"github.com/tingly-dev/tingly-box/internal/recording/recordingtest"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/recordingtest"
 	"io"
 	"net/http"
 	"net/http/httptest"

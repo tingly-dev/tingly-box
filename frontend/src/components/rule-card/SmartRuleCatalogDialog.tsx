@@ -41,7 +41,7 @@ import {
     timezoneOptions,
 } from './timeRange';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha } from '@mui/material/styles';
 import { radius } from '@tingly/ui/theme/radius';
 

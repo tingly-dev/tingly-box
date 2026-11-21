@@ -306,6 +306,20 @@ func (s *Store) ListThreads(projectID string) ([]Thread, error) {
 	return out, err
 }
 
+// MainThreadBySession returns the main thread whose coordinator session is
+// sessionID, or ErrNotFound.
+func (s *Store) MainThreadBySession(sessionID string) (*Thread, error) {
+	var t Thread
+	if sessionID == "" {
+		return nil, ErrNotFound
+	}
+	err := s.db.Where("session_id = ? AND agent = ?", sessionID, AgentLLM).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &t, err
+}
+
 // ListThreadsByStatus returns threads in any of the given statuses across
 // all projects.
 func (s *Store) ListThreadsByStatus(statuses ...string) ([]Thread, error) {
@@ -336,6 +350,16 @@ func (s *Store) Lineage(id string) ([]Thread, error) {
 // AddThreadEvent appends to a thread's transcript.
 func (s *Store) AddThreadEvent(e *ThreadEvent) error {
 	e.ID = newID()
+	return s.AddThreadEventAs(e)
+}
+
+// NewEventID is an id for an event whose text must name it before it is saved
+// (AddThreadEventAs).
+func (s *Store) NewEventID() string { return newID() }
+
+// AddThreadEventAs is AddThreadEvent for an event that already has its id
+// from NewEventID.
+func (s *Store) AddThreadEventAs(e *ThreadEvent) error {
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now()
 	}

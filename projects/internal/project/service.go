@@ -73,6 +73,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	}
 	coord.OnFinal = relay.Message
 	coord.OnDecided = relay.Decided
+	coord.OnSuggested = relay.Suggested
 	threads.OnWait = relay.NeedsUser
 	threads.OnSettled = relay.Settled
 	threads.OnReply = relay.ThreadReply
@@ -88,6 +89,10 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
 	threads.RevokeTools = svc.sessionToolsMCP.revoke
 	coord.sessions = newCoordinatorSessions(coord, host, svc.sessionToolsMCP, agents)
+	svc.Threads.coordinatorInsertable = coord.insertableMain
+	if agents.coordinatorHold != nil {
+		agents.coordinatorHold.set(svc.coordinatorNeeded)
+	}
 	return svc
 }
 

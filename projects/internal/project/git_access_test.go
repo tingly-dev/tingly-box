@@ -62,7 +62,7 @@ func TestSwitchingToAutoModeRefreshesThreadSettingsOnNextTurn(t *testing.T) {
 	f.report(t)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	_, ask := settingsPerms(t, f.threads.layout.SettingsFile(f.project.ID, th.ID))
-	assert.Equal(t, []string{githubToolRule(toolMerge)}, ask, "only the merge asks")
+	assert.ElementsMatch(t, []string{githubToolRule(toolMerge), toolSendMessage}, ask, "only the merge and the native SendMessage ask")
 
 	_, err = f.threads.SetPermissionMode(th.ID, "auto")
 	require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestWriteSettingsLeavesAnUnchangedFileAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, os.SameFile(before, same), "identical content is not rewritten")
 
-	f.project.ThreadPermissionMode = "auto"
+	th.PermissionMode = "auto"
 	require.NoError(t, f.threads.writeSettings(f.project, th))
 	changed, err := os.Stat(path)
 	require.NoError(t, err)

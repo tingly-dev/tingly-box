@@ -12,7 +12,7 @@ import {
     Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@/components/icons';
-import CopyIconButton from '@/components/CopyIconButton';
+import CopyIconButton from '@tingly/ui/components/CopyIconButton';
 import { radius } from '@tingly/ui/theme/radius';
 
 export type CredentialEditorState = {

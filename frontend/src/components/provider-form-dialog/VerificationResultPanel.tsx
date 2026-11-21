@@ -2,7 +2,7 @@ import {Check, Close} from '@/components/icons';
 import {Box, Button, IconButton, Stack, Typography, alpha} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface VerificationResultPanelProps {

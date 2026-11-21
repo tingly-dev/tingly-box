@@ -14,7 +14,7 @@ name: Build Frontend
 #   harness-npm.yml builds the binaries it rehearses around it, so they carry
 #                   the real UI and no runner installs pnpm.
 #
-# Not here on purpose: verify-compile.yml (the PR check builds and lints in
+# Not here on purpose: verify-frontend.yml (the PR check builds and lints in
 # one job, sharing only setup-frontend) and docker.build.Dockerfile (a source
 # image must build on its own).
 on:

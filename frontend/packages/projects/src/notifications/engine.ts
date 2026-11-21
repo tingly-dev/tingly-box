@@ -33,7 +33,8 @@ export const FINISHED_COOLDOWN_MS = 30_000;
 
 interface Engine {
     ui: NotificationUi | null;
-    stop: () => void;
+    /** Leaves the project stream; null while the engine is not watching. */
+    stop: (() => void) | null;
     /** The last status seen per thread; the first sight of a thread baselines it. */
     status: Map<string, string>;
     /** The last `finished` ping per thread, for the cooldown. */
@@ -42,7 +43,7 @@ interface Engine {
     decisions: Map<string, BrowserNotification>;
 }
 
-const engine: Engine = { ui: null, stop: () => undefined, status: new Map(), finishedAt: new Map(), decisions: new Map() };
+const engine: Engine = { ui: null, stop: null, status: new Map(), finishedAt: new Map(), decisions: new Map() };
 
 /** The user's choice. On unless they turned it off: the browser's permission
  * is what still has to be asked for (a click does that, never the page load). */
@@ -78,16 +79,16 @@ export function setNotificationUi(ui: NotificationUi): void {
 }
 
 function startEngine(): void {
-    if (engine.stop !== returnVoid) return;
+    if (engine.stop) return;
     engine.status = new Map();
     engine.finishedAt = new Map();
-    engine.stop = subscribeProjectList(returnVoid, onProjectEvent);
+    engine.stop = subscribeProjectList(() => undefined, onProjectEvent);
 }
 
 function stopEngine(): void {
-    if (engine.stop === returnVoid) return;
+    if (!engine.stop) return;
     engine.stop();
-    engine.stop = returnVoid;
+    engine.stop = null;
     for (const n of engine.decisions.values()) n.close();
     engine.decisions.clear();
 }
@@ -96,8 +97,6 @@ function resetBaseline(): void {
     engine.status = new Map();
     engine.finishedAt = new Map();
 }
-
-const returnVoid = () => undefined;
 
 /**
  * The status change a thread event asks of the user, or null. The first
@@ -134,8 +133,8 @@ function onThread(thread: Thread): void {
     engine.status.set(thread.id, thread.status);
     const attention = classifyTransition(prev, thread.status);
     if (!attention) return;
-    // The gate the feature lives by: a visible page already shows this.
-    if (document.visibilityState !== 'hidden') return;
+    // The gate the feature lives by: a page the user is looking at already shows this.
+    if (pageIsWatched()) return;
     if (attention === 'finished' && Date.now() - (engine.finishedAt.get(thread.id) ?? 0) < FINISHED_COOLDOWN_MS) return;
     const t = engine.ui?.t ?? ((key: string) => key);
     // The concrete word where there is one: why it waits, how it failed,
@@ -158,11 +157,17 @@ function onThreadEvent(event: ThreadEvent, projectId: string): void {
         engine.decisions.delete(event.id);
         return;
     }
-    if (document.visibilityState !== 'hidden') return;
+    if (pageIsWatched()) return;
     const t = engine.ui?.t ?? ((key: string) => key);
     const project = listRows()?.find((p) => p.id === projectId);
     const n = notify(project?.name || t('nav.projects'), decision.question || event.content, `tb-decision-${event.id}`, () => projectUrl(projectId));
     if (n) engine.decisions.set(event.id, n);
+}
+
+/** Whether the user is looking at this page: the tab is showing and its window
+ * has focus. A visible tab in a window behind another app is not being watched. */
+export function pageIsWatched(): boolean {
+    return document.visibilityState === 'visible' && document.hasFocus();
 }
 
 /** One notification: the title names the place, the body says what it wants,

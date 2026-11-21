@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import api from '@/services/api';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
+import { formatLatency } from '@/utils/formatLatency';
 
 interface MetricPercentiles {
     sample_count: number;
@@ -29,11 +30,6 @@ export interface PerformanceQueryParams {
     scenario?: string;
 }
 
-const fmtLatency = (ms: number) => {
-    if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${ms}ms`;
-};
-
 type PercentileKey = 'p99' | 'p95' | 'p90' | 'p50' | 'p10';
 
 const PERCENTILES: Array<{ key: PercentileKey; label: string }> = [
@@ -51,7 +47,7 @@ function formatMetricValue(metric: MetricPercentiles | undefined, kind: 'latency
     if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
     return kind === 'tps'
         ? value.toFixed(1)
-        : fmtLatency(Math.round(value));
+        : formatLatency(Math.round(value));
 }
 
 export default function PerformanceSummary({ queryParams }: { queryParams: PerformanceQueryParams | null }) {

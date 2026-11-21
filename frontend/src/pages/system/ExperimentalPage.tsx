@@ -1,7 +1,7 @@
 import CardGrid from '@/components/CardGrid';
 import { parseExperimentalFeature, sanitizeFeatureReturnPath } from '@/components/ExperimentalFeatureGate';
-import GlobalExperimentalFeatures from '@/components/GlobalExperimentalFeatures';
-import { PageLayout } from '@/components/PageLayout';
+import GlobalExperimentalFeatures from '@/pages/system/GlobalExperimentalFeatures';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';

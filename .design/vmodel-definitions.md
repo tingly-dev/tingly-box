@@ -125,10 +125,10 @@ and `google_base_url`. OpenAI uses `/v1`, Anthropic uses the root URL
 as its SDK base; Google uses the root URL. Export exits without starting a
 listener. No `--standalone` flag is needed.
 
-Harness `--config` (`--fixture` alias) uses the identical loader and requires
+Harness `--config` uses the identical loader and requires
 `--mode=single` plus test assertions. Existing built-in matrix behavior remains
 the default when no file is supplied. `--config` here is a VModel definition;
-agent/replay live-provider configuration remains a separate contract.
+agent/replay live-provider credentials use `--providers`, a separate contract.
 
 ## Completed migration and cleanup
 

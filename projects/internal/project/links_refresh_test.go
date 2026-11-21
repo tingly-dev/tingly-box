@@ -210,13 +210,14 @@ func TestBuiltinToolPermissionRules(t *testing.T) {
 	for _, tool := range githubWriteTools {
 		writes = append(writes, githubToolRule(tool))
 	}
-	// The merge asks whatever the project says: it cannot be taken back.
-	merge := []string{githubToolRule(toolMerge)}
+	// The merge asks whatever the project says: it cannot be taken back. So does
+	// the native SendMessage, which the approval prompt answers (native_channel.go).
+	merge := []string{githubToolRule(toolMerge), toolSendMessage}
 
 	for _, access := range []string{"", GitHubAllow} {
 		allow, ask := rules(access)
 		assert.Equal(t, []string{"mcp__tingly-projects"}, allow, "the whole server, tools added later included: %q", access)
-		assert.Equal(t, merge, ask, "only the merge asks: %q", access)
+		assert.ElementsMatch(t, merge, ask, "only the merge asks: %q", access)
 	}
 
 	allow, ask := rules(GitHubAsk)

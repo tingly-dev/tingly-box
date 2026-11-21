@@ -138,6 +138,8 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			Models:       models,
 			Prefs:        aiagent.DefaultCodexPrefs(),
 			WriteCatalog: true,
+			// Same per-rule 1M windows the Agent page applies.
+			ContextWindows: serverconfig.BuildContextWindowsFromRules(aa.config),
 		})
 	case AgentTypeDsh:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)

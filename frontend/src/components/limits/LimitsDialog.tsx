@@ -1,7 +1,7 @@
 import {Button, Dialog, DialogActions, DialogContent, Stack, Typography} from '@mui/material';
 import {useId, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import DialogHeader from '@/components/DialogHeader';
+import DialogHeader from '@tingly/ui/components/DialogHeader';
 import LimitsEditor, {compactLimits, isEmptyLimits, type Limits} from './LimitsEditor';
 import LimitsLiveStatus from './LimitsLiveStatus';
 import {useLimitsStatus} from './useLimitsStatus';

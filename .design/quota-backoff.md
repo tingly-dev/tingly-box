@@ -16,7 +16,7 @@
 | 失败处理 | 失败只被写成一条 `LastError` 记录，**下个 tick 原样再来**，永远不变慢。`Config.RetryOnFailure` / `MaxRetries` 是**无人读取的死配置** | `manager.go` `fetchProviderQuota` |
 | 失败的副作用 | 失败记录整行覆盖 `provider_usage`（上一次成功的 windows 丢失），并向 `provider_usage_history` 追加一行 —— 每 5 分钟一行，无休止 | `store.go` `Save` |
 | 触发来源 | 自动：ticker → `Manager.Refresh`。手动：`POST /provider-quota/:uuid/refresh`、`POST /provider-quota/refresh`、CLI `internal/command/quota.go`；其中"全部刷新"与 ticker **共用 `Manager.Refresh`**，目前无法区分 | `providerquota/handler.go` |
-| 可复用的退避 | **没有可直接用的**：`mcp/runtime.ExponentialBackoffStrategy`、`task.BackoffFor`、`loadbalance` 熔断器各自独立，量级与语义不同 | — |
+| 可复用的退避 | **没有可直接用的**：`mcp/runtime.ExponentialBackoffStrategy`、`task.BackoffFor`（`internal/task` 现已删除）、`loadbalance` 熔断器各自独立，量级与语义不同 | — |
 
 结论：一个持续 403 的 provider（key 过期、套餐无权限、上游拒绝）会**每 5 分钟打一次上游，永远如此**，
 同时每天向历史表写 288 行无信息量的失败记录。

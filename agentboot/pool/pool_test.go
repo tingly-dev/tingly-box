@@ -252,3 +252,76 @@ func TestPool_CloseAllWhere(t *testing.T) {
 	_, ok := p.Acquire("bot-b|chat-1|/proj")
 	assert.True(t, ok)
 }
+
+// holder is a Hold predicate a test can flip.
+type holder struct {
+	mu   sync.Mutex
+	keys map[string]bool
+}
+
+func (h *holder) set(key string, held bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.keys == nil {
+		h.keys = map[string]bool{}
+	}
+	h.keys[key] = held
+}
+
+func (h *holder) hold(key string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.keys[key]
+}
+
+func TestPool_IdleSweepSkipsHeldSession(t *testing.T) {
+	h := &holder{}
+	h.set("a", true)
+	p := pool.New(pool.Config{IdleTimeout: 30 * time.Millisecond, SweepInterval: 5 * time.Millisecond, Hold: h.hold})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+
+	s := newFakeSession(agentboot.SessionStateIdle)
+	require.NoError(t, p.Open(context.Background(), "a", s))
+
+	time.Sleep(150 * time.Millisecond)
+	assert.Equal(t, 0, s.closedCount(), "a held session is not closed however long it idles")
+	_, ok := p.Acquire("a")
+	assert.True(t, ok)
+
+	// Releasing the hold starts a whole idle window, not an immediate close.
+	h.set("a", false)
+	released := time.Now()
+	require.Eventually(t, func() bool { return s.closedCount() == 1 }, time.Second, 5*time.Millisecond)
+	assert.GreaterOrEqual(t, time.Since(released), 10*time.Millisecond, "the idle clock restarted when the hold ended")
+}
+
+func TestPool_CapacityEvictionSkipsHeldSession(t *testing.T) {
+	h := &holder{}
+	h.set("old", true)
+	p := pool.New(pool.Config{MaxSessions: 2, Hold: h.hold})
+
+	old, newer := newFakeSession(agentboot.SessionStateIdle), newFakeSession(agentboot.SessionStateIdle)
+	require.NoError(t, p.Open(context.Background(), "old", old))
+	time.Sleep(2 * time.Millisecond)
+	require.NoError(t, p.Open(context.Background(), "newer", newer))
+
+	require.NoError(t, p.Open(context.Background(), "third", newFakeSession(agentboot.SessionStateIdle)))
+	assert.Equal(t, 0, old.closedCount(), "the held entry is the oldest but not the one evicted")
+	assert.Equal(t, 1, newer.closedCount())
+
+	// Every idle entry held: no room, like every entry running.
+	h.set("third", true)
+	assert.ErrorIs(t, p.Open(context.Background(), "fourth", newFakeSession(agentboot.SessionStateIdle)), pool.ErrFull)
+}
+
+func TestPool_HoldMayCallBackIntoPool(t *testing.T) {
+	var p *pool.Pool
+	p = pool.New(pool.Config{IdleTimeout: 20 * time.Millisecond, SweepInterval: 5 * time.Millisecond, Hold: func(string) bool {
+		p.Len() // would deadlock if the pool's lock were held
+		return false
+	}})
+	t.Cleanup(func() { p.Shutdown(context.Background()) })
+	s := newFakeSession(agentboot.SessionStateIdle)
+	require.NoError(t, p.Open(context.Background(), "a", s))
+	require.Eventually(t, func() bool { return s.closedCount() == 1 }, 2*time.Second, 5*time.Millisecond)
+}

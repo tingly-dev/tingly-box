@@ -12,8 +12,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ImageAsset } from './assetTypes';
 import { useAssets } from './assetStore';
-import ThumbImage from '../components/ThumbImage';
-import { THUMB_EDGE_TILE } from '../components/imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_TILE } from '../../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 

@@ -37,6 +37,7 @@ Instructions, Goal.
 - The coordinator and threads are Claude Code sessions (agentboot); the coordinator acts only through the Projects MCP tools. Nothing in `projects` calls a model directly. `internal/llm` is a plain model client used only by the standalone app's Chats and connection test.
 - Tests script the coordinator's session with `internal/coordtest` (calls the real MCP tools) on top of `agentboot/engine/enginetest`.
 - `projects` is the embedding facade (`New` / `Register` / `Start` / `Host`); this module never imports Tingly Box's root module (`task projects:boundary`, also run in CI). It may import the `remote` module, but only its ports and vocabulary (`remote/agent`, `remote/interaction`): `*App` implements `agent.Chat`, and the IM bridge itself lives in the host.
+- A list in a response is `[]`, never `null` (a Go nil slice marshals to null, and the web client reads `.length` / `.map` on it unchecked): build it with `make` or `[]T{}`, not `var x []T`. `TestResponsesOfAnEmptyWorkspaceCarryNoNull` reads the responses of an empty workspace and fails on a null; add a new endpoint to it. The frontend side is `frontend/scripts/check-api-arrays.mjs` (in `pnpm lint`), which flags an unguarded read of a list on an API entity.
 - Projects routes live under `/api/v1/projects` (projects, their thread lists) and `/api/v1/threads` (everything addressed by a thread id). Settings, Chats and health sit outside it and are standalone-only (`build` in `server_modules.go`).
 
 ## Frontend

@@ -13,13 +13,13 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { ApiStyleBadge } from '@/components/ApiStyleBadge';
 import { ProbeDialog } from '@/components/probe/ProbeDialog';
 import type { Provider } from '../types/provider';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 interface ModelCardProps {

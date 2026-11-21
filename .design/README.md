@@ -156,6 +156,7 @@
 | [harness-remote.md](./harness-remote.md) | Harness Remote — in-process IM chat e2e for remote/control/remoteagent | 设计说明；局部实施状态见正文 |
 | [harness-agent-testing.md](./harness-agent-testing.md) | Runbook — tingly-box 阶段验收基线 | 设计说明；局部实施状态见正文 |
 | [harness-npm.md](./harness-npm.md) | Harness npm — 用本地 registry 和虚拟版本号，从当前源码演练整条 npm 发布与安装链路 | 脚本 `build/npx/harness-npm.sh`；CI 里只有手动触发的 `harness-npm.yml`（Linux、macOS、Windows 三平台） |
+| [cli-harness-refactor.md](./cli-harness-refactor.md) | cli/harness review after the canonical VModel definition change, with a phased refactor plan | 提案；P0 随文档提交，其余阶段待确认 |
 | [rule-flag-testing.md](./rule-flag-testing.md) | Rule-Flag Behavior Testing | 设计说明；局部实施状态见正文 |
 | [vmodel.md](./vmodel.md) | vmodel — design index | 入口索引 |
 | [vmodel-definitions.md](./vmodel-definitions.md) | VModel 统一定义、严格加载与共享运行时 | #2618/#2624 已合并；场景集成在 PR #2621 |
@@ -188,6 +189,6 @@
 | [runtime-port-file.md](./runtime-port-file.md) | Runtime Port File | 设计说明；局部实施状态见正文 |
 | [cli-entry-semantics.md](./cli-entry-semantics.md) | CLI entry semantics: npx vs installed CLI, daemon default | 设计说明；局部实施状态见正文 |
 | [npm.md](./npm.md) | npm distribution | 设计说明；局部实施状态见正文 |
-| [npm-ci.md](./npm-ci.md) | 新增 npm 包：占位发布 → `npm trust` → CI 接手 | 操作流程；命令已按 npm 12 文档核对 |
+| [ci.md](./ci.md) | CI：哪些 workflow 何时跑、为什么、改的规则；附新增 npm 包的发布流程 | 现行；唯一的 CI 文档 |
 | [shortcut.md](./shortcut.md) | Desktop Shortcut: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [tui.md](./tui.md) | Federated TUI: Design and Decisions | 设计说明；局部实施状态见正文 |

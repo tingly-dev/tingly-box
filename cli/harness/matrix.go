@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
-	"github.com/tingly-dev/tingly-box/vmodel/spec"
 )
 
 // MatrixCmd runs the protocol validation matrix tests.
@@ -23,19 +22,19 @@ import (
 //
 // --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
-	Fixtures   []string `kong:"name='config',aliases='fixture',help='Load a JSON/YAML model definition or list (repeatable; replaces builtins; requires --mode=single)'"`
-	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
-	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
-	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
-	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
-	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,content_shapes,cache_controls,cache_prefix,vendor,servertool,thinking_limits,flag_paths,response_retention',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (every section), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only), content_shapes (request content-shape regression only), cache_controls (single-hop + ABA cache/no-cache requests), cache_prefix (cross-request prompt-cache prefix stability, per client shape), vendor (ApplyProviderTransforms dispatch against real vendor APIBase discriminators), servertool (server-tool loop and Guardrails x MCP through the real gateway; known gaps reported as KNOWN_GAP), thinking_limits (client thinking level x rule thinking_effort x max_tokens x source/target combinations), flag_paths (every rule flag x applicable source/target pair x streaming), response_retention (Anthropic output fidelity through the gateway)'"`
-	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
-	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
-	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
-	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
-	BatchCount int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
-	MCPEnabled bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
+	Definitions []string `kong:"name='config',help='Load a JSON/YAML model definition or list (repeatable; replaces builtins; requires --mode=single)'"`
+	Scenarios   []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
+	Sources     []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
+	Targets     []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
+	Streaming   bool     `kong:"name='streaming',help='Run only streaming tests'"`
+	NonStream   bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	Mode        string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags,content_shapes,cache_controls,cache_prefix,vendor,servertool,thinking_limits,flag_paths,response_retention',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (every section), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only), content_shapes (request content-shape regression only), cache_controls (single-hop + ABA cache/no-cache requests), cache_prefix (cross-request prompt-cache prefix stability, per client shape), vendor (ApplyProviderTransforms dispatch against real vendor APIBase discriminators), servertool (server-tool loop and Guardrails x MCP through the real gateway; known gaps reported as KNOWN_GAP), thinking_limits (client thinking level x rule thinking_effort x max_tokens x source/target combinations), flag_paths (every rule flag x applicable source/target pair x streaming), response_retention (Anthropic output fidelity through the gateway)'"`
+	Client      string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
+	JsonOutput  bool     `kong:"name='json',help='Output results as JSON'"`
+	Verbose     int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
+	RecordDir   string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
+	BatchCount  int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
+	MCPEnabled  bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
 }
 
 // matrixSection describes one runnable section of the validation matrix and
@@ -166,49 +165,21 @@ func (m *MatrixCmd) Run() error {
 		return err
 	}
 
-	var fixtures []protocoltest.Scenario
-	if len(m.Fixtures) > 0 {
+	var definitionScenarios []protocoltest.Scenario
+	if len(m.Definitions) > 0 {
 		if m.Mode != "single" {
-			return fmt.Errorf("--config/--fixture requires --mode=single")
+			return fmt.Errorf("--config requires --mode=single")
 		}
-		seen := make(map[string]bool)
-		var definitions []spec.Definition
-		for _, path := range m.Fixtures {
-			loaded, err := spec.Load(path)
-			if err != nil {
-				return err
-			}
-			definitions = append(definitions, loaded...)
-		}
-		runtime, err := spec.New(definitions)
+		definitionScenarios, err = scenariosFromDefinitions(m.Definitions, m.Scenarios)
 		if err != nil {
 			return err
-		}
-		for _, id := range runtime.IDs() {
-			if len(m.Scenarios) > 0 && !slices.Contains(m.Scenarios, id) {
-				continue
-			}
-			fixture, err := runtime.Scenario(id)
-			if err != nil {
-				return err
-			}
-			if len(fixture.Assertions) == 0 {
-				return fmt.Errorf("fixture %q requires at least one expect assertion for matrix tests", fixture.Name)
-			}
-			seen[fixture.Name] = true
-			fixtures = append(fixtures, fixture)
-		}
-		for _, name := range m.Scenarios {
-			if !seen[name] {
-				return fmt.Errorf("scenario %q not found in --config files", name)
-			}
 		}
 	}
 
 	// Build matrix with filters
 	matrix := protocoltest.DefaultMatrix()
-	if len(m.Fixtures) > 0 {
-		matrix.Scenarios = fixtures
+	if len(m.Definitions) > 0 {
+		matrix.Scenarios = definitionScenarios
 	}
 	if client != nil {
 		matrix = matrix.WithClient(client)
@@ -255,8 +226,8 @@ func (m *MatrixCmd) Run() error {
 		combined = append(combined, sec.exec(matrix)...)
 	}
 	results := filterResults(combined, m)
-	if len(m.Fixtures) > 0 && len(results) == 0 {
-		return fmt.Errorf("no fixture test cases matched the selected filters")
+	if len(m.Definitions) > 0 && len(results) == 0 {
+		return fmt.Errorf("no definition test cases matched the selected filters")
 	}
 
 	// Output results

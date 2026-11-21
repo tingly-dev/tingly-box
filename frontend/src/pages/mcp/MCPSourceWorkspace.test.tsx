@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPSourceWorkspace from './MCPSourceWorkspace';
-import type { MCPRouteSource, MCPSourceConfig } from './types';
+import type { MCPRouteSource, MCPSourceConfig } from '../../features/mcp/types';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (_: string, o: { defaultValue: string }) => o.defaultValue }),

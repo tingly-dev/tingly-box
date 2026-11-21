@@ -15,7 +15,7 @@ behind a popover.
   "Status fields"), Environment (folder, base → branch, profile · model,
   permission mode, session id; read-only: the pickers stay at the message box),
   Usage (tokens in/out, cache read/write and hit rate), Changes (commits, files,
-  uncommitted, Review), Background tasks (folder sessions: running rows with
+  uncommitted, Review; later replaced by the PR cards, see below), Background tasks (folder sessions: running rows with
   elapsed time and a stop button, finished ones behind a count). A card's fold
   state is remembered (`thread.rail.<id>`).
 - On a folder page with a session open (viewport above the `lg` breakpoint), the
@@ -24,10 +24,10 @@ behind a popover.
   right column. Narrow screens keep the drawer. Project thread panes are
   unchanged.
 - Data is the `Thread` record (see "Status fields"); the rail makes no request of its own.
-- **Issues & PRs card** (`ThreadLinksCard`, after the host's cards, before Changes): the issues and PRs the thread opened or commented on through its tools, from `Thread.links`: `#12 title` as a link to GitHub, under it open / draft / merged / closed, for an open PR its checks and mergeability, and how old the reading is ("could not refresh" when the last refresh failed). Absent when the thread has none. The Status tab of the coordinator has the same rows for every thread of the project under one card (`ProjectLinksCard`), newest first, each with its thread's title. The records and their refresh rules are in `projects/.design/github-tools.md`.
+- **Pull requests and Issues cards** (`ThreadPrsCard`, `ThreadIssuesCard`, after the host's cards): the PRs and the issues the thread opened or commented on through its tools, from `Thread.links`, one card per kind: `#12 title` as a link to GitHub, under it open / draft / merged / closed, for an open PR its checks and mergeability, and how old the reading is ("could not refresh" when the last refresh failed). Each card is absent when the thread has none of its kind. An open PR's row has a **Files changed** button that opens that PR's own diff (head against base: `projects/.design/github-tools.md`, "A PR's diff"), with **Merge…** for the PR of the thread's own branch. A branch with commits and no open PR has a row in the Pull requests card instead ("No PR yet · ahead of main · N commits · M files", **Merge…**). The Changes card is gone, and so is the Review button in the thread header and on the conversation's thread line; the diff belongs to a PR, so it is reached from the PR. The Status tab of the coordinator has the same rows for every thread of the project under one card (`ProjectLinksCard`), newest first, each with its thread's title. The records and their refresh rules are in `projects/.design/github-tools.md`.
 - With the rail on, the header's "N running" chip, the menu's Background tasks
   entry and the commits/uncommitted facts of the meta line drop out so nothing
-  is shown twice. The Review button stays in the header: it is the action.
+  is shown twice.
 - Clicking a task row scrolls the conversation to the call that started it.
   Output and subagent detail still live in `BackgroundTasksPanel`.
 

@@ -3,7 +3,6 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { UnifiedRoutingGraph } from '@/components/UnifiedRoutingGraph';
 import type { ConfigRecord } from '@/components/RoutingGraphTypes';
-import type { Provider } from '@/types/provider';
 import { TIER_DIAGRAM_DATA } from './diagrams';
 
 export interface StaticGraphViewerProps {

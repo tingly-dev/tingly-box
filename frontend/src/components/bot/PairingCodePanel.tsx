@@ -19,8 +19,8 @@ import { api } from '@/services/api';
 import { notify } from '@/utils/notify';
 import { isPairingRequired } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
-import { fontMono, fontSizes } from '@/theme/fonts';
-import { writeToClipboard } from '@/utils/clipboard';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
 import { radius } from '@tingly/ui/theme/radius';
 
 // formatRemaining returns null once expired so the caller can render a localized label.
@@ -48,7 +48,6 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
     const [active, setActive] = useState(false);
     const [code, setCode] = useState('');
     const [expiresAt, setExpiresAt] = useState('');
-    const [message, setMessage] = useState('');
     const [revealed, setRevealed] = useState(revealByDefault);
 
     // Re-render countdown once per second while a code is active and revealed
@@ -68,12 +67,10 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                 setActive(Boolean(res.active));
                 setCode(res.code || '');
                 setExpiresAt(res.expires_at || '');
-                setMessage(res.message || '');
             } else {
                 setActive(false);
                 setCode('');
                 setExpiresAt('');
-                setMessage(res.error || t('remoteControl.pairing.fetchFailed', { defaultValue: 'Failed to fetch pairing code' }));
             }
         } finally {
             setLoading(false);
@@ -106,7 +103,6 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                 setActive(true);
                 setCode(res.code);
                 setExpiresAt(res.expires_at || '');
-                setMessage('');
                 setRevealed(true);
                 notify.success(t('remoteControl.pairing.rotated', { defaultValue: 'Pairing code rotated for {{bot}}', bot: entities.botText(bot) }));
             } else {

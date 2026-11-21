@@ -87,7 +87,7 @@ it('uses independent worker values, guards saves across thread switching and nev
     let finish!: (value: unknown) => void;
     m.put.mockReturnValue(new Promise((r) => { finish = r; }));
     render(<MemoryRouter initialEntries={['/projects/p?thread=a']}><ProjectsHostProvider host={host}><Switch /><Routes><Route path="/projects/:id" element={<ProjectPage />} /></Routes></ProjectsHostProvider></MemoryRouter>);
-    const choose = await screen.findByRole('button', { name: 'threadSettings.projectDefault · project-choice' });
+    const choose = await screen.findByRole('button', { name: 'threadSettings.defaultModel' });
     expect(screen.queryByRole('button', { name: 'observed-upstream' })).not.toBeInTheDocument();
     fireEvent.click(choose);
     expect(m.put).toHaveBeenCalledWith('/api/v1/threads/{id}/model', { params: { path: { id: 'a' } }, body: { model: 'worker-choice' } });

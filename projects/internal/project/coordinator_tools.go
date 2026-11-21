@@ -55,7 +55,7 @@ func (c *Coordinator) coordinatorTools() []Tool {
 				"reason":      strProp("Why you recommend it, one sentence."),
 			},
 			Required: []string{"question", "options", "recommended"}, Handle: textTool(c.requestDecision)},
-		{Name: "message_thread", CoordinatorOnly: true, Description: "Send a message to an existing thread (follow-up work, an answer to its question). It runs after the thread's current turn.",
+		{Name: "message_thread", CoordinatorOnly: true, Description: "Send a message to an existing thread (follow-up work, an answer to its question). While the thread works, it is added to the running turn and read at the thread's next step (so it can change course); an idle thread starts a turn on it.",
 			Properties: map[string]any{"thread_id": strProp("Thread id (the 8-character prefix is enough)."), "message": strProp("What to tell the thread."),
 				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
 			Required: []string{"thread_id", "message"}, Handle: textTool(c.messageThread)},
@@ -129,7 +129,7 @@ func (c *Coordinator) proposeThreads(ctx context.Context, p *db.Project, in stru
 	if err := checkProposals(ctx, p, in.Threads); err != nil {
 		return "", err
 	}
-	c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvSuggestions, Payload: jsonString(suggestionsPayload{Suggestions: in.Threads})})
+	c.final(c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvSuggestions, Payload: jsonString(suggestionsPayload{Suggestions: in.Threads})}))
 	return fmt.Sprintf("proposed %d threads; the user can start them from the card", len(in.Threads)), nil
 }
 
@@ -161,10 +161,14 @@ func (c *Coordinator) messageThread(ctx context.Context, p *db.Project, in struc
 		}
 		msg += quote
 	}
-	if _, err := c.threads.Send(ctx, t.ID, msg, fromThread(p.MainThreadID), nil); err != nil {
+	_, joined, err := c.threads.sendWith(ctx, t.ID, msg, nil, fromThread(p.MainThreadID), SendInsert)
+	if err != nil {
 		return "", err
 	}
-	if busy {
+	switch {
+	case joined:
+		return "sent into the thread's running turn; it reads it at its next step", nil
+	case busy:
 		return "queued; the thread will read it after its current turn", nil
 	}
 	return "sent; the thread is working on it", nil

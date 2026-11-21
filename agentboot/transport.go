@@ -132,6 +132,23 @@ type ControlRequestEncoder interface {
 	EncodeControlRequest(reqID string, req ControlRequest) any
 }
 
+// ErrInjectUnsupported is returned by [PersistentSession.Inject] when the
+// session's agent cannot take a user message while a turn runs; the message
+// is then for the next turn.
+var ErrInjectUnsupported = errors.New("agentboot: agent cannot take a message while a turn runs")
+
+// MidTurnInputEncoder is implemented by transports whose agent reads a user
+// message written to stdin while a turn is running, at its next step (Claude
+// Code's stream-json input does: the message joins the next model request,
+// after the running tool call returns). Optional: without it
+// [PersistentSession.Inject] returns [ErrInjectUnsupported] and hosts fall
+// back to sending the message as the next turn.
+type MidTurnInputEncoder interface {
+	// EncodeMidTurnMessage returns the wire value for a user message written
+	// during a turn.
+	EncodeMidTurnMessage(prompt string) any
+}
+
 // ControlResponseDecoder is implemented by transports whose agent answers a
 // host-initiated control request with a response event. Optional: without
 // it, [PersistentSession.SetModel] and friends return ErrControlUnsupported.

@@ -89,7 +89,8 @@ func (m *Threads) SetProfile(ctx context.Context, id, profile string) (*db.Threa
 	return out, err
 }
 
-// SetWorkerProfile selects a profile for a project worker, or restores inheritance.
+// SetWorkerProfile selects a profile for a project worker. inherit copies the
+// project's current profile and model onto it again (a reset, not a link).
 func (m *Threads) SetWorkerProfile(ctx context.Context, id, profile string, inherit bool) (*db.Thread, error) {
 	t, err := m.store.GetThread(id)
 	if err != nil {
@@ -108,24 +109,32 @@ func (m *Threads) SetWorkerProfile(ctx context.Context, id, profile string, inhe
 			return nil, err
 		}
 	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return nil, err
+	}
 	return m.update(id, func(t *db.Thread) {
 		if inherit {
-			t.ProfileOverride = nil
+			profile = p.ThreadProfile
+			t.ModelOverride = p.ThreadModel
 		} else {
-			t.ProfileOverride = &profile
+			t.ModelOverride = ""
 		}
-		t.ModelOverride = ""
+		t.ProfileOverride = &profile
 	})
 }
-func workerProfile(p *db.Project, t *db.Thread) string {
+
+// workerProfile is the profile a worker runs under: its own, pinned when it
+// started. The project's is not consulted; a row without one uses the connection.
+func workerProfile(t *db.Thread) string {
 	if t.ProfileOverride != nil {
 		return *t.ProfileOverride
 	}
-	return p.ThreadProfile
+	return ""
 }
 
-// SetModel sets the model the thread's next turn asks for. Empty restores
-// the project's model for a worker, or the host profile's default for a folder.
+// SetModel sets the model the thread's next turn asks for. Empty is the
+// default model of the thread's profile (the connection's when it has none).
 func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, error) {
 	model = strings.TrimSpace(model)
 	t, err := m.store.GetThread(id)
@@ -139,11 +148,7 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 	if l, ok := m.env.(Launcher); ok && model != "" {
 		profile := t.Profile
 		if !folder {
-			p, err := m.store.GetProject(t.ProjectID)
-			if err != nil {
-				return nil, err
-			}
-			profile = workerProfile(p, t)
+			profile = workerProfile(t)
 		}
 		if err := l.CheckLaunch(ctx, profile, model); err != nil {
 			return nil, err
@@ -162,7 +167,8 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 	return out, err
 }
 
-// SetEffort configures the next turn without changing project defaults.
+// SetEffort configures the thread's next turn; empty is the endpoint's default.
+// The project's defaults are never changed or consulted.
 func (m *Threads) SetEffort(id, effort string) (*db.Thread, error) {
 	effort = strings.TrimSpace(effort)
 	if !ValidEffort(effort) {
@@ -204,9 +210,7 @@ func (m *Threads) Handoff(id string) (string, error) {
 	if h, ok := m.env.(Handoffer); ok {
 		profile := t.Profile
 		if !m.isFolder(t.ProjectID) {
-			if p, err := m.store.GetProject(t.ProjectID); err == nil {
-				profile = workerProfile(p, t)
-			}
+			profile = workerProfile(t)
 		}
 		argv = h.HandoffLaunch(profile)
 	}
@@ -214,23 +218,13 @@ func (m *Threads) Handoff(id string) (string, error) {
 	model := t.Model
 	if !m.isFolder(t.ProjectID) {
 		// A worker's Model is the model that last answered, not its next
-		// launch choice. Handoff must preserve the configured override/default.
+		// launch choice. Handoff must preserve the thread's own configured model.
 		model = t.ModelOverride
-		if model == "" && t.ProfileOverride == nil {
-			if p, err := m.store.GetProject(t.ProjectID); err == nil {
-				model = p.ThreadModel
-			}
-		}
 	}
 	if model != "" {
 		argv = append(argv, "--model", model)
 	}
 	effort := t.EffortOverride
-	if effort == "" && !m.isFolder(t.ProjectID) {
-		if p, err := m.store.GetProject(t.ProjectID); err == nil {
-			effort = p.ThreadEffort
-		}
-	}
 	if effort != "" {
 		argv = append(argv, "--effort", effort)
 	}

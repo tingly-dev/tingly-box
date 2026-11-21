@@ -57,6 +57,13 @@ type testFixture struct {
 // newFixture runs every thread turn through script, a stand-in for Claude
 // Code (one-shot turns: no pool).
 func newFixture(t *testing.T, script func(turn *enginetest.Turn) error) *testFixture {
+	a := &enginetest.Agent{Script: script}
+	return newFixtureWith(t, a, Agents{Service: a.Service()})
+}
+
+// newFixtureWith is newFixture over the given agents (a is what the fixture
+// reports launches of).
+func newFixtureWith(t *testing.T, a *enginetest.Agent, agents Agents) *testFixture {
 	store, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
@@ -65,8 +72,7 @@ func newFixture(t *testing.T, script func(turn *enginetest.Turn) error) *testFix
 	p := &db.Project{Name: "Demo", Goal: "Ship it", Instructions: "Be careful.", Repos: []db.Repo{{Path: repo, BaseBranch: "main"}}}
 	mkProject(t, store, p)
 	require.NoError(t, layout.Ensure(p.ID))
-	a := &enginetest.Agent{Script: script}
-	th := NewThreads(store, layout, NewHub(), Agents{Service: a.Service()}, staticEnv{})
+	th := NewThreads(store, layout, NewHub(), agents, staticEnv{})
 	t.Cleanup(func() { shutdownAndSettle(th) })
 	f := &testFixture{store: store, threads: th, agent: a, project: p, repo: repo, reports: make(chan Report, 10)}
 	th.OnReport = func(rep Report) { f.reports <- rep }
@@ -167,12 +173,16 @@ func TestThreadCommitsBecomeReady(t *testing.T) {
 	assert.Equal(t, "Added feature.txt and committed it.", rep.Text)
 	assert.EqualValues(t, 5, got.OutputTokens)
 
-	d, err := f.threads.Diff(context.Background(), th.ID)
+	_, err = f.threads.PRDiff(context.Background(), th.ID, 12)
+	require.Error(t, err, "a PR the thread does not hold has no diff")
+	addOpenPR(t, f, th, 12)
+	d, err := f.threads.PRDiff(context.Background(), th.ID, 12)
 	require.NoError(t, err)
+	assert.Equal(t, "local", d.Source)
 	require.Len(t, d.Files, 1)
 	assert.Equal(t, "feature.txt", d.Files[0].Path)
 	assert.Equal(t, "added", d.Files[0].Status)
-	fd, err := f.threads.DiffFile(context.Background(), th.ID, "feature.txt", "")
+	fd, err := f.threads.PRDiffFile(context.Background(), th.ID, 12, "feature.txt", "")
 	require.NoError(t, err)
 	assert.Contains(t, fd.Patch, "+x")
 }
@@ -244,7 +254,7 @@ func TestSquashMergesAnAlreadyOpenPR(t *testing.T) {
 	calls := strings.Join(gh.called(), "\n")
 	assert.NotContains(t, calls, "create-pr", "no second PR")
 	assert.Contains(t, calls, fmt.Sprintf("squash-pr acme/widgets #%d", existing.Number))
-	assert.Contains(t, calls, `title="" message=""`, "an empty message leaves GitHub's default")
+	assert.Contains(t, calls, `title="Already open (#11)" message=""`, "an empty message is the PR's own title and number, and its description, as gh pr merge words it")
 	assert.Equal(t, db.ThreadResolved, got.Status)
 }
 
@@ -300,11 +310,24 @@ func TestMergeRequestPushesTheBranchOpensAPRAndLinksIt(t *testing.T) {
 	assert.Equal(t, head, run(t, f.repo, "git", "rev-parse", "HEAD"), "the main checkout is untouched")
 }
 
-func TestMergeRequestDefaultsTitleAndBodyFromTheThread(t *testing.T) {
+func TestMergeRequestDefaultsTitleAndBodyFromTheCommits(t *testing.T) {
 	f, th, gh, _ := mergeFixture(t)
 	_, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest})
 	require.NoError(t, err)
-	assert.Contains(t, gh.called(), fmt.Sprintf(`create-pr acme/widgets "Add feature" head=%s base=main draft=false`, th.Branch))
+	// The branch has one commit: its subject is the title, as gh pr create --fill takes it.
+	subject := run(t, f.repo, "git", "log", "-1", "--format=%s", th.Branch)
+	assert.Contains(t, gh.called(), fmt.Sprintf(`create-pr acme/widgets %q head=%s base=main draft=false`, subject, th.Branch))
+}
+
+// A description given without a title is kept; only the title comes from the commits.
+func TestMergeRequestKeepsAGivenBodyWithoutATitle(t *testing.T) {
+	f, th, gh, _ := mergeFixture(t)
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeMergeRequest, Body: "Written by hand."})
+	require.NoError(t, err)
+	require.Len(t, got.Links, 1)
+	gh.mu.Lock()
+	defer gh.mu.Unlock()
+	assert.Equal(t, "Written by hand.", gh.items[got.Links[0].Number].Body)
 }
 
 func TestMergeRequestLinksAnExistingPRInsteadOfOpeningAnother(t *testing.T) {
@@ -769,7 +792,7 @@ func TestThreadsShareRepositoryWhenWorktreesDisabled(t *testing.T) {
 	assert.Contains(t, threadSystemPrompt(f.threads.layout, f.project, first), "shared repository checkout")
 	_, err = f.threads.Merge(context.Background(), first.ID, MergeSpec{Method: MergeSquash})
 	require.Error(t, err)
-	_, err = f.threads.Diff(context.Background(), first.ID)
+	_, err = f.threads.PRDiff(context.Background(), first.ID, 1)
 	require.Error(t, err)
 	f.project.DisableWorktree = false
 	third, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Third", Task: "z"})
@@ -814,4 +837,12 @@ func TestSetTitle(t *testing.T) {
 
 	_, err = f.threads.SetTitle(th.ID, "   ")
 	assert.ErrorIs(t, err, ErrEmptyTitle)
+}
+
+// addOpenPR records an open PR for the thread's branch, as a refresh would.
+func addOpenPR(t *testing.T, f *testFixture, th *db.Thread, number int) {
+	t.Helper()
+	require.NoError(t, f.store.UpdateThreadLinks(th.ID, func(l []db.ThreadLink) []db.ThreadLink {
+		return append(l, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: number, State: db.LinkStateOpen, Head: th.Branch, Base: th.BaseBranch, Role: db.LinkOpened})
+	}))
 }

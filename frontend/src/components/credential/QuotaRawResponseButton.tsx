@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Tooltip } from '@mui/material';
 import { Code as CodeIcon } from '@/components/icons';
 import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface QuotaRawResponseButtonProps {
   providerName?: string;

@@ -4,7 +4,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import { api } from '@/services/api';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import {
     CODEX_COMPACT,
     compactZones,

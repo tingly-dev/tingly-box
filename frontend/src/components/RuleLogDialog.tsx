@@ -1,6 +1,6 @@
 import { Dialog, DialogContent } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import DialogHeader from '@/components/DialogHeader';
+import DialogHeader from '@tingly/ui/components/DialogHeader';
 import LogExplorer from '@/components/LogExplorer';
 
 interface ScenarioLogDialogProps {

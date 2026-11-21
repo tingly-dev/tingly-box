@@ -62,6 +62,10 @@ func (g *stubGitHub) UpdatePR(context.Context, project.GitHubRepo, int, *string,
 func (g *stubGitHub) UpdateIssue(context.Context, project.GitHubRepo, int, *string, *string) (project.GitHubItem, error) {
 	return project.GitHubItem{}, nil
 }
+func (g *stubGitHub) PRFiles(context.Context, project.GitHubRepo, int) ([]project.GitHubFile, error) {
+	return nil, nil
+}
+
 func (g *stubGitHub) Read(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

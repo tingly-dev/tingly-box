@@ -20,7 +20,7 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import type {BotSettings} from '@/types/bot';
 import {capabilityEnabled, ccProfileIdFromDefaultAgent, isPairingRequired} from '@/types/bot';
 import {PLATFORM_BRAND_ICONS} from '@/constants/platformGuides';

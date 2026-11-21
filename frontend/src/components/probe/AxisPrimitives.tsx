@@ -3,7 +3,7 @@ import { Box, Typography, Tooltip, ToggleButton, ToggleButtonGroup, Slider } fro
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
 import type { ProbeThinking, ProbeProtocol } from '@/types/probe';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // AxisPrimitives: the instrument-panel vocabulary shared by the probe dialog's
 // control rail and the Bench page's compose column — one axis logic, two
@@ -18,10 +18,7 @@ export const PROTOCOL_META: Partial<Record<ProbeProtocol | '', { short: string; 
     anthropic_v1: { short: 'A', full: 'Anthropic Messages' },
 };
 
-// THINKING_LADDER orders the effort steps for the slider control bar. Mirrors
-// the rule flag's thinking_effort options (.design/rule-flags.md) minus the
-// "By Client"/"Off" states, which don't apply to a probe that always builds
-// its own request.
+// This ladder controls the probe's generated client request.
 export const THINKING_LADDER: ProbeThinking[] = ['none', 'low', 'medium', 'high', 'max'];
 
 // Full-width group with equal-width options — the alignment primitive of the

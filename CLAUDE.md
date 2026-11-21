@@ -13,7 +13,7 @@ Tingly-Box is a technical product, but the product itself is the core — **UX a
 ## Frontend
 
 - Use `MUI` for new frontend components; take care of `layout` when adding new pages.
-- The theme, icons and page primitives (`PageLayout`, `PageHeader`, `Surface`, `EmptyState`, `DialogHeader`, `ConfirmDialog`, `CopyIconButton`) live in `frontend/packages/ui` (`@tingly/ui`), shared with the embedded Projects pages. Change them there; the old `src/` paths only re-export.
+- The theme, icons and page primitives (`PageLayout`, `PageHeader`, `Surface`, `EmptyState`, `DialogHeader`, `ConfirmDialog`, `CopyIconButton`) live in `frontend/packages/ui` (`@tingly/ui`), shared with the embedded Projects pages. Import them from `@tingly/ui` (`@tingly/ui/components/PageLayout`, `@tingly/ui/theme/fonts`, …) and change them there; `@/components/icons` is the one host path that stays as a re-export.
 - API client code is generated (see [Build](#build)); use a placeholder function when the API doesn't exist yet.
 
 ### Icons
@@ -30,7 +30,7 @@ Key design decisions and architecture notes are kept in `.design/`. Before imple
 
 # CI
 
-When changing `.github/workflows/` or `.github/actions/`, read `.github/workflows/AGENTS.md` first and lint with `actionlint` before committing.
+When changing `.github/workflows/` or `.github/actions/`, read `.github/workflows/AGENTS.md` first and lint with `actionlint` before committing. What runs when, and the policy for adding checks: `.design/ci.md`.
 
 # Pull Requests
 

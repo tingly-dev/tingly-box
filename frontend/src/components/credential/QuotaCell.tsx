@@ -12,16 +12,16 @@ import {
     tightestWindow,
 } from '@/types/quota';
 import { useTheme } from '@mui/material/styles';
-import { getStatusColor } from '@/theme/status';
+import { getStatusColor } from '@tingly/ui/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
 import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { useNotify } from '@/hooks/useNotify';
 import type { RedeemOutcome } from '@/hooks/useProviderQuota';
 import type { UsageRedeem } from '@/types/quota';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 // Older than this, the figure is dimmed: the cache is refreshed in the

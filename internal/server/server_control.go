@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/module"
@@ -132,7 +131,7 @@ func newProjectsApp(cfg *config.Config, dataDir string, schema bool, chats *proj
 	opts := projectsapp.Options{Host: host}
 	if !schema {
 		if dataDir == "" {
-			dataDir = options.DefaultProjectsDir(cfg.ConfigDir)
+			dataDir = config.DefaultProjectsDir(cfg.ConfigDir)
 		}
 		opts.DataDir = dataDir
 	}

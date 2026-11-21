@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Subagent, Thread } from '../../client';
 
 const { writeToClipboard } = vi.hoisted(() => ({ writeToClipboard: vi.fn(() => Promise.resolve()) }));
-vi.mock('@tingly/ui', async (importOriginal) => ({ ...(await importOriginal()), writeToClipboard }));
+vi.mock('@tingly/ui/utils/clipboard', async (importOriginal) => ({ ...(await importOriginal<object>()), writeToClipboard }));
 import type { BackgroundTaskRow } from '../workdir/backgroundTasks';
 import { readLocal } from '../../utils/storage';
 import { ThreadInfoRail } from './ThreadInfoRail';
@@ -24,31 +24,34 @@ const thread = (o: Partial<Thread> = {}): Thread => ({
 
 const task = (o: Partial<BackgroundTaskRow>): BackgroundTaskRow => ({ taskId: 'a', callId: 'c1', status: 'running', background: true, taskType: 'local_bash', description: 'pnpm test', ended: false, ...o } as BackgroundTaskRow);
 
-const props = { onReview: () => undefined, onChanged: () => undefined, onReveal: () => undefined };
+const props = { onChanged: () => undefined, onReveal: () => undefined };
 
 describe('ThreadInfoRail', () => {
-    it('shows the issues and PRs the thread opened, and nothing when it opened none', () => {
-        const { rerender } = render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
-        expect(screen.queryByRole('region', { name: 'links.title' })).not.toBeInTheDocument();
-        const link = { kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Fix login', role: 'opened', state: 'open', ci: 'passing', refreshed_at: new Date().toISOString(), attempted_at: '', created_at: '' };
-        rerender(<ThreadInfoRail {...props} thread={thread({ links: [link] as Thread['links'] })} folder={false} tasks={[]} canReview={false} />);
-        expect(within(screen.getByRole('region', { name: 'links.title' })).getByRole('link', { name: '#12 Fix login' })).toBeInTheDocument();
+    it('shows the PRs and the issues the thread opened in their own cards, and nothing when it opened none', () => {
+        const none = { commits_ahead: 0 };
+        const { rerender } = render(<ThreadInfoRail {...props} thread={thread(none)} folder={false} tasks={[]} />);
+        expect(screen.queryByRole('region', { name: 'links.prs' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'links.issues' })).not.toBeInTheDocument();
+        const link = { kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Fix login', role: 'opened', state: 'open', ci: 'passing', head: 'tb/fix', base: 'main', refreshed_at: new Date().toISOString(), attempted_at: '', created_at: '' };
+        const issue = { ...link, kind: 'issue', number: 3, title: 'Login is slow', url: 'https://github.com/acme/w/issues/3' };
+        rerender(<ThreadInfoRail {...props} thread={thread({ ...none, links: [link, issue] as Thread['links'] })} folder={false} tasks={[]} />);
+        expect(within(screen.getByRole('region', { name: 'links.prs' })).getByRole('link', { name: '#12 Fix login' })).toBeInTheDocument();
+        expect(within(screen.getByRole('region', { name: 'links.issues' })).getByRole('link', { name: '#3 Login is slow' })).toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'rail.changes' })).not.toBeInTheDocument();
     });
 
-    it('shows where the thread runs and what it changed, with Review when there is something to review', () => {
-        const onReview = vi.fn();
-        render(<ThreadInfoRail {...props} onReview={onReview} thread={thread()} folder={false} tasks={[]} canReview />);
+    it('shows where the thread runs, and for a branch with commits and no PR a row to merge it', () => {
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} />);
         expect(screen.getByText('/work/app')).toBeInTheDocument();
         expect(screen.getByText('main → tb/fix')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'thread.review' }));
-        expect(onReview).toHaveBeenCalled();
+        expect(within(screen.getByRole('region', { name: 'links.prs' })).getByRole('button', { name: 'thread.mergeIt' })).toBeInTheDocument();
         // A project thread with no background tasks has no card for them.
         expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
     });
 
     it('keeps a long folder on one line: the ellipsis leads, the tail stays whole, the hover and the copy carry the whole', async () => {
         const cwd = '/Users/me/.tingly-box/projects/p-latency/threads/t-cache';
-        render(<ThreadInfoRail {...props} thread={thread({ cwd })} folder={false} tasks={[]} canReview={false} />);
+        render(<ThreadInfoRail {...props} thread={thread({ cwd })} folder={false} tasks={[]} />);
         // The path abbreviates to its trailing directories from a `/`, never wrapping the card tall.
         const shown = screen.getByText('…/threads/t-cache');
         expect(shown.textContent?.startsWith('…')).toBe(true);
@@ -64,7 +67,7 @@ describe('ThreadInfoRail', () => {
     });
 
     it('lets a short value show as it always did, with a click that copies it whole', () => {
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} />);
         const shown = screen.getByText('/work/app');
         expect(shown.textContent).toBe('/work/app');
         fireEvent.click(shown);
@@ -72,7 +75,7 @@ describe('ThreadInfoRail', () => {
     });
 
     it('keeps the permissions row on one line too, with a click that copies it', () => {
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} permission="Project default · Accept edits" />);
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} permission="Project default · Accept edits" />);
         const shown = screen.getByText('Project default · Accept edits');
         expect(shown.textContent).toBe('Project default · Accept edits');
         fireEvent.click(shown);
@@ -80,19 +83,19 @@ describe('ThreadInfoRail', () => {
     });
 
     it('copies a session id whole while still showing it short', () => {
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} />);
         fireEvent.click(screen.getByText('abcd1234'));
         expect(writeToClipboard).toHaveBeenCalledWith('abcd1234-0000');
         expect(screen.getByText('abcd1234').textContent).toBe('abcd1234');
     });
 
     it('has no background-tasks card for a folder session that runs none either', () => {
-        render(<ThreadInfoRail {...props} thread={thread()} folder canReview={false} tasks={[]} />);
+        render(<ThreadInfoRail {...props} thread={thread()} folder tasks={[]} />);
         expect(screen.queryByRole('region', { name: 'session.backgroundTasks' })).not.toBeInTheDocument();
     });
 
     it('draws the same cards at the pane\'s width as a sheet, without the docked column\'s edge or fixed width', () => {
-        render(<ThreadInfoRail {...props} sheet thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        render(<ThreadInfoRail {...props} sheet thread={thread()} folder={false} tasks={[]} />);
         const frame = screen.getByRole('complementary', { name: 'rail.title' });
         expect(getComputedStyle(frame).borderLeftWidth).not.toBe('1px');
         expect(getComputedStyle(frame).width).not.toBe('288px');
@@ -101,7 +104,7 @@ describe('ThreadInfoRail', () => {
     });
 
     it('shows the background tasks of a project thread too, not only a folder session', () => {
-        render(<ThreadInfoRail {...props} thread={thread({ status: 'working' })} folder={false} canReview={false} tasks={[task({}), task({ taskId: 'b', callId: 'c2', status: 'completed', description: 'old build' })]} />);
+        render(<ThreadInfoRail {...props} thread={thread({ status: 'working' })} folder={false} tasks={[task({}), task({ taskId: 'b', callId: 'c2', status: 'completed', description: 'old build' })]} />);
         const card = screen.getByRole('region', { name: 'session.backgroundTasks' });
         expect(within(card).getByText('pnpm test')).toBeInTheDocument();
         expect(within(card).getByRole('button', { name: 'tasks.stopTask' })).toBeInTheDocument();
@@ -109,7 +112,7 @@ describe('ThreadInfoRail', () => {
     });
 
     it('shows the same status and usage as the coordinator: state, context fill, turns, cache', () => {
-        render(<ThreadInfoRail {...props} thread={thread({ status: 'working' })} folder={false} tasks={[]} canReview={false} />);
+        render(<ThreadInfoRail {...props} thread={thread({ status: 'working' })} folder={false} tasks={[]} />);
         const status = screen.getByRole('region', { name: 'rail.status' });
         expect(within(status).getByText('thread.status.working')).toBeInTheDocument();
         expect(within(status).getByText('150k / 200k · 75%')).toBeInTheDocument();
@@ -125,7 +128,7 @@ describe('ThreadInfoRail', () => {
 
     it('lists running tasks with a stop button, finished ones folded behind a count', () => {
         const onReveal = vi.fn();
-        render(<ThreadInfoRail {...props} onReveal={onReveal} thread={thread()} folder canReview={false} tasks={[task({}), task({ taskId: 'b', callId: 'c2', status: 'completed', description: 'old build' })]} />);
+        render(<ThreadInfoRail {...props} onReveal={onReveal} thread={thread()} folder tasks={[task({}), task({ taskId: 'b', callId: 'c2', status: 'completed', description: 'old build' })]} />);
         expect(screen.getByRole('button', { name: 'tasks.stopTask' })).toBeInTheDocument();
         fireEvent.click(screen.getByText('pnpm test'));
         expect(onReveal).toHaveBeenCalledWith('c1');
@@ -135,14 +138,14 @@ describe('ThreadInfoRail', () => {
     });
 
     it('remembers a folded card', () => {
-        const { unmount } = render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} />);
+        const { unmount } = render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} />);
         fireEvent.click(screen.getByRole('button', { name: /rail.environment/ }));
         expect(readLocal('thread.rail.env')).toBe('0');
         unmount();
     });
 
     it("puts the host's extra cards after Usage", () => {
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false} extra={<section aria-label="host card" />} />);
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} extra={<section aria-label="host card" />} />);
         const usage = screen.getByRole('region', { name: 'rail.usage' });
         expect(usage.compareDocumentPosition(screen.getByRole('region', { name: 'host card' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
@@ -154,7 +157,7 @@ describe('ThreadInfoRail', () => {
             { call: 'c-early', background: true, created_at: '2026-11-11T01:00:00Z', description: 'First scout', event_id: 'e1', status: 'completed', steps: 3, subagent_type: 'Explore' },
             { call: 'c-late', background: true, created_at: '2026-11-11T02:00:00Z', description: '', event_id: 'e2', status: 'running', steps: 1 },
         ];
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false}
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]}
             subagents={{ list: () => Promise.resolve(agents) }} onOpenAgent={onOpenAgent} onShowAgent={onShowAgent} />);
         const card = await waitFor(() => screen.getByRole('region', { name: 'subagents.title' }));
         expect(within(card).getByText('First scout')).toBeInTheDocument();
@@ -169,7 +172,7 @@ describe('ThreadInfoRail', () => {
     });
 
     it('carries no subagent card for a thread that never ran one', async () => {
-        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]} canReview={false}
+        render(<ThreadInfoRail {...props} thread={thread()} folder={false} tasks={[]}
             subagents={{ list: () => Promise.resolve([]) }} onOpenAgent={() => undefined} onShowAgent={() => undefined} />);
         expect(screen.getByText('subagents.loading')).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByText('subagents.loading')).not.toBeInTheDocument());

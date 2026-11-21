@@ -85,6 +85,22 @@ type Runtime struct {
 	definitions map[string]Definition
 	wire        map[string]scenario.Scenario
 	protocols   map[string]map[scenario.ResponseFormat]bool
+	fallback    string
+}
+
+// SetFallback makes request model ids that no definition names be served by
+// the definition fallbackID, on the protocols that definition supports (other
+// protocols still answer 404). Replies echo the id the client asked for. It is
+// opt-in: without it unknown models stay a 404, which is the contract tests and
+// the production /virtual endpoint rely on. Call it before serving.
+func (r *Runtime) SetFallback(fallbackID string) error {
+	if _, ok := r.definitions[fallbackID]; !ok {
+		return fmt.Errorf("fallback model %q is not defined", fallbackID)
+	}
+	r.fallback = fallbackID
+	r.service.GetAnthropicRegistry().SetFallback(fallbackID)
+	r.service.GetOpenAIRegistry().SetFallback(fallbackID)
+	return nil
 }
 
 func New(defs []Definition) (*Runtime, error) { return NewWithCatalog(defs, NewCatalog()) }
@@ -335,8 +351,13 @@ func (r *Runtime) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		id = strings.Split(strings.TrimPrefix(path, "/v1beta/models/"), ":")[0]
 	}
 	if _, ok := r.definitions[id]; !ok {
-		writeRequestError(w, req, 404, "unknown model "+id)
-		return
+		if r.fallback == "" {
+			writeRequestError(w, req, 404, "unknown model "+id)
+			return
+		}
+		// Semantic models resolve the fallback in their registries; recordings
+		// are keyed here.
+		id = r.fallback
 	}
 	if !r.protocols[id][format] {
 		writeRequestError(w, req, 404, "model does not support "+string(format))

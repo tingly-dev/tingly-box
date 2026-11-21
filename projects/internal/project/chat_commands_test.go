@@ -202,7 +202,7 @@ func TestStatusAndYoloInAFolderChat(t *testing.T) {
 	assert.Contains(t, reply, "Yolo is off")
 	cur, err = f.store.GetThread(s.ID)
 	require.NoError(t, err)
-	assert.Empty(t, cur.PermissionMode, "back to what it inherits")
+	assert.Equal(t, DefaultPermissionMode, cur.PermissionMode, "back to the folder's current mode")
 
 	// A chat waiting to start in another folder says so.
 	other := t.TempDir()

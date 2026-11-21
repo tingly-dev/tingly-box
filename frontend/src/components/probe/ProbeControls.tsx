@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { ProbeProtocol } from '@/types/probe';
 import type { ProbeAxes } from './probeConfig';
 import { Axis, AxisGroup, ExclusiveToggle, ThinkingSlider, PROTOCOL_META } from './AxisPrimitives';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // ProbeControls renders the control rail: orthogonal axes stacked vertically,
 // one label + control pair per row. Groups fill the rail width and every

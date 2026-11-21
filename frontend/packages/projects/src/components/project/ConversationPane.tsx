@@ -4,18 +4,18 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useTranslation } from 'react-i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
 import { ImSourceBadge } from '../im/ImSourceBadge';
-import { AttachmentChips, uploadAttachments } from '../attachments';
+import { AttachmentChips, AttachmentGallery, uploadAttachments } from '../attachments';
 import { ThreadComposer } from '../ThreadComposer';
+import type { SendMode } from '../Composer';
 import { Markdown } from '../Markdown';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { useTranscriptHost } from '../../transcript/context';
-import { Check, DiffIcon, PlayArrow, Settings } from '../icons';
+import { Check, PlayArrow, Settings } from '../icons';
 import { DisclosureRow } from '../common/Disclosure';
-import { DiffDialog } from './DiffDialog';
 import { LoadEarlier } from './LoadEarlier';
 import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
-import { Transcript, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
+import { Transcript, blockAttachments, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
 import { threadTranscript } from './threadTranscript';
 import { radius } from '@tingly/ui/theme/radius';
 import { readLocal, writeLocal } from '../../utils/storage';
@@ -34,48 +34,33 @@ function parse<T>(payload: unknown): T | null {
 /**
  * A thread as one line in the conversation: its status, title, what it last
  * did and its work. The line is the thread's live state; it changes in place
- * rather than the conversation adding a note. A thread with changes to
- * review offers "Review" right here.
+ * rather than the conversation adding a note.
  */
 export function ThreadCard({ thread, onOpen, onTasks }: { thread: Thread; onOpen: (id: string) => void; /** Opens the thread's running tasks from its count pill. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
-    const [reviewing, setReviewing] = useState(false);
-    const canReview = thread.status === 'ready' && !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at;
     return (
-        <>
-            <Box
-                role="button"
-                tabIndex={0}
-                onClick={() => onOpen(thread.id)}
-                onKeyDown={(e) => e.key === 'Enter' && onOpen(thread.id)}
-                sx={{
-                    display: 'flex', alignItems: 'center', gap: 1, minHeight: 40, px: 1.25, py: 0.5, borderRadius: radius.row, cursor: 'pointer',
-                    border: 1, borderColor: 'divider', bgcolor: 'background.paper', outline: 'none',
-                    '&:hover': { borderColor: 'text.disabled' },
-                    '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
-                }}
-            >
-                <Box component="span" title={t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
-                    <ThreadStateMark status={thread.status} queued={thread.queued} />
-                </Box>
-                <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
-                {/* On a phone the line keeps the title; the thread holds the rest. */}
-                <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
-                    <ThreadSubtitle thread={thread} />
-                </Typography>
-                <ThreadBadges thread={thread} onTasks={onTasks} />
-                {canReview && (
-                    <Button size="small" variant="outlined" startIcon={<DiffIcon />} sx={{ flexShrink: 0, py: 0.125 }}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setReviewing(true);
-                        }}>
-                        {t('thread.review')}
-                    </Button>
-                )}
+        <Box
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(thread.id)}
+            onKeyDown={(e) => e.key === 'Enter' && onOpen(thread.id)}
+            sx={{
+                display: 'flex', alignItems: 'center', gap: 1, minHeight: 40, px: 1.25, py: 0.5, borderRadius: radius.row, cursor: 'pointer',
+                border: 1, borderColor: 'divider', bgcolor: 'background.paper', outline: 'none',
+                '&:hover': { borderColor: 'text.disabled' },
+                '&:focus-visible': { boxShadow: (th) => `inset 0 0 0 2px ${th.palette.primary.main}` },
+            }}
+        >
+            <Box component="span" title={t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
+                <ThreadStateMark status={thread.status} queued={thread.queued} />
             </Box>
-            {canReview && <DiffDialog thread={thread} open={reviewing} onClose={() => setReviewing(false)} />}
-        </>
+            <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
+            {/* On a phone the line keeps the title; the thread holds the rest. */}
+            <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
+                <ThreadSubtitle thread={thread} />
+            </Typography>
+            <ThreadBadges thread={thread} onTasks={onTasks} />
+        </Box>
     );
 }
 
@@ -254,9 +239,12 @@ interface Props {
     onLoadEarlier?: () => Promise<void>;
     threads: Map<string, Thread>;
     busy: boolean;
+    /** False while the coordinator's turn cannot take a message (waiting, compacting): Enter then sends for the next turn. */
+    insertable?: boolean;
     disabled: boolean;
     disabledReason?: React.ReactNode;
-    onSend: (text: string, attachments: Attachment[]) => Promise<boolean>;
+    /** mode is only set when the user chose one: the default inserts into the coordinator's running turn. */
+    onSend: (text: string, attachments: Attachment[], mode?: SendMode) => Promise<boolean>;
     /** The conversation's own thread: its draft is kept under this id. */
     threadId: string;
     /** The coordinator's model, switched from the message box; the picker is left out without onModelChange. */
@@ -277,7 +265,7 @@ interface Props {
     onStop?: () => Promise<void>;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, insertable = true, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -297,6 +285,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         () => buildTranscript(threadTranscript(messages, busy, (e) => e.source === 'thread' ? t('thread.fromCoordinator') : undefined).entries),
         [messages, busy, t],
     );
+    // Every file in the conversation, which a preview steps through.
+    const galleryFiles = useMemo(() => blockAttachments(blocks), [blocks]);
     const renderCustom = useMemo(() => (message: TranscriptEntry) => {
         switch (message.kind) {
             case 'thread_started': {
@@ -328,7 +318,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         }
     }, [threads, disabled, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, t]);
     // A user message's files, fetched against the project like a thread's.
-    const attachments = useMemo<AttachmentsComponent>(() => ({ items, align }) => <AttachmentChips owner={{ projectId }} items={items} align={align} />, [projectId]);
+    const attachments = useMemo<AttachmentsComponent>(() => ({ items, align, captions }) => <AttachmentChips owner={{ projectId }} items={items} align={align} captions={captions} />, [projectId]);
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -369,6 +359,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                         </Box>
                     )}
                     {messages.length > 0 && (
+                        <AttachmentGallery owner={{ projectId }} files={galleryFiles}>
                         <Transcript
                             blocks={blocks}
                             detail={detail}
@@ -379,6 +370,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                             messageSource={(message) => message.imSource ? <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} /> : null}
                             renderCustom={renderCustom}
                         />
+                        </AttachmentGallery>
                     )}
                 </Box>
             </Box>
@@ -421,9 +413,11 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
                     modelSource="projects"
                     placeholder={t(busy ? 'conversation.queuePlaceholder' : 'conversation.placeholder')}
                     attach={(files) => uploadAttachments({ projectId }, files)}
-                    onSend={async (text, attachments) => {
+                    sendModes
+                    insertable={insertable}
+                    onSend={async (text, attachments, mode) => {
                         stick.current = true;
-                        return onSend(text, attachments);
+                        return mode ? onSend(text, attachments, mode) : onSend(text, attachments);
                     }}
                 />
                 </Box>

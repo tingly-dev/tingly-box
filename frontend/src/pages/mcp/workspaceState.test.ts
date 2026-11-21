@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { connectionPatch, nextMCPId } from './workspaceState';
-import { sourceToFormValue } from './types';
+import { sourceToFormValue } from '../../features/mcp/types';
 describe('connection edits and identifiers', () => {
     it('updates a connection without replacing its usage, enabled state or per-tool policy', () => {
         const form = sourceToFormValue({

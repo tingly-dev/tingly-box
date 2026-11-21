@@ -3,7 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {NODE_LAYER_STYLES, StyledBotGraphNode} from './styles';
 import NodeTag from './NodeTag';
 import NodeTooltip from './NodeTooltip';
-import {fontMono} from '@/theme/fonts';
+import {fontMono} from '@tingly/ui/theme/fonts';
 import {shortId} from '@tingly/ui';
 
 // ChatNode is a leaf of the notify routing graph: one chat a bot's channel can

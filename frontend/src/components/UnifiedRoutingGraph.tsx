@@ -21,7 +21,6 @@ import {
     SmartOpNode,
     TierNode,
 } from '@/components/nodes';
-import NodeTooltip from '@/components/nodes/NodeTooltip';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import type {Provider} from '../types/provider';

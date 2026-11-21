@@ -39,7 +39,7 @@ import {
     type FieldStruct,
     type PrefsKey,
 } from './ClaudeCodeQuickConfig';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { useNotify } from '@/hooks/useNotify';
 import { radius } from '@tingly/ui/theme/radius';
 

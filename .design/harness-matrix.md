@@ -74,7 +74,7 @@ Assertions + SemanticEquivalence checks
 ### Key types
 
 File-defined scenarios use the same `vmodel/spec` loader as `tb vmodel`:
-`harness matrix --mode=single --config model.yaml` (`--fixture` is an alias).
+`harness matrix --mode=single --config model.yaml`.
 Files replace the default scenarios and must supply test assertions. The
 runtime's `Scenario(id)` adapter preserves protocol/mode restrictions, raw
 recordings and named Go behavior; native-only decision checks use HTTP plus
@@ -314,7 +314,7 @@ strictly (pydantic), and accumulate streams with protocol-enforcing state
 machines. `--client` swaps the sending stack while reusing the same matrix,
 scenarios, and assertions:
 
-| `--client` | Stack | CI leg (`harness-matrix.yml`) |
+| `--client` | Stack | CI leg (`harness-template.yml`) |
 |------------|-------|-------------------------------|
 | `http` *(default)* | raw JSON over `net/http` (`client_http.go`) | `matrix-single` / `matrix-transitive` / `matrix-idempotent` / `matrix-flags` |
 | `gosdk` | official `anthropic-sdk-go` + `openai-go`, in-process (`client_gosdk.go`) | `matrix-single-gosdk` / `matrix-idempotent-gosdk` |
@@ -832,11 +832,11 @@ source (anthropic_v1/beta, openai_chat, openai_responses)
   × client thinking level (none + minimal…max; budget for Anthropic,
                            reasoning effort for OpenAI clients)
   × client max_tokens (2048, 40000; OpenAI clients also absent)
-  × rule thinking_effort ("" / off / low / medium / high / max)
+  × rule thinking_effort ("" / off / low / medium / high / xhigh / max)
   × rule max-tokens field flag (Chat targets: none / use_max_completion_tokens
                                 / use_max_tokens)
   × streaming
-= 4200 combinations, one route (env) per source × target × rule flags
+= 4900 combinations, one route (env) per source × target × rule flags
 ```
 
 Each combination asserts properties of the request that reached the provider

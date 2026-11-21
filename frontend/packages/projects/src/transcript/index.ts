@@ -8,7 +8,7 @@ export type {
     ActivityStep, ApprovalSubject, AskOption, AskQuestion, RequestBlock, RequestOutcome, TaskEvent, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptAttachment, TranscriptBlock, TranscriptEntry, WorkingVerb,
 } from './model';
 export {
-    agentReport, agentStatus, approvalSubject, askQuestions, blockTime, buildTranscript, firstNewBlock, foldTasks, formatTokens, isAgentTool, latestTodos, todoGroups, pendingRequestId, requestOutcome, toolSummary, workingState,
+    agentReport, agentStatus, approvalSubject, askQuestions, blockAttachments, blockTime, buildTranscript, firstNewBlock, foldTasks, formatTokens, isAgentTool, latestTodos, todoGroups, pendingRequestId, requestOutcome, toolSummary, workingState,
 } from './model';
 
 export type {TrajectoryAnchor, TrajectoryFilter, TrajectoryKind, TrajectoryRow, TrajectorySummary} from './trajectoryRows';

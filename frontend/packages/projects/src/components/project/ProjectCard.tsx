@@ -14,6 +14,8 @@ export function ProjectCard({ p }: { p: ProjectSummary }) {
     const navigate = useNavigate();
     const { paths: routes } = useProjectsHost();
     const c = p.threads;
+    // A project created without directories used to arrive as null.
+    const repos = p.repos ?? [];
     const counts = [
         { key: 'waiting', n: c.waiting },
         { key: 'failed', n: c.failed },
@@ -40,9 +42,9 @@ export function ProjectCard({ p }: { p: ProjectSummary }) {
                         </Box>
                     ))}
                 </Box>
-                {p.repos.length > 0 && (
+                {repos.length > 0 && (
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Branch sx={{ fontSize: 13 }} />{p.repos.map((r) => r.path.split('/').pop()).join(' · ')}
+                        <Branch sx={{ fontSize: 13 }} />{repos.map((r) => r.path.split('/').pop()).join(' · ')}
                     </Typography>
                 )}
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>{t('projects.updated', { time: timeAgo(p.updated_at, i18n.language) })}</Typography>

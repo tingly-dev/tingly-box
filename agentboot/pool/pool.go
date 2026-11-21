@@ -11,6 +11,7 @@ package pool
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -31,6 +32,14 @@ var (
 	ErrFull = errors.New("agentboot/pool: at capacity, no idle session to evict")
 )
 
+// DefaultIdleTimeout is the idle window a host can adopt when it has no
+// better number: a little over an hour. A resident Claude Code process that is
+// resumed within the hour still finds its prompt cache warm (the long cache
+// TTL is 1h; the short one is 5 minutes), so closing it sooner trades a
+// cheap idle process for a full-price first turn. Pool itself applies no
+// default: a zero IdleTimeout disables idle eviction.
+const DefaultIdleTimeout = 65 * time.Minute
+
 // Config controls a [Pool]'s capacity and idle-eviction policy.
 type Config struct {
 	// MaxSessions caps how many PersistentSessions the pool holds
@@ -42,6 +51,16 @@ type Config struct {
 	// Status, not merely un-Touch-ed) for at least this long since its last
 	// Touch. Zero or negative disables idle eviction.
 	IdleTimeout time.Duration
+
+	// Hold, if set, vets every entry the pool is about to close for being
+	// idle or to make room: a session it reports true for is kept, and its
+	// idle clock restarts (so it gets a whole IdleTimeout after Hold stops
+	// reporting true). It is called with key only, never with the pool's lock
+	// held, so it may be slow and may call back into the pool. It answers
+	// "does something outside the session still depend on it?", which the
+	// session's own Status cannot say: for example a coordinator that sits
+	// Idle while the threads it started work.
+	Hold func(key string) bool
 
 	// SweepInterval is how often the idle sweep runs. Left zero with
 	// IdleTimeout > 0, it defaults to IdleTimeout/4 (floored at 1s).
@@ -151,47 +170,72 @@ func (p *Pool) Touch(key string) {
 // session is Running), Open returns ErrFull and session is not registered
 // — closing session in that case is the caller's responsibility.
 func (p *Pool) Open(ctx context.Context, key string, session agentboot.PersistentSession) error {
-	p.mu.Lock()
-	if existing, ok := p.entries[key]; ok && existing.session.Status() != agentboot.SessionStateTerminated {
-		p.mu.Unlock()
-		return ErrKeyAlreadyOpen
-	}
-
-	var evictKey string
-	var evict *entry
-	if p.cfg.MaxSessions > 0 && len(p.entries) >= p.cfg.MaxSessions {
-		evictKey, evict = p.lruIdleLocked(key)
-		if evict == nil {
+	for {
+		p.mu.Lock()
+		if existing, ok := p.entries[key]; ok && existing.session.Status() != agentboot.SessionStateTerminated {
 			p.mu.Unlock()
+			return ErrKeyAlreadyOpen
+		}
+		if p.cfg.MaxSessions <= 0 || len(p.entries) < p.cfg.MaxSessions {
+			p.entries[key] = &entry{session: session, lastActivity: time.Now()}
+			p.mu.Unlock()
+			return nil
+		}
+		candidates := p.idleByAgeLocked(key)
+		p.mu.Unlock()
+
+		victim := p.firstUnheld(candidates)
+		if victim == nil {
 			return ErrFull
 		}
-		delete(p.entries, evictKey)
-	}
-	p.entries[key] = &entry{session: session, lastActivity: time.Now()}
-	p.mu.Unlock()
 
-	if evict != nil {
-		_ = p.closeEntry(ctx, evict)
-	}
-	return nil
-}
-
-// lruIdleLocked finds the least-recently-touched Idle entry other than
-// excludeKey. Caller holds p.mu.
-func (p *Pool) lruIdleLocked(excludeKey string) (string, *entry) {
-	var (
-		oldestKey string
-		oldest    *entry
-	)
-	for k, e := range p.entries {
-		if k == excludeKey || e.session.Status() != agentboot.SessionStateIdle {
+		p.mu.Lock()
+		// The pool moved while Hold ran: look again rather than evict a
+		// session that has since started a turn or gone.
+		if p.entries[victim.key] != victim.e || victim.e.session.Status() != agentboot.SessionStateIdle {
+			p.mu.Unlock()
 			continue
 		}
-		if oldest == nil || e.lastActivity.Before(oldest.lastActivity) {
-			oldestKey, oldest = k, e
+		if existing, ok := p.entries[key]; ok && existing.session.Status() != agentboot.SessionStateTerminated {
+			p.mu.Unlock()
+			return ErrKeyAlreadyOpen
+		}
+		delete(p.entries, victim.key)
+		p.entries[key] = &entry{session: session, lastActivity: time.Now()}
+		p.mu.Unlock()
+
+		_ = p.closeEntry(ctx, victim.e)
+		return nil
+	}
+}
+
+type candidate struct {
+	key string
+	e   *entry
+}
+
+// idleByAgeLocked lists the Idle entries other than excludeKey, least
+// recently touched first. Caller holds p.mu.
+func (p *Pool) idleByAgeLocked(excludeKey string) []candidate {
+	var out []candidate
+	for k, e := range p.entries {
+		if k != excludeKey && e.session.Status() == agentboot.SessionStateIdle {
+			out = append(out, candidate{k, e})
 		}
 	}
-	return oldestKey, oldest
+	sort.Slice(out, func(i, j int) bool { return out[i].e.lastActivity.Before(out[j].e.lastActivity) })
+	return out
+}
+
+// firstUnheld returns the first candidate Hold does not keep, or nil. Call
+// it without p.mu.
+func (p *Pool) firstUnheld(candidates []candidate) *candidate {
+	for i := range candidates {
+		if p.cfg.Hold == nil || !p.cfg.Hold(candidates[i].key) {
+			return &candidates[i]
+		}
+	}
+	return nil
 }
 
 // CloseAndRemove closes key's session (if any) and removes it from the
@@ -257,25 +301,43 @@ func (p *Pool) sweepLoop() {
 func (p *Pool) sweepIdle() {
 	cutoff := time.Now().Add(-p.cfg.IdleTimeout)
 
-	type victim struct {
-		key string
-		e   *entry
-	}
-	var victims []victim
-
 	p.mu.Lock()
+	var expired []candidate
 	for k, e := range p.entries {
 		if e.session.Status() == agentboot.SessionStateIdle && e.lastActivity.Before(cutoff) {
-			victims = append(victims, victim{k, e})
+			expired = append(expired, candidate{k, e})
 		}
-	}
-	for _, v := range victims {
-		delete(p.entries, v.key)
 	}
 	p.mu.Unlock()
 
-	for _, v := range victims {
-		_ = p.closeEntry(context.Background(), v.e)
+	// Hold runs outside the lock; the entry is checked again before it goes.
+	var held, victims []candidate
+	for _, c := range expired {
+		if p.cfg.Hold != nil && p.cfg.Hold(c.key) {
+			held = append(held, c)
+		} else {
+			victims = append(victims, c)
+		}
+	}
+
+	p.mu.Lock()
+	now := time.Now()
+	for _, c := range held {
+		if p.entries[c.key] == c.e {
+			c.e.lastActivity = now
+		}
+	}
+	var closing []candidate
+	for _, c := range victims {
+		if p.entries[c.key] == c.e && c.e.session.Status() == agentboot.SessionStateIdle && c.e.lastActivity.Before(cutoff) {
+			delete(p.entries, c.key)
+			closing = append(closing, c)
+		}
+	}
+	p.mu.Unlock()
+
+	for _, c := range closing {
+		_ = p.closeEntry(context.Background(), c.e)
 	}
 }
 
