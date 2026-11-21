@@ -247,11 +247,8 @@ pairs × stream × transport; the old code fails every case).
 2. **Default (no profile)**: the main `claude_code` scenario has no
    `ProfileMeta`; it needs its own `mcp_profile` (and `tingly-box cc` without
    a profile the same file under `claude/default/`).
-3. `openapi.json` and the client SDK: `task codegen` for `/auth/mcp-token`
-   and `mcp_profile` (the frontend calls them already; typecheck flags the
-   two token paths until then).
-4. MCP profile page: "Used by Claude Code profiles: …".
-5. Later, on request: Codex/OpenCode equivalents; an "Add to Claude Code"
+3. MCP profile page: "Used by Claude Code profiles: …".
+4. Later, on request: Codex/OpenCode equivalents; an "Add to Claude Code"
    button for `~/.claude.json`; per-MCP-profile tokens.
 
 ## 6. To probe
