@@ -65,7 +65,7 @@ same sidebar. The page where MCPs are connected stays **MCP Tools**.
   the filled primary action (Add tools). Directly under it the connection card
   (the shared `AgentAccessSection`: endpoint URL when folded; open it is two rows,
   the endpoint URL and the whole registration command for Claude Code / Codex /
-  OpenCode with the user token already written in: nothing is read from the
+  OpenCode with the MCP token already written in: nothing is read from the
   machine or an environment variable), then the tool list with a switch
   per tool (custom ones also remove). Tools that are globally off are shown greyed
   with the reason; both Default and custom profiles carry a one-line explanation of what they contain. The sidebar
@@ -159,11 +159,21 @@ paths retain native tools.
 The GitHub integration (a fixed subset plus per-profile repository scope) is
 described in `github-mcp.md`.
 
+## Connected MCP is never injected (decided 2026-11-20)
+
+An MCP the user connects reaches agents only as an ordinary MCP server through
+a profile; the agent's own permissions decide its calls. The gateway injects
+Server Tools only; a stored `usage.gateway`, tool usage or `visibility:
+server` on a connected source is ignored. Agents authenticate with the MCP
+token (Access Control), which opens the MCP endpoints and nothing else, and
+see tools as `<source>__<tool>`. Server Tools are unchanged: Advisor is
+injection-only, and Search / Fetch exist both as Server Tools
+(`server-webtools`) and as the ordinary `webtools` source; a `webtools` source
+saved with `visibility: server` is no longer injected. Details:
+`claude-profile-mcp.md` §4.3.
+
 ## Open (carried, not decided here)
 
-- Ordinary connected tools can currently also be injected into model requests
-  (`usage.gateway`). This round keeps that mechanism untouched; whether it stays
-  a per-tool flag or becomes a Default-profile concern is a follow-up.
 - `usage.client` is no longer an input. Availability to MCP clients is derived:
   every ordinary MCP tool, subject to the switches above. Server Tools (Advisor,
   Search and Fetch) are gateway-only and never exposed over an MCP endpoint.

@@ -83,7 +83,7 @@
 | [claude-code-config.md](./claude-code-config.md) | Claude Code Quick Config: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [claude-code-slots.md](./claude-code-slots.md) | Claude Code: per-slot rules (no modes) | 已实现（TEP #2197）；取代 unified/separate 模式 |
 | [claude-code-default-switch.md](./claude-code-default-switch.md) | Claude Code: use a profile as the default | 已实现：显式覆盖，无备份无还原 |
-| [claude-profile-mcp.md](./claude-profile-mcp.md) | Claude Code profile 接入 Tingly Box MCP：现状（网关注入全局、客户端侧无自动接入、端点用管理 token）、推荐按 profile 生成 `--mcp-config`、scoped token、权限与分阶段计划 | 提案，未实现；待用户决定见 §6 |
+| [claude-profile-mcp.md](./claude-profile-mcp.md) | Claude Code profile 接入 Tingly Box MCP：MCP token、客户端短工具名、已接入 MCP 不再注入模型请求、profile 选择 MCP Profile 后启动时生成 `--mcp-config` | 部分实现（§4）；Projects 启动与 Default 待做（§5） |
 | [cursor.md](./cursor.md) | Cursor Scenario — the public-URL constraint | 设计说明；局部实施状态见正文 |
 | [opencode-session.md](./opencode-session.md) | OpenCode Zen session header | 设计说明；局部实施状态见正文 |
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |

@@ -3,6 +3,7 @@ package scenario
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -461,9 +462,21 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		req.Name = existing.Name
 	}
 
+	if req.MCPProfile != nil && *req.MCPProfile != existing.MCPProfile {
+		if err := h.validateMCPProfileChoice(scenario, *req.MCPProfile); err != nil {
+			apierr.Failure(c, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	if err := h.config.UpdateProfile(scenario, profileID, req.Name, req.Unified); err != nil {
 		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
+	}
+	if req.MCPProfile != nil && *req.MCPProfile != existing.MCPProfile {
+		if err := h.config.SetProfileMCPProfile(scenario, profileID, *req.MCPProfile); err != nil {
+			apierr.Failure(c, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	updated, _ := h.config.GetProfile(scenario, profileID)
@@ -481,6 +494,28 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated", "data": updated})
+}
+
+// validateMCPProfileChoice accepts "" (none) or an existing MCP profile, and
+// only for Claude Code, whose launches are the ones that connect to it.
+func (h *Handler) validateMCPProfileChoice(scenario typ.RuleScenario, id string) error {
+	if id == "" {
+		return nil
+	}
+	if scenario != typ.ScenarioClaudeCode {
+		return fmt.Errorf("an MCP profile can only be chosen for Claude Code profiles")
+	}
+	if id == typ.MCPDefaultProfileID {
+		return nil
+	}
+	if runtime := h.config.GetMCPRuntimeConfig(); runtime != nil {
+		for _, p := range runtime.Profiles {
+			if p.ID == id {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("unknown MCP profile %q", id)
 }
 
 func (h *Handler) resolveProfileClaudeConfig(c *gin.Context) (typ.ProfileMeta, string, agent.CCProfileSettingsResolution, bool) {

@@ -385,6 +385,10 @@ type ProfileMeta struct {
 	Name       string                   `json:"name" yaml:"name"`                                   // Human-readable name (unique within base scenario)
 	Unified    bool                     `json:"unified" yaml:"unified"`                             // true=unified mode (single model), false=separate mode (individual models, default)
 	ClaudeCode *ClaudeCodeProfileConfig `json:"claude_code,omitempty" yaml:"claude_code,omitempty"` // Persistent overrides for generated Claude Code settings.
+	// MCPProfile is the MCP profile this Claude Code profile's launches
+	// connect to, as an ordinary MCP server; empty means none. Chosen by the
+	// user, never inherited.
+	MCPProfile string `json:"mcp_profile,omitempty" yaml:"mcp_profile,omitempty"`
 }
 
 // ClaudeCodeProfileConfig stores only the delta from a profile's inherited

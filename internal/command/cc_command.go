@@ -121,9 +121,16 @@ func runCC(appManager *app.AppManager, profile string, portOverride int, claudeA
 		return fmt.Errorf("claude CLI not found: %w", err)
 	}
 
-	// Build claude args: --settings <file> + passthrough
-	execArgs := []string{"--settings", settingsPath}
-	execArgs = append(execArgs, claudeArgs...)
+	// The MCP profile the user chose for this profile, as an ordinary MCP
+	// server next to the user's own (not strict).
+	var mcpConfigPath string
+	if profileMeta != nil {
+		if mcpConfigPath, err = agent.MaterializeCCProfileMCPConfig(globalConfig, baseURL, *profileMeta); err != nil {
+			return err
+		}
+	}
+
+	execArgs := ccExecArgs(mcpConfigPath, settingsPath, claudeArgs)
 
 	// Exec replaces current process (on Windows, which has no true exec(),
 	// this instead starts the child detached and exits immediately) so
@@ -134,6 +141,19 @@ func runCC(appManager *app.AppManager, profile string, portOverride int, claudeA
 		return fmt.Errorf("failed to run claude CLI: %w", err)
 	}
 	return nil
+}
+
+// ccExecArgs builds claude's arguments: [--mcp-config <file>] --settings
+// <file>, then the passthrough. --mcp-config takes several values, so it goes
+// before another flag rather than next to the passthrough, where it would
+// swallow a prompt.
+func ccExecArgs(mcpConfigPath, settingsPath string, claudeArgs []string) []string {
+	var args []string
+	if mcpConfigPath != "" {
+		args = append(args, "--mcp-config", mcpConfigPath)
+	}
+	args = append(args, "--settings", settingsPath)
+	return append(args, claudeArgs...)
 }
 
 // selectProfileInteractive lists the profiles and prompts the user to pick one

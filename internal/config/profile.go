@@ -87,6 +87,22 @@ func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, pr
 	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
 }
 
+// SetProfileMCPProfile records which MCP profile a profile's launches connect
+// to; empty means none. Validating the MCP profile is the caller's job.
+func (c *Config) SetProfileMCPProfile(baseScenario typ.RuleScenario, profileID, mcpProfile string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	profiles := c.Profiles[string(baseScenario)]
+	for i := range profiles {
+		if profiles[i].ID == profileID {
+			profiles[i].MCPProfile = mcpProfile
+			return c.saveLocked()
+		}
+	}
+	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
+}
+
 // newCCProfileRules builds fresh rules for a claude_code profile.
 // A new profile starts with the default slot rule "cc"; slot rules are added when a slot is split.
 // Rules are empty (no services, no smart routing) for users to configure.

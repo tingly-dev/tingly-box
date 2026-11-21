@@ -1,7 +1,10 @@
 # Claude Code profiles and Tingly Box's MCP
 
-> Status: **proposal, not built** (2026-11-20). Read-only investigation on `main`
-> at `a7c593425`; `file:line` references are from that commit.
+> Status: **partly built** (2026-11-20): MCP token, short client tool names, no
+> injection of connected MCP, Claude Code profile → `--mcp-config` for
+> `tingly-box profile`/`cc` (§4). Projects launches and the Default (no-profile)
+> path are next (§5). §2 is the investigation on `main` at `a7c593425`;
+> `file:line` references there are from that commit.
 > Builds on `mcp-profiles.md` (gateway tools, MCP profiles), `github-mcp.md`,
 > `remote-cc-profile.md` (how a Claude Code profile reaches the CLI),
 > `projects/.design/mcp-tools.md` and `projects/.design/github-tools.md`
@@ -84,12 +87,14 @@ one `MCPConfigPath`, both emitted as `--mcp-config` (variadic), plus
 ### 2.3 Gaps found
 
 1. **No automatic client-side wiring** on any path (2.2).
-2. **The endpoint takes the admin token.** `/api/v1/mcp/:id` is under the V1
-   group with `UserAuthMiddleware` (`internal/middleware/auth.go:252`): only the
-   UI user token is accepted. The copy command therefore writes the admin
-   token into `~/.claude.json`, where any process (and a prompt-injected
-   model with Bash) can read it and call every management API. This must be
-   fixed before Tingly Box writes the endpoint into anything itself.
+2. **The copy command does not authenticate.** `/api/v1/mcp/:id` is under
+   the V1 group with `UserAuthMiddleware` (`internal/middleware/auth.go:252`):
+   only the UI user (admin) token is accepted. The copy command
+   (`ProfileConnect.tsx`) writes `api.getToken()`, which is `GET /api/v1/token`
+   = the **model** token, so a client registered with it gets 401. The
+   only token that works is the admin one, which must not be handed to an
+   agent (a prompt-injected model with Bash could read it from
+   `~/.claude.json` and call every management API).
 3. **Endpoint needs the experimental flag** (`mcp` on `global` or
    `claude_code`; `internal/mcp/local/transport.go:38`), otherwise 403.
 4. **Doubled namespace.** The endpoint names tools
@@ -105,7 +110,32 @@ one `MCPConfigPath`, both emitted as `--mcp-config` (variadic), plus
    `default` they prompt, and in `auto` the classifier may deny an unlisted
    MCP tool (probe in `github-tools.md`).
 
-## 3. How to connect: options
+## 3. Decisions (user, 2026-11-20)
+
+They replaced parts of the first proposal (an automatic default, Tingly Box
+writing read-only allow rules, one token per MCP profile); §3a keeps the
+comparison of ways to connect that still holds.
+
+1. **Ordinary MCP is a standard MCP gateway, never injected.** Every MCP the
+   user connects (anything but the built-in Server Tools) reaches an agent only
+   the normal way: the agent is started with the MCP server configured and
+   calls it itself. The gateway no longer injects connected MCP tools into
+   model requests (`usage.gateway` is gone for them); Server Tools (Advisor,
+   Search, Fetch) keep their gateway injection.
+2. **The agent decides authorization.** Tingly Box writes no allow rules for
+   its MCP server: Claude Code's own permission mode and the user's rules
+   decide, as for any MCP server. (Unlike `tingly-projects`, which is Tingly
+   Box's own bounded tools; #2579 stays as it is.)
+3. **The user configures access.** Which MCP profile an agent gets is the
+   user's choice on the Claude Code profile; nothing is connected implicitly.
+4. **An MCP token, like the user token and the model token.** One global
+   token (`tb-mcp-…`), shown and reset on Access Control, accepted only by the
+   MCP endpoints. The copy command and generated configs use it; the admin
+   token keeps working there too (it can already do everything).
+5. **Order:** token, tool names, access (no injection; Claude Code profile →
+   `--mcp-config`) first; Projects launches and the rest after.
+
+## 3a. How to connect: options
 
 Claude Code facts this relies on (from the official docs, read via search
 summaries on 2026-11-20; items marked *unverified* need a probe):
@@ -145,193 +175,104 @@ does not break the cache); `ENABLE_TOOL_SEARCH=false` loads all upfront.
   machine-wide, edits a user file, and would leak across profiles.
 - Server Tools are model capabilities (consult another model, search, fetch),
   not actions, and are not on any endpoint by design. They stay gateway-side.
-  `usage.gateway` for ordinary MCP tools stays as it is (the open item in
-  `mcp-profiles.md`); B does not depend on it. A tool that is both injected
-  and on the profile is offered twice under two names; the profile page should
-  say so (a later UI point, not a blocker).
+  Connected MCP tools are no longer injected at all (decision 1, §4.3).
 
-## 4. Design (option B)
+## 4. Built (option B, with the decisions of §3)
 
-### 4.1 What a Claude Code profile declares
+### 4.1 MCP token
 
-One field, a reference to an MCP profile; the tool list stays where it is
-already curated (MCP profile page), not copied into the Claude Code profile:
+`Config.MCPToken` (`tb-mcp-` + 64 hex, generated on load like the model
+token), `GET /api/v1/auth/mcp-token`, `POST /api/v1/auth/mcp-token/reset`, a
+third row on Access Control. The transport routes (`/api/v1/mcp/:id`,
+`/stream`) moved from the user-authenticated V1 group to the public group
+with `MCPAuthMiddleware` (`internal/middleware/auth.go`): the MCP token, or
+whatever the user auth accepts. The MCP token on any other route is 401. The
+copy command on the MCP profile page and the probe use it (the probe so it
+takes the real path). One global token, not one per MCP profile: the user
+asked for "an MCP token, like the user token"; per-profile scoping can come
+later if a profile needs to be shared with someone else.
 
-```go
-type ClaudeCodeProfileConfig struct {
-    ...
-    // MCPProfile is the MCP profile this Claude Code profile's launches get:
-    // "" = inherit (custom profiles inherit the Default Claude Code profile's
-    // choice), "off" = none, otherwise an MCP profile id ("default", "prof-…").
-    MCPProfile string `json:"mcp_profile,omitempty" yaml:"mcp_profile,omitempty"`
-}
-```
+Why not per launch (as `tingly-projects`): a `tingly-box profile` launch
+`exec`s Claude Code, so Tingly Box never learns when it ends; resumed sessions
+and terminal handoff must keep working. Not the model token: it is shared by
+every client and team key, and would turn "can call the model" into "can run
+my GitHub writes".
 
-The main `claude_code` scenario (Default Claude Code profile) stores its own
-value in the scenario's config (same field, same meaning, `""` = automatic).
+### 4.2 Tool names
 
-- **All vs whitelist** is answered by which MCP profile is chosen: `default`
-  = all tools (newly connected ones included); a custom MCP profile = only its
-  tools (never widens silently). No second whitelist on the Claude Code side.
-- **Default value** (ux-principles §6: a smart default over a switch):
-  automatic = `default` MCP profile **when the experimental MCP flag is on and
-  at least one client tool is on**, otherwise nothing. With the flag off (the
-  shipped default) nothing changes for anyone. An empty server is never
-  written (no tools = no `--mcp-config` entry, no per-turn cost).
-- A deleted MCP profile resolves to nothing and the Claude Code profile page
-  shows a warning chip (as `remote-cc-profile.md` §1 does for a deleted Claude
-  Code profile); a launch never fails because of it.
+The endpoint lists `<source>__<tool>` (`coretool.ClientToolName`) and calls
+take that name back (`ToolNameFromClient`); the catalog, profiles and
+policies keep `tingly_box_mcp__<source>__<tool>`. The probe accepts both. The
+longest GitHub tool is now
+`mcp__tb__src-3f2a9c1e__add_reply_to_pull_request_comment` (56).
 
-### 4.2 What is generated
+### 4.3 No injection of connected MCP
 
-`MaterializeCCProfileSettings` (and the default-profile path in `runCC`) also
-writes, next to `settings.json` in the profile artifact dir, `mcp.json`, mode
-0600, atomically and only when changed (`writeGeneratedFileIfChanged`):
+`SourceUsage` gives ordinary sources `Client` only and Server Tools (`advisor`
+by ID too, `server-webtools`, virtual) `Gateway` only; stored `usage.gateway`,
+per-tool usage and `visibility: server` are ignored. `ListServerToolsForInjection`
+is the Server Tools only; the remote tool cache and `WithConnectedTools` are
+gone. The toolround never claims a connected tool's call, so a model that
+names one hands it to the client. Harness: `TestMCPRemoteNotInjected` (24
+pairs × stream × transport; the old code fails every case).
 
-```json
-{"mcpServers": {"tb": {"type": "http",
-  "url": "http://localhost:<port>/api/v1/mcp/<mcp-profile-id>",
-  "headers": {"Authorization": "Bearer <mcp client token>"}}}}
-```
+Built-ins are not one kind. What decides injection is the tool, not that
+Tingly Box ships it:
 
-- Base URL: the same loopback base the profile's `ANTHROPIC_BASE_URL` uses.
-- Server name: `tb` for the `default` MCP profile and `tb-<slug>` for a custom
-  one: the names the copy command already uses (`mcp-profiles.md`
-  Identifiers), so a user who also registered it by hand gets one server, not
-  the same tools twice. *Probe*: which definition wins on a name clash.
-- The resolver returns `(settingsPath, mcpConfigPath)`; every launcher adds
-  `--mcp-config <mcpConfigPath>` when it is non-empty.
+| Tool | Injected (Server Tool) | Ordinary MCP (through a profile) |
+|---|---|---|
+| Advisor | Only this way: it reads the whole conversation, which only the gateway sees | Never on an endpoint (`advisor_context_required`) |
+| Search / Fetch | `server-webtools`, off by default (Server Tools page) | `webtools`, off by default (MCP Tools page, then a profile) |
 
-### 4.3 Token: a scoped MCP client token, not the admin token
+Both webtools sources run the same `tingly-box mcp-builtin` binary and keep
+their own switches and credentials. Injection is for model capability that
+must be transparent to the client: context only the gateway has (Advisor), or
+filling in what the upstream lacks (replacing native web search when Claude
+Code is routed to a provider without it; the native definition is stripped
+only when the replacement was injected). These are read-only, so running
+them without the client's approval is acceptable. Actions on external systems
+go through MCP and the agent's permissions.
 
-The endpoint accepts, besides the user token, an **MCP client token** that is
-valid only on `/api/v1/mcp/{id}` (the transport routes) and only for the MCP
-profile it was issued for. One token per MCP profile, stored in the MCP
-runtime config, rotated from the MCP profile page. The copy command switches
-to it too (fixes gap 2 for manual registrations).
+Behaviour change: a `webtools` source saved with `visibility: server` used to
+be injected; it is now offered only through MCP profiles. To keep web search
+inside model requests, turn on Search / Fetch under Server Tools.
 
-Why stable per MCP profile rather than per launch (as `tingly-projects` does):
-a `tingly-box profile` launch `exec`s Claude Code, so Tingly Box never learns
-when it ends; resumed sessions, terminal handoff (`tingly-box cc --resume`)
-and Projects' resident processes must keep working across turns and server
-restarts. Projects can revoke its URLs because it owns the process lifetime;
-Tingly Box does not.
+### 4.4 Claude Code profile → MCP profile
 
-Not reused: the model API token. It is shared by every client and team key,
-and would turn "can call the model" into "can run my GitHub writes".
+- `typ.ProfileMeta.MCPProfile` (`mcp_profile`), empty = none, the user's
+  choice, never inherited. Set with `PUT /scenario/claude_code/profiles/:id`
+  `{"mcp_profile": "<id>" | ""}`, validated against the MCP profiles.
+- `agent.MaterializeCCProfileMCPConfig` writes `mcp.json` next to the
+  profile's `settings.json`, 0600, only when changed:
+  `{"mcpServers": {"tb" | "tb-<slug>": {"type": "http", "url": ".../api/v1/mcp/<id>", "headers": {"Authorization": "Bearer <MCP token>"}}}}`.
+  The server name matches the copy command (`MCPServerName` ↔
+  `profileServerName`). No permission rules: Claude Code's own decide. MCP
+  off, the MCP profile missing or switched off, or no choice: no file (a
+  stale one is removed), no flag.
+- `runCC` (`tingly-box profile <id>`, `cc --profile`, the `--resume` handoff)
+  passes `--mcp-config <file>` **before** `--settings`: the flag is variadic,
+  and next to the passthrough it would swallow a prompt (`ccExecArgs`). Not
+  strict: the user's own servers keep loading.
+- UI: an "MCP" row in the Claude Code profile page's connection card (None /
+  MCP Integration / custom MCP profiles, a link to the chosen one, a warning
+  when it is gone), shown while MCP is on.
 
-### 4.4 Permissions: Tingly Box decides what runs without a card
+## 5. Next
 
-PR #2579 allows the whole `mcp__tingly-projects` server because those tools
-are Tingly Box's own, bounded in code (no close, no force-push, only what the
-thread opened, merge always asks). MCP profile tools are not: they are
-whatever the user connected, writes included. So the rule differs:
+1. **Projects launches** (worker threads, folder sessions, IM chats): the
+   embedded host's `Launcher` hands Projects the profile's `mcp.json` path (an
+   optional `LaunchMCP(ctx, profile)`), agentboot takes several
+   `--mcp-config` files (`tingly-projects` and `tb`). Coordinator stays off
+   (strict config, it delegates). Standalone Projects is unchanged: threads
+   get `tingly-projects` plus the user's own `~/.claude.json` servers.
+2. **Default (no profile)**: the main `claude_code` scenario has no
+   `ProfileMeta`; it needs its own `mcp_profile` (and `tingly-box cc` without
+   a profile the same file under `claude/default/`).
+3. MCP profile page: "Used by Claude Code profiles: …".
+4. Later, on request: Codex/OpenCode equivalents; an "Add to Claude Code"
+   button for `~/.claude.json`; per-MCP-profile tokens.
 
-- **Reads run without a card**: tools whose MCP annotation says
-  `readOnlyHint: true`, and for the GitHub preset the read half of
-  `githubSubset` (known, fixed list). Written as
-  `permissions.allow: ["mcp__tb__<tool>", …]` into the generated
-  `settings.json` at materialize time (the list is regenerated every launch,
-  so it follows the switches). An unannotated tool is a write.
-- **Writes ask** (no rule, so Claude Code's mode decides; in Projects the card
-  goes through the thread prompter as for any tool).
-- **Opt-in "run without asking"** on the MCP profile (one switch, writes
-  `allow: ["mcp__tb"]`, whole server). Off by default. `deny` and the
-  user's own `ask` rules still win (deny, ask, allow).
-- The Projects prompter fallback that answers `mcp__tingly-projects__*` is
-  **not** extended to `mcp__tb__*`: a profile or user `ask` rule on a tb tool
-  is the user's decision and should reach them.
-
-### 4.5 Namespace
-
-Claude Code already namespaces by server (`mcp__tb__`), so the endpoint, when
-serving a client, should name tools `<source>__<tool>` instead of
-`tingly_box_mcp__<source>__<tool>`: 16 characters back, and the 72-char GitHub
-name becomes 56. `ParseNormalizedToolName` accepts both on the call path. The
-feature has not shipped (`mcp-profiles.md`), so manual registrations made so
-far only need re-registering; their permission rules by full name would stop
-matching, which is why this goes first.
-
-### 4.6 Per launcher
-
-| Launcher | Change |
-|---|---|
-| `tingly-box profile <id>` / `cc` (and the Default path) | `execArgs` gets `--mcp-config <mcp.json>`. Not strict: the user's own servers keep loading. |
-| Projects worker thread, folder session, IM chat (embedded) | `Launcher` gains the MCP config path (new optional interface, e.g. `LaunchMCP(ctx, profile) (path string, err error)`, so `profile == ""` is covered too: today `""` goes to `ThreadEnv`, not to `LaunchEnv`). agentboot `ExecutionOptions` takes a list (`MCPConfigPaths`) so `tingly-projects` and `tb` are two files. The allow rules arrive with the host's settings file, which `workerSettings` already copies as the base. |
-| Projects coordinator | **Off.** Strict config and `AllowedTools: mcp__tingly-projects` by design (it delegates; it does not act). Revisit only on request. |
-| `tingly-box cc --resume` handoff | Same as the profile launch (it goes through `runCC`). |
-| Quick Config / Apply (plain `claude`) | Unchanged. The MCP profile page's copy command (with the scoped token) is the way; an "Add to Claude Code" button that writes `~/.claude.json` with a backup is a later option, not this design. |
-
-### 4.7 Standalone Projects (tp) vs embedded in Tingly Box
-
-- **Standalone**: no MCP runtime, no `Launcher`. Threads get `tingly-projects`
-  plus whatever the user registered in `~/.claude.json` (workers and folder
-  sessions; the coordinator is strict). Nothing changes; Projects never learns
-  about MCP profiles.
-- **Embedded**: the host's `Launcher` hands Projects an opaque config path
-  (no import of the root module, `task projects:boundary` stays green).
-  Projects passes it through and writes no rule for it; the rules are in the
-  host's settings file.
-- Both: Projects' own server stays per-thread, capability URL, revoked with
-  the thread; tb's stays per MCP profile with a scoped token.
-
-### 4.8 UI
-
-- **Claude Code profile page** (`ClaudeCodeProfilePage.tsx`), one row in the
-  profile settings, next to permission mode: "MCP tools: Automatic (MCP
-  Integration) / <MCP profile> / Off", showing the concrete result ("MCP
-  Integration · 12 tools, 9 run without asking") and a link to that MCP
-  profile (ux-principles §5, §11). Hidden while the MCP flag is off.
-- **MCP profile page**: the connection card gains "Used by Claude Code
-  profiles: Default, p2" and the "Run without asking" switch; the copy command
-  uses the scoped token.
-- Projects needs no UI: a thread's profile already decides.
-
-### 4.9 Prompt cache and cost
-
-The tool set is fixed per Claude Code session; with tool search on (the
-default for Claude models) MCP tools are deferred and frozen at the first
-request, so they add little to the prefix. With tool search off (as the
-coordinator sets for small/compatible models) every on tool costs tokens on
-every turn: the reason the automatic default writes nothing when no tool is
-on, and why a narrow custom MCP profile is the answer for a heavy Default.
-A change on the MCP profile reaches a running session only on its next
-process (Projects resident processes keep the old list until restarted).
-
-## 5. Phases (each its own PR, each shippable)
-
-0. **Scoped MCP client token** (backend + copy command). Endpoint accepts it
-   only on the transport routes of its MCP profile; UI token keeps working.
-   Fixes gap 2 on its own, even if nothing else lands.
-1. **Short tool names on the client endpoint** (`<source>__<tool>`), both
-   names accepted on call. Golden test on the tool list of a profile.
-2. **Materialize `mcp.json`** with the profile artifact, `mcp_profile` field
-   with automatic default, `tingly-box profile` / `cc` pass `--mcp-config`.
-   Read-only allow rules into the generated settings. Probe with the real CLI
-   (isolated HOME, scripted model, `real-run-projects-with-scripted-model`
-   method): server connects, a read runs without a card, a write asks, in
-   `default`, `auto`, `acceptEdits`.
-3. **Projects embedded**: `LaunchMCP` on the host, `MCPConfigPaths` in
-   agentboot, worker/folder/IM threads get `tb`. Coordinator stays off.
-   Boundary check green; `coordtest` unaffected.
-4. **UI**: MCP row on the Claude Code profile page, "Used by" and "Run without
-   asking" on the MCP profile page. Screenshots (`ui-screenshots`).
-5. Later, on request: per-profile gateway injection (scope `usage.gateway`
-   and Server Tools by Claude Code profile), an "Add to Claude Code" button for
-   `~/.claude.json`, Codex/OpenCode equivalents of phase 2.
-
-## 6. Open decisions (the user's)
-
-1. Default: automatic (`default` MCP profile when the MCP flag is on and a
-   tool is on), or off until chosen per Claude Code profile?
-2. Default approval: reads without a card, writes ask (proposed), or the
-   whole server without a card like `tingly-projects` (#2579)?
-3. Coordinator: keep tb MCP off (proposed)?
-4. Short tool names (phase 1): accept that existing manual registrations must
-   re-register?
-5. Token: one per MCP profile (proposed), or one per Claude Code profile?
-
-## 7. To probe before building
+## 6. To probe
 
 - Precedence when `tb` comes from both `~/.claude.json` and `--mcp-config`.
 - Whether `--mcp-config` expands `${VAR}` in headers (would let the file hold

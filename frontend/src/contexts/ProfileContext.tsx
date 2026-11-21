@@ -7,6 +7,7 @@ export interface ProfileInfo {
     id: string;
     name: string;
     unified?: boolean;  // true=unified mode, false/undefined=separate mode
+    mcp_profile?: string;  // Claude Code: the MCP profile its launches connect to
 }
 
 interface ScenarioProfiles {

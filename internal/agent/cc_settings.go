@@ -596,7 +596,7 @@ func removeCCProfileArtifacts(rootDir, profileID, profileName string) error {
 		} else if statErr != nil && !os.IsNotExist(statErr) {
 			return fmt.Errorf("failed to inspect Claude Code profile directory: %w", statErr)
 		}
-		for _, name := range []string{"settings.json", "statusline.sh"} {
+		for _, name := range []string{"settings.json", "statusline.sh", ccProfileMCPConfigFile} {
 			if removeErr := os.Remove(filepath.Join(artifactDir, name)); removeErr != nil && !os.IsNotExist(removeErr) {
 				return fmt.Errorf("failed to remove Claude Code profile artifact %s: %w", name, removeErr)
 			}

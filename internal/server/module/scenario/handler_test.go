@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -529,4 +531,43 @@ func TestUseClaudeCodeProfileEndpoint(t *testing.T) {
 	if assert.NotNil(t, mainRule) && assert.NotEmpty(t, mainRule.Services) {
 		assert.Equal(t, "work-model", mainRule.Services[0].Model)
 	}
+}
+
+// A Claude Code profile names the MCP profile its launches connect to; the
+// choice is validated and kept across other edits.
+func TestUpdateProfileMCPProfile(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetToolConfig(config.ToolTypeMCPRuntime, &typ.MCPRuntimeConfig{Profiles: []typ.MCPProfile{{ID: "prof-1a2b3c4d", Name: "Work"}}}))
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	require.NoError(t, err)
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	router.PUT("/scenario/:scenario/profiles/:id", handler.UpdateProfile)
+	put := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/scenario/claude_code/profiles/"+profile.ID, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+	stored := func() string {
+		p, _ := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+		return p.MCPProfile
+	}
+
+	require.Equal(t, "", stored(), "nothing is connected until the user chooses")
+	require.Equal(t, http.StatusOK, put(`{"mcp_profile":"prof-1a2b3c4d"}`).Code)
+	require.Equal(t, "prof-1a2b3c4d", stored())
+	require.Equal(t, http.StatusBadRequest, put(`{"mcp_profile":"prof-missing"}`).Code)
+	require.Equal(t, "prof-1a2b3c4d", stored(), "a refused choice changes nothing")
+	require.Equal(t, http.StatusOK, put(`{"name":"work"}`).Code)
+	require.Equal(t, "prof-1a2b3c4d", stored(), "an edit without the field keeps the choice")
+	require.Equal(t, http.StatusOK, put(`{"mcp_profile":"default"}`).Code)
+	require.Equal(t, "default", stored())
+	require.Equal(t, http.StatusOK, put(`{"mcp_profile":""}`).Code)
+	require.Equal(t, "", stored())
 }
