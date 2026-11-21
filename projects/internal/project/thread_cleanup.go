@@ -263,7 +263,7 @@ func (m *Threads) Archive(threadID string) (*db.Thread, error) {
 	}
 	// As in Resolve: let the turn take its interrupt before the process is
 	// closed, then evict; nothing can start a session, the lock is held.
-	if done := m.stop(threadID, Source{}); done != nil {
+	if done := m.stopEnding(threadID); done != nil {
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):

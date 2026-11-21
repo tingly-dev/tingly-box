@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -135,6 +136,28 @@ func TestProjectLimitQueuesExtraThreadsAndStartsThemWhenASlotFrees(t *testing.T)
 	g.finish("b")
 	g.finish("c")
 	waitStatus(t, g.store, c.ID, db.ThreadIdle)
+}
+
+// A thread stopped while it waits for a slot has no turn whose end would set
+// it back: it rests and says it was stopped, rather than showing working with
+// nothing running.
+func TestStoppingAQueuedThreadLetsItRest(t *testing.T) {
+	g := newGatedFixture(t)
+	g.setLimit(t, 1)
+	g.start(t, "a")
+	b := g.start(t, "b")
+	g.expectStarted(t, "a")
+	g.waitQueued(t, b, true)
+
+	g.threads.Stop(b.ID, Source{Kind: db.SourceIM})
+	waitStatus(t, g.store, b.ID, db.ThreadIdle)
+	g.waitQueued(t, b, false)
+	assert.Eventually(t, func() bool { return slices.Contains(systemNotes(t, g.store, b.ID), "Stopped from a chat.") },
+		5*time.Second, 5*time.Millisecond, "notes: %v", systemNotes(t, g.store, b.ID))
+	assert.False(t, g.threads.Running(b.ID))
+
+	g.finish("a")
+	g.expectNoStart(t)
 }
 
 func TestProjectWithoutAValidSettingRunsTheDefaultFour(t *testing.T) {

@@ -182,6 +182,9 @@ type activeThread struct {
 	stopped bool
 	// stoppedBy is who stopped the turn, for the "Stopped" note.
 	stoppedBy Source
+	// ending is a stop on the way to resolving or archiving the thread: that
+	// shows itself, so the stopped turn leaves no "Stopped" note.
+	ending bool
 }
 
 type queued struct {
@@ -1194,8 +1197,27 @@ func (m *Threads) drop(threadID string) {
 func (m *Threads) giveUp(threadID string, a *activeThread) {
 	m.mu.Lock()
 	a.current = nil
+	stopped, by, ending := a.stopped, a.stoppedBy, a.ending
 	m.mu.Unlock()
+	if stopped {
+		m.stoppedBeforeTurn(threadID, by, ending)
+	}
 	m.next(threadID)
+}
+
+// stoppedBeforeTurn settles a thread whose Stop came before its turn did, as
+// settle does a stopped turn: no turn ends to do it, and a new thread has
+// shown working since Start.
+func (m *Threads) stoppedBeforeTurn(threadID string, by Source, ending bool) {
+	t, err := m.update(threadID, func(t *db.Thread) {
+		if t.Status == db.ThreadWorking && !m.hasBackground(threadID) {
+			t.Status, t.WaitReason = db.ThreadIdle, ""
+		}
+	})
+	if err != nil || ending || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
+		return
+	}
+	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
 }
 
 // turnEnded settles a finished turn: the thread's status and counters, its
@@ -1342,11 +1364,14 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	case report.Kind == "":
 		m.mu.Lock()
 		var by Source
+		ending := false
 		if a := m.active[threadID]; a != nil {
-			by = a.stoppedBy
+			by, ending = a.stoppedBy, a.ending
 		}
 		m.mu.Unlock()
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
+		if !ending {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
+		}
 	case end.Err != nil:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: end.Err.Error()})
 	case session, tally.compact:
@@ -1440,6 +1465,18 @@ func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
 	return done
 }
 
+// stopEnding is stop on the way to resolving or archiving the thread. The
+// stopped turn's bookkeeping runs after done closes and may come before or
+// after the caller saves the end; either way it leaves no "Stopped" note.
+func (m *Threads) stopEnding(threadID string) <-chan struct{} {
+	m.mu.Lock()
+	if a, ok := m.active[threadID]; ok {
+		a.ending = true
+	}
+	m.mu.Unlock()
+	return m.stop(threadID, Source{})
+}
+
 // Running reports whether a thread has a turn in flight or waiting.
 func (m *Threads) Running(threadID string) bool {
 	m.mu.Lock()
@@ -1521,7 +1558,7 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done := m.stop(threadID, Source{}); done != nil {
+	if done := m.stopEnding(threadID); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
 		case <-done:
@@ -1552,7 +1589,7 @@ func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done := m.stop(threadID, Source{}); done != nil {
+	if done := m.stopEnding(threadID); done != nil {
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):
