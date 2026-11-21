@@ -44,12 +44,12 @@ func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardA
 		return noReply, nil
 	}
 
-	var chatID, messageID string
+	var openChatID, messageID string
 	if event.Event.Context != nil {
-		chatID = event.Event.Context.OpenChatID
+		openChatID = event.Event.Context.OpenChatID
 		messageID = event.Event.Context.OpenMessageID
 	}
-	if chatID == "" {
+	if openChatID == "" {
 		// Without a chat there is nowhere to reply. Emitting anyway would be
 		// worse than dropping: the message builder substitutes "unknown" for a
 		// missing recipient, and the handler would then address a chat that
@@ -58,17 +58,19 @@ func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardA
 		return noReply, nil
 	}
 
-	senderID := ""
+	senderID, openID := "", ""
 	if op := event.Event.Operator; op != nil {
 		// Prefer the tenant-global user_id when the app is scoped to see it,
 		// matching what convertLarkMessageToCore does for ordinary messages so
 		// a chat's sender identity does not change between the two paths.
+		openID = op.OpenID
 		if op.UserID != nil && *op.UserID != "" {
 			senderID = *op.UserID
 		} else {
 			senderID = op.OpenID
 		}
 	}
+	chatID := pressChat(event.Event.Action.Value, openChatID, senderID, openID)
 
 	msg := core.NewMessageBuilder(core.Platform(b.domain)).
 		WithID(messageID).
@@ -79,10 +81,25 @@ func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardA
 		WithPayload(payload).
 		WithMetadata("callback_query_id", messageID).
 		WithMetadata("message_id", messageID).
-		WithMetadata("original_chat_id", chatID).
+		WithMetadata("original_chat_id", openChatID).
 		Build()
 
 	b.EmitMessage(*msg)
 	b.UpdateLastActivity()
 	return noReply, nil
+}
+
+// pressChat is the chat a card press comes from, under the id that chat's
+// messages carry (convertLarkMessageToCore): for a one-to-one chat that is
+// the user's id, not the open_chat_id Feishu names the press's chat by. The
+// card says which chat it was sent to (buttonChatKey); that is believed only
+// when it is the chat the press is in, or the user pressing it is that chat's
+// user, so a card forwarded elsewhere speaks for where it is pressed. A card
+// that does not say comes from the open_chat_id.
+func pressChat(value map[string]interface{}, openChatID, userID, openID string) string {
+	chat, _ := value[buttonChatKey].(string)
+	if chat != "" && (chat == openChatID || chat == userID || chat == openID) {
+		return chat
+	}
+	return openChatID
 }

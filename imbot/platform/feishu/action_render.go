@@ -21,7 +21,7 @@ func (b *Bot) sendActionCard(ctx context.Context, target string, opts *core.Send
 		return nil, fmt.Errorf("bot client is nil")
 	}
 
-	card := buildActionCard(opts.Text, set)
+	card := buildActionCard(opts.Text, set, target)
 	cardJSON, err := card.String()
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize card: %w", err)
@@ -49,8 +49,9 @@ func (b *Bot) sendActionCard(ctx context.Context, target string, opts *core.Send
 }
 
 // buildActionCard builds a Lark interactive card from text and a neutral
-// action set.
-func buildActionCard(text string, set *core.ActionSet) *larkcard.MessageCard {
+// action set, for the chat chat (the target it is sent to; see
+// buttonChatKey).
+func buildActionCard(text string, set *core.ActionSet, chat string) *larkcard.MessageCard {
 	elements := []larkcard.MessageCardElement{
 		larkcard.NewMessageCardMarkdown().Content(text),
 	}
@@ -58,7 +59,7 @@ func buildActionCard(text string, set *core.ActionSet) *larkcard.MessageCard {
 	// Feishu lays actions out itself, so rows are flattened.
 	var buttons []larkcard.MessageCardActionElement
 	for _, action := range set.Flatten() {
-		if btn, ok := buildActionButton(action); ok {
+		if btn, ok := buildActionButton(action, chat); ok {
 			buttons = append(buttons, btn)
 		}
 	}
@@ -84,7 +85,7 @@ func buildActionCard(text string, set *core.ActionSet) *larkcard.MessageCard {
 // otherwise honours its FallbackPolicy. FallbackAsText is handled by the
 // caller, not here, because it changes the message body rather than the
 // buttons.
-func buildActionButton(action core.Action) (larkcard.MessageCardActionElement, bool) {
+func buildActionButton(action core.Action, chat string) (larkcard.MessageCardActionElement, bool) {
 	if action.Label == "" {
 		return nil, false
 	}
@@ -109,19 +110,30 @@ func buildActionButton(action core.Action) (larkcard.MessageCardActionElement, b
 	// A Feishu button value is arbitrary JSON, so the payload's segments go in
 	// as segments — no length budget, no separator to escape. The flat form is
 	// carried alongside only for consumers still reading callback_data.
+	value := map[string]interface{}{
+		payloadValueKey: []string(payload),
+		"callback":      payload.FlatCallbackData(),
+		"actionId":      action.ID,
+	}
+	if chat != "" {
+		value[buttonChatKey] = chat
+	}
 	return larkcard.NewMessageCardEmbedButton().
 		Text(larkcard.NewMessageCardPlainText().Content(action.Label)).
 		Type(larkcard.MessageCardButtonTypeDefault).
-		Value(map[string]interface{}{
-			payloadValueKey: []string(payload),
-			"callback":      payload.FlatCallbackData(),
-			"actionId":      action.ID,
-		}), true
+		Value(value), true
 }
 
 // payloadValueKey is where a button's payload segments live inside the Feishu
 // button value object.
 const payloadValueKey = "payload"
+
+// buttonChatKey is where a button keeps the chat its card was sent to, as the
+// chat's messages name it. A one-to-one chat's messages are from (and replied
+// to) the user's id, but a press names its chat by open_chat_id, an id no
+// message of that chat carries; the press reads the chat back from here
+// (pressChat).
+const buttonChatKey = "chat"
 
 // payloadFromButtonValue reads the segments back out of an inbound card action
 // value, accepting the flat callback string from buttons rendered by earlier
@@ -235,7 +247,7 @@ func (b *Bot) Restate(ctx context.Context, ref core.MessageRef, opts core.Restat
 		return fmt.Errorf("bot client is nil")
 	}
 
-	card := buildActionCard(opts.Text, opts.Actions)
+	card := buildActionCard(opts.Text, opts.Actions, ref.ChatID)
 	cardJSON, err := card.String()
 	if err != nil {
 		return fmt.Errorf("failed to serialize card: %w", err)

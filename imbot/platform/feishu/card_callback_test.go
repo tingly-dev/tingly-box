@@ -13,7 +13,7 @@ import (
 // hand back when the button is tapped.
 func buttonValue(t *testing.T, action core.Action) map[string]interface{} {
 	t.Helper()
-	el, ok := buildActionButton(action)
+	el, ok := buildActionButton(action, "oc_chat")
 	if !ok {
 		t.Fatal("action was not rendered as a button")
 	}
