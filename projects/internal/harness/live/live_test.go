@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -147,4 +148,54 @@ func TestDirtyAncestors(t *testing.T) {
 	dir := filepath.Join(root, "a", "b")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	assert.Contains(t, dirtyAncestors(dir), filepath.Join(root, "CLAUDE.md"))
+}
+
+func TestRunDirectoriesAreMarkedListedAndCleaned(t *testing.T) {
+	root := t.TempDir()
+	a, err := newRunDir(Options{Root: root}, "one-thread")
+	require.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
+	b, err := newRunDir(Options{Root: root}, "parallel")
+	require.NoError(t, err)
+	stray := filepath.Join(root, "not-a-run")
+	require.NoError(t, os.MkdirAll(stray, 0o755))
+
+	rs, err := Runs(root)
+	require.NoError(t, err)
+	require.Len(t, rs, 2)
+	assert.Equal(t, b, rs[0].Dir, "newest first")
+	assert.Equal(t, "one-thread", rs[1].Meta.Journey)
+
+	assert.Error(t, Clean([]string{stray}), "only directories the harness made")
+	require.NoError(t, Clean([]string{a, b}))
+	assert.DirExists(t, stray)
+	assert.NoDirExists(t, a)
+
+	full := filepath.Join(root, "full")
+	require.NoError(t, os.MkdirAll(full, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(full, "x"), nil, 0o644))
+	_, err = newRunDir(Options{WorkDir: full}, "x")
+	assert.ErrorContains(t, err, "not empty")
+}
+
+func TestEnvironmentStaysInTheRunDirectory(t *testing.T) {
+	dir := t.TempDir()
+	w := worldAt(dir)
+	require.NoError(t, w.ensure())
+	env := map[string]string{}
+	for _, kv := range w.env() {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	for _, k := range []string{"HOME", "CLAUDE_CONFIG_DIR", "TINGLY_PROJECT_HOME", "TMPDIR", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"} {
+		assert.True(t, strings.HasPrefix(env[k], dir), "%s=%s", k, env[k])
+	}
+	for _, k := range []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "TINGLY_BOX_HOME"} {
+		_, ok := env[k]
+		assert.False(t, ok, k)
+	}
+	info, err := os.Stat(env["XDG_RUNTIME_DIR"])
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+	assert.FileExists(t, filepath.Join(env["HOME"], ".claude.json"))
 }

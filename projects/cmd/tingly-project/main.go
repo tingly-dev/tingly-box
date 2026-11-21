@@ -10,11 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -22,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/projects/internal/config"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/internal/harness/live"
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server"
 )
@@ -88,90 +85,6 @@ func rootCmd() *cobra.Command {
 	root.Flags().AddFlagSet(serve.Flags())
 	root.AddCommand(serve, swaggerCmd, versionCmd, harnessCmd())
 	return root
-}
-
-// harnessCmd runs Projects journeys for real: this binary as the server, the
-// real Claude Code CLI, and a scripted model served by `tingly-box vmodel`.
-func harnessCmd() *cobra.Command {
-	var o live.Options
-	run := &cobra.Command{
-		Use:   "run <journey|file>...",
-		Short: "Run journeys against the real server and Claude Code, with a scripted model",
-		Long: "Each journey starts its own tingly-project server (this binary) and `tingly-box vmodel` serving the journey's script, " +
-			"in a fresh work directory with its own HOME and Claude Code config; your ~/.tingly-box and ~/.claude are not used. " +
-			"It needs claude and git on PATH. A journey is a builtin name (see `harness list`) or a YAML file.",
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if o.Projects == "" {
-				self, err := os.Executable()
-				if err != nil {
-					return err
-				}
-				o.Projects = self
-			}
-			tb, err := exec.LookPath(o.TB)
-			if err != nil {
-				return fmt.Errorf("tingly-box binary %q not found: pass --tb", o.TB)
-			}
-			o.TB = tb
-			if _, err := exec.LookPath("claude"); err != nil {
-				return fmt.Errorf("the claude CLI is not on PATH")
-			}
-			o.Out = cmd.OutOrStdout()
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
-			var failed []string
-			for _, arg := range args {
-				j, err := live.Load(arg)
-				if err != nil {
-					return err
-				}
-				opts := o
-				if o.WorkDir != "" && len(args) > 1 {
-					opts.WorkDir = filepath.Join(o.WorkDir, j.Name)
-				}
-				res, err := live.Run(ctx, j, opts)
-				if err != nil {
-					return fmt.Errorf("journey %s: %w", j.Name, err)
-				}
-				if res.OK() {
-					fmt.Fprintf(o.Out, "PASS %s\n", j.Name)
-					continue
-				}
-				failed = append(failed, j.Name)
-				fmt.Fprintf(o.Out, "FAIL %s (kept %s)\n", j.Name, res.WorkDir)
-				for _, f := range res.Failures {
-					fmt.Fprintf(o.Out, "  - %s\n", f)
-				}
-			}
-			if len(failed) > 0 {
-				return fmt.Errorf("%d of %d journeys failed: %s", len(failed), len(args), strings.Join(failed, ", "))
-			}
-			return nil
-		},
-	}
-	run.Flags().StringVar(&o.TB, "tb", "tingly-box", "the tingly-box binary that serves the scripted model (`tingly-box vmodel`, with kind: script)")
-	run.Flags().StringVar(&o.Projects, "projects-bin", "", "the tingly-project binary to run as the server (default: this one)")
-	run.Flags().StringVar(&o.WorkDir, "work-dir", "", "where the run lives; pick a path whose parents hold no CLAUDE.md or .claude (default: a new temp directory)")
-	run.Flags().BoolVar(&o.Keep, "keep", false, "keep the work directory of a passing journey (a failing one is always kept)")
-
-	list := &cobra.Command{
-		Use:   "list",
-		Short: "List the builtin journeys",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			for _, name := range live.Builtin() {
-				j, err := live.Load(name)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", name, strings.TrimSpace(j.Description))
-			}
-			return nil
-		},
-	}
-	h := &cobra.Command{Use: "harness", Short: "Run Projects journeys against the real Claude Code CLI with a scripted model"}
-	h.AddCommand(run, list)
-	return h
 }
 
 func runServe(cfg config.Config, sessions project.SessionConfig) error {

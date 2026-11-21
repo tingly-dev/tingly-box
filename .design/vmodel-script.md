@@ -321,6 +321,19 @@ tingly-project harness run <journey>            （projects 模块，Projects �
   cc-native-peer-messaging）、`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`、`DISABLE_TELEMETRY=1`、
   `DISABLE_AUTOUPDATER=1`、`DISABLE_ERROR_REPORTING=1`、git 身份、假 key。绝不碰真实
   `~/.tingly-box`、`~/.claude`。
+- **一次运行 = 一个目录，环境从零开始**（已实现，PR 5）：`<root>/<旅程>-<时间>-<随机>`，默认 root 是
+  `/dev/shm/tingly-project-harness`（内存盘，祖先目录干净），没有 `/dev/shm` 时退到系统临时目录。
+  目录里有 `home/`（`HOME`、`CLAUDE_CONFIG_DIR`、`XDG_CONFIG/CACHE/DATA/STATE_HOME`）、`run/`
+  （`XDG_RUNTIME_DIR`，0700：Claude Code 的 peer socket `cc-socks` 落在这里，不再进共享的
+  `/tmp/cc-socks`）、`tmp/`（`TMPDIR`）、`data/`（`TINGLY_PROJECT_HOME`，数据库和线程 worktree）、
+  `repo/`、`capture/`（模型一端的原始字节 + `script-<id>.json`）和日志。目录带标记文件
+  `.harness-run.json`；`harness runs` 列出、`harness clean <dir>|--all` 只删带标记的目录。
+  用户自己的 `~/.tingly-project`、`~/.tingly-box`、`~/.claude` 既不读也不写。
+- **跑完在前端看**（已实现，PR 5）：`harness run … --open` 跑完后接着服务最后一条旅程的项目；
+  `harness open [run-dir]`（默认最新一次）用同一个隔离环境重新起 `tingly-project serve`，并起一个
+  占位模型（`kind: mock`，回一句"脚本已结束"），打印项目页地址，Ctrl-C 结束。界面要二进制里带
+  前端（`task projects:frontend` 后再编译），没带时会提示。看的是独立版 tingly-project 的界面；
+  在隔离的 tb（内嵌 Projects）里看是之后的事。
 - **工作目录要有干净的祖先**（实测）：Claude Code 从工作目录往上找 `CLAUDE.md` 和 `.claude/skills`，
   放在用户 home 下面会把用户自己的文件带进请求。runner 默认用 `os.TempDir()` 下的新目录，
   `--work-dir` 可改；祖先目录里有 `CLAUDE.md` 或 `.claude` 时打警告。
@@ -480,6 +493,7 @@ GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内
 | **2 `vmodel/script` 引擎** ✅ #2722 | Go 结构与校验；路由（续接索引、bind、`spawns` 守卫、背景规则、严格未匹配、重试重放）；轨道内顺序、`when`/`optional`；`expect`、`expect_result`、`capture` + `{{var}}`；`after`（步骤 / 信号）；确定性 id；Anthropic 流式与非流式回答、预置错误；`count_tokens`；报告与 trace；Go API（`Signal`、`WaitServed`、`Finish`） | 单元测试：并发两条轨道交错、子 agent、重试、未匹配、未消费、断言失败、after 超时 |
 | **3 vmodel 接入** ✅ #2723 | `spec` 新 kind `script`（加载、导出、`--fallback` 指向它）；`Runtime` 把指向 script 的请求交给它（含 `count_tokens`）；控制接口 `/_vmodel/scripts/...`；`tingly-box vmodel` 退出时写报告 | spec 与 CLI 测试；真实 claude `-p` 打一条两步脚本 |
 | **4 tingly-project harness** ✅ | `projects/internal/harness/live`：旅程文件、runner（拉起 vmodel 与 Projects、隔离环境、用户动作、Projects 侧断言、结果表）；`tingly-project harness run|list`；第一条内置旅程 `one-thread`（§5.2） | runner 单元测试（用假的 vmodel/Projects 端点）；真实运行 `one-thread` 通过（6 个模型请求、5 项检查全过、线程 1 个提交）；故意改坏的副本报出两处失败、退出码 1 |
+| **5 隔离与观察** | 运行目录 + 标记、XDG/TMPDIR 隔离、`harness runs|open|clean`、`run --open` | 单元测试；真实 `run --open` 后用无头浏览器截图（项目页、工具调用展开） |
 | 之后 | `hold`（流中扣住）→ 消息插入旅程；并行线程、`notify_coordinator` → `propose_threads`、决策卡、`create_pr`、审批拒绝、压缩；无序步骤组；`trace.md`；经网关；IM；OpenAI Responses | 每条先写旅程 |
 
 ## 10. 原待定点的决定
