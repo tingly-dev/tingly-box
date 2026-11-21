@@ -70,7 +70,7 @@ func TestSetupRealOAuthAgent_ClaudeCode(t *testing.T) {
 	if got := up.Headers.Get("X-Api-Key"); got != "" {
 		t.Errorf("x-api-key must not be sent on the OAuth path, got %q", got)
 	}
-	if got := up.Headers.Get("User-Agent"); got != "claude-cli/2.1.280 (external, cli)" {
+	if got := up.Headers.Get("User-Agent"); got != "claude-cli/2.1.328 (external, cli)" {
 		t.Errorf("User-Agent = %q, want the latest native client", got)
 	}
 	if got := up.Headers.Get("X-Claude-Code-Request-Class"); got != "main" {
@@ -94,7 +94,7 @@ func TestSetupRealOAuthAgent_ClaudeCode(t *testing.T) {
 	if len(parsed.System) != 2 {
 		t.Fatalf("system blocks = %d, want billing header + preamble: %+v", len(parsed.System), parsed.System)
 	}
-	if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.280\.[0-9a-f]{3}; cc_entrypoint=cli; cch=[0-9a-f]{5};$`); !want.MatchString(parsed.System[0].Text) {
+	if want := regexp.MustCompile(`^x-anthropic-billing-header: cc_version=2\.1\.328\.[0-9a-f]{3}; cc_entrypoint=cli; cch=[0-9a-f]{5};$`); !want.MatchString(parsed.System[0].Text) {
 		t.Errorf("billing header = %q", parsed.System[0].Text)
 	}
 	if strings.Contains(parsed.System[0].Text, "cch=00000;") {

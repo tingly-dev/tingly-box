@@ -725,15 +725,15 @@ func TestResolveRuleFlagsWithScenario_ClaudeCodeVersionDefaultsToLatest(t *testi
 // profile is cleared for any other provider (e.g. an API-key Anthropic
 // provider reached through load balancing or failover on the same rule).
 func TestResolveRuleFlagsWithScenario_ClaudeCodeVersionOnlyForClaudeOAuth(t *testing.T) {
-	rule := &typ.Rule{UUID: "r", Flags: typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280}}
+	rule := &typ.Rule{UUID: "r", Flags: typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_328}}
 	resolve := func(p *typ.Provider) string {
 		return ResolveRuleFlagsWithScenario(newGinContext(t), rule, typ.ScenarioClaudeCode, &typ.ScenarioConfig{},
 			protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, p).ClaudeCodeVersion
 	}
 	oauth := &typ.Provider{AuthType: typ.AuthTypeOAuth, OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode}}
 	apiKey := &typ.Provider{AuthType: typ.AuthTypeAPIKey, APIBase: "https://api.anthropic.com"}
-	if got := resolve(oauth); got != typ.ClaudeCodeVersion2_1_280 {
-		t.Errorf("Claude OAuth provider: got %q, want %q", got, typ.ClaudeCodeVersion2_1_280)
+	if got := resolve(oauth); got != typ.ClaudeCodeVersion2_1_328 {
+		t.Errorf("Claude OAuth provider: got %q, want %q", got, typ.ClaudeCodeVersion2_1_328)
 	}
 	if got := resolve(apiKey); got != "" {
 		t.Errorf("API-key provider must not get the native profile, got %q", got)

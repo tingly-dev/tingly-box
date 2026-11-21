@@ -115,6 +115,19 @@ health monitor, instead of surfacing to the client as "Please run /login".
   `E2EProber`, any cached model that goes through). Subscription windows only
   start counting on the first real request, so this keeps them moving while idle.
 
+## Claude Code: identity and plan after login
+
+The Claude Code issuer's token response already carries `account{uuid,email_address}` and `organization{uuid,name}`
+(`populateAnthropicMetadata`). `AnthropicHook.AfterToken` then reads `GET /api/oauth/profile` — the endpoint the official CLI
+uses at that point — and adds what the token response lacks: `subscription_type` (`max` / `pro` / `team` / `enterprise`, from
+`organization.organization_type`; an unknown type is left out rather than guessed) and `rate_limit_tier`, plus
+`organization_id` when the token response had none. It is best effort: any failure leaves the login as it was. (It used to
+call `/v1/account`, which the CLI never calls.) Nothing reads `subscription_type` / `rate_limit_tier` yet; they are stored in the
+provider's `ExtraFields` so the UI can show the plan later.
+Deliberately not done: storing the token response's `refresh_token_expires_in` (new in 2.1.328; no consumer yet) and mapping the
+CLI's "account on hold" refusal to its own re-auth state (the marker string was not extracted from the bundle).
+See `.research/claude-code/2.1.328.md` §4 for the full comparison with the official flow.
+
 ## Re-authentication (in place)
 
 Recovery flow for a credential that has gone **permanently** invalid — refresh token

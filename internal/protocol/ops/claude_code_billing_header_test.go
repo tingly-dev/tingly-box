@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testNativeVersion = "2.1.280"
+const testNativeVersion = "2.1.328"
 
 func nativeExtra() map[string]any {
 	return map[string]any{"device": "dev", "user_id": "acct", ClaudeCodeVersionExtraKey: testNativeVersion}
@@ -19,39 +19,39 @@ func TestClaudeCodeVersionFromExtra(t *testing.T) {
 	assert.Equal(t, "", ClaudeCodeVersionFromExtra(nil))
 	assert.Equal(t, "", ClaudeCodeVersionFromExtra(map[string]any{"device": "d"}))
 	assert.Equal(t, "", ClaudeCodeVersionFromExtra(map[string]any{ClaudeCodeVersionExtraKey: 42}))
-	assert.Equal(t, "2.1.280", ClaudeCodeVersionFromExtra(nativeExtra()))
+	assert.Equal(t, "2.1.328", ClaudeCodeVersionFromExtra(nativeExtra()))
 }
 
 func TestBuildClaudeCodeBillingHeader_Fresh(t *testing.T) {
-	got := BuildClaudeCodeBillingHeader("2.1.280.31f", "")
-	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;", got)
+	got := BuildClaudeCodeBillingHeader("2.1.328.593", "")
+	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;", got)
 }
 
 func TestBuildClaudeCodeBillingHeader_ReplacesClientOwnedFieldsKeepsSessionFields(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_version=2.1.240.abc; cc_entrypoint=sdk-cli; cch=4f05e; cc_workload=cron; cc_is_subagent=true; cc_prev_req=req_011CeAbCdEf; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;"
-	got := BuildClaudeCodeBillingHeader("2.1.280.31f", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.328.593", inbound)
 	assert.Equal(t,
-		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000; cc_workload=cron; cc_is_subagent=true; cc_prev_req=req_011CeAbCdEf; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;",
+		"x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000; cc_workload=cron; cc_is_subagent=true; cc_prev_req=req_011CeAbCdEf; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;",
 		got)
 }
 
 func TestBuildClaudeCodeBillingHeader_OrderIsCanonicalNotInbound(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b; cc_is_subagent=true; cc_version=1; cc_entrypoint=x;"
-	got := BuildClaudeCodeBillingHeader("2.1.280.31f", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.328.593", inbound)
 	assert.Equal(t,
-		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000; cc_is_subagent=true; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;",
+		"x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000; cc_is_subagent=true; cc_prompt_id=0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b;",
 		got)
 }
 
 func TestBuildClaudeCodeBillingHeader_DropsInvalidAndUnknownFields(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_version=2; cc_entrypoint=cli; cch=abcde; cc_is_subagent=false; cc_prev_req=nope; cc_prompt_id=not-a-uuid; cc_workload=bad value; cc_evil=1; garbage"
-	got := BuildClaudeCodeBillingHeader("2.1.280.31f", inbound)
-	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;", got)
+	got := BuildClaudeCodeBillingHeader("2.1.328.593", inbound)
+	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;", got)
 }
 
 func TestBuildClaudeCodeBillingHeader_FirstDuplicateWins(t *testing.T) {
 	inbound := "x-anthropic-billing-header: cc_workload=cron; cc_workload=other;"
-	got := BuildClaudeCodeBillingHeader("2.1.280.31f", inbound)
+	got := BuildClaudeCodeBillingHeader("2.1.328.593", inbound)
 	assert.Contains(t, got, " cc_workload=cron;")
 	assert.NotContains(t, got, "other")
 }
@@ -69,10 +69,10 @@ func TestIsBillingHeaderText(t *testing.T) {
 	assert.False(t, IsBillingHeaderText("the x-anthropic-billing-header: is mentioned mid-text"))
 }
 
-// Live capture: prompt "say hi" → cc_version=2.1.280.31f.
+// Live capture: prompt "say hi" → cc_version=2.1.328.593 (2.1.328 live capture).
 func TestComputeCCVersionFor_MatchesLiveCapture(t *testing.T) {
-	assert.Equal(t, "31f", computeFingerprint("say hi", "2.1.280"))
-	assert.Equal(t, "2.1.280.31f", computeCCVersionFor("say hi", "2.1.280"))
+	assert.Equal(t, "593", computeFingerprint("say hi", "2.1.328"))
+	assert.Equal(t, "2.1.328.593", computeCCVersionFor("say hi", "2.1.328"))
 }
 
 // The fingerprint skips the <system-reminder> blocks folded into the first
@@ -154,7 +154,7 @@ func TestApplyAnthropicBetaMetadataTransform_NativeRebuildsInPlace(t *testing.T)
 	}
 	out := ApplyAnthropicBetaMetadataTransform(req, nativeExtra())
 	require.Len(t, out.System, 2, "billing header replaced in place, not prepended")
-	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000; cc_is_subagent=true;", out.System[0].Text)
+	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000; cc_is_subagent=true;", out.System[0].Text)
 	assert.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", out.System[1].Text)
 	assert.Equal(t, `{"device_id":"dev","account_uuid":"acct","session_id":"s","parent_session_id":"p"}`, out.Metadata.UserID.String())
 }
@@ -169,7 +169,7 @@ func TestApplyAnthropicV1MetadataTransform_NativePrependsWhenAbsent(t *testing.T
 	}
 	out := ApplyAnthropicV1MetadataTransform(req, nativeExtra())
 	require.Len(t, out.System, 2)
-	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;", out.System[0].Text)
+	assert.Equal(t, "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;", out.System[0].Text)
 	assert.Contains(t, out.Metadata.UserID.String(), `"device_id":"dev"`)
 }
 
@@ -197,14 +197,14 @@ func TestApplyAnthropicBetaMetadataTransform_LegacyUnchanged(t *testing.T) {
 
 func TestBuildClaudeCodeBillingHeader_TurnOrigin(t *testing.T) {
 	// Kept after cc_prompt_id (live capture order).
-	inbound := "x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=sdk-cli; cch=a803d; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe; cc_turn_origin=sdk;"
+	inbound := "x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=sdk-cli; cch=a803d; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe; cc_turn_origin=sdk;"
 	assert.Equal(t,
-		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe; cc_turn_origin=sdk;",
-		BuildClaudeCodeBillingHeader("2.1.280.31f", inbound))
+		"x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000; cc_prompt_id=053a4a80-e173-41fa-9513-7fc43f75dcbe; cc_turn_origin=sdk;",
+		BuildClaudeCodeBillingHeader("2.1.328.593", inbound))
 	// Invalid values are dropped.
 	assert.Equal(t,
-		"x-anthropic-billing-header: cc_version=2.1.280.31f; cc_entrypoint=cli; cch=00000;",
-		BuildClaudeCodeBillingHeader("2.1.280.31f", "x-anthropic-billing-header: cc_turn_origin=Human; cc_turn_origin=1x;"))
+		"x-anthropic-billing-header: cc_version=2.1.328.593; cc_entrypoint=cli; cch=00000;",
+		BuildClaudeCodeBillingHeader("2.1.328.593", "x-anthropic-billing-header: cc_turn_origin=Human; cc_turn_origin=1x;"))
 }
 
 // The CLI indexes the prompt as a JavaScript string (UTF-16 code units).
@@ -212,16 +212,16 @@ func TestBuildClaudeCodeBillingHeader_TurnOrigin(t *testing.T) {
 // two cases land on half of a surrogate pair, which Node hashes as U+FFFD.
 func TestComputeFingerprintJS_MatchesCLI(t *testing.T) {
 	cases := map[string]string{
-		"say hi": "31f",
-		"请帮我修复这个bug，谢谢你的帮助哦":                 "df8",
-		"héllo wörld, ça va très bien merci": "f84",
-		"ab😀cd😀efghijklmnopqrstuvwxyz":       "362",
-		"abc😀":                               "fc4",
+		"say hi": "593",
+		"请帮我修复这个bug，谢谢你的帮助哦":                 "9b1",
+		"héllo wörld, ça va très bien merci": "916",
+		"ab😀cd😀efghijklmnopqrstuvwxyz":       "b05",
+		"abc😀":                               "465",
 	}
 	for text, want := range cases {
-		assert.Equal(t, want, computeFingerprintJS(text, "2.1.280"), text)
+		assert.Equal(t, want, computeFingerprintJS(text, "2.1.328"), text)
 	}
 	// ASCII is unchanged from the legacy byte-indexed version.
-	assert.Equal(t, computeFingerprint("hello world, this is ascii", "2.1.280"), computeFingerprintJS("hello world, this is ascii", "2.1.280"))
-	assert.Equal(t, "2.1.280.df8", computeCCVersionFor("请帮我修复这个bug，谢谢你的帮助哦", "2.1.280"))
+	assert.Equal(t, computeFingerprint("hello world, this is ascii", "2.1.328"), computeFingerprintJS("hello world, this is ascii", "2.1.328"))
+	assert.Equal(t, "2.1.328.9b1", computeCCVersionFor("请帮我修复这个bug，谢谢你的帮助哦", "2.1.328"))
 }

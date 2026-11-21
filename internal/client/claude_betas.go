@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -26,7 +28,6 @@ const (
 	betaContextManagement          = "context-management-2025-06-27"
 	betaStructuredOutputs          = "structured-outputs-2025-12-15"
 	betaPromptCachingScope         = "prompt-caching-scope-2026-01-05"
-	betaMidConversationSystem      = "mid-conversation-system-2026-04-07"
 	betaPerTurnControl             = "per-turn-control-2026-07-01"
 	betaMidConversationToolChanges = "mid-conversation-tool-changes-2026-07-01"
 	betaEffort                     = "effort-2025-11-24"
@@ -47,6 +48,16 @@ const (
 	betaThinkingBindingControls    = "thinking-binding-controls-2026-08-01"
 	betaThinkingResumption         = "thinking-resumption-2026-07-17"
 	betaMessageThreads             = "message-threads-2026-08-12"
+	betaToolProvenance             = "tool-provenance-2026-10-26"
+	betaResumption                 = "resumption-2026-10-08"
+	betaProgramUseCaseIDs          = "program-use-case-ids-2026-09-17"
+	betaAdvisorTool                = "advisor-tool-2026-03-01"
+	betaCacheKeepalive             = "cache-keepalive-2026-09-03"
+	betaFallbackCredit             = "fallback-credit-2026-06-01"
+	betaServerSideFallback         = "server-side-fallback-2026-06-01"
+	betaServerSideFallbackCategory = "server-side-fallback-2026-07-01"
+	betaMCPServers                 = "mcp-servers-2025-12-04"
+	betaFilesAPI                   = "files-api-2025-04-14"
 )
 
 // claudeCodeBetaEmissionOrder is the CLI's push order; the composed header
@@ -58,20 +69,23 @@ var claudeCodeBetaEmissionOrder = []string{
 	betaContext1M,
 	betaInterleavedThinking,
 	betaRedactThinking,
-	betaThinkingTokenCount,
 	betaContextManagement,
 	betaPromptCachingScope,
-	betaMidConversationSystem,
-	// query-scoped
+	// query-scoped (the CLI's per-turn table); mid-conversation-system is
+	// registered without a header since 2.1.328 and is never sent.
 	betaPerTurnControl,
 	betaPerTurnTiming,
 	betaMidConversationToolChanges,
 	betaInlineTools,
+	betaToolProvenance,
 	betaMidConvSystemClearAt,
-	// tool search (pushed before the main loop)
+	// main query loop, in call order. thinking-token-count left the baseline
+	// in 2.1.328: it is pushed here, ahead of tool search.
+	betaProgramUseCaseIDs,
+	betaAdvisorTool,
+	betaThinkingTokenCount,
 	betaAdvancedToolUse,
 	betaToolSearchTool,
-	// main query loop, in call order
 	betaEffort,
 	betaTaskBudgets,
 	betaStructuredOutputs,
@@ -79,13 +93,41 @@ var claudeCodeBetaEmissionOrder = []string{
 	betaThinkingBindingControls,
 	betaThinkingDisplayUpdates,
 	betaThinkingResumption,
+	betaResumption,
 	betaFastMode,
 	betaAfkMode,
 	betaExtendedCacheTTL,
 	betaContextHint,
+	betaMCPServers,
+	betaFilesAPI,
 	betaPromptCachingEvict,
 	betaCacheDiagnosis,
+	betaCacheKeepalive,
 	betaMessageThreads,
+	// positions below were not observed on the wire (server-driven, rare)
+	betaFallbackCredit,
+	betaServerSideFallback,
+	betaServerSideFallbackCategory,
+}
+
+// claudeCodeBetaOrderFor returns the emission order for a model. For haiku the
+// CLI leaves claude-code-20250219 out of the baseline and appends it for
+// agentic queries, i.e. after prompt-caching-scope (2.1.328 capture).
+func claudeCodeBetaOrderFor(model string) []string {
+	if !claudeModelIsHaiku(model) {
+		return claudeCodeBetaEmissionOrder
+	}
+	out := make([]string, 0, len(claudeCodeBetaEmissionOrder))
+	for _, flag := range claudeCodeBetaEmissionOrder {
+		if flag == betaClaudeCode {
+			continue
+		}
+		out = append(out, flag)
+		if flag == betaPromptCachingScope {
+			out = append(out, betaClaudeCode)
+		}
+	}
+	return out
 }
 
 // claudeCodeClientReplayableBetas are the inbound flags replayed upstream:
@@ -114,6 +156,85 @@ var claudeCodeClientReplayableBetas = map[string]struct{}{
 	betaThinkingBindingControls:    {},
 	betaThinkingResumption:         {},
 	betaMessageThreads:             {},
+	betaResumption:                 {},
+	betaProgramUseCaseIDs:          {},
+	betaAdvisorTool:                {},
+	betaCacheKeepalive:             {},
+	betaFallbackCredit:             {},
+	betaServerSideFallback:         {},
+	betaServerSideFallbackCategory: {},
+	betaMCPServers:                 {},
+	betaFilesAPI:                   {},
+}
+
+// claudeCodeBodyExtraBetas pairs the body members the typed SDK params drop
+// with the beta that enables them. A member is replayed only when its beta is
+// in the composed header, so we never send a field without its beta (the API
+// rejects unknown inputs) nor a beta whose field we silently dropped.
+var claudeCodeBodyExtraBetas = map[string]string{
+	"resumption":          betaResumption,
+	"program_use_case_id": betaProgramUseCaseIDs,
+	"thread":              betaMessageThreads,
+}
+
+// claudeCacheControlExtraBetas pairs the cache_control members the SDK's
+// BetaCacheControlEphemeralParam lacks with their betas.
+var claudeCacheControlExtraBetas = map[string]string{
+	"evict_on_complete": betaPromptCachingEvict,
+	"scope":             betaPromptCachingScope,
+}
+
+// applyClaudeCodeBodyExtras restores the inbound body members the typed
+// params dropped, gated by their paired beta (see claudeCodeBodyExtraBetas).
+// Anthropic's gateway protocol asks proxies to pass unknown body fields
+// through unchanged; the typed SDK params would otherwise lose them.
+func applyClaudeCodeBodyExtras(req *anthropic.BetaMessageNewParams, extras map[string]json.RawMessage, betas []string) {
+	if len(extras) == 0 {
+		return
+	}
+	sent := make(map[string]struct{}, len(betas))
+	for _, b := range betas {
+		sent[b] = struct{}{}
+	}
+	fields := map[string]any{}
+	for name, beta := range claudeCodeBodyExtraBetas {
+		if raw, ok := extras[name]; ok {
+			if _, ok := sent[beta]; ok {
+				fields[name] = raw
+			}
+		}
+	}
+	if len(fields) > 0 {
+		merged := map[string]any{}
+		for k, v := range req.ExtraFields() {
+			merged[k] = v
+		}
+		for k, v := range fields {
+			merged[k] = v
+		}
+		req.SetExtraFields(merged)
+	}
+
+	// top-level cache_control: only members the SDK type lacks
+	raw, ok := extras["cache_control"]
+	if !ok || param.IsOmitted(req.CacheControl) {
+		return
+	}
+	var cc map[string]json.RawMessage
+	if json.Unmarshal(raw, &cc) != nil {
+		return
+	}
+	ccExtra := map[string]any{}
+	for name, beta := range claudeCacheControlExtraBetas {
+		if v, ok := cc[name]; ok {
+			if _, ok := sent[beta]; ok {
+				ccExtra[name] = v
+			}
+		}
+	}
+	if len(ccExtra) > 0 {
+		req.CacheControl.SetExtraFields(ccExtra)
+	}
 }
 
 // claudeCodeCountTokensBetas is the subset the CLI sends on count_tokens.
@@ -154,18 +275,15 @@ func normalizeClaudeModel(model string) string {
 	return m
 }
 
-// claudeModelIsHaiku: the CLI omits claude-code-20250219 for any haiku.
+// claudeModelIsHaiku: the CLI leaves claude-code-20250219 out of the baseline for haiku.
 func claudeModelIsHaiku(model string) bool {
 	return strings.Contains(normalizeClaudeModel(model), "haiku")
 }
 
-// claudeModelSupportsInterleavedThinking: all but claude-haiku-4-5 and claude-3.
+// claudeModelSupportsInterleavedThinking: every first-party model but claude-3
+// (claude-haiku-4-5 joined in 2.1.328).
 func claudeModelSupportsInterleavedThinking(model string) bool {
-	m := normalizeClaudeModel(model)
-	if strings.Contains(m, "claude-3-") {
-		return false
-	}
-	return m != "claude-haiku-4-5"
+	return !strings.Contains(normalizeClaudeModel(model), "claude-3-")
 }
 
 // claudeModelSupportsContextManagement: all but claude-3.
@@ -173,29 +291,28 @@ func claudeModelSupportsContextManagement(model string) bool {
 	return !strings.Contains(normalizeClaudeModel(model), "claude-3-")
 }
 
-// claudeLegacyMidConversationModels is the CLI's mid-conversation-system denylist.
-var claudeLegacyMidConversationModels = map[string]struct{}{
-	"claude-opus-4":     {},
-	"claude-opus-4-0":   {},
-	"claude-opus-4-1":   {},
-	"claude-opus-4-5":   {},
-	"claude-opus-4-6":   {},
+// claudeNative1MModels have a 1M window without the context-1m beta (the CLI's
+// model table, native_1m). The beta is not sent for them and the [1m] suffix
+// is dropped from the wire model.
+var claudeNative1MModels = map[string]struct{}{
+	"claude-haiku-5-5":  {},
+	"claude-sonnet-5":   {},
+	"claude-sonnet-5-5": {},
 	"claude-opus-4-7":   {},
-	"claude-sonnet-4":   {},
-	"claude-sonnet-4-0": {},
-	"claude-sonnet-4-5": {},
-	"claude-sonnet-4-6": {},
-	"claude-haiku-4-5":  {},
+	"claude-opus-4-8":   {},
+	"claude-opus-5":     {},
+	"claude-opus-5-5":   {},
+	"claude-fable-5":    {},
+	"claude-fable-5-1":  {},
+	"claude-fable-5-2":  {},
+	"claude-mythos-5":   {},
+	"claude-mythos-5-1": {},
+	"claude-mythos-5-2": {},
 }
 
-// claudeModelSupportsMidConversationSystem mirrors the CLI's check.
-func claudeModelSupportsMidConversationSystem(model string) bool {
-	m := normalizeClaudeModel(model)
-	if strings.Contains(m, "claude-3-") {
-		return false
-	}
-	_, legacy := claudeLegacyMidConversationModels[m]
-	return !legacy
+func claudeModelNative1M(model string) bool {
+	_, ok := claudeNative1MModels[normalizeClaudeModel(model)]
+	return ok
 }
 
 // composeClaudeCodeBetas returns the ordered anthropic-beta flags for one request.
@@ -209,8 +326,9 @@ func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 	}
 	if sig.OAuth {
 		add(betaOAuth)
+		add(betaToolProvenance)
 	}
-	if sig.Context1M {
+	if sig.Context1M && !claudeModelNative1M(sig.Model) {
 		add(betaContext1M)
 	}
 	if claudeModelSupportsInterleavedThinking(sig.Model) {
@@ -222,9 +340,6 @@ func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 		add(betaContextManagement)
 	}
 	add(betaPromptCachingScope)
-	if claudeModelSupportsMidConversationSystem(sig.Model) {
-		add(betaMidConversationSystem)
-	}
 
 	// body-derived
 	if sig.EffortSet {
@@ -258,13 +373,22 @@ func composeClaudeCodeBetas(sig claudeBetaSignals) []string {
 	// replayed from the inbound client
 	for _, flag := range sig.ClientBetas {
 		flag = strings.TrimSpace(flag)
+		if flag == betaContext1M && claudeModelNative1M(sig.Model) {
+			continue // the model's window is native; the CLI never sends the beta
+		}
 		if _, ok := claudeCodeClientReplayableBetas[flag]; ok {
 			add(flag)
 		}
 	}
 
 	out := make([]string, 0, len(want))
-	for _, flag := range claudeCodeBetaEmissionOrder {
+	// An agentic haiku query (the main thread) carries claude-code-20250219;
+	// the inbound Claude Code client says so by sending it itself.
+	if claudeModelIsHaiku(sig.Model) && slices.Contains(sig.ClientBetas, betaClaudeCode) {
+		add(betaClaudeCode)
+	}
+
+	for _, flag := range claudeCodeBetaOrderFor(sig.Model) {
 		if _, ok := want[flag]; ok {
 			out = append(out, flag)
 		}

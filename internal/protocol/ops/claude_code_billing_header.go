@@ -50,6 +50,14 @@ var billingHeaderPreservedFields = []struct {
 	{"cc_prev_req", regexp.MustCompile(`^req_[A-Za-z0-9_-]{1,36}$`)},
 	{"cc_prompt_id", regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)},
 	{"cc_turn_origin", regexp.MustCompile(`^[a-z][a-z_]{0,31}$`)},
+	// 2.1.328: turn position, and the position/message before a compaction.
+	// cc_gateway / cc_project / cc_dispatch_entrypoint are deliberately not
+	// preserved: they describe the inbound client's own routing, not ours.
+	{"cc_prompt_index", regexp.MustCompile(`^[0-9]{1,7}$`)},
+	{"cc_turn_index", regexp.MustCompile(`^[0-9]{1,7}$`)},
+	{"cc_prev_msg", regexp.MustCompile(`^msg_[A-Za-z0-9_]{1,64}$`)},
+	{"cc_prev_prompt_index", regexp.MustCompile(`^[0-9]{1,7}$`)},
+	{"cc_prev_turn_index", regexp.MustCompile(`^[0-9]{1,7}$`)},
 }
 
 // IsBillingHeaderText reports whether a system block is the billing header.

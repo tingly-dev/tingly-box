@@ -93,19 +93,41 @@ func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) 
 	return nil
 }
 
+// anthropicSubscriptionTypes maps the profile's organization_type to the plan
+// name Claude Code derives from it (cdo in the 2.1.328 bundle).
+var anthropicSubscriptionTypes = map[string]string{
+	"claude_max":        "max",
+	"claude_pro":        "pro",
+	"claude_enterprise": "enterprise",
+	"claude_team":       "team",
+}
+
+// AfterToken reads the account behind a fresh token from
+// GET /api/oauth/profile, the endpoint Claude Code itself uses after login.
+// Identity normally already came with the token response; this fills what
+// that lacks (plan, rate-limit tier) and covers a response without it.
+// Best effort: any failure leaves the login as it is.
 func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
-	type accountResponse struct {
-		UUID         string `json:"uuid"`
-		EmailAddress string `json:"email_address"`
+	type profileResponse struct {
+		Account struct {
+			UUID  string `json:"uuid"`
+			Email string `json:"email"`
+		} `json:"account"`
+		Organization struct {
+			UUID             string `json:"uuid"`
+			OrganizationType string `json:"organization_type"`
+			RateLimitTier    string `json:"rate_limit_tier"`
+		} `json:"organization"`
 	}
 
-	// Try to get account info from Anthropic account endpoint
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/v1/account", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/api/oauth/profile", nil)
 	if err != nil {
 		return nil, nil
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cache-Control", "no-cache")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -117,19 +139,30 @@ func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, http
 		return nil, nil
 	}
 
-	var account accountResponse
-	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
+	var profile profileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil, nil
 	}
 
 	metadata := make(map[string]any)
-	if account.EmailAddress != "" {
-		metadata["email"] = account.EmailAddress
+	if profile.Account.Email != "" {
+		metadata["email"] = profile.Account.Email
 	}
-	if account.UUID != "" {
-		metadata["account_id"] = account.UUID
+	if profile.Account.UUID != "" {
+		metadata["account_id"] = profile.Account.UUID
 	}
-
+	if profile.Organization.UUID != "" {
+		metadata["organization_id"] = profile.Organization.UUID
+	}
+	if plan, ok := anthropicSubscriptionTypes[profile.Organization.OrganizationType]; ok {
+		metadata["subscription_type"] = plan
+	}
+	if profile.Organization.RateLimitTier != "" {
+		metadata["rate_limit_tier"] = profile.Organization.RateLimitTier
+	}
+	if len(metadata) == 0 {
+		return nil, nil
+	}
 	return metadata, nil
 }
 

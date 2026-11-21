@@ -10,7 +10,7 @@ import (
 // the request; claude_code_version must be listed or an applied profile
 // looks like no profile at all.
 func TestFormatAppliedFlags_ClaudeCodeVersion(t *testing.T) {
-	if got := formatAppliedFlags(typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_280}); got != "claude_code_version=2.1.280" {
+	if got := formatAppliedFlags(typ.RuleFlags{ClaudeCodeVersion: typ.ClaudeCodeVersion2_1_328}); got != "claude_code_version=2.1.328" {
 		t.Errorf("formatAppliedFlags = %q", got)
 	}
 	if got := formatAppliedFlags(typ.RuleFlags{}); got != "" {

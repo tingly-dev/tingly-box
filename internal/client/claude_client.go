@@ -81,7 +81,10 @@ func NewClaudeClient(ctx context.Context, provider *typ.Provider, model string, 
 	// default client would). No ruleFlagTransport, so the Claude Code UA
 	// above stays decisive (.design/user-agent.md).
 	httpClient := &http.Client{
-		Transport: wrapWithLogging(createSessionBoundTransport(provider, sessionID), provider),
+		Transport: &claudeObservingTransport{
+			next:     wrapWithLogging(createSessionBoundTransport(provider, sessionID), provider),
+			provider: provider,
+		},
 	}
 	options = append(options, anthropicOption.WithHTTPClient(httpClient))
 
@@ -266,7 +269,9 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	}
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
 	if c.native {
-		options = append(options, c.nativeRequestOptions(ctx, betaClaudeBetaSignals(ctx, req, c.isOAuth()))...)
+		sig := betaClaudeBetaSignals(ctx, req, c.isOAuth())
+		options = append(options, c.nativeRequestOptions(ctx, sig)...)
+		applyClaudeCodeBodyExtras(req, typ.GetClaudeCodeClientHints(ctx).BodyExtras, composeClaudeCodeBetas(sig))
 		req.Betas = nil // the composed header is complete; avoid a second value
 	}
 	// Streaming responses bypass restoreBetaToolNamesInMessage, so undo the
