@@ -101,14 +101,26 @@ func approveScript(turn *enginetest.Turn) error {
 }
 
 // startDeploy starts a worker that asks to run `make deploy`, with chat "up"
-// on the project and chat "own" on the worker.
+// on the project and chat "own" on the worker. "own" can only be bound once the
+// worker exists, so the approval is held back from the relay until it is:
+// otherwise a fast turn asks before "own" listens and it never hears it.
 func startDeploy(t *testing.T, f *testFixture, svc *Service) *db.Thread {
 	t.Helper()
 	_, err := svc.BindChannel("telegram", "up", "", "", f.project.ID)
 	require.NoError(t, err)
+	bound := make(chan struct{})
+	needsUser := f.threads.OnWait
+	f.threads.OnWait = func(th db.Thread, request db.ThreadEvent) {
+		<-bound
+		needsUser(th, request)
+	}
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Ship", Task: "deploy", Repo: "none", Origin: "coordinator"})
-	require.NoError(t, err)
+	if err != nil {
+		close(bound)
+		require.NoError(t, err)
+	}
 	_, err = svc.BindChannel("telegram", "own", "", th.ID, "")
+	close(bound)
 	require.NoError(t, err)
 	return th
 }

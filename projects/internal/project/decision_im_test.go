@@ -224,12 +224,10 @@ func TestADecisionAnsweredOnTheWebIsRestatedInChats(t *testing.T) {
 func TestAnOpenDecisionDoesNotBlockALaterApprovalInTheSameChat(t *testing.T) {
 	f, svc, sink := promptFixture(t, approveScript)
 	sink.plain["up"] = true
-	card := askShip(t, svc, f.project.ID)
 	_, err := svc.BindChannel("telegram", "up", "", "", f.project.ID)
 	require.NoError(t, err)
-	// The chat was bound after the card, so ask again now that it listens.
-	card = askShip(t, svc, f.project.ID)
-	sink.next(t)
+	card := askShip(t, svc, f.project.ID)
+	assert.Contains(t, sink.next(t).text, "Ship it now?")
 	th := startDeploy(t, f, svc)
 	assert.Contains(t, sink.next(t).text, "Approve: Run `make deploy`")
 
