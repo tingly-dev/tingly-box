@@ -65,6 +65,24 @@ func (f *fakeSink) next(t *testing.T) sentText {
 	}
 }
 
+// nextContaining skips what else reaches the chat (replies whose number and
+// order vary) until a message containing want arrives.
+func (f *fakeSink) nextContaining(t *testing.T, want string) sentText {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case m := <-f.ch:
+			if strings.Contains(m.text, want) {
+				return m
+			}
+		case <-deadline:
+			t.Fatalf("no message containing %q was sent to the chat", want)
+			return sentText{}
+		}
+	}
+}
+
 func (f *fakeSink) none(t *testing.T) {
 	t.Helper()
 	select {
