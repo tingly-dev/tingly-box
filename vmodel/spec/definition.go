@@ -12,6 +12,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/vmodel"
 	"github.com/tingly-dev/tingly-box/vmodel/benchmark/scenario"
+	"github.com/tingly-dev/tingly-box/vmodel/script"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,6 +25,9 @@ const (
 	Decision  Kind = "decision"
 	Transform Kind = "transform"
 	Builtin   Kind = "builtin"
+	// Script serves a scene of conversations (vmodel/script) rather than one
+	// model's behaviour: point --fallback at it so every model id reaches it.
+	Script Kind = "script"
 )
 
 // Definition keeps identity, protocol selection and assertions identical across
@@ -40,6 +44,7 @@ type Definition struct {
 	Decision       *DecisionSpec                                 `json:"decision,omitempty"`
 	Transform      *TransformSpec                                `json:"transform,omitempty"`
 	Builtin        string                                        `json:"builtin,omitempty"`
+	Script         *script.Script                                `json:"script,omitempty"`
 	Tags           []string                                      `json:"tags,omitempty"`
 	Expect         *scenario.Expect                              `json:"expect,omitempty"`
 	Structural     *scenario.Expect                              `json:"structural,omitempty"`
@@ -201,6 +206,9 @@ func (d *Definition) Normalize() error {
 	if d.Builtin != "" {
 		blocks++
 	}
+	if d.Script != nil {
+		blocks++
+	}
 	if blocks != 1 {
 		return fmt.Errorf("exactly one behavior block is required")
 	}
@@ -261,6 +269,21 @@ func (d *Definition) Normalize() error {
 	case Builtin:
 		if d.Builtin == "" {
 			return fmt.Errorf("builtin is required")
+		}
+	case Script:
+		if d.Script == nil {
+			return fmt.Errorf("kind script requires script")
+		}
+		for _, p := range d.Protocols {
+			if p != scenario.FormatAnthropic {
+				return fmt.Errorf("kind script supports only the anthropic protocol")
+			}
+		}
+		if d.Expect != nil || d.Structural != nil {
+			return fmt.Errorf("kind script asserts in its steps, not in expect/structural")
+		}
+		if err := d.Script.Validate(); err != nil {
+			return fmt.Errorf("script: %w", err)
 		}
 	default:
 		return fmt.Errorf("unknown kind %q", d.Kind)
