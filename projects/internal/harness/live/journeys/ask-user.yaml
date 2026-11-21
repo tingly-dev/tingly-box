@@ -1,0 +1,54 @@
+name: ask-user
+description: >
+  A thread asks the user a question with AskUserQuestion: it shows as a
+  question card, the user picks an answer, and the thread gets it as the
+  tool's result.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: ask-user
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - {id: start, name: mcp__tingly-projects__start_thread, arguments: {title: Pick a license, task: "Ask the user which license to use and report it."}, spawns: thread, expect_result: {contains: "started thread"}}
+          - id: started
+            reply: {content: "Started Pick a license."}
+          - id: report
+            expect: {last_text_contains: "Apache-2.0"}
+            reply: {content: "You picked Apache-2.0."}
+      thread:
+        bind: {system_contains: "Your task: Pick a license"}
+        steps:
+          - id: ask
+            reply:
+              tool_calls:
+                - id: ask
+                  name: AskUserQuestion
+                  arguments:
+                    questions:
+                      - question: Which license should the project use?
+                        header: License
+                        multiSelect: false
+                        options:
+                          - {label: MIT, description: Short and permissive.}
+                          - {label: Apache-2.0, description: Permissive with a patent grant.}
+                  expect_result: {contains: "Apache-2.0"}
+          - id: done
+            reply: {content: "The user chose Apache-2.0."}
+steps:
+  - say: Help me pick a license.
+  - answer: {thread: Pick a license, text: Apache-2.0}
+  - served: coordinator.report
+expect:
+  thread:
+    Pick a license: {events: {ask: 1}}

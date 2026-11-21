@@ -107,3 +107,14 @@ final answer, and two coordinator check-ins (one per thread report).
 - Selectors need `last_text_contains` (last text block of the last user
   message) besides "anywhere in the message".
 - Journeys run in a work directory with clean ancestors.
+
+## Later findings (from the harness journeys, same CLI version)
+
+- A message the user writes to a running turn reaches the model in a
+  `role: "system"` entry after the last tool result: "The user sent a new
+  message while you were working: <text> … Address the message above as you
+  continue this turn." (journey `insert-into-thread`).
+- With a background subagent still running when the thread's turn ends,
+  Projects does not report that turn; the report comes after the turn the
+  subagent's `<task-notification>` starts (journey `subagent`). When the
+  subagent finished first (run `sub` above) there were two reports.

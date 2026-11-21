@@ -329,6 +329,9 @@ tingly-project harness run <journey>            （projects 模块，Projects �
   `repo/`、`capture/`（模型一端的原始字节 + `script-<id>.json`）和日志。目录带标记文件
   `.harness-run.json`；`harness runs` 列出、`harness clean <dir>|--all` 只删带标记的目录。
   用户自己的 `~/.tingly-project`、`~/.tingly-box`、`~/.claude` 既不读也不写。
+  `tingly-project serve` 和 `tingly-box vmodel` 各在自己的进程组里启动，停止时向整组发信号并等组里每个进程
+  （包括服务器拉起的 Claude Code）都退出，再删目录：否则退出中的 Claude Code 会在目录删掉之后再写回
+  transcript 和 MCP 日志（实测出现过，PR 7 修）。
 - **跑完在前端看**（已实现，PR 5）：`harness run … --open` 跑完后接着服务最后一条旅程的项目；
   `harness open [run-dir]`（默认最新一次）用同一个隔离环境重新起 `tingly-project serve`，并起一个
   占位模型（`kind: mock`，回一句"脚本已结束"），打印项目页地址，Ctrl-C 结束。界面要二进制里带
@@ -431,6 +434,26 @@ expect:                             # 结束时 Projects 侧的断言
 | 模型失败 | `error: {status: 529}` / 中途断流 | 回合失败显示、队列继续 |
 | IM | 与上面相同 | 需要假的 IM 平台（第三阶段） |
 
+### 5.3.1 已有的内置旅程（`tingly-project harness list`）
+
+| 旅程 | 覆盖的功能 |
+| --- | --- |
+| `one-thread` | 开线程、线程写文件、审批卡（允许）、提交、汇报、协调者转述 |
+| `parallel-threads` | 一个回复开两个线程、两个审批卡、`after` 固定汇报顺序 |
+| `propose-and-start` | `propose_threads` 建议卡、只启动其中一个 |
+| `decision` | `request_decision` 决策卡、用户选择回到协调者、`remember` |
+| `follow-up` | `message_thread` 转给已有线程、第二次提交、`rename_thread`、`remember`、`resolve_thread` |
+| `needs-input` | 线程 `NEEDS_INPUT` 进入等待、用户在线程里回答、继续 |
+| `thread-tools` | 没有 GitHub origin 时 `create_pr` 被拒、`send_file`、审批卡（拒绝）、无提交 |
+| `ask-user` | `AskUserQuestion` 问题卡、用户回答回到工具结果 |
+| `insert-into-thread` | 线程运行中用户发消息，落在下一个模型请求里 |
+| `notify-coordinator` | 线程 `notify_coordinator`、协调者收到 `kind="notify"` 并出建议卡 |
+| `subagent` | 线程 `Agent` 子 agent（后台）、完成通知带来的额外回合、只汇报一次 |
+| `known-gap-insert-at-turn-end` | 已知缺口：回合收尾时插入的消息拿不到工具（§9.1） |
+
+还没覆盖：stalled 检测（需要可调阈值）、暂停/归档、IM、合并（`/merge`）、压缩、协调者 `send_file`/共享文件读取、
+`update_instructions`、线程 `merge`/`view` 等 GitHub 工具（需要 GitHub 替身）。
+
 ### 5.4 与 `projects/internal/harness` 的关系：补充，不替代
 
 | 档位 | 脑子 | CLI | 速度 | 跑在哪 | 回答的问题 |
@@ -495,6 +518,7 @@ GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内
 | **4 tingly-project harness** ✅ | `projects/internal/harness/live`：旅程文件、runner（拉起 vmodel 与 Projects、隔离环境、用户动作、Projects 侧断言、结果表）；`tingly-project harness run|list`；第一条内置旅程 `one-thread`（§5.2） | runner 单元测试（用假的 vmodel/Projects 端点）；真实运行 `one-thread` 通过（6 个模型请求、5 项检查全过、线程 1 个提交）；故意改坏的副本报出两处失败、退出码 1 |
 | **5 隔离与观察** | 运行目录 + 标记、XDG/TMPDIR 隔离、`harness runs|open|clean`、`run --open` | 单元测试；真实 `run --open` 后用无头浏览器截图（项目页、工具调用展开） |
 | **6 协调者一侧的旅程** | 用户动作 `start_suggestions`、`choose`、`settle`、`reached`（引擎 `WaitReached` + 控制接口 `reached`）；断言 `memory_contains`；旅程 `decision`、`propose-and-start`、`parallel-threads`、`follow-up`、`known-gap-insert-at-turn-end` | 全部真实跑通；`known-gap-…` 稳定复现一个缺口（见下） |
+| **7 线程一侧的旅程** | 用户动作 `answer`（问题卡）；断言 `conversation_events`、线程 `events`；引擎选择器 `inserted_contains`（运行中插入的用户消息在 role=system 条目里）；旅程 `needs-input`、`thread-tools`、`ask-user`、`insert-into-thread`、`notify-coordinator`、`subagent` | 12 条内置旅程一次全过 |
 | 之后 | `hold`（流中扣住）→ 消息插入旅程；并行线程、`notify_coordinator` → `propose_threads`、决策卡、`create_pr`、审批拒绝、压缩；无序步骤组；`trace.md`；经网关；IM；OpenAI Responses | 每条先写旅程 |
 
 ### 9.1 旅程找到的问题
@@ -505,6 +529,11 @@ GitHub 工具）各做一条真实版本，名字对齐，便于对照"进程内
   （`coordinator_mcp.go`），于是"开个线程"之类的请求没有被执行。旅程按现状断言这个错误；修好后把
   `coordinator.act` 的 `expect_result` 改成线程已开。`follow-up` 起初也撞上了它（驱动在协调者汇报刚送出时就说话），
   所以加了 `settle`：等协调者和线程都空闲再说下一句。
+- **运行中插入的用户消息在 role=system 条目里**（`insert-into-thread`）：Claude Code 2.1.259 把它写成
+  "The user sent a new message while you were working: …"，放在最后一个 tool_result 之后的 system 条目里，
+  不在 user 消息里；引擎加了 `inserted_contains`。
+- **后台子 agent 时线程只汇报一次**（`subagent`）：回合结束时还有后台任务在跑，不算汇报；子 agent 完成通知带来
+  的下一个回合结束后才汇报。探针里子 agent 先结束时有两次汇报，所以旅程用 `after` 固定了先后。
 - `served` 只说明模型的回复已写出，不说明 Claude Code 的回合已结束；需要"回合结束后"语义的地方用 `settle`。
 
 ## 10. 原待定点的决定

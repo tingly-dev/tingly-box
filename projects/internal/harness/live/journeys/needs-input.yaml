@@ -1,0 +1,61 @@
+name: needs-input
+description: >
+  A thread stops with NEEDS_INPUT, waits with the question as its reason, the
+  user answers it in the thread, and the thread goes on, commits and reports.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: needs-input
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - {id: start, name: mcp__tingly-projects__start_thread, arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md and commit it."}, spawns: thread, expect_result: {contains: "started thread"}}
+          - id: started
+            reply: {content: "Started Add CHANGELOG."}
+          - id: asked
+            expect: {last_text_contains: "Which heading level"}
+            reply: {content: "Add CHANGELOG needs your answer: which heading level for versions."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is committed and waits for review."}
+      thread:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: ask
+            reply: {content: "Before I write it I need one decision.\nNEEDS_INPUT: Which heading level should versions use, ## or ###?"}
+          - id: write
+            expect: {last_user_contains: "##"}
+            reply:
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n\n## Unreleased\n"}, expect_result: {is_error: false}}
+          - id: commit
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'", description: Commit}, expect_result: {is_error: false}}
+          - id: done
+            reply: {content: "Added CHANGELOG.md with ## version headings and committed it."}
+steps:
+  - say: Add a CHANGELOG please.
+  - wait: {thread: Add CHANGELOG, status: waiting}
+  - served: coordinator.asked
+  - settle: true
+  - message: {thread: Add CHANGELOG, content: "Use ## for versions."}
+  - approve: {thread: Add CHANGELOG}
+  - wait: {thread: Add CHANGELOG, status: ready}
+  - served: coordinator.report
+expect:
+  thread:
+    Add CHANGELOG: {status: ready, commits_ahead: 1}
+  conversation_contains: ["needs your answer", "waits for review"]

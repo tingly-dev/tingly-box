@@ -64,6 +64,10 @@ type request struct {
 	System   string
 	Tools    []string
 	Messages []message // role "system" entries left out
+	// Inserted are the role "system" entries after the last assistant
+	// message: Claude Code 2.1.259 sends a message the user wrote mid-turn
+	// there ("The user sent a new message while you were working: ...").
+	Inserted []string
 	Header   http.Header
 	Session  string
 }
@@ -95,14 +99,21 @@ func parseRequest(body []byte, h http.Header) (*request, error) {
 		r.Tools = append(r.Tools, t.Name)
 	}
 	for i, m := range raw.Messages {
-		if m.Role == "system" {
-			continue // Claude Code 2.1.259 interleaves these (skills, budgets)
-		}
 		bs, err := blocksOf(m.Content)
 		if err != nil {
 			return nil, fmt.Errorf("messages[%d]: %w", i, err)
 		}
-		r.Messages = append(r.Messages, message{Role: m.Role, Blocks: bs})
+		switch m.Role {
+		case "system":
+			// Claude Code 2.1.259 interleaves these: skills, budgets and
+			// messages the user wrote mid-turn.
+			r.Inserted = append(r.Inserted, (&message{Blocks: bs}).text())
+		case "assistant":
+			r.Inserted = nil
+			fallthrough
+		default:
+			r.Messages = append(r.Messages, message{Role: m.Role, Blocks: bs})
+		}
 	}
 	r.Session = h.Get("X-Claude-Code-Session-Id")
 	if r.Session == "" && raw.Metadata.UserID != "" {
@@ -250,6 +261,9 @@ func (m *Match) eval(r *request, resolve func(string) string) (bool, string) {
 	}
 	if m.LastTextContains != "" && !strings.Contains(r.last("user").lastText(), m.LastTextContains) {
 		return false, fmt.Sprintf("last text block lacks %q", m.LastTextContains)
+	}
+	if m.InsertedContains != "" && !strings.Contains(strings.Join(r.Inserted, "\n"), m.InsertedContains) {
+		return false, fmt.Sprintf("no message inserted since the last reply contains %q", m.InsertedContains)
 	}
 	for _, t := range m.ToolsInclude {
 		if !r.hasTool(t) {
