@@ -105,6 +105,8 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 
 （官方的 Landing 对应"PR 已批准排队合并"，本地合并是同步动作，MVP 不需要该状态。）
 
+何时、由谁 resolve（PR 合并后自动、可解决提示、协调者的限制）：见 [thread-lifecycle.md](thread-lifecycle.md)（提案）。
+
 ### 4.4 线程运行
 - 线程用 `agentboot/engine` 跑，和原来 Tingly Box 的 Desk 是同一个会话引擎（Desk 现已并入 Projects，成为工作目录）（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
 - **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，默认空闲 65 分钟回收，可用 `--thread-idle-timeout` 或 `projects.Options.Sessions` 配置，之后的轮次带 `--resume` 重开；协调者的常驻进程另有一个池和更长的空闲时间，见 `coordinator-session.md` 的“进程生命周期”）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。**改设置不重启进程**：模型和权限模式用 `set_model` / `set_permission_mode` 控制请求即时切换；线程设置文件里的权限规则（`permissions`、`autoMode`）在下一轮开始前用 `apply_flag_settings` 控制请求推送给存活的进程（`agentboot/engine` 的 `applyLive`），启动签名不再包含它们。进程拒绝推送（太旧的 CLI）时不重启，规则等进程下次自然启动（空闲回收后）再生效，下一轮会再试一次。只有环境变量、网关、profile 的其余设置、MCP 配置这类启动时才读的内容变了才重启。详见 `message-channel.md` 的“设置怎么应用”。
