@@ -20,10 +20,7 @@ func (s *Store) RotateThreadSession(threadID, expectedID, newID string, event *T
 			"last_turn_ms": 0, "last_turn_at": nil, "reported_model": "",
 		}
 		if thread.Status == ThreadWaiting || thread.Status == ThreadFailed {
-			updates["status"], updates["wait_reason"] = ThreadIdle, ""
-			if thread.CommitsAhead > 0 && thread.MergedAt == nil {
-				updates["status"] = ThreadReady
-			}
+			updates["status"], updates["wait_reason"] = RestingStatus(&thread), ""
 		}
 		res := tx.Model(&Thread{}).Where("id = ? AND COALESCE(session_id, '') = ?", threadID, expectedID).UpdateColumns(updates)
 		if res.Error != nil {
