@@ -1,0 +1,112 @@
+name: follow-up
+description: >
+  After a thread is ready, the user asks for more: the coordinator sends it to
+  the same thread (message_thread), which commits again and reports; the
+  coordinator renames the thread and saves a memory note, and resolves it once
+  the user says it is merged.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: follow-up
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__message_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - id: start
+                  name: mcp__tingly-projects__start_thread
+                  arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md and commit it."}
+                  spawns: thread
+                  expect_result: {contains: "started thread"}
+          - id: started
+            capture:
+              tid: {from: "tool_result:plan.start", regex: "started thread ([0-9a-f]+)"}
+            reply: {content: "Started Add CHANGELOG."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is ready for review."}
+          - id: relay
+            expect: {last_text_contains: "0.1 release"}
+            reply:
+              tool_calls:
+                - id: send
+                  name: mcp__tingly-projects__message_thread
+                  arguments: {thread_id: "{{tid}}", message: "Also add a line about the 0.1 release to CHANGELOG.md and commit it."}
+                  expect_result: {contains: "sent", is_error: false}
+          - id: relayed
+            reply: {content: "Passed that on to Add CHANGELOG."}
+          - id: report-again
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply:
+              tool_calls:
+                - id: rename
+                  name: mcp__tingly-projects__rename_thread
+                  arguments: {thread_id: "{{tid}}", title: Add CHANGELOG for 0.1}
+                  expect_result: {contains: "renamed to Add CHANGELOG for 0.1"}
+                - id: save
+                  name: mcp__tingly-projects__remember
+                  arguments: {topic: release-notes, content: "Release notes go in CHANGELOG.md, newest first.", summary: "Where release notes go"}
+                  expect_result: {contains: "saved to memory"}
+          - id: renamed
+            reply: {content: "Both commits are in; I renamed the thread to Add CHANGELOG for 0.1."}
+          - id: close
+            expect: {last_text_contains: "merged"}
+            reply:
+              tool_calls:
+                - id: resolve
+                  name: mcp__tingly-projects__resolve_thread
+                  arguments: {thread_id: "{{tid}}"}
+                  expect_result: {contains: "resolved", is_error: false}
+          - id: closed
+            reply: {content: "Resolved Add CHANGELOG for 0.1."}
+      thread:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: write
+            reply:
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n"}, expect_result: {is_error: false}}
+          - id: commit
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'", description: Commit}, expect_result: {is_error: false}}
+          - id: done
+            reply: {content: "Added CHANGELOG.md and committed it."}
+          - id: follow-up
+            # The coordinator's message reaches the thread marked as relayed.
+            expect: {last_user_contains: "0.1 release"}
+            reply:
+              tool_calls:
+                - id: append
+                  name: Bash
+                  arguments: {command: "printf '\\n## 0.1\\n- First release.\\n' >> CHANGELOG.md && git commit -qam 'Note the 0.1 release'", description: Commit the 0.1 note}
+                  expect_result: {is_error: false}
+          - id: done-again
+            reply: {content: "Added the 0.1 release to CHANGELOG.md and committed it."}
+steps:
+  - say: Add a CHANGELOG please.
+  - approve: {thread: Add CHANGELOG}
+  - served: coordinator.report
+  - settle: true
+  - say: Also note the 0.1 release in it.
+  - approve: {thread: Add CHANGELOG}
+  - served: coordinator.renamed
+  - settle: true
+  - say: I merged it, you can close the thread.
+  - served: coordinator.closed
+expect:
+  threads: 1
+  thread:
+    Add CHANGELOG for 0.1: {status: resolved, commits_ahead: 2}
+  memory_contains: ["Release notes go in CHANGELOG.md"]
+  conversation_contains: ["Passed that on", "Resolved Add CHANGELOG for 0.1."]

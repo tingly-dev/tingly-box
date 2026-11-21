@@ -64,6 +64,10 @@ func (e *Engine) serveMessages(w http.ResponseWriter, hr *http.Request) {
 	}
 	if d.ts != nil {
 		entry.Track = d.ts.name
+		if d.step >= 0 && d.err == nil {
+			e.reached[d.ts.name+"."+d.ts.t.Steps[d.step].ID] = true
+			e.notify()
+		}
 	}
 	entry.Via = d.via
 	e.mu.Unlock()

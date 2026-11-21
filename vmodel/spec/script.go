@@ -73,6 +73,7 @@ func (r *Runtime) serveScriptCountTokens(w http.ResponseWriter, req *http.Reques
 //	GET  /_vmodel/scripts/{id}/report             the report so far
 //	GET  /_vmodel/scripts/{id}/trace              every request so far
 //	GET  /_vmodel/scripts/{id}/served?step=t.s    wait until a step was answered (timeout=30s; 408)
+//	GET  /_vmodel/scripts/{id}/reached?step=t.s   wait until a request claimed a step (its reply may be held)
 //	POST /_vmodel/scripts/{id}/signals/{name}     raise a signal
 //	POST /_vmodel/scripts/{id}/finish             end the run, return the final report
 func (r *Runtime) serveScriptControl(w http.ResponseWriter, req *http.Request) {
@@ -101,7 +102,7 @@ func (r *Runtime) serveScriptControl(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 200, e.Report())
 	case req.Method == http.MethodGet && action == "trace":
 		writeJSON(w, 200, map[string]any{"entries": e.Trace()})
-	case req.Method == http.MethodGet && action == "served":
+	case req.Method == http.MethodGet && (action == "served" || action == "reached"):
 		timeout := 30 * time.Second
 		if v := req.URL.Query().Get("timeout"); v != "" {
 			d, err := time.ParseDuration(v)
@@ -113,7 +114,11 @@ func (r *Runtime) serveScriptControl(w http.ResponseWriter, req *http.Request) {
 		}
 		ctx, cancel := context.WithTimeout(req.Context(), timeout)
 		defer cancel()
-		if err := e.WaitServed(ctx, req.URL.Query().Get("step")); err != nil {
+		wait := e.WaitServed
+		if action == "reached" {
+			wait = e.WaitReached
+		}
+		if err := wait(ctx, req.URL.Query().Get("step")); err != nil {
 			status := 408
 			if ctx.Err() == nil {
 				status = 400
