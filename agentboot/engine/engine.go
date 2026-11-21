@@ -98,6 +98,11 @@ type Config struct {
 	// its status is recorded and the session is free for the next Start.
 	// Optional.
 	OnTurnEnd func(id string, end TurnEnd)
+	// OnUnsolicitedTurn is called when Claude Code starts a turn by itself,
+	// before the turn claims the session and before any of its output is
+	// recorded; OnTurnEnd reports its end with Unsolicited set. It runs on
+	// the process's reader, so it must not wait on the session. Optional.
+	OnUnsolicitedTurn func(id string)
 }
 
 // TurnEnd is how a turn ended.
@@ -122,6 +127,7 @@ type Engine struct {
 	permissionMode func(id string) string
 	hostPrompter   func(id string) agentboot.Prompter
 	onTurnEnd      func(id string, end TurnEnd)
+	onUnsolicited  func(id string)
 
 	mu   sync.Mutex
 	runs map[string]*run // session id -> live turn, while one is in flight
@@ -182,6 +188,7 @@ func New(cfg Config) *Engine {
 		permissionMode: cfg.PermissionMode,
 		hostPrompter:   cfg.Prompter,
 		onTurnEnd:      cfg.OnTurnEnd,
+		onUnsolicited:  cfg.OnUnsolicitedTurn,
 		runs:           map[string]*run{},
 		settling:       map[string]int{},
 		launch:         map[string]launchState{},

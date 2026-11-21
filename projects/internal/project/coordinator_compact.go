@@ -60,7 +60,13 @@ func (s *coordinatorSessions) compact(ctx context.Context, p *db.Project, main *
 	s.mu.Lock()
 	s.runs[main.SessionID] = run
 	s.mu.Unlock()
-	defer func() { s.mu.Lock(); delete(s.runs, main.SessionID); s.mu.Unlock() }()
+	defer func() {
+		s.mu.Lock()
+		if s.runs[main.SessionID] == run {
+			delete(s.runs, main.SessionID)
+		}
+		s.mu.Unlock()
+	}()
 
 	res, err := s.engine.Compact(ctx, main.SessionID, main.Cwd, instructions, func(context.Context) agentboot.ExecutionOptions { return opts })
 	var refused *agentboot.CompactFailedError

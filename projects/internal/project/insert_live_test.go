@@ -277,6 +277,125 @@ func TestInsertedMessageAnsweredOutsideTheTurnIsKept(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond)
 }
 
+// The turn Claude Code starts by itself to answer a message inserted as the
+// last turn ended is a coordinator turn like any other: its Projects tools
+// work (the user asked for something, so no_update is refused), the page sees
+// it busy, and its tokens count.
+func TestInsertedMessageAnsweredOutsideTheTurnIsActedOn(t *testing.T) {
+	fc := newFakeClaude(t)
+	svc, store := liveService(t, fc)
+	p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
+	require.NoError(t, err)
+	_, err = svc.Coordinator.Post(p.ID, "Hi", nil, Source{})
+	require.NoError(t, err)
+	fc.next(t)
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+	require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
+	_, err = svc.SendWith(context.Background(), p.MainThreadID, "please add a CHANGELOG", nil, Source{}, SendInsert)
+	require.NoError(t, err)
+	fc.next(t)
+
+	// The turn ends before the model read the message.
+	fc.endTurn(t, "Hello! What should we work on?")
+	require.Eventually(t, func() bool {
+		events, _ := store.ListThreadEvents(p.MainThreadID)
+		return countKind(events, db.EvAssistant) == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	tools := svc.Coordinator.sessions.tools.coordinatorTurn(main.ID)
+	require.NotNil(t, tools)
+	call := func(tool string) *mcp.CallToolResult {
+		res, err := tools.run(store, tool, false, func(*db.Project) (*mcp.CallToolResult, error) { return textResult("done", false), nil })
+		require.NoError(t, err)
+		return res
+	}
+
+	// Claude Code answers it in a turn of its own.
+	fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+	require.Eventually(t, func() bool { return !call("start_thread").IsError }, 5*time.Second, 10*time.Millisecond, "the follow-up turn may use the Projects tools")
+	assert.True(t, call(toolNoUpdate).IsError, "it answers the user, so no_update is refused")
+	assert.True(t, svc.Coordinator.Busy(p.ID), "the coordinator works while it answers")
+
+	fc.write(t, map[string]any{"type": "assistant", "message": map[string]any{"id": "m2", "role": "assistant", "model": "m", "content": []any{map[string]any{"type": "text", "text": "Started a thread for the CHANGELOG."}}}})
+	fc.write(t, map[string]any{"type": "result", "subtype": "success", "is_error": false, "result": "Started a thread for the CHANGELOG.", "session_id": "s1",
+		"usage": map[string]any{"input_tokens": 1000, "output_tokens": 20}})
+	require.Eventually(t, func() bool {
+		events, _ := store.ListThreadEvents(p.MainThreadID)
+		return countKind(events, db.EvAssistant) == 2 && !svc.Coordinator.Busy(p.ID)
+	}, 5*time.Second, 10*time.Millisecond)
+	res := call("start_thread")
+	require.True(t, res.IsError, "the tools close with the follow-up turn")
+	assert.Equal(t, "No coordinator turn is active.", res.Content[0].(*mcp.TextContent).Text)
+	main, err = store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, main.InputTokens, int64(1000), "the follow-up turn's tokens are counted")
+}
+
+// A message queued behind the turn waits for Claude Code's own follow-up
+// turn instead of failing on a busy session, even when that turn starts the
+// instant the last one ends.
+func TestQueuedMessageWaitsForTheFollowUpTurn(t *testing.T) {
+	t.Run("taken up first", func(t *testing.T) { queuedBehindFollowUp(t, false) })
+	// The queued turn reaches the process after it began its own turn but
+	// before Projects took that turn up: the process refuses it, and it goes
+	// again after the follow-up.
+	t.Run("refused by the process", func(t *testing.T) { queuedBehindFollowUp(t, true) })
+}
+
+func queuedBehindFollowUp(t *testing.T, hold bool) {
+	for i := 0; i < 10; i++ {
+		fc := newFakeClaude(t)
+		svc, store := liveService(t, fc)
+		p, err := svc.Create(context.Background(), NewProjectSpec{Name: "Project"})
+		require.NoError(t, err)
+		if hold {
+			svc.Coordinator.sessions.beforeFollowUp = func() {
+				// Until the turn before has settled and the queued one
+				// has had time to be refused.
+				for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+					if events, _ := store.ListThreadEvents(p.MainThreadID); countKind(events, db.EvAssistant) == 1 {
+						break
+					}
+				}
+				time.Sleep(300 * time.Millisecond)
+			}
+		}
+		_, err = svc.Coordinator.Post(p.ID, "Hi", nil, Source{})
+		require.NoError(t, err)
+		fc.next(t)
+		fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+		require.Eventually(t, func() bool { return svc.Coordinator.Insertable(p.ID) }, 5*time.Second, 10*time.Millisecond)
+		_, err = svc.SendWith(context.Background(), p.MainThreadID, "please add a CHANGELOG", nil, Source{}, SendInsert)
+		require.NoError(t, err)
+		fc.next(t)
+		_, err = svc.SendWith(context.Background(), p.MainThreadID, "then summarize", nil, Source{}, SendNextTurn)
+		require.NoError(t, err)
+
+		// The turn ends and Claude Code starts its own at once.
+		fc.endTurn(t, "Hello!")
+		fc.write(t, map[string]any{"type": "system", "subtype": "init", "session_id": "s1", "model": "m"})
+		select {
+		case s := <-fc.got:
+			t.Fatalf("the queued message was written while Claude Code answered the inserted one: %q", s)
+		case <-time.After(100 * time.Millisecond):
+		}
+		fc.write(t, map[string]any{"type": "assistant", "message": map[string]any{"id": "m2", "role": "assistant", "model": "m", "content": []any{map[string]any{"type": "text", "text": "Started a thread."}}}})
+		fc.write(t, map[string]any{"type": "result", "subtype": "success", "is_error": false, "result": "Started a thread.", "session_id": "s1"})
+
+		assert.Contains(t, fc.next(t), "then summarize", "the queued message runs after the follow-up")
+		fc.endTurn(t, "Summary.")
+		require.Eventually(t, func() bool {
+			events, _ := store.ListThreadEvents(p.MainThreadID)
+			return countKind(events, db.EvAssistant) == 3 && !svc.Coordinator.Busy(p.ID)
+		}, 5*time.Second, 10*time.Millisecond)
+		events, err := store.ListThreadEvents(p.MainThreadID)
+		require.NoError(t, err)
+		require.Zero(t, countKind(events, db.EvError), "no input needs recovery")
+	}
+}
+
 // What the coordinator relays to a thread joins the running turn too, with
 // the note that says it is the coordinator's, and the tool says how it went.
 func TestRelayedMessageInsertsIntoTheRunningTurn(t *testing.T) {

@@ -118,12 +118,14 @@ func (c *Coordinator) Post(projectID, text string, atts []Attachment, src Source
 	return m, nil
 }
 
-// Busy reports whether a coordinator turn is running or queued.
+// Busy reports whether a coordinator turn is running or queued, or Claude
+// Code is answering an inserted message in a turn of its own.
 func (c *Coordinator) Busy(projectID string) bool {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	q, ok := c.queues[projectID]
-	return ok && (q.running || q.woken)
+	queued := ok && (q.running || q.woken)
+	c.mu.Unlock()
+	return queued || (c.live() && c.sessions.followingUp(projectID))
 }
 
 // live reports whether the coordinator has sessions to run turns in (one

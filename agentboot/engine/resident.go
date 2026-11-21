@@ -88,6 +88,11 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 // the session's run, so the page shows it working and its approvals, Stop
 // and the "busy" check all behave as for any turn.
 func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentboot.Prompter) {
+	// The host hears of it before the turn claims the session, so a turn
+	// of its own that then finds the session busy can tell why.
+	if e.onUnsolicited != nil {
+		e.onUnsolicited(sessionID)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	wp := newWebPrompter(sessionID, e.store)
 
