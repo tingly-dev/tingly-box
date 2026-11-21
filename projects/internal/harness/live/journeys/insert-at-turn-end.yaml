@@ -1,0 +1,58 @@
+name: insert-at-turn-end
+description: >
+  The user writes while the coordinator's turn is about to end (its last
+  reply is being produced): the message joins that turn, Claude Code answers
+  it in a turn of its own after the one Projects was running, and Projects
+  takes that turn up as a coordinator turn, so its tools work and the
+  requested thread is started. The in-process counterpart is
+  TestInsertedMessageAnsweredOutsideTheTurnIsActedOn.
+project:
+  name: Demo
+  goal: Ship the demo app
+model:
+  id: insert-at-turn-end
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: greet
+            expect: {last_text_contains: "Hi"}
+            # Held until the driver has sent the second message, so it is
+            # inserted while this turn's last request is in flight.
+            after: ["signal:sent"]
+            reply: {content: "Hello! What should we work on?"}
+          - id: act
+            expect: {last_user_contains: "add a CHANGELOG"}
+            reply:
+              tool_calls:
+                - id: start
+                  name: mcp__tingly-projects__start_thread
+                  arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md."}
+                  spawns: thread
+                  expect_result: {contains: "started thread", is_error: false}
+          - id: answered
+            reply: {content: "Started a thread: Add CHANGELOG."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is done."}
+      thread:
+        bind:
+          system_contains: "Your task: Add CHANGELOG"
+          tools_include: ["__notify_coordinator"]
+        steps:
+          - id: done
+            reply: {content: "Created CHANGELOG.md."}
+steps:
+  - say: Hi
+  - reached: coordinator.greet
+  - say: Please add a CHANGELOG.
+  - signal: sent
+  - served: coordinator.answered
+  - wait: {thread: Add CHANGELOG, status: idle}
+  - served: coordinator.report
+expect:
+  threads: 1
+  conversation_contains: ["Started a thread: Add CHANGELOG."]
