@@ -1,0 +1,62 @@
+name: propose-and-start
+description: >
+  The user asks for a plan first: the coordinator proposes two threads on a
+  card instead of starting them, the user starts only the first, which runs
+  and reports.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: propose-and-start
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__propose_threads"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            expect: {last_text_contains: "plan first"}
+            reply:
+              tool_calls:
+                - id: propose
+                  name: mcp__tingly-projects__propose_threads
+                  arguments:
+                    threads:
+                      - {title: Add CHANGELOG, task: "Create CHANGELOG.md with an Unreleased section and commit it."}
+                      - {title: Add greeting helper, task: "Add Greet(name) in greet.go and commit it."}
+                  expect_result: {contains: "proposed 2 threads", is_error: false}
+          - id: proposed
+            reply: {content: "Here is the plan: two threads. Start the ones you want."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is committed and waits for review."}
+      thread:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: write
+            reply:
+              content: I'll create CHANGELOG.md.
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n"}, expect_result: {is_error: false}}
+          - id: commit
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'", description: Commit}, expect_result: {is_error: false}}
+          - id: done
+            reply: {content: "Added CHANGELOG.md and committed it."}
+steps:
+  - say: Add a CHANGELOG and a greeting helper, but show me the plan first.
+  - start_suggestions: {indexes: [0]}
+  - approve: {thread: Add CHANGELOG}
+  - wait: {thread: Add CHANGELOG, status: ready}
+  - served: coordinator.report
+expect:
+  threads: 1
+  thread:
+    Add CHANGELOG: {status: ready, commits_ahead: 1}
+  conversation_contains: ["Here is the plan", "waits for review"]

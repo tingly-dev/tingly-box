@@ -92,7 +92,7 @@ func (f *fakeProjects) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		write(map[string]any{})
 	case "GET /api/v1/threads/main/events":
 		write(map[string]any{"events": []any{map[string]any{"kind": "assistant", "content": "It waits for review."}}})
-	case "GET /_vmodel/scripts/m/served":
+	case "GET /_vmodel/scripts/m/served", "GET /_vmodel/scripts/m/reached":
 		if r.URL.Query().Get("step") != "coordinator.report" {
 			w.WriteHeader(408)
 		}

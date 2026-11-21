@@ -57,8 +57,29 @@ type Action struct {
 	Wait *WaitAction `yaml:"wait"`
 	// Served waits until the model side answered a step ("track.step").
 	Served string `yaml:"served"`
+	// Reached waits until the step's request arrived; with after: on that
+	// step its reply is still held, so the next actions happen while the
+	// client waits for it.
+	Reached string `yaml:"reached"`
 	// Signal releases model steps held with after: [signal:<name>].
 	Signal string `yaml:"signal"`
+	// StartSuggestions starts threads from the coordinator's newest
+	// suggestions card (all of them when Indexes is empty).
+	StartSuggestions *SuggestionsAction `yaml:"start_suggestions"`
+	// Choose picks an option of the coordinator's newest open decision card.
+	Choose *ChooseAction `yaml:"choose"`
+	// Settle waits until the coordinator and every thread are idle: a step
+	// served is not yet a turn ended, and a message sent in between joins
+	// the ending turn.
+	Settle bool `yaml:"settle"`
+}
+
+type SuggestionsAction struct {
+	Indexes []int `yaml:"indexes"`
+}
+
+type ChooseAction struct {
+	Option int `yaml:"option"`
 }
 
 type MessageAction struct {
@@ -84,6 +105,8 @@ type Expect struct {
 	Threads              *int                    `yaml:"threads"`
 	Thread               map[string]ThreadExpect `yaml:"thread"`
 	ConversationContains []string                `yaml:"conversation_contains"`
+	// MemoryContains are texts some project memory file must contain.
+	MemoryContains []string `yaml:"memory_contains"`
 }
 
 type ThreadExpect struct {
@@ -149,13 +172,13 @@ func (j *Journey) ModelID() string { id, _ := j.Model["id"].(string); return id 
 
 func (a Action) validate() error {
 	n := 0
-	for _, set := range []bool{a.Say != "", a.Message != nil, a.Approve != nil, a.Deny != nil, a.Wait != nil, a.Served != "", a.Signal != ""} {
+	for _, set := range []bool{a.Say != "", a.Message != nil, a.Approve != nil, a.Deny != nil, a.Wait != nil, a.Served != "", a.Reached != "", a.Signal != "", a.StartSuggestions != nil, a.Choose != nil, a.Settle} {
 		if set {
 			n++
 		}
 	}
 	if n != 1 {
-		return fmt.Errorf("set exactly one of say, message, approve, deny, wait, served, signal")
+		return fmt.Errorf("set exactly one of say, message, approve, deny, wait, served, reached, signal, start_suggestions, choose, settle")
 	}
 	switch {
 	case a.Message != nil && (a.Message.Thread == "" || a.Message.Content == ""):
@@ -166,8 +189,8 @@ func (a Action) validate() error {
 		return fmt.Errorf("approve/deny needs thread")
 	case a.Wait != nil && (a.Wait.Thread == "" || a.Wait.Status == ""):
 		return fmt.Errorf("wait needs thread and status")
-	case a.Served != "" && !strings.Contains(a.Served, "."):
-		return fmt.Errorf("served is track.step")
+	case a.Served != "" && !strings.Contains(a.Served, "."), a.Reached != "" && !strings.Contains(a.Reached, "."):
+		return fmt.Errorf("served and reached are track.step")
 	}
 	return nil
 }
@@ -187,6 +210,14 @@ func (a Action) String() string {
 		return "wait " + a.Wait.Thread + " " + a.Wait.Status
 	case a.Served != "":
 		return "served " + a.Served
+	case a.Reached != "":
+		return "reached " + a.Reached
+	case a.StartSuggestions != nil:
+		return fmt.Sprintf("start suggestions %v", a.StartSuggestions.Indexes)
+	case a.Choose != nil:
+		return fmt.Sprintf("choose option %d", a.Choose.Option)
+	case a.Settle:
+		return "settle"
 	}
 	return "signal " + a.Signal
 }

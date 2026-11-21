@@ -387,6 +387,14 @@ tracks:
 		t.Fatal("a answered before b and the signal")
 	default:
 	}
+	reached, cancelReached := context.WithTimeout(context.Background(), time.Second)
+	defer cancelReached()
+	require.NoError(t, e.WaitReached(reached, "a.0"), "a's request is in, held")
+	assert.Error(t, func() error {
+		c, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		return e.WaitServed(c, "a.0")
+	}())
 	assert.Equal(t, "b", newConv(t, url, "agent b", "Bash").say("hi").text)
 	e.Signal("go")
 	assert.Equal(t, "a", (<-done).text)
