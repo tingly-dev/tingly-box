@@ -1,0 +1,63 @@
+name: subagent
+description: >
+  A thread starts a subagent with the Agent tool. In Claude Code 2.1.259 it
+  runs in the background: the thread's turn goes on and ends while the
+  subagent still works (its answer is held until then), the subagent makes its
+  own requests in the thread's session, and its completion notice gives the
+  thread one more turn. Projects reports to the coordinator once, after that
+  turn: a turn that ends with a background task running is not a report.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+    main.go: "package main\n\nfunc main() {}\n"
+model:
+  id: subagent
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - {id: start, name: mcp__tingly-projects__start_thread, arguments: {title: Count the files, task: "Count the files in the repository with a helper agent."}, spawns: thread, expect_result: {contains: "started thread"}}
+          - id: started
+            reply: {content: "Started Count the files."}
+          - id: counted
+            expect: {last_text_contains: "2 files"}
+            reply: {content: "The repository has 2 files."}
+      thread:
+        bind: {system_contains: "Your task: Count the files", class: [main]}
+        steps:
+          - id: delegate
+            reply:
+              tool_calls:
+                - id: agent
+                  name: Agent
+                  arguments: {description: Count files, prompt: "Count the tracked files in the repository and answer with the number.", subagent_type: general-purpose}
+                  spawns: helper
+          - id: waiting
+            reply: {content: "A helper is counting the files; I will report when it is done."}
+          - id: notified
+            expect: {last_user_contains: "task-notification"}
+            reply: {content: "The helper found 2 files."}
+      helper:
+        bind: {class: [subagent]}
+        steps:
+          - id: list
+            reply:
+              tool_calls:
+                - {id: ls, name: Bash, arguments: {command: "git ls-files | wc -l", description: Count tracked files}, expect_result: {contains: "2"}}
+          - id: answer
+            after: [thread.waiting]
+            reply: {content: "There are 2 files."}
+steps:
+  - say: How many files does the repository have?
+  - served: coordinator.counted
+expect:
+  threads: 1
+  conversation_contains: ["has 2 files"]

@@ -12,9 +12,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -157,9 +157,11 @@ func act(ctx context.Context, p *projects, m *model, a Action, timeout time.Dura
 		_, err = p.do(ctx, http.MethodPost, "/api/v1/threads/"+t.ID+"/messages", map[string]string{"content": a.Message.Content, "mode": a.Message.Mode}, nil)
 		return "", err
 	case a.Approve != nil:
-		return p.answer(ctx, a.Approve.Thread, true, a.Approve.Scope)
+		return p.respond(ctx, a.Approve.Thread, "approval", map[string]any{"allow": true, "scope": scopeOr(a.Approve.Scope)})
 	case a.Deny != nil:
-		return p.answer(ctx, a.Deny.Thread, false, a.Deny.Scope)
+		return p.respond(ctx, a.Deny.Thread, "approval", map[string]any{"allow": false, "scope": scopeOr(a.Deny.Scope)})
+	case a.Answer != nil:
+		return p.respond(ctx, a.Answer.Thread, "ask", map[string]any{"allow": true, "answer": a.Answer.Text})
 	case a.Wait != nil:
 		return "", p.waitStatus(ctx, a.Wait.Thread, a.Wait.Status)
 	case a.Served != "":
@@ -205,6 +207,20 @@ func expectations(ctx context.Context, p *projects, e Expect) []string {
 		if want.BranchPrefix != "" && !strings.HasPrefix(got.Branch, want.BranchPrefix) {
 			fails = append(fails, fmt.Sprintf("%s is on branch %q, want prefix %q", quote(title), got.Branch, want.BranchPrefix))
 		}
+		if len(want.Events) > 0 {
+			evs, err := p.events(ctx, got.ID)
+			if err != nil {
+				return append(fails, err.Error())
+			}
+			fails = append(fails, countEvents(quote(title), evs, want.Events)...)
+		}
+	}
+	if len(e.ConversationEvents) > 0 {
+		evs, err := p.events(ctx, p.project.MainThreadID)
+		if err != nil {
+			return append(fails, err.Error())
+		}
+		fails = append(fails, countEvents("the conversation", evs, e.ConversationEvents)...)
 	}
 	if len(e.MemoryContains) > 0 {
 		all, err := p.memory(ctx)
@@ -250,6 +266,29 @@ func (p *projects) waitHealthy(ctx context.Context) error {
 // connection is the Projects model setting for a model server: a fake key.
 func connection(modelURL string) map[string]string {
 	return map[string]string{"api_style": "anthropic", "base_url": modelURL, "api_key": "sk-ant-harness-fake", "default_model": "harness-model"}
+}
+
+func scopeOr(scope string) string {
+	if scope == "" {
+		return "once"
+	}
+	return scope
+}
+
+// countEvents checks the least numbers of events by kind.
+func countEvents(where string, evs []event, want map[string]int) []string {
+	got := map[string]int{}
+	for _, ev := range evs {
+		got[ev.Kind]++
+	}
+	var fails []string
+	for kind, n := range want {
+		if got[kind] < n {
+			fails = append(fails, fmt.Sprintf("%s has %d %s events, want at least %d", where, got[kind], kind, n))
+		}
+	}
+	sort.Strings(fails)
+	return fails
 }
 
 // setup points Projects at the model and creates the journey's project.
@@ -374,6 +413,7 @@ func (w *world) startModelFile(ctx context.Context, tb, file, id, captureDir str
 		args = append(args, "--capture", captureDir)
 	}
 	cmd := exec.CommandContext(ctx, tb, args...)
+	ownGroup(cmd)
 	cmd.Env, cmd.Stderr = w.env(), logf
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -422,28 +462,13 @@ func (w *world) startProjects(ctx context.Context, bin string, port int) (func()
 		return nil, "", err
 	}
 	cmd := exec.CommandContext(ctx, bin, "serve", "--port", strconv.Itoa(port), "--data-dir", w.data)
+	ownGroup(cmd)
 	cmd.Env, cmd.Stdout, cmd.Stderr, cmd.Dir = w.env(), logf, logf, w.dir
 	if err := cmd.Start(); err != nil {
 		logf.Close()
 		return nil, "", fmt.Errorf("start %s: %w", bin, err)
 	}
 	return func() { terminate(cmd); logf.Close() }, "http://127.0.0.1:" + strconv.Itoa(port), nil
-}
-
-// terminate asks a process to stop and kills it if it does not.
-func terminate(cmd *exec.Cmd) {
-	if cmd.Process == nil {
-		return
-	}
-	_ = cmd.Process.Signal(syscall.SIGTERM)
-	done := make(chan struct{})
-	go func() { _ = cmd.Wait(); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		_ = cmd.Process.Kill()
-		<-done
-	}
 }
 
 // dirtyAncestors are the CLAUDE.md files and .claude directories above dir:

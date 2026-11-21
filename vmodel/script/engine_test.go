@@ -466,3 +466,21 @@ func TestAuxiliaryEndpoints(t *testing.T) {
 	head.Body.Close()
 	assert.Equal(t, 200, head.StatusCode)
 }
+
+func TestInsertedMessagesAreMatched(t *testing.T) {
+	e, url := serve(t, `
+tracks:
+  t:
+    bind: {}
+    steps:
+      - reply: {tool_calls: [{name: Read, arguments: {file_path: /x}}]}
+      - when: {inserted_contains: "Make it 0.2"}
+        reply: {content: switched}
+`)
+	c := newConv(t, url, "s", "Read")
+	a := c.say("go")
+	c.msgs = append(c.msgs, map[string]any{"role": "user", "content": []map[string]any{{"type": "tool_result", "tool_use_id": a.calls[0]["id"], "content": "x"}}},
+		map[string]any{"role": "system", "content": []map[string]any{{"type": "text", "text": "The user sent a new message while you were working:\nMake it 0.2, not 0.1."}}})
+	assert.Equal(t, "switched", c.post().text)
+	assert.True(t, e.Finish().OK)
+}
