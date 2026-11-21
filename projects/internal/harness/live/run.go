@@ -27,8 +27,10 @@ type Options struct {
 	// Projects is the tingly-project binary to run the server with.
 	Projects string
 	// WorkDir holds the run (repository, data, homes, logs, capture); empty
-	// makes a new one under the system temp directory.
+	// makes <Root>/<journey>-<time>.
 	WorkDir string
+	// Root holds the runs made without WorkDir; empty is DefaultRoot().
+	Root string
 	// Keep leaves the work directory after a passing run (a failing run is
 	// always kept).
 	Keep bool
@@ -60,15 +62,8 @@ func Run(ctx context.Context, j *Journey, o Options) (res *Result, err error) {
 	if err != nil {
 		return nil, err
 	}
-	dir := o.WorkDir
-	if dir == "" {
-		if dir, err = os.MkdirTemp("", "tingly-project-harness-"+j.Name+"-"); err != nil {
-			return nil, err
-		}
-	} else if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	if dir, err = filepath.Abs(dir); err != nil {
+	dir, err := newRunDir(o, j.Name)
+	if err != nil {
 		return nil, err
 	}
 	res = &Result{Journey: j.Name, WorkDir: dir}
@@ -85,12 +80,12 @@ func Run(ctx context.Context, j *Journey, o Options) (res *Result, err error) {
 	if err != nil {
 		return nil, err
 	}
-	stopModel, modelURL, err := w.startModel(ctx, o.TB, j.ModelID())
+	stopModel, modelURL, err := w.startModelFile(ctx, o.TB, filepath.Join(dir, "model.yaml"), j.ModelID(), filepath.Join(dir, "capture"))
 	if err != nil {
 		return nil, err
 	}
 	defer stopModel()
-	stopProjects, projectsURL, err := w.startProjects(ctx, o.Projects)
+	stopProjects, projectsURL, err := w.startProjects(ctx, o.Projects, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +95,9 @@ func Run(ctx context.Context, j *Journey, o Options) (res *Result, err error) {
 	m := &model{api: newAPI(modelURL), id: j.ModelID()}
 	p := &projects{api: newAPI(projectsURL)}
 	if err := p.setup(ctx, j, w.repo, modelURL); err != nil {
+		return nil, err
+	}
+	if err := writeMeta(dir, RunMeta{Journey: j.Name, Started: time.Now().UTC(), ProjectID: p.project.ID}); err != nil {
 		return nil, err
 	}
 
@@ -221,17 +219,26 @@ func expectations(ctx context.Context, p *projects, e Expect) []string {
 	return fails
 }
 
-// setup points Projects at the model and creates the journey's project.
-func (p *projects) setup(ctx context.Context, j *Journey, repo, modelURL string) error {
-	if err := poll(ctx, "the projects server", func() (bool, string, error) {
+func (p *projects) waitHealthy(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return poll(ctx, "the projects server", func() (bool, string, error) {
 		_, err := p.do(ctx, http.MethodGet, "/api/v1/health", nil, nil)
 		return err == nil, fmt.Sprint(err), nil
-	}); err != nil {
+	})
+}
+
+// connection is the Projects model setting for a model server: a fake key.
+func connection(modelURL string) map[string]string {
+	return map[string]string{"api_style": "anthropic", "base_url": modelURL, "api_key": "sk-ant-harness-fake", "default_model": "harness-model"}
+}
+
+// setup points Projects at the model and creates the journey's project.
+func (p *projects) setup(ctx context.Context, j *Journey, repo, modelURL string) error {
+	if err := p.waitHealthy(ctx); err != nil {
 		return err
 	}
-	if _, err := p.do(ctx, http.MethodPut, "/api/v1/settings", map[string]string{
-		"api_style": "anthropic", "base_url": modelURL, "api_key": "sk-ant-harness-fake", "default_model": "harness-model",
-	}, nil); err != nil {
+	if _, err := p.do(ctx, http.MethodPut, "/api/v1/settings", connection(modelURL), nil); err != nil {
 		return err
 	}
 	if _, err := p.do(ctx, http.MethodPost, "/api/v1/projects", map[string]any{"name": j.Project.Name, "goal": j.Project.Goal, "repos": []string{repo}}, &p.project); err != nil {
@@ -250,14 +257,16 @@ type world struct {
 	dir, home, repo, data string
 }
 
+func worldAt(dir string) *world {
+	return &world{dir: dir, home: filepath.Join(dir, "home"), repo: filepath.Join(dir, "repo"), data: filepath.Join(dir, "data")}
+}
+
 func newWorld(dir string, j *Journey) (*world, error) {
-	w := &world{dir: dir, home: filepath.Join(dir, "home"), repo: filepath.Join(dir, "repo"), data: filepath.Join(dir, "data")}
-	for _, d := range []string{filepath.Join(w.home, ".claude"), w.repo, w.data} {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			return nil, err
-		}
+	w := worldAt(dir)
+	if err := w.ensure(); err != nil {
+		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(w.home, ".claude.json"), []byte(`{"hasCompletedOnboarding":true}`), 0o644); err != nil {
+	if err := os.MkdirAll(w.repo, 0o755); err != nil {
 		return nil, err
 	}
 	files := j.Project.Files
@@ -287,14 +296,41 @@ func newWorld(dir string, j *Journey) (*world, error) {
 	return w, os.WriteFile(filepath.Join(dir, "model.yaml"), model, 0o644)
 }
 
+// ensure makes the directories the environment points at.
+func (w *world) ensure() error {
+	for _, d := range []string{filepath.Join(w.home, ".claude"), w.data, filepath.Join(w.dir, "tmp")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(w.dir, "run"), 0o700); err != nil {
+		return err
+	}
+	onboarding := filepath.Join(w.home, ".claude.json")
+	if _, err := os.Stat(onboarding); os.IsNotExist(err) {
+		return os.WriteFile(onboarding, []byte(`{"hasCompletedOnboarding":true}`), 0o644)
+	}
+	return nil
+}
+
 // env is a fresh environment: nothing of the user's HOME, Claude Code config
-// or credentials reaches the server or the CLIs it starts.
+// or credentials reaches the server or the CLIs it starts, and everything
+// they write (Claude Code's config, sessions and sockets, temp files, the
+// Projects database, worktrees) stays in the run directory.
 func (w *world) env() []string {
 	return []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + w.home,
 		"CLAUDE_CONFIG_DIR=" + filepath.Join(w.home, ".claude"),
 		"TINGLY_PROJECT_HOME=" + w.data,
+		"TMPDIR=" + filepath.Join(w.dir, "tmp"),
+		// Claude Code binds its peer socket under $XDG_RUNTIME_DIR/cc-socks
+		// (else /tmp/cc-socks, shared with the user's own sessions).
+		"XDG_RUNTIME_DIR=" + filepath.Join(w.dir, "run"),
+		"XDG_CONFIG_HOME=" + filepath.Join(w.home, ".config"),
+		"XDG_CACHE_HOME=" + filepath.Join(w.home, ".cache"),
+		"XDG_DATA_HOME=" + filepath.Join(w.home, ".local", "share"),
+		"XDG_STATE_HOME=" + filepath.Join(w.home, ".local", "state"),
 		"LANG=C.UTF-8", "NO_PROXY=*", "no_proxy=*",
 		"GIT_AUTHOR_NAME=harness", "GIT_AUTHOR_EMAIL=harness@example.com",
 		"GIT_COMMITTER_NAME=harness", "GIT_COMMITTER_EMAIL=harness@example.com",
@@ -307,15 +343,18 @@ func (w *world) log(name string) (*os.File, error) {
 	return os.OpenFile(filepath.Join(w.dir, name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 }
 
-// startModel runs `tingly-box vmodel` on the journey's script and returns its
-// URL from the readiness line.
-func (w *world) startModel(ctx context.Context, tb, id string) (func(), string, error) {
+// startModelFile runs `tingly-box vmodel` on a definition file, every model
+// id answered by definition id, and returns its URL from the readiness line.
+func (w *world) startModelFile(ctx context.Context, tb, file, id, captureDir string) (func(), string, error) {
 	logf, err := w.log("vmodel.log")
 	if err != nil {
 		return nil, "", err
 	}
-	cmd := exec.CommandContext(ctx, tb, "vmodel", "--config", filepath.Join(w.dir, "model.yaml"), "--fallback", id,
-		"--capture", filepath.Join(w.dir, "capture"), "--json")
+	args := []string{"vmodel", "--config", file, "--fallback", id, "--json"}
+	if captureDir != "" {
+		args = append(args, "--capture", captureDir)
+	}
+	cmd := exec.CommandContext(ctx, tb, args...)
 	cmd.Env, cmd.Stderr = w.env(), logf
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -349,14 +388,16 @@ func (w *world) startModel(ctx context.Context, tb, id string) (func(), string, 
 	}
 }
 
-// startProjects runs `tingly-project serve` on a free port.
-func (w *world) startProjects(ctx context.Context, bin string) (func(), string, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return nil, "", err
+// startProjects runs `tingly-project serve` on port (0: a free one).
+func (w *world) startProjects(ctx context.Context, bin string, port int) (func(), string, error) {
+	if port == 0 {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return nil, "", err
+		}
+		port = l.Addr().(*net.TCPAddr).Port
+		l.Close()
 	}
-	port := l.Addr().(*net.TCPAddr).Port
-	l.Close()
 	logf, err := w.log("server.log")
 	if err != nil {
 		return nil, "", err
