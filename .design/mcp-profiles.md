@@ -166,7 +166,11 @@ a profile; the agent's own permissions decide its calls. The gateway injects
 Server Tools only; a stored `usage.gateway`, tool usage or `visibility:
 server` on a connected source is ignored. Agents authenticate with the MCP
 token (Access Control), which opens the MCP endpoints and nothing else, and
-see tools as `<source>__<tool>`. Details: `claude-profile-mcp.md`.
+see tools as `<source>__<tool>`. Server Tools are unchanged: Advisor is
+injection-only, and Search / Fetch exist both as Server Tools
+(`server-webtools`) and as the ordinary `webtools` source; a `webtools` source
+saved with `visibility: server` is no longer injected. Details:
+`claude-profile-mcp.md` §4.3.
 
 ## Open (carried, not decided here)
 

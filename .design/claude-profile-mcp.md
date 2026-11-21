@@ -216,6 +216,27 @@ gone. The toolround never claims a connected tool's call, so a model that
 names one hands it to the client. Harness: `TestMCPRemoteNotInjected` (24
 pairs × stream × transport; the old code fails every case).
 
+Built-ins are not one kind. What decides injection is the tool, not that
+Tingly Box ships it:
+
+| Tool | Injected (Server Tool) | Ordinary MCP (through a profile) |
+|---|---|---|
+| Advisor | Only this way: it reads the whole conversation, which only the gateway sees | Never on an endpoint (`advisor_context_required`) |
+| Search / Fetch | `server-webtools`, off by default (Server Tools page) | `webtools`, off by default (MCP Tools page, then a profile) |
+
+Both webtools sources run the same `tingly-box mcp-builtin` binary and keep
+their own switches and credentials. Injection is for model capability that
+must be transparent to the client: context only the gateway has (Advisor), or
+filling in what the upstream lacks (replacing native web search when Claude
+Code is routed to a provider without it; the native definition is stripped
+only when the replacement was injected). These are read-only, so running
+them without the client's approval is acceptable. Actions on external systems
+go through MCP and the agent's permissions.
+
+Behaviour change: a `webtools` source saved with `visibility: server` used to
+be injected; it is now offered only through MCP profiles. To keep web search
+inside model requests, turn on Search / Fetch under Server Tools.
+
 ### 4.4 Claude Code profile → MCP profile
 
 - `typ.ProfileMeta.MCPProfile` (`mcp_profile`), empty = none, the user's
