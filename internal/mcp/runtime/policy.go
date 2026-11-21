@@ -5,22 +5,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// SourceUsage reports where a source's tools may run. Client availability is not
-// a setting: ordinary MCP tools can be offered through a profile, and profiles
-// plus switches decide which. Server Tools are always gateway-only.
+// SourceUsage reports where a source's tools may run, and it is not a
+// setting. Ordinary MCP tools are client-only: offered through a profile, and
+// profiles plus switches decide which; they are never injected into model
+// requests, whatever a stored usage or visibility says. Server Tools are
+// gateway-only; their switch is the tool's own enablement.
 func SourceUsage(source typ.MCPSourceConfig) typ.MCPToolUsage {
-	usage := typ.MCPToolUsage{Gateway: SourceVisibility(source) == typ.ToolVisibilityServer}
-	if source.Usage != nil {
-		usage.Gateway = source.Usage.Gateway
-	}
-	// A Server Tool exists only to be run by the gateway; its switch is the
-	// tool's own enablement, not a separate usage flag.
 	server := IsServerToolSource(source)
-	usage.Client = !server
-	if server {
-		usage.Gateway = true
-	}
-	return usage
+	return typ.MCPToolUsage{Client: !server, Gateway: server}
 }
 
 // EffectiveToolPolicy applies source enablement, its allow list, and a per-tool override.
@@ -35,9 +27,6 @@ func EffectiveToolPolicy(source typ.MCPSourceConfig, name string) (bool, typ.MCP
 	if policy, ok := source.ToolPolicies[name]; ok {
 		if policy.Enabled != nil && !*policy.Enabled {
 			enabled = false
-		}
-		if policy.Usage != nil && !IsServerToolSource(source) {
-			usage.Gateway = policy.Usage.Gateway
 		}
 	}
 	return enabled, usage

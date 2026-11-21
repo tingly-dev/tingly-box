@@ -13,22 +13,13 @@ import (
 
 const injectedServerToolsKey = "injected_server_tools"
 
-// MCPToolInjectionTransform injects enabled server-side MCP tools into requests.
+// MCPToolInjectionTransform injects Tingly Box's enabled Server Tools into requests.
 type MCPToolInjectionTransform struct {
 	runtime *runtime.Runtime
-	// connectedTools says whether connected MCP tools may be injected as well.
-	// Nil means yes; when it reports false only Tingly Box's own Server Tools are.
-	connectedTools func() bool
 }
 
 func NewMCPToolInjectionTransform(rt *runtime.Runtime) *MCPToolInjectionTransform {
 	return &MCPToolInjectionTransform{runtime: rt}
-}
-
-// WithConnectedTools makes injection of connected MCP tools conditional.
-func (t *MCPToolInjectionTransform) WithConnectedTools(on func() bool) *MCPToolInjectionTransform {
-	t.connectedTools = on
-	return t
 }
 
 func (t *MCPToolInjectionTransform) Name() string { return "mcp_tool_injection" }
@@ -47,12 +38,7 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 		return nil
 	}
 
-	var mcpTools []openai.ChatCompletionToolUnionParam
-	if t.connectedTools == nil || t.connectedTools() {
-		mcpTools = t.runtime.ListServerToolsForInjection(ctx.Context)
-	} else {
-		mcpTools = t.runtime.ListBuiltinServerToolsForInjection(ctx.Context)
-	}
+	mcpTools := t.runtime.ListServerToolsForInjection(ctx.Context)
 	if len(mcpTools) == 0 {
 		return nil
 	}
