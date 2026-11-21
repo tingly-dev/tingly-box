@@ -472,6 +472,23 @@ export default {
       "saved": "我已经更新了我的客户端",
       "pullToken": "从服务器拉取最新令牌"
     },
+    "mcpToken": {
+      "title": "MCP 令牌（MCP Profile）",
+      "description": "交给连接 MCP Profile的 Agent（Claude Code、Codex、OpenCode）使用。它只能访问 MCP Profile的端点，不能访问其他任何接口。",
+      "resetToken": "重置 MCP 令牌",
+      "resetTitle": "重置 MCP 令牌",
+      "resetConfirm": "您确定要重置 MCP 令牌吗？",
+      "resetPoints": {
+        "new": "将生成一个新的随机令牌",
+        "stop": "旧令牌将立即停止工作 - 用它注册的 Agent 都需要换成新令牌"
+      },
+      "resetWarning": "重置后请在 Agent 中重新注册 MCP Profile。",
+      "resetCancel": "取消",
+      "resetConfirmButton": "重置",
+      "resetSuccess": "MCP 令牌重置成功",
+      "resetSuccessMessage": "新的 MCP 令牌已生成。请到 MCP Profile页面重新复制注册命令。",
+      "saved": "我已经更新了 Agent"
+    },
     "securityInfo": {
       "title": "令牌安全",
       "description": "了解用户令牌和模型令牌的区别：",

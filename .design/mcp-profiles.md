@@ -167,3 +167,6 @@ described in `github-mcp.md`.
 - `usage.client` is no longer an input. Availability to MCP clients is derived:
   every ordinary MCP tool, subject to the switches above. Server Tools (Advisor,
   Search and Fetch) are gateway-only and never exposed over an MCP endpoint.
+- Wiring an MCP profile into Claude Code launches automatically (per Claude
+  Code profile, scoped token, permissions) is proposed in
+  `claude-profile-mcp.md`.

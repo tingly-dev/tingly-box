@@ -133,6 +133,14 @@ export const api = {
     // Reset model token to a new secure random value
     resetModelToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> =>
         controlApi((client, headers) => client.POST('/api/v1/auth/model-token/reset', {headers})),
+
+    // The MCP token: accepted by the MCP profile endpoints only, so it is the
+    // one an agent is given.
+    getMCPToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> =>
+        controlApi((client, headers) => client.GET('/api/v1/auth/mcp-token', {headers})),
+
+    resetMCPToken: async (): Promise<{ success: boolean; data?: { token: string }; error?: string }> =>
+        controlApi((client, headers) => client.POST('/api/v1/auth/mcp-token/reset', {headers})),
 };
 
 export default api;

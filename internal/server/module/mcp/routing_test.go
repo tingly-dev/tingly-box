@@ -22,9 +22,9 @@ func TestRoutingAndClientProbeTraverseTheAuthenticatedGateway(t *testing.T) {
 	r.GET("/routing", h.GetRouting)
 	r.POST("/probe/:profile_id", h.ProbeClient)
 	// Use the production endpoint, not an adapter shortcut. Its auth middleware
-	// checks that the loopback SDK connection has the actual user's token.
+	// checks that the loopback SDK connection has the MCP token, as an agent would.
 	r.POST("/api/v1/mcp/:client_name", func(c *gin.Context) {
-		if c.GetHeader("Authorization") != "Bearer "+cfg.GetUserToken() {
+		if cfg.GetMCPToken() == "" || c.GetHeader("Authorization") != "Bearer "+cfg.GetMCPToken() {
 			c.AbortWithStatus(401)
 			return
 		}

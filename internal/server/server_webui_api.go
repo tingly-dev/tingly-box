@@ -64,7 +64,7 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) *module.Route
 	apiV2 := manager.NewGroup("api", "v2", "")
 	apiV2.Router.Use(s.getUserAuthMiddleware())
 
-	rt := &module.Routes{Public: apiAuth, V1: apiV1, V2: apiV2, Engine: s.engine, Manager: manager, UserAuth: s.getUserAuthMiddleware()}
+	rt := &module.Routes{Public: apiAuth, V1: apiV1, V2: apiV2, Engine: s.engine, Manager: manager, UserAuth: s.getUserAuthMiddleware(), MCPAuth: s.authMW.MCPAuthMiddleware(s.getUserAuthMiddleware())}
 
 	// Info endpoints: health (unauthenticated) + config/version (authenticated)
 	infoHandler := info.NewHandler(s.version, s.config.ConfigFile, s.config.ConfigDir, s.launchSource)
@@ -89,6 +89,17 @@ func (s *Server) UseWebAPIEndpoints(manager *swagger.RouteManager) *module.Route
 	// Model token management endpoints (authenticated)
 	apiV1.POST("/auth/model-token/reset", s.ResetModelToken,
 		swagger.WithDescription("Reset model token to a new secure random value"),
+		swagger.WithTags("auth"),
+		swagger.WithResponseModel(gin.H{}),
+	)
+
+	apiV1.GET("/auth/mcp-token", s.GetMCPToken,
+		swagger.WithDescription("Get the MCP token, accepted only by the MCP profile endpoints"),
+		swagger.WithTags("auth"),
+		swagger.WithResponseModel(gin.H{}),
+	)
+	apiV1.POST("/auth/mcp-token/reset", s.ResetMCPToken,
+		swagger.WithDescription("Reset the MCP token to a new secure random value"),
 		swagger.WithTags("auth"),
 		swagger.WithResponseModel(gin.H{}),
 	)
@@ -412,5 +423,32 @@ func (s *Server) ResetModelToken(c *gin.Context) {
 		"data": gin.H{
 			"token": newToken,
 		},
+	})
+}
+
+// GetMCPToken returns the MCP token. Requires authentication.
+func (s *Server) GetMCPToken(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    gin.H{"token": s.config.GetMCPToken()},
+	})
+}
+
+// ResetMCPToken replaces the MCP token; MCP clients registered with the old
+// one stop authenticating. Requires authentication.
+func (s *Server) ResetMCPToken(c *gin.Context) {
+	newToken, err := config.GenerateMCPToken()
+	if err != nil {
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to generate token")
+		return
+	}
+	if err := s.config.SetMCPToken(newToken); err != nil {
+		apierr.Failure(c, http.StatusInternalServerError, "Failed to save token")
+		return
+	}
+	logrus.Info("MCP token has been reset via web UI")
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    gin.H{"token": newToken},
 	})
 }

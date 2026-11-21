@@ -74,6 +74,23 @@ func (c *Config) HasModelToken() bool {
 	return c.ModelToken != ""
 }
 
+// SetMCPToken sets the token accepted by the MCP profile endpoints
+func (c *Config) SetMCPToken(token string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.MCPToken = token
+	return c.saveLocked()
+}
+
+// GetMCPToken returns the token accepted by the MCP profile endpoints
+func (c *Config) GetMCPToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.MCPToken
+}
+
 // GetInternalAPIToken returns the internal API token for probe testing
 // The token is generated at startup and stored in memory only (not persisted to config file)
 func (c *Config) GetInternalAPIToken() string {
