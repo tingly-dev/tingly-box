@@ -29,6 +29,8 @@ import ThumbImage from '../../features/image/ThumbImage';
 import { THUMB_EDGE_TILE } from '../../features/image/imageThumbnails';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 
 type Tab = 'images' | 'snippets';
 
@@ -38,6 +40,10 @@ type Tab = 'images' | 'snippets';
 // copies it). See .design/image-library.md.
 const ImageLibraryPage: React.FC = () => {
     const { t } = useTranslation();
+    // Phone shell: two thumbnails a row (not one a screen), and deleting a
+    // snippet asks first — a mistap is easy and there is no undo.
+    const phone = usePhoneShell();
+    const [snippetToDelete, setSnippetToDelete] = useState<PromptSnippet | null>(null);
     const [params, setParams] = useSearchParams();
     const tab: Tab = params.get('tab') === 'snippets' ? 'snippets' : 'images';
     const assets = useAssets();
@@ -121,7 +127,7 @@ const ImageLibraryPage: React.FC = () => {
                             {t('imageLibrary.emptyImages', { defaultValue: 'Nothing kept yet. Open any image in the Playground and choose “Keep in library”.' })}
                         </Typography>
                     ) : (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 2 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(168px, 1fr))', gap: phone ? 1.5 : 2 }}>
                             {assets.map((asset) => (
                                 <ButtonBase
                                     key={asset.id}
@@ -152,7 +158,7 @@ const ImageLibraryPage: React.FC = () => {
                                     </IconButton>
                                 </Tooltip>
                                 <Tooltip title={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}>
-                                    <IconButton size="small" onClick={() => removeSnippet(snippet.id)} aria-label={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}>
+                                    <IconButton size="small" onClick={() => (phone ? setSnippetToDelete(snippet) : removeSnippet(snippet.id))} aria-label={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}>
                                         <DeleteOutline sx={{ fontSize: 18 }} />
                                     </IconButton>
                                 </Tooltip>
@@ -166,6 +172,20 @@ const ImageLibraryPage: React.FC = () => {
                     </Stack>
                 )}
             </UnifiedCard>
+
+            <ConfirmDialog
+                open={snippetToDelete !== null}
+                title={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}
+                description={snippetToDelete?.name}
+                confirmLabel={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}
+                cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+                confirmColor="error"
+                onClose={() => setSnippetToDelete(null)}
+                onConfirm={() => {
+                    if (snippetToDelete) removeSnippet(snippetToDelete.id);
+                    setSnippetToDelete(null);
+                }}
+            />
 
             <Dialog open={openAsset !== null} onClose={() => setOpenAsset(null)} maxWidth="sm" fullWidth>
                 {openAsset && (

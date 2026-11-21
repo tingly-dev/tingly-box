@@ -11,6 +11,12 @@ import { mobile, safeAreaBottom } from './mobile';
 export const PHONE_SHELL_ATTR = 'data-shell';
 export const PHONE_SHELL_VALUE = 'phone';
 
+/**
+ * Opt-out for the 44px minimum: a small control drawn over something else (a
+ * thumbnail's remove ×), where a 44px button would cover what it sits on.
+ */
+export const PHONE_COMPACT_CLASS = 'phone-compact';
+
 /** The visible height (shrinks with the on-screen keyboard), kept up to date by the shell. */
 export const PHONE_VIEWPORT_HEIGHT = '--phone-viewport-height';
 /** How far the visible area is scrolled down inside the layout viewport (iOS keyboard). */
@@ -30,7 +36,7 @@ export const phoneShellStyles: CSSObject = {
     '& .MuiButton-root, & .MuiToggleButton-root, & .MuiTab-root, & .MuiMenuItem-root, & .MuiListItemButton-root': {
       minHeight: tap,
     },
-    '& .MuiIconButton-root': {
+    [`& .MuiIconButton-root:not(.${PHONE_COMPACT_CLASS})`]: {
       minWidth: tap,
       minHeight: tap,
     },
