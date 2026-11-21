@@ -19349,6 +19349,10 @@
       "ProfileUpdateRequest": {
         "type": "object",
         "properties": {
+          "mcp_profile": {
+            "type": "string",
+            "description": "Field mcp_profile"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
