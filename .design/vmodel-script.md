@@ -329,6 +329,9 @@ tingly-project harness run <journey>            （projects 模块，Projects �
   `repo/`、`capture/`（模型一端的原始字节 + `script-<id>.json`）和日志。目录带标记文件
   `.harness-run.json`；`harness runs` 列出、`harness clean <dir>|--all` 只删带标记的目录。
   用户自己的 `~/.tingly-project`、`~/.tingly-box`、`~/.claude` 既不读也不写。
+  `tingly-project serve` 和 `tingly-box vmodel` 各在自己的进程组里启动，停止时向整组发信号并等组里每个进程
+  （包括服务器拉起的 Claude Code）都退出，再删目录：否则退出中的 Claude Code 会在目录删掉之后再写回
+  transcript 和 MCP 日志（实测出现过，PR 7 修）。
 - **跑完在前端看**（已实现，PR 5）：`harness run … --open` 跑完后接着服务最后一条旅程的项目；
   `harness open [run-dir]`（默认最新一次）用同一个隔离环境重新起 `tingly-project serve`，并起一个
   占位模型（`kind: mock`，回一句"脚本已结束"），打印项目页地址，Ctrl-C 结束。界面要二进制里带

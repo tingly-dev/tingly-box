@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -414,6 +413,7 @@ func (w *world) startModelFile(ctx context.Context, tb, file, id, captureDir str
 		args = append(args, "--capture", captureDir)
 	}
 	cmd := exec.CommandContext(ctx, tb, args...)
+	ownGroup(cmd)
 	cmd.Env, cmd.Stderr = w.env(), logf
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -462,28 +462,13 @@ func (w *world) startProjects(ctx context.Context, bin string, port int) (func()
 		return nil, "", err
 	}
 	cmd := exec.CommandContext(ctx, bin, "serve", "--port", strconv.Itoa(port), "--data-dir", w.data)
+	ownGroup(cmd)
 	cmd.Env, cmd.Stdout, cmd.Stderr, cmd.Dir = w.env(), logf, logf, w.dir
 	if err := cmd.Start(); err != nil {
 		logf.Close()
 		return nil, "", fmt.Errorf("start %s: %w", bin, err)
 	}
 	return func() { terminate(cmd); logf.Close() }, "http://127.0.0.1:" + strconv.Itoa(port), nil
-}
-
-// terminate asks a process to stop and kills it if it does not.
-func terminate(cmd *exec.Cmd) {
-	if cmd.Process == nil {
-		return
-	}
-	_ = cmd.Process.Signal(syscall.SIGTERM)
-	done := make(chan struct{})
-	go func() { _ = cmd.Wait(); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		_ = cmd.Process.Kill()
-		<-done
-	}
 }
 
 // dirtyAncestors are the CLAUDE.md files and .claude directories above dir:
