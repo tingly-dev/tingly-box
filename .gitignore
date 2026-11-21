@@ -1,6 +1,7 @@
 # doc
 docs
 script
+!vmodel/script/
 .worktrees
 
 # claude code - externally installed skills (via install-sdlc.sh etc.)
