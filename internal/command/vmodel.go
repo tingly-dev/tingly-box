@@ -71,6 +71,9 @@ type vmodelReady struct {
 	Models           []string `json:"models"`
 	GoogleBaseURL    string   `json:"google_base_url,omitempty"`
 	CaptureDir       string   `json:"capture_dir,omitempty"`
+	// Scripts are the script definitions served; their control interface is
+	// under <url>/_vmodel/scripts.
+	Scripts []string `json:"scripts,omitempty"`
 }
 
 func (c *VModelCmdKong) definitions(all bool) ([]spec.Definition, error) {
@@ -90,10 +93,10 @@ func (c *VModelCmdKong) definitions(all bool) ([]spec.Definition, error) {
 	}
 	return defs, nil
 }
-func (c *VModelCmdKong) handler() (http.Handler, []string, error) {
+func (c *VModelCmdKong) handler() (*spec.Runtime, error) {
 	defs, err := c.definitions(false)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	fallback := c.Fallback
 	if fallback == "" && c.Capture != "" {
@@ -101,19 +104,19 @@ func (c *VModelCmdKong) handler() (http.Handler, []string, error) {
 		// it must still be answered so it finishes its round.
 		fallback = captureDefaultModel
 		if defs, err = withCaptureDefault(defs); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	runtime, err := spec.New(defs)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if fallback != "" {
 		if err := runtime.SetFallback(fallback); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	return runtime, runtime.IDs(), nil
+	return runtime, nil
 }
 
 // captureDefaultModel answers unknown model ids while capturing, unless the
@@ -139,10 +142,12 @@ func (c *VModelCmdKong) run(ctx context.Context, out io.Writer) error {
 	if c.Port < 0 || c.Port > 65535 {
 		return fmt.Errorf("port must be 0..65535")
 	}
-	handler, models, err := c.handler()
+	runtime, err := c.handler()
 	if err != nil {
 		return err
 	}
+	var handler http.Handler = runtime
+	models := runtime.IDs()
 	var tap *capture.Tap
 	if c.Capture != "" {
 		tap, err = capture.New(c.Capture, capture.Options{
@@ -179,7 +184,7 @@ func (c *VModelCmdKong) run(ctx context.Context, out io.Writer) error {
 		}
 	}
 	base := "http://" + net.JoinHostPort(host, strconv.Itoa(address.Port))
-	ready := vmodelReady{URL: base, OpenAIBaseURL: base + "/v1", AnthropicBaseURL: base, Models: models, GoogleBaseURL: base}
+	ready := vmodelReady{URL: base, OpenAIBaseURL: base + "/v1", AnthropicBaseURL: base, Models: models, GoogleBaseURL: base, Scripts: runtime.ScriptIDs()}
 	if tap != nil {
 		ready.CaptureDir = tap.Dir()
 		if err := tap.SetMeta(map[string]any{"argv": os.Args, "url": base, "models": models,
@@ -211,6 +216,31 @@ func (c *VModelCmdKong) run(ctx context.Context, out io.Writer) error {
 		if err := server.Shutdown(shutdown); err != nil {
 			return fmt.Errorf("vmodel shutdown: %w", err)
 		}
-		return nil
+		return finishScripts(runtime, ready.CaptureDir, os.Stderr)
 	}
+}
+
+// finishScripts ends every script run, prints its report and, when
+// capturing, keeps report and trace next to the capture; a failed script
+// fails the command.
+func finishScripts(runtime *spec.Runtime, dir string, out io.Writer) error {
+	var failed []string
+	for _, id := range runtime.ScriptIDs() {
+		engine := runtime.Scripts()[id]
+		report := engine.Finish()
+		fmt.Fprint(out, report.String())
+		if dir != "" {
+			data, _ := json.MarshalIndent(map[string]any{"report": report, "trace": engine.Trace()}, "", " ")
+			if err := os.WriteFile(filepath.Join(dir, "script-"+id+".json"), append(data, '\n'), 0o644); err != nil {
+				return fmt.Errorf("write script report: %w", err)
+			}
+		}
+		if !report.OK {
+			failed = append(failed, id)
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("script %s failed", strings.Join(failed, ", "))
+	}
+	return nil
 }

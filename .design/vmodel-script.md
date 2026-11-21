@@ -272,11 +272,12 @@ require.True(t, rep.OK(), rep.String())
  "reply":{"text":"Now commit it.","tool_calls":[{"name":"Bash","id":"toolu_3f…"}]}}
 ```
 
-`via` 取 `bind` / `continuation` / `spawn` / `retry` / `background` / `unmatched`。
-`seq` 与 capture 的 `index.jsonl` 是同一个序号（tap 把序号放进请求 context，script 读出来），
-所以任何一行都能找回 `raw/conn-N.in` 里的原始字节。`Finish()` 另写 `report.json` 和
-`trace.md`：按轨道排成对话（用户消息 / tool_result / 我们的回答，长文本截断），失败项在顶部。
-排序按（轨道, 步骤），不按到达时间——跨轨道的到达顺序本来就不确定，不应该让报告每次都不同。
+`via` 取 `bind` / `continuation` / `retry` / `background` / `unmatched`（派生轨道的绑定也记为 `bind`）。
+**已实现（PR 3）**：`seq` 是脚本自己对 `/v1/messages` 请求的计数；capture 的 `index.jsonl` 还算上
+`HEAD /api/hello`、控制接口等，两者按到达顺序对得上，但序号不同（让 tap 把序号放进请求 context 是
+之后的事）。`tingly-box vmodel --capture` 退出时把报告和 trace 写成 `script-<id>.json` 放在 capture 旁边。
+`trace.md`（按轨道排成对话）是之后的事。报告里的失败按（轨道, 步骤）排序，不按到达时间——跨轨道的到达
+顺序本来就不确定，不应该让报告每次都不同。
 
 `tb vmodel --config s.yaml` 下：收到 SIGTERM/中断时写报告，有失败就以非零退出；`--json` 的就绪
 输出里列出脚本。外部驱动（tingly-project 的 runner，§5）用 HTTP 控制接口：
@@ -284,7 +285,8 @@ require.True(t, rep.OK(), rep.String())
 | 接口 | 作用 |
 | --- | --- |
 | `POST /_vmodel/scripts/{id}/signals/{name}` | 发信号（放行 `after: signal:<name>`） |
-| `GET /_vmodel/scripts/{id}/served?track=&step=&timeout=30s` | 等到某一步已送出；超时 408 |
+| `GET /_vmodel/scripts/{id}/served?step=<track>.<step>&timeout=30s` | 等到某一步已送出；超时 408 |
+| `GET /_vmodel/scripts/{id}/trace` | 到目前为止的每个请求 |
 | `GET /_vmodel/scripts/{id}/report` | 当前报告（不结束） |
 | `POST /_vmodel/scripts/{id}/finish` | 结束：之后的请求都算失败，返回最终报告 |
 
