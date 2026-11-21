@@ -1,127 +1,265 @@
-# 线程生命周期：何时、由谁 resolve
+# 线程生命周期：顶层设计
 
-状态：**提案**（2026-11-21），待用户确认后分 PR 实现。实现后把本文改成“现状”，并更新 `projects.md` §4.3。
+状态：**设计（待确认）**，2026-11-21。取代同名文件的上一版提案。
 
-现状的完整状态图、触发和实测缺口（G1–G14）见 [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)。
+这是线程状态机的**唯一权威**。改线程状态、加入口、加后台规则之前先改这里；`projects.md` §4.3 的表只是摘要。现状图（代码今天怎么做、实测的缺口 G1–G14）在 [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)。
 
-## 1. 问题
+**范围**：把已有的状态和入口合理化，让它们自洽、可测，**不加新功能**。不加新状态，不加新工具，不加 UI 入口，不加 IM 推送。只有一处数据改动（§6.3 的 `HeadSHA`）。
 
-用户反馈：大量线程停在 ready / waiting，什么也不等，却不进 resolved。原因是“谁、在什么条件下 resolve”从未定义完整。现状（代码核对）：
+## 1 问题
 
-| 路径 | 代码 | 行为 | 缺口 |
+状态是一个个入口各自加出来的，从没有一张总图：
+
+- **同一个问题有四个答案。** “有没有待审阅的工作”在 settle、Stop、Reopen、`/clear` 里各算各的（`CommitsAhead`、`MergedAt`、什么都不看），于是同一个线程走不同的路会落到不同状态（G10、G11）。
+- **waiting 混进了不能回答的东西。** 重启中断、过期的审批、建 worktree 失败都记成 waiting，用户看到“等你回答”，却没有问题可答（G7–G9）。
+- **resolve 的六个入口做的事不一样。** 有的回收进程、收回工具 URL，有的不收（G14）；有的留记录，有的什么都不留。
+- **“合并后自动 resolve”写在 `projects.md` 里，代码里不存在。** 只有 Merge 对话框会 resolve（G1、G2）；每周的自动清理反而会关掉没做完的活（G4）。
+- **谁可以 resolve 只写在提示词里。** 协调者的工具不检查任何条件（G5）。
+
+## 2 模型：三条轴，一个显示状态
+
+线程有三件互相独立的事。今天它们挤在一个 `Status` 字段里，这是混乱的根源（原则 §4：一个旋钮管两件事，底层模型就错了）。
+
+| 轴 | 取值 | 存在哪 | 谁改 |
 |---|---|---|---|
-| Merge 按钮 / `POST /threads/:id/merge`（squash） | `Threads.Merge` → `resolveMerged` | resolve，记 `MergedAt` | 只覆盖“在 Projects 里点合并” |
-| 线程的 `merge` 工具 | `Links.Merge` | PR 记为 merged，**线程不动**（自己的 turn 里不能关自己，`github-tools.md`） | 之后一直 ready，直到有人再点 Merge |
-| PR 在 GitHub 上被合并（最常见） | `Links.Sweep` → `applyReading` | link 的 `state` 变 merged，页面刷新 | **线程不动**，永远 ready（`CommitsAhead` 对本地 base 算，squash 后仍 >0） |
-| 一周无活动 | `Threads.AutoResolve`（`service.go` 每小时） | 只看 `idle` | ready / waiting / failed 永远不动；idle 有未提交改动或开着的 PR 也照样 resolve |
-| 协调者 | `resolve_thread`：“Only when the user says so or its work is merged.” | 纯提示词约束，工具不检查 | 协调者看不到“是否已合并、是否还有活”的结论，只能自己从 `prs=#12(merged)` 推断；也没有任何东西阻止它 resolve 有未合并工作的线程 |
-| 线程自己 | 无 | — | 调研 / 回答类任务做完后停在 idle 七天 |
-| 重启 | `Threads.Recover` | 跑着的线程变 `waiting`，原因 “Interrupted when tingly-project stopped” | 这不是在等用户回答问题，却和真正的问题混在 Waiting on you 里；而且 `Retry` 只认 `failed`，用户只能手打一条消息 |
+| **A 结局**（持久） | open · resolved | `ResolvedAt` | 只有 §4 的关闭 / 重开 |
+| **B 这一轮**（仅 open 时） | 在跑 · 在等回答 · 失败 · 歇着 | `Status` 的 working / waiting / failed | 轮次引擎、提问、重启 |
+| **C 工作**（只读，算出来的） | 有待审阅的工作 · 没有 | `CommitsAhead`、`Uncommitted`、`MergedAt`、`Links` | git 和 GitHub 的事实，从不手写 |
 
-本机 DB 快照（`.design/thread-cleanup.md`，2026-11-17）：175 个线程里 ready 18、idle 18、waiting 4；resolved 的 135 个里 `merged_at` 一个都没有——合并基本都发生在 GitHub 上，正好是上表第三行的缺口。
+另有 **归档**（`ArchivedAt`）：存储层面的“收起来”，与三条轴都正交，不在本文范围（`thread-cleanup.md`）。
 
-Resolve 的副作用（`Threads.Resolve`）：停 turn、回收进程、收回工具 URL、IM 聊天绑定交还父线程、删 `library/.tmp/<thread>`。**不删 worktree、不删分支、不删记录**；`Reopen` 可撤销（工具 URL 和进程下一轮重建；聊天绑定不回迁，`@N` 仍可直达）。释放 worktree 是 Archive 的事（`thread-cleanup.md`），本文不改它。
+**显示状态**由三条轴推出，`Status` 字段继续存它（不做迁移），但只能由一个函数写（§5）：
 
-## 2. 状态语义
+```
+resolved                      ← A = resolved
+working | waiting | failed    ← A = open，B 不是“歇着”
+ready                         ← A = open，B = 歇着，C = 有待审阅的工作
+idle                          ← A = open，B = 歇着，C = 没有
+```
 
-状态不变（不加新状态，原则 §4：可解决是一个提示，不是第七种状态）：
+## 3 每个状态的含义（契约）
 
-| 状态 | 含义 | 在等谁 | 该不该一直停着 |
+每个状态回答一个用户问题，并且只回答这一个：
+
+| 状态 | 用户的问题 | 契约（不变量） | 用户能做的下一步 |
 |---|---|---|---|
-| `working` | 一轮在跑（或后台任务在跑、排队等槽位） | 线程自己 | 是 |
-| `waiting` | **线程问了用户一个问题**：`NEEDS_INPUT:`、待答的审批 / 提问 | 用户回答 | 是，直到用户答；系统不替用户关掉一个开着的问题 |
-| `failed` | 上一轮出错或**被中断**（见 §2.2），Retry 或发消息继续 | 用户决定重试 | 是 |
-| `ready` | 做完了，分支上有待审阅的提交 | 用户审阅 / 合并 | **否**：PR 合并后应自动离开 |
-| `idle` | 做完了，没有待审阅的东西（回答、调研、被停下） | 没人 | 否：可解决 |
-| `resolved` | 完成、收起；可 Reopen | — | — |
+| `working` | 它在干活吗？ | 有一轮在跑，或在排队等槽位（`Queued`），或后台任务在跑 | 等 · Stop |
+| `waiting` | **它在等我回答吗？** | 有一个**现在能回答**的问题：待答的审批 / 提问（进程活着），或上一轮以 `NEEDS_INPUT:` 结尾 | 回答 |
+| `failed` | 它出事了吗？ | 上一轮没能正常结束：出错、启动失败、被重启打断、问题过期 | Retry · 发消息 |
+| `ready` | 有东西等我审阅吗？ | 歇着，且有**待审阅的工作**（§3.1） | 看 diff · 开 PR · 合并 |
+| `idle` | — | 歇着，没有待审阅的工作 | 发消息 · Resolve |
+| `resolved` | 它结束了吗？ | `ResolvedAt` 有值；没有进程，工具 URL 已收回 | Reopen |
 
-### 2.1 “等用户输入” vs “做完了等审阅”
+### 3.1 “待审阅的工作”只有一个定义
 
-已经由状态区分：`waiting` = 被问题挡住（amber，计入 Waiting on you）；`ready` = 结果在等审阅（中性色）。真正混在一起的是 ready 内部的三种情况，用**可解决提示**和 PR 卡片分开，而不是拆状态：
+```
+unreviewed(t) = t.Uncommitted
+             || (t.CommitsAhead > 0 && !merged(t))
 
-- ready + PR 开着：在等审阅 / CI / 合并（PR 卡片已显示 checks、merge state）；
-- ready + 没有 PR：在等用户看 diff、要 PR 或点 Merge；
-- ready + PR 都已合并：**不该再是 ready** → §3.1 自动 resolve。
+merged(t)     = t.MergedAt != nil
+             || 线程有一个 merged 的 PR，head 是 t.Branch，
+                且本地分支 tip 被这个 PR 合并时的 head 包含（§6.3）
+```
 
-### 2.2 无意义的等待
+`Uncommitted` 也算：没提交的改动只活在 worktree 里，比提交更需要用户看到。
 
-- **重启中断**：`Recover` 改为把中断的线程记成 `failed`，原因 “Interrupted when tingly-project stopped”，于是 Retry 按钮直接可用（续跑同一轮），也不再冒充“在等你回答”。不自动续跑：续跑要花钱，且用户可能已不需要。
-- **问题久未回答**：不自动 resolve（会丢掉一个开着的问题）。卡片已显示距上次更新多久（`timeAgo(updated_at)`）；不另加超时。
-- **idle 七天**：保留现有 `AutoResolve`，但跳过有未提交改动或开着 PR 的线程（它们是被遗忘的工作，不是做完的工作）。
+### 3.2 waiting 与 failed 的分界
 
-## 3. 谁来 resolve
+判断标准只有一个：**用户现在回答，线程能不能接着走？** 能就是 waiting，不能就是 failed。
 
-核心是一个判定函数 `Threads.resolvability(t) (Verdict, reason string)`，所有入口（系统、协调者、UI、IM）共用同一个结论，规则只写一处：
-
-| 结论 | 条件（全部满足） | 谁动手 |
+| 情况 | 今天 | 设计 |
 |---|---|---|
-| `auto` | 状态 ready 或 idle；不在跑、没排队、没有后台任务；项目线程（非文件夹会话）；线程 opened 的 PR 全部不是 open，且至少一个 merged；**分支 tip 被某个已合并 PR 的 head 包含**（`git merge-base --is-ancestor <tip> <head_sha>`，即合并之后没有新提交）；worktree 无未提交改动（实时 `git status`） | 系统自动 resolve |
-| `suggest` | 不满足 auto，但看起来做完了：① idle、没有开着的 PR、无未提交改动（回答 / 调研类）；② PR 已合并，但无法证明之后没有新提交（老 link 没有 head sha、对象不在本地）；③ waiting / failed，但它的 PR 都已合并 | 给用户（和协调者）看“可解决”，一键 resolve |
-| `no` | 其余：开着的 PR、未合并的提交、未提交改动、在跑、等回答 | 只能用户明确要求；原因列出 |
+| 待答的审批 / 提问 | waiting | waiting |
+| 报告末行 `NEEDS_INPUT:` | waiting | waiting |
+| 轮次出错、profile 不可用、会话启动失败 | failed | failed |
+| 重启时正在跑 | waiting “Interrupted…” | **failed** “Interrupted when tingly-project stopped” — Retry 续跑同一轮 |
+| 重启时有待答的审批 / 提问（已过期） | waiting “Approve: …” | **failed** “The question expired when tingly-project stopped” |
+| 建 worktree 失败 | waiting | **failed** |
 
-### 3.1 自动：PR 合并后
+不做超时：一个能回答的问题，等多久都还是能回答的，系统不替用户关掉它。
 
-- **数据**：`ThreadLink` 加 `HeadSHA`（GitHub 读取时顺带取 `headRefOid`，同一个 GraphQL 请求，不多花额度）。`Links.Merge`、`CreatePR`、`Read` 都填它。
-- **触发**：① `applyReading` 发现某 PR 从 open 变 merged / closed；② 一轮结束（`settle`，覆盖线程用 `merge` 工具合并后停在 ready 的情况）；③ 每小时的 `AutoResolve` 顺带复查（兜底，也处理积压）。
-- **执行**：判定为 auto 时调用现有 `resolveMerged`（记 `MergedAt`，于是卡片显示 Merged 徽章），系统事件写明依据：“Resolved: PR #34 was merged into main; nothing was committed after it.” 判定用到的 git 检查在 lifecycle 锁内实时再做一遍，存储的计数只用于提示。
-- **Reopen 之后不被再关**：用过的 merged PR 在 link 上记 `Resolved`（这次自动 resolve 用的是它）。auto 还要求至少有一个**未用过**的 merged PR，所以用户 Reopen 一个已合并线程后，每小时的复查不会马上又关掉它；它之后开的新 PR 合并时照常自动 resolve。
-- **积压**：已 merged 的老 link 没有 `HeadSHA`，Sweep 每次额外补读最多几个（merged 记录本来不再读），读到后照常判定。本机约 18 个 ready 线程会在首个小时内被清掉或标为 suggest。
-- **Stack / 被取代的 PR**：线程开过多个 PR 时要求“全部不 open、至少一个 merged、tip 被某个 merged head 包含”。从错分支开又关掉、换分支重开并合并的情况（`rivalOf`）自然满足；stack 中下层 PR 合并进上层分支也算合并（工作已被接收进它的 base）。
+## 4 转移表（完整）
 
-### 3.2 线程自己
+这张表之外没有别的转移。加一行要先改这里。
 
-**不给线程 resolve / done 工具，也不加 `DONE` 标记。** 理由：
+```mermaid
+stateDiagram-v2
+    direction LR
+    state open {
+        working --> waiting: 提问 · NEEDS_INPUT
+        working --> failed: 出错 · 重启打断
+        working --> resting: 正常结束 · Stop
+        waiting --> working: 回答 · 发消息
+        waiting --> failed: 重启（问题过期）
+        failed --> working: Retry · 发消息
+        resting --> working: 发消息 · 后台任务开始
+        waiting --> resting: /clear
+        failed --> resting: /clear
+        state resting {
+            ready --> idle: 工作被合并
+            idle --> ready: 出现未提交改动（下一轮结束时读到）
+        }
+    }
+    [*] --> working: 新线程
+    open --> resolved: 关闭（§4.2）
+    resolved --> resting: Reopen
+```
 
-- “做完”是用户的验收，线程只知道自己交了什么，不知道用户满不满意、还有没有追问；线程关自己也违背已有约定（自己的 turn 里不能关自己，`github-tools.md`）。
-- 需要的信号已经有了：一轮正常结束、没有 `NEEDS_INPUT`、分支没有提交 → `idle` → 判定 `suggest` ①。线程的“声明”就是它的报告和它停下的状态，不需要再多一个字段。
-- 线程提示词只加一句：没有要用户做的事时，报告里不要用问句收尾（避免“需要我再做 X 吗？”让协调者和用户误以为在等）。真正要问就用 `NEEDS_INPUT:`。
+### 4.1 open 之内
 
-### 3.3 协调者
+| # | 从 | 到 | 触发 | 写状态的地方 |
+|---|---|---|---|---|
+| T1 | — | working | 新线程（start_thread、提议卡、用户新建、IM 新会话） | 创建 |
+| T2 | working | waiting | 提问 / 审批挂起；或末行 `NEEDS_INPUT:` | prompter；settle |
+| T3 | working | failed | 出错、启动失败、建 worktree 失败、重启时在跑 | settle；launch；Recover |
+| T4 | working | 歇着 | 正常结束（后台任务也结束）；Stop | settle → `rest()` |
+| T5 | waiting | working | 回答；发消息 | prompter；SetRunning |
+| T6 | waiting | failed | 重启时问题过期 | Recover |
+| T7 | failed | working | Retry；发消息 | Retry；SetRunning |
+| T8 | 歇着 | working | 发消息；后台任务开始 | SetRunning；后台任务 |
+| T9 | waiting · failed | 歇着 | `/clear` 开新会话 | session_rotation → `rest()` |
+| T10 | ready | idle | 工作被合并（§6） | link 刷新 / settle → `rest()` |
 
-- `resolve_thread` 在服务端按判定执行：`auto` / `suggest` 直接 resolve；`no` 时**拒绝**，返回原因和“需要用户同意：用 request_decision 问，或在 `cite` 里给出用户说要关掉它的那条消息 id”。带有效 `cite`（项目里真实的用户消息）时才 resolve，线程里记一条 “Resolved by the coordinator, citing your message: …”，可审计。这与“approval 只认 cite”的既有规则一致（`coordinator.go` 提示词）。
-- 线程列表（系统提示词和 `list_threads`）给可解决的线程加 `resolvable="<reason>"`，协调者不必自己从 `prs=` 推断。
-- 提示词规则改为：
-  > Resolve a thread with resolve_thread when the user says so, or when it is marked resolvable and the user has seen its result (you passed it on and they moved on or acknowledged it). Never resolve a thread with an open PR, unmerged commits, uncommitted changes or an open question unless the user said to: the tool refuses without cite. Merged threads are resolved by the system; do not announce each one.
-- 协调者不因自动 resolve 被唤醒（不花模型调用）；它下一轮从线程列表看到 resolved。
+“歇着”永远落到 `rest()`（§5），它按 §3.1 选 ready 或 idle。
 
-### 3.4 用户
+### 4.2 关闭与重开
 
-- 现有：线程页 Resolve / Reopen；看板 select 模式的批量 Resolve / Archive（`OverviewPane`）。
-- 新增：可解决提示与“Resolve all suggested (N)”（§4）；“清理已合并线程”（批量 Archive）沿用 `thread-cleanup.md` §3.5，不在本文重复。
-- 用户 resolve 永远不被拦（是用户自己的决定），但有未合并工作时确认框写明“分支 `tp/…` 有 N 个未合并提交，resolve 不会删除它们，可随时 Reopen”。
+| # | 从 | 到 | 谁 | 条件 |
+|---|---|---|---|---|
+| C1 | 任何 open | resolved | **用户**（线程菜单、看板批量） | 无条件。可撤销，不删任何东西 |
+| C2 | 任何 open | resolved | **用户** Archive（项目线程） | 同 Archive 的现有拦截（在跑、排队、未提交改动） |
+| C3 | 不在跑的 open | resolved | **用户** Merge 对话框 squash 成功 | 合并本身就是用户的决定 |
+| C4 | 任何 open | resolved | **协调者** `resolve_thread` | §7 |
+| C5 | 歇着 | resolved | **系统**：工作已合并 | §6.1 |
+| C6 | idle | resolved | **系统**：7 天没有活动 | §6.2 |
+| O1 | resolved | 歇着 | **用户** Reopen | 无条件 |
 
-## 4. UI
+线程自己**不能**关闭自己：做完是用户的验收，线程只知道自己交了什么。调研 / 回答类线程做完后是 idle，由 C1 或 C6 收尾。
 
-（遵循原则 §9 降噪、§11 把下一步动作放到眼前、§10 可逆）
+## 5 实现约束：三个写入口
 
-- **卡片**：suggest 的线程在 ready / idle 组里显示一个低调的“可解决”勾选按钮（与 Resolved 同一 `CheckCircle` 图标、描边态），tooltip 是原因（“PR #34 已合并”“回答已交付，没有待审阅内容”），点一下即 resolve，Toast 带 **Undo**（= Reopen）。不加颜色，不进 Waiting on you 计数。
-- **工具栏**：有 suggest 线程时显示 “Resolve N suggested”，打开 `ConfirmDialog` 列出每个线程和原因（可逐个取消勾选），确认后逐个调用（现有 `runBulk`）。
-- **线程页头**：suggest 时在状态行下一条横幅：“PR #34 已合并，可以关闭这个线程 · Resolve”。auto resolve 的线程页显示系统事件说明，并保留 Reopen。
-- **Resolved 卡片**：自动 resolve 的显示 Merged 徽章（已有，靠 `MergedAt`）。用户手动 resolve 但仍有未合并提交的，显示中性的“未合并”徽章，避免工作被遗忘。
-- **API**：`Thread` 加只读派生字段 `resolvable: {verdict, reason} | null`（像 `running_tasks` 一样发送时计算，不入库；只用已存字段 + link，不跑 git）。需要 `task codegen`。
+状态只经过三个函数写。今天的六处各写各的是 G10、G11、G14 的直接原因。
 
-## 5. IM
+| 函数 | 做什么 | 取代 |
+|---|---|---|
+| `rest(t)` | 歇着时按 §3.1 写 ready / idle | `restingStatus(commits)`、Stop 的硬编码 idle、Reopen 和 `/clear` 各自的 `MergedAt` 判断 |
+| `close(t, by, reason)` | 关闭：停轮次 → 回收进程 → 写 resolved（`MergedAt` 若适用）→ 收回工具 URL → 交还 IM 绑定 → 删 `.tmp` → **记一条系统事件**（谁、为什么） | `Resolve`、`resolveMerged`、Archive 里的 resolve 段 |
+| `reopen(t, by)` | 清 `ResolvedAt` → `rest(t)` → 记事件 | `Reopen` 自己的判断 |
 
-- 自动 resolve：项目聊天收到**一行**：“#12 Fix Safari export — resolved: PR #34 merged.” 走现有的折叠线程更新路径（`foldThreadUpdate`），不唤醒协调者。同一小时内多个合并合并成一行（“Resolved 3 merged threads: #12, #15, #18”）。
-- suggest：**不推送**（不是需要用户马上做的事，推了就是噪音）；协调者在它本来就要发的那条更新里可以带一句“可以关掉”。
-- 其余不变：Needs you / Failed 照旧推送。
+`close` 的事件文字固定为三种，用户在线程里总能看到它为什么关了：
 
-## 6. 实现拆分（每个 PR 带测试，到 main）
+- `Resolved by you.` / `Resolved by the coordinator.`
+- `Resolved: PR #34 was merged into main.`
+- `Resolved after 7 days without activity.`
 
-| PR | 内容 | 风险 | 验证 |
+轮次中的 working / waiting / failed 仍由引擎回调、prompter、Recover 写，它们只改 B 轴，不碰 A、C。
+
+## 6 系统规则
+
+系统只做两件事，并且只关掉**没有剩余工作**的线程。关闭可撤销、不删任何东西，所以系统可以不问用户；但它永远不关有剩余工作的线程。
+
+**剩余工作**（三者任一即不关）：`unreviewed(t)`（§3.1）· 线程开的 PR 还有 open 的 · 在跑、排队或有后台任务。
+
+### 6.1 C5 工作已合并 → resolved
+
+`projects.md` 一直写着“合并后自动”，这里把它真正实现，覆盖三种合并（Merge 对话框已经会关，另两种今天不会）：
+
+| 在哪合并 | 何时检查 |
+|---|---|
+| Merge 对话框 | 已有（C3） |
+| 线程自己调 `merge` 工具 | 这一轮结束时（settle） |
+| GitHub 网页 / 别人合并 | link 刷新读到 open → merged 时 |
+
+条件：线程歇着 ∧ `merged(t)` ∧ 没有剩余工作。
+
+### 6.2 C6 七天无活动 → resolved
+
+保留，加两条限制：只对 **idle**（ready 有东西等审阅，不能静默关掉）；并且**没有剩余工作**（今天会关掉有 open PR、有未提交改动的线程，G4）。
+
+### 6.3 唯一的数据改动：`ThreadLink.HeadSHA`
+
+`merged(t)` 要回答“合并之后分支上还有没有新提交”。仓库用 squash 合并，祖先关系证明不了什么，只能拿合并时 PR 的 head commit 比：`git merge-base --is-ancestor <本地 tip> <HeadSHA>`。
+
+- GitHub 读取时一并取 `headRefOid`（同一个 GraphQL 请求，不多花额度）；`create_pr` 和 `merge` 也填它。
+- 老记录没有 `HeadSHA`：退回今天 `hasMergedPR` 的判断（head 分支名一致即算合并，Delete 的保护已经这样用）。最坏情况是一个合并后又有提交的老线程被关掉——它可 Reopen，分支和提交都在。
+
+## 7 协调者
+
+协调者替用户执行，不替用户决定。`resolve_thread` 在服务端检查：
+
+| 线程 | 结果 |
+|---|---|
+| 没有剩余工作（§6） | 关闭，事件写 `Resolved by the coordinator.` |
+| 有剩余工作 | **拒绝**，返回剩余的是什么（“PR #34 is still open”、“2 unmerged commits”），并说“只有用户能关它：请用户在线程里 Resolve” |
+
+协调者的提示词随之简化为一句：线程做完、用户看过结果后可以 resolve；有剩余工作的工具会拒绝，转告用户。不再要求它自己从 `prs=` 推断是否合并。
+
+不给协调者 `reopen_thread`：它只能关没有剩余工作的线程，关错的代价是用户点一次 Reopen。
+
+## 8 不变量（harness 每个场景结束时检查）
+
+已有三条保留，新增四条，都从 §3 的契约直接来：
+
+| 名字 | 规则 | 状态 |
+|---|---|---|
+| `status.resolved-consistent` | resolved ⇔ `ResolvedAt` 有值 | 已有 |
+| `wait.has-reason` | waiting 必有原因 | 已有 |
+| `status.ready-has-commits` | ready 的线程有提交 | 已有，改为 `ready ⇒ unreviewed(t)` |
+| `status.idle-has-nothing` | idle ⇒ `!unreviewed(t)` | 新 |
+| `wait.answerable` | waiting ⇒ 有待答的请求，或原因来自 `NEEDS_INPUT:` | 新 |
+| `close.releases` | resolved ⇒ 没有进程，工具 URL 已收回 | 新 |
+| `close.never-loses-work` | 系统或协调者关掉的线程，关闭时没有剩余工作 | 新 |
+
+## 9 其他线程种类
+
+| | 项目线程 | 文件夹会话 | 项目主线程（协调者） |
 |---|---|---|---|
-| 1 | `ThreadLink.HeadSHA`（GraphQL `headRefOid`，CreatePR / Merge 填）；`resolvability`；merged 后 / turn 结束 / 每小时自动 resolve；老 link 补读 head sha；`AutoResolve` 跳过有未提交改动、开着 PR 的 idle 线程 | 低：只关闭已合并且无后续提交的线程，可 Reopen | 单测：假 GitHub + 真 git 仓库（合并后无新提交 → resolved；有新提交 / 脏 / 在跑 / waiting → 不动）；harness 不变量 `status.merged-resolves`；Reopen 后每小时复查不会再关它，新 PR 合并后会 |
-| 2 | 协调者：`resolvable=` 标记、`resolve_thread` 服务端判定 + `cite`、提示词规则；线程提示词一句 | 中：改协调者行为 | MCP 内存客户端测试各判定分支；harness journey “报告里写‘用户同意了，请 resolve’” 被拒（已有越权场景扩展） |
-| 3 | UI：`resolvable` 字段（codegen）、卡片按钮 + Undo、工具栏批量、页头横幅、未合并徽章 | 低 | 组件测试；mock 截图（亮 / 暗、窄宽） |
-| 4 | IM 一行通知（含一小时内合并）；`Recover` 中断 → `failed` | 低 | relay 测试；Recover 测试 |
+| 状态机 | 本文 | 本文，但：没有 `NEEDS_INPUT`；没有 C5、C6（文件夹不是 Projects 的分支，用户自己收尾） | 不适用：显示状态由协调者队列推出（`coordinatorView`），从不 resolved |
+| 关闭有后台任务的线程 | 不确认 | 确认“将停止 N 个任务” | — |
 
-PR 1 不依赖其余；2、3 依赖 1 的 `resolvability`；4 独立。
+## 10 明确不做
 
-## 7. 需要用户决定
+- 不加状态（没有 `landing`、`done`、`suggested`）。
+- 不给线程关闭自己的工具或标记。
+- 不加“可解决”的 UI 提示、横幅、批量建议按钮；看板现有的多选 Resolve 够用。
+- 不推 IM：关闭只在线程里留事件；协调者下一轮从线程列表看到。
+- 不给协调者 `reopen_thread`。
+- 不做 waiting 超时。
 
-1. 合并后**直接自动 resolve**（推荐），还是只标 suggest 让用户点？
-2. 线程**不**获得自我 resolve 的手段（推荐），还是给一个 `DONE` 标记 / 工具？
-3. 协调者 resolve 有未合并工作的线程时，**工具强制要求 cite**（推荐），还是只靠提示词？
-4. IM：自动 resolve 推一行（推荐），还是完全静默？
-5. 重启中断的线程改记 `failed`（可 Retry，推荐），还是保持 waiting？
-6. idle 自动 resolve 的七天是否保持（推荐保持；suggest 按钮已让用户能更早关）？
+这些都可以以后再议，但每一项都要先在本文改模型，不能直接加入口。
+
+## 11 缺口如何收口
+
+| 缺口（pencil §11） | 收口于 |
+|---|---|
+| G1 GitHub 上合并，线程不变 | §6.1 |
+| G2 `merge` 工具合并，线程不变 | §6.1 |
+| G3 自动清理只看 idle | §6.1 处理已合并的 ready；其余 ready 有东西等审阅，按设计不自动关 |
+| G4 自动清理关掉没做完的活 | §6.2 |
+| G5 协调者 resolve 不检查 | §7 |
+| G6 协调者无 reopen | 不做（§10），理由见 §7 |
+| G7 重启中断记成 waiting | §3.2 |
+| G8 过期的审批仍 waiting | §3.2 |
+| G9 建 worktree 失败记成 waiting | §3.2 |
+| G10 Stop 后有提交是 idle | §5 `rest()` |
+| G11 Reopen 只看 `MergedAt` | §5 `reopen()` |
+| G12 线程不能声明做完 | 不做（§4.2 末、§10） |
+| G13 关闭不通知协调者和 IM | 不做推送（§10）；关闭在线程里留事件（§5） |
+| G14 Merge 对话框的关闭不回收进程 | §5 `close()` |
+
+## 12 落地（小 PR，每个带测试）
+
+| PR | 内容 | 用户可见的变化 |
+|---|---|---|
+| 1 | `rest()`、`close()`、`reopen()` 三个写入口；关闭事件；不变量 `status.idle-has-nothing`、`close.releases` | Stop 后有提交显示 ready；重开已合并线程显示 idle；每次关闭在线程里说明原因 |
+| 2 | §3.2：重启中断、过期问题、建 worktree 失败 → failed；不变量 `wait.answerable` | Waiting on you 里只剩真正能回答的问题；被打断的线程可直接 Retry |
+| 3 | §6：`HeadSHA`；合并后自动关闭；七天规则加限制；不变量 `close.never-loses-work` | 合并后的线程自己关闭；未做完的不会被静默关掉 |
+| 4 | §7：`resolve_thread` 服务端检查，提示词一句 | 协调者关不掉有剩余工作的线程 |
+
+1 和 2 互不依赖；3、4 依赖 1。前端不改（状态值不变）。
+
+## 13 需要用户决定
+
+1. **协调者的边界**（§7）：有剩余工作时一律拒绝（推荐，最简单、不可能越权）；还是允许它带上用户那条消息的 `cite` 后关闭（用户在对话里说“关掉它”时更顺手，但多一条路径）？
+2. **系统自动关闭已合并的线程**（§6.1）不问用户（推荐：可撤销、不删东西、`projects.md` 原本就这样写）；还是你希望保留人工？
+3. **七天规则**（§6.2）保留并加限制（推荐），还是直接去掉、只留合并规则和人工？

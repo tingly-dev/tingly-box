@@ -1,6 +1,6 @@
 # 线程生命周期：现状 — Pencil Graph
 
-现状图（2026-11-21，main @ 66a564d30），配合 [thread-lifecycle.md](thread-lifecycle.md)（改进提案）看。本文只画**代码现在怎么做**；标 ✗ 的是缺口。每条转移都注明代码位置；标 🧪 的已用一次性测试实测（测试未提交，见文末）。
+现状图（2026-11-21，main @ 66a564d30），配合 [thread-lifecycle.md](thread-lifecycle.md)（顶层设计）看。本文只画**代码现在怎么做**；标 ✗ 的是缺口。每条转移都注明代码位置；标 🧪 的已用一次性测试实测（测试未提交，见文末）。
 
 目录：
 
@@ -277,7 +277,7 @@ Recover 中断                       ✗ 否                          ✗ 否
 | G13 | 任何 resolve 都不告诉协调者和 IM | 用户在 IM 里不知道哪些已经收尾 | 代码 §9 |
 | G14 | Merge 对话框的 resolve（`resolveMerged`）不回收进程、不收回工具 URL | 已 resolved 的线程进程留到空闲回收，工具 URL 一直有效，与 `mcp-tools.md`“resolve 即收回”的约定不符 | 代码：`Evict` / `revokeTools` 只在 Resolve、ArchiveSession、Archive、ReleaseProject 里调用 |
 
-G1–G5、G12、G13 在 [thread-lifecycle.md](thread-lifecycle.md) 的提案里有对应方案；G6–G11、G14 还没有，确认方向后补进提案。
+每个缺口的去向（收口或明确不做）见 [thread-lifecycle.md](thread-lifecycle.md) §11。
 
 ---
 
