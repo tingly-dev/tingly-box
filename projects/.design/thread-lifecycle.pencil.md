@@ -277,7 +277,7 @@ Recover 中断                       ✗ 否                          ✗ 否
 | G13 | 任何 resolve 都不告诉协调者和 IM | 用户在 IM 里不知道哪些已经收尾 | 代码 §9 |
 | G14 | Merge 对话框的 resolve（`resolveMerged`）不回收进程、不收回工具 URL | 已 resolved 的线程进程留到空闲回收，工具 URL 一直有效，与 `mcp-tools.md`“resolve 即收回”的约定不符 | 代码：`Evict` / `revokeTools` 只在 Resolve、ArchiveSession、Archive、ReleaseProject 里调用 |
 
-每个缺口的去向（收口或明确不做）见 [thread-lifecycle.md](thread-lifecycle.md) §11。
+哪些是现有行为内部的不一致、哪些是本轮不引入的新需求，见 [thread-lifecycle.md](thread-lifecycle.md) §6。
 
 ---
 
