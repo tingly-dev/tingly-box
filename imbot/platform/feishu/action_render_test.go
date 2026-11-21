@@ -21,7 +21,7 @@ func TestBuildActionCardRendersButtons(t *testing.T) {
 		).
 		AddRow(core.Action{ID: "project", Label: "🔧 Project", CallbackData: "action:project"})
 
-	out, err := buildActionCard("Task done.", set).String()
+	out, err := buildActionCard("Task done.", set, "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestBuildActionCardRendersButtons(t *testing.T) {
 }
 
 func TestBuildActionCardWithoutActions(t *testing.T) {
-	out, err := buildActionCard("just text", core.NewActionSet()).String()
+	out, err := buildActionCard("just text", core.NewActionSet(), "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestBuildActionCardWithoutActions(t *testing.T) {
 }
 
 func TestBuildActionCardUsesMarkdownElement(t *testing.T) {
-	out, err := buildActionCard("# Heading\n\n- item", core.NewActionSet()).String()
+	out, err := buildActionCard("# Heading\n\n- item", core.NewActionSet(), "oc_chat").String()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestBuildActionCardTier3Fallback(t *testing.T) {
 		Fallback: core.FallbackAsURL,
 		Ext:      map[core.Platform]any{core.PlatformTelegram: struct{ x int }{1}},
 	}
-	out, err := buildActionCard("hi", core.NewActionSet().AddRow(asURL)).String()
+	out, err := buildActionCard("hi", core.NewActionSet().AddRow(asURL), "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestBuildActionCardTier3Fallback(t *testing.T) {
 		Fallback: core.FallbackDrop,
 		Ext:      map[core.Platform]any{core.PlatformTelegram: struct{ x int }{1}},
 	}
-	out, err = buildActionCard("hi", core.NewActionSet().AddRow(dropped)).String()
+	out, err = buildActionCard("hi", core.NewActionSet().AddRow(dropped), "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
