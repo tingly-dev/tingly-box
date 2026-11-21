@@ -41,6 +41,7 @@ func (s *Store) ListChannelBindings(f BindingFilter) ([]ChannelBinding, error) {
 		q = q.Where("channel_bindings.thread_id = ? AND COALESCE(channel_bindings.folder, '') = ''", f.ThreadID)
 	}
 	err := q.Scan(&out).Error
+	settleMutes(out)
 	return out, err
 }
 
@@ -52,7 +53,15 @@ func (s *Store) ListChannelBindingsOf(threadIDs []string) ([]ChannelBinding, err
 	}
 	err := s.bindings().Where("channel_bindings.thread_id IN ? AND COALESCE(channel_bindings.folder, '') = ''", threadIDs).
 		Order("channel_bindings.created_at, channel_bindings.rowid").Scan(&out).Error
+	settleMutes(out)
 	return out, err
+}
+
+func settleMutes(bindings []ChannelBinding) {
+	now := time.Now()
+	for i := range bindings {
+		bindings[i].settleMute(now)
+	}
 }
 
 // GetChannelBinding loads the binding of an IM chat.
@@ -65,6 +74,21 @@ func (s *Store) GetChannelBinding(platform, chatID string) (*ChannelBinding, err
 	if res.RowsAffected == 0 {
 		return nil, ErrNotFound
 	}
+	b.settleMute(time.Now())
+	return &b, nil
+}
+
+// GetChannelBindingByID loads a binding by its id.
+func (s *Store) GetChannelBindingByID(id string) (*ChannelBinding, error) {
+	var b ChannelBinding
+	res := s.bindings().Where("channel_bindings.id = ?", id).Limit(1).Scan(&b)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, ErrNotFound
+	}
+	b.settleMute(time.Now())
 	return &b, nil
 }
 
@@ -99,6 +123,7 @@ func (s *Store) UpsertChannelBinding(b *ChannelBinding) error {
 			return err
 		}
 		*b = cur
+		b.settleMute(now)
 		return nil
 	})
 	if err != nil {
@@ -176,6 +201,23 @@ func (s *Store) SetChannelBindingNewThread(id string, on bool) error {
 func (s *Store) SetChannelBindingVerbose(id string, on bool) error {
 	return s.db.Model(&ChannelBinding{}).Where("id = ?", id).
 		Updates(map[string]any{"verbose": on, "updated_at": time.Now()}).Error
+}
+
+// SetChannelBindingMute mutes a chat until until (nil: until unmuted), or
+// unmutes it (see ChannelBinding.Muted).
+func (s *Store) SetChannelBindingMute(id string, muted bool, until *time.Time) error {
+	if !muted {
+		until = nil
+	}
+	res := s.db.Model(&ChannelBinding{}).Where("id = ?", id).
+		Updates(map[string]any{"muted": muted, "muted_until": until, "updated_at": time.Now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // MoveChannelBindings moves every chat bound to one thread to another, and

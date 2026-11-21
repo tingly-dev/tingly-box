@@ -337,3 +337,52 @@ func TestLocateSubagent(t *testing.T) {
 		assert.Empty(t, e.Parent, "steps stay with their subagent")
 	}
 }
+
+func TestChannelBindingMuteSurvivesARestartAMoveAndRunsOut(t *testing.T) {
+	path := t.TempDir() + "/projects.db"
+	s, err := Open(path)
+	require.NoError(t, err)
+	_, aMain := newProject(t, s, "A")
+	_, bMain := newProject(t, s, "B")
+	b := &ChannelBinding{Platform: "telegram", ChatID: "42", ThreadID: aMain.ID}
+	require.NoError(t, s.UpsertChannelBinding(b))
+	until := time.Now().Add(time.Hour).Round(time.Second)
+	require.NoError(t, s.SetChannelBindingMute(b.ID, true, &until))
+	assert.ErrorIs(t, s.SetChannelBindingMute("nope", true, nil), ErrNotFound)
+	require.NoError(t, s.Close())
+
+	// Reopened, the chat is still bound and still muted.
+	s, err = Open(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { s.Close() })
+	got, err := s.GetChannelBinding("telegram", "42")
+	require.NoError(t, err)
+	assert.True(t, got.Muted)
+	require.NotNil(t, got.MutedUntil)
+	assert.True(t, got.MutedUntil.Equal(until))
+
+	// Moving the chat keeps its mute.
+	moved := &ChannelBinding{Platform: "telegram", ChatID: "42", ThreadID: bMain.ID}
+	require.NoError(t, s.UpsertChannelBinding(moved))
+	assert.True(t, moved.Muted)
+
+	// Muted until unmuted, then unmuted: no time is left behind.
+	require.NoError(t, s.SetChannelBindingMute(b.ID, true, nil))
+	got, err = s.GetChannelBindingByID(b.ID)
+	require.NoError(t, err)
+	assert.True(t, got.MutedAt(time.Now().Add(1000*time.Hour)))
+	require.NoError(t, s.SetChannelBindingMute(b.ID, false, &until))
+	got, err = s.GetChannelBindingByID(b.ID)
+	require.NoError(t, err)
+	assert.False(t, got.Muted)
+	assert.Nil(t, got.MutedUntil)
+
+	// A mute that ran out reads as none, in a list too.
+	past := time.Now().Add(-time.Minute)
+	require.NoError(t, s.SetChannelBindingMute(b.ID, true, &past))
+	all, err := s.ListChannelBindings(BindingFilter{})
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.False(t, all[0].Muted)
+	assert.Nil(t, all[0].MutedUntil)
+}

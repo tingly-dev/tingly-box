@@ -5,9 +5,9 @@ import type { ChannelBinding } from '../client/channelBindings';
 import { ProjectsHostProvider, type ImChat, type ProjectsHost } from '../host/ProjectsHost';
 import ImSettingsPage from './ImSettingsPage';
 
-const m = vi.hoisted(() => ({ list: vi.fn(), bind: vi.fn(), unbind: vi.fn(), get: vi.fn(), notify: vi.fn() }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key) }) }));
-vi.mock('../client/channelBindings', () => ({ listChannelBindings: m.list, bindChannel: m.bind, unbindChannel: m.unbind }));
+const m = vi.hoisted(() => ({ list: vi.fn(), bind: vi.fn(), unbind: vi.fn(), mute: vi.fn(), get: vi.fn(), notify: vi.fn() }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key), i18n: { language: 'en' } }) }));
+vi.mock('../client/channelBindings', () => ({ listChannelBindings: m.list, bindChannel: m.bind, unbindChannel: m.unbind, muteChannel: m.mute }));
 vi.mock('../client', async (actual) => ({ ...(await actual<typeof import('../client')>()), api: { GET: m.get } }));
 
 const chat = (chatId: string, title: string, over: Partial<ImChat> = {}): ImChat => ({
@@ -29,7 +29,7 @@ const summary = (id: string, name: string, over: Record<string, unknown> = {}) =
 const show = (h: ProjectsHost) => render(<MemoryRouter><ProjectsHostProvider host={h}><ImSettingsPage /></ProjectsHostProvider></MemoryRouter>);
 
 beforeEach(() => {
-    m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false } satisfies ChannelBinding]);
+    m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false, muted: false } satisfies ChannelBinding]);
     m.bind.mockResolvedValue({});
     m.get.mockResolvedValue({ data: { projects: [summary('p1', 'Alpha'), summary('p2', 'Docs'), summary('f1', 'notes', { type: 'folder', main_thread_id: undefined, path: '/home/me/notes' })] }, response: new Response() });
 });
@@ -119,6 +119,50 @@ describe('ImSettingsPage', () => {
         fireEvent.click(await within(dialog).findByRole('radio', { name: /notes/ }));
         fireEvent.click(within(dialog).getByRole('button', { name: 'im.bind.submit' }));
         await waitFor(() => expect(m.bind).toHaveBeenCalledWith({ platform: 'telegram', chat_id: 'tg:2', bot_uuid: 'b1', chat_title: expect.any(String), project_id: 'f1' }));
+    });
+
+    it('mutes a bound chat for as long as picked, keeping it bound', async () => {
+        m.mute.mockResolvedValue({});
+        show(host());
+        const rows = await screen.findAllByRole('row');
+        expect(within(rows[2]).queryByRole('button', { name: /im\.mute\.muteLabel/ })).not.toBeInTheDocument();
+        fireEvent.click(within(rows[1]).getByRole('button', { name: /im\.mute\.muteLabel/ }));
+        const before = Date.now();
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'im.mute.hours8' }));
+        await waitFor(() => expect(m.mute).toHaveBeenCalledWith('cb1', true, expect.any(Date)));
+        const until = (m.mute.mock.calls[0][2] as Date).getTime();
+        expect(until - before).toBeGreaterThanOrEqual(8 * 3_600_000 - 1000);
+        expect(until - before).toBeLessThan(8 * 3_600_000 + 5000);
+        expect(m.bind).not.toHaveBeenCalled();
+        expect(m.unbind).not.toHaveBeenCalled();
+    });
+
+    it('mutes until unmuted', async () => {
+        m.mute.mockResolvedValue({});
+        show(host());
+        const rows = await screen.findAllByRole('row');
+        fireEvent.click(within(rows[1]).getByRole('button', { name: /im\.mute\.muteLabel/ }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'im.mute.forever' }));
+        await waitFor(() => expect(m.mute).toHaveBeenCalledWith('cb1', true, undefined));
+    });
+
+    it('says until when a chat is muted and unmutes it in one click', async () => {
+        const until = new Date(Date.now() + 3_600_000).toISOString();
+        m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false, muted: true, muted_until: until }]);
+        m.mute.mockResolvedValue({});
+        show(host());
+        const rows = await screen.findAllByRole('row');
+        await waitFor(() => expect(within(rows[1]).getByText(/im\.mute\.until/)).toBeInTheDocument());
+        fireEvent.click(within(rows[1]).getByRole('button', { name: /im\.mute\.unmuteLabel/ }));
+        await waitFor(() => expect(m.mute).toHaveBeenCalledWith('cb1', false, undefined));
+    });
+
+    it('treats a mute that ran out as none', async () => {
+        m.list.mockResolvedValue([{ id: 'cb1', platform: 'telegram', chat_id: 'tg:1', chat_title: 'yz', project_id: 'p1', thread_id: 'mp1', created_at: '', updated_at: '', verbose: false, muted: true, muted_until: new Date(Date.now() - 1000).toISOString() }]);
+        show(host());
+        const rows = await screen.findAllByRole('row');
+        await waitFor(() => expect(within(rows[1]).getByRole('button', { name: /im\.mute\.muteLabel/ })).toBeInTheDocument());
+        expect(within(rows[1]).queryByText(/im\.mute\.until/)).not.toBeInTheDocument();
     });
 
     it('opens the host\'s access dialog for a bot', async () => {

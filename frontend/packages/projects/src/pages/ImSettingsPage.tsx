@@ -6,9 +6,10 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MoveChatDialog } from '../components/im/MoveChatDialog';
+import { isMuted, MuteControl, useMuteText } from '../components/im/MuteControl';
 import { PlatformMark, usePlatformLabel } from '../components/im/PlatformMark';
 import { chatKey, imDestination, useChannelBindings, useImChats, useProjectDirectory } from '../components/im/useImBindings';
-import { ChatBubble } from '../components/icons';
+import { BellOff, ChatBubble } from '../components/icons';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectsHost, type ImBot, type ImChat } from '../host/ProjectsHost';
 
@@ -30,7 +31,8 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
     const { im, paths, embedded } = useProjectsHost();
     const platformLabel = usePlatformLabel();
     const { bots, chats, reload } = useImChats(!!im);
-    const { bindings, byChat, bind } = useChannelBindings(!!im);
+    const { bindings, byChat, bind, mute } = useChannelBindings(!!im);
+    const muteText = useMuteText();
     const directory = useProjectDirectory(!!im);
     const bindable = useMemo(() => [...directory.values()], [directory]);
     const [accessBot, setAccessBot] = useState<ImBot | null>(null);
@@ -51,6 +53,16 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
             throw e;
         }
     }, [bind, notify, directory, t]);
+
+    const onMute = useCallback(async (chat: ImChat, id: string, muted: boolean, until?: Date) => {
+        try {
+            await mute(id, muted, until);
+            notify(t(muted ? 'im.mute.done' : 'im.mute.undone', { chat: chat.title }), 'success');
+        } catch (e) {
+            notify(`${t('im.mute.failed')}: ${(e as Error).message}`, 'error');
+            throw e;
+        }
+    }, [mute, notify, t]);
 
     const loading = bots === null || chats === null || bindings === null;
 
@@ -101,10 +113,10 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                             <Table size="small" sx={{ tableLayout: 'fixed', minWidth: 560, '& td, & th': { borderColor: 'divider' }, '& tbody tr:last-of-type td': { borderBottom: 0 } }}>
                                                 <TableHead>
                                                     <TableRow>
-                                                        <TableCell sx={{ pl: 2, width: '42%' }}>{t('im.settings.chat')}</TableCell>
+                                                        <TableCell sx={{ pl: 2, width: '32%' }}>{t('im.settings.chat')}</TableCell>
                                                         <TableCell sx={{ width: '28%' }}>{t('im.settings.boundTo')}</TableCell>
-                                                        <TableCell sx={{ width: '16%' }}>{t('im.settings.status')}</TableCell>
-                                                        <TableCell align="right" sx={{ pr: 2, width: '14%' }}><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('im.settings.action')}</Box></TableCell>
+                                                        <TableCell sx={{ width: '18%' }}>{t('im.settings.status')}</TableCell>
+                                                        <TableCell align="right" sx={{ pr: 2, width: '22%' }}><Box component="span" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('im.settings.action')}</Box></TableCell>
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
@@ -112,6 +124,7 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                         const b = byChat.get(chatKey(c.platform, c.chatId));
                                                         const place = b ? directory.get(b.project_id) : undefined;
                                                         const destination = imDestination(b, place, paths);
+                                                        const muted = isMuted(b);
                                                         return (
                                                             <TableRow key={chatKey(c.platform, c.chatId)}>
                                                                 <TableCell sx={{ pl: 2 }}>
@@ -137,16 +150,25 @@ export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {
                                                                         <Dot color={STATE_COLOR[c.state]} />
                                                                         {t(c.state === 'ok' ? 'im.settings.statusOk' : c.state === 'blocked' ? 'im.settings.statusBlocked' : 'im.settings.statusUnpaired')}
                                                                     </Typography>
+                                                                    {muted && (
+                                                                        <Typography noWrap title={t('im.mute.hint')} sx={{ fontSize: fontSizes.sm, display: 'flex', alignItems: 'center', gap: 0.5, color: 'warning.main' }}>
+                                                                            <BellOff sx={{ fontSize: 14 }} />
+                                                                            {muteText(b)}
+                                                                        </Typography>
+                                                                    )}
                                                                 </TableCell>
                                                                 <TableCell align="right" sx={{ pr: 2 }}>
-                                                                    <Button
-                                                                        size="small" variant={b ? 'outlined' : 'contained'} color={b ? 'inherit' : 'primary'}
-                                                                        disabled={c.state === 'blocked'}
-                                                                        aria-label={b ? t('im.settings.rebindLabel', { chat: c.title }) : undefined}
-                                                                        onClick={() => setMoving(c)}
-                                                                    >
-                                                                        {b ? t('im.settings.rebindAction') : t('im.settings.bindAction')}
-                                                                    </Button>
+                                                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, flexWrap: 'wrap' }}>
+                                                                        {b && <MuteControl binding={b} chat={c.title} onMute={(on, until) => onMute(c, b.id, on, until)} />}
+                                                                        <Button
+                                                                            size="small" variant={b ? 'outlined' : 'contained'} color={b ? 'inherit' : 'primary'}
+                                                                            disabled={c.state === 'blocked'}
+                                                                            aria-label={b ? t('im.settings.rebindLabel', { chat: c.title }) : undefined}
+                                                                            onClick={() => setMoving(c)}
+                                                                        >
+                                                                            {b ? t('im.settings.rebindAction') : t('im.settings.bindAction')}
+                                                                        </Button>
+                                                                    </Box>
                                                                 </TableCell>
                                                             </TableRow>
                                                         );

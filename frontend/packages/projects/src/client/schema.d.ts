@@ -204,6 +204,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/channel-bindings/{id}/mute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mute a bound IM chat (nothing is sent to it, its messages still arrive), until a time or until unmuted; or unmute it. The binding stays.
+         * @description Mute a bound IM chat (nothing is sent to it, its messages still arrive), until a time or until unmuted; or unmute it. The binding stays.
+         */
+        put: operations["apiV1ProjectsChannel-bindingsIdMutePut"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/directories": {
         parameters: {
             query?: never;
@@ -1471,6 +1491,13 @@ export interface components {
             folder?: string;
             /** @description Field id */
             id: string;
+            /** @description Field muted */
+            muted: boolean;
+            /**
+             * Format: date-time
+             * @description Field muted_until
+             */
+            muted_until?: string;
             /** @description Field platform */
             platform: string;
             /** @description Field project_id */
@@ -1978,6 +2005,15 @@ export interface components {
             error?: string;
             /** @description Field models */
             models: components["schemas"]["Model"][];
+        };
+        MuteChannelRequest: {
+            /** @description Field muted */
+            muted: boolean;
+            /**
+             * Format: date-time
+             * @description Field muted_until
+             */
+            muted_until?: string;
         };
         OKResponse: {
             /** @description Field ok */
@@ -3118,6 +3154,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
+    "apiV1ProjectsChannel-bindingsIdMutePut": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MuteChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelBinding"];
                 };
             };
         };
