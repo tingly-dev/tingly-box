@@ -2,6 +2,8 @@
 
 状态：**提案**（2026-11-21），待用户确认后分 PR 实现。实现后把本文改成“现状”，并更新 `projects.md` §4.3。
 
+现状的完整状态图、触发和实测缺口（G1–G14）见 [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)。
+
 ## 1. 问题
 
 用户反馈：大量线程停在 ready / waiting，什么也不等，却不进 resolved。原因是“谁、在什么条件下 resolve”从未定义完整。现状（代码核对）：
