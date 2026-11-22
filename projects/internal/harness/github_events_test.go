@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
 )
 
 // G-merge: a thread merges its PR through its tool. The coordinator is told
@@ -44,8 +45,10 @@ func TestJourneyAMergedPRIsToldToTheCoordinatorAsAFact(t *testing.T) {
 			return nil
 		},
 	})
-	pointOriginAtGitHub(t, w.Repo)
+	gh.bare = pointOriginAtGitHub(t, w.Repo)
 	w.Service.SetGitHub(gh)
+	// The user lets threads merge on their own (a new project asks first).
+	w.UpdateProject(func(p *db.Project) { p.GitHubAuto = []string{project.GitHubPublish, project.GitHubMerge} })
 
 	w.Say("Add the tool and merge it.")
 	th := w.ThreadIs(endTool, db.ThreadReady)
