@@ -33,7 +33,7 @@ const mixed = () => {
 };
 
 describe('ProjectLinks', () => {
-    it('shows the open items, PRs and issues in cards of their own, newest first, each under its thread', () => {
+    it('shows the open items, PRs and issues in groups of their own, newest first, each under its thread', () => {
         render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
         const prs = screen.getByRole('region', { name: 'links.prs' });
         expect(within(prs).getAllByRole('link').map((a) => a.textContent)).toEqual(['#2 Newer', '#1 Older']);
@@ -90,8 +90,31 @@ describe('ProjectLinks', () => {
     it('sends a row\'s refresh to the thread that owns the item', async () => {
         post.mockResolvedValue({ data: { results: [{ repo: 'acme/w', kind: 'pr', number: 2, status: 'refreshed' }] }, response: { ok: true } });
         render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
-        const row = screen.getByRole('link', { name: '#2 Newer' }).parentElement!.parentElement as HTMLElement;
+        let row = screen.getByRole('link', { name: '#2 Newer' }) as HTMLElement;
+        while (!within(row).queryByRole('button', { name: 'links.refresh' })) row = row.parentElement!;
         fireEvent.click(within(row).getByRole('button', { name: 'links.refresh' }));
         expect(post).toHaveBeenCalledWith('/api/v1/threads/{id}/links/refresh', { params: { path: { id: 'b' } }, body: { repo: 'acme/w', kind: 'pr', number: 2 } });
+    });
+
+    it('folds a group from its heading and remembers it', () => {
+        const { unmount } = render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
+        const heading = screen.getByRole('button', { name: 'links.prs 2' });
+        expect(heading).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.click(heading);
+        expect(heading).toHaveAttribute('aria-expanded', 'false');
+        unmount();
+        render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
+        expect(screen.getByRole('button', { name: 'links.prs 2' })).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.getByRole('button', { name: 'links.issues 1' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('starts the other list at its top, and keeps the place when the threads update', () => {
+        const { container, rerender } = render(<ProjectLinks projectId="p1" threads={mixed()} onOpen={vi.fn()} />);
+        const scroller = [...container.querySelectorAll<HTMLElement>('div')].find((d) => getComputedStyle(d).overflowY === 'auto')!;
+        scroller.scrollTop = 120;
+        rerender(<ProjectLinks projectId="p1" threads={[...mixed()]} onOpen={vi.fn()} />);
+        expect(scroller.scrollTop).toBe(120);
+        fireEvent.click(screen.getByRole('button', { name: 'links.filterClosed:1' }));
+        expect(scroller.scrollTop).toBe(0);
     });
 });

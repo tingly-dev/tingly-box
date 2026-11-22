@@ -24,7 +24,21 @@ behind a popover.
   right column. Narrow screens keep the drawer. Project thread panes are
   unchanged.
 - Data is the `Thread` record (see "Status fields"); the rail makes no request of its own.
-- **Pull requests and Issues cards** (`ThreadPrsCard`, `ThreadIssuesCard`, after the host's cards): the PRs and the issues the thread opened or commented on through its tools, from `Thread.links`, one card per kind: `#12 title` as a link to GitHub, under it open / draft / merged / closed, for an open PR its checks and mergeability, and how old the reading is ("could not refresh" when the last refresh failed). Each card is absent when the thread has none of its kind. An open PR's row has a **Files changed** button that opens that PR's own diff (head against base: `projects/.design/github-tools.md`, "A PR's diff"), with **Merge…** for the PR of the thread's own branch. A branch with commits and no open PR has a row in the Pull requests card instead ("No PR yet · ahead of main · N commits · M files", **Merge…**). The Changes card is gone, and so is the Review button in the thread header and on the conversation's thread line; the diff belongs to a PR, so it is reached from the PR. The Status tab of the coordinator has the same rows for every thread of the project under one card (`ProjectLinksCard`), newest first, each with its thread's title. The records and their refresh rules are in `projects/.design/github-tools.md`.
+- **Pull requests and Issues cards** (`ThreadPrsCard`, `ThreadIssuesCard`, after the host's cards): the PRs and the issues the thread opened or commented on through its tools, from `Thread.links`, one card per kind: `#12 title` as a link to GitHub, under it open / draft / merged / closed, for an open PR its checks and mergeability, and how old the reading is ("could not refresh" when the last refresh failed). Each card is absent when the thread has none of its kind. An open PR's row has a **Files changed** button that opens that PR's own diff (head against base: `projects/.design/github-tools.md`, "A PR's diff"), with **Merge…** for the PR of the thread's own branch. A branch with commits and no open PR has a row in the Pull requests card instead ("No PR yet · ahead of main · N commits · M files", **Merge…**). The Changes card is gone, and so is the Review button in the thread header and on the conversation's thread line; the diff belongs to a PR, so it is reached from the PR. The project's own **Issues & PRs** tab (below) lists every thread's links, each with its thread's title. The records and their refresh rules are in `projects/.design/github-tools.md`.
+- **Issues & PRs tab** (`ProjectLinks`, beside Threads and Library in the
+  project's overview pane): every link of the project's threads, newest
+  first. It is drawn like the Threads tab, not like the rail: the same
+  toolbar row (Open · N | Closed · N, the refresh-all button at its end),
+  then quiet folding groups (Pull requests, Issues; the fold is remembered
+  per project, as the Threads tab's) of `ListRow`s — kind/state icon in
+  the mark, `#12 title` (link to GitHub) as the title, the state parts
+  (checks, mergeability) then the thread's title (opens the thread) as the
+  subtitle, the short reading age as the meta, refresh and details at the
+  end. Only the list scrolls, inside the tab; the toolbar stays put. The
+  scroll box is a plain block: the rail's cards in a flex column shrank to
+  the pane (a clipping flex item has no min-content floor) and cut their own
+  rows, so a long list could not be scrolled. Switching Open/Closed starts
+  the other list at its top; a refresh or a thread event keeps the place.
 - **Issues & PRs strip** (`ComposerStrip`, right above the message box): the
   same links as one line each (kind, `#12 title`, where it stands, Files
   changed / refresh / details), open PRs first, then open issues, then what
