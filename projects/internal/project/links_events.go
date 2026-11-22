@@ -33,8 +33,10 @@ const (
 )
 
 // conflictWakeGap is how soon after waking the coordinator about a PR's
-// conflicts it may be woken about the same PR again; the count is kept in
-// memory, so a restart forgets it.
+// conflicts it may be woken about the same PR again, when it left them and
+// came back; the count is kept in memory, so a restart forgets it. A conflict
+// that stays is one wake whatever this says: the record keeps its merge state
+// through unknown readings (keepMergeState).
 const conflictWakeGap = 30 * time.Minute
 
 // prChange is one change of a PR the thread opened: Link is the record as it

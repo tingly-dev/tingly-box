@@ -241,3 +241,74 @@ func TestACoordinatorTurnThatFailsLeavesTheConflictLineInTheChat(t *testing.T) {
 	assert.Contains(t, got.text, "to tell the thread what to do.")
 	waitQuiet(t, f, svc, w.ID)
 }
+
+// restart is a new Links over the same store, as after the service restarted:
+// whatever it kept in memory is gone.
+func (f *linksFixture) restart() {
+	events := f.links.events
+	f.links = NewLinks(f.store, f.gh, func(id string) { f.events = append(f.events, id) })
+	f.links.now = func() time.Time { return *f.clock }
+	f.links.events = events
+	f.svc.Links = f.links
+}
+
+func TestAConflictThatStaysIsOneAlertThroughUnknownReadingsAndRestarts(t *testing.T) {
+	f := eventsFixture(t)
+	l := f.stackedPR(t, "Fix", "tp/work", "main")
+	f.setMerge(l.Number, "conflicts")
+	f.sweepAfter(linkInterval)
+	require.Equal(t, 1, f.pending(t))
+
+	// Hours of the same conflict, GitHub recomputing in between (main moved),
+	// and the service restarting twice: well past the 30-minute cap.
+	for i := 0; i < 30; i++ {
+		if i%2 == 0 {
+			f.setMerge(l.Number, "unknown")
+		} else {
+			f.setMerge(l.Number, "conflicts")
+		}
+		if i == 9 || i == 20 {
+			f.restart()
+		}
+		f.sweepAfter(linkInterval)
+		if i%2 == 0 {
+			assert.Equal(t, "conflicts", f.link(t, l.Number).MergeState, "an unknown reading keeps the last settled one")
+		}
+	}
+
+	assert.Len(t, githubNotes(t, f, f.worker.ID), 1, "nothing more recorded")
+	assert.Equal(t, 1, f.pending(t), "the coordinator was woken once")
+
+	// Leaving and coming back, past the cap, is a new entry.
+	f.setMerge(l.Number, "ready")
+	f.sweepAfter(linkInterval)
+	f.setMerge(l.Number, "unknown")
+	f.sweepAfter(linkInterval)
+	assert.Equal(t, "ready", f.link(t, l.Number).MergeState)
+	f.setMerge(l.Number, "conflicts")
+	f.sweepAfter(linkInterval)
+	notes := githubNotes(t, f, f.worker.ID)
+	require.Len(t, notes, 3, "entered, resolved, entered again")
+	assert.Equal(t, 2, f.pending(t))
+}
+
+func TestACommentReadingUnknownDoesNotEnterConflictsAgain(t *testing.T) {
+	f := eventsFixture(t)
+	f.allowAll()
+	l := f.stackedPR(t, "Fix", "tp/work", "main")
+	f.setMerge(l.Number, "conflicts")
+	f.sweepAfter(linkInterval)
+	require.Equal(t, 1, f.pending(t))
+
+	// The comment tool records its own reading of the PR.
+	f.setMerge(l.Number, "unknown")
+	_, err := f.links.Comment(context.Background(), f.thread(t), l.Number, "Rebasing on main.")
+	require.NoError(t, err)
+	assert.Equal(t, "conflicts", f.link(t, l.Number).MergeState)
+
+	f.setMerge(l.Number, "conflicts")
+	f.advance(conflictWakeGap)
+	f.sweepAfter(linkInterval)
+	assert.Len(t, githubNotes(t, f, f.worker.ID), 1)
+	assert.Equal(t, 1, f.pending(t))
+}
