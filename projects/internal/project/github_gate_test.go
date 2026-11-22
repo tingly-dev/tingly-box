@@ -108,13 +108,16 @@ func TestWhatIsNeverAutomaticAsksWithEveryGroupOn(t *testing.T) {
 }
 
 // The Merge dialog is the user's own click: nothing asks again.
+// Through the dialog's own entry point: there is nobody to ask in this
+// fixture, so a gated merge would fail.
 func TestTheUsersMergeDialogIsNotGated(t *testing.T) {
-	f := newLinksFixture(t)
-	f.setAuto(t)
-	_, err := f.links.Merge(byUser(context.Background()), f.thread(t), MergeInput{Method: MergeSquash})
+	f, th, _, _ := mergeFixture(t)
+	p, err := f.store.GetProject(f.project.ID)
 	require.NoError(t, err)
-	assert.Empty(t, f.approvals)
-	links, _ := f.store.ThreadLinks(f.worker.ID)
-	require.Len(t, links, 1)
-	assert.Equal(t, db.LinkStateMerged, links[0].State)
+	p.GitHubAuto = []string{}
+	require.NoError(t, f.store.SaveProject(p))
+	got, err := f.threads.Merge(context.Background(), th.ID, MergeSpec{Method: MergeSquash})
+	require.NoError(t, err)
+	require.Len(t, got.Links, 1)
+	assert.Equal(t, db.LinkStateMerged, got.Links[0].State)
 }

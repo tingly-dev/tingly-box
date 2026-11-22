@@ -1767,7 +1767,8 @@ func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*
 	if links == nil {
 		return nil, errors.New("merging is not available here")
 	}
-	out, err := links.Merge(ctx, t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
+	// The dialog is the user's own click: no card asks them again.
+	out, err := links.Merge(byUser(ctx), t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
 	if err != nil {
 		return nil, err
 	}
