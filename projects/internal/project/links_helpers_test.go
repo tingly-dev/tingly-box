@@ -140,8 +140,8 @@ func (g *fakeGitHub) CreatePR(_ context.Context, r GitHubRepo, title, body, head
 	return g.add(db.LinkPR, title, func(it *GitHubItem) { it.Head, it.Base, it.Draft, it.Body = head, base, draft, body }), nil
 }
 
-func (g *fakeGitHub) SquashPR(_ context.Context, r GitHubRepo, n int, sha, title, message string) error {
-	if err := g.log("squash-pr %s #%d sha=%s title=%q message=%q", r.Slug(), n, sha, title, message); err != nil {
+func (g *fakeGitHub) MergePR(_ context.Context, r GitHubRepo, n int, method, sha, title, message string) error {
+	if err := g.log("%s-pr %s #%d sha=%s title=%q message=%q", method, r.Slug(), n, sha, title, message); err != nil {
 		return err
 	}
 	if g.mergeFail != nil {

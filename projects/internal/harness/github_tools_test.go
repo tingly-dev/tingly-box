@@ -65,8 +65,8 @@ func (g *stubGitHub) CreatePR(_ context.Context, _ project.GitHubRepo, title, _,
 	g.log(fmt.Sprintf("create-pr %s %s->%s", title, head, base))
 	return project.GitHubItem{Number: 7, URL: "https://github.com/acme/demo/pull/7", Title: title, State: "open", Head: head, Base: base}, nil
 }
-func (g *stubGitHub) SquashPR(_ context.Context, _ project.GitHubRepo, n int, _, _, _ string) error {
-	g.log(fmt.Sprintf("squash-pr #%d", n))
+func (g *stubGitHub) MergePR(_ context.Context, _ project.GitHubRepo, n int, method, _, _, _ string) error {
+	g.log(fmt.Sprintf("%s-pr #%d", method, n))
 	return nil
 }
 func (g *stubGitHub) UpdatePR(context.Context, project.GitHubRepo, int, *string, *string, *string) (project.GitHubItem, error) {

@@ -83,18 +83,21 @@ func (f *sessionToolsMCP) githubTools() []Tool {
 				return l.Comment(ctx, t, in.Number, in.Body)
 			})},
 		{Name: toolMerge, ThreadOnly: true, Strict: true,
-			Description: "Merge this thread's branch on GitHub, the way the user asked. method \"squash\": push the branch, open its PR if none is open, then squash-merge that PR on GitHub (it cannot be undone; the PR stays open and is reported if GitHub refuses, for example on conflicts or required checks). method \"merge_request\": push the branch and open the PR only, leaving the merge to a reviewer. The user is asked to approve every call; use it only when they asked for the merge. Nothing is merged in the local checkout, and the branch is not deleted.",
-			Properties: map[string]any{"method": map[string]any{"type": "string", "enum": []string{MergeSquash, MergeMergeRequest}, "description": "How to merge."},
+			Description: "Merge a branch of this thread on GitHub, the way the user asked. method \"squash\": push the branch, open its PR if none is open, then squash-merge that PR on GitHub (it cannot be undone; the PR stays open and is reported if GitHub refuses, for example on conflicts or required checks). method \"merge\": the same with a merge commit, which keeps the branch's commits (for the lower PR of a stack, the upper branch then needs no rebase; point its PR at the new base with update). method \"merge_request\": push the branch and open the PR only, leaving the merge to a reviewer. head defaults to this thread's own branch; name another local branch to merge its PR, for example a stack's, bottom first. The user is asked to approve every call; use it only when they asked for the merge. Nothing is merged in the local checkout, and the branch is not deleted.",
+			Properties: map[string]any{"method": map[string]any{"type": "string", "enum": []string{MergeSquash, MergeCommit, MergeMergeRequest}, "description": "How to merge."},
+				"head":    strProp("Optional. Local branch whose PR to merge; default is this thread's own branch. Same rules as create_pr's head."),
 				"message": strProp("Squash commit message (first line is the title); empty is the PR's own title with its number, and its description."),
 				"title":   strProp("PR title if a PR has to be opened; default is taken from the branch's commits, as gh pr create --fill does."),
 				"body":    strProp("PR description if a PR has to be opened; default is taken from the branch's commits.")},
 			Required: []string{"method"},
-			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct{ Method, Message, Title, Body string }) (string, error) {
-				out, err := l.Merge(ctx, t, MergeInput{Method: in.Method, Message: in.Message, Title: in.Title, Body: in.Body})
+			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct{ Method, Head, Message, Title, Body string }) (string, error) {
+				out, err := l.Merge(ctx, t, MergeInput{Method: in.Method, Head: in.Head, Message: in.Message, Title: in.Title, Body: in.Body})
 				if err != nil {
 					return "", err
 				}
 				switch {
+				case out.Merged && in.Method == MergeCommit:
+					return fmt.Sprintf("merged PR #%d into %s on GitHub with a merge commit: %s", out.Item.Number, orBranch(out.Item.Base), out.Item.URL), nil
 				case out.Merged:
 					return fmt.Sprintf("squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, orBranch(out.Item.Base), out.Item.URL), nil
 				case out.Existed:
