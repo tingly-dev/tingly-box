@@ -46,6 +46,15 @@ func (c *Coordinator) quoteUser(p *db.Project, ids []string) (string, error) {
 			return "", fmt.Errorf("cite %q is not one of the user's own recent messages", id)
 		}
 		fmt.Fprintf(&b, "\n> %s", strings.ReplaceAll(strings.TrimSpace(found.Content), "\n", "\n> "))
+		if a := answerOf(found.Payload); a != nil {
+			// The pick alone says little: name the question it answers, as
+			// the system read it off the card.
+			note := fmt.Sprintf("the user's pick on the decision card %q", oneLine(a.Question))
+			if s := about(a.ThreadTitle, a.Number, a.LinkKind); s != "" {
+				note += ", about " + s
+			}
+			fmt.Fprintf(&b, "\n(%s)", note)
+		}
 	}
 	return b.String(), nil
 }

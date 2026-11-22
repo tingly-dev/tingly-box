@@ -215,6 +215,11 @@ const messages = [
     msg('m8', 'thread_update', '', 4, { thread_id: 't-pool', title: 'Tune the DB connection pool', kind: 'needs_input' }),
     msg('m9', 'assistant', 'The Redis change is ready for review, and the tracing work is merged. Next, approve or deny the staging benchmark in the pool thread; I will keep the retry-budget work separate until its tests finish.', 3),
     msg('m9a', 'file', 'Pool saturation during the last run', 3.5, { attachments: [{ name: 'pool-saturation.png', path: 'outputs/pool-saturation.png', type: 'image/png', size: 40_220 }] }),
+    // Two decision cards about two threads' PRs: each says which one it is
+    // about, and the answer reaches the coordinator naming its card.
+    msg('m10', 'decision', '', 2.5, { question: 'Resolve the conflicts of the SDK PR with main?', thread_id: 't-sdk', thread_title: 'Retry budget in the SDK', number: 37, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The conflict is in one import block.', chosen: 1 }),
+    msg('m10a', 'user', "I'll handle it", 2.4, { answer: { card: 'm10', question: 'Resolve the conflicts of the SDK PR with main?', thread_id: 't-sdk', thread_title: 'Retry budget in the SDK', number: 37, link_kind: 'pr' } }),
+    msg('m11', 'decision', '', 2, { question: 'Resolve the conflicts of the Redis PR with main?', thread_id: 't-cache', thread_title: 'Cache idempotency keys in Redis', number: 214, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The branch is two commits behind and CI was green before.' }),
 ]
 
 const library = [

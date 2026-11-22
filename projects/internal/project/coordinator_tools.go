@@ -53,6 +53,8 @@ func (c *Coordinator) coordinatorTools() []Tool {
 				}, "required": []string{"label"}}},
 				"recommended": map[string]any{"type": "integer", "description": "Index of the recommended option, from 0."},
 				"reason":      strProp("Why you recommend it, one sentence."),
+				"thread_id":   strProp("Optional. The thread it is about (id prefix); the card and the answer name it."),
+				"number":      map[string]any{"type": "integer", "description": "Optional. The PR or issue number it is about."},
 			},
 			Required: []string{"question", "options", "recommended"}, Handle: textTool(c.requestDecision)},
 		{Name: "message_thread", CoordinatorOnly: true, Description: "Send a message to an existing thread (follow-up work, an answer to its question). While the thread works, it is added to the running turn and read at the thread's next step (so it can change course); an idle thread starts a turn on it.",
@@ -139,6 +141,9 @@ func (c *Coordinator) proposeThreads(ctx context.Context, p *db.Project, in stru
 
 func (c *Coordinator) requestDecision(_ context.Context, p *db.Project, d Decision) (string, error) {
 	if err := d.validate(); err != nil {
+		return "", err
+	}
+	if err := c.resolveSource(p, &d); err != nil {
 		return "", err
 	}
 	return c.ask(p.ID, d), nil

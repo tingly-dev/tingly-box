@@ -22,9 +22,85 @@ type Decision struct {
 	Options     []DecisionOption `json:"options"`
 	Recommended int              `json:"recommended"`
 	Reason      string           `json:"reason,omitempty"`
+	// ThreadID and Number say what the card is about: a thread of the
+	// project and a PR or issue number. Both are optional; the system checks
+	// the thread, fills in the other where the thread's links tell it, and
+	// writes ThreadTitle and LinkKind itself.
+	ThreadID    string `json:"thread_id,omitempty"`
+	Number      int    `json:"number,omitempty"`
+	ThreadTitle string `json:"thread_title,omitempty"`
+	// LinkKind is db.LinkPR or db.LinkIssue when a thread's links know the
+	// number, empty when not.
+	LinkKind string `json:"link_kind,omitempty"`
 	// Chosen is the picked option's index, nil until the user answers.
 	Chosen *int `json:"chosen,omitempty"`
 }
+
+// decisionAnswer is what a user message that answers a card carries in its
+// payload: the card's source, copied by the system when the user chose, so
+// the coordinator reads which card, thread and PR the pick is for.
+type decisionAnswer struct {
+	Card        string `json:"card"`
+	Question    string `json:"question"`
+	ThreadID    string `json:"thread_id,omitempty"`
+	ThreadTitle string `json:"thread_title,omitempty"`
+	Number      int    `json:"number,omitempty"`
+	LinkKind    string `json:"link_kind,omitempty"`
+}
+
+// answerOf reads the card a user message answers from its payload.
+func answerOf(payload string) *decisionAnswer {
+	if payload == "" {
+		return nil
+	}
+	var pl struct {
+		Answer *decisionAnswer `json:"answer"`
+	}
+	if json.Unmarshal([]byte(payload), &pl) != nil || pl.Answer == nil || pl.Answer.Card == "" {
+		return nil
+	}
+	return pl.Answer
+}
+
+// attrs are the envelope attributes that name the card an answer is for.
+func (a *decisionAnswer) attrs() []string {
+	if a == nil {
+		return nil
+	}
+	out := []string{"kind", "answer", "card", short(a.Card), "question", a.Question}
+	if a.ThreadID != "" {
+		out = append(out, "thread", a.ThreadTitle, "id", short(a.ThreadID))
+	}
+	if a.Number > 0 {
+		key := a.LinkKind
+		if key == "" {
+			key = "number"
+		}
+		out = append(out, key, strconv.Itoa(a.Number))
+	}
+	return out
+}
+
+// about says in words what a card is about: its thread and PR or issue.
+func about(threadTitle string, number int, kind string) string {
+	var parts []string
+	if threadTitle != "" {
+		parts = append(parts, "thread “"+threadTitle+"”")
+	}
+	if number > 0 {
+		switch kind {
+		case db.LinkPR:
+			parts = append(parts, "PR #"+strconv.Itoa(number))
+		case db.LinkIssue:
+			parts = append(parts, "issue #"+strconv.Itoa(number))
+		default:
+			parts = append(parts, "#"+strconv.Itoa(number))
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+func (d Decision) about() string { return about(d.ThreadTitle, d.Number, d.LinkKind) }
 
 // DecisionOption is one choice of a decision.
 type DecisionOption struct {
@@ -51,7 +127,81 @@ func (d *Decision) validate() error {
 	if d.Recommended < 0 || d.Recommended >= len(d.Options) {
 		return fmt.Errorf("recommended must be an option index from 0 to %d", len(d.Options)-1)
 	}
+	if d.Number < 0 {
+		return errors.New("number must be a PR or issue number")
+	}
 	return nil
+}
+
+// resolveSource checks what the card says it is about against the project's
+// threads: a thread must be one of the project's own, and the system fills
+// in what their links tell it. A thread named with no number is about its
+// one open PR, if it has exactly one; a number named with no thread is about
+// the one thread that has it. Nothing is guessed beyond that.
+func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
+	d.ThreadTitle, d.LinkKind = "", ""
+	d.ThreadID = strings.TrimSpace(d.ThreadID)
+	if d.ThreadID == "" && d.Number == 0 {
+		return nil
+	}
+	threads, err := c.store.ListThreads(p.ID)
+	if err != nil {
+		return err
+	}
+	var th *db.Thread
+	if d.ThreadID != "" {
+		for i := range threads {
+			if threads[i].ID != p.MainThreadID && strings.HasPrefix(threads[i].ID, d.ThreadID) {
+				th = &threads[i]
+				break
+			}
+		}
+		if th == nil {
+			return fmt.Errorf("no thread %q in this project", d.ThreadID)
+		}
+	} else {
+		for i := range threads {
+			if threads[i].ID == p.MainThreadID || !hasLink(threads[i].Links, d.Number) {
+				continue
+			}
+			if th != nil {
+				th = nil // two threads have it: not ours to pick
+				break
+			}
+			th = &threads[i]
+		}
+		if th == nil {
+			return nil
+		}
+	}
+	d.ThreadID, d.ThreadTitle = th.ID, th.Title
+	if d.Number == 0 {
+		var open []db.ThreadLink
+		for _, l := range th.Links {
+			if l.Kind == db.LinkPR && l.State == db.LinkStateOpen {
+				open = append(open, l)
+			}
+		}
+		if len(open) == 1 {
+			d.Number = open[0].Number
+		}
+	}
+	for _, l := range th.Links {
+		if l.Number == d.Number {
+			d.LinkKind = l.Kind
+			break
+		}
+	}
+	return nil
+}
+
+func hasLink(links []db.ThreadLink, number int) bool {
+	for _, l := range links {
+		if l.Number == number {
+			return true
+		}
+	}
+	return false
 }
 
 // ask posts a decision card to the conversation.
@@ -65,6 +215,8 @@ func (c *Coordinator) ask(projectID string, d Decision) string {
 // Choose records the user's pick on a decision card of a main thread and
 // tells the coordinator, as the user's own message: the label alone, so
 // the coordinator's wording of the question is never quoted as the user's.
+// The message's payload names the card and what it is about, which the
+// coordinator reads ahead of the label in the system's words.
 func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, index int, src Source) (*db.ThreadEvent, error) {
 	c.choosing.Lock()
 	defer c.choosing.Unlock()
@@ -89,7 +241,8 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 	if index < 0 || index >= len(d.Options) {
 		return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
 	}
-	if _, err := c.Post(main.ProjectID, d.Options[index].Label, nil, src); err != nil {
+	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind}
+	if _, err := c.post(main.ProjectID, d.Options[index].Label, jsonString(map[string]any{"answer": answer}), src); err != nil {
 		return nil, err
 	}
 	d.Chosen = &index
@@ -151,6 +304,9 @@ func (d Decision) optionOfReply(text string) (int, bool) {
 func (d Decision) chatText() string {
 	var b strings.Builder
 	b.WriteString(d.Question)
+	if a := d.about(); a != "" {
+		b.WriteString("\nAbout " + a)
+	}
 	if ctx := strings.TrimSpace(d.Context); ctx != "" {
 		b.WriteString("\n" + ctx)
 	}
@@ -198,6 +354,9 @@ func (d Decision) describe() string {
 func (d Decision) text() string {
 	var b strings.Builder
 	b.WriteString(d.Question)
+	if a := d.about(); a != "" {
+		b.WriteString("\nAbout " + a)
+	}
 	for i, o := range d.Options {
 		fmt.Fprintf(&b, "\n%d. %s", i+1, o.Label)
 		if o.Consequence != "" {

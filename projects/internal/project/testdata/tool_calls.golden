@@ -31,6 +31,9 @@ invalid input: validating root: validating /properties/options: minItems: array 
 == request_decision {"options":[{"label":"A"},{"label":"B"}],"question":"Bad index?","recommended":5}
 error=true
 recommended must be an option index from 0 to 1
+== request_decision {"options":[{"label":"A"},{"label":"B"}],"question":"Drop it?","recommended":0,"thread_id":"nope"}
+error=true
+no thread "nope" in this project
 == propose_threads {"threads":[{"task":"do a","title":"Plan A"},{"base":"main","task":"do b","title":"Plan B"}]}
 error=false
 proposed 2 threads; the user can start them from the card

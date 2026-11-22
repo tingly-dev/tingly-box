@@ -2,7 +2,9 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -311,4 +313,74 @@ func TestACommentReadingUnknownDoesNotEnterConflictsAgain(t *testing.T) {
 	f.sweepAfter(linkInterval)
 	assert.Len(t, githubNotes(t, f, f.worker.ID), 1)
 	assert.Equal(t, 1, f.pending(t))
+}
+
+// The whole loop of a conflict: the coordinator asks about the thread, the
+// user picks, the answer reaches the coordinator naming that card and thread,
+// and the coordinator relays it to that thread with the pick quoted.
+func TestAConflictAnswerReachesItsOwnThread(t *testing.T) {
+	attr := func(env, key string) string {
+		if m := regexp.MustCompile(` ` + key + `="([^"]*)"`).FindStringSubmatch(env); m != nil {
+			return m[1]
+		}
+		return ""
+	}
+	f, svc, sink, _, w := conflictFixture(t, func(c *coordtest.Turn) error {
+		env := c.InputEnvelope()
+		switch {
+		case isConflictInput(c):
+			out, isErr := c.Call("request_decision", map[string]any{
+				"question":    "Resolve the conflicts with main?",
+				"options":     []map[string]string{{"label": "Merge main and push"}, {"label": "I will handle it"}, {"label": "Drop the PR"}},
+				"recommended": 0,
+				"thread_id":   attr(env, "id"),
+			})
+			assert.False(t, isErr, out)
+		case attr(env, "kind") == "answer":
+			out, isErr := c.Call("message_thread", map[string]any{"thread_id": attr(env, "id"), "message": "The user decided.", "cite": []string{attr(env, "msg")}})
+			assert.False(t, isErr, out)
+		default:
+			c.Reply("ok")
+		}
+		return nil
+	})
+	w.Cwd, w.SessionID = f.repo, "fix-export" // the relayed message runs a turn of the thread
+	require.NoError(t, f.store.SaveThread(w))
+	done := make(chan struct{})
+	defer close(done)
+	go func() { // the chat hears the card and the replies; nobody reads them here
+		for {
+			select {
+			case <-sink.ch:
+			case <-done:
+				return
+			}
+		}
+	}()
+	refreshConflicts(t, svc, w)
+	msgs := waitMessages(t, f.store, f.project.ID, func(m []db.ThreadEvent) bool { return countKind(m, db.EvDecision) == 1 })
+	var card db.ThreadEvent
+	for _, m := range msgs {
+		if m.Kind == db.EvDecision {
+			card = m
+		}
+	}
+	var d Decision
+	require.NoError(t, json.Unmarshal([]byte(card.Payload), &d))
+	assert.Equal(t, w.ID, d.ThreadID)
+	assert.Equal(t, db.LinkPR, d.LinkKind, "the thread's one open PR")
+
+	_, err := svc.Coordinator.Choose(context.Background(), f.project.MainThreadID, card.ID, 1, Source{})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		events, _ := f.store.ListThreadEvents(w.ID)
+		for _, e := range events {
+			if e.Kind == db.EvUser && strings.Contains(e.Content, "> I will handle it") &&
+				strings.Contains(e.Content, `the user's pick on the decision card "Resolve the conflicts with main?"`) {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 20*time.Millisecond, "the thread got the user's pick and the question it answers")
+	waitQuiet(t, f, svc, w.ID)
 }

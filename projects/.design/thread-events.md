@@ -84,12 +84,12 @@
 
 1. Sweep 读到 PR #34 的 `merge_state` 从别的值变成 `conflicts`。线程里记一条：“PR #34 has conflicts with main.” 卡片上 PR 显示 conflicts（已有）。
 2. 协调者被唤醒，输入的 `kind="pr_conflicts"`，信封里写明 **needs_user="true"**。
-3. 协调者调用 `get_thread` 看清情况（线程在不在跑、PR 的 base、冲突前的工作），然后**必须**调用 `request_decision`，**不得**直接 `message_thread`。卡片的选项：
+3. 协调者调用 `get_thread` 看清情况（线程在不在跑、PR 的 base、冲突前的工作），然后**必须**调用 `request_decision`（`thread_id` 为该线程、`number` 为该 PR，卡片和回答都会标明来源，见 `decision-card-source.md`），**不得**直接 `message_thread`。卡片的选项：
    - **让线程把 main 合进分支、解决冲突后推送**（推荐）。线程不能强推，所以是 merge 而不是 rebase；推送是普通推送，PR 自动更新。
    - **我自己处理**：协调者什么都不做，冲突解决后（Sweep 读到 `conflicts` 消失）记一条 “Conflicts resolved.”。
    - **放弃这个 PR**：协调者带 cite 让线程用 `close` 工具关闭它（除非项目设置自动放行 close，否则工具会弹卡问用户）。
    - 线程正在跑时，卡片的 context 写明“线程还在跑，选第一项会在这一轮结束后执行”。
-4. 用户在网页或 IM 上选择。选择作为用户消息回到协调者（已有流程），协调者用 `message_thread` 带上 `cite` 转给线程，线程把这句话当作用户的授权。
+4. 用户在网页或 IM 上选择。选择作为用户消息回到协调者（已有流程，信封带 `kind="answer"` 和卡片的 card / thread / id / pr，几张冲突卡同时待答也不会混），协调者用 `message_thread` 带上 `cite` 转给线程，线程把这句话当作用户的授权。
 5. 用户一直不选：卡片留着，不催、不超时。冲突在此期间自己消失的（用户在别处解决了），记一条 “Conflicts resolved.”，**不再唤醒**协调者，也不再发卡片。
 
 **协调者离线**（暂停、归档、出错）时：IM 收到一行 “Needs you: PR #34 of #12 Fix export has conflicts with main. Open Projects to decide.”，与现有 needs_input 的折叠行一致。恢复后协调者不补发卡片（用户已经被告知）。

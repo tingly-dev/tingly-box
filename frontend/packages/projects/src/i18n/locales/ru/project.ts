@@ -60,6 +60,7 @@ export const project: PluralDict<typeof en> = {
         example3: 'С этого момента предлагай потоки и жди моего «добро», прежде чем их запускать.',
         suggested: 'Предложенные потоки', start: 'Запустить', startAll: 'Запустить все ({{count}})',
         decision: 'Нужно ваше решение', recommended: 'Рекомендуется', choose: 'Выбрать', chosen: 'Выбрано',
+        decisionAbout: 'Касается', decisionPR: 'PR #{{number}}', decisionIssue: 'Issue #{{number}}', decisionNumber: '#{{number}}',
     },
     overview: {
         view: { label: 'Вид', list: 'Список', board: 'Доска' },
