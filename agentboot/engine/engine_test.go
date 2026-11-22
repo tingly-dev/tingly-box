@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -415,4 +417,44 @@ func TestApplyLive_PermissionRules(t *testing.T) {
 			t.Fatal("a refused mode change restarts as before")
 		}
 	})
+}
+
+// A settings file whose permission rules changed is sent to the running
+// process at once, and only what changed; the engine then knows it was sent.
+func TestRefreshLiveSendsChangedRulesOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	write := func(s string) {
+		if err := os.WriteFile(path, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(`{"permissions":{"allow":["Bash(ls)"]}}`)
+	e := &Engine{launch: map[string]launchState{}}
+	f := &fakeLive{}
+	if err := e.refreshLive(context.Background(), "s1", f, path); err != nil || len(f.applied) != 0 {
+		t.Fatalf("a process the engine never launched was sent %v (%v)", f.applied, err)
+	}
+	e.setLaunch("s1", launchState{live: liveSettings(agentboot.ExecutionOptions{SettingsPath: path})})
+	if err := e.refreshLive(context.Background(), "s1", f, path); err != nil || len(f.applied) != 0 {
+		t.Fatalf("unchanged rules were sent: %v (%v)", f.applied, err)
+	}
+	write(`{"permissions":{"allow":["Bash(ls)","Bash(task codegen)"]}}`)
+	if err := e.refreshLive(context.Background(), "s1", f, path); err != nil || len(f.applied) != 1 {
+		t.Fatalf("changed rules: sent %v (%v)", f.applied, err)
+	}
+	if !strings.Contains(fmt.Sprint(f.applied[0]), "Bash(task codegen)") {
+		t.Fatalf("sent %v", f.applied[0])
+	}
+	if err := e.refreshLive(context.Background(), "s1", f, path); err != nil || len(f.applied) != 1 {
+		t.Fatalf("the same rules were sent twice: %v", f.applied)
+	}
+	write(`{"permissions":{"allow":["Bash(ls)"]}}`)
+	f.settingsErr = errors.New("process gone")
+	if err := e.refreshLive(context.Background(), "s1", f, path); err == nil {
+		t.Fatal("a failed send is an error")
+	}
+	f.settingsErr = nil
+	if err := e.refreshLive(context.Background(), "s1", f, path); err != nil || len(f.applied) != 3 {
+		t.Fatalf("a failed send is tried again: %v", f.applied)
+	}
 }

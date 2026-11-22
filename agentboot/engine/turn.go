@@ -642,6 +642,11 @@ func (e *Engine) RefreshSettings(ctx context.Context, id, path string) error {
 	if !ok {
 		return nil
 	}
+	return e.refreshLive(ctx, id, res.c, path)
+}
+
+// refreshLive is RefreshSettings for the process ctl controls.
+func (e *Engine) refreshLive(ctx context.Context, id string, ctl liveController, path string) error {
 	e.mu.Lock()
 	have, known := e.launch[id]
 	e.mu.Unlock()
@@ -651,7 +656,7 @@ func (e *Engine) RefreshSettings(ctx context.Context, id, path string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, liveControlTimeout)
 	defer cancel()
-	if err := res.c.ApplySettings(ctx, liveDelta(have.live, want)); err != nil {
+	if err := ctl.ApplySettings(ctx, liveDelta(have.live, want)); err != nil {
 		return err
 	}
 	have.live = want

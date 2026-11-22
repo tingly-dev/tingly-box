@@ -180,3 +180,35 @@ func TestTheGateHonoursAGroupGrant(t *testing.T) {
 	assert.True(t, isErr, out)
 	assert.Len(t, f.approvals, 3)
 }
+
+func TestGrantRulesThatReachPastTheGateOrRunAnythingAreRefused(t *testing.T) {
+	for _, r := range []string{"Bash(gh pr merge *)", "Bash(gh:*)", "Bash(git push --force *)", "Bash(git push:*)", "Bash(bash -c *)", "Bash(sh *)", "Bash(env FOO=1 *)", "Bash(xargs *)", "Bash(sudo make *)", "WebFetch(domain:*)", "Bash(* )"} {
+		assert.Error(t, checkGrantRule(r), r)
+	}
+	for _, r := range []string{"Bash(task codegen)", "Bash(git status)", "Bash(npm run build *)", "Bash(./bin/tingly-project *)", "WebFetch(domain:github.com)", "Bash(ghostscript *)", "Bash(shellcheck *)"} {
+		assert.NoError(t, checkGrantRule(r), r)
+	}
+}
+
+// A thread closed while its card waited gets nothing granted.
+func TestNoGrantForAThreadClosedWhileTheCardWaited(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	th := startedThread(t, f)
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.threads.RequestPermission(context.Background(), th, PermissionRequest{Action: "merge", Reason: "asked", Group: GitHubMerge})
+		done <- err
+	}()
+	var pending []db.ThreadEvent
+	require.Eventually(t, func() bool { pending = f.threads.PendingRequests(th.ID); return len(pending) == 1 }, 5*time.Second, 5*time.Millisecond)
+	var p requestPayload
+	require.NoError(t, jsonUnmarshal(pending[0].Payload, &p))
+	_, err := f.store.UpdateThreadGrants(th.ID, func(gs []db.ThreadGrant) []db.ThreadGrant { return gs })
+	require.NoError(t, err)
+	_, err = f.threads.update(th.ID, func(t *db.Thread) { now := time.Now(); t.ResolvedAt = &now })
+	require.NoError(t, err)
+	require.NoError(t, f.threads.Respond(th.ID, p.RequestID, Answer{Allow: true}))
+	assert.ErrorContains(t, <-done, "closed while the user answered")
+	got, _ := f.store.GetThread(th.ID)
+	assert.Empty(t, got.Grants)
+}

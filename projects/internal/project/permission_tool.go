@@ -53,9 +53,15 @@ type PermissionRequest struct {
 // grantRuleShape is a permission rule with a pattern: Tool(pattern).
 var grantRuleShape = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_]*)\((.+)\)$`)
 
+// grantRefusedCommands are the commands a Bash rule may not start with: what
+// the GitHub tools gate (gh, git push), and what runs any other command
+// (shells and wrappers), which would make the rule a whole-Bash rule.
+var grantRefusedCommands = []string{"gh", "git push", "bash", "sh", "zsh", "fish", "env", "xargs", "sudo", "doas", "eval", "exec", "nohup", "timeout", "nice", "command", "builtin", "su", "ssh"}
+
 // checkGrantRule refuses a rule the user could not weigh on a card or that
 // would reach past the tools' own gate: one without a pattern, one whose
-// pattern is everything, and any rule for the Projects tools.
+// pattern is everything (also after a "domain:" style prefix), a Bash rule for
+// the GitHub CLI, git push or a shell, and any rule for MCP tools.
 func checkGrantRule(rule string) error {
 	m := grantRuleShape.FindStringSubmatch(rule)
 	if m == nil {
@@ -64,8 +70,24 @@ func checkGrantRule(rule string) error {
 	if strings.HasPrefix(m[1], "mcp__") {
 		return errors.New("MCP tools are not granted by a rule: the Projects tools ask on their own cards (pass group for GitHub)")
 	}
-	if p := strings.TrimSpace(m[2]); p == "" || strings.Trim(p, "*: ") == "" {
+	p := strings.TrimSpace(m[2])
+	value := p
+	if _, v, ok := strings.Cut(p, ":"); ok && m[1] != "Bash" {
+		value = v
+	}
+	if strings.Trim(p, "*: ") == "" || strings.Trim(value, "*: ") == "" {
 		return fmt.Errorf("rule %q matches everything: name the command (Bash(task codegen), Bash(npm run build *))", rule)
+	}
+	if m[1] == "Bash" {
+		cmd := strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSuffix(p, "*"), ":")), " ")
+		for _, c := range grantRefusedCommands {
+			if cmd == c || strings.HasPrefix(cmd, c+" ") || strings.HasPrefix(cmd, c+":") {
+				if c == "gh" || c == "git push" {
+					return fmt.Errorf("rule %q is for %s, which the GitHub tools do with the project's settings: use them, and ask with group if a call needs it", rule, c)
+				}
+				return fmt.Errorf("rule %q starts with %s, which runs any command: name the command itself", rule, c)
+			}
+		}
 	}
 	return nil
 }
@@ -146,6 +168,13 @@ func (m *Threads) RequestPermission(ctx context.Context, t *db.Thread, in Permis
 		exp := now.Add(time.Duration(in.Minutes) * time.Minute)
 		g.ExpiresAt, until = &exp, ", until "+exp.Format("15:04")
 	}
+	// The thread may have been closed while the card waited: a grant then
+	// would outlive the close that cleared the others.
+	if cur, err := m.store.GetThread(t.ID); err != nil {
+		return "", err
+	} else if cur.ResolvedAt != nil || cur.ArchivedAt != nil {
+		return "", errors.New("the thread was closed while the user answered; nothing was granted")
+	}
 	if _, err := m.store.UpdateThreadGrants(t.ID, func(gs []db.ThreadGrant) []db.ThreadGrant { return append(gs, g) }); err != nil {
 		return "", err
 	}
@@ -167,6 +196,13 @@ func (m *Threads) RequestPermission(ctx context.Context, t *db.Thread, in Permis
 // applyRuleGrant writes a granted rule into the thread's settings and sends it
 // to the running process, and says when it holds.
 func (m *Threads) applyRuleGrant(ctx context.Context, t *db.Thread, rule string) string {
+	expiry := " When it expires it is taken out at your next turn."
+	if _, ok := m.env.(Launcher); ok && workerProfile(t) != "" {
+		// A thread under a profile runs on settings built from the profile's
+		// each turn (workerSettings), not on the project's file: the rule joins
+		// them at the next turn.
+		return rule + " holds from your next turn (this thread runs under a profile, whose settings are built when a turn starts)." + expiry
+	}
 	fresh, err := m.store.GetThread(t.ID)
 	if err != nil {
 		return "it could not be written to the thread's settings: " + err.Error()
@@ -181,10 +217,10 @@ func (m *Threads) applyRuleGrant(ctx context.Context, t *db.Thread, rule string)
 	if m.engine != nil {
 		if err := m.engine.RefreshSettings(ctx, m.sessionOf(t.ID), m.layout.SettingsFile(p.ID, t.ID)); err != nil {
 			logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: a granted rule could not reach the running process")
-			return rule + " is in this thread's settings and holds from your next turn (the running process did not take it now)."
+			return rule + " is in this thread's settings and holds from your next turn (the running process did not take it now)." + expiry
 		}
 	}
-	return rule + " is in this thread's settings and holds from your next tool call. A deny rule of the user's profile, an ask rule of the thread's (such as force pushes) and an OS sandbox still win."
+	return rule + " is in this thread's settings and holds from your next tool call. A deny rule of the user's profile, an ask rule of the thread's (such as force pushes) and an OS sandbox still win." + expiry
 }
 
 // grantRules adds the rules the user granted thread t, still live at now, to
