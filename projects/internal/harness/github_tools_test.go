@@ -24,6 +24,8 @@ type stubGitHub struct {
 	mu    sync.Mutex
 	calls []string
 	ci    string
+	// bare is where the tools' git pushes: a local bare repository.
+	bare string
 }
 
 func (g *stubGitHub) log(s string) {
@@ -32,6 +34,17 @@ func (g *stubGitHub) log(s string) {
 	g.calls = append(g.calls, s)
 }
 
+func (g *stubGitHub) Credential(context.Context, project.GitHubRepo) (project.GitHubCredential, error) {
+	return project.GitHubCredential{Token: "ghs_StubTokenForTheTestsOnly0123456789", Source: "stub"}, nil
+}
+
+// GitURL keeps the tools' git off the network.
+func (g *stubGitHub) GitURL(project.GitHubRepo) string {
+	if g.bare == "" {
+		return "/nonexistent/stub-github.git"
+	}
+	return g.bare
+}
 func (g *stubGitHub) DefaultBranch(context.Context, project.GitHubRepo) (string, error) {
 	return "main", nil
 }
@@ -134,6 +147,7 @@ func TestJourneyThreadOpensAPRThroughItsTool(t *testing.T) {
 		},
 	})
 	bare = pointOriginAtGitHub(t, w.Repo)
+	gh.bare = bare
 	w.Service.SetGitHub(gh)
 
 	w.Say("Add the end-of-turn tool and open a PR.")
@@ -274,6 +288,7 @@ func TestJourneyThreadOpensAStackOfPRs(t *testing.T) {
 		},
 	})
 	bare = pointOriginAtGitHub(t, w.Repo)
+	gh.bare = bare
 	w.Service.SetGitHub(gh)
 
 	w.Say("Add the tool as a stack of two PRs.")
