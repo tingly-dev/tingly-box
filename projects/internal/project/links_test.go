@@ -72,8 +72,11 @@ func TestCreatePRRefusals(t *testing.T) {
 		want  string
 	}{
 		{"no title", func(*linksFixture) {}, map[string]any{"title": "  "}, "title is required"},
-		{"base is the head", func(*linksFixture) {}, map[string]any{"title": "x", "base": "tp/work"}, "never pushed to"},
-		{"head is the default branch", func(f *linksFixture) { f.gh.def = "tp/work" }, map[string]any{"title": "x"}, "never pushed to"},
+		{"base is the head", func(*linksFixture) {}, map[string]any{"title": "x", "base": "tp/work"}, "base of its own PR"},
+		{"head is the default branch and the user says no", func(f *linksFixture) {
+			f.gh.def = "tp/work"
+			f.answer = func(Approval) (bool, string) { return false, "not main" }
+		}, map[string]any{"title": "x"}, "did not approve"},
 		{"origin is not GitHub", func(f *linksFixture) {
 			run(t, f.repo, "git", "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git")
 		}, map[string]any{"title": "x"}, "only work with github.com"},
@@ -164,7 +167,7 @@ func TestCreatePRNeverForcesAPush(t *testing.T) {
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x"})
 	require.True(t, isErr, out)
 	assert.Contains(t, out, "rebase")
-	assert.Contains(t, out, "a force push is not available")
+	assert.Contains(t, out, "force=true")
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "create-pr")
 	}
@@ -242,12 +245,12 @@ func TestUpdatePROnlyEditsPRsTheThreadOpened(t *testing.T) {
 	theirs := f.gh.add(db.LinkPR, "Theirs", nil)
 	out, isErr = f.call(t, cs, "update", map[string]any{"number": theirs.Number, "title": "Hijacked"})
 	assert.True(t, isErr)
-	assert.Contains(t, out, "not one of this thread's issues or PRs")
+	assert.Contains(t, out, "did not approve")
 	_, isErr = f.call(t, cs, "comment", map[string]any{"number": theirs.Number, "body": "hi"})
 	require.False(t, isErr)
 	out, isErr = f.call(t, cs, "update", map[string]any{"number": theirs.Number, "title": "Hijacked"})
 	assert.True(t, isErr)
-	assert.Contains(t, out, "was not opened by this thread")
+	assert.Contains(t, out, "did not approve", "a PR it did not open is the user's to allow")
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "Hijacked")
 	}
@@ -377,7 +380,7 @@ func TestUpdateRefusesAnIssueTheThreadOnlyCommentedOn(t *testing.T) {
 	require.False(t, isErr)
 	out, isErr := f.call(t, cs, "update", map[string]any{"number": theirs.Number, "title": "Hijacked"})
 	assert.True(t, isErr)
-	assert.Contains(t, out, "was not opened by this thread")
+	assert.Contains(t, out, "did not approve")
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "update-issue")
 	}

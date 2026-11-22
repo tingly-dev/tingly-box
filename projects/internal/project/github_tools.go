@@ -8,7 +8,8 @@ import (
 )
 
 // The GitHub tools a thread's session has: they act on the thread's own
-// repository and branch (never named by the model), and leave a link record.
+// repository and on the branches of its checkout (no repository, remote or
+// refspec is ever named by the model), and leave a link record.
 // There are five, one per kind of action, with issues and PRs addressed by
 // their shared number: create_issue and create_pr (different inputs, and the
 // PR pushes), update and comment (the same for either kind) and view (the only
@@ -45,20 +46,21 @@ func (f *sessionToolsMCP) githubTools() []Tool {
 				return l.CreateIssue(ctx, t, in.Title, in.Body)
 			})},
 		{Name: toolCreatePR, ThreadOnly: true, Strict: true,
-			Description: "Push a local branch of this checkout (never forced) and open a pull request from it on GitHub; the repository is the thread's. head defaults to this thread's own branch: name another local branch to open a PR for it, for example the next one of a stack, with base set to the branch below it. The base must already be on GitHub; the default branch and protected branches are never pushed to. If the branch already has an open PR of this thread's it is not duplicated: the branch is pushed again and the PR is put right to what you pass (a different title, a body when given, a base when named; draft is not changed). To fix a PR, call this again. A PR's head branch cannot be changed on GitHub: commit the right content to the same branch, or for another branch open a new PR (the old one is for the user to close; no tool closes a PR). Write the title and body as the repository's PR template asks; nothing is added to them.",
+			Description: "Push a local branch of this checkout and open a pull request from it on GitHub; the repository is the thread's. head defaults to this thread's own branch: name another local branch to open a PR for it, for example the next one of a stack, with base set to the branch below it. The base must already be on GitHub; pass force=true after a rebase (--force-with-lease). What is beyond this thread's own work (another thread's branch, the default or a protected branch, a force it has not earned) is put to the user to approve, and the call returns when they answer; after a no, do not retry. A force over commits on origin that this checkout has not seen is an error: fetch, rebase, call again. If the branch already has an open PR of this thread's it is not duplicated: the branch is pushed again and the PR is put right to what you pass (a different title, a body when given, a base when named; draft is not changed). To fix a PR, call this again. A PR's head branch cannot be changed on GitHub: commit the right content to the same branch, or for another branch open a new PR (the old one is for the user to close; no tool closes a PR). Write the title and body as the repository's PR template asks; nothing is added to them.",
 			Properties: map[string]any{"title": strProp("PR title."), "body": strProp("PR description in Markdown."),
 				"head":  strProp("Optional. Local branch to push and open the PR from; default is this thread's own branch."),
 				"base":  strProp("Optional. Branch to merge into, on GitHub; default is this thread's base branch (the repository's default branch for another head)."),
-				"draft": map[string]any{"type": "boolean", "description": "Open as a draft."}},
+				"draft": map[string]any{"type": "boolean", "description": "Open as a draft."},
+				"force": map[string]any{"type": "boolean", "description": "Push with --force-with-lease, after a rebase."}},
 			Required: []string{"title"},
 			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct {
 				Title, Body, Head, Base string
-				Draft                   bool
+				Draft, Force            bool
 			}) (string, error) {
-				return l.CreatePR(ctx, t, in.Title, in.Body, in.Head, in.Base, in.Draft)
+				return l.CreatePR(ctx, t, in.Title, in.Body, in.Head, in.Base, in.Draft, in.Force)
 			})},
 		{Name: toolUpdate, ThreadOnly: true, Strict: true,
-			Description: "Change the title and description of a GitHub issue, or the title, description and base branch of a PR, that this thread opened. It cannot close or merge anything, and it cannot change a PR's head branch (GitHub does not allow it: see create_pr).",
+			Description: "Change the title and description of a GitHub issue, or the title, description and base branch of a PR. One this thread did not open is put to the user first. It cannot close or merge anything, and it cannot change a PR's head branch (GitHub does not allow it: see create_pr).",
 			Properties: map[string]any{"number": number("Issue or PR number; optional only when this thread has one PR."),
 				"title": strProp("New title."), "body": strProp("New description (replaces the old one)."), "base": strProp("New base branch (PR only), for example main once the PR below it in a stack has merged.")},
 			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct {
