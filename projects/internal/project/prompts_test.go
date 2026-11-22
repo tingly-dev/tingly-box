@@ -38,7 +38,7 @@ func TestCoordinatorPromptTrustAndStyleRules(t *testing.T) {
 	assert.Contains(t, s, "request_decision")
 	assert.Contains(t, s, "in cite")
 	assert.Contains(t, s, `outcome="stalled"`)
-	assert.Contains(t, s, "talks to threads directly", "the user's words in a thread are named")
+	assert.Contains(t, s, "writes to threads directly", "the user's words in a thread are named")
 	assert.Contains(t, s, "do not tell the user you did not see it")
 }
 
@@ -48,7 +48,7 @@ func TestThreadPromptRules(t *testing.T) {
 	s := threadSystemPrompt(l, p, &db.Thread{Title: "Fix bug"})
 	assert.Contains(t, s, "not written by the user")
 	assert.Contains(t, s, "quoted by the system")
-	assert.Contains(t, s, "newest instruction wins")
+	assert.Contains(t, s, "credited for what its own words name")
 	assert.Contains(t, s, "do not do both")
 	assert.Contains(t, s, "Memory is background")
 	assert.Contains(t, s, "wins; if the two conflict")
