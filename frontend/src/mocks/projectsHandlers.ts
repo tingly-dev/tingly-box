@@ -91,7 +91,7 @@ type MockLink = ReturnType<typeof link>
 const threads = [
     threadWithUsage({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
     threadWithUsage({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18),
-        links: [link({ number: 214, title: 'Cache idempotency keys in Redis', head: 'projects/t-cache', base: 'main', ci: 'failing', merge_state: 'blocked',
+        links: [link({ number: 212, title: 'Read idempotency keys through an interface', head: 'projects/t-cache-iface', base: 'main', state: 'merged', refreshed_at: ago(10), created_at: ago(60) }), link({ number: 214, title: 'Cache idempotency keys in Redis', head: 'projects/t-cache', base: 'main', ci: 'failing', merge_state: 'blocked',
             checks: { passing: 11, failing: 2, pending: 1, failed: [{ name: 'go test ./... (race)', url: 'https://github.com/acme/payments-api/actions/runs/1' }, { name: 'lint / golangci', url: 'https://github.com/acme/payments-api/actions/runs/2' }] } }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
     threadWithUsage({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1),
         links: [link({ number: 37, head: 'projects/t-sdk', base: 'main', repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
@@ -172,6 +172,8 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ev('user', 'Also keep the Postgres path as a fallback.', 25),
             ev('assistant', report, 18),
             ev('report', report, 18, { payload: '{"commits_ahead":3,"files_changed":6}' }),
+            // Its first PR merged on GitHub: the coordinator was told (m7f) and answered (m7g).
+            ev('system', 'PR #212 was merged into main. Since then: PR #214 still open (base main) · no uncommitted changes.', 10, { payload: JSON.stringify({ github: 'pr_merged', item: 'acme/payments-api#212', status: 'ready', resolved: false, coordinator_event: 'm7f' }) }),
         ]
     }
     return [brief]
@@ -208,6 +210,8 @@ const messages = [
     msg('m7c', 'file', 'Throughput at the same load', 16.4, { attachments: [{ name: 'throughput.png', path: 'outputs/load-test-2026-10-14/charts/throughput.png', type: 'image/png', size: 61_870 }] }),
     msg('m7d', 'file', '', 16.3, { attachments: [{ name: 'p99-by-route.png', path: 'outputs/load-test-2026-10-14/charts/p99-by-route.png', type: 'image/png', size: 48_120 }] }),
     msg('m7e', 'file', 'The full report', 16.2, { attachments: [{ name: 'report.md', path: 'outputs/load-test-2026-10-14/report.md', type: 'text/markdown', size: 4_812 }] }),
+    msg('m7f', 'thread_update', 'PR #212 was merged into main. Since then: PR #214 still open (base main) · no uncommitted changes.', 10, { thread_id: 't-cache', title: 'Cache idempotency keys in Redis', kind: 'github', status: 'ready' }),
+    msg('m7g', 'assistant', 'PR #212 (the lookup interface) is merged into main. PR #214 with the Redis cache is still open and its CI is failing; I asked the thread to check what is left and report back.', 9.8),
     msg('m8', 'thread_update', '', 4, { thread_id: 't-pool', title: 'Tune the DB connection pool', kind: 'needs_input' }),
     msg('m9', 'assistant', 'The Redis change is ready for review, and the tracing work is merged. Next, approve or deny the staging benchmark in the pool thread; I will keep the retry-budget work separate until its tests finish.', 3),
     msg('m9a', 'file', 'Pool saturation during the last run', 3.5, { attachments: [{ name: 'pool-saturation.png', path: 'outputs/pool-saturation.png', type: 'image/png', size: 40_220 }] }),

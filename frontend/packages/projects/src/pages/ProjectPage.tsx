@@ -320,6 +320,15 @@ export default function ProjectPage() {
         p.delete('thread');
         return p;
     });
+    // "View reply" on a thread's GitHub event: the conversation shows the
+    // input the coordinator was told it as; a thread that covers the
+    // conversation steps aside for it.
+    const [focusEvent, setFocusEvent] = useState<string | null>(null);
+    const showCoordinatorReply = (eventId: string) => {
+        setFocusEvent(eventId);
+        if (threadAt === 'main') closeThread();
+    };
+    const focusDone = useCallback(() => setFocusEvent(null), []);
     const patch = async (body: Pick<components['schemas']['UpdateProjectRequest'], 'starred' | 'paused' | 'archived' | 'coordinator_model' | 'thread_model' | 'coordinator_profile' | 'thread_profile' | 'coordinator_effort' | 'thread_effort' | 'thread_permission_mode' | 'primary_directory_mode'>) => {
         if (projectSaving.current) return;
         projectSaving.current = true;
@@ -412,6 +421,7 @@ export default function ProjectPage() {
             initialFocus={params.get('focus') ?? undefined}
             initialTask={params.get('task') ?? undefined}
             onDrillConsumed={clearDrill}
+            onShowCoordinatorReply={showCoordinatorReply}
             actions={canPlace && overviewAt !== 'top' && (
                 <Tooltip title={t(threadAt === 'float' ? 'window.dock' : 'window.float')}>
                     <IconButton
@@ -514,6 +524,9 @@ export default function ProjectPage() {
                             {!session?.launchPickers && project?.thread_profile && <Alert severity="warning" sx={{ mb: 1 }} action={<Button color="inherit" size="small" disabled={savingDefaults} onClick={() => void patch({ thread_profile: '', thread_model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.defaultProfileUnavailable')}</Alert>}
                         </>}
                         threadId={mainThreadId}
+                        // Only once the conversation shows: a thread over it closes first.
+                        focusEventId={threadId && threadAt === 'main' ? null : focusEvent}
+                        onFocused={focusDone}
                         model={project?.coordinator_model}
                         onModelChange={session?.launchPickers ? undefined : (m) => void patch({ coordinator_model: m })}
                         modelControl={project && session?.launchPickers?.({ value: { profile: project.coordinator_profile || '', model: project.coordinator_model || '' }, disabled: blocked || savingDefaults, onChange: (next) => void patch({ coordinator_profile: next.profile, coordinator_model: next.model }) })}

@@ -263,9 +263,12 @@ interface Props {
     onChooseDecision: (messageId: string, index: number) => Promise<void>;
     /** Interrupts the running coordinator turn, like a thread's stop. */
     onStop?: () => Promise<void>;
+    /** An entry to bring into view and mark for a moment (a thread's "View reply"); onFocused says it was shown. */
+    focusEventId?: string | null;
+    onFocused?: () => void;
 }
 
-export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, insertable = true, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop }: Props) {
+export function ConversationPane({ projectId, messages, more = false, onLoadEarlier, threads, busy, insertable = true, disabled, disabledReason, onSend, threadId, model, onModelChange, modelControl, effort, onEffortChange, composerContext, onOpenThread, onOpenTasks, onStartSuggestions, onChooseDecision, onStop, focusEventId, onFocused }: Props) {
     const { t } = useTranslation('projects');
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
@@ -305,7 +308,7 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
             case 'decision':
                 return <DecisionCard message={message} onChoose={onChooseDecision} disabled={disabled} />;
             case 'thread_update':
-                return <ThreadUpdateRow message={message} onOpen={onOpenThread} />;
+                return <Box data-event-id={message.id} sx={{ borderRadius: radius.row, transition: 'background-color 0.6s', '&[data-focused]': { bgcolor: 'action.selected' } }}><ThreadUpdateRow message={message} onOpen={onOpenThread} /></Box>;
             case 'system':
                 // The transcript shows system notes as they read; the settings
                 // notice is the conversation's own word for it.
@@ -324,6 +327,20 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
         const el = scrollRef.current;
         if (el && stick.current) el.scrollTop = el.scrollHeight;
     }, [messages, busy, detail]);
+    // A thread asked to show the coordinator's answer to one of its events:
+    // the input it was told as comes into view, marked for a moment, with the
+    // reply under it. One not loaded (older than the page) is left alone.
+    useEffect(() => {
+        if (!focusEventId) return;
+        const row = scrollRef.current?.querySelector<HTMLElement>(`[data-event-id="${CSS.escape(focusEventId)}"]`);
+        if (!row) return;
+        stick.current = false;
+        row.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        row.setAttribute('data-focused', '');
+        // Not cleared with the effect: onFocused ends it at once, the mark stays its moment.
+        setTimeout(() => row.removeAttribute('data-focused'), 2000);
+        onFocused?.();
+    }, [focusEventId, messages, onFocused]);
 
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>

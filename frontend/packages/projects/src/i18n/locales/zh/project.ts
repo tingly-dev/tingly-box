@@ -53,7 +53,7 @@ export const project: Dict<typeof projectEn> = {
         step2: '协调者会为每个任务开一个线程。每个线程都是一个在独立分支上工作的 Claude Code 会话。',
         step3: '你可以走开。Overview 会告诉你哪些可以 review、哪个线程在等你。',
         openThread: '打开线程',
-        updateKind: { finished: '已完成', needs_input: '需要你回复', failed: '失败', stalled: '久无动静', notify: '发来说明' },
+        updateKind: { finished: '已完成', needs_input: '需要你回复', failed: '失败', stalled: '久无动静', notify: '发来说明', github: 'GitHub 动态' },
         tryExample: '试试这些',
         example1: '先探索这个仓库并提出三个改进建议，暂时不要改任何东西。',
         example2: '在 README 里加一节，说明如何运行测试。',
@@ -89,6 +89,7 @@ export const project: Dict<typeof projectEn> = {
         copyRefOf: '复制“{{ref}}”',
         refCopied: '已复制“{{ref}}”',
         editTitle: '重命名线程',
+        githubEvent: { told: '已通知协调者', reply: '查看回复' },
         requests: {
             approval: '需要你批准', question: '有问题等你回答', many: '{{count}} 个请求等你处理', review: '查看',
             more: '另有 {{count}} 个', answered: '已处理', openThread: '打开线程',

@@ -34,6 +34,8 @@ import { radius } from '@tingly/ui/theme/radius';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
 import { ImSourceBadge } from '../im/ImSourceBadge';
+import { GitHubEventNote, coordinatorEventOf } from './GitHubEventNote';
+import type { TranscriptEntry } from '../../transcript';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -99,6 +101,8 @@ interface Props {
     initialTask?: string;
     /** Tells the page the drill-in was taken, so it can clean the URL. */
     onDrillConsumed?: () => void;
+    /** Shows the coordinator's answer to a GitHub event of this thread: its input (eventId) in the project conversation. */
+    onShowCoordinatorReply?: (eventId: string) => void;
 }
 
 type View = 'chat' | 'trajectory';
@@ -109,7 +113,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { copy: copyRef } = useCopyThreadRef(thread ?? { seq: 0, title: '' });
@@ -129,6 +133,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         writeLocal('thread.view', next);
     };
     const [detail, setDetail] = useMessageDetail('thread');
+    // A GitHub event the coordinator was told of says so under its note; the
+    // transcript draws every other entry as it would without a host renderer.
+    const renderCustom = useCallback((message: TranscriptEntry) => {
+        if (message.kind === 'system') return coordinatorEventOf(message) ? <GitHubEventNote message={message} onShowReply={onShowCoordinatorReply} /> : null;
+        return <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>{message.content}</Typography>;
+    }, [onShowCoordinatorReply]);
     const [expandAll, setExpandAll] = useState(() => readLocal('thread.expandTools') === '1');
     const toggleExpand = () => {
         writeLocal('thread.expandTools', expandAll ? '0' : '1');
@@ -564,7 +574,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     : focused && focusBlock
                         ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
                     : view === 'chat'
-                        ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} />
+                        ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} renderCustom={renderCustom} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
                 </AttachmentGallery>
                 </Box>

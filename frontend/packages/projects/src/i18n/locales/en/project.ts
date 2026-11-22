@@ -50,7 +50,7 @@ export const project = {
         step2: 'The coordinator starts a thread for each task. Each thread is a Claude Code session working on its own branch.',
         step3: 'Walk away. Overview shows what is ready for review and which thread is waiting on you.',
         openThread: 'Open thread',
-        updateKind: { finished: 'finished', needs_input: 'needs input', failed: 'failed', stalled: 'quiet for a while', notify: 'sent a note' },
+        updateKind: { finished: 'finished', needs_input: 'needs input', failed: 'failed', stalled: 'quiet for a while', notify: 'sent a note', github: 'GitHub update' },
         tryExample: 'Try one',
         example1: 'Explore this repository and propose three improvements, without changing anything yet.',
         example2: 'Add a README section explaining how to run the tests.',
@@ -86,6 +86,7 @@ export const project = {
         copyRefOf: 'Copy “{{ref}}”',
         refCopied: 'Copied “{{ref}}”',
         editTitle: 'Rename thread',
+        githubEvent: { told: 'Coordinator notified', reply: 'View reply' },
         requests: {
             approval: 'Needs your approval', question: 'Has a question for you', many: '{{count}} requests need you', review: 'Review',
             more: '+{{count}} more', answered: 'Answered', openThread: 'Open thread',
