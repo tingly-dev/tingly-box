@@ -26,16 +26,8 @@ const (
 	toolClose       = "close"
 )
 
-// githubWriteTools are the tools that publish something on GitHub.
-var githubWriteTools = []string{toolCreateIssue, toolCreatePR, toolUpdate, toolComment}
-
-// alwaysAskTools are the tools whose every call needs the user's approval, in
-// every project and permission mode: what they do cannot be taken back. The
-// settings file writes an ask rule for each (it wins over the blanket allow of
-// the server) and the approval prompt never answers for them. close is not
-// here: it asks on every call itself, on a card that names the item and who
-// opened it (Links.Close), which a rule on the tool's name cannot show.
-var alwaysAskTools = []string{toolMerge}
+// Whether a call of the tools that write to GitHub needs the user is decided by
+// the tool itself, from the project's GitHub settings (GitHubGroups, Links.gate).
 
 func (f *sessionToolsMCP) githubTools() []Tool {
 	l := f.service.Links
@@ -83,7 +75,7 @@ func (f *sessionToolsMCP) githubTools() []Tool {
 				return l.Comment(ctx, t, in.Number, in.Body)
 			})},
 		{Name: toolMerge, ThreadOnly: true, Strict: true,
-			Description: "Merge a branch of this thread on GitHub, the way the user asked. method \"squash\": push the branch, open its PR if none is open, then squash-merge that PR on GitHub (it cannot be undone; the PR stays open and is reported if GitHub refuses, for example on conflicts or required checks). method \"merge\": the same with a merge commit, which keeps the branch's commits (for the lower PR of a stack, the upper branch then needs no rebase; point its PR at the new base with update). method \"merge_request\": push the branch and open the PR only, leaving the merge to a reviewer. head defaults to this thread's own branch; name another local branch to merge its PR, for example a stack's, bottom first. The user is asked to approve every call; use it only when they asked for the merge. Nothing is merged in the local checkout, and the branch is not deleted.",
+			Description: "Merge a branch of this thread on GitHub, the way the user asked. method \"squash\": push the branch, open its PR if none is open, then squash-merge that PR on GitHub (it cannot be undone; the PR stays open and is reported if GitHub refuses, for example on conflicts or required checks). method \"merge\": the same with a merge commit, which keeps the branch's commits (for the lower PR of a stack, the upper branch then needs no rebase; point its PR at the new base with update). method \"merge_request\": push the branch and open the PR only, leaving the merge to a reviewer. head defaults to this thread's own branch; name another local branch to merge its PR, for example a stack's, bottom first. Unless the project lets threads merge on their own, the user is asked on a card; either way, use it only when they asked for the merge. Nothing is merged in the local checkout, and the branch is not deleted.",
 			Properties: map[string]any{"method": map[string]any{"type": "string", "enum": []string{MergeSquash, MergeCommit, MergeMergeRequest}, "description": "How to merge."},
 				"head":    strProp("Optional. Local branch whose PR to merge; default is this thread's own branch. Same rules as create_pr's head."),
 				"message": strProp("Squash commit message (first line is the title); empty is the PR's own title with its number, and its description."),
@@ -106,7 +98,7 @@ func (f *sessionToolsMCP) githubTools() []Tool {
 				return fmt.Sprintf("opened PR #%d, not merged: %s", out.Item.Number, out.Item.URL), nil
 			})},
 		{Name: toolClose, ThreadOnly: true, Strict: true,
-			Description: "Close a GitHub issue or PR of this thread's repository, for example a PR a new one replaces, whoever opened it. Every call is put to the user on a card that says who opened it (this thread, another thread, or someone on GitHub), and the call returns when they answer; after a no, do not retry. It does not merge, delete a branch or comment; a closed item can be reopened on GitHub.",
+			Description: "Close a GitHub issue or PR of this thread's repository, for example a PR a new one replaces, whoever opened it. Unless the project lets threads close on their own, the call is put to the user on a card that says who opened it (this thread, another thread, or someone on GitHub), and returns when they answer; after a no, do not retry. It does not merge, delete a branch or comment; a closed item can be reopened on GitHub.",
 			Properties:  map[string]any{"number": number("Issue or PR number; optional only when this thread has opened one open PR.")},
 			Handle: threadTool(f, func(ctx context.Context, t *db.Thread, in struct{ Number int }) (string, error) {
 				return l.Close(ctx, t, in.Number)

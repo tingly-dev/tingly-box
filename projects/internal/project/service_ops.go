@@ -147,6 +147,7 @@ func configurationChanges(a, b *db.Project) []string {
 		{"thread effort", a.ThreadEffort, b.ThreadEffort},
 		{"thread permission mode", a.ThreadPermissionMode, b.ThreadPermissionMode},
 		{"thread GitHub access", a.ThreadGitHubAccess, b.ThreadGitHubAccess},
+		{"GitHub auto-approval", strings.Join(a.GitHubAuto, ","), strings.Join(b.GitHubAuto, ",")},
 	} {
 		if field.a != field.b {
 			fields = append(fields, field.name)

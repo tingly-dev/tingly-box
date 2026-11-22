@@ -153,6 +153,8 @@ func TestJourneyThreadOpensAPRThroughItsTool(t *testing.T) {
 	bare = pointOriginAtGitHub(t, w.Repo)
 	gh.bare = bare
 	w.Service.SetGitHub(gh)
+	// The user lets threads publish on their own (a new project asks).
+	w.UpdateProject(func(p *db.Project) { p.GitHubAuto = []string{project.GitHubPublish} })
 
 	w.Say("Add the end-of-turn tool and open a PR.")
 	th := w.ThreadIs(endTool, db.ThreadReady)
@@ -294,6 +296,8 @@ func TestJourneyThreadOpensAStackOfPRs(t *testing.T) {
 	bare = pointOriginAtGitHub(t, w.Repo)
 	gh.bare = bare
 	w.Service.SetGitHub(gh)
+	// The user lets threads publish on their own (a new project asks).
+	w.UpdateProject(func(p *db.Project) { p.GitHubAuto = []string{project.GitHubPublish} })
 
 	w.Say("Add the tool as a stack of two PRs.")
 	th := w.ThreadIs(endTool, db.ThreadReady)

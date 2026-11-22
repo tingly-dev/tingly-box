@@ -342,5 +342,14 @@ func (f *linksFixture) remoteBranches(t *testing.T) []string {
 	return strings.Fields(strings.ReplaceAll(run(t, f.remote, "git", "branch", "--format=%(refname:short)"), "*", ""))
 }
 
+// setAuto sets the groups the project auto-approves.
+func (f *linksFixture) setAuto(t *testing.T, groups ...string) {
+	t.Helper()
+	p, err := f.store.GetProject(f.p.ID)
+	require.NoError(t, err)
+	p.GitHubAuto = append([]string{}, groups...)
+	require.NoError(t, f.store.SaveProject(p))
+}
+
 // allowAll makes the user allow everything the tools ask.
 func (f *linksFixture) allowAll() { f.answer = func(Approval) (bool, string) { return true, "" } }

@@ -9,23 +9,30 @@ import (
 	rt "github.com/tingly-dev/tingly-box/projects/internal/project"
 )
 
-func TestProjectGitHubAccessIsValidatedAndDefaultsToAllow(t *testing.T) {
+func TestProjectGitHubAutoIsValidatedAndANewProjectAutoApprovesNothing(t *testing.T) {
 	store, c := newServer(t, quietAgents())
 	var p db.Project
 	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "P"}, &p))
-	assert.Empty(t, p.ThreadGitHubAccess, "a new project says nothing, which is allow")
+	assert.Equal(t, []string{}, p.GitHubAuto, "a new project asks for every GitHub write")
 
 	var out db.Project
-	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "ask"}, &out))
-	assert.Equal(t, "ask", out.ThreadGitHubAccess)
-	for _, bad := range []any{"yes", "", "always", 1} {
-		assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": bad}, nil), bad)
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"github_auto": []string{rt.GitHubPublish, rt.GitHubMerge, rt.GitHubPublish}}, &out))
+	assert.Equal(t, []string{rt.GitHubPublish, rt.GitHubMerge}, out.GitHubAuto)
+	for _, bad := range []any{[]string{"everything"}, "publish", []any{1}} {
+		assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, map[string]any{"github_auto": bad}, nil), bad)
 	}
 	saved, err := store.GetProject(p.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "ask", saved.ThreadGitHubAccess, "a rejected value changes nothing")
+	assert.Equal(t, []string{rt.GitHubPublish, rt.GitHubMerge}, saved.GitHubAuto, "a rejected value changes nothing")
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"github_auto": []string{}}, &out))
+	assert.Equal(t, []string{}, out.GitHubAuto)
+
+	// The setting it replaced is still taken: allow turns publish on, ask turns all off.
 	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "allow"}, &out))
-	assert.Equal(t, "allow", out.ThreadGitHubAccess)
+	assert.Equal(t, []string{rt.GitHubPublish}, out.GitHubAuto)
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "ask"}, &out))
+	assert.Equal(t, []string{}, out.GitHubAuto)
+	assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_github_access": "always"}, nil))
 }
 
 func TestThreadsCarryTheirIssueAndPRLinksOverTheAPI(t *testing.T) {

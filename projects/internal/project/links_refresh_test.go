@@ -189,44 +189,21 @@ func TestGetThreadShowsLinksToTheCoordinator(t *testing.T) {
 	assert.Contains(t, list, "prs=#")
 }
 
+// No Projects tool asks through a permission rule: the GitHub tools ask on
+// their own card from the project's settings (Links.gate). Only the native
+// SendMessage asks, which the approval prompt answers (native_channel.go).
 func TestBuiltinToolPermissionRules(t *testing.T) {
-	rules := func(access string) (allow, ask []string) {
+	for _, auto := range [][]string{nil, {}, GitHubGroups} {
 		doc := map[string]any{}
-		grantBuiltinTools(doc, &db.Project{ThreadGitHubAccess: access})
+		grantBuiltinTools(doc, &db.Project{GitHubAuto: auto})
 		perms := permissionsOf(doc)
-		for _, k := range []string{"allow", "ask"} {
-			list, _ := perms[k].([]any)
-			for _, r := range list {
-				if k == "allow" {
-					allow = append(allow, r.(string))
-				} else {
-					ask = append(ask, r.(string))
-				}
-			}
-		}
-		return
+		assert.Equal(t, []any{"mcp__tingly-projects"}, perms["allow"], "the whole server, tools added later included: %v", auto)
+		assert.Equal(t, []any{toolSendMessage}, perms["ask"], "no ask rule for a GitHub tool: %v", auto)
 	}
-	var writes []string
-	for _, tool := range githubWriteTools {
-		writes = append(writes, githubToolRule(tool))
-	}
-	// The merge asks whatever the project says: it cannot be taken back. So does
-	// the native SendMessage, which the approval prompt answers (native_channel.go).
-	merge := []string{githubToolRule(toolMerge), toolSendMessage}
-
-	for _, access := range []string{"", GitHubAllow} {
-		allow, ask := rules(access)
-		assert.Equal(t, []string{"mcp__tingly-projects"}, allow, "the whole server, tools added later included: %q", access)
-		assert.ElementsMatch(t, merge, ask, "only the merge asks: %q", access)
-	}
-
-	allow, ask := rules(GitHubAsk)
-	assert.Equal(t, []string{"mcp__tingly-projects"}, allow, "the other tools stay allowed")
-	assert.ElementsMatch(t, append(writes, merge...), ask, "the opt-out asks for the tools that publish, and the merge still asks")
 
 	// The Bash commands keep asking whatever the project says.
 	doc := map[string]any{}
-	grantAutoGit(doc, &db.Project{ThreadGitHubAccess: GitHubAllow, ThreadPermissionMode: "auto"}, &db.Thread{Branch: "tp/x", BaseBranch: "main"})
+	grantAutoGit(doc, &db.Project{GitHubAuto: GitHubGroups, ThreadPermissionMode: "auto"}, &db.Thread{Branch: "tp/x", BaseBranch: "main"})
 	assert.Contains(t, permissionsOf(doc)["ask"], "Bash(gh pr create *)")
 	assert.Contains(t, permissionsOf(doc)["ask"], "Bash(gh pr merge *)")
 }
@@ -243,28 +220,17 @@ func TestThreadSettingsFileAllowsTheProjectsTools(t *testing.T) {
 }
 
 // A Projects tool that still reaches the approval prompt (a rule from a profile
-// that asks) is approved there, except what the project opted out of.
-func TestProjectsToolsAreApprovedAtThePromptUnlessTheProjectAsks(t *testing.T) {
+// that asks) is approved there: the GitHub tools ask on their own card.
+func TestProjectsToolsAreApprovedAtThePrompt(t *testing.T) {
 	f := newFixture(t, func(*enginetest.Turn) error { return nil })
 	th := &db.Thread{ProjectID: f.project.ID, Agent: db.AgentClaudeCode, Title: "W"}
 	require.NoError(t, f.store.CreateThread(th))
-	allowed := func() map[string]bool {
-		got := map[string]bool{}
-		for _, tool := range []string{"mcp__tingly-projects__create_pr", "mcp__tingly-projects__merge", "mcp__tingly-projects__close", "mcp__tingly-projects__send_file", "mcp__other__create_pr", "Bash"} {
-			got[tool] = f.threads.builtinToolAllowed(th.ID, tool)
-		}
-		return got
+	for _, tool := range []string{"mcp__tingly-projects__create_pr", "mcp__tingly-projects__merge", "mcp__tingly-projects__close", "mcp__tingly-projects__send_file"} {
+		assert.True(t, f.threads.builtinToolAllowed(th.ID, tool), tool)
 	}
-	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": true, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__close": true, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
-
-	p, err := f.store.GetProject(f.project.ID)
-	require.NoError(t, err)
-	p.ThreadGitHubAccess = GitHubAsk
-	require.NoError(t, f.store.SaveProject(p))
-	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": false, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__close": true, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
-	p.ThreadGitHubAccess = GitHubAllow
-	require.NoError(t, f.store.SaveProject(p))
-	assert.True(t, f.threads.builtinToolAllowed(th.ID, "mcp__tingly-projects__close"), "close asks on its own card, not at this prompt")
+	for _, tool := range []string{"mcp__other__create_pr", "Bash"} {
+		assert.False(t, f.threads.builtinToolAllowed(th.ID, tool), tool)
+	}
 }
 
 func TestRedact(t *testing.T) {

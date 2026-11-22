@@ -40,7 +40,7 @@ func TestCloseClosesAnOpenedPRAndTheRecordFollows(t *testing.T) {
 	assert.Equal(t, []string{"close acme/widgets #11"}, f.closes())
 	require.Len(t, f.approvals, 1, "the user is asked, even for the thread's own PR")
 	assert.Contains(t, f.approvals[0].Summary, `Close pr #11 "Wrong", opened by this thread`)
-	assert.Empty(t, f.approvals[0].Key, "an answer is for this call only")
+	assert.Equal(t, "github\x00close", f.approvals[0].Key, "allow for this thread covers closing, not anything else")
 
 	l, err := f.store.FindThreadLink(f.worker.ID, "acme/widgets", 11)
 	require.NoError(t, err)
@@ -197,15 +197,14 @@ func TestGhCLICloseIsOneRESTPatchOnTheIssuesEndpoint(t *testing.T) {
 	assert.NotContains(t, string(b), "merge")
 }
 
-// The tool asks itself, on a card that can name the item: no rule on its name
-// adds a second card, and thread_github_access does not cover it.
-func TestCloseIsAskedByTheToolNotByARule(t *testing.T) {
-	for _, access := range []string{"", GitHubAllow, GitHubAsk} {
-		doc := map[string]any{}
-		grantBuiltinTools(doc, &db.Project{ThreadGitHubAccess: access})
-		assert.NotContains(t, permissionsOf(doc)["ask"], githubToolRule(toolClose), "access %q", access)
-		assert.NotContains(t, permissionsOf(doc)["allow"], githubToolRule(toolClose), "only the server-wide allow")
-	}
-	assert.NotContains(t, githubWriteTools, toolClose, "thread_github_access does not cover it")
-	assert.NotContains(t, alwaysAskTools, toolClose)
+// close is its own group: auto-approved only when the project says so.
+func TestCloseRunsWithoutACardWhenTheProjectAutoApprovesIt(t *testing.T) {
+	f := newLinksFixture(t)
+	f.setAuto(t, GitHubClose)
+	cs, _ := f.client(t, f.worker.ID)
+	theirs := f.gh.add(db.LinkIssue, "Theirs", nil)
+	out, isErr := f.call(t, cs, "close", map[string]any{"number": theirs.Number})
+	require.False(t, isErr, out)
+	assert.Empty(t, f.approvals)
+	assert.Equal(t, "closed", f.gh.items[theirs.Number].State)
 }

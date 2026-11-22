@@ -35,7 +35,21 @@ func (s *Store) CreateProject(p *Project) error {
 	if p.Type == "" {
 		p.Type = ProjectProject
 	}
+	defaultGitHubAuto(p)
 	return s.db.Create(p).Error
+}
+
+// defaultGitHubAuto gives a new project its GitHub settings when none were
+// chosen: a project auto-approves nothing (every write asks), a folder, which
+// has no settings to change it, keeps publishing without a card as before.
+func defaultGitHubAuto(p *Project) {
+	if p.GitHubAuto != nil {
+		return
+	}
+	p.GitHubAuto = []string{}
+	if p.Type == ProjectFolder {
+		p.GitHubAuto = []string{"publish"}
+	}
 }
 
 // CreateProjectWithMain inserts a project together with its main thread
@@ -53,6 +67,7 @@ func (s *Store) CreateProjectWithMain(p *Project, main *Thread, projectsDir stri
 		if main.Status == "" {
 			main.Status = ThreadIdle
 		}
+		defaultGitHubAuto(p)
 		p.MainThreadID = main.ID
 		if main.Cwd == "" && projectsDir != "" {
 			main.Cwd = filepath.Join(projectsDir, p.ID)

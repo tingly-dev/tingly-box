@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1768,7 +1767,8 @@ func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*
 	if links == nil {
 		return nil, errors.New("merging is not available here")
 	}
-	out, err := links.Merge(ctx, t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
+	// The dialog is the user's own click: no card asks them again.
+	out, err := links.Merge(byUser(ctx), t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
 	if err != nil {
 		return nil, err
 	}
@@ -2238,26 +2238,15 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 
 // builtinToolAllowed is the answer for a Projects tool that reached the
 // approval prompt anyway (a permission mode or a profile rule the settings
-// file does not outrank): the tools are allowed as grantBuiltinTools says,
-// except the ones that always ask and the ones the thread's project asked to
-// approve itself.
+// file does not outrank): the tools are allowed as grantBuiltinTools says. The
+// ones that write to GitHub ask on their own card when the project says so
+// (Links.gate), so answering here never skips the user.
 func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
 	if !strings.HasPrefix(tool, builtinToolsRule+"__") {
 		return false
 	}
-	t, err := m.store.GetThread(threadID)
-	if err != nil {
-		return false
-	}
-	p, err := m.store.GetProject(t.ProjectID)
-	if err != nil {
-		return false
-	}
-	name := strings.TrimPrefix(tool, builtinToolsRule+"__")
-	if slices.Contains(alwaysAskTools, name) {
-		return false
-	}
-	return p.ThreadGitHubAccess != GitHubAsk || !slices.Contains(githubWriteTools, name)
+	_, err := m.store.GetThread(threadID)
+	return err == nil
 }
 
 func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
