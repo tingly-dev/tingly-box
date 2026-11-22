@@ -56,7 +56,7 @@ describe('connection workspace', () => {
             ...source,
             tool_policies: { ...source.tool_policies, read: { enabled: true, usage: { client: true, gateway: true } } },
         });
-        const row = within(screen.getByRole('group', { name: 'read' }));
+        const row = within(screen.getByRole('article', { name: 'Docs / read' }));
         expect(row.queryByRole('checkbox')).toBeNull();
         fireEvent.click(row.getByRole('switch', { name: 'On' }));
         await waitFor(() =>
@@ -92,7 +92,7 @@ describe('connection workspace', () => {
     it('reports a rejected change and keeps the previous state', async () => {
         save.mockRejectedValue(new Error('Update failed'));
         open();
-        const row = within(screen.getByRole('group', { name: 'read' }));
+        const row = within(screen.getByRole('article', { name: 'Docs / read' }));
         fireEvent.click(row.getByRole('switch', { name: 'On' }));
         expect(await screen.findByText('Update failed')).toBeInTheDocument();
         expect(row.getByRole('switch', { name: 'On' })).toBeChecked();

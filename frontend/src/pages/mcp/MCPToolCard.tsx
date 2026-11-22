@@ -11,7 +11,6 @@ export default function MCPToolCard({
     busy,
     onChange,
     onTest,
-    inWorkspace = false,
 }: {
     tool: MCPCatalogTool;
     source?: MCPSourceConfig;
@@ -19,7 +18,6 @@ export default function MCPToolCard({
     busy: boolean;
     onChange: (patch: MCPToolPatch) => void;
     onTest?: () => void;
-    inWorkspace?: boolean;
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
@@ -42,8 +40,7 @@ export default function MCPToolCard({
             switchDisabled={busy || restricted}
             muted={!tool.enabled || restricted}
             note={note}
-            groupRole={inWorkspace}
-            ariaLabel={inWorkspace ? tool.name : `${source?.name || tool.source_id} / ${tool.name}`}
+            ariaLabel={`${source?.name || tool.source_id} / ${tool.name}`}
             onToggle={(on) => onChange({ enabled: on })}
             onTest={onTest}
             testDisabled={busy || (!enabled && !serverTool) || !tool.enabled || restricted || advisor || missingSearchKey}

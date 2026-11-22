@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Box, Button, Card, Chip, CircularProgress, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
+import { triStateOf } from '@tingly/ui/components/TriStateSwitch';
+import MCPToolGroup from './MCPToolGroup';
 import MCPToolList from './MCPToolList';
 import MCPToolTestDialog from './MCPToolTestDialog';
-import { connectionSummary, isBuiltinSource, isServerToolSource, isServerWebtoolsSource, toolPolicyPatch, toolsPolicyPatch, type MCPToolPatch } from './toolPresentation';
+import { connectionSummary, isBuiltinSource, isServerToolSource, isServerWebtoolsSource, isToolRestricted, toolPolicyPatch, toolsPolicyPatch, type MCPToolPatch } from './toolPresentation';
 import type { MCPCatalogTool, MCPRouteSource, MCPSourceConfig } from '../../features/mcp/types';
-import { radius } from '@tingly/ui/theme/radius';
 
 // Every connection and Server Tool in one list. The applied routing snapshot is
 // the source of tool state, so what is shown is what the gateway will do.
@@ -77,29 +78,20 @@ export default function MCPToolsPanel({
                               ? { text: workspace('failed', 'Failed'), tone: 'error' }
                               : { text: workspace('needsAttention', 'Needs attention'), tone: 'warning' };
                 const toneColor = { neutral: 'text.secondary', warning: 'warning.main', error: 'error.main' }[status.tone];
+                const eligible = tools.filter((tool) => !isToolRestricted(tool, source));
                 return (
-                    <Card
-                        component="article"
-                        variant="outlined"
-                        aria-label={source.name || source.id}
+                    <MCPToolGroup
                         key={source.id}
-                        sx={{ minWidth: 0, borderRadius: radius.card, overflow: 'hidden' }}
-                    >
-                        <Stack
-                            direction="row"
-                            sx={{ alignItems: 'center', gap: 1.25, px: 2, py: 1.75, flexWrap: 'wrap' }}
-                        >
-                            <Typography component="h2" sx={{ fontWeight: 600, fontSize: 14, overflowWrap: 'anywhere' }}>
-                                {source.name || source.id}
-                            </Typography>
-                            <Typography variant="caption" color="text.disabled">
-                                {serverTool
-                                    ? workspace('serverToolLabel', 'Server Tool')
-                                    : t(`mcp.relationships.${route?.origin || source.origin || 'external'}`, {
-                                          defaultValue: route?.origin || source.origin || 'external',
-                                      })}
-                            </Typography>
-                            <Box sx={{ flex: 1 }} />
+                        ariaLabel={source.name || source.id || ''}
+                        title={source.name || source.id}
+                        meta={
+                            serverTool
+                                ? workspace('serverToolLabel', 'Server Tool')
+                                : t(`mcp.relationships.${route?.origin || source.origin || 'external'}`, {
+                                      defaultValue: route?.origin || source.origin || 'external',
+                                  })
+                        }
+                        status={
                             <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
                                 <Box
                                     aria-hidden
@@ -110,13 +102,12 @@ export default function MCPToolsPanel({
                                         bgcolor: status.tone === 'neutral' ? 'text.disabled' : toneColor,
                                     }}
                                 />
-                                <Typography
-                                    variant="caption"
-                                    sx={{ color: toneColor }}
-                                >
+                                <Typography variant="caption" sx={{ color: toneColor }}>
                                     {status.text}
                                 </Typography>
                             </Stack>
+                        }
+                        actions={
                             <Button
                                 size="small"
                                 variant={failed ? 'contained' : 'outlined'}
@@ -132,62 +123,78 @@ export default function MCPToolsPanel({
                                         ? workspace('configureAdvisor', 'Configure Advisor model')
                                         : workspace('connectionSettingsShort', 'Settings')}
                             </Button>
-                        </Stack>
-                        <Stack sx={{ px: 2, pb: 1.5, gap: 1 }}>
-                            {builtin ? (
-                                <Typography variant="caption" color="text.secondary">
-                                    {workspace('builtinRuns', 'Runs inside Tingly Box.')}
-                                </Typography>
-                            ) : (
-                                <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                    <Typography
-                                        color="text.secondary"
-                                        sx={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}
-                                    >
-                                        {summary.target || workspace('notSet', 'Not set')}
+                        }
+                        on={eligible.filter((tool) => tool.enabled).length}
+                        total={tools.length}
+                        // One switch for every tool of the connection; restricted tools are left alone.
+                        switchState={tools.length > 1 ? (eligible.length ? triStateOf(eligible.map((tool) => tool.enabled)) : 'off') : undefined}
+                        switchDisabled={busy || loading || eligible.length === 0}
+                        switchLabel={`${source.name || source.id}: ${workspace('groupEnabled', 'All tools on')}`}
+                        onSwitch={(on) => void save(toolsPolicyPatch(source, tools, on))}
+                        foldKey={`tools-${source.id}`}
+                        summary={
+                            <>
+                                {builtin ? (
+                                    <Typography variant="caption" color="text.secondary">
+                                        {workspace('builtinRuns', 'Runs inside Tingly Box.')}
                                     </Typography>
-                                    {summary.details.map(({ key, count }) => (
-                                        <Chip
-                                            key={key}
-                                            size="small"
-                                            variant="outlined"
-                                            sx={{ fontSize: 11.5, height: 22 }}
-                                            label={`${workspace(`detail_${key}`, key)}${key === 'proxy' ? '' : ` · ${count}`}`}
-                                        />
-                                    ))}
-                                    {summary.missing.map((key) => (
-                                        <Chip
-                                            key={key}
-                                            size="small"
-                                            color="warning"
-                                            variant="outlined"
-                                            clickable
-                                            sx={{ fontSize: 11.5, height: 22 }}
-                                            onClick={() => onConfigureSource(source.id!)}
-                                            label={workspace(`missing_${key}`, `Needs ${key}`)}
-                                        />
-                                    ))}
-                                </Stack>
-                            )}
-                            {route && route.state !== 'connected' && !!route.error && (
-                                <Typography variant="caption" color={failed ? 'error.main' : 'text.secondary'}>
-                                    {route.error}
-                                </Typography>
-                            )}
-                            {webtools && (
-                                <Typography variant="caption" color="text.secondary">
-                                    {workspace('webtoolsContext', 'Configure Search with a Serper API key and enable Search / Fetch separately. Ready tools replace native web tools on supported model routes. The MCP version has independent settings.')}
-                                </Typography>
-                            )}
-                            {advisor && (
-                                <Typography variant="caption" color="text.secondary">
-                                    {workspace(
-                                        'advisorContext',
-                                        'Advisor is run by the gateway during model requests, so it has a switch and a consultation model but is not offered through profiles.'
-                                    )}
-                                </Typography>
-                            )}
-                        </Stack>
+                                ) : (
+                                    <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                        <Typography
+                                            color="text.secondary"
+                                            sx={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}
+                                        >
+                                            {summary.target || workspace('notSet', 'Not set')}
+                                        </Typography>
+                                        {summary.details.map(({ key, count }) => (
+                                            <Chip
+                                                key={key}
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ fontSize: 11.5, height: 22 }}
+                                                label={`${workspace(`detail_${key}`, key)}${key === 'proxy' ? '' : ` · ${count}`}`}
+                                            />
+                                        ))}
+                                        {summary.missing.map((key) => (
+                                            <Chip
+                                                key={key}
+                                                size="small"
+                                                color="warning"
+                                                variant="outlined"
+                                                clickable
+                                                sx={{ fontSize: 11.5, height: 22 }}
+                                                onClick={() => onConfigureSource(source.id!)}
+                                                label={workspace(`missing_${key}`, `Needs ${key}`)}
+                                            />
+                                        ))}
+                                    </Stack>
+                                )}
+                                {route && route.state !== 'connected' && !!route.error && (
+                                    <Typography variant="caption" color={failed ? 'error.main' : 'text.secondary'}>
+                                        {route.error}
+                                    </Typography>
+                                )}
+                                {webtools && (
+                                    <Typography variant="caption" color="text.secondary">
+                                        {workspace('webtoolsContext', 'Configure Search with a Serper API key and enable Search / Fetch separately. Ready tools replace native web tools on supported model routes. The MCP version has independent settings.')}
+                                    </Typography>
+                                )}
+                                {advisor && (
+                                    <Typography variant="caption" color="text.secondary">
+                                        {workspace(
+                                            'advisorContext',
+                                            'Advisor is run by the gateway during model requests, so it has a switch and a consultation model but is not offered through profiles.'
+                                        )}
+                                    </Typography>
+                                )}
+                                {!loading && source.enabled !== false && route?.state === 'connected' && tools.length === 0 && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        {workspace('emptyDiscovery', 'The connection returned no tools.')}
+                                    </Typography>
+                                )}
+                            </>
+                        }
+                    >
                         {tools.length > 0 && (
                             <MCPToolList
                                 tools={tools}
@@ -199,12 +206,7 @@ export default function MCPToolsPanel({
                                 onTest={setTesting}
                             />
                         )}
-                        {!loading && source.enabled !== false && route?.state === 'connected' && tools.length === 0 && (
-                            <Typography variant="body2" color="text.secondary" sx={{ px: 2, pb: 1.75 }}>
-                                {workspace('emptyDiscovery', 'The connection returned no tools.')}
-                            </Typography>
-                        )}
-                    </Card>
+                    </MCPToolGroup>
                 );
             })}
             {testing && (

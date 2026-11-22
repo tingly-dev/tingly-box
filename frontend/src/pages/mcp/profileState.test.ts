@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
     addProfileTools,
     defaultProfile,
+    profileGroups,
     profileRows,
     profileServerName,
     removeProfileTool,
+    removeProfileTools,
     setProfileToolOn,
+    setProfileToolsOn,
 } from './profileState';
 import type { MCPCatalogTool, MCPProfile, MCPRoutingSnapshot } from '../../features/mcp/types';
 
@@ -53,6 +56,21 @@ describe('profile tool state', () => {
     it('keeps a tool that no longer exists visible in a custom profile', () => {
         const rows = profileRows({ id: 'prof-1', name: 'Old', tools: [{ name: n('gone') }] }, routing);
         expect(rows).toEqual([{ name: n('gone'), tool: undefined, sourceName: '', on: true }]);
+    });
+    it('switches and removes a whole group in one saved profile', () => {
+        const allOff = setProfileToolsOn(defaultProfile(), [n('read'), n('write')], false);
+        expect(profileRows(allOff, routing).map((r) => r.on)).toEqual([false, false]);
+        expect(setProfileToolsOn(allOff, [n('read'), n('write')], true).tools).toEqual([]);
+        const custom = addProfileTools({ id: 'prof-1', name: 'Review', tools: [] }, [n('read'), n('write'), n('x')]);
+        expect(setProfileToolsOn(custom, [n('read'), n('write')], false).tools!.map((t) => t.enabled)).toEqual([false, false, undefined]);
+        expect(removeProfileTools(custom, [n('read'), n('write')]).tools).toEqual([{ name: n('x') }]);
+    });
+    it('groups rows by connection in first-seen order', () => {
+        const rows = profileRows({ id: 'prof-1', name: 'Mixed', tools: [{ name: n('read') }, { name: n('gone') }, { name: n('write') }] }, routing);
+        expect(profileGroups(rows).map((g) => [g.sourceName, g.rows.length])).toEqual([
+            ['Docs', 2],
+            ['', 1],
+        ]);
     });
     it('registers each profile under its own name, Default as tb', () => {
         expect(profileServerName(defaultProfile())).toBe('tb');
