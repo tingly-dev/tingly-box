@@ -360,3 +360,17 @@ func assertNoTokenUnder(t *testing.T, dir string) {
 		return nil
 	}))
 }
+
+// The tools' git drops the user's GIT_ variables but keeps the ones that say
+// which CA to trust, as it keeps http.sslCAInfo.
+func TestTheToolsGitKeepsOnlyTheTLSTrustVariables(t *testing.T) {
+	t.Setenv("GIT_SSL_CAINFO", "/etc/corp-ca.pem")
+	t.Setenv("GIT_SSL_CAPATH", "/etc/corp-ca")
+	t.Setenv("GIT_SSL_NO_VERIFY", "1")
+	t.Setenv("GIT_DIR", "/elsewhere")
+	env := githubRemote{cred: GitHubCredential{Token: fakeToken}}.env(nil)
+	assert.Contains(t, env, "GIT_SSL_CAINFO=/etc/corp-ca.pem")
+	assert.Contains(t, env, "GIT_SSL_CAPATH=/etc/corp-ca")
+	assert.NotContains(t, env, "GIT_SSL_NO_VERIFY=1")
+	assert.NotContains(t, env, "GIT_DIR=/elsewhere")
+}

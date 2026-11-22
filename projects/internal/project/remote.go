@@ -319,14 +319,24 @@ func carriedSettings(ctx context.Context) [][2]string {
 	return out
 }
 
+// carriedEnv are the GIT_ variables the tools' git keeps: like the carried
+// config, they only say how to trust the TLS of the internet in between (a
+// corporate CA). GIT_SSL_NO_VERIFY is not one of them.
+var carriedEnv = []string{"GIT_SSL_CAINFO=", "GIT_SSL_CAPATH="}
+
 // env is the environment of the tools' git: the process's own without any
-// GIT_ variable (one could point git at another repository or config), the
-// user's global and system config off, no prompt of any kind, the credential
-// helper above and the carried settings in GIT_CONFIG_*, and the credential.
+// GIT_ variable (one could point git at another repository or config) except
+// carriedEnv, the user's global and system config off, no prompt of any kind,
+// the credential helper above and the carried settings in GIT_CONFIG_*, and
+// the credential.
 func (g githubRemote) env(carried [][2]string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "GIT_") {
+		keep := !strings.HasPrefix(kv, "GIT_")
+		for _, p := range carriedEnv {
+			keep = keep || strings.HasPrefix(kv, p)
+		}
+		if keep {
 			env = append(env, kv)
 		}
 	}
