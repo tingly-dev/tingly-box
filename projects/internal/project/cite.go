@@ -53,7 +53,7 @@ func (c *Coordinator) quoteUser(p *db.Project, ids []string) (string, error) {
 			if s := a.about(); s != "" {
 				note += ", about " + s
 			}
-			fmt.Fprintf(&b, "\n(%s)", note)
+			fmt.Fprintf(&b, "\n(%s)", escapeEnvelope(note))
 		}
 	}
 	return b.String(), nil

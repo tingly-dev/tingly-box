@@ -114,7 +114,8 @@ func (a *decisionAnswer) about() string {
 func about(threadSeq int, threadTitle string, number int, kind string) string {
 	var parts []string
 	if threadSeq > 0 || threadTitle != "" {
-		parts = append(parts, threadTag(threadSeq, threadTitle))
+		// A title is one line wherever a card's source is written.
+		parts = append(parts, threadTag(threadSeq, strings.Join(strings.Fields(threadTitle), " ")))
 	}
 	if number > 0 {
 		switch kind {
@@ -170,37 +171,42 @@ func (d *Decision) validate() error {
 func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
 	d.ThreadSeq, d.ThreadTitle, d.LinkKind = 0, "", ""
 	d.ThreadID = strings.TrimSpace(d.ThreadID)
-	if d.ThreadID == "" && d.Number == 0 {
-		return nil
-	}
-	threads, err := c.store.ListThreads(p.ID)
-	if err != nil {
-		return err
-	}
 	var th *db.Thread
-	if d.ThreadID != "" {
+	switch {
+	case d.ThreadID != "":
 		// By its number (#3) or id, as every thread tool takes it; the
 		// conversation itself is not a thread a card can be about.
+		var err error
 		if th, err = c.findThread(p.ID, d.ThreadID); err != nil {
 			return err
 		}
 		if th.ID == p.MainThreadID {
 			return fmt.Errorf("no thread %q in this project", d.ThreadID)
 		}
-	} else {
+		// The card states it as the system's fact: a number the thread
+		// never touched would pair it with someone else's PR.
+		if d.Number > 0 && linkKind(th.Links, d.Number) == "" {
+			return fmt.Errorf("thread %s has no PR or issue #%d; leave number out or name the thread that has it", threadName(th), d.Number)
+		}
+	case d.Number > 0:
+		threads, err := c.store.ListThreads(p.ID)
+		if err != nil {
+			return err
+		}
 		for i := range threads {
-			if threads[i].ID == p.MainThreadID || !hasLink(threads[i].Links, d.Number) {
+			if threads[i].ID == p.MainThreadID || linkKind(threads[i].Links, d.Number) == "" {
 				continue
 			}
 			if th != nil {
-				th = nil // two threads have it: not ours to pick
-				break
+				return nil // two threads have it: not ours to pick
 			}
 			th = &threads[i]
 		}
 		if th == nil {
 			return nil
 		}
+	default:
+		return nil
 	}
 	d.ThreadID, d.ThreadSeq, d.ThreadTitle = th.ID, th.Seq, th.Title
 	if d.Number == 0 {
@@ -214,23 +220,27 @@ func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
 			d.Number = open[0].Number
 		}
 	}
-	for _, l := range th.Links {
-		if l.Number == d.Number {
-			d.LinkKind = l.Kind
-			break
-		}
-	}
+	d.LinkKind = linkKind(th.Links, d.Number)
 	return nil
 }
 
-func hasLink(links []db.ThreadLink, number int) bool {
+// linkKind is what a thread's link with this number is: a PR when any is
+// (one thread can touch PRs and issues of several repos), else an issue; ""
+// when the thread has none.
+func linkKind(links []db.ThreadLink, number int) string {
+	kind := ""
 	for _, l := range links {
-		if l.Number == number {
-			return true
+		if l.Number != number || number == 0 {
+			continue
 		}
+		if l.Kind == db.LinkPR {
+			return db.LinkPR
+		}
+		kind = l.Kind
 	}
-	return false
+	return kind
 }
+
 
 // ask posts a decision card to the conversation.
 func (c *Coordinator) ask(projectID string, d Decision) string {
