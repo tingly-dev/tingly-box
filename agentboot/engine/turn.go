@@ -632,6 +632,33 @@ func liveSettings(opts agentboot.ExecutionOptions) string {
 	return live
 }
 
+// RefreshSettings sends session id's resident process the live part (the
+// permission rules) of the settings file at path now, as the next turn would,
+// so a rule added mid-turn holds from the process's next tool call. Nothing is
+// sent when no process is resident or nothing changed; on an error the next
+// turn sends it as usual.
+func (e *Engine) RefreshSettings(ctx context.Context, id, path string) error {
+	res, ok := e.residentFor(id)
+	if !ok {
+		return nil
+	}
+	e.mu.Lock()
+	have, known := e.launch[id]
+	e.mu.Unlock()
+	want := liveSettings(agentboot.ExecutionOptions{SettingsPath: path})
+	if !known || have.live == want {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, liveControlTimeout)
+	defer cancel()
+	if err := res.c.ApplySettings(ctx, liveDelta(have.live, want)); err != nil {
+		return err
+	}
+	have.live = want
+	e.setLaunch(id, have)
+	return nil
+}
+
 // liveDelta is the settings to send to take a process from have to want
 // (both from liveSettings). A key replaces what was sent for it before, and a
 // key that is gone is sent empty. The process keeps the rules it started

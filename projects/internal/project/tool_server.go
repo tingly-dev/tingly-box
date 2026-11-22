@@ -24,6 +24,9 @@ func (f *sessionToolsMCP) tools(t *db.Thread, p *db.Project) []Tool {
 	if f.service.Coordinator != nil {
 		out = append(out, f.notifyTools()...)
 	}
+	if f.service.Threads != nil {
+		out = append(out, f.permissionTools()...)
+	}
 	return append(out, Tool{Name: "send_file", Description: f.sendFileDescription(t, p), Strict: true,
 		Properties: map[string]any{
 			"path":    strProp("Path to the file to publish in this conversation"),

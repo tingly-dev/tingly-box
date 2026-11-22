@@ -38,6 +38,8 @@ func newToolsFixture(t *testing.T) *toolsFixture {
 	svc := &Service{Store: store, Layout: Layout{Root: t.TempDir()}, Hub: NewHub()}
 	svc.Coordinator = &Coordinator{store: store, layout: svc.Layout, hub: svc.Hub}
 	svc.Links = NewLinks(store, newFakeGitHub(), nil)
+	// Only to be offered request_permission; no test here calls it.
+	svc.Threads = &Threads{store: store}
 	return &toolsFixture{store: store, svc: svc, tools: &sessionToolsMCP{service: svc}, p: p, worker: worker, folder: folder}
 }
 
@@ -96,7 +98,8 @@ func TestToolsOfEachScope(t *testing.T) {
 	// The GitHub tools are the thread's own: they act on its checkout, which the
 	// coordinator does not have.
 	// notify_coordinator is how a thread reaches the coordinator mid-turn.
-	thread := []string{"close", "comment", "create_issue", "create_pr", "merge", "notify_coordinator", "send_file", "update", "view"}
+	// request_permission is how a thread asks the user for a permission on purpose.
+	thread := []string{"close", "comment", "create_issue", "create_pr", "merge", "notify_coordinator", "request_permission", "send_file", "update", "view"}
 	for _, c := range []struct {
 		name     string
 		threadID string
