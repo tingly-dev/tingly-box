@@ -62,4 +62,24 @@ func TestThreadPromptRules(t *testing.T) {
 	assert.Contains(t, s, "with the merge tool")
 	assert.Contains(t, s, "Never merge it yourself by hand")
 	assert.NotContains(t, s, "Do not push", "a PR may be asked for, so pushing is not banned outright")
+	assert.NotContains(t, s, "touch other branches", "other local branches of the worktree are the thread's to work on")
+	assert.NotContains(t, s, "force-push,", "a rebased branch is pushed with create_pr force")
+	assert.Contains(t, s, "force=true")
+	assert.Contains(t, s, "put to the user themselves")
+}
+
+// The thread prompt and the tool list are part of the cached prefix of every
+// turn: what the branch rules say must not depend on what other threads, PRs
+// or approvals exist, or each change would cost the thread its prompt cache.
+func TestThreadPromptDoesNotDependOnOtherThreadsOrLinks(t *testing.T) {
+	l := Layout{Root: t.TempDir()}
+	p := &db.Project{ID: "p1", Name: "Demo"}
+	th := &db.Thread{ID: "t1", Title: "Fix bug", Branch: "tb/fix", BaseBranch: "main", Cwd: "/w", RepoPath: "/r"}
+	before := threadSystemPrompt(l, p, th)
+
+	other := *th
+	other.Links = []db.ThreadLink{{Kind: db.LinkPR, Repo: "a/b", Number: 7, Role: db.LinkOpened, Head: "tb/other", Base: "main"}}
+	th.Links = other.Links
+	th.LastReport, th.Status, th.WaitReason = "report", db.ThreadWaiting, "Approve: push"
+	assert.Equal(t, before, threadSystemPrompt(l, p, th))
 }

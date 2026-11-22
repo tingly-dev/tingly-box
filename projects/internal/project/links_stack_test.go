@@ -102,14 +102,14 @@ func TestCreatePRWithHeadRefusals(t *testing.T) {
 		args  map[string]any
 		want  string
 	}{
-		{"head is the default branch", func(*linksFixture) {}, map[string]any{"head": "main", "base": "feat/other"}, "never pushed to"},
-		{"head is the default branch whatever the base", func(f *linksFixture) { f.gh.def = "feat/other" }, map[string]any{"head": "feat/other", "base": "main"}, "never pushed to"},
-		{"head is protected", func(f *linksFixture) { f.gh.protected = map[string]bool{"feat/other": true} }, map[string]any{"head": "feat/other"}, "protected"},
+		{"head is the default branch", func(*linksFixture) {}, map[string]any{"head": "main", "base": "feat/other"}, "base branch feat/other is not on GitHub"},
+		{"head is the default branch whatever the base", func(f *linksFixture) { f.gh.def = "feat/other" }, map[string]any{"head": "feat/other", "base": "main"}, "did not approve"},
+		{"head is protected", func(f *linksFixture) { f.gh.protected = map[string]bool{"feat/other": true} }, map[string]any{"head": "feat/other"}, "did not approve"},
 		{"head is not a local branch", func(*linksFixture) {}, map[string]any{"head": "feat/nope"}, "no local branch feat/nope"},
 		{"head is a remote-only name", func(*linksFixture) {}, map[string]any{"head": "origin/main"}, "no local branch origin/main"},
 		{"head is an option", func(*linksFixture) {}, map[string]any{"head": "--force"}, "not a valid branch name"},
 		{"head is a refspec", func(*linksFixture) {}, map[string]any{"head": "feat/other:main"}, "not a valid branch name"},
-		{"head is the base", func(*linksFixture) {}, map[string]any{"head": "feat/other", "base": "feat/other"}, "never pushed to"},
+		{"head is the base", func(*linksFixture) {}, map[string]any{"head": "feat/other", "base": "feat/other"}, "base of its own PR"},
 		{"base is not on GitHub", func(*linksFixture) {}, map[string]any{"head": "feat/other", "base": "feat/unpushed"}, "base branch feat/unpushed is not on GitHub"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -150,7 +150,7 @@ func TestCreatePRWithHeadNeverForcesAPush(t *testing.T) {
 
 	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x", "head": "feat/other"})
 	require.True(t, isErr, out)
-	assert.Contains(t, out, "a force push is not available")
+	assert.Contains(t, out, "force=true")
 	assert.Equal(t, before, run(t, f.remote, "git", "rev-parse", "feat/other"))
 	for _, c := range f.gh.called() {
 		assert.NotContains(t, c, "create-pr")
