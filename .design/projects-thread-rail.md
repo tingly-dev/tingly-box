@@ -46,6 +46,25 @@ behind a popover.
   when the thread has a link, so it is the short list worth seeing while
   typing. It no longer carries the folder and branch (the Environment card
   has them) nor the "answers itself at …" line (the question card says it).
+- **Issues & PRs on thread rows** (`ThreadLinkPills`, part of `ThreadBadges`):
+  wherever a thread is a row or a card (the Overview's list and boards, the
+  band's columns, a folder's sessions, the status popovers, the thread line in
+  the coordinator conversation) its links show before its work pills, so what
+  a thread did and where that stands reads without opening it. One pill for the
+  first link in the strip's order (an open PR, else an open issue, else what
+  finished): the kind/state icon in its colour (`LinkIcon`: open green, draft grey,
+  merged in the info tone, a closed PR red), `#214`, and a red dot when an open item has failing checks or
+  a conflict; the pill opens the item on GitHub. The rest fold into `+N`, whose
+  card (hover, or click/tap on touch) lists every item as the strip does
+  (`#209 title · where it stands`), each a link. The hover title and
+  `aria-label` carry `repo#N title · state · checks`. Clicks on a pill never
+  open the thread. The data is `Thread.links` of the thread list and its live
+  events: the pills make no request (refresh stays on the strip, the rail and
+  the Issues & PRs tab). When that first pill is the PR of the thread's own
+  branch, it stands in for the commits pill (while open) and the merged pill
+  (once merged): same fact twice otherwise, and the row is narrow. The open
+  thread's own header leaves the pills out (`links={false}`): the strip above
+  its message box lists them in full.
 - **Auto-answer** (`AutoAnswerSelect`) is a picker in the message box's row
   of pickers, after the permission mode: both say how far the thread goes
   without the user, and that row is where the thread's behaviour is changed
@@ -189,3 +208,34 @@ only offers a place for a host's own cards.
   per-folder polling.
 - Not done: a failed state. The list's `ThreadCounts` has none; a failed turn
   surfaces as `waiting` with a reason.
+
+## Thread numbers (proposal, not built)
+
+Asked: show a number on each thread so it can be mentioned directly. What
+exists today:
+
+- `Thread.seq`: a per-project number from 1, stored, never reused, 0 for the
+  coordinator (`projects/internal/db`, `projects.md`). IM already uses it:
+  messages are tagged `[#3 Title]` (`threadTag`), `@3 text` talks to thread
+  #3, `/session 3` binds a chat to it. The web UI never shows it.
+- The coordinator does not see it: its thread table, `list_threads` and the
+  tools name threads by the 8-character id prefix (`a1b2c3d4`), and branches
+  and worktrees carry the 6-character prefix (`tp/<slug>-a1b2c3`).
+
+Options, neither adds a stored field:
+
+- **A. Show `#seq`** (recommended): a muted `#3` before the title in rows,
+  cards and the thread header. It is the number IM users already type, short
+  and stable. Hover/menu "Copy reference" copies `#3 Title` (the IM tag).
+  For it to work as a mention in the coordinator chat, the coordinator's
+  thread table and `list_threads` gain the seq (`#3 a1b2c3d4 "Title"`) and
+  the thread tools accept `#3` beside the id prefix: a prompt and parser
+  change, no migration. Risk: `#3` next to a PR's `#214`; the PR always sits
+  in a pill with its icon, the thread number is plain muted text before the
+  title.
+- **B. Show the id prefix** (`a1b2c3d4`, monospace): what the coordinator
+  and the branch names already use, unique across projects, but 8 opaque
+  characters per row, and IM's `@3` would still be a second, different name.
+
+Undecided: A or B; whether the copy action copies `#3 Title` or a link to
+the thread; whether a folder's sessions (which also carry `seq`) show it.
