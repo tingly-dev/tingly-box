@@ -24,7 +24,13 @@ type Links struct {
 	// approve asks the user about a call that is outside what a thread may do
 	// on its own (see approval.go); nil means there is nobody to ask.
 	approve Approver
-	now     func() time.Time
+	// events is told which of a thread's PRs were merged or closed, once each
+	// (see links_events.go); nil in a host without a coordinator.
+	events func([]prChange)
+	// transitions serialises reading a record's state and writing the new one,
+	// so a sweep and a manual refresh cannot both see the same change.
+	transitions sync.Mutex
+	now         func() time.Time
 	// sweeping keeps two sweeps from overlapping.
 	sweeping sync.Mutex
 	// views are the last answers of View, for linkMinGap.
@@ -394,9 +400,16 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 		it.State, it.MergeState, it.CI = db.LinkStateMerged, "", ""
 	}
 	l.forgetView(t, it.Number)
-	_, rerr := l.record(t, r.repo, db.LinkPR, db.LinkOpened, it)
+	l.transitions.Lock()
+	prev, _ := l.store.FindThreadLink(t.ID, r.repo.Slug(), it.Number)
+	rec, rerr := l.record(t, r.repo, db.LinkPR, db.LinkOpened, it)
+	l.transitions.Unlock()
 	if rerr != nil {
 		logrus.WithError(rerr).Warn("projects: cannot record a merged PR")
+	} else if !isByUser(ctx) && prev != nil {
+		// The Merge dialog is the user's own click (byUser): the coordinator is
+		// not told what they did themselves; the thread records it.
+		l.deliver(changeOf(t.ID, prev.State, rec))
 	}
 	out.Item, out.Merged = it, true
 	return out, nil
@@ -1109,9 +1122,11 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 		return "", err
 	}
 	if link != nil {
-		if err := l.applyReading(t.ID, link, it); err != nil {
+		ch, err := l.applyReading(t.ID, link, it)
+		if err != nil {
 			logrus.WithError(err).Warn("projects: cannot save a link's reading")
 		}
+		l.deliver(ch)
 	}
 	text := describeItem(kind, it)
 	l.viewMu.Lock()
@@ -1172,10 +1187,10 @@ func describeItem(kind string, it GitHubItem) string {
 
 // refresh reads one record from GitHub. A failure keeps the last good reading,
 // and counts toward its back-off.
-func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) error {
+func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) (*prChange, error) {
 	repo, err := repoOfLink(k)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_, it, err := l.read(ctx, repo, k.Number)
 	if err != nil {
@@ -1189,23 +1204,31 @@ func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) 
 			// The card shows "could not refresh" from now on.
 			l.publish(threadID)
 		}
-		return err
+		return nil, err
 	}
 	return l.applyReading(threadID, k, it)
 }
 
 // applyReading stores what GitHub just said about a linked item and tells open
-// pages when it changed anything they show.
-func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) error {
+// pages when it changed anything they show. It returns the change when a PR
+// the thread opened went from open to merged or closed: the caller delivers it.
+func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) (*prChange, error) {
+	l.transitions.Lock()
+	defer l.transitions.Unlock()
+	// What the store says, not the caller's copy: it may have been read since.
+	before := k.State
+	if cur, err := l.store.FindThreadLink(threadID, k.Repo, k.Number); err == nil {
+		before, k.Role = cur.State, cur.Role
+	}
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || (it.Head != "" && (k.Head != it.Head || k.Base != it.Base)) || k.LastError != ""
 	fillLink(k, it, l.now())
 	if err := l.store.SaveThreadLinkReading(threadID, *k); err != nil {
-		return err
+		return nil, err
 	}
 	if changed {
 		l.publish(threadID)
 	}
-	return nil
+	return changeOf(threadID, before, k), nil
 }
 
 // due is when an open record may be read again.
@@ -1250,6 +1273,9 @@ func (l *Links) Sweep(ctx context.Context) {
 			}
 		}
 	}
+	// What the sweep saw merged or closed goes out together when it ends.
+	var changes []*prChange
+	defer func() { l.deliver(changes...) }()
 	// The ones read longest ago go first when the cap leaves some for later.
 	sort.SliceStable(open, func(i, j int) bool { return open[i].link.RefreshedAt.Before(open[j].link.RefreshedAt) })
 	now := l.now()
@@ -1262,7 +1288,9 @@ func (l *Links) Sweep(ctx context.Context) {
 			continue
 		}
 		done++
-		if err := l.refresh(ctx, open[i].threadID, &open[i].link); err != nil {
+		ch, err := l.refresh(ctx, open[i].threadID, &open[i].link)
+		changes = append(changes, ch)
+		if err != nil {
 			logrus.WithField("link", fmt.Sprintf("%s#%d", open[i].link.Repo, open[i].link.Number)).Debug("projects: link refresh failed: ", redact(err.Error()))
 		}
 	}
@@ -1433,11 +1461,12 @@ func (l *Links) refreshNow(ctx context.Context, threadID string, k db.ThreadLink
 	if err != nil {
 		return fail(err)
 	}
-	fillLink(&k, it, l.now())
-	if err := l.store.SaveThreadLinkReading(threadID, k); err != nil {
+	ch, err := l.applyReading(threadID, &k, it)
+	if err != nil {
 		return fail(err)
 	}
 	l.publish(threadID)
+	l.deliver(ch)
 	res.Status = RefreshDone
 	return res
 }

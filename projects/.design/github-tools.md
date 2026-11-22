@@ -223,7 +223,7 @@ The UI never asks GitHub; it reads the record. A background sweep keeps open ite
 - A change (state, CI, merge state) publishes a `thread` event so open pages update; an unchanged reading only moves `refreshed_at` and publishes nothing.
 - When `gh` is missing or not signed in, every refresh fails the same way and backs off; the card says "could not refresh" with the age of the last reading.
 
-Not done: webhooks (the host is usually behind NAT), review decisions (one more field in the query; left out because nothing here acts on it), notifying the coordinator when a PR is merged (an event line in the thread transcript is the obvious next step).
+Not done: webhooks (the host is usually behind NAT), review decisions (one more field in the query; left out because nothing here acts on it). Built: telling the coordinator when a PR the thread opened is merged or closed on GitHub (`applyReading` and `Links.Merge` detect the move out of open; see `thread-events.md`). Conflicts and CI are not told yet.
 
 ### Cost of a read
 

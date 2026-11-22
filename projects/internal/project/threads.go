@@ -82,6 +82,8 @@ type Report struct {
 	// Kind is finished, needs_input, failed, stalled or notify.
 	Kind string
 	Text string
+	// Events are the PR changes of a github report (Thread is the first one's).
+	Events []prEvent
 }
 
 // Report kinds.
