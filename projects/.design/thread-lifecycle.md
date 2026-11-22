@@ -216,6 +216,7 @@ close(t, mark)  写 resolved + ResolvedAt（已有则保留）+ mark 的附加�
 | 20 分钟无活动 | 收到 stalled | 不推 |
 | Merge 对话框合并（T13）、关闭、重开、重启 | 不收；下一轮从线程列表看到 | 不推 |
 | 线程开的 PR 在 GitHub 上被合并 / 被关闭（`merge` 工具合并也算）。**不改状态** | 收到 github 事件 pr_merged / pr_closed（线程已 resolved、项目暂停则只记录） | 不直接推；协调者在线时由它的回复到达 |
+| 线程开的 PR 进入合并冲突。**不改状态** | 收到 pr_conflicts（`needs_user`，同一 PR 30 分钟内最多一次；离开冲突只记录） | 协调者发决策卡；离线、或它没发卡也没回复时推一行折叠消息 |
 
 哪些事件值得送给线程、协调者或用户，见 [thread-events.md](thread-events.md)。
 

@@ -397,6 +397,12 @@ func foldThreadUpdate(m db.ThreadEvent) (tag, text string) {
 			return tag, join("Needs you", body) + fmt.Sprintf(". Reply with @%d and your answer.", p.Seq)
 		}
 		return tag, join("Needs you", body) + ". Open Projects in the web UI to answer."
+	case ReportGitHub:
+		// Only the fallback for a PR the user decides about gets here.
+		if p.Seq > 0 {
+			return tag, body + fmt.Sprintf(" Reply with @%d to tell the thread what to do.", p.Seq)
+		}
+		return tag, body + " Open Projects in the web UI to decide."
 	default:
 		return tag, join("Finished", body)
 	}

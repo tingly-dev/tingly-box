@@ -303,18 +303,31 @@ func TestAGitHubEventIsNoRawLineInTheChat(t *testing.T) {
 }
 
 func TestPRTransitionIsOnlyOutOfOpen(t *testing.T) {
-	own := func(state string) *db.ThreadLink {
-		return &db.ThreadLink{Kind: db.LinkPR, Role: db.LinkOpened, State: state}
+	own := func(state, merge string) *db.ThreadLink {
+		return &db.ThreadLink{Kind: db.LinkPR, Role: db.LinkOpened, State: state, MergeState: merge}
 	}
-	assert.Equal(t, EventPRMerged, prTransition(db.LinkStateOpen, own(db.LinkStateMerged)))
-	assert.Equal(t, EventPRClosed, prTransition(db.LinkStateOpen, own(db.LinkStateClosed)))
-	assert.Empty(t, prTransition(db.LinkStateMerged, own(db.LinkStateMerged)))
-	assert.Empty(t, prTransition(db.LinkStateClosed, own(db.LinkStateMerged)))
-	assert.Empty(t, prTransition(db.LinkStateOpen, own(db.LinkStateOpen)))
-	assert.Empty(t, prTransition("", own(db.LinkStateMerged)))
-	issue := own(db.LinkStateClosed)
+	was := func(state, merge string) db.ThreadLink { return *own(state, merge) }
+	open, merged, closed := db.LinkStateOpen, db.LinkStateMerged, db.LinkStateClosed
+	assert.Equal(t, EventPRMerged, prTransition(was(open, ""), own(merged, "")))
+	assert.Equal(t, EventPRClosed, prTransition(was(open, ""), own(closed, "")))
+	assert.Empty(t, prTransition(was(merged, ""), own(merged, "")))
+	assert.Empty(t, prTransition(was(closed, ""), own(merged, "")))
+	assert.Empty(t, prTransition(was(open, ""), own(open, "")))
+	assert.Empty(t, prTransition(db.ThreadLink{}, own(merged, "")))
+	issue := own(closed, "")
 	issue.Kind = db.LinkIssue
-	assert.Empty(t, prTransition(db.LinkStateOpen, issue))
+	assert.Empty(t, prTransition(was(open, ""), issue))
+
+	// Conflicts: entering counts from anything, a first reading included;
+	// staying does not; leaving counts once GitHub has settled on a state.
+	for _, from := range []string{"", "unknown", "ready", "blocked", "behind"} {
+		assert.Equal(t, EventPRConflicts, prTransition(was(open, from), own(open, "conflicts")), from)
+	}
+	assert.Empty(t, prTransition(was(open, "conflicts"), own(open, "conflicts")))
+	assert.Equal(t, EventPRConflictsGone, prTransition(was(open, "conflicts"), own(open, "ready")))
+	assert.Equal(t, EventPRConflictsGone, prTransition(was(open, "conflicts"), own(open, "blocked")))
+	assert.Empty(t, prTransition(was(open, "conflicts"), own(open, "unknown")), "GitHub has not settled")
+	assert.Equal(t, EventPRMerged, prTransition(was(open, "conflicts"), own(merged, "")))
 }
 
 // The close tool writes the record itself: the coordinator hears of it as of

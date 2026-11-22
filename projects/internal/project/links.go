@@ -30,7 +30,10 @@ type Links struct {
 	// transitions serialises reading a record's state and writing the new one,
 	// so a sweep and a manual refresh cannot both see the same change.
 	transitions sync.Mutex
-	now         func() time.Time
+	// conflictWoke is when the coordinator was last woken about each PR's
+	// conflicts (conflictWakeGap).
+	conflictWoke map[string]time.Time
+	now          func() time.Time
 	// sweeping keeps two sweeps from overlapping.
 	sweeping sync.Mutex
 	// views are the last answers of View, for linkMinGap.
@@ -946,7 +949,7 @@ func (l *Links) recordAndTell(ctx context.Context, t *db.Thread, repo GitHubRepo
 	rec, err := l.record(t, repo, kind, role, it)
 	l.transitions.Unlock()
 	if err == nil && prev != nil && !isByUser(ctx) {
-		l.deliver(changeOf(t.ID, prev.State, rec))
+		l.deliver(changeOf(t.ID, *prev, rec))
 	}
 	return rec, err
 }
@@ -1218,19 +1221,20 @@ func (l *Links) refresh(ctx context.Context, threadID string, k *db.ThreadLink) 
 
 // applyReading stores what GitHub just said about a linked item and tells open
 // pages when it changed anything they show. It returns the change when a PR
-// the thread opened went from open to merged or closed: the caller delivers it.
+// the thread opened was merged or closed, or entered or left conflicts: the
+// caller delivers it.
 func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) (*prChange, error) {
 	l.transitions.Lock()
 	defer l.transitions.Unlock()
 	// What the store says, not the caller's copy: it may have been read since.
-	before := k.State
+	before := *k
 	if cur, err := l.store.FindThreadLink(threadID, k.Repo, k.Number); err == nil {
-		before, k.Role = cur.State, cur.Role
+		before, k.Role = *cur, cur.Role
 	}
 	// A merge is final: a reading that says otherwise was taken before it (a
 	// sweep racing the merge tool) and would bring the record back to open, to
 	// be "merged" a second time by the next reading.
-	if before == db.LinkStateMerged && it.State != db.LinkStateMerged {
+	if before.State == db.LinkStateMerged && it.State != db.LinkStateMerged {
 		return nil, nil
 	}
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || (it.Head != "" && (k.Head != it.Head || k.Base != it.Base)) || k.LastError != ""
@@ -1241,7 +1245,9 @@ func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) (
 	if changed {
 		l.publish(threadID)
 	}
-	return changeOf(threadID, before, k), nil
+	ch := changeOf(threadID, before, k)
+	l.capConflicts(ch)
+	return ch, nil
 }
 
 // due is when an open record may be read again.
