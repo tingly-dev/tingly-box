@@ -53,7 +53,7 @@ export const project: PluralDict<typeof en> = {
         step2: 'Координатор запустит поток на каждую задачу. Каждый поток — сеанс Claude Code в своей ветке.',
         step3: 'Можно отойти. Обзор покажет, что готово к проверке и какой поток ждёт вас.',
         openThread: 'Открыть поток',
-        updateKind: { finished: 'завершён', needs_input: 'нужен ваш ввод', failed: 'сбой', stalled: 'давно молчит', notify: 'прислал заметку' },
+        updateKind: { finished: 'завершён', needs_input: 'нужен ваш ввод', failed: 'сбой', stalled: 'давно молчит', notify: 'прислал заметку', github: 'новость с GitHub' },
         tryExample: 'Попробуйте',
         example1: 'Изучи этот репозиторий и предложи три улучшения, пока ничего не меняя.',
         example2: 'Добавь в README раздел о том, как запускать тесты.',
@@ -89,6 +89,7 @@ export const project: PluralDict<typeof en> = {
         copyRefOf: 'Копировать «{{ref}}»',
         refCopied: 'Скопировано «{{ref}}»',
         editTitle: 'Переименовать поток',
+        githubEvent: { told: 'Координатор уведомлён', reply: 'Посмотреть ответ' },
         requests: {
             approval: 'Нужно ваше подтверждение', question: 'Есть вопрос к вам', many: 'Требуют вас: {{count}}', review: 'Открыть',
             more: 'ещё +{{count}}', answered: 'Отвечено', openThread: 'Открыть поток',

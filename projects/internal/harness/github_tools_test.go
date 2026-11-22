@@ -24,6 +24,9 @@ type stubGitHub struct {
 	mu    sync.Mutex
 	calls []string
 	ci    string
+	// state is what GitHub says of the PR (open when empty): a test sets it
+	// to merge or close the PR on GitHub, behind the thread's back.
+	state string
 	// bare is where the tools' git pushes: a local bare repository.
 	bare string
 }
@@ -86,7 +89,11 @@ func (g *stubGitHub) PRFiles(context.Context, project.GitHubRepo, int) ([]projec
 func (g *stubGitHub) Read(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return project.GitHubItem{Number: n, URL: "https://github.com/acme/demo/pull/7", Title: "Add the tool", State: "open", IsPR: true, CI: g.ci, MergeState: "ready"}, nil
+	state := g.state
+	if state == "" {
+		state = "open"
+	}
+	return project.GitHubItem{Number: n, URL: "https://github.com/acme/demo/pull/7", Title: "Add the tool", State: state, IsPR: true, CI: g.ci, MergeState: "ready"}, nil
 }
 
 // pointOriginAtGitHub gives the repository a github.com origin whose pushes

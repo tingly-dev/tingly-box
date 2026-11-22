@@ -226,3 +226,24 @@ describe('conversation presentation', () => {
         expect(configured).toMatchObject({ streaming: true, onStop });
     });
 });
+
+describe('a thread asks to show the coordinator reply', () => {
+    it('brings the input into view, marks it, and says it was shown', () => {
+        const scrolled = vi.fn();
+        Element.prototype.scrollIntoView = scrolled;
+        const onFocused = vi.fn();
+        const input = event('thread_update', 'PR #11 was merged into main.', { payload: JSON.stringify({ thread_id: 't', title: 'Fix login', kind: 'github', status: 'ready' }) });
+        const { container } = show({ ...props([input, event('assistant', 'PR #11 landed.')]), focusEventId: input.id, onFocused });
+        const row = container.querySelector(`[data-event-id="${input.id}"]`);
+        expect(row).not.toBeNull();
+        expect(row!.hasAttribute('data-focused')).toBe(true);
+        expect(scrolled).toHaveBeenCalled();
+        expect(onFocused).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves an input that is not loaded alone', () => {
+        const onFocused = vi.fn();
+        show({ ...props([event('assistant', 'Hi.')]), focusEventId: 'older', onFocused });
+        expect(onFocused).not.toHaveBeenCalled();
+    });
+});

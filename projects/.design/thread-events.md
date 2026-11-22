@@ -1,6 +1,6 @@
 # 事件如何触发流程：值得流转的信息
 
-> 状态：**第 1 步（E1 合并、E2 关闭）和第 2 步（E3 冲突）已实现，见 §8、§9**（2026-11-22）。范围已由用户确定（§7）。与 [thread-lifecycle.md](thread-lifecycle.md) 互为补充：那里定义线程**处于什么状态、谁能改**；本文定义**什么信息会让谁去做决定**。
+> 状态：**第 1 步（E1 合并、E2 关闭）和第 2 步（E3 冲突）已实现，见 §8、§9；合并后的后续（经协调者）见 §10**（2026-11-22）。范围已由用户确定（§7）。与 [thread-lifecycle.md](thread-lifecycle.md) 互为补充：那里定义线程**处于什么状态、谁能改**；本文定义**什么信息会让谁去做决定**。
 > 前提（用户决定）：系统不自动关闭线程，不替任何人做决定。事件只把事实送到能做决定的人手里，并且不改变线程状态。
 
 ## 1 第一性原理
@@ -221,7 +221,7 @@ Thread now: status=ready running=no
 
 **默认（按推荐，用户可改）**：
 
-- **都经协调者**：系统不把任何事件直接发给线程。线程只在用户或协调者的指示下行动；协调者手里有用户的规则，转给线程时带 `cite`。
+- **都经协调者**（用户 2026-11-22 确认：选项 a“经协调者补后续”，见 §10）：系统不把任何事件直接发给线程。线程只在用户或协调者的指示下行动；协调者手里有用户的规则，转给线程时带 `cite`。
 - **IM 兜底**：GitHub 事件平时只通过协调者的回复或决策卡到达 IM。协调者离线时，E3 推一行折叠消息（需要用户），E1、E2 只记录（用户回来后从线程和协调者那里看到）。协调者在线但没处理 E3 时，同样推这一行。
 
 ## 8 第 1 步：已实现什么（E1、E2）
@@ -267,3 +267,17 @@ Thread now: status=ready running=no
 ### 变异检查
 
 把 30 分钟上限改成永不命中 → `TestConflictsWakeTheCoordinatorOncePerPRInThirtyMinutes` 失败；去掉“进入”的守卫（`!conflicting(&before)`）→ `TestEnteringConflictsIsOneEvent…` 和 `TestPRTransitionIsOnlyOutOfOpen` 失败。去掉 `applyReading` 里的 `keepMergeState` → `TestAConflictThatStaysIsOneAlertThroughUnknownReadingsAndRestarts` 失败（修复前同一冲突 30 次读取唤醒 6 次）；去掉 `record` 里的 → `TestACommentReadingUnknownDoesNotEnterConflictsAgain` 失败。均已用 Edit 恢复。
+
+## 10 合并 / 关闭之后的后续（用户选 a，2026-11-22）
+
+用户反馈：PR 合并后线程里只出现一行事件，之后没有任何动静。调查结论：协调者在线时它确实收到 `pr_merged` 并回复，但回复在项目对话里，线程这边看不出来（设计行为）；另外有两个 bug。用户在三个选项里选了 **a：仍经协调者，补上后续**（b“事件直接发给线程”、c“事件行上的按钮”未采用）。
+
+- **修 bug 1：工具记录先看到合并**。PR 在 GitHub 上合并（或关闭）后、Sweep 读到之前，线程调用 `comment`、`update` 或 `create_pr`（`settleClosed`）时，`record` 直接把记录写成 merged / closed，事件丢失（之后的 Sweep 读到的旧值已是终态）。现在这三处走 `recordAndTell`：与 Sweep 同一把 `transitions` 锁、同一个 `prTransition`，所以一个 PR 只报一次，先到者报。`recordAndTell` 只投递 merged / closed：冲突仍只由读取发现（§9 的限制不变）。`settleClosed` 读不到 GitHub 时按“已关闭”猜测写入，这是猜测，**不报**（可能其实已合并，不能告诉协调者“丢了”）。Merge 对话框（`byUser`）照旧只记录。
+- **修 bug 2：文件夹会话**。文件夹没有协调者：它的线程的 PR 事件只在线程里记，不再调用 `onReport`（之前每次都打一条 `save coordinator report: event is not in the project's main thread` 的 error 日志）。
+- **线程里看得到“已通知协调者”**。`onPRChanges` 先保存协调者输入（`queueReport`，即 `onReport` 去掉唤醒的部分），再写线程记录，记录的负载带 `coordinator_event`（那条输入在主对话里的事件 id），最后唤醒协调者（这样它 `get_thread` 时已看得到记录）。没有告诉协调者的（已解决 / 归档线程、暂停 / 归档项目、文件夹、冲突消失、30 分钟内再次冲突）不带这个字段。前端线程面板里这一行下面多一行小字 **“已通知协调者 · 查看回复”**；点“查看回复”时项目对话把那条输入滚进视野并闪一下底色，协调者的回复就在它下面；线程占着主区域时先关掉线程。输入不在已加载的那一页里时什么也不做。对话里这类输入的种类显示为“GitHub 动态”（以前回退成原文 `github`）。
+- **协调者提示词**：收到 `pr_merged` / `pr_closed` 后先 `get_thread`；还有剩余工作（其他开着的 PR、未推送的提交、未提交的改动）时，**可以** `message_thread` 让线程检查合并 / 关闭之后还剩什么并汇报，消息里说明来自 GitHub、不是用户，不得要求用户没要求的合并、关闭或强推；然后一句话告诉用户落地 / 丢弃了什么、还剩什么、是否已让线程检查；没有剩余工作就一句话或 `no_update`。永不 resolve 或关闭线程。
+- `message_thread` 没有 mode 参数（工具粒度规则：不加 action / mode 参数）：线程空闲时消息开一轮（等价于 next_turn），线程正在跑时插进这一轮、下一步读到。
+- **不变的规则**：事件本身不改线程状态，合并不关闭线程；线程因协调者的消息跑一轮，状态变化是那一轮的，不是事件的。
+
+测试：`links_followup_test.go`（comment / update / create_pr 先看到合并各报一次且与 Sweep 去重；猜测的关闭不报；文件夹只记录且无 error 日志；记录带 `coordinator_event` 且晚于输入；暂停 / 已解决不带；脚本化协调者 `message_thread` 后线程跑一轮、未被 resolve；提示词）。harness 旅程 `TestJourneyAMergeOnGitHubIsFollowedUpThroughTheCoordinator`：线程开 PR 后 PR 在 GitHub 上被合并，线程的 `comment` 先看到 → 协调者收到一次 `pr_merged` → `message_thread` → 线程第二轮。前端：`GitHubEventNote.test.tsx`、`ConversationPane.test.tsx`（聚焦）。变异检查：comment 改回 `record`、`settleClosed` 改回 `record`、去掉文件夹判断、去掉 `coordinator_event`，各自的测试都失败；已恢复。
+

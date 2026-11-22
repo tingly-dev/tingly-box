@@ -280,7 +280,7 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 		return "", err
 	}
 	l.forgetView(t, number)
-	_, rerr := l.record(t, lc.repo, kind, db.LinkCommented, it)
+	_, rerr := l.recordAndTell(ctx, t, lc.repo, kind, db.LinkCommented, it)
 	return fmt.Sprintf("commented on %s #%d %s%s", kind, number, commentURL, saved(rerr)), nil
 }
 
@@ -643,12 +643,17 @@ func (l *Links) settleClosed(ctx context.Context, t *db.Thread, repo GitHubRepo,
 			continue
 		}
 		_, it, err := l.read(ctx, repo, k.Number)
+		var rerr error
 		if err != nil || it.State == db.LinkStateOpen {
 			// An open reading against OpenPR's answer is GitHub catching up, not a
 			// reason to keep the record open: it is closed here and a refresh corrects it.
+			// That is a guess, not GitHub's word, so nobody is told of it.
 			it = GitHubItem{Number: k.Number, URL: k.URL, Title: k.Title, Head: k.Head, Base: k.Base, State: db.LinkStateClosed, IsPR: true}
+			_, rerr = l.record(t, repo, db.LinkPR, k.Role, it)
+		} else {
+			_, rerr = l.recordAndTell(ctx, t, repo, db.LinkPR, k.Role, it)
 		}
-		if _, rerr := l.record(t, repo, db.LinkPR, k.Role, it); rerr != nil {
+		if rerr != nil {
 			logrus.WithError(rerr).Warn("projects: cannot record a closed PR")
 			continue
 		}
@@ -884,7 +889,7 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 		return "", err
 	}
 	l.forgetView(t, link.Number)
-	_, rerr := l.record(t, lc.repo, link.Kind, role, it)
+	_, rerr := l.recordAndTell(ctx, t, lc.repo, link.Kind, role, it)
 	return fmt.Sprintf("updated %s #%d %s (%s)%s", link.Kind, it.Number, it.URL, strings.Join(what, ", "), saved(rerr)), nil
 }
 
@@ -953,16 +958,21 @@ func (l *Links) Close(ctx context.Context, t *db.Thread, number int) (string, er
 }
 
 // recordAndTell records it on thread t, like record, and delivers the change
-// when it moved a PR the thread opened out of open (see links_events.go):
-// the merge and close tools write the record themselves, not through a
-// reading. The user's own Merge dialog (byUser) is recorded only.
+// when it moved a PR the thread opened from open to merged or closed (see
+// links_events.go): the merge, close, comment and update tools write the record
+// themselves, not through a reading, and may be the first to see a merge made
+// on GitHub. Conflicts are left to readings. The user's own Merge dialog
+// (byUser) is recorded only.
 func (l *Links) recordAndTell(ctx context.Context, t *db.Thread, repo GitHubRepo, kind, role string, it GitHubItem) (*db.ThreadLink, error) {
 	l.transitions.Lock()
 	prev, _ := l.store.FindThreadLink(t.ID, repo.Slug(), it.Number)
 	rec, err := l.record(t, repo, kind, role, it)
 	l.transitions.Unlock()
-	if err == nil && prev != nil && !isByUser(ctx) {
-		l.deliver(changeOf(t.ID, *prev, rec))
+	if err != nil || prev == nil || isByUser(ctx) {
+		return rec, err
+	}
+	if ch := changeOf(t.ID, *prev, rec); ch != nil && (ch.Kind == EventPRMerged || ch.Kind == EventPRClosed) {
+		l.deliver(ch)
 	}
 	return rec, err
 }
