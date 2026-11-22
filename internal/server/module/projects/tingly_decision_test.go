@@ -80,7 +80,7 @@ func TestTinglyDecisionCardReachesChatAsButtons(t *testing.T) {
 
 	ship.Click()
 	chat.WaitRestate(card.MessageID, 10*time.Second).AssertContains(t, "Answered in a chat: Ship")
-	chat.WaitText(10*time.Second).AssertContains(t, "You said: Ship")
+	chat.WaitText(10*time.Second).AssertContains(t, "The user picked option 1:)\nShip")
 	require.Equal(t, 0, chosenOption(t, h, main))
 
 	// The same press again is too late and changes nothing.
@@ -142,7 +142,7 @@ func TestTinglyDecisionCardReachesButtonlessChatAsNumberedText(t *testing.T) {
 		first, second = second, first
 	}
 	first.AssertContains(t, "Re: Ship it now?\nAnswered in a chat: Wait")
-	second.AssertContains(t, "You said: Wait")
+	second.AssertContains(t, "The user picked option 2:)\nWait")
 	require.Equal(t, 1, chosenOption(t, h, main))
 
 	// Answered: "1" is a plain message again.
@@ -172,6 +172,6 @@ func TestTinglyDecisionCardIsAnsweredOnlyByItsOwnConversation(t *testing.T) {
 	require.Equal(t, -1, chosenOption(t, h, main))
 
 	ship.Click()
-	chat.WaitText(10*time.Second).AssertContains(t, "You said: Ship")
+	chat.WaitText(10*time.Second).AssertContains(t, "The user picked option 1:)\nShip")
 	require.Equal(t, 0, chosenOption(t, h, main))
 }

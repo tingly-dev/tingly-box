@@ -76,6 +76,7 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                 : <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.5}}>{files.map((f) => f.name).join(', ')}</Typography>)}
             {message.content.trim() !== '' && (
                 <Box sx={userBubble}>
+                    {message.context && <Typography variant="caption" sx={{display: 'block', color: 'text.secondary', mb: 0.25}}>{message.context}</Typography>}
                     <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
                 </Box>
             )}

@@ -174,6 +174,7 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 	call("request_decision", map[string]any{"question": "Ship now?", "options": []map[string]string{{"label": "Yes", "consequence": "ships"}, {"label": "No"}}, "recommended": 1, "reason": "safer"})
 	call("request_decision", map[string]any{"question": "One option?", "options": []map[string]string{{"label": "Only"}}, "recommended": 0})
 	call("request_decision", map[string]any{"question": "Bad index?", "options": []map[string]string{{"label": "A"}, {"label": "B"}}, "recommended": 5})
+	call("request_decision", map[string]any{"question": "Drop it?", "options": []map[string]string{{"label": "A"}, {"label": "B"}}, "recommended": 0, "thread_id": "nope"})
 	call("propose_threads", map[string]any{"threads": []map[string]string{{"title": "Plan A", "task": "do a"}, {"title": "Plan B", "task": "do b", "base": "main"}}})
 	call("propose_threads", map[string]any{"threads": []map[string]string{}})
 

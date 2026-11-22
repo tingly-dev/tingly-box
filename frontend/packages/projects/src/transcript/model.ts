@@ -21,6 +21,9 @@ export interface TranscriptEntry {
     // Who sent a user message, when the host knows more than "the user"
     // (a Projects thread is also written to by its coordinator).
     author?: string;
+    // A line the host puts in front of a user message, in its own words, not
+    // the user's: which decision card a picked option answers.
+    context?: string;
     // Origin of a message written through an IM bot, when known by the host.
     imSource?: {platform: string; chatId: string};
     // Files attached to a user message.

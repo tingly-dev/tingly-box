@@ -381,6 +381,9 @@ func (s *Service) tellWhichRequest(b *db.ChannelBinding, group []replyMatch) {
 		label := ""
 		if m.card != nil {
 			label = m.card.Question
+			if a := m.card.about(); a != "" {
+				label += " (" + a + ")"
+			}
 		} else if m.suggestions != nil {
 			label = "start the proposed threads"
 		} else if ev, ok := s.Threads.PendingRequest(m.threadID, m.requestID); ok {

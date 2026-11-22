@@ -273,7 +273,7 @@ P1 没有用真实 Claude Code 验证：规则是否真的在 auto 模式下保�
 
 - `Relay.decision` 把卡片当作一个**请求**发给绑定在该项目主线程上的 chat：请求 id 是卡片事件 id，`pendingRequest{主线程, 事件 id}`。支持按钮的平台（`ChannelPrompter` 且平台能力含 interaction：Telegram、Feishu/Lark 等）每个选项一个按钮，值为 `o<N>`，推荐项标 `(recommended)`；不支持按钮的平台（`PlatformCapabilities.SupportsInteraction()` 为假：钉钉、Discord、Slack、WhatsApp 等，`ErrNoButtons`）和没有 prompter 的宿主，收到带编号的文字卡 + “Reply 1 or 2 to choose.”。文字含上下文、每项后果、推荐理由。
 - 回答有两条路，都落到同一个 `Coordinator.Choose`：① 按钮回调 `pj` → `RouteAnswer` → `Service.AnswerFromChannel`（要求该 chat 绑定在卡片所属的主线程或其祖先上，否则 `ErrNotThisChat`；已答返回 “This was already answered.”）；② 文字回复：`PostFromChannel` 里该 chat 的待答请求依次尝试，卡片只认选项的**编号或标签**（忽略大小写和句末标点），其它文字是普通消息、卡片继续开着，也不会挡住同一 chat 里之后的审批/提问的文字回答。
-- 答案作为**用户消息**（`source=im`，只有标签本身，不带 coordinator 措辞）交给 coordinator，与 Web 点击一致；`Coordinator.OnDecided → Relay.Decided` 把各 chat 里的卡片改写为 “Answered in a chat/on the web: <标签>”，并忘掉待答记录。Web 先答同样会改写 IM 里的卡片。
+- 答案作为**用户消息**（`source=im`，只有标签本身，不带 coordinator 措辞；卡片的 id、问题和关联线程 / PR 由系统写在信封属性里，见 `decision-card-source.md`）交给 coordinator，与 Web 点击一致；`Coordinator.OnDecided → Relay.Decided` 把各 chat 里的卡片改写为 “Answered in a chat/on the web: <标签>”，并忘掉待答记录。Web 先答同样会改写 IM 里的卡片。
 - 信任：能答卡片的只有绑定了该会话的 chat（按钮路径在 `AnswerFromChannel` 校验，文字路径经 chat 的配对/白名单门）。已知缺口（未改，影响审批按钮同理）：按钮回调不经 `handleInboundGate`，在群里是“chat 已绑定”这一级，不区分群成员。
 
 - **用户怎么确认自己答的是哪一问**：① 按钮卡片的文字本身含问题，点后原地改写为 “Answered in a chat: X”，问题仍在上面；② 纯文字 chat 没有可改写的消息，答完后补一条 `[项目] Re: <问题>\nAnswered in a chat: X`；③ 一个 chat 里同时有多张未答卡片、而回复（如 “1”）同时符合多张时**不猜**，回一条列出这些问题和各自四位代码（卡片 id 前 4 位）的说明；用户以代码开头回复（`a3f9 2`、`7c21 keep`）即可指定哪一张——纯文字平台没有按钮也不会卡死。回复的标签只符合一张时照常作答。标签优先于数字位置（标签本身是数字的选项不会被当成序号）。卡片优先于审批/提问处理，所以裸数字不会被当成审批的拒绝理由。与别处同时作答的竞态会回 “This was already answered.”，不当错误。
