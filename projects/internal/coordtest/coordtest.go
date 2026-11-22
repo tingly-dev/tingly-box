@@ -218,7 +218,7 @@ func (t *Turn) ThreadRef(title string) string {
 	if isErr {
 		return ""
 	}
-	m := regexp.MustCompile(`(?m)^- (\w+) ` + regexp.QuoteMeta(strconv.Quote(title))).FindStringSubmatch(out)
+	m := regexp.MustCompile(`(?m)^- (?:#\d+ )?(\w+) ` + regexp.QuoteMeta(strconv.Quote(title))).FindStringSubmatch(out)
 	if m == nil {
 		return ""
 	}

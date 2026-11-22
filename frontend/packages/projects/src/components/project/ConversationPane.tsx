@@ -14,7 +14,7 @@ import { useTranscriptHost } from '../../transcript/context';
 import { Check, PlayArrow, Settings } from '../icons';
 import { DisclosureRow } from '../common/Disclosure';
 import { LoadEarlier } from './LoadEarlier';
-import { ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
+import { NumberedTitle, ThreadStateMark, ThreadBadges, ThreadSubtitle } from './threadStatus';
 import { Transcript, blockAttachments, buildTranscript, type AttachmentsComponent, type TranscriptEntry } from '../../transcript';
 import { threadTranscript } from './threadTranscript';
 import { radius } from '@tingly/ui/theme/radius';
@@ -54,7 +54,7 @@ export function ThreadCard({ thread, onOpen, onTasks }: { thread: Thread; onOpen
             <Box component="span" title={t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)} sx={{ display: 'inline-flex', flexShrink: 0 }}>
                 <ThreadStateMark status={thread.status} queued={thread.queued} />
             </Box>
-            <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{thread.title}</Typography>
+            <Typography noWrap sx={{ flex: { xs: 1, sm: '0 1 auto' }, minWidth: 0, maxWidth: { sm: '45%' }, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}><NumberedTitle thread={thread} /></Typography>
             {/* On a phone the line keeps the title; the thread holds the rest. */}
             <Typography noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' }, flex: 1, minWidth: 0, fontSize: fontSizes.sm, color: 'text.secondary' }}>
                 <ThreadSubtitle thread={thread} />

@@ -20,7 +20,7 @@ export interface StatusGroup {
 export interface StatusRow {
     id: string;
     group: string;
-    title: string;
+    title: ReactNode;
     /** The line under the title: what it waits on, where its work is. */
     subtitle?: ReactNode;
     /** At the right: small pills about its work (commits, merged). */
@@ -29,6 +29,8 @@ export interface StatusRow {
     meta?: ReactNode;
     /** Under the text: a control of this row (what the thread waits on, answered in place). */
     footer?: ReactNode;
+    /** Under the whole row: its detail (the thread's issues and PRs). */
+    trail?: ReactNode;
     selected?: boolean;
     /** Changed since the user last looked. */
     unseen?: boolean;
@@ -95,7 +97,7 @@ export function GroupHeader({ label, status, count, needsYou = 0, open, onToggle
 }
 
 function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) {
-    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} footer={row.footer} end={row.end} selected={row.selected} unseen={row.unseen} onClick={row.onClick ?? (() => onOpen(row.id))} />;
+    return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} footer={row.footer} trail={row.trail} end={row.end} selected={row.selected} unseen={row.unseen} onClick={row.onClick ?? (() => onOpen(row.id))} />;
 }
 
 /**

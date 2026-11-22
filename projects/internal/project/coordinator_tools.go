@@ -56,15 +56,15 @@ func (c *Coordinator) coordinatorTools() []Tool {
 			},
 			Required: []string{"question", "options", "recommended"}, Handle: textTool(c.requestDecision)},
 		{Name: "message_thread", CoordinatorOnly: true, Description: "Send a message to an existing thread (follow-up work, an answer to its question). While the thread works, it is added to the running turn and read at the thread's next step (so it can change course); an idle thread starts a turn on it.",
-			Properties: map[string]any{"thread_id": strProp("Thread id (the 8-character prefix is enough)."), "message": strProp("What to tell the thread."),
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3) or its id (the 8-character prefix is enough)."), "message": strProp("What to tell the thread."),
 				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
 			Required: []string{"thread_id", "message"}, Handle: textTool(c.messageThread)},
 		{Name: "stop_thread", CoordinatorOnly: true, Strict: true, Description: "Stop a thread's running turn and drop its queued messages, only because the user asked. Its session and history stay; message_thread continues it. A pending approval or question of the thread expires.",
-			Properties: map[string]any{"thread_id": strProp("Thread id or its 8-character prefix."),
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or 8-character prefix."),
 				"cite": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that ask to stop this thread."}},
 			Required: []string{"thread_id", "cite"}, Handle: textTool(c.stopThread)},
 		{Name: "get_thread", CoordinatorOnly: true, Description: "Read a thread's status, branch, last report and recent transcript. Entries are cut and the result capped like read_conversation; page back with before, read entries whole with full.",
-			Properties: map[string]any{"thread_id": strProp("Thread id or its 8-character prefix."),
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or 8-character prefix."),
 				"before": strProp("Optional. 8-character id of a transcript entry to read back from."),
 				"limit":  map[string]any{"type": "integer", "description": "How many entries, up to 40. Default 15."},
 				"full":   map[string]any{"type": "boolean", "description": "Show each entry up to 4000 characters instead of 300."}}, Required: []string{"thread_id"}, Handle: textTool(c.getThread)},
@@ -79,9 +79,9 @@ func (c *Coordinator) coordinatorTools() []Tool {
 				"contains": strProp("Optional. Only threads whose title, task or last report contains this text."),
 				"limit":    map[string]any{"type": "integer", "description": "How many threads, up to 40. Default 20."}}, Handle: textTool(c.listThreadsTool)},
 		{Name: "resolve_thread", CoordinatorOnly: true, Description: "Mark a thread resolved (done). Only when the user asks for it: a merged PR alone does not mean the thread is done.",
-			Properties: map[string]any{"thread_id": strProp("Thread id or prefix.")}, Required: []string{"thread_id"}, Handle: textTool(c.resolveThread)},
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or prefix.")}, Required: []string{"thread_id"}, Handle: textTool(c.resolveThread)},
 		{Name: "rename_thread", CoordinatorOnly: true, Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
-			Properties: map[string]any{"thread_id": strProp("Thread id or its 8-character prefix."), "title": strProp("New title: starts with a verb that names the goal, three to six words, no ids or paths.")}, Required: []string{"thread_id", "title"}, Handle: textTool(c.renameThread)},
+			Properties: map[string]any{"thread_id": strProp("The thread: its number (#3), or its id or 8-character prefix."), "title": strProp("New title: starts with a verb that names the goal, three to six words, no ids or paths.")}, Required: []string{"thread_id", "title"}, Handle: textTool(c.renameThread)},
 		{Name: "no_update", CoordinatorOnly: true, Description: "End this turn without posting anything to the user. Use it when a thread update or settings change needs no message. Call it instead of replying with text.",
 			Properties: map[string]any{"reason": strProp("Optional. Why nothing needs saying.")}, Handle: textTool(c.noUpdate)},
 		{Name: "remember", CoordinatorOnly: true, Description: "Save a requirement, decision, pitfall or coordination preference to project memory. Every new thread and coordinator turn sees the memory index. Reuse the topic of an existing file to update it instead of adding a duplicate; one fact per file; skip what the repository already shows.",
@@ -123,7 +123,7 @@ func (c *Coordinator) startThread(ctx context.Context, p *db.Project, in struct 
 		return "", err
 	}
 	c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvThreadStarted, Payload: jsonString(map[string]any{"thread_ids": []string{t.ID}})})
-	return fmt.Sprintf("started thread %s %q (branch %s, base %s)", short(t.ID), t.Title, orNone(t.Branch), orNone(t.BaseBranch)), nil
+	return fmt.Sprintf("started thread %s %q (branch %s, base %s)", threadName(t), t.Title, orNone(t.Branch), orNone(t.BaseBranch)), nil
 }
 
 func (c *Coordinator) proposeThreads(ctx context.Context, p *db.Project, in struct{ Threads []Suggestion }) (string, error) {
@@ -261,7 +261,7 @@ func (c *Coordinator) getThread(_ context.Context, p *db.Project, in struct {
 		links = "issues and PRs (read from GitHub by the thread's tools):\n" + linksDetail(t.Links, time.Now())
 	}
 	return envelope(trustRelay, fmt.Sprintf("thread %s %q status=%s%s branch=%s base=%s commits_ahead=%d files_changed=%d waiting_on=%q\ntask: %s\nlast report: %s\n%srecent transcript:\n%s",
-		short(t.ID), t.Title, t.Status, tasksNote(t.RunningTasks), orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
+		threadName(t), t.Title, t.Status, tasksNote(t.RunningTasks), orNone(t.Branch), orNone(t.BaseBranch), t.CommitsAhead, t.FilesChanged, t.WaitReason,
 		clip(t.Task, 1500), clip(t.LastReport, 2000), links, lines), "source", "thread", "kind", "get_thread"), nil
 }
 

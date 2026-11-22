@@ -5,8 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Star, Stream } from '../icons';
 import type { Thread } from '../../client';
 import { radius } from '@tingly/ui/theme/radius';
-import { ThreadLinkPills } from './ThreadLinkPills';
-import { stripLinks } from './linkView';
 
 /** Overview groups, in the order the Overview shows them: what runs first,
  * then what needs the user, then what waits for review. */
@@ -86,6 +84,23 @@ export function ThreadState({ status, compact, queued }: { status: string; compa
     );
 }
 
+/** How a thread is mentioned: "#3 Title", the tag IM chats already use; a
+ * thread without a number (the coordinator) is its title. */
+export const threadRef = (thread: Pick<Thread, 'seq' | 'title'>) => (thread.seq > 0 ? `#${thread.seq} ${thread.title}` : thread.title);
+
+/** The thread's number in the project, muted before its title: the `#3` that
+ * `@3` in IM and the coordinator's thread tools take. Nothing for the
+ * coordinator (0). */
+export function ThreadNumber({ seq }: { seq: number }) {
+    if (!(seq > 0)) return null;
+    return <Box component="span" data-thread-number sx={{ mr: 0.75, color: 'text.disabled', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>#{seq}</Box>;
+}
+
+/** A thread's title as rows and cards show it: its number, then the title. */
+export function NumberedTitle({ thread }: { thread: Pick<Thread, 'seq' | 'title'> }) {
+    return <><ThreadNumber seq={thread.seq} />{thread.title}</>;
+}
+
 const mono = { fontFamily: fontMono } as const;
 
 /** One line of backend text where `backticks` mark a literal (a command, a
@@ -121,15 +136,13 @@ const pill = {
     '& svg': { fontSize: 13 },
 } as const;
 
-/** A thread's work at a glance, as small pills: its issues and PRs
- * (`ThreadLinkPills`), its commits, or that it was merged; the commits and
- * merged pills give way to the open or merged PR of the thread's own branch,
- * which says the same. Nothing for a thread without a branch; the details sit in the
+/** A thread's work at a glance, as small pills: its commits, or that it was
+ * merged. Nothing for a thread without a branch; the details sit in the
  * tooltip, so the pill stays one icon and one word wherever it shows. The
  * running-tasks pill is a count of what is running elsewhere: given
  * `onTasks` it opens what the count counts, instead of only explaining
  * itself. */
-export function ThreadBadges({ thread, tasks: showTasks = true, links: showLinks = true, onTasks }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean; /** False where the thread's issues and PRs are already listed (the open thread, above its message box). */ links?: boolean; /** Opens the thread's task list from the pill; without it the pill stays a plain count. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
+export function ThreadBadges({ thread, tasks: showTasks = true, onTasks }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean; /** Opens the thread's task list from the pill; without it the pill stays a plain count. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
     const open = (e: { stopPropagation(): void; currentTarget: HTMLElement }) => {
         e.stopPropagation();
@@ -146,16 +159,9 @@ export function ThreadBadges({ thread, tasks: showTasks = true, links: showLinks
             <Stream />{t('thread.tasksBadge', { count: thread.running_tasks })}
         </Box>
     );
-    const links = showLinks && <ThreadLinkPills links={thread.links} />;
-    // The PR of the thread's own branch, when its pill leads: it already says
-    // what the commits or the merged pill would (open with the work, merged).
-    const lead = showLinks ? stripLinks(thread.links)[0] : undefined;
-    const branchPr = lead?.kind === 'pr' && !!thread.branch && lead.head === thread.branch ? lead.state : undefined;
-    if (thread.merged_at && branchPr === 'merged') return <>{links}{tasks}</>;
     if (thread.merged_at) {
         return (
             <>
-                {links}
                 <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })}
                     sx={pill}>
                     <Merge />{t('thread.mergedBadge')}
@@ -164,10 +170,9 @@ export function ThreadBadges({ thread, tasks: showTasks = true, links: showLinks
             </>
         );
     }
-    if (!thread.branch || thread.commits_ahead === 0 || branchPr === 'open') return links || tasks ? <>{links}{tasks}</> : null;
+    if (!thread.branch || thread.commits_ahead === 0) return tasks || null;
     return (
         <>
-            {links}
             <Box component="span"
                 title={[thread.branch, t('thread.commits', { count: thread.commits_ahead }), t('thread.files', { count: thread.files_changed })].filter(Boolean).join(' · ')}
                 sx={pill}>

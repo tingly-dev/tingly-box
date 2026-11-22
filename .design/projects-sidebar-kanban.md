@@ -43,8 +43,7 @@ both axes and make "what needs me" a hunt.
   from vertical. In a narrow pane (one card per line) the two kanbans are close to one another, by
   nature; the lane dividers and cards-flow-in-rows are what remain.
 - **Cards are `ListRow outlined` + `stacked`**: title, subtitle (what it waits on, last report, branch),
-  then the issue/PR pills (see `projects-thread-rail.md`, "Issues & PRs on thread rows"), commit /
-  merged badges and the time. The stacked footer wraps, so in a 220px column the badge
+  then commit / merged badges and the time. The stacked footer wraps, so in a 220px column the badge
   and the time drop to two lines instead of overflowing. The band keeps the one-line card. The status
   mark is on the heading, not on every card.
 - **Opening is unchanged**: a card calls the same `onOpen(thread id)` as a row; the open thread is the

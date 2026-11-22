@@ -253,6 +253,12 @@ const sessions = [
     sessionWithUsage({ id: 's-old', title: 'Rename the config keys', status: 'resolved', cwd: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
 ]
 
+// Threads are numbered per project from 1, in the order they were started (the coordinator is 0).
+for (const list of [threads, sessions] as { project_id: string; seq: number }[][]) {
+    const next: Record<string, number> = {}
+    for (const t of list) t.seq = next[t.project_id] = (next[t.project_id] ?? 0) + 1
+}
+
 // The project's main thread, with the coordinator session's own usage.
 const coordinatorOf = (p: Proj) => {
     const turns = p.id === 'p-latency' ? 23 : 6
@@ -260,7 +266,7 @@ const coordinatorOf = (p: Proj) => {
     const updated_at = ago(p.id === 'p-latency' ? 3 : 20)
     return {
         ...thread({ id: p.main_thread_id!, title: p.name, status: p.id === 'p-docs' ? 'working' : 'idle', task: '', turns, input_tokens: input, output_tokens: Math.round(input / 28), updated_at }),
-        ...usageOf({ turns, input_tokens: input, updated_at }), agent: 'llm', project_id: p.id, parent_id: '', branch: '', repo_path: '', cwd: `/Users/me/.tingly-project/projects/${p.id}`,
+        ...usageOf({ turns, input_tokens: input, updated_at }), agent: 'llm', seq: 0, project_id: p.id, parent_id: '', branch: '', repo_path: '', cwd: `/Users/me/.tingly-project/projects/${p.id}`,
         reported_model: 'claude-sonnet-4-5', session_id: '7d1f3a90-2c4e-4b7a-8e61-0a9b5c2d4f13',
         context_tokens: p.id === 'p-latency' ? 112_000 : 41_000,
     }
