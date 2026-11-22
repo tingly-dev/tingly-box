@@ -65,7 +65,7 @@ describe('a thread that runs background tasks', () => {
     it('carries a count pill, with or without commits', () => {
         const { rerender } = render(<ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} />);
         expect(screen.getByText('thread.tasksBadge:3')).toBeTruthy();
-        rerender(<ThreadBadges thread={thread({ status: 'working', running_tasks: 1, branch: 'tb/fix', commits_ahead: 2 })} />);
+        rerender(<ThreadBadges thread={thread({ status: 'working', running_tasks: 1, branch: 'tb/fix', commits_ahead: 2 })} work />);
         expect(screen.getByText('thread.tasksBadge:1')).toBeTruthy();
         expect(screen.getByText('thread.commits:2')).toBeTruthy();
         rerender(<ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} tasks={false} />);
@@ -76,17 +76,25 @@ describe('a thread that runs background tasks', () => {
 });
 
 describe('ThreadBadges', () => {
-    it('carries the commits as a badge whose tooltip holds the branch and the files', () => {
-        render(<ThreadBadges thread={thread({ branch: 'tb/fix', base_branch: 'main', commits_ahead: 2, files_changed: 3 })} />);
+    it('carries the commits as a badge whose tooltip holds the branch and the files, in the header only', () => {
+        const th = thread({ branch: 'tb/fix', base_branch: 'main', commits_ahead: 2, files_changed: 3 });
+        const { rerender } = render(<ThreadBadges thread={th} links />);
+        // A list row or a card says nothing of commits: no count tells the user what to do next.
+        expect(screen.queryByText('thread.commits:2')).toBeNull();
+        rerender(<ThreadBadges thread={th} work />);
         expect(screen.getByText('thread.commits:2')).toBeTruthy();
         expect(screen.getByTitle('tb/fix · thread.commits:2 · thread.files:3')).toBeTruthy();
     });
 
     it('says merged, and nothing for a thread without work', () => {
-        const { rerender } = render(<ThreadBadges thread={thread({ branch: 'tb/fix', base_branch: 'main', merged_at: '2026-01-01T00:00:00Z' })} />);
+        const merged = thread({ branch: 'tb/fix', base_branch: 'main', merged_at: '2026-01-01T00:00:00Z' });
+        // Merged shows in lists and on cards too, unlike the commits.
+        const { rerender } = render(<ThreadBadges thread={merged} />);
+        expect(screen.getByText('thread.mergedBadge')).toBeTruthy();
+        rerender(<ThreadBadges thread={merged} work />);
         expect(screen.getByText('thread.mergedBadge')).toBeTruthy();
         expect(screen.getByTitle('thread.mergedInto')).toBeTruthy();
-        rerender(<ThreadBadges thread={thread({ branch: 'tb/fix' })} />);
+        rerender(<ThreadBadges thread={thread({ branch: 'tb/fix' })} work />);
         expect(screen.queryByText('thread.commits:0')).toBeNull();
     });
 
