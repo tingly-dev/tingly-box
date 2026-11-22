@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -228,4 +229,15 @@ func threadStatus(t *testing.T, f *testFixture, id string) string {
 	th, err := f.store.GetThread(id)
 	require.NoError(t, err)
 	return th.Status
+}
+
+// A coordinator turn that fails asked nobody: the chats still get the line.
+func TestACoordinatorTurnThatFailsLeavesTheConflictLineInTheChat(t *testing.T) {
+	f, svc, sink, _, w := conflictFixture(t, func(c *coordtest.Turn) error {
+		return errors.New("model unavailable")
+	})
+	refreshConflicts(t, svc, w)
+	got := sink.nextContaining(t, "has merge conflicts with main.")
+	assert.Contains(t, got.text, "to tell the thread what to do.")
+	waitQuiet(t, f, svc, w.ID)
 }

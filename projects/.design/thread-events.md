@@ -87,7 +87,7 @@
 3. 协调者调用 `get_thread` 看清情况（线程在不在跑、PR 的 base、冲突前的工作），然后**必须**调用 `request_decision`，**不得**直接 `message_thread`。卡片的选项：
    - **让线程把 main 合进分支、解决冲突后推送**（推荐）。线程不能强推，所以是 merge 而不是 rebase；推送是普通推送，PR 自动更新。
    - **我自己处理**：协调者什么都不做，冲突解决后（Sweep 读到 `conflicts` 消失）记一条 “Conflicts resolved.”。
-   - **放弃这个 PR**：协调者告诉用户 PR 需要用户在 GitHub 上关闭（线程不能关闭 PR）。
+   - **放弃这个 PR**：协调者带 cite 让线程用 `close` 工具关闭它（除非项目设置自动放行 close，否则工具会弹卡问用户）。
    - 线程正在跑时，卡片的 context 写明“线程还在跑，选第一项会在这一轮结束后执行”。
 4. 用户在网页或 IM 上选择。选择作为用户消息回到协调者（已有流程），协调者用 `message_thread` 带上 `cite` 转给线程，线程把这句话当作用户的授权。
 5. 用户一直不选：卡片留着，不催、不超时。冲突在此期间自己消失的（用户在别处解决了），记一条 “Conflicts resolved.”，**不再唤醒**协调者，也不再发卡片。
@@ -250,7 +250,8 @@ Thread now: status=ready running=no
 - **离开只记录**：线程里记 “Conflicts on PR #34 are resolved.”，不进协调者输入（`prChange.Quiet`）。
 - **30 分钟上限**：`Links.capConflicts`，同一个 PR 上次唤醒协调者后 30 分钟内再次进入，只在线程里记（Quiet），不唤醒。时间记在内存里（`conflictWoke`），重启后清空：重启后同一个 PR 最多多唤醒一次。
 - **线程事件**：一行事实，例如 `PR #34 has merge conflicts with main. Thread: ready, no turn running, 0 unpushed commits, no uncommitted changes.`
-- **协调者输入**：`kind="pr_conflicts" needs_user="true"`（只有这一种带），仍按项目、按一次 Sweep 合并，与 merged / closed 可以在同一条输入里。提示词（`coordinatorSystemPrompt`）要求：用 `request_decision`，选项为“把 base 合进分支并推送（推荐，普通推送不需要强推）/ 我自己处理 / 放弃这个 PR（由用户在 GitHub 上关闭）”；只有用户选了之后才带 `cite` 给线程发消息，不得自行发，不得关闭线程。
+- **回退一行（IM）**：协调者离线、回合失败或被停、或回合结束时既没发卡也没回复，都发一行（`coordinatorSessions.turn` 的 defer）。
+- **协调者输入**：`kind="pr_conflicts" needs_user="true"`（只有这一种带），仍按项目、按一次 Sweep 合并，与 merged / closed 可以在同一条输入里。提示词（`coordinatorSystemPrompt`）要求：用 `request_decision`，选项为“把 base 合进分支并推送（推荐，普通推送不需要强推）/ 我自己处理 / 放弃这个 PR（线程用 `close` 关闭，按项目设置弹卡或自动放行）”；只有用户选了之后才带 `cite` 给线程发消息，不得自行发，不得关闭线程。
 - **IM 兜底**：一行折叠消息 `[#2 标题] PR #34 has merge conflicts with main. Reply with @2 to tell the thread what to do.`（无序号时是 “Open Projects in the web UI to decide.”）。两种情况发：(i) 协调者离线（项目暂停 / 归档）：`onReport` 的离线分支对 `needs_user` 事件发；(ii) 协调者处理了这条输入，但回合结束时既没有发决策卡（回合开始之后主对话里没有新的 `EvDecision`）也没有回复文字（`no_update` 或空）：`coordinatorSessions.turn` 末尾判断。回合出错、被用户停止时不发（走已有的错误 / 恢复路径）。
 - **只记录且不兜底**：线程已 resolved / 归档；30 分钟内再次进入；离开。
 

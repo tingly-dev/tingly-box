@@ -52,10 +52,11 @@ func conflicting(k *db.ThreadLink) bool {
 }
 
 // prTransition is the kind of event a record's move from before to after is,
-// or "" when it is none. Only a PR the thread opened counts, and only a move
-// out of open, or into conflicts (from anything else, a first reading
-// included), or out of them to a state GitHub has settled on: a finished
-// record read again, or a conflict that is still there, is no change.
+// or "" when it is none. Only an open PR the thread opened counts (a new
+// record starts open, so its first reading counts too), and only a move out
+// of open, into conflicts from any other merge state, or out of them to a
+// state GitHub has settled on: a finished record read again, or a conflict
+// that is still there, is no change.
 func prTransition(before db.ThreadLink, after *db.ThreadLink) string {
 	if after.Kind != db.LinkPR || after.Role != db.LinkOpened || before.State != db.LinkStateOpen {
 		return ""
