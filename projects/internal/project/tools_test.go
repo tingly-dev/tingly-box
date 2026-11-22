@@ -92,7 +92,7 @@ func TestToolsOfEachScope(t *testing.T) {
 	f := newToolsFixture(t)
 	coordinator := []string{"forget", "get_thread", "list_shared_files", "list_threads", "message_thread", "no_update", "propose_threads",
 		"read_conversation", "read_shared_file", "remember", "rename_thread", "request_decision", "resolve_thread", "send_file",
-		"start_thread", "update_instructions"}
+		"start_thread", "stop_thread", "update_instructions"}
 	// The GitHub tools are the thread's own: they act on its checkout, which the
 	// coordinator does not have.
 	// notify_coordinator is how a thread reaches the coordinator mid-turn.

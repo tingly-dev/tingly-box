@@ -1,13 +1,13 @@
 # Projects MCP tools: grow the surface one action at a time
 
-> Status: **in progress**: steps 1–3 (creation with base and branch, the state API, the tool table and boundaries) are built; step 4 (new tools) is proposed. Narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
+> Status: **in progress**: steps 1–3 (creation with base and branch, the state API, the tool table and boundaries) are built; step 4 is half built (`stop_thread`; `reopen_thread` is proposed). Narrowed on 2026-11-07. Tracking issue: [TEP-2462](https://github.com/tingly-dev/tingly-box/issues/2462).
 > Builds on [coordinator-session.md](./coordinator-session.md) (how the coordinator's MCP server is scoped and serialised) and [message-channel.md](./message-channel.md).
 > Related, not on `main` yet: `.design/slash-commands.md` (session control API; PRs #2454–#2456), `pr-issue-awareness.md`, `branch-tracking.md`.
 > `file:line` references were taken on `main` at `d7b849ccc`, before steps 1–3 moved some code; search by name when a line number is off.
 
 ## Approach
 
-The coordinator and every thread are Claude Code sessions, so MCP tools are the only way they can act on Projects. Today the coordinator has 13 business tools plus 2 shared-file readers, and a thread has `send_file`. The web UI and IM commands reach many more actions.
+The coordinator and every thread are Claude Code sessions, so MCP tools are the only way they can act on Projects. Today the coordinator has 14 business tools plus 2 shared-file readers, and a thread has `send_file`. The web UI and IM commands reach many more actions.
 
 We do **not** design the whole surface up front. The order, each step small and shipped before the next:
 
@@ -22,7 +22,7 @@ The rule that carries over every step: **an action is a method on `Threads` or `
 
 ## What exists
 
-Tools today: one table. The coordinator's 13 tools are `Coordinator.coordinatorTools()` (`coordinator_tools.go`); `read_shared_file`, `list_shared_files` and `send_file` are added in `sessionToolsMCP.tools` (`tool_server.go`); `sessionToolsMCP.buildFor` makes the server of one session. They are `start_thread`, `propose_threads`, `request_decision`, `message_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, `read_shared_file`, `list_shared_files`, and `send_file` (every thread). `sessionToolsMCP.config` starts one loopback listener and gives each thread a random capability URL; the thread id is bound to the URL and the project id is never taken from the model. The URL is issued once per thread and kept for the life of the process, so every turn and resume of a thread uses the same one. It is **revoked** (path unserved, config file removed) when the thread is resolved, when a session is archived, and when its project is paused or archived (`Threads.ReleaseProject`, called once the project refuses messages; it also closes the threads' resident processes, since a process keeps the URL it started with). For a thread the revocation comes after its new status is saved, not before: the interrupted turn's own bookkeeping runs after the engine reports the turn done, so it races that save, and doing it earlier made that race flip about one run in five in the golden test. Resolve and archive stop the turn with `Threads.stopEnding`, so whichever wins, the interrupted turn writes no "Stopped." note: the resolved or archived status says it. A paused or archived project answers nothing. The next turn of a reopened, restored, resumed or unarchived thread gets a fresh URL and a fresh process. A project's main thread is not revoked: the coordinator's tools already refuse a paused or archived project, and its turn state lives with the URL.
+Tools today: one table. The coordinator's 14 tools are `Coordinator.coordinatorTools()` (`coordinator_tools.go`); `read_shared_file`, `list_shared_files` and `send_file` are added in `sessionToolsMCP.tools` (`tool_server.go`); `sessionToolsMCP.buildFor` makes the server of one session. They are `start_thread`, `propose_threads`, `request_decision`, `message_thread`, `stop_thread`, `get_thread`, `read_conversation`, `list_threads`, `resolve_thread`, `rename_thread`, `no_update`, `remember`, `forget`, `update_instructions`, `read_shared_file`, `list_shared_files`, and `send_file` (every thread). `sessionToolsMCP.config` starts one loopback listener and gives each thread a random capability URL; the thread id is bound to the URL and the project id is never taken from the model. The URL is issued once per thread and kept for the life of the process, so every turn and resume of a thread uses the same one. It is **revoked** (path unserved, config file removed) when the thread is resolved, when a session is archived, and when its project is paused or archived (`Threads.ReleaseProject`, called once the project refuses messages; it also closes the threads' resident processes, since a process keeps the URL it started with). For a thread the revocation comes after its new status is saved, not before: the interrupted turn's own bookkeeping runs after the engine reports the turn done, so it races that save, and doing it earlier made that race flip about one run in five in the golden test. Resolve and archive stop the turn with `Threads.stopEnding`, so whichever wins, the interrupted turn writes no "Stopped." note: the resolved or archived status says it. A paused or archived project answers nothing. The next turn of a reopened, restored, resumed or unarchived thread gets a fresh URL and a fresh process. A project's main thread is not revoked: the coordinator's tools already refuse a paused or archived project, and its turn state lives with the URL.
 
 Gates every coordinator call passes (`coordinatorToolTurn.run`): schema validation, an active turn, project not paused or archived, project settings unchanged since the turn began, `no_update` refused on a user-triggered turn. Trust: text from others is wrapped in `envelope(trustRelay, …)`; `message_thread` takes `cite` (ids of the user's own messages) checked by `quoteUser`.
 
@@ -85,7 +85,7 @@ One table replaces three separate registrations (the coordinator's list, the two
 
 `tools.go`: `Tool{Name, Description, Properties, Required, CoordinatorOnly, Strict, Output, EditsProject, Handle}`.
 
-- **Who is offered a tool**: `CoordinatorOnly` tools (the 13 business tools and the two shared-file readers) go to a project's main thread; every other thread gets the rest, today `send_file`. `sessionToolsMCP.buildFor` decides from the thread and its project, never from the model, and fails if either cannot be read; a worker's server cannot contain a coordinator tool.
+- **Who is offered a tool**: `CoordinatorOnly` tools (the 14 business tools and the two shared-file readers) go to a project's main thread; every other thread gets the rest, today `send_file`. `sessionToolsMCP.buildFor` decides from the thread and its project, never from the model, and fails if either cannot be read; a worker's server cannot contain a coordinator tool.
 - **One gate** (`coordinatorToolTurn.run`): active turn, not ended with `no_update`, project not paused or archived, settings unchanged, `no_update` refused on a user turn. Every tool on the coordinator's server passes it, `send_file` included.
 - **All tools are in the table.** The 13 coordinator tools used to run in one `switch` (`Coordinator.runTool`); each is now a method with a typed input struct (`coordinator_tools.go`: `startThread`, `messageThread`, ...) bound to its definition with `textTool`, which decodes the input, calls the method and turns an error into a failed result. `runTool` is gone. A new tool is one definition and one method.
 - **Migration was checked, not trusted.** Before moving anything, two golden files pinned the current behaviour (`testdata/tool_list.golden`: every tool's name, description and schema in each scope; `testdata/tool_calls.golden`: the exact answer of all 16 tools on a fixed script of about 60 calls, with ids, paths and times normalised). They are byte-identical after the move. Mutation check: changing one answer or one description fails the matching golden test. Regenerate on purpose with `UPDATE_GOLDEN=1` and read the diff.
@@ -104,7 +104,7 @@ Tests: `tools_fixes_test.go` (each fix has a direct test; reversing the sort, ma
 
 Not changed: the tools' names, schemas (apart from `base` / `branch`) and behaviour; the real-CLI probe is not rerun.
 
-## Step 4: stop + reopen tools (next)
+## Step 4: stop + reopen tools (`stop_thread` built, `reopen_thread` next)
 
 The service side is Step 2, the table is Step 3. Each tool is one entry in `coordinatorTools()` and one method.
 
@@ -112,16 +112,18 @@ The service side is Step 2, the table is Step 3. Each tool is one entry in `coor
 
 | Tool | Input | Does | Result |
 | --- | --- | --- | --- |
-| `stop_thread` | `thread_id` | interrupt the thread's running turn, drop its queued messages | one line: status now, or "not running" (not an error) |
+| `stop_thread` (built) | `thread_id`, `cite` (required, at least one) | interrupt the thread's running turn, drop its queued messages | one line: "stopped; the thread is now <status>", or "not running; nothing to stop" (not an error) |
 | `reopen_thread` | `thread_id` | undo `resolve_thread`: the thread accepts messages again | one line: status now, or "already open" (not an error) |
 
 Both are `CoordinatorOnly`, reversible and recorded in the thread, so they need no approval step. `message_thread` to a resolved thread keeps returning `ErrResolved`, and its text now names `reopen_thread`.
 
-To verify while implementing, not assumed here: what happens to a pending approval card of a `waiting` thread when it is stopped.
+`stop_thread` takes `cite` like `message_thread` and checks it the same way (`quoteUser`): the coordinator may stop a thread only because the user asked, so a call with no citation, or one that is not the user's own message, is refused and stops nothing. The thread's note reads "Stopped by the coordinator." The main thread and other projects' threads are not found (`findThread`). The tool waits for the stopped turn to settle before it reads the status, so the answer is the new status (idle, or ready when the branch has commits).
+
+**Verified: stopping a `waiting` thread.** A thread waiting on an approval or a question has its turn in flight, so `stop_thread` stops it: the wait ends with the turn's context, the card's event is rewritten as `"state":"expired"` (the same state shutdown uses), the pending request is forgotten (`PendingRequests` is empty, and answering it later fails with `ErrNoPrompt`), and the thread goes from `waiting` to idle with no wait reason. Nothing is answered on the user's behalf. The tool's description says the card expires; to get the work going again the coordinator sends a message (`message_thread`), which starts a new turn. Test: `TestStopThreadExpiresAPendingApproval`.
 
 ### Tests
 
-- In-memory MCP client (as `coordinator_mcp_test.go`): each tool on a running, idle, resolved and cross-project thread; the not-an-error no-op paths; the `ErrResolved` hint.
+- In-memory MCP client (as `coordinator_mcp_test.go`; `stop_thread` is in `stop_thread_test.go`: running, idle, waiting, cross-project and main thread, refusal without a valid cite); each tool on a running, idle, resolved and cross-project thread; the not-an-error no-op paths; the `ErrResolved` hint.
 - One parity test per action: the same fixture through the service, the HTTP route and the MCP tool ends in the same thread state and the same system event, apart from the actor wording.
 - `Reopen` on a working thread leaves it working.
 - `coordtest` flow: stop a running thread, message it, resolve it, reopen it, message it.

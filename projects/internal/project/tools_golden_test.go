@@ -217,6 +217,12 @@ func TestCoordinatorToolOutputsGolden(t *testing.T) {
 	call("message_thread", map[string]any{"thread_id": first[:8], "message": "The user's own words, quoted by the system: yes"})
 	call("message_thread", map[string]any{"thread_id": "zzzz", "message": "hi"})
 
+	call("stop_thread", map[string]any{"thread_id": first[:8]})
+	call("stop_thread", map[string]any{"thread_id": first[:8], "cite": []string{"nope"}})
+	call("stop_thread", map[string]any{"thread_id": "zzzz", "cite": []string{user.ID[:8]}})
+	call("stop_thread", map[string]any{"thread_id": first[:8], "cite": []string{user.ID[:8]}})
+	call("stop_thread", map[string]any{"thread_id": first[:8], "cite": []string{user.ID[:8]}})
+
 	// Renaming and resolving.
 	call("rename_thread", map[string]any{"thread_id": second[:8], "title": "Renamed second"})
 	call("rename_thread", map[string]any{"thread_id": second[:8], "title": "   "})

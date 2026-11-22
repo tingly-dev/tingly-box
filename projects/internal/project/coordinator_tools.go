@@ -59,6 +59,10 @@ func (c *Coordinator) coordinatorTools() []Tool {
 			Properties: map[string]any{"thread_id": strProp("Thread id (the 8-character prefix is enough)."), "message": strProp("What to tell the thread."),
 				"cite": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that approve or decide what you are telling the thread. The system quotes them to the thread word for word; without a citation the thread treats your message as not approved."}},
 			Required: []string{"thread_id", "message"}, Handle: textTool(c.messageThread)},
+		{Name: "stop_thread", CoordinatorOnly: true, Strict: true, Description: "Stop a thread's running turn and drop its queued messages, only because the user asked. Its session and history stay; message_thread continues it. A pending approval or question of the thread expires.",
+			Properties: map[string]any{"thread_id": strProp("Thread id or its 8-character prefix."),
+				"cite": map[string]any{"type": "array", "minItems": 1, "items": map[string]any{"type": "string"}, "description": "Ids (the msg attribute of the user's event) of the user's own messages that ask to stop this thread."}},
+			Required: []string{"thread_id", "cite"}, Handle: textTool(c.stopThread)},
 		{Name: "get_thread", CoordinatorOnly: true, Description: "Read a thread's status, branch, last report and recent transcript. Entries are cut and the result capped like read_conversation; page back with before, read entries whole with full.",
 			Properties: map[string]any{"thread_id": strProp("Thread id or its 8-character prefix."),
 				"before": strProp("Optional. 8-character id of a transcript entry to read back from."),
@@ -172,6 +176,48 @@ func (c *Coordinator) messageThread(ctx context.Context, p *db.Project, in struc
 		return "queued; the thread will read it after its current turn", nil
 	}
 	return "sent; the thread is working on it", nil
+}
+
+// stopSettleMax bounds how long stop_thread waits for the stopped turn to end,
+// so a turn that does not exit cannot hold the coordinator's own turn.
+const stopSettleMax = 10 * time.Second
+
+func (c *Coordinator) stopThread(ctx context.Context, p *db.Project, in struct {
+	ThreadID string `json:"thread_id"`
+	Cite     []string
+}) (string, error) {
+	t, err := c.findThread(p.ID, in.ThreadID)
+	if err != nil {
+		return "", err
+	}
+	if len(in.Cite) == 0 {
+		return "", errors.New("cite is required: pass the ids of the user's messages that ask to stop this thread")
+	}
+	if _, err := c.quoteUser(p, in.Cite); err != nil {
+		return "", err
+	}
+	if !c.threads.Running(t.ID) {
+		return "not running; nothing to stop", nil
+	}
+	if done := c.threads.stop(t.ID, fromThread(p.MainThreadID)); done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return "stop requested; the thread is still ending its turn", nil
+		case <-time.After(stopSettleMax):
+			return "stop requested; the thread is still ending its turn", nil
+		}
+	}
+	// The stopped turn settles the thread after it exits; wait for that, so the
+	// status below is the new one.
+	for i := 0; i < 200 && c.threads.Running(t.ID); i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	now, err := c.store.GetThread(t.ID)
+	if err != nil {
+		return "", err
+	}
+	return "stopped; the thread is now " + string(now.Status), nil
 }
 
 func (c *Coordinator) getThread(_ context.Context, p *db.Project, in struct {
