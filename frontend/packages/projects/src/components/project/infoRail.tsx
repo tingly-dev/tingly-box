@@ -216,9 +216,12 @@ export function StatusCard({ thread, children }: { thread: Thread; children?: Re
     return (
         <RailCard id="status" title={t('rail.status')}>
             <Fact label={t('rail.state')}>
+                {/* The word, not the mark, gives the row its baseline: an icon-first box would line its bottom edge up with the label and push the row taller than its neighbours. */}
                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                     <ThreadStateMark status={thread.status} queued={thread.queued} />
-                    {t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)}
+                    <Box component="span" sx={{ alignSelf: 'baseline' }}>
+                        {t(`thread.status.${thread.status === 'working' && thread.queued ? 'queued' : thread.status}`)}
+                    </Box>
                 </Box>
             </Fact>
             {children}

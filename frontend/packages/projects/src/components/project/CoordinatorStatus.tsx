@@ -62,7 +62,8 @@ export function CoordinatorStatus({ project, coordinator, queued, extra }: Props
                 </Box>
             </DisclosureRow>
             <Collapse in={open} unmountOnExit>
-                <Box sx={{ p: 1.25, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 1.25, alignItems: 'start', bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
+                {/* Cards on a line stretch to the tallest one, so the row reads as one band rather than ragged boxes. */}
+                <Box sx={{ p: 1.25, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 1.25, alignItems: 'stretch', bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
                     <StatusCard thread={coordinator}>
                         {queued > 0 && <Fact label={t('rail.queued')} title={t('rail.queuedTitle')}>{queued}</Fact>}
                     </StatusCard>
