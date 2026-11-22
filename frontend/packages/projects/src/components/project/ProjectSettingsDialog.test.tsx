@@ -99,13 +99,29 @@ it('saves a newly selected primary without changing other modes', async () => {
     await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: { directories: [{ path: '/git', workspace_mode: 'worktree' }, { path: '/docs', workspace_mode: 'shared' }], primary_repo_path: '/docs' } }));
 });
 
-it('allows issues and PRs by default, and saves the choice to ask', async () => {
+const sw = (g: string) => screen.getByRole('switch', { name: `projectSettings.githubGroups.${g}` });
+const body = (b: Record<string, unknown>) => ({ params: { path: { id: 'p' } }, body: expect.objectContaining(b) });
+
+it('shows the five GitHub switches off for a project with no github_auto, and saves a toggle as github_auto', async () => {
     open();
-    expect(screen.getByText('projectSettings.githubAccessAllowHelp')).toBeTruthy();
+    for (const g of ['publish', 'rewrite', 'others', 'close', 'merge']) expect(sw(g)).not.toBeChecked();
     expect(save()).toBeDisabled();
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'projectSettings.githubAccess' }));
-    fireEvent.click(screen.getByRole('option', { name: 'projectSettings.githubAccessAsk' }));
-    expect(screen.getByText('projectSettings.githubAccessAskHelp')).toBeTruthy();
+    fireEvent.click(sw('merge'));
+    fireEvent.click(sw('publish'));
+    expect(save()).not.toBeDisabled();
     fireEvent.click(save());
-    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', { params: { path: { id: 'p' } }, body: expect.objectContaining({ thread_github_access: 'ask' }) }));
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', body({ github_auto: ['publish', 'merge'] })));
+    expect(m.patch.mock.calls[0][1].body).not.toHaveProperty('thread_github_access');
+});
+
+it('starts the switches from project.github_auto and saves an empty list when all are turned off', async () => {
+    open({ ...project, github_auto: ['publish', 'close'] });
+    expect(sw('publish')).toBeChecked();
+    expect(sw('close')).toBeChecked();
+    expect(sw('merge')).not.toBeChecked();
+    fireEvent.click(sw('publish'));
+    fireEvent.click(sw('close'));
+    expect(save()).not.toBeDisabled();
+    fireEvent.click(save());
+    await waitFor(() => expect(m.patch).toHaveBeenCalledWith('/api/v1/projects/{id}', body({ github_auto: [] })));
 });
