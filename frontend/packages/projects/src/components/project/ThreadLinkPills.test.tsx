@@ -70,40 +70,23 @@ describe('ThreadLinkPills', () => {
 });
 
 describe('ThreadBadges with links', () => {
-    it('shows the links before the work on a card, and nowhere else', () => {
+    it('shows the links on a card, and nowhere else', () => {
         const th = thread({ links: [link()], branch: 'tp/x', commits_ahead: 2 });
         const { rerender } = render(<ThreadBadges thread={th} links />);
         expect(document.querySelector('[data-link-pill]')).toBeTruthy();
-        expect(screen.getByText('thread.commits:2')).toBeTruthy();
+        expect(screen.queryByText('thread.commits:2')).toBeNull();
         rerender(<ThreadBadges thread={th} />);
         expect(document.querySelector('[data-link-pill]')).toBeNull();
     });
 
-    it('shows the links of a thread without commits', () => {
-        render(<ThreadBadges thread={thread({ links: [link()] })} links />);
-        expect(document.querySelector('[data-link-pill]')).toBeTruthy();
-    });
-});
-
-describe('the PR of the thread\'s own branch', () => {
-    it('stands in for the commits pill while open', () => {
-        render(<ThreadBadges thread={thread({ links: [link({ head: 'tp/x' })], branch: 'tp/x', commits_ahead: 2 })} links />);
-        expect(screen.queryByText('thread.commits:2')).toBeNull();
-    });
-
-    it('stands in for the merged pill once merged', () => {
-        render(<ThreadBadges thread={thread({ links: [link({ head: 'tp/x', state: 'merged' })], branch: 'tp/x', merged_at: '2026-11-21T10:00:00Z' })} links />);
+    it('leaves merged to the merged PR pill of the thread\'s own branch', () => {
+        const th = (head: string) => thread({ links: [link({ head, state: 'merged' })], branch: 'tp/x', merged_at: '2026-11-21T10:00:00Z' });
+        const { rerender } = render(<ThreadBadges thread={th('tp/x')} links />);
         expect(screen.queryByText('thread.mergedBadge')).toBeNull();
-    });
-
-    it('leaves the commits pill to a PR of another branch', () => {
-        render(<ThreadBadges thread={thread({ links: [link({ head: 'other' })], branch: 'tp/x', commits_ahead: 2 })} links />);
-        expect(screen.getByText('thread.commits:2')).toBeTruthy();
-    });
-
-    it('keeps the commits pill where the links are not shown', () => {
-        render(<ThreadBadges thread={thread({ links: [link({ head: 'tp/x' })], branch: 'tp/x', commits_ahead: 2 })} />);
-        expect(screen.getByText('thread.commits:2')).toBeTruthy();
+        rerender(<ThreadBadges thread={th('other')} links />);
+        expect(screen.getByText('thread.mergedBadge')).toBeTruthy();
+        rerender(<ThreadBadges thread={th('tp/x')} />);
+        expect(screen.getByText('thread.mergedBadge')).toBeTruthy();
     });
 });
 

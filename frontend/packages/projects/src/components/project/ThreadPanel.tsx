@@ -494,7 +494,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         !thread.branch && !session && t('thread.noRepo'),
                         // The work, as badges whose details hover out (the
                         // rail's Changes card carries them in full).
-                        <ThreadBadges thread={thread} tasks={false} />,
+                        <ThreadBadges thread={thread} tasks={false} work />,
                         thread.uncommitted && (
                             <Tooltip title={t('thread.uncommitted')}>
                                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>

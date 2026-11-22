@@ -64,10 +64,17 @@ behind a popover.
   item has failing checks or a conflict; the pill opens it on GitHub), the
   rest behind `+N`, whose card (hover, or click/tap on touch) lists every item
   with where it stands, each a link. Hover title and `aria-label` carry
-  `repo#N title · state · checks`; clicks never open the thread. When that
-  pill is the PR of the thread's own branch it stands in for the commits pill
-  (while open) and the merged pill (once merged): the same fact twice
-  otherwise, on a card that is short of width. Same data, no request.
+  `repo#N title · state · checks`; clicks never open the thread. Same data,
+  no request.
+- **No commits pill in lists and on cards** (user's call, 2026-11-22): list
+  rows, board and band cards, the status popovers and the conversation's
+  thread lines show the links, Merged, the running-tasks count and the time,
+  not how many commits a branch has: a count of commits says nothing about
+  what to do next. The open thread's header keeps it (`ThreadBadges work`),
+  and the rail's Pull requests card keeps "No PR yet · ahead of main · N
+  commits · M files". Merged stays everywhere (a merge done from the Merge
+  dialog has no PR to say so), except on a card whose leading pill is the
+  merged PR of the thread's own branch, which already says it.
 - **Auto-answer** (`AutoAnswerSelect`) is a picker in the message box's row
   of pickers, after the permission mode: both say how far the thread goes
   without the user, and that row is where the thread's behaviour is changed
