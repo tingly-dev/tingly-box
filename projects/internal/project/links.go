@@ -169,6 +169,9 @@ func checkText(what, s string, max int) error {
 // record writes what GitHub said about an item as the thread's link to it and
 // tells open pages.
 func (l *Links) record(t *db.Thread, repo GitHubRepo, kind, role string, it GitHubItem) (*db.ThreadLink, error) {
+	if cur, err := l.store.FindThreadLink(t.ID, repo.Slug(), it.Number); err == nil {
+		keepMergeState(cur, &it)
+	}
 	link := db.ThreadLink{Kind: kind, Repo: repo.Slug(), Number: it.Number, Role: role}
 	fillLink(&link, it, l.now())
 	stored, err := l.store.UpsertThreadLink(t.ID, link)
@@ -177,6 +180,16 @@ func (l *Links) record(t *db.Thread, repo GitHubRepo, kind, role string, it GitH
 	}
 	l.publish(t.ID)
 	return &stored, nil
+}
+
+// keepMergeState keeps the merge state of the record before when GitHub says
+// unknown of a PR that is still open: it says so while it works mergeability
+// out again (main moved, an edit), and a conflict that is still there would
+// otherwise be entered again on the next reading (links_events.go).
+func keepMergeState(before *db.ThreadLink, it *GitHubItem) {
+	if it.State == db.LinkStateOpen && before.State == db.LinkStateOpen && (it.MergeState == "unknown" || it.MergeState == "") {
+		it.MergeState = before.MergeState
+	}
 }
 
 // fillLink sets what GitHub said about an item on its record, as read at now:
@@ -1237,6 +1250,7 @@ func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) (
 	if before.State == db.LinkStateMerged && it.State != db.LinkStateMerged {
 		return nil, nil
 	}
+	keepMergeState(&before, &it)
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || (it.Head != "" && (k.Head != it.Head || k.Base != it.Base)) || k.LastError != ""
 	fillLink(k, it, l.now())
 	if err := l.store.SaveThreadLinkReading(threadID, *k); err != nil {

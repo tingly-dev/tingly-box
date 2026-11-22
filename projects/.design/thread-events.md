@@ -246,9 +246,10 @@ Thread now: status=ready running=no
 
 代码：同在 `links_events.go`；折叠行在 `Coordinator.foldNeedsUser`，回合结束的判断在 `coordinator_session.go`。
 
-- **检测**（`prTransition`，现在拿整条旧记录）：线程自己开的、仍开着的 PR，`merge_state` 从任何别的值（含 unknown、从未读过）变成 `conflicts` 为**进入** → `pr_conflicts`。**第一次读取就已是 conflicts 也算进入**（选择：PR 一开始就冲突，用户同样需要知道）。保持 conflicts 不算。`conflicts` 变成 GitHub 已确定的别的值（不是空、不是 unknown）为**离开** → `pr_conflicts_gone`；变成 unknown 不算离开，避免 GitHub 重算时来回抖动。离开后再进入算新的进入。从 conflicts 直接变 merged / closed 仍是 E1 / E2。
+- **检测**（`prTransition`，现在拿整条旧记录）：线程自己开的、仍开着的 PR，`merge_state` 从任何别的值（含 unknown、从未读过）变成 `conflicts` 为**进入** → `pr_conflicts`。**第一次读取就已是 conflicts 也算进入**（选择：PR 一开始就冲突，用户同样需要知道）。保持 conflicts 不算。`conflicts` 变成 GitHub 已确定的别的值（不是空、不是 unknown）为**离开** → `pr_conflicts_gone`；变成 unknown 不算离开，避免 GitHub 重算时来回抖动。离开后再进入算新的进入。比较的“之前”是记录里存的 `merge_state`（links JSON 列，重启不丢），不是内存。从 conflicts 直接变 merged / closed 仍是 E1 / E2。
+- **unknown 不覆盖已确定的值**（`keepMergeState`，修复 2026-11-22 观察到的重复提醒：#2728、#2682 在 07:30、08:05、10:45 UTC 各收到一次 `pr_conflicts`，PR 都没动过）：仍开着的 PR，GitHub 说 `unknown`（或空）时，记录保留上一次已确定的 `merge_state`。原因：main 每动一次 GitHub 就重算可合并性，期间回 `unknown`；以前这个 `unknown` 被写进记录，下一次读到 `conflicts` 就成了“从 unknown 进入”，只剩 30 分钟上限挡着（且重启就清空）。Sweep / 手动刷新 / `view`（`applyReading`）和工具自己的记录（`record`，例如 `comment` 读到的 unknown）走同一条规则。卡片上因此显示上一次已确定的值，直到 GitHub 算完；编辑 PR 的工具本来就这样做。
 - **离开只记录**：线程里记 “Conflicts on PR #34 are resolved.”，不进协调者输入（`prChange.Quiet`）。
-- **30 分钟上限**：`Links.capConflicts`，同一个 PR 上次唤醒协调者后 30 分钟内再次进入，只在线程里记（Quiet），不唤醒。时间记在内存里（`conflictWoke`），重启后清空：重启后同一个 PR 最多多唤醒一次。
+- **30 分钟上限**：`Links.capConflicts`，同一个 PR 上次唤醒协调者后 30 分钟内再次进入，只在线程里记（Quiet），不唤醒。时间记在内存里（`conflictWoke`），重启后清空。它只是真正“离开再进入”来回变化时的兜底：同一个冲突一直在（中间夹着 unknown、跨重启）靠存下的 `merge_state` 只发一次，不靠这个上限。
 - **线程事件**：一行事实，例如 `PR #34 has merge conflicts with main. Thread: ready, no turn running, 0 unpushed commits, no uncommitted changes.`
 - **回退一行（IM）**：协调者离线、回合失败或被停、或回合结束时既没发卡也没回复，都发一行（`coordinatorSessions.turn` 的 defer）。
 - **协调者输入**：`kind="pr_conflicts" needs_user="true"`（只有这一种带），仍按项目、按一次 Sweep 合并，与 merged / closed 可以在同一条输入里。提示词（`coordinatorSystemPrompt`）要求：用 `request_decision`，选项为“把 base 合进分支并推送（推荐，普通推送不需要强推）/ 我自己处理 / 放弃这个 PR（线程用 `close` 关闭，按项目设置弹卡或自动放行）”；只有用户选了之后才带 `cite` 给线程发消息，不得自行发，不得关闭线程。
@@ -265,4 +266,4 @@ Thread now: status=ready running=no
 
 ### 变异检查
 
-把 30 分钟上限改成永不命中 → `TestConflictsWakeTheCoordinatorOncePerPRInThirtyMinutes` 失败；去掉“进入”的守卫（`!conflicting(&before)`）→ `TestEnteringConflictsIsOneEvent…` 和 `TestPRTransitionIsOnlyOutOfOpen` 失败。均已用 Edit 恢复。
+把 30 分钟上限改成永不命中 → `TestConflictsWakeTheCoordinatorOncePerPRInThirtyMinutes` 失败；去掉“进入”的守卫（`!conflicting(&before)`）→ `TestEnteringConflictsIsOneEvent…` 和 `TestPRTransitionIsOnlyOutOfOpen` 失败。去掉 `applyReading` 里的 `keepMergeState` → `TestAConflictThatStaysIsOneAlertThroughUnknownReadingsAndRestarts` 失败（修复前同一冲突 30 次读取唤醒 6 次）；去掉 `record` 里的 → `TestACommentReadingUnknownDoesNotEnterConflictsAgain` 失败。均已用 Edit 恢复。
