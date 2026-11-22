@@ -93,7 +93,7 @@ Coordinator 按项目的 profile、model、effort 启动。使用 profile 时由
 
 已有 Project 首次进入新实现时保留主线程、显示历史和工作线程，创建独立的 Coordinator session 并一次性导入有限近期上下文；更早的内容存在时，导入文本会提示用 `read_conversation` 查询。早于导入窗口的对话仍保存在主线程；旧实现丢弃的工具调用和工具结果无法恢复。旧的自驱模型循环（`Coordinator.turn` / `LLMSource`）已删除，session 是唯一路径，不再支持回滚。
 
-用户直接在线程里说的话和答过的审批卡如何由系统随汇报带给协调者（`kind="user_in_thread"` / `user_answer`），见 [user-in-thread.md](./user-in-thread.md)（设计，未实现）。
+用户在线程里说的话和亲手答的审批卡如何镜像进主线程、作为随车输入按同一状态机投递给协调者，见 [user-in-thread.md](./user-in-thread.md)（设计，未实现）。
 
 线程汇报回合末尾附一个 system 信封（`kind="check-in"`），带 `replies_since_user` 和 `minutes_since_user`，即协调者提示词里的回复预算。设置变更不会产生独立回合。
 
