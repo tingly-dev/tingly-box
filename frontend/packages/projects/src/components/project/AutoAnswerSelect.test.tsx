@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
-import { AutoAnswerSelect, autoAnswerOf } from './AutoAnswerSelect';
+import { AutoAnswerSelect, autoAnswerOf, customDelayMinutes } from './AutoAnswerSelect';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: Record<string, unknown>) => (o?.duration ? `${key} ${o.duration}` : key) }) }));
 
 afterEach(cleanup);
 
@@ -30,5 +30,46 @@ describe('AutoAnswerSelect', () => {
         expect(within(list).getByText('autoAnswer.nowHelp')).toBeInTheDocument();
         fireEvent.click(within(list).getByText('autoAnswer.now'));
         expect(onChange).toHaveBeenCalledWith('now');
+    });
+
+    it('reads a custom wait from the thread and shows it as its own entry', () => {
+        expect(autoAnswerOf(thread({ auto_answer: 'delay:45' }))).toBe('delay:45');
+        expect(autoAnswerOf(thread({ auto_answer: 'delay:0' }))).toBe('delay');
+        expect(autoAnswerOf(thread({ auto_answer: 'delay:61' }), true)).toBe('off');
+        expect(customDelayMinutes('delay:45')).toBe(45);
+        expect(customDelayMinutes('delay')).toBeUndefined();
+        render(<AutoAnswerSelect thread={thread({ auto_answer: 'delay:45' })} onChange={vi.fn()} />);
+        expect(screen.getByRole('combobox', { name: 'autoAnswer.title' })).toHaveTextContent('autoAnswer.delayCustomLabel 45m');
+    });
+
+    it('saves a custom wait as delay:<minutes>, rejects bad input, and cancel changes nothing', async () => {
+        const onChange = vi.fn();
+        render(<AutoAnswerSelect thread={thread({})} onChange={onChange} />);
+        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'autoAnswer.title' }));
+        fireEvent.click(within(screen.getByRole('listbox')).getByText('autoAnswer.custom'));
+        const input = screen.getByRole('textbox', { name: 'autoAnswer.customInput' });
+        fireEvent.change(input, { target: { value: '0' } });
+        expect(screen.getByText('autoAnswer.customInvalid')).toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '45' } });
+        fireEvent.submit(input);
+        expect(onChange).toHaveBeenCalledWith('delay:45');
+        await waitForElementToBeRemoved(() => screen.queryByRole('dialog'));
+
+        onChange.mockClear();
+        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'autoAnswer.title' }));
+        fireEvent.click(within(screen.getByRole('listbox')).getByText('autoAnswer.custom'));
+        fireEvent.click(screen.getByText('autoAnswer.customCancel'));
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('stores the default wait as plain delay when 5 minutes is typed', () => {
+        const onChange = vi.fn();
+        render(<AutoAnswerSelect thread={thread({ auto_answer: 'now' })} onChange={onChange} />);
+        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'autoAnswer.title' }));
+        fireEvent.click(within(screen.getByRole('listbox')).getByText('autoAnswer.custom'));
+        const input = screen.getByRole('textbox', { name: 'autoAnswer.customInput' });
+        fireEvent.change(input, { target: { value: '5' } });
+        fireEvent.submit(input);
+        expect(onChange).toHaveBeenCalledWith('delay');
     });
 });

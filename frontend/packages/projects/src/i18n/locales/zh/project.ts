@@ -157,6 +157,10 @@ export const project: Dict<typeof projectEn> = {
         off: '关闭', offHelp: '每个问题都等你回答。',
         delay: '5 分钟后', delayHelp: '5 分钟内没回答，线程就按推荐答案继续工作。',
         now: '立即', nowHelp: '线程立即按推荐答案继续。之后仍可以发消息纠正。',
+        custom: '自定义…', customTitle: '自定义自动回答等待时间', customInput: '等待多久后回答', minutes: '分钟',
+        customHelp: '整数分钟，1 到 {{max}}。仅对此线程生效。',
+        customInvalid: '请输入 1 到 {{max}} 之间的整数分钟。', customApply: '应用', customCancel: '取消',
+        delayCustom: '{{duration}}后', delayCustomLabel: '{{duration}}后自动回答',
     },
     tree: { loading: '加载中…', emptyFolder: '空文件夹', retry: '重试', failed: '无法加载此文件夹。' },
     library: {

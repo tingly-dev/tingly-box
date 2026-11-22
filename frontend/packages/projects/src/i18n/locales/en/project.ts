@@ -154,6 +154,10 @@ export const project = {
         off: 'Off', offHelp: 'Every question waits for you.',
         delay: 'After 5 min', delayHelp: 'If you don’t answer within 5 minutes, the thread goes with the suggestion and keeps working.',
         now: 'Right away', nowHelp: 'The thread goes with the suggestion at once. You can still correct it with a message.',
+        custom: 'Custom…', customTitle: 'Custom auto-answer wait', customInput: 'Wait before answering', minutes: 'min',
+        customHelp: 'Whole minutes, 1 to {{max}}. Applies to this thread only.',
+        customInvalid: 'Enter a whole number of minutes from 1 to {{max}}.', customApply: 'Apply', customCancel: 'Cancel',
+        delayCustom: 'After {{duration}}', delayCustomLabel: 'Auto-answer in {{duration}}',
     },
     tree: { loading: 'Loading…', emptyFolder: 'Empty folder', retry: 'Try again', failed: 'Could not load this folder.' },
     library: {

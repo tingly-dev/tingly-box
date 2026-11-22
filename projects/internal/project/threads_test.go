@@ -856,3 +856,34 @@ func addOpenPR(t *testing.T, f *testFixture, th *db.Thread, number int) {
 		return append(l, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: number, State: db.LinkStateOpen, Head: th.Branch, Base: th.BaseBranch, Role: db.LinkOpened})
 	}))
 }
+
+func TestParseAutoAnswer(t *testing.T) {
+	cases := []struct {
+		in    string
+		mode  string
+		after time.Duration
+		ok    bool
+	}{
+		{"", "", 0, true},
+		{"off", "off", 0, true},
+		{"now", "now", 0, true},
+		{"delay", "delay", AutoAnswerAfter, true},
+		{"delay:1", "delay", time.Minute, true},
+		{"delay:45", "delay", 45 * time.Minute, true},
+		{"delay:60", "delay", time.Hour, true},
+		{"delay:0", "", 0, false},
+		{"delay:61", "", 0, false},
+		{"delay:-5", "", 0, false},
+		{"delay:05", "", 0, false},
+		{"delay:1.5", "", 0, false},
+		{"delay:", "", 0, false},
+		{"off:5", "", 0, false},
+	}
+	for _, c := range cases {
+		mode, after, ok := parseAutoAnswer(c.in)
+		assert.Equal(t, c.ok, ok, c.in)
+		assert.Equal(t, c.mode, mode, c.in)
+		assert.Equal(t, c.after, after, c.in)
+		assert.Equal(t, c.ok, ValidAutoAnswer(c.in), c.in)
+	}
+}

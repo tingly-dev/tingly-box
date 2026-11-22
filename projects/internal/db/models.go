@@ -260,7 +260,7 @@ type Thread struct {
 	// (Tingly Box: a Claude Code profile); empty for the host's default.
 	Profile string `gorm:"size:100" json:"profile,omitempty"`
 	// AutoAnswer says when a question with a suggested answer is answered
-	// without the user: off, delay or now. Empty is the kind's default
+	// without the user: off, delay, delay:<minutes> or now. Empty is the kind's default
 	// (delay for a project thread, off for a folder thread).
 	AutoAnswer string `gorm:"size:10" json:"auto_answer,omitempty"`
 	// HeadBranch is the branch a folder thread's folder is on, read when

@@ -1,3 +1,4 @@
+import LogLimitSelect from './LogLimitSelect';
 import {
     Alert,
     Box,
@@ -18,7 +19,6 @@ import {
     Switch,
     Tooltip,
     TextField,
-    MenuItem,
 } from '@mui/material';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -380,15 +380,7 @@ const AILogViewer = ({ getRequests, getRequestDetail, getTrace, scenario }: Requ
                     onClick={() => setErrorsOnly(value => !value)}
                 />
                 {!scenario && (
-                    <TextField
-                            select
-                            size="small"
-                            value={limit}
-                            onChange={event => setLimit(Number(event.target.value))}
-                            slotProps={{ htmlInput: { 'aria-label': t('logViewer.load', { defaultValue: 'Load' }) } }}
-                        >
-                            {[200, 500, 1000].map(value => <MenuItem key={value} value={value}>{t('logViewer.latest', { count: value, defaultValue: 'Latest {{count}}' })}</MenuItem>)}
-                    </TextField>
+                    <LogLimitSelect value={limit} onChange={setLimit} />
                 )}
                 <Box sx={{ flex: 1 }} />
                 <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>

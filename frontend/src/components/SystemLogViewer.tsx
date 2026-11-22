@@ -1,3 +1,4 @@
+import LogLimitSelect from './LogLimitSelect';
 import {
     Alert,
     Box,
@@ -17,7 +18,6 @@ import {
     TableSortLabel,
     Tooltip,
     TextField,
-    MenuItem,
 } from '@mui/material';
 import { Fragment, useMemo, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -163,15 +163,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     slotProps={{ htmlInput: { 'aria-label': t('logViewer.searchLogs', { defaultValue: 'Search logs' }) } }}
                     sx={{ width: 240 }}
                 />
-                <TextField
-                        select
-                        size="small"
-                        value={limit}
-                        onChange={event => setLimit(Number(event.target.value))}
-                        slotProps={{ htmlInput: { 'aria-label': t('logViewer.load', { defaultValue: 'Load' }) } }}
-                    >
-                        {[200, 500, 1000].map(value => <MenuItem key={value} value={value}>{t('logViewer.latest', { count: value, defaultValue: 'Latest {{count}}' })}</MenuItem>)}
-                </TextField>
+                <LogLimitSelect value={limit} onChange={setLimit} />
                 <Stack
                     direction="row"
                     spacing={0.5}

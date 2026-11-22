@@ -122,9 +122,10 @@ type ThreadRespondRequest struct {
 
 // AutoAnswerRequest sets when the thread's questions with a suggested
 // answer are answered without the user; empty is the default (delay for a
-// project thread, off for a folder thread).
+// project thread, off for a folder thread). "delay:<minutes>" (1 to 60)
+// waits that long instead of the default delay.
 type AutoAnswerRequest struct {
-	AutoAnswer string `json:"auto_answer" enum:",off,delay,now"`
+	AutoAnswer string `json:"auto_answer"`
 }
 
 // PermissionModeRequest sets the mode of the thread's next turn.
