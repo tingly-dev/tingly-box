@@ -284,10 +284,18 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, b
 	return b.String(), nil
 }
 
+// MergeCommit merges a PR with a merge commit, keeping its commits. Only the
+// thread's merge tool offers it: a stack whose lower PR is merged this way
+// leaves the upper PR's history intact, where a squash needs a rebase.
+const MergeCommit = "merge"
+
 // MergeInput says how a thread's branch is merged on GitHub.
 type MergeInput struct {
-	// Method is MergeSquash or MergeMergeRequest.
+	// Method is MergeSquash, MergeCommit or MergeMergeRequest.
 	Method string
+	// Head is the local branch whose PR is merged; empty is the thread's own
+	// branch. It follows create_pr's rules for a head.
+	Head string
 	// Message is the squash commit's message (its first line is the title);
 	// empty leaves it to GitHub's default.
 	Message string
@@ -302,7 +310,7 @@ type MergeOutcome struct {
 	Item GitHubItem
 	// Existed is set when the PR was already open (its branch was pushed again).
 	Existed bool
-	// Merged is set when the PR was squash-merged.
+	// Merged is set when the PR was merged (squash or merge commit).
 	Merged bool
 }
 
@@ -312,8 +320,8 @@ type MergeOutcome struct {
 // is irreversible and is only ever made at a user's request: the thread's tool
 // asks for approval on every call, and the Review dialog is the user's click.
 func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOutcome, error) {
-	if in.Method != MergeSquash && in.Method != MergeMergeRequest {
-		return MergeOutcome{}, ErrBadMergeMethod
+	if in.Method != MergeSquash && in.Method != MergeCommit && in.Method != MergeMergeRequest {
+		return MergeOutcome{}, errors.New(`method must be "squash", "merge" or "merge_request"`)
 	}
 	if err := checkLength("message", in.Message, bodyMax); err != nil {
 		return MergeOutcome{}, err
@@ -324,6 +332,9 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 		title, _, _ = strings.Cut(strings.TrimSpace(in.Message), "\n")
 		title = strings.TrimSpace(title)
 	}
+	if title == "" && in.Head != "" && in.Head != t.Branch {
+		title = in.Head
+	}
 	if title == "" {
 		var filled string
 		title, filled, _ = fillPR(ctx, t)
@@ -331,7 +342,7 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 			body = filled
 		}
 	}
-	r, err := l.createPR(ctx, t, title, body, "", "", false, false, false)
+	r, err := l.createPR(ctx, t, title, body, in.Head, "", false, false, false)
 	if err != nil {
 		return MergeOutcome{}, err
 	}
@@ -345,11 +356,12 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 	}
 	msgTitle, msgBody, _ := strings.Cut(strings.TrimSpace(in.Message), "\n")
 	msgTitle, msgBody = strings.TrimSpace(msgTitle), strings.TrimSpace(msgBody)
-	if msgTitle == "" {
-		// As `gh pr merge --squash` words it: the PR's title and (#number), and its description.
+	if msgTitle == "" && in.Method == MergeSquash {
+		// As `gh pr merge --squash` words it: the PR's title and (#number), and
+		// its description. A merge commit keeps GitHub's own wording.
 		msgTitle, msgBody = fmt.Sprintf("%s (#%d)", r.item.Title, r.item.Number), strings.TrimSpace(r.item.Body)
 	}
-	if err := l.gh.SquashPR(ctx, r.repo, r.item.Number, sha, msgTitle, msgBody); err != nil {
+	if err := l.gh.MergePR(ctx, r.repo, r.item.Number, in.Method, sha, msgTitle, msgBody); err != nil {
 		return out, fmt.Errorf("PR #%d (%s) is open but was not merged, and stays open: %w", r.item.Number, r.item.URL, err)
 	}
 	// The record says what GitHub says now; if that read fails the merge still happened.

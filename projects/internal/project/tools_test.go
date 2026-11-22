@@ -116,7 +116,7 @@ func TestToolsOfEachScope(t *testing.T) {
 				if c.name != "coordinator" {
 					assert.NotContains(t, props, "thread_id", "%s: a worker's tools act on itself only", tool.Name)
 					assert.NotContains(t, props, "repo", "%s: a thread's repository is its own, never named", tool.Name)
-					if tool.Name != "create_pr" { // a stack's other branches: local ones of this checkout only
+					if tool.Name != "create_pr" && tool.Name != "merge" { // a stack's other branches: local ones of this checkout only
 						assert.NotContains(t, props, "head", "%s: a thread's branch is its own, never named", tool.Name)
 					}
 				}

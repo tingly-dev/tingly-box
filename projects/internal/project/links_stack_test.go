@@ -192,10 +192,10 @@ func TestGhCLIProtectedReadsTheBranchAndTreatsAMissingOneAsUnprotected(t *testin
 	assert.Error(t, err)
 }
 
-func TestGhCLISquashPRPutsAPinnedSquashMerge(t *testing.T) {
+func TestGhCLIMergePRPutsAPinnedMerge(t *testing.T) {
 	repo := GitHubRepo{Owner: "acme", Name: "widgets"}
 	bin, logFile := fakeGH(t, `{"merged":true,"message":"Pull Request successfully merged","sha":"def"}`, 0)
-	require.NoError(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "Add a", "Body."))
+	require.NoError(t, ghCLI{bin: bin}.MergePR(context.Background(), repo, 7, MergeSquash, "abc123", "Add a", "Body."))
 	b, _ := os.ReadFile(logFile)
 	got := string(b)
 	assert.Contains(t, got, "api -X PUT --input - repos/acme/widgets/pulls/7/merge")
@@ -204,15 +204,58 @@ func TestGhCLISquashPRPutsAPinnedSquashMerge(t *testing.T) {
 	assert.Contains(t, got, `"commit_title":"Add a"`)
 
 	bin, logFile = fakeGH(t, `{"merged":true}`, 0)
-	require.NoError(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", ""))
+	require.NoError(t, ghCLI{bin: bin}.MergePR(context.Background(), repo, 7, MergeSquash, "abc123", "", ""))
 	b, _ = os.ReadFile(logFile)
 	assert.NotContains(t, string(b), "commit_title", "no message: GitHub's default")
 
+	bin, logFile = fakeGH(t, `{"merged":true}`, 0)
+	require.NoError(t, ghCLI{bin: bin}.MergePR(context.Background(), repo, 7, MergeCommit, "abc123", "", ""))
+	b, _ = os.ReadFile(logFile)
+	assert.Contains(t, string(b), `"merge_method":"merge"`, "a merge commit")
+
 	// GitHub answering "not merged" is an error, whatever the status.
 	bin, _ = fakeGH(t, `{"merged":false,"message":"Pull Request is not mergeable"}`, 0)
-	err := ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", "")
+	err := ghCLI{bin: bin}.MergePR(context.Background(), repo, 7, MergeSquash, "abc123", "", "")
 	assert.ErrorContains(t, err, "not mergeable")
 
 	bin, _ = fakeGH(t, "", 1)
-	assert.Error(t, ghCLI{bin: bin}.SquashPR(context.Background(), repo, 7, "abc123", "", ""))
+	assert.Error(t, ghCLI{bin: bin}.MergePR(context.Background(), repo, 7, MergeSquash, "abc123", "", ""))
+}
+
+// merge takes a head, so a stack's PRs are merged one by one, bottom first, and
+// a merge commit keeps the lower branch's commits for the PR above it.
+func TestMergeToolMergesAStackBottomFirstWithAMergeCommit(t *testing.T) {
+	f := newLinksFixture(t)
+	f.stackBranch(t, "tp/top", "tp/work")
+	cs, _ := f.client(t, f.worker.ID)
+	_, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "Bottom"})
+	require.False(t, isErr)
+	_, isErr = f.call(t, cs, "create_pr", map[string]any{"title": "Top", "head": "tp/top", "base": "tp/work"})
+	require.False(t, isErr)
+
+	out, isErr := f.call(t, cs, "merge", map[string]any{"method": "merge"})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "merged PR #11 into main on GitHub with a merge commit")
+	bottom := run(t, f.repo, "git", "rev-parse", "tp/work")
+	assert.Contains(t, f.gh.called(), `merge-pr acme/widgets #11 sha=`+bottom+` title="" message=""`, "a merge commit keeps GitHub's wording")
+
+	f.gh.set(12, func(it *GitHubItem) { it.Base = "main" })
+	out, isErr = f.call(t, cs, "merge", map[string]any{"method": "squash", "head": "tp/top"})
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "squash-merged PR #12")
+	top := run(t, f.repo, "git", "rev-parse", "tp/top")
+	assert.Contains(t, f.gh.called(), `squash-pr acme/widgets #12 sha=`+top+` title="Top (#12)" message=""`)
+
+	links, _ := f.store.ThreadLinks(f.worker.ID)
+	require.Len(t, links, 2)
+	for _, k := range links {
+		assert.Equal(t, db.LinkStateMerged, k.State, "#%d", k.Number)
+	}
+	assert.Empty(t, f.approvals, "the thread's own stack needs no card from the tool itself (the ask rule on merge is Claude Code's)")
+}
+
+func TestMergeToolRefusesAMethodItDoesNotKnow(t *testing.T) {
+	f := newLinksFixture(t)
+	_, err := f.links.Merge(context.Background(), f.thread(t), MergeInput{Method: "rebase"})
+	assert.ErrorContains(t, err, `"squash", "merge" or "merge_request"`)
 }
