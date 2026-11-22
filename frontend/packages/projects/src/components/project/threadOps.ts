@@ -28,7 +28,7 @@ export interface ThreadOps {
     /** Rename the thread; the renamed thread comes back. */
     setTitle: (title: string) => Promise<unknown>;
     /** When a question with a suggested answer is answered without the user. */
-    setAutoAnswer: (mode: '' | 'off' | 'delay' | 'now') => Promise<unknown>;
+    setAutoAnswer: (mode: string) => Promise<unknown>;
 }
 
 export function threadOps(id: string): ThreadOps {

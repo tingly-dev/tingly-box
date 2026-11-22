@@ -1402,11 +1402,8 @@ export interface components {
             attachments: components["schemas"]["Attachment"][];
         };
         AutoAnswerRequest: {
-            /**
-             * @description Field auto_answer
-             * @enum {string}
-             */
-            auto_answer: "" | "off" | "delay" | "now";
+            /** @description Field auto_answer */
+            auto_answer: string;
         };
         BackgroundTask: {
             /** @description Field description */
@@ -2419,6 +2416,8 @@ export interface components {
              * @description Field files_changed
              */
             files_changed: number;
+            /** @description Field grants */
+            grants?: components["schemas"]["ThreadGrant"][];
             /** @description Field head_branch */
             head_branch?: string;
             /** @description Field id */
@@ -2591,6 +2590,28 @@ export interface components {
              * @description Field updated_at
              */
             updated_at: string;
+        };
+        ThreadGrant: {
+            /** @description Field action */
+            action: string;
+            /**
+             * Format: date-time
+             * @description Field expires_at
+             */
+            expires_at?: string;
+            /**
+             * Format: date-time
+             * @description Field granted_at
+             */
+            granted_at: string;
+            /** @description Field group */
+            group?: string;
+            /** @description Field id */
+            id: string;
+            /** @description Field rule */
+            rule?: string;
+            /** @description Field scope */
+            scope: string;
         };
         ThreadLink: {
             /**

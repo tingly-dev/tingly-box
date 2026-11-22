@@ -157,6 +157,10 @@ export const project: PluralDict<typeof en> = {
         off: 'Выкл.', offHelp: 'Каждый вопрос ждёт вас.',
         delay: 'Через 5 мин', delayHelp: 'Если вы не ответите за 5 минут, поток примет предложение и продолжит работу.',
         now: 'Сразу', nowHelp: 'Поток сразу принимает предложение. Исправить можно сообщением.',
+        custom: 'Своё значение…', customTitle: 'Своё время ожидания автоответа', customInput: 'Ждать перед ответом', minutes: 'мин',
+        customHelp: 'Целое число минут, от 1 до {{max}}. Только для этого потока.',
+        customInvalid: 'Введите целое число минут от 1 до {{max}}.', customApply: 'Применить', customCancel: 'Отмена',
+        delayCustom: 'Через {{duration}}', delayCustomLabel: 'Автоответ через {{duration}}',
     },
     tree: { loading: 'Загрузка…', emptyFolder: 'Пустая папка', retry: 'Повторить', failed: 'Не удалось загрузить эту папку.' },
     library: {

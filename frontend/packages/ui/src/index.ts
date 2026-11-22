@@ -20,3 +20,8 @@ export { EntityLabel } from './components/EntityLabel';
 export type { EntityLabelProps } from './components/EntityLabel';
 export { entityText, shortId, bareId, aliasOrName } from './utils/entityLabel';
 export type { EntityKind, EntityParts, ShortId, EntityTextOptions } from './utils/entityLabel';
+export { default as SelectWithCustom } from './components/SelectWithCustom';
+export type { SelectOption, CustomSpec, SelectWithCustomProps } from './components/SelectWithCustom';
+export { default as CustomValueDialog } from './components/CustomValueDialog';
+export type { CustomValueDialogProps } from './components/CustomValueDialog';
+export { formatDurationShort } from './utils/duration';

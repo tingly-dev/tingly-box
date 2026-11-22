@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1930,26 +1931,48 @@ const (
 // AutoAnswerAfter is how long a question waits under AutoAnswerDelay.
 var AutoAnswerAfter = 5 * time.Minute
 
-// ValidAutoAnswer reports whether mode is a setting; empty is the default.
-func ValidAutoAnswer(mode string) bool {
-	switch mode {
-	case "", AutoAnswerOff, AutoAnswerDelay, AutoAnswerNow:
-		return true
+// MaxAutoAnswerMinutes caps a custom delay ("delay:<minutes>"): the answer
+// must come before the idle reclaim (65 minutes) takes the process.
+const MaxAutoAnswerMinutes = 60
+
+// parseAutoAnswer splits a setting into its mode and the delay it waits:
+// "delay" is AutoAnswerAfter, "delay:<minutes>" a custom wait of 1 to
+// MaxAutoAnswerMinutes. ok is false for anything else; empty is the default.
+func parseAutoAnswer(setting string) (mode string, after time.Duration, ok bool) {
+	switch setting {
+	case "", AutoAnswerOff, AutoAnswerNow:
+		return setting, 0, true
+	case AutoAnswerDelay:
+		return setting, AutoAnswerAfter, true
 	}
-	return false
+	n, found := strings.CutPrefix(setting, AutoAnswerDelay+":")
+	if !found {
+		return "", 0, false
+	}
+	m, err := strconv.Atoi(n)
+	if err != nil || m < 1 || m > MaxAutoAnswerMinutes || strconv.Itoa(m) != n {
+		return "", 0, false
+	}
+	return AutoAnswerDelay, time.Duration(m) * time.Minute, true
+}
+
+// ValidAutoAnswer reports whether setting is one; empty is the default.
+func ValidAutoAnswer(setting string) bool {
+	_, _, ok := parseAutoAnswer(setting)
+	return ok
 }
 
 // autoAnswerMode is the setting a thread's questions follow: its own, else
 // delay for a project thread (its owner is usually away) and off for a
 // folder session (its owner is usually watching).
-func autoAnswerMode(t *db.Thread, folder bool) string {
-	if t.AutoAnswer != "" {
-		return t.AutoAnswer
+func autoAnswerMode(t *db.Thread, folder bool) (string, time.Duration) {
+	if mode, after, ok := parseAutoAnswer(t.AutoAnswer); ok && mode != "" {
+		return mode, after
 	}
 	if folder {
-		return AutoAnswerOff
+		return AutoAnswerOff, 0
 	}
-	return AutoAnswerDelay
+	return AutoAnswerDelay, AutoAnswerAfter
 }
 
 var recommendedRe = regexp.MustCompile(`(?i)\s*\((recommended|推荐)\)\s*$`)
@@ -2084,11 +2107,12 @@ func (p *threadPrompter) autoDeadline(asked time.Time, suggested bool) *time.Tim
 		return nil
 	}
 	var at time.Time
-	switch autoAnswerMode(t, p.m.isFolder(t.ProjectID)) {
+	mode, after := autoAnswerMode(t, p.m.isFolder(t.ProjectID))
+	switch mode {
 	case AutoAnswerNow:
 		at = time.Now()
 	case AutoAnswerDelay:
-		at = asked.Add(AutoAnswerAfter)
+		at = asked.Add(after)
 	default:
 		return nil
 	}

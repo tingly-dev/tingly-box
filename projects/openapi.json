@@ -3087,13 +3087,7 @@
         "properties": {
           "auto_answer": {
             "type": "string",
-            "description": "Field auto_answer",
-            "enum": [
-              "",
-              "off",
-              "delay",
-              "now"
-            ]
+            "description": "Field auto_answer"
           }
         },
         "required": [
@@ -5307,6 +5301,13 @@
             "format": "int64",
             "description": "Field files_changed"
           },
+          "grants": {
+            "type": "array",
+            "description": "Field grants",
+            "items": {
+              "$ref": "#/components/schemas/ThreadGrant"
+            }
+          },
           "head_branch": {
             "type": "string",
             "description": "Field head_branch"
@@ -5614,6 +5615,47 @@
           "content",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ThreadGrant": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field expires_at"
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field granted_at"
+          },
+          "group": {
+            "type": "string",
+            "description": "Field group"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "rule": {
+            "type": "string",
+            "description": "Field rule"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "scope",
+          "granted_at"
         ]
       },
       "ThreadLink": {
