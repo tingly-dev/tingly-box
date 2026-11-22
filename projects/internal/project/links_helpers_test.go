@@ -209,6 +209,20 @@ func (g *fakeGitHub) UpdateIssue(_ context.Context, r GitHubRepo, n int, title, 
 	return it, nil
 }
 
+func (g *fakeGitHub) Close(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
+	if err := g.log("close %s #%d", r.Slug(), n); err != nil {
+		return GitHubItem{}, err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	it := g.items[n]
+	it.State = "closed"
+	g.items[n] = it
+	// Like the issues API: no branches in the answer.
+	it.Head, it.Base, it.Draft = "", "", false
+	return it, nil
+}
+
 func (g *fakeGitHub) Read(_ context.Context, r GitHubRepo, n int) (GitHubItem, error) {
 	err := g.log("read %s #%d", r.Slug(), n)
 	if g.block != nil {

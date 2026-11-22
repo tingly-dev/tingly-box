@@ -96,7 +96,7 @@ func TestToolsOfEachScope(t *testing.T) {
 	// The GitHub tools are the thread's own: they act on its checkout, which the
 	// coordinator does not have.
 	// notify_coordinator is how a thread reaches the coordinator mid-turn.
-	thread := []string{"comment", "create_issue", "create_pr", "merge", "notify_coordinator", "send_file", "update", "view"}
+	thread := []string{"close", "comment", "create_issue", "create_pr", "merge", "notify_coordinator", "send_file", "update", "view"}
 	for _, c := range []struct {
 		name     string
 		threadID string

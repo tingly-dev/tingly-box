@@ -189,7 +189,7 @@ func TestAPRForAnotherBranchAgainstTheSameBaseIsFlaggedAsPossibleReplacement(t *
 	require.False(t, isErr, out)
 	assert.Contains(t, out, "opened PR #12")
 	assert.Contains(t, out, "#11 (tp/work → main) is still open")
-	assert.Contains(t, out, "no tool here closes a PR")
+	assert.Contains(t, out, "close it with the close tool (the user is asked)")
 
 	// A stack is not a replacement: another base does not trigger the note.
 	f.stackBranch(t, "tp/top", "tp/right")
