@@ -400,16 +400,8 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 		it.State, it.MergeState, it.CI = db.LinkStateMerged, "", ""
 	}
 	l.forgetView(t, it.Number)
-	l.transitions.Lock()
-	prev, _ := l.store.FindThreadLink(t.ID, r.repo.Slug(), it.Number)
-	rec, rerr := l.record(t, r.repo, db.LinkPR, db.LinkOpened, it)
-	l.transitions.Unlock()
-	if rerr != nil {
+	if _, rerr := l.recordAndTell(ctx, t, r.repo, db.LinkPR, db.LinkOpened, it); rerr != nil {
 		logrus.WithError(rerr).Warn("projects: cannot record a merged PR")
-	} else if !isByUser(ctx) && prev != nil {
-		// The Merge dialog is the user's own click (byUser): the coordinator is
-		// not told what they did themselves; the thread records it.
-		l.deliver(changeOf(t.ID, prev.State, rec))
 	}
 	out.Item, out.Merged = it, true
 	return out, nil
@@ -917,7 +909,7 @@ func (l *Links) Close(ctx context.Context, t *db.Thread, number int) (string, er
 		var rerr error
 		if own != nil {
 			l.forgetView(t, number)
-			_, rerr = l.record(t, lc.repo, kind, own.Role, cur)
+			_, rerr = l.recordAndTell(ctx, t, lc.repo, kind, own.Role, cur)
 		}
 		return fmt.Sprintf("%s #%d is already %s, nothing to do: %s%s", kind, cur.Number, cur.State, cur.URL, saved(rerr)), nil
 	}
@@ -940,8 +932,23 @@ func (l *Links) Close(ctx context.Context, t *db.Thread, number int) (string, er
 	// The answer is the issues API's: no branches, checks or mergeability.
 	it.IsPR, it.Draft, it.Head, it.Base, it.CI, it.Checks, it.MergeState = cur.IsPR, cur.Draft, cur.Head, cur.Base, cur.CI, cur.Checks, ""
 	l.forgetView(t, number)
-	_, rerr := l.record(t, lc.repo, kind, role, it)
+	_, rerr := l.recordAndTell(ctx, t, lc.repo, kind, role, it)
 	return fmt.Sprintf("closed %s #%d (opened by %s; not merged, no branch deleted): %s%s", kind, it.Number, opener, it.URL, saved(rerr)), nil
+}
+
+// recordAndTell records it on thread t, like record, and delivers the change
+// when it moved a PR the thread opened out of open (see links_events.go):
+// the merge and close tools write the record themselves, not through a
+// reading. The user's own Merge dialog (byUser) is recorded only.
+func (l *Links) recordAndTell(ctx context.Context, t *db.Thread, repo GitHubRepo, kind, role string, it GitHubItem) (*db.ThreadLink, error) {
+	l.transitions.Lock()
+	prev, _ := l.store.FindThreadLink(t.ID, repo.Slug(), it.Number)
+	rec, err := l.record(t, repo, kind, role, it)
+	l.transitions.Unlock()
+	if err == nil && prev != nil && !isByUser(ctx) {
+		l.deliver(changeOf(t.ID, prev.State, rec))
+	}
+	return rec, err
 }
 
 // openerOf says who opened item number of repo, for the card: this thread,
@@ -1219,6 +1226,12 @@ func (l *Links) applyReading(threadID string, k *db.ThreadLink, it GitHubItem) (
 	before := k.State
 	if cur, err := l.store.FindThreadLink(threadID, k.Repo, k.Number); err == nil {
 		before, k.Role = cur.State, cur.Role
+	}
+	// A merge is final: a reading that says otherwise was taken before it (a
+	// sweep racing the merge tool) and would bring the record back to open, to
+	// be "merged" a second time by the next reading.
+	if before == db.LinkStateMerged && it.State != db.LinkStateMerged {
+		return nil, nil
 	}
 	changed := k.State != it.State || k.Draft != it.Draft || k.CI != it.CI || k.MergeState != it.MergeState || k.Title != it.Title || (it.Head != "" && (k.Head != it.Head || k.Base != it.Base)) || k.LastError != ""
 	fillLink(k, it, l.now())

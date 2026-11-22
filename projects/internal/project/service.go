@@ -101,7 +101,9 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 func (s *Service) SetGitHub(gh GitHub) {
 	s.Links = NewLinks(s.Store, gh, s.Threads.republish)
 	s.Links.approve = s.Threads.askApproval
-	s.Links.events = s.Coordinator.onPRChanges
+	if s.Coordinator != nil {
+		s.Links.events = s.Coordinator.onPRChanges
+	}
 }
 
 // Start recovers interrupted threads and runs housekeeping until ctx ends,

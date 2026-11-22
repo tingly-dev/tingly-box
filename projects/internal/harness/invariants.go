@@ -109,9 +109,13 @@ func (w *World) checkGitHubNotes(th db.Thread) {
 		w.T.Errorf("github.never-moves-status: cannot read events of %q: %v", th.Title, err)
 		return
 	}
-	for _, e := range events {
+	for i, e := range events {
 		if e.Kind != db.EvSystem || !strings.Contains(e.Payload, `"github"`) {
 			continue
+		}
+		reopened := false
+		for _, later := range events[i+1:] {
+			reopened = reopened || (later.Kind == db.EvSystem && strings.HasPrefix(later.Content, "Reopened"))
 		}
 		var pl struct {
 			Github   string `json:"github"`
@@ -121,7 +125,7 @@ func (w *World) checkGitHubNotes(th db.Thread) {
 		if json.Unmarshal([]byte(e.Payload), &pl) != nil || pl.Github == "" {
 			continue
 		}
-		if pl.Resolved && th.ResolvedAt == nil {
+		if pl.Resolved && th.ResolvedAt == nil && !reopened {
 			w.T.Errorf("github.never-moves-status: thread %q was resolved when %s arrived and is open now", th.Title, pl.Github)
 		}
 		if !pl.Resolved && th.ResolvedAt != nil && th.ResolvedAt.Before(e.CreatedAt) {

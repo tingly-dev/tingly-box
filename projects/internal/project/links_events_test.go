@@ -316,3 +316,39 @@ func TestPRTransitionIsOnlyOutOfOpen(t *testing.T) {
 	issue.Kind = db.LinkIssue
 	assert.Empty(t, prTransition(db.LinkStateOpen, issue))
 }
+
+// The close tool writes the record itself: the coordinator hears of it as of
+// any close, once.
+func TestTheCloseToolTellsTheCoordinatorOnce(t *testing.T) {
+	f := eventsFixture(t)
+	f.allowAll()
+	pr := f.stackedPR(t, "Old", "tp/work", "main")
+	_, err := f.links.Close(context.Background(), f.thread(t), pr.Number)
+	require.NoError(t, err)
+	notes := githubNotes(t, f, f.worker.ID)
+	require.Len(t, notes, 1)
+	assert.Contains(t, notes[0].Content, "was closed without merging")
+	assert.Len(t, githubInputs(t, f), 1)
+
+	// Closing it again finds it closed: nothing new to tell.
+	_, err = f.links.Close(context.Background(), f.thread(t), pr.Number)
+	require.NoError(t, err)
+	assert.Len(t, githubNotes(t, f, f.worker.ID), 1)
+}
+
+// A reading taken before a merge (a sweep racing the merge tool) does not
+// bring the record back to open, so the next reading cannot merge it again.
+func TestAStaleReadingDoesNotUnmergeAPR(t *testing.T) {
+	f := eventsFixture(t)
+	_, err := f.links.Merge(context.Background(), f.thread(t), MergeInput{Method: MergeSquash})
+	require.NoError(t, err)
+	links, _ := f.store.ThreadLinks(f.worker.ID)
+	require.Len(t, links, 1)
+	stale := GitHubItem{Number: links[0].Number, URL: links[0].URL, Title: links[0].Title, State: db.LinkStateOpen, IsPR: true, Head: links[0].Head, Base: links[0].Base}
+	ch, err := f.links.applyReading(f.worker.ID, &links[0], stale)
+	require.NoError(t, err)
+	assert.Nil(t, ch)
+	got, _ := f.store.FindThreadLink(f.worker.ID, links[0].Repo, links[0].Number)
+	assert.Equal(t, db.LinkStateMerged, got.State)
+	assert.Len(t, githubNotes(t, f, f.worker.ID), 1)
+}
