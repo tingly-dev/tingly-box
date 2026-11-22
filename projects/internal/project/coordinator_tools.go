@@ -178,7 +178,11 @@ func (c *Coordinator) messageThread(ctx context.Context, p *db.Project, in struc
 	return "sent; the thread is working on it", nil
 }
 
-func (c *Coordinator) stopThread(_ context.Context, p *db.Project, in struct {
+// stopSettleMax bounds how long stop_thread waits for the stopped turn to end,
+// so a turn that does not exit cannot hold the coordinator's own turn.
+const stopSettleMax = 10 * time.Second
+
+func (c *Coordinator) stopThread(ctx context.Context, p *db.Project, in struct {
 	ThreadID string `json:"thread_id"`
 	Cite     []string
 }) (string, error) {
@@ -196,7 +200,13 @@ func (c *Coordinator) stopThread(_ context.Context, p *db.Project, in struct {
 		return "not running; nothing to stop", nil
 	}
 	if done := c.threads.stop(t.ID, fromThread(p.MainThreadID)); done != nil {
-		<-done
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return "stop requested; the thread is still ending its turn", nil
+		case <-time.After(stopSettleMax):
+			return "stop requested; the thread is still ending its turn", nil
+		}
 	}
 	// The stopped turn settles the thread after it exits; wait for that, so the
 	// status below is the new one.
