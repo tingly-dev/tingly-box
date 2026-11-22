@@ -141,7 +141,7 @@ func TestAnAnswerToACardWithoutASourceNamesTheCard(t *testing.T) {
 // or left without a thread, never pinned on a wrong one.
 func TestADecisionSourceMustBeOfTheProject(t *testing.T) {
 	c, p := citeFixture(t)
-	conflictThread(t, c, p, "Fix login", 2728)
+	login := conflictThread(t, c, p, "Fix login", 2728)
 	var d Decision
 	require.NoError(t, json.Unmarshal([]byte(`{"question":"Q?","options":[{"label":"A"},{"label":"B"}],"recommended":0,"thread_id":"zzzzzzzz"}`), &d))
 	_, err := c.requestDecision(t.Context(), p, d)
@@ -149,6 +149,15 @@ func TestADecisionSourceMustBeOfTheProject(t *testing.T) {
 	d.ThreadID = p.MainThreadID
 	_, err = c.requestDecision(t.Context(), p, d)
 	assert.ErrorContains(t, err, "no thread", "the conversation itself is not a thread to be about")
+	d.ThreadID = "#99"
+	_, err = c.requestDecision(t.Context(), p, d)
+	assert.ErrorContains(t, err, "no thread #99")
+
+	byNumber := askAbout(t, c, p, fmt.Sprintf(`{"question":"Q?","options":[{"label":"A"},{"label":"B"}],"recommended":0,"thread_id":"#%d"}`, login.Seq))
+	var named Decision
+	require.NoError(t, json.Unmarshal([]byte(byNumber.Payload), &named))
+	assert.Equal(t, login.ID, named.ThreadID, "a thread is named by its number like in every thread tool")
+	assert.Equal(t, 2728, named.Number)
 
 	card := askAbout(t, c, p, `{"question":"Close issue 9?","options":[{"label":"A"},{"label":"B"}],"recommended":0,"number":9}`)
 	var got Decision

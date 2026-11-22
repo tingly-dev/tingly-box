@@ -179,13 +179,12 @@ func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
 	}
 	var th *db.Thread
 	if d.ThreadID != "" {
-		for i := range threads {
-			if threads[i].ID != p.MainThreadID && strings.HasPrefix(threads[i].ID, d.ThreadID) {
-				th = &threads[i]
-				break
-			}
+		// By its number (#3) or id, as every thread tool takes it; the
+		// conversation itself is not a thread a card can be about.
+		if th, err = c.findThread(p.ID, d.ThreadID); err != nil {
+			return err
 		}
-		if th == nil {
+		if th.ID == p.MainThreadID {
 			return fmt.Errorf("no thread %q in this project", d.ThreadID)
 		}
 	} else {

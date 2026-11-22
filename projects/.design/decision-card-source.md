@@ -8,7 +8,7 @@
 
 ## 设计
 
-1. **卡片声明它关于什么**。`request_decision` 新增两个可选参数：`thread_id`（线程 id 前缀）和 `number`（PR 或 issue 编号）。两者都不填时卡片照常可用。系统负责解析和补全（`Coordinator.resolveSource`）：
+1. **卡片声明它关于什么**。`request_decision` 新增两个可选参数：`thread_id`（线程编号 `#3` 或 id 前缀，与其它线程工具一致，经 `findThread`）和 `number`（PR 或 issue 编号）。两者都不填时卡片照常可用。系统负责解析和补全（`Coordinator.resolveSource`）：
    - `thread_id` 必须是本项目的工作线程（不能是协调者自己的主线程），否则报错 `no thread "…" in this project`。
    - 只给了线程：如果它**恰好有一个** open 的 PR，补上该编号。
    - 只给了编号：如果**恰好一个**线程的 links 里有这个编号，补上该线程；有多个或没有就不补，不猜。
@@ -30,7 +30,7 @@
 4. **转给线程时也带上问题**。协调者用 `message_thread` 带 `cite` 引用这条回答时，系统在引用的用户原话下面追加一行 `(the user's pick on the decision card "…", about #12 Fix login · PR #2728)`。单独一句“我自己处理”对线程没有意义，附上问题线程才知道答的是什么。这一行同样由系统写入（协调者写不出 `quoted by the system` 标记）。
 5. **协调者提示词**：问题涉及某个线程或它的 PR 时传 `thread_id`（以及 `number`）；收到 `kind="answer"` 的用户事件，按信封里的 `card` 和 `id` 处理、转给对应线程并 cite 这条消息；连续几条回答各自对应各自的卡，不按顺序配对。`pr_conflicts` 的指令改为“用事件里的线程作为 thread_id、PR 作为 number”。协调者自己历史里的卡片记录也带上卡片 id 和来源：`(I asked the user, card ef56ab78 about #12 Fix login · PR #2728: …)`，与回答里的 `card` 对得上。
 
-协调者这一侧仍用 8 位 id 前缀（信封的 `id` 属性、`request_decision` 的 `thread_id`）：它的线程表、`list_threads`、`get_thread`、`message_thread` 等所有工具都按 id 前缀寻址，信封里给 id 才能直接拿来调用工具。线程编号只出现在给用户看的文字里，以及协调者历史中的卡片记录。
+协调者的信封仍带 8 位 id（`id` 属性），与线程汇报、GitHub 事件的信封一致；`thread` 属性写成 `#12 Fix login`。自 #2749 起协调者的线程表写作 `#3 a1b2c3d4`，线程工具也接受 `#3`，所以协调者用编号或 id 都能直接转给线程。
 
 ## 没有做的
 
