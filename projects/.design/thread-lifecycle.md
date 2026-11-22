@@ -4,7 +4,7 @@
 > 改状态、加入口、加规则之前先改本文，再改代码；代码与本文不符时按缺陷处理。
 >
 > 相关文档：
-> - [thread-events.md](thread-events.md)：哪些事件触发什么流程、传给谁（设计中）。
+> - [thread-events.md](thread-events.md)：哪些事件触发什么流程、传给谁（第一版：PR 合并、关闭、冲突；未实现）。
 > - [thread-lifecycle.pencil.md](thread-lifecycle.pencil.md)：本设计落地前的代码现状图，含每条转移的行号、判定树、实测结果、缺口 G1–G14。
 > - `projects.md` §4.3：本文的摘要。
 > - [`../../.design/thread-cleanup.md`](../../.design/thread-cleanup.md)：归档和删除（释放 worktree、删分支）。
