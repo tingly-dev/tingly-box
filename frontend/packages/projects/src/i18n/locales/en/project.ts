@@ -141,9 +141,8 @@ export const project = {
     },
     attachments: { removed: '{{name}} (removed)', fromThread: 'From {{name}}' },
     strip: {
-        pr: 'PR', issue: 'Issue', moreLinks: '+{{count}} more in Issues & PRs',
-        title: 'This thread', sessionTitle: 'This session', autoAt: 'Goes with the suggestion at {{time}}', expand: 'Show details', collapse: 'Hide details',
-        folder: 'Folder', copyCd: 'Copy the cd command', branch: 'Branch', copyBranch: 'Copy the branch name',
+        pr: 'PR', issue: 'Issue',
+        title: 'Issues & PRs',
         autoAnswer: {
             title: 'Auto-answer', change: 'Change', menuTitle: 'When a question has a suggested answer',
             off: 'Off', offHelp: 'Every question waits for you.',

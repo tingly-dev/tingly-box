@@ -266,12 +266,6 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         onDrillConsumed?.();
     }, [initialTask, threadId, onDrillConsumed]);
 
-    // The waiting question's own deadline, for the strip's folded line.
-    const pendingAutoAt = useMemo(() => {
-        const b = blocks.find((x) => x.type === 'request' && !!pendingRequestId && x.message.request_id === pendingRequestId);
-        return b?.type === 'request' ? b.message.autoAt : undefined;
-    }, [blocks, pendingRequestId]);
-
     const tasks = useMemo(() => backgroundTasks(threadTranscript(events ?? [], running, () => undefined).entries, liveTasks),
         [events, running, liveTasks]);
     // A folder session always has its tasks panel; a project thread only while it has tasks to show.
@@ -483,7 +477,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         <Box component="span" title={t('threadSettings.lastModel')} sx={{ ...mono, overflowWrap: 'anywhere' }}>
                             {t('threadSettings.lastModel')}: {observedModel || t('threadSettings.modelUnknown')}
                         </Box>,
-                        // The folder and branch float above the message box.
+                        // The folder and branch are the details rail's.
                         !thread.branch && !session && t('thread.noRepo'),
                         // The work, as badges whose details hover out (the
                         // rail's Changes card carries them in full).
@@ -595,7 +589,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     </Alert>
                 )}
                 {(view === 'chat' || focused) && <MessageDetailControl detail={detail} onChange={setDetail} surface="thread" />}
-                <ComposerStrip thread={thread} folder={session} autoAt={pendingAutoAt} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                <ComposerStrip thread={thread} folder={session} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
                 <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
                 <ThreadComposer
                     ref={composer}

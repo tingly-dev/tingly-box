@@ -144,9 +144,8 @@ export const project: PluralDict<typeof en> = {
     },
     attachments: { removed: '{{name}} (удалено)', fromThread: 'Из потока {{name}}' },
     strip: {
-        pr: 'PR', issue: 'Issue', moreLinks: 'ещё {{count}} — в Issues и PR',
-        title: 'Этот поток', sessionTitle: 'Этот сеанс', autoAt: 'В {{time}} будет принято предложение', expand: 'Показать подробности', collapse: 'Скрыть подробности',
-        folder: 'Папка', copyCd: 'Скопировать команду cd', branch: 'Ветка', copyBranch: 'Скопировать имя ветки',
+        pr: 'PR', issue: 'Issue',
+        title: 'Issues и PR',
         autoAnswer: {
             title: 'Автоответ', change: 'Изменить', menuTitle: 'Если у вопроса есть предложенный ответ',
             off: 'Выкл.', offHelp: 'Каждый вопрос ждёт вас.',

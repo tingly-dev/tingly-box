@@ -22,30 +22,24 @@ describe('ComposerStrip', () => {
         expect(autoAnswerOf(thread({ auto_answer: 'now' }), true)).toBe('now');
     });
 
-    it('folds to the fact that matters now plus a count, and unfolds to one line per fact', () => {
-        const onAutoAnswer = vi.fn();
-        const th = thread({ branch: 'tb/fix-login', base_branch: 'main' });
-        const { rerender } = render(<ComposerStrip thread={th} onAutoAnswer={onAutoAnswer} />);
-        // Folded: the branch leads, the folder and the setting are counted.
-        expect(screen.getByText('tb/fix-login')).toBeInTheDocument();
-        expect(screen.getByText('+2')).toBeInTheDocument();
-        expect(screen.queryByText('app')).toBeNull();
-        // A question about to answer itself takes the line.
-        rerender(<ComposerStrip thread={th} onAutoAnswer={onAutoAnswer} autoAt={new Date().toISOString()} />);
-        expect(screen.getByText('strip.autoAt')).toBeInTheDocument();
+    it('leaves where the thread runs to the rail: no folder or branch line', () => {
+        render(<ComposerStrip thread={thread({ branch: 'tb/fix-login', base_branch: 'main' })} onAutoAnswer={vi.fn()} />);
         expect(screen.queryByText('tb/fix-login')).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: 'strip.expand' }));
-        expect(screen.getByText('/work/app')).toBeInTheDocument();
-        expect(screen.getByText('tb/fix-login')).toBeInTheDocument();
+        expect(screen.queryByText('/work/app')).toBeNull();
+        expect(screen.queryByText('strip.title')).toBeNull();
+    });
+
+    it('changes the auto-answer setting from its menu', () => {
+        const onAutoAnswer = vi.fn();
+        render(<ComposerStrip thread={thread({})} onAutoAnswer={onAutoAnswer} />);
         fireEvent.click(screen.getByRole('button', { name: 'strip.autoAnswer.change' }));
         fireEvent.click(screen.getByText('strip.autoAnswer.now'));
         expect(onAutoAnswer).toHaveBeenCalledWith('now');
     });
 
-    it('names a folder session’s branch, and drops auto-answer once resolved', () => {
+    it('drops auto-answer once resolved, and with it the whole strip when there is nothing else', () => {
         render(<ComposerStrip thread={thread({ head_branch: 'main', status: 'resolved' })} folder onAutoAnswer={vi.fn()} />);
-        expect(screen.getByText('main')).toBeInTheDocument();
-        expect(screen.queryByText('strip.autoAnswer.off')).toBeNull();
+        expect(screen.queryByTestId('composer-strip')).toBeNull();
     });
 
     describe('linked issues and PRs', () => {
@@ -55,23 +49,11 @@ describe('ComposerStrip', () => {
             role: 'opened', state: 'open', refreshed_at: at(1), attempted_at: at(1), created_at: at(60), ...o,
         } as ThreadLink);
 
-        it('leads the folded line with the PR and what is wrong with it, ahead of the branch', () => {
-            const th = thread({ branch: 'tb/fix', base_branch: 'main', links: [link({ ci: 'failing', merge_state: 'conflicts' })] });
-            render(<ComposerStrip thread={th} onAutoAnswer={vi.fn()} />);
-            const strip = screen.getByTestId('composer-strip');
-            expect(within(strip).getByText('#12')).toBeInTheDocument();
-            expect(within(strip).getByText('links.checksFailing')).toBeInTheDocument();
-            expect(within(strip).getByText('links.conflicts')).toBeInTheDocument();
-            expect(within(strip).queryByText('tb/fix')).not.toBeInTheDocument();
-            // The PR, the branch, the folder and the setting: three more behind the lead.
-            expect(within(strip).getByText('+3')).toBeInTheDocument();
-        });
-
-        it('lists each link in the open strip with its title, state and the refresh and details buttons', () => {
+        it('lists each link under the title with its title, state and the refresh and details buttons', () => {
             const th = thread({ branch: 'tb/fix', links: [link({ ci: 'passing', merge_state: 'ready' })] });
             render(<ComposerStrip thread={th} onAutoAnswer={vi.fn()} />);
-            fireEvent.click(screen.getByRole('button', { name: 'strip.expand' }));
             const strip = screen.getByTestId('composer-strip');
+            expect(within(strip).getByText('strip.title')).toBeInTheDocument();
             expect(within(strip).getByText('strip.pr')).toBeInTheDocument();
             const a = within(strip).getByRole('link', { name: '#12 Add the tool' });
             expect(a).toHaveAttribute('href', 'https://github.com/acme/w/pull/12');
@@ -87,11 +69,10 @@ describe('ComposerStrip', () => {
                 link({ kind: 'issue', number: 3, title: 'Flaky', url: 'https://github.com/acme/w/issues/3' }),
             ] });
             render(<ComposerStrip thread={th} onAutoAnswer={vi.fn()} />);
-            fireEvent.click(screen.getByRole('button', { name: 'strip.expand' }));
             expect(screen.getAllByRole('button', { name: /links\.filesOf/ })).toHaveLength(1);
         });
 
-        it('puts an open PR first, then an open issue, then what finished, and keeps the strip short', () => {
+        it('puts an open PR first, then an open issue, then what finished, and lists every one', () => {
             const th = thread({ links: [
                 link({ number: 1, state: 'merged', title: 'Old', created_at: at(10) }),
                 link({ number: 2, kind: 'issue', title: 'Bug', url: 'https://github.com/acme/w/issues/2', created_at: at(30) }),
@@ -99,10 +80,8 @@ describe('ComposerStrip', () => {
                 link({ number: 4, title: 'Older PR', created_at: at(120) }),
             ] });
             render(<ComposerStrip thread={th} />);
-            fireEvent.click(screen.getByRole('button', { name: 'strip.expand' }));
             const strip = screen.getByTestId('composer-strip');
-            expect(within(strip).getAllByRole('link').map((a) => a.textContent)).toEqual(['#3 New PR', '#4 Older PR', '#2 Bug']);
-            expect(within(strip).getByText('strip.moreLinks')).toBeInTheDocument();
+            expect(within(strip).getAllByRole('link').map((a) => a.textContent)).toEqual(['#3 New PR', '#4 Older PR', '#2 Bug', '#1 Old']);
         });
 
         it('is there for a thread that has only links', () => {
@@ -110,9 +89,9 @@ describe('ComposerStrip', () => {
             expect(screen.getByTestId('composer-strip')).toBeInTheDocument();
         });
 
-        it('leaves the strip as it was for a thread with none', () => {
+        it('has no title or link lines for a thread with none', () => {
             render(<ComposerStrip thread={thread({ branch: 'tb/fix' })} onAutoAnswer={vi.fn()} />);
-            expect(screen.getByText('tb/fix')).toBeInTheDocument();
+            expect(screen.queryByText('strip.title')).toBeNull();
             expect(screen.queryByRole('button', { name: 'links.refresh' })).not.toBeInTheDocument();
         });
     });
