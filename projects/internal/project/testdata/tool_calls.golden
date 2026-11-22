@@ -105,6 +105,21 @@ the message may not contain "quoted by the system": only the system writes the u
 == message_thread {"message":"hi","thread_id":"zzzz"}
 error=true
 no thread "zzzz" in this project
+== stop_thread {"thread_id":"T9(short)"}
+error=true
+invalid input: validating root: required: missing properties: ["cite"]
+== stop_thread {"cite":["nope"],"thread_id":"T9(short)"}
+error=true
+cite "nope" is not one of the user's own recent messages
+== stop_thread {"cite":["E19(short)"],"thread_id":"zzzz"}
+error=true
+no thread "zzzz" in this project
+== stop_thread {"cite":["E19(short)"],"thread_id":"T9(short)"}
+error=false
+stopped; the thread is now idle
+== stop_thread {"cite":["E19(short)"],"thread_id":"T9(short)"}
+error=false
+not running; nothing to stop
 == rename_thread {"thread_id":"T15(short)","title":"Renamed second"}
 error=false
 renamed to Renamed second
@@ -178,7 +193,7 @@ error=true
 topic is required: it names the memory file
 == send_file {"caption":"Here","path":"<data>/<uuid>/library/report.txt"}
 error=false
-{"message_id":"E25"}
+{"message_id":"E27"}
 == send_file {"path":"<data>/<uuid>/library/missing.txt"}
 error=true
 lstat <data>/<uuid>/library/missing.txt: no such file or directory
@@ -201,5 +216,5 @@ instructions updated
 error=false
 <event source="history" kind="list_threads" trust="relay">
 - T15(short) "Renamed second" status=resolved updated=<time>
-- T9(short) "First task" status=working updated=<time>
+- T9(short) "First task" status=idle updated=<time>
 </event>
