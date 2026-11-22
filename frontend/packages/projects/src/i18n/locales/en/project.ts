@@ -141,15 +141,15 @@ export const project = {
     },
     attachments: { removed: '{{name}} (removed)', fromThread: 'From {{name}}' },
     strip: {
-        pr: 'PR', issue: 'Issue', moreLinks: '+{{count}} more in Issues & PRs',
-        title: 'This thread', sessionTitle: 'This session', autoAt: 'Goes with the suggestion at {{time}}', expand: 'Show details', collapse: 'Hide details',
-        folder: 'Folder', copyCd: 'Copy the cd command', branch: 'Branch', copyBranch: 'Copy the branch name',
-        autoAnswer: {
-            title: 'Auto-answer', change: 'Change', menuTitle: 'When a question has a suggested answer',
-            off: 'Off', offHelp: 'Every question waits for you.',
-            delay: 'After 5 min', delayHelp: 'If you don’t answer within 5 minutes, the thread goes with the suggestion and keeps working.',
-            now: 'Right away', nowHelp: 'The thread goes with the suggestion at once. You can still correct it with a message.',
-        },
+        pr: 'PR', issue: 'Issue',
+        title: 'Issues & PRs',
+    },
+    autoAnswer: {
+        title: 'Auto-answer', menuTitle: 'When a question has a suggested answer',
+        offLabel: 'No auto-answer', delayLabel: 'Auto-answer in 5 min', nowLabel: 'Auto-answer now',
+        off: 'Off', offHelp: 'Every question waits for you.',
+        delay: 'After 5 min', delayHelp: 'If you don’t answer within 5 minutes, the thread goes with the suggestion and keeps working.',
+        now: 'Right away', nowHelp: 'The thread goes with the suggestion at once. You can still correct it with a message.',
     },
     tree: { loading: 'Loading…', emptyFolder: 'Empty folder', retry: 'Try again', failed: 'Could not load this folder.' },
     library: {

@@ -144,15 +144,15 @@ export const project: PluralDict<typeof en> = {
     },
     attachments: { removed: '{{name}} (удалено)', fromThread: 'Из потока {{name}}' },
     strip: {
-        pr: 'PR', issue: 'Issue', moreLinks: 'ещё {{count}} — в Issues и PR',
-        title: 'Этот поток', sessionTitle: 'Этот сеанс', autoAt: 'В {{time}} будет принято предложение', expand: 'Показать подробности', collapse: 'Скрыть подробности',
-        folder: 'Папка', copyCd: 'Скопировать команду cd', branch: 'Ветка', copyBranch: 'Скопировать имя ветки',
-        autoAnswer: {
-            title: 'Автоответ', change: 'Изменить', menuTitle: 'Если у вопроса есть предложенный ответ',
-            off: 'Выкл.', offHelp: 'Каждый вопрос ждёт вас.',
-            delay: 'Через 5 мин', delayHelp: 'Если вы не ответите за 5 минут, поток примет предложение и продолжит работу.',
-            now: 'Сразу', nowHelp: 'Поток сразу принимает предложение. Исправить можно сообщением.',
-        },
+        pr: 'PR', issue: 'Issue',
+        title: 'Issues и PR',
+    },
+    autoAnswer: {
+        title: 'Автоответ', menuTitle: 'Если у вопроса есть предложенный ответ',
+        offLabel: 'Без автоответа', delayLabel: 'Автоответ через 5 мин', nowLabel: 'Автоответ сразу',
+        off: 'Выкл.', offHelp: 'Каждый вопрос ждёт вас.',
+        delay: 'Через 5 мин', delayHelp: 'Если вы не ответите за 5 минут, поток примет предложение и продолжит работу.',
+        now: 'Сразу', nowHelp: 'Поток сразу принимает предложение. Исправить можно сообщением.',
     },
     tree: { loading: 'Загрузка…', emptyFolder: 'Пустая папка', retry: 'Повторить', failed: 'Не удалось загрузить эту папку.' },
     library: {

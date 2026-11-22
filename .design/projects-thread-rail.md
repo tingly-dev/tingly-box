@@ -25,6 +25,21 @@ behind a popover.
   unchanged.
 - Data is the `Thread` record (see "Status fields"); the rail makes no request of its own.
 - **Pull requests and Issues cards** (`ThreadPrsCard`, `ThreadIssuesCard`, after the host's cards): the PRs and the issues the thread opened or commented on through its tools, from `Thread.links`, one card per kind: `#12 title` as a link to GitHub, under it open / draft / merged / closed, for an open PR its checks and mergeability, and how old the reading is ("could not refresh" when the last refresh failed). Each card is absent when the thread has none of its kind. An open PR's row has a **Files changed** button that opens that PR's own diff (head against base: `projects/.design/github-tools.md`, "A PR's diff"), with **Merge…** for the PR of the thread's own branch. A branch with commits and no open PR has a row in the Pull requests card instead ("No PR yet · ahead of main · N commits · M files", **Merge…**). The Changes card is gone, and so is the Review button in the thread header and on the conversation's thread line; the diff belongs to a PR, so it is reached from the PR. The Status tab of the coordinator has the same rows for every thread of the project under one card (`ProjectLinksCard`), newest first, each with its thread's title. The records and their refresh rules are in `projects/.design/github-tools.md`.
+- **Issues & PRs strip** (`ComposerStrip`, right above the message box): the
+  same links as one line each (kind, `#12 title`, where it stands, Files
+  changed / refresh / details), open PRs first, then open issues, then what
+  finished. Every link is listed and the strip does not fold: it is there only
+  when the thread has a link, so it is the short list worth seeing while
+  typing. It no longer carries the folder and branch (the Environment card
+  has them) nor the "answers itself at …" line (the question card says it).
+- **Auto-answer** (`AutoAnswerSelect`) is a picker in the message box's row
+  of pickers, after the permission mode: both say how far the thread goes
+  without the user, and that row is where the thread's behaviour is changed
+  (the rail only reads it). Its label reads on its own ("Auto-answer in
+  5 min"); the menu explains each choice. It sits outside the "applies next
+  turn" hint of the model pickers: a waiting question is re-timed at once.
+  Hidden once the thread is resolved. The setting itself:
+  `projects/.design/projects.md` ("自动回答问题").
 - With the rail on, the header's "N running" chip, the menu's Background tasks
   entry and the commits/uncommitted facts of the meta line drop out so nothing
   is shown twice.

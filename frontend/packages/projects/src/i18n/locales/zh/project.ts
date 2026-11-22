@@ -144,15 +144,15 @@ export const project: Dict<typeof projectEn> = {
     },
     attachments: { removed: '{{name}}（已移除）', fromThread: '来自 {{name}}' },
     strip: {
-        pr: 'PR', issue: 'Issue', moreLinks: '另有 {{count}} 项，见 Issue 与 PR',
-        title: '本线程', sessionTitle: '本会话', autoAt: '{{time}} 自动按推荐回答', expand: '展开详情', collapse: '收起详情',
-        folder: '文件夹', copyCd: '复制 cd 命令', branch: '分支', copyBranch: '复制分支名',
-        autoAnswer: {
-            title: '自动回答', change: '更改', menuTitle: '问题带有推荐答案时',
-            off: '关闭', offHelp: '每个问题都等你回答。',
-            delay: '5 分钟后', delayHelp: '5 分钟内没回答，线程就按推荐答案继续工作。',
-            now: '立即', nowHelp: '线程立即按推荐答案继续。之后仍可以发消息纠正。',
-        },
+        pr: 'PR', issue: 'Issue',
+        title: 'Issue 与 PR',
+    },
+    autoAnswer: {
+        title: '自动回答', menuTitle: '问题带有推荐答案时',
+        offLabel: '不自动回答', delayLabel: '5 分钟后自动回答', nowLabel: '立即自动回答',
+        off: '关闭', offHelp: '每个问题都等你回答。',
+        delay: '5 分钟后', delayHelp: '5 分钟内没回答，线程就按推荐答案继续工作。',
+        now: '立即', nowHelp: '线程立即按推荐答案继续。之后仍可以发消息纠正。',
     },
     tree: { loading: '加载中…', emptyFolder: '空文件夹', retry: '重试', failed: '无法加载此文件夹。' },
     library: {
