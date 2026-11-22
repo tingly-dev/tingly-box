@@ -90,7 +90,7 @@ func (l *Links) gate(ctx context.Context, t *db.Thread, g gateCall, a Approval) 
 			off = append(off, g)
 		}
 	}
-	if len(off) == 0 {
+	if len(off) == 0 || l.grantsCover(t, off) {
 		return nil
 	}
 	a.Key = "github\x00" + strings.Join(groups, "+")
@@ -100,4 +100,46 @@ func (l *Links) gate(ctx context.Context, t *db.Thread, g gateCall, a Approval) 
 		a.Reason += "; the project does not auto-approve " + strings.Join(off, ", ")
 	}
 	return l.authorize(ctx, t, a)
+}
+
+// grantsCover is whether the user granted thread t every one of groups on a
+// request_permission card, still live; a grant for one call is used up here.
+// A grant for the rest of the thread is preferred, so a one-call grant is kept
+// for when it is the only one.
+func (l *Links) grantsCover(t *db.Thread, groups []string) bool {
+	covered := false
+	now := l.now()
+	_, err := l.store.UpdateThreadGrants(t.ID, func(grants []db.ThreadGrant) []db.ThreadGrant {
+		use := map[int]bool{}
+		for _, g := range groups {
+			pick := -1
+			for i, gr := range grants {
+				if gr.Group != g || !gr.Live(now) {
+					continue
+				}
+				if gr.Scope == db.GrantThread {
+					pick = i
+					break
+				}
+				if pick < 0 {
+					pick = i
+				}
+			}
+			if pick < 0 {
+				return grants
+			}
+			if grants[pick].Scope == db.GrantOnce {
+				use[pick] = true
+			}
+		}
+		covered = true
+		var kept []db.ThreadGrant
+		for i, gr := range grants {
+			if !use[i] {
+				kept = append(kept, gr)
+			}
+		}
+		return kept
+	})
+	return err == nil && covered
 }

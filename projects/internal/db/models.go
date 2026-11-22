@@ -204,6 +204,9 @@ type Thread struct {
 	// are a JSON column of this row that SaveThread leaves alone: only
 	// UpdateThreadLinks and what is built on it write it.
 	Links []ThreadLink `gorm:"serializer:json;type:text" json:"links,omitempty"`
+	// Grants are what the user allowed the thread when it asked with
+	// request_permission (see UpdateThreadGrants, which alone writes them).
+	Grants []ThreadGrant `gorm:"serializer:json;type:text" json:"grants,omitempty"`
 	// WaitReason says why a waiting thread needs the user.
 	WaitReason string `gorm:"type:text" json:"wait_reason,omitempty"`
 	// Queued is true while a working thread's turn waits for a free slot under

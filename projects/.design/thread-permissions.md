@@ -1,6 +1,6 @@
 # 线程权限：项目级 GitHub 开关与 `request_permission`
 
-> 状态：**§2 后端已实现**（2026-11-22，P1，分组与默认值待用户确认）；§2.6 界面已实现；§3 `request_permission` 为提案。
+> 状态：**§2 已实现**（#2740 后端，用户确认了分组与默认值；§2.6 界面 #2742）；**§3 `request_permission` 已实现**（#2741，见 §3.7 与提案的差异）。
 > 建在 #2734（工具自己弹审批卡：`approval.go`、`Links.authorize`）、#2736（`close`）、#2737（`merge` 的 `head` 与 merge commit）之上。
 > 相关：[github-tools.md](github-tools.md)（工具与边界）、[mcp-tools.md](mcp-tools.md)（工具粒度）、[mcp-tools-coverage.md](mcp-tools-coverage.md)（场景卡点）、项目记忆 `ask-dont-refuse-beyond-boundary`、`mcp-tool-granularity`。
 
@@ -129,6 +129,21 @@ gate(thread, groups, approval):
 1. auto 模式下，线程设置文件里的 `Bash(...)` allow 规则是否让分类器不再拦截该命令（MCP 工具已证实 allow 生效）。
 2. `ApplySettings` 能否在一轮进行中下发（若能，`rule` 授权当轮生效；否则下一轮生效，工具返回里如实说“从下一轮起生效”）。
 3. `bypassPermissions` 下 GitHub 闸门的卡照常出现（闸门在服务端，预期与模式无关，补一条测试）。
+
+### 3.7 实现说明（与上文的差异）
+
+- 授权存在 `threads.grants`（`db.ThreadGrant`：`id`、`action`、`group|rule`、`scope`、`granted_at`、`expires_at`），只由 `Store.UpdateThreadGrants` 写；`SaveThread` 不写它。线程关闭时清空。
+- 闸门（`Links.gate`）在开关没开时认授权：每个没开的组都要有一条有效授权；优先用线程范围的，一次性的在此被删掉。§2.3 的动作不看授权。
+- 卡片是普通审批卡（`threadPrompter.wait`），不设“对本线程允许”的 Key；用户在卡上点“对本线程允许”时，**只把这一条请求**升级为线程范围（不会让以后的请求免卡）。
+- `rule` 授权：写进线程设置文件的 `permissions.allow`（`grantRules`，过期的不写），然后调用新的 `engine.RefreshSettings` 立即把权限规则下发给常驻进程（agentboot 的 `ApplySettings` 注释写明“从下一次工具调用起生效，不重启”）；没有常驻进程或下发失败时，下一轮开始时照常下发，工具返回里如实说明。**未用真实 Claude Code 探针**：一轮进行中下发是否真的在当轮生效、auto 模式分类器是否让位于 allow 规则，仍是 §3.6 的探针 1、2。
+- 文件夹会话拒绝 `rule`（它的设置来自 profile，不经 `writeSettings`）。
+- 线程跑在 profile 下时（`workerSettings` 每轮由 profile 的设置加项目权限拼出），`rule` 授权不写项目设置文件、不即时下发，从下一轮生效（拼设置时 `grantProjectAccess` → `grantRules` 带上它）。
+- `rule` 还拒绝：以 `gh`、`git push` 开头的 Bash 规则（这些由 GitHub 工具按项目设置管）、以 shell 或包装命令（`bash`、`sh`、`env`、`xargs`、`sudo` 等）开头的（等于整个 Bash），以及前缀后只剩通配的（`WebFetch(domain:*)`）。
+- 过期在下一轮生效：常驻进程在当前这一轮里还拿着规则；工具返回里写明。
+- 用户回答时线程已被关闭的，不记授权（关闭清空了其他授权，这条不能留下）。
+- `engine.RefreshSettings` 有单元测试（只发变化的部分、失败下次重发）；它与一轮开始时的 `applyLive` 不互斥，两者同时发时可能有一次是多余的下发，不会丢规则（下一轮按文件重算）。
+- “同一请求被拒后不重复弹卡”只写在工具描述里，没有在服务端强制。
+- 记录：拒绝 / 同意各一条 system 事件（“The user denied: …” / “The user granted: … (scope; request xxxx)”），payload 是 `{"user_answer": {request_id, action, group, rule, scope, allowed, answer, answered_via}}`。
 
 ## 4 实现与拆分
 

@@ -804,6 +804,7 @@ func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Th
 	grantLibrary(doc, m.layout.LibraryDir(p.ID))
 	grantAutoGit(doc, p, t)
 	grantBuiltinTools(doc, p)
+	grantRules(doc, t, time.Now())
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
@@ -1598,6 +1599,10 @@ func (m *Threads) close(threadID string, mark func(t *db.Thread, now time.Time))
 	if err == nil {
 		m.releaseChats(t)
 		m.cleanTmp(t)
+		// What the user granted was for this thread while it is open.
+		if _, gerr := m.store.UpdateThreadGrants(threadID, func([]db.ThreadGrant) []db.ThreadGrant { return nil }); gerr != nil {
+			logrus.WithError(gerr).Warn("projects: cannot drop a closed thread's grants")
+		}
 		// After the status is saved, not before: the stopped turn's own
 		// bookkeeping races the save (it writes no "Stopped." once the
 		// thread is resolved).
