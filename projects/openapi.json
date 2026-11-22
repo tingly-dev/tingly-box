@@ -4443,6 +4443,13 @@
             "type": "boolean",
             "description": "Field disable_worktree"
           },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -4535,6 +4542,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "github_auto",
           "max_running_threads",
           "paused",
           "starred",
@@ -4674,6 +4682,13 @@
             "type": "boolean",
             "description": "Field disable_worktree"
           },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -4769,6 +4784,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "github_auto",
           "max_running_threads",
           "paused",
           "starred",
@@ -5866,6 +5882,13 @@
           "disable_worktree": {
             "type": "boolean",
             "description": "Field disable_worktree"
+          },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
           },
           "goal": {
             "type": "string",

@@ -281,7 +281,7 @@ Not done: `gh pr create` also reads the repository's PR template when it is not 
 - **The composer strip** (`ComposerStrip`) lists the same rows, PRs first, and gives an open PR the same Files changed button, so a narrow layout without the rail reaches the diff too.
 - **Coordinator's Status tab**: a card with all records of the project's threads, newest first, each with the thread's title, so "which PRs are open and how are they doing" is one place.
 - **Narrow layouts** that have no rail keep the header chips; a link count chip is not added in batch 1.
-- Project settings dialog: the GitHub settings, five switches (see [thread-permissions.md](thread-permissions.md)). `PATCH /projects/{id}` takes `github_auto` (a list of group names; an unknown one is a 400) and still `thread_github_access`.
+- Project settings dialog: the GitHub settings, five switches, one row each with a name and a one-line description, saved with the dialog's Save (see [thread-permissions.md](thread-permissions.md) §2.6). `PATCH /projects/{id}` takes `github_auto` (a list of group names; an unknown one is a 400) and still `thread_github_access`.
 - The coordinator sees the same records as text: a short `prs=#12(open checks=failing merge=conflicts)` on each thread line (its prompt table and `list_threads`) and the full list, with the age of each reading, in `get_thread`. A field not read yet shows as `unread`.
 
 ## Tests

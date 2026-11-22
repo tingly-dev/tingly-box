@@ -2016,6 +2016,8 @@ export interface components {
             created_at: string;
             /** @description Field disable_worktree */
             disable_worktree?: boolean;
+            /** @description Field github_auto */
+            github_auto: string[];
             /** @description Field goal */
             goal: string;
             /** @description Field id */
@@ -2117,6 +2119,8 @@ export interface components {
             created_at: string;
             /** @description Field disable_worktree */
             disable_worktree?: boolean;
+            /** @description Field github_auto */
+            github_auto: string[];
             /** @description Field goal */
             goal: string;
             /** @description Field id */
@@ -2718,6 +2722,8 @@ export interface components {
             directories?: components["schemas"]["DirectorySpec"][];
             /** @description Field disable_worktree */
             disable_worktree?: boolean;
+            /** @description Field github_auto */
+            github_auto?: string[];
             /** @description Field goal */
             goal?: string;
             /** @description Field instructions */

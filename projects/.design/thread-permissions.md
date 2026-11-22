@@ -1,6 +1,6 @@
 # 线程权限：项目级 GitHub 开关与 `request_permission`
 
-> 状态：**§2 后端已实现**（2026-11-22，P1，分组与默认值待用户确认）；§2.6 界面与 §3 `request_permission` 为提案。
+> 状态：**§2 后端已实现**（2026-11-22，P1，分组与默认值待用户确认）；§2.6 界面已实现；§3 `request_permission` 为提案。
 > 建在 #2734（工具自己弹审批卡：`approval.go`、`Links.authorize`）、#2736（`close`）、#2737（`merge` 的 `head` 与 merge commit）之上。
 > 相关：[github-tools.md](github-tools.md)（工具与边界）、[mcp-tools.md](mcp-tools.md)（工具粒度）、[mcp-tools-coverage.md](mcp-tools-coverage.md)（场景卡点）、项目记忆 `ask-dont-refuse-beyond-boundary`、`mcp-tool-granularity`。
 
@@ -77,6 +77,8 @@ gate(thread, groups, approval):
 ### 2.6 UI
 
 项目设置对话框把“Issues and PRs: allowed / ask each time”下拉换成一个小节“GitHub：自动放行”，五个开关，每个一行：名称、一句说明、开关；小节底部一行灰字：“关闭时每次弹卡询问；推送到默认/保护分支、强推别人的分支总是询问。”en / zh / ru 三语。截图用 mock 模式、隔离 HOME。
+
+**已实现**（`ProjectSettingsDialog.tsx` 的 General 页）：开关按 `GITHUB_GROUPS`（与 `project.GitHubGroups` 同序）排列，行内是名称、一句说明、MUI `Switch`；状态来自 `project.github_auto`（缺失或空 = 全关），与其他字段一样由页内“保存”统一提交，只发 `github_auto`（不再发 `thread_github_access`），改动前后按分组顺序比较来判断是否 dirty。手机壳（`?ui=mobile`）里同一对话框以底部抽屉呈现，说明文字自动折行，可用。mock 项目带 `github_auto`（`p-latency` 为 `["publish"]`）。API 类型由 `projects/openapi.json` 重新生成。
 
 ## 3 `request_permission`：线程明确地索要权限
 
