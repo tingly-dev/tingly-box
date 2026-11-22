@@ -174,15 +174,19 @@ interface DecisionPayload {
     chosen?: number;
     /** What the card is about, as the system resolved it from the coordinator's ask. */
     thread_id?: string;
+    /** The thread's number in its project, as chats name it ("#12"). */
+    thread_seq?: number;
     thread_title?: string;
     number?: number;
     link_kind?: 'pr' | 'issue';
 }
 
-/** The thread and PR or issue a card is about, with the thread a link to open it. */
+/** The thread ("#12 Fix login", numbered as chats name it) and PR or issue a card is about, with the thread a link to open it. */
 function DecisionSource({ d, threads, onOpen }: { d: DecisionPayload; threads: Map<string, Thread>; onOpen: (id: string) => void }) {
     const { t } = useTranslation('projects');
-    const title = d.thread_id ? threads.get(d.thread_id)?.title ?? d.thread_title : undefined;
+    const th = d.thread_id ? threads.get(d.thread_id) : undefined;
+    const title = d.thread_id ? th?.title ?? d.thread_title : undefined;
+    const seq = th?.seq || d.thread_seq;
     if (!title && !d.number) return null;
     const item = d.number
         ? t(d.link_kind === 'pr' ? 'conversation.decisionPR' : d.link_kind === 'issue' ? 'conversation.decisionIssue' : 'conversation.decisionNumber', { number: d.number })
@@ -193,7 +197,7 @@ function DecisionSource({ d, threads, onOpen }: { d: DecisionPayload; threads: M
             {title && d.thread_id && (
                 <Box component="button" type="button" onClick={() => onOpen(d.thread_id!)} title={t('conversation.openThread')}
                     sx={{ minWidth: 0, p: 0, border: 0, bgcolor: 'transparent', font: 'inherit', fontWeight: 600, color: 'text.primary', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
-                    {title}
+                    {seq ? `#${seq} ${title}` : title}
                 </Box>
             )}
             {title && item && <span>·</span>}

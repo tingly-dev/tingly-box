@@ -155,11 +155,11 @@ describe('conversation presentation', () => {
     it('says which thread and PR a decision card is about, and opens the thread', () => {
         const options = [{ label: 'Merge base and push' }, { label: "I'll handle it" }];
         const card = (extra: object) => event('decision', 'Resolve?', { id: 'dec', payload: JSON.stringify({ question: 'Resolve?', options, recommended: 0, ...extra }) });
-        const p = { ...props([card({ thread_id: 't1', thread_title: 'Old title', number: 2728, link_kind: 'pr' })]), threads: new Map([['t1', { id: 't1', title: 'Fix login' } as Thread]]) };
+        const p = { ...props([card({ thread_id: 't1', thread_seq: 12, thread_title: 'Old title', number: 2728, link_kind: 'pr' })]), threads: new Map([['t1', { id: 't1', seq: 12, title: 'Fix login' } as Thread]]) };
         const view = show(p);
         expect(screen.getByText('conversation.decisionAbout')).toBeInTheDocument();
         expect(screen.getByText('conversation.decisionPR')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Fix login' }));
+        fireEvent.click(screen.getByRole('button', { name: '#12 Fix login' }));
         expect(p.onOpenThread).toHaveBeenCalledWith('t1');
         view.unmount();
 

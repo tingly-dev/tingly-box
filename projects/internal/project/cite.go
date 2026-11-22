@@ -50,7 +50,7 @@ func (c *Coordinator) quoteUser(p *db.Project, ids []string) (string, error) {
 			// The pick alone says little: name the question it answers, as
 			// the system read it off the card.
 			note := fmt.Sprintf("the user's pick on the decision card %q", oneLine(a.Question))
-			if s := about(a.ThreadTitle, a.Number, a.LinkKind); s != "" {
+			if s := about(a.ThreadSeq, a.ThreadTitle, a.Number, a.LinkKind); s != "" {
 				note += ", about " + s
 			}
 			fmt.Fprintf(&b, "\n(%s)", note)

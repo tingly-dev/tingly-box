@@ -2,6 +2,7 @@ package project
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -107,9 +108,10 @@ func TestADecisionAboutAPRFindsItsThread(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(card.Payload), &d))
 	assert.Equal(t, b.ID, d.ThreadID)
 	assert.Equal(t, "Add export", d.ThreadTitle)
+	assert.Equal(t, b.Seq, d.ThreadSeq)
+	assert.Positive(t, b.Seq)
 	assert.Equal(t, db.LinkPR, d.LinkKind)
-	assert.Contains(t, card.Content, "Add export", "a chat reading the card sees where it is from")
-	assert.Contains(t, card.Content, "PR #2682")
+	assert.Contains(t, card.Content, fmt.Sprintf("About #%d Add export · PR #2682", b.Seq), "a chat names the thread by its number, as everywhere in chats")
 }
 
 // A card without a source still works, and its answer still names the card.
@@ -159,7 +161,7 @@ func TestACitedAnswerTellsTheThreadItsQuestion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, quote, "> I'll handle it")
 	assert.Contains(t, quote, `the user's pick on the decision card "Resolve the conflicts of PR #2728?"`)
-	assert.Contains(t, quote, "PR #2728")
+	assert.Contains(t, quote, fmt.Sprintf("about #%d Fix login · PR #2728", a.Seq))
 }
 
 // In a chat, each card says where it is from, a reply that fits both is
@@ -174,16 +176,16 @@ func TestTwoCardsInAChatAreToldApartBySource(t *testing.T) {
 	a := conflictThread(t, c, f.project, "Fix login", 2728)
 	b := conflictThread(t, c, f.project, "Add export", 2682)
 	first := askAbout(t, c, f.project, `{"question":"Resolve the conflicts?",`+conflictOptions+`,"thread_id":"`+a.ID[:8]+`"}`)
-	assert.Contains(t, sink.next(t).text, "Resolve the conflicts?\nAbout thread “Fix login” · PR #2728")
+	assert.Contains(t, sink.next(t).text, "Resolve the conflicts?\nAbout "+threadTag(a.Seq, "Fix login")+" · PR #2728")
 	second := askAbout(t, c, f.project, `{"question":"Resolve the conflicts?",`+conflictOptions+`,"thread_id":"`+b.ID[:8]+`"}`)
-	assert.Contains(t, sink.next(t).text, "About thread “Add export” · PR #2682")
+	assert.Contains(t, sink.next(t).text, "About "+threadTag(b.Seq, "Add export")+" · PR #2682")
 
 	handled, err := svc.PostFromChannel("dingtalk", "dt", "2", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	asked := sink.next(t).text
-	assert.Contains(t, asked, decisionCode(first.ID)+" · Resolve the conflicts? (thread “Fix login” · PR #2728)")
-	assert.Contains(t, asked, decisionCode(second.ID)+" · Resolve the conflicts? (thread “Add export” · PR #2682)")
+	assert.Contains(t, asked, decisionCode(first.ID)+" · Resolve the conflicts? ("+threadTag(a.Seq, "Fix login")+" · PR #2728)")
+	assert.Contains(t, asked, decisionCode(second.ID)+" · Resolve the conflicts? ("+threadTag(b.Seq, "Add export")+" · PR #2682)")
 
 	handled, err = svc.PostFromChannel("dingtalk", "dt", decisionCode(second.ID)+" 3", nil)
 	require.NoError(t, err)

@@ -28,6 +28,7 @@ type Decision struct {
 	// writes ThreadTitle and LinkKind itself.
 	ThreadID    string `json:"thread_id,omitempty"`
 	Number      int    `json:"number,omitempty"`
+	ThreadSeq   int    `json:"thread_seq,omitempty"`
 	ThreadTitle string `json:"thread_title,omitempty"`
 	// LinkKind is db.LinkPR or db.LinkIssue when a thread's links know the
 	// number, empty when not.
@@ -43,6 +44,7 @@ type decisionAnswer struct {
 	Card        string `json:"card"`
 	Question    string `json:"question"`
 	ThreadID    string `json:"thread_id,omitempty"`
+	ThreadSeq   int    `json:"thread_seq,omitempty"`
 	ThreadTitle string `json:"thread_title,omitempty"`
 	Number      int    `json:"number,omitempty"`
 	LinkKind    string `json:"link_kind,omitempty"`
@@ -81,11 +83,12 @@ func (a *decisionAnswer) attrs() []string {
 	return out
 }
 
-// about says in words what a card is about: its thread and PR or issue.
-func about(threadTitle string, number int, kind string) string {
+// about says in words what a card is about: its thread, by the project's
+// number for it as chats name threads ("#12 Fix login"), and PR or issue.
+func about(threadSeq int, threadTitle string, number int, kind string) string {
 	var parts []string
-	if threadTitle != "" {
-		parts = append(parts, "thread “"+threadTitle+"”")
+	if threadSeq > 0 || threadTitle != "" {
+		parts = append(parts, threadTag(threadSeq, threadTitle))
 	}
 	if number > 0 {
 		switch kind {
@@ -100,7 +103,7 @@ func about(threadTitle string, number int, kind string) string {
 	return strings.Join(parts, " · ")
 }
 
-func (d Decision) about() string { return about(d.ThreadTitle, d.Number, d.LinkKind) }
+func (d Decision) about() string { return about(d.ThreadSeq, d.ThreadTitle, d.Number, d.LinkKind) }
 
 // DecisionOption is one choice of a decision.
 type DecisionOption struct {
@@ -139,7 +142,7 @@ func (d *Decision) validate() error {
 // one open PR, if it has exactly one; a number named with no thread is about
 // the one thread that has it. Nothing is guessed beyond that.
 func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
-	d.ThreadTitle, d.LinkKind = "", ""
+	d.ThreadSeq, d.ThreadTitle, d.LinkKind = 0, "", ""
 	d.ThreadID = strings.TrimSpace(d.ThreadID)
 	if d.ThreadID == "" && d.Number == 0 {
 		return nil
@@ -174,7 +177,7 @@ func (c *Coordinator) resolveSource(p *db.Project, d *Decision) error {
 			return nil
 		}
 	}
-	d.ThreadID, d.ThreadTitle = th.ID, th.Title
+	d.ThreadID, d.ThreadSeq, d.ThreadTitle = th.ID, th.Seq, th.Title
 	if d.Number == 0 {
 		var open []db.ThreadLink
 		for _, l := range th.Links {
@@ -241,7 +244,7 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 	if index < 0 || index >= len(d.Options) {
 		return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
 	}
-	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind}
+	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadSeq: d.ThreadSeq, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind}
 	if _, err := c.post(main.ProjectID, d.Options[index].Label, jsonString(map[string]any{"answer": answer}), src); err != nil {
 		return nil, err
 	}
