@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread, ThreadLink } from '../../client';
-import { autoAnswerOf, ComposerStrip } from './ComposerStrip';
+import { ComposerStrip } from './ComposerStrip';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -16,29 +16,8 @@ const thread = (o: Partial<Thread>): Thread => ({
 } as Thread);
 
 describe('ComposerStrip', () => {
-    it('defaults to waiting ten minutes in a project thread and to off in a folder session', () => {
-        expect(autoAnswerOf(thread({}))).toBe('delay');
-        expect(autoAnswerOf(thread({}), true)).toBe('off');
-        expect(autoAnswerOf(thread({ auto_answer: 'now' }), true)).toBe('now');
-    });
-
-    it('leaves where the thread runs to the rail: no folder or branch line', () => {
-        render(<ComposerStrip thread={thread({ branch: 'tb/fix-login', base_branch: 'main' })} onAutoAnswer={vi.fn()} />);
-        expect(screen.queryByText('tb/fix-login')).toBeNull();
-        expect(screen.queryByText('/work/app')).toBeNull();
-        expect(screen.queryByText('strip.title')).toBeNull();
-    });
-
-    it('changes the auto-answer setting from its menu', () => {
-        const onAutoAnswer = vi.fn();
-        render(<ComposerStrip thread={thread({})} onAutoAnswer={onAutoAnswer} />);
-        fireEvent.click(screen.getByRole('button', { name: 'strip.autoAnswer.change' }));
-        fireEvent.click(screen.getByText('strip.autoAnswer.now'));
-        expect(onAutoAnswer).toHaveBeenCalledWith('now');
-    });
-
-    it('drops auto-answer once resolved, and with it the whole strip when there is nothing else', () => {
-        render(<ComposerStrip thread={thread({ head_branch: 'main', status: 'resolved' })} folder onAutoAnswer={vi.fn()} />);
+    it('leaves where the thread runs to the rail and is not there without a link', () => {
+        render(<ComposerStrip thread={thread({ branch: 'tb/fix-login', base_branch: 'main' })} />);
         expect(screen.queryByTestId('composer-strip')).toBeNull();
     });
 
@@ -51,7 +30,7 @@ describe('ComposerStrip', () => {
 
         it('lists each link under the title with its title, state and the refresh and details buttons', () => {
             const th = thread({ branch: 'tb/fix', links: [link({ ci: 'passing', merge_state: 'ready' })] });
-            render(<ComposerStrip thread={th} onAutoAnswer={vi.fn()} />);
+            render(<ComposerStrip thread={th} />);
             const strip = screen.getByTestId('composer-strip');
             expect(within(strip).getByText('strip.title')).toBeInTheDocument();
             expect(within(strip).getByText('strip.pr')).toBeInTheDocument();
@@ -68,7 +47,7 @@ describe('ComposerStrip', () => {
                 link({ number: 13, title: 'Done', state: 'merged', head: 'x', base: 'main' }),
                 link({ kind: 'issue', number: 3, title: 'Flaky', url: 'https://github.com/acme/w/issues/3' }),
             ] });
-            render(<ComposerStrip thread={th} onAutoAnswer={vi.fn()} />);
+            render(<ComposerStrip thread={th} />);
             expect(screen.getAllByRole('button', { name: /links\.filesOf/ })).toHaveLength(1);
         });
 
@@ -87,12 +66,6 @@ describe('ComposerStrip', () => {
         it('is there for a thread that has only links', () => {
             render(<ComposerStrip thread={thread({ cwd: '', links: [link({})] })} />);
             expect(screen.getByTestId('composer-strip')).toBeInTheDocument();
-        });
-
-        it('has no title or link lines for a thread with none', () => {
-            render(<ComposerStrip thread={thread({ branch: 'tb/fix' })} onAutoAnswer={vi.fn()} />);
-            expect(screen.queryByText('strip.title')).toBeNull();
-            expect(screen.queryByRole('button', { name: 'links.refresh' })).not.toBeInTheDocument();
         });
     });
 });

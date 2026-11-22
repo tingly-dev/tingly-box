@@ -17,6 +17,7 @@ import { ArrowBack, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Termin
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens } from '../../utils/format';
 import { ComposerStrip } from './ComposerStrip';
+import { AutoAnswerSelect } from './AutoAnswerSelect';
 import { ThreadInfoRail } from './ThreadInfoRail';
 import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
 import { LoadEarlier } from './LoadEarlier';
@@ -589,20 +590,29 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     </Alert>
                 )}
                 {(view === 'chat' || focused) && <MessageDetailControl detail={detail} onChange={setDetail} surface="thread" />}
-                <ComposerStrip thread={thread} folder={session} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                <ComposerStrip thread={thread} />
                 <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
                 <ThreadComposer
                     ref={composer}
                     draftKey={threadId}
-                    leftSlot={(modelControl || effortControl || composerContext) && (
-                        <ControlTooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
-                                {modelControl}
-                                {effortControl}
-                                {composerContext}
-                                {running && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
-                            </Box>
-                        </ControlTooltip>
+                    leftSlot={(modelControl || effortControl || composerContext || thread.status !== 'resolved') && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
+                            {(modelControl || effortControl || composerContext) && (
+                                <ControlTooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
+                                        {modelControl}
+                                        {effortControl}
+                                        {composerContext}
+                                    </Box>
+                                </ControlTooltip>
+                            )}
+                            {/* Beside the permission mode, outside the next-turn hint: a question already waiting is re-timed at once. */}
+                            {thread.status !== 'resolved' && (
+                                <AutoAnswerSelect thread={thread} folder={session} disabled={acting}
+                                    onChange={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                            )}
+                            {running && (modelControl || effortControl || composerContext) && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
+                        </Box>
                     )}
                     streaming={running}
                     sendModes
