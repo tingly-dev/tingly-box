@@ -87,6 +87,26 @@ type GitHub interface {
 	PRFiles(ctx context.Context, r GitHubRepo, number int) ([]GitHubFile, error)
 }
 
+// GitHubAuth gives the credential the tools' git pushes with (see
+// githubRemote). It is the one place a token comes from: today gh's sign-in;
+// a connected GitHub App or a PAT replaces only its body
+// (.design/github-auth.md).
+type GitHubAuth interface {
+	// Credential is a token that can push to repo now, or an error that says
+	// what the user has to sign in to. It is handed to git only: never to a
+	// model, a log or a file.
+	Credential(ctx context.Context, repo GitHubRepo) (GitHubCredential, error)
+}
+
+// GitHubCredential is a token for git over https.
+type GitHubCredential struct {
+	Token string
+	// Username goes with the token over https: x-access-token when empty.
+	Username string
+	// Source says where the token came from ("gh"), never the token itself.
+	Source string
+}
+
 // ghCLI is GitHub over the host's own `gh`, signed in as the user. Every call
 // is a REST request through `gh api` with a JSON body: no GraphQL (`gh pr edit`
 // fails on this repository's retired Projects classic), and no shell quoting.
@@ -230,6 +250,26 @@ func mergeState(p ghPull) string {
 		return "conflicts"
 	}
 	return "unknown"
+}
+
+// Credential is the token gh is signed in with for github.com.
+func (g ghCLI) Credential(ctx context.Context, _ GitHubRepo) (GitHubCredential, error) {
+	ctx, cancel := context.WithTimeout(ctx, ghTimeout)
+	defer cancel()
+	bin := g.bin
+	if bin == "" {
+		bin = "gh"
+	}
+	cmd := exec.CommandContext(ctx, bin, "auth", "token", "--hostname", "github.com")
+	cmd.Env = append(os.Environ(), "GH_PROMPT_DISABLED=1", "NO_COLOR=1", "GH_NO_UPDATE_NOTIFIER=1")
+	out, err := cmd.Output()
+	token := strings.TrimSpace(string(out))
+	if err != nil || token == "" || strings.ContainsAny(token, " \t\n") {
+		// What gh said is not repeated: it is about the sign-in, and the
+		// answer to fix it is always the same.
+		return GitHubCredential{}, ErrGitHubUnavailable
+	}
+	return GitHubCredential{Token: token, Username: "x-access-token", Source: "gh"}, nil
 }
 
 func (g ghCLI) DefaultBranch(ctx context.Context, r GitHubRepo) (string, error) {

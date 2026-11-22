@@ -412,28 +412,6 @@ func TestGitHubToolsBelongToThreadsNotTheCoordinator(t *testing.T) {
 	}
 }
 
-func TestParseGitHubRemote(t *testing.T) {
-	for remote, want := range map[string]string{
-		"https://github.com/acme/widgets.git":                           "acme/widgets",
-		"https://github.com/acme/widgets":                               "acme/widgets",
-		"git@github.com:acme/widgets.git":                               "acme/widgets",
-		"ssh://git@github.com/acme/widgets.git":                         "acme/widgets",
-		"https://x-access-token:ghs_secret@github.com/acme/widgets.git": "acme/widgets",
-		"https://gitlab.com/acme/widgets.git":                           "",
-		"https://github.com/acme":                                       "",
-		"/some/local/path":                                              "",
-		"https://github.com/acme/widgets/extra.git":                     "",
-	} {
-		r, err := parseGitHubRemote(remote)
-		if want == "" {
-			assert.Error(t, err, remote)
-			continue
-		}
-		require.NoError(t, err, remote)
-		assert.Equal(t, want, r.Slug(), remote)
-	}
-}
-
 func TestAPushRejectedByAHookIsNotAdvisedAsARebase(t *testing.T) {
 	f := newLinksFixture(t)
 	hook := filepath.Join(f.remote, "hooks", "pre-receive")

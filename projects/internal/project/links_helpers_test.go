@@ -34,6 +34,30 @@ type fakeGitHub struct {
 	rate  GitHubRate
 	// prFiles are the files of each PR, as GitHub lists them.
 	prFiles map[int][]GitHubFile
+	// tokenFail is why there is no token to push with.
+	tokenFail error
+	// gitURL is where the tools' git pushes: a local bare repository.
+	gitURL string
+}
+
+// fakeToken is the token the fake signs git in with: GitHub's shape, so
+// redact would also catch it.
+const fakeToken = "ghs_FakeTokenForTheTestsOnly0123456789"
+
+func (g *fakeGitHub) Credential(context.Context, GitHubRepo) (GitHubCredential, error) {
+	if g.tokenFail != nil {
+		return GitHubCredential{}, g.tokenFail
+	}
+	return GitHubCredential{Token: fakeToken, Username: "x-access-token", Source: "fake"}, nil
+}
+
+// GitURL keeps every test's git off the network: a fixture without a bare
+// repository pushes to one that is not there.
+func (g *fakeGitHub) GitURL(GitHubRepo) string {
+	if g.gitURL == "" {
+		return "/nonexistent/fake-github.git"
+	}
+	return g.gitURL
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -249,6 +273,7 @@ func newLinksFixture(t *testing.T) *linksFixture {
 	f.worker.Cwd, f.worker.RepoPath, f.worker.Branch, f.worker.BaseBranch = repo, repo, "tp/work", "main"
 	require.NoError(t, f.store.SaveThread(f.worker))
 	gh := newFakeGitHub()
+	gh.gitURL = remote
 	lf := &linksFixture{toolsFixture: f, gh: gh, remote: remote, repo: repo}
 	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
 	lf.clock = &now
