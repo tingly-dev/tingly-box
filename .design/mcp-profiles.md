@@ -59,6 +59,9 @@ same sidebar. The page where MCPs are connected stays **MCP Tools**.
   set) and flags what is still missing (empty URL, command, env or header value,
   Advisor model) with a chip that opens the connection drawer
   (`?source=<id>`).
+  The connection form starts with a box that reads a pasted command line,
+  registration command, client config or URL into its fields
+  (`mcp-paste-import.md`).
 - **Profile** (`/mcp/profile/:id`, `/mcp/profile/new` creates one), laid out like
   the Claude Code profile page: the header holds the name with rename and delete
   beside it (custom only), a status line, the profile switch, refresh, Verify and
