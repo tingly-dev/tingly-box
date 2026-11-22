@@ -75,6 +75,10 @@ func (g *stubGitHub) UpdatePR(context.Context, project.GitHubRepo, int, *string,
 func (g *stubGitHub) UpdateIssue(context.Context, project.GitHubRepo, int, *string, *string) (project.GitHubItem, error) {
 	return project.GitHubItem{}, nil
 }
+func (g *stubGitHub) Close(_ context.Context, _ project.GitHubRepo, n int) (project.GitHubItem, error) {
+	g.log(fmt.Sprintf("close #%d", n))
+	return project.GitHubItem{Number: n, State: "closed"}, nil
+}
 func (g *stubGitHub) PRFiles(context.Context, project.GitHubRepo, int) ([]project.GitHubFile, error) {
 	return nil, nil
 }

@@ -35,6 +35,8 @@ type GitHubItem struct {
 	Title  string
 	// Body is the description, as the item's author wrote it.
 	Body string
+	// Author is the login of whoever opened it (read only, for an approval card).
+	Author string
 	// State is open, closed or merged.
 	State string
 	// IsPR is set by Issue when the number is a PR.
@@ -80,6 +82,9 @@ type GitHub interface {
 	UpdatePR(ctx context.Context, r GitHubRepo, number int, title, body, base *string) (GitHubItem, error)
 	// UpdateIssue changes only the fields that are not nil.
 	UpdateIssue(ctx context.Context, r GitHubRepo, number int, title, body *string) (GitHubItem, error)
+	// Close sets an issue or PR to closed and nothing else: no merge, no branch
+	// deleted. The answer is the item as GitHub now has it.
+	Close(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
 	// Read is an issue or PR in one request: for a PR its CI and mergeability
 	// too (IsPR says which it is), and the request budget in Rate.
 	Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error)
@@ -364,6 +369,13 @@ func (g ghCLI) UpdatePR(ctx context.Context, r GitHubRepo, number int, title, bo
 	return out.item(), err
 }
 
+// Close goes through the issues endpoint, which serves PRs too.
+func (g ghCLI) Close(ctx context.Context, r GitHubRepo, number int) (GitHubItem, error) {
+	var out ghIssue
+	err := g.api(ctx, r, "PATCH", fmt.Sprintf("%s/issues/%d", r.path(), number), map[string]any{"state": "closed"}, &out)
+	return out.item(), err
+}
+
 // readQuery is the whole of a read: the item, for a PR its head commit's
 // checks, and the request budget, in one request that costs one point. (Three
 // REST requests used to do this for a PR, and two for an item of unknown kind.)
@@ -372,8 +384,8 @@ const readQuery = `query($owner:String!,$name:String!,$number:Int!){
   repository(owner:$owner,name:$name){
     issueOrPullRequest(number:$number){
       __typename
-      ... on Issue{number url title body state}
-      ... on PullRequest{number url title body state isDraft headRefName baseRefName mergeable mergeStateStatus
+      ... on Issue{number url title body state author{login}}
+      ... on PullRequest{number url title body state author{login} isDraft headRefName baseRefName mergeable mergeStateStatus
         commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){totalCount nodes{
           __typename
           ... on CheckRun{name status conclusion detailsUrl}
@@ -403,11 +415,14 @@ type gqlRead struct {
 		} `json:"rateLimit"`
 		Repository struct {
 			Item *struct {
-				Typename         string `json:"__typename"`
-				Number           int    `json:"number"`
-				URL              string `json:"url"`
-				Title            string `json:"title"`
-				Body             string `json:"body"`
+				Typename string `json:"__typename"`
+				Number   int    `json:"number"`
+				URL      string `json:"url"`
+				Title    string `json:"title"`
+				Body     string `json:"body"`
+				Author   *struct {
+					Login string `json:"login"`
+				} `json:"author"`
 				State            string `json:"state"`
 				IsDraft          bool   `json:"isDraft"`
 				HeadRefName      string `json:"headRefName"`
@@ -444,6 +459,9 @@ func (g ghCLI) Read(ctx context.Context, r GitHubRepo, number int) (GitHubItem, 
 	}
 	it := GitHubItem{Number: n.Number, URL: n.URL, Title: n.Title, Body: n.Body, State: strings.ToLower(n.State), IsPR: n.Typename == "PullRequest",
 		Rate: GitHubRate{Remaining: out.Data.RateLimit.Remaining, ResetAt: out.Data.RateLimit.ResetAt}}
+	if n.Author != nil {
+		it.Author = n.Author.Login
+	}
 	if !it.IsPR {
 		return it, nil
 	}

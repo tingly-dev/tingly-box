@@ -250,18 +250,21 @@ func TestProjectsToolsAreApprovedAtThePromptUnlessTheProjectAsks(t *testing.T) {
 	require.NoError(t, f.store.CreateThread(th))
 	allowed := func() map[string]bool {
 		got := map[string]bool{}
-		for _, tool := range []string{"mcp__tingly-projects__create_pr", "mcp__tingly-projects__merge", "mcp__tingly-projects__send_file", "mcp__other__create_pr", "Bash"} {
+		for _, tool := range []string{"mcp__tingly-projects__create_pr", "mcp__tingly-projects__merge", "mcp__tingly-projects__close", "mcp__tingly-projects__send_file", "mcp__other__create_pr", "Bash"} {
 			got[tool] = f.threads.builtinToolAllowed(th.ID, tool)
 		}
 		return got
 	}
-	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": true, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
+	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": true, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__close": true, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
 
 	p, err := f.store.GetProject(f.project.ID)
 	require.NoError(t, err)
 	p.ThreadGitHubAccess = GitHubAsk
 	require.NoError(t, f.store.SaveProject(p))
-	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": false, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
+	assert.Equal(t, map[string]bool{"mcp__tingly-projects__create_pr": false, "mcp__tingly-projects__merge": false, "mcp__tingly-projects__close": true, "mcp__tingly-projects__send_file": true, "mcp__other__create_pr": false, "Bash": false}, allowed())
+	p.ThreadGitHubAccess = GitHubAllow
+	require.NoError(t, f.store.SaveProject(p))
+	assert.True(t, f.threads.builtinToolAllowed(th.ID, "mcp__tingly-projects__close"), "close asks on its own card, not at this prompt")
 }
 
 func TestRedact(t *testing.T) {

@@ -279,7 +279,7 @@ func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, b
 		fmt.Fprintf(&b, "\nPR #%d was closed on GitHub, so it is recorded as closed; this is a new PR for the branch.", n)
 	}
 	if r.rival != nil {
-		fmt.Fprintf(&b, "\nPR #%d (%s → %s) is still open against the same base. If this one replaces it, the user has to close it: no tool here closes a PR.", r.rival.Number, r.rival.Head, r.rival.Base)
+		fmt.Fprintf(&b, "\nPR #%d (%s → %s) is still open against the same base. If this one replaces it, close it with the close tool (the user is asked).", r.rival.Number, r.rival.Head, r.rival.Base)
 	}
 	return b.String(), nil
 }
@@ -822,6 +822,98 @@ func (l *Links) Update(ctx context.Context, t *db.Thread, number int, title, bod
 	l.forgetView(t, link.Number)
 	_, rerr := l.record(t, lc.repo, link.Kind, role, it)
 	return fmt.Sprintf("updated %s #%d %s (%s)%s", link.Kind, it.Number, it.URL, strings.Join(what, ", "), saved(rerr)), nil
+}
+
+// Close closes an issue or PR of the thread's repository, after the user
+// approves this one call on a card that says who opened it: this thread,
+// another thread of Projects, or someone on GitHub. Closing is outward-facing,
+// so the card is the gate whoever opened the item, and it is asked by the tool
+// itself because a permission rule cannot show the item. A merged or already
+// closed one is left as it is. Nothing is merged and no branch is deleted.
+func (l *Links) Close(ctx context.Context, t *db.Thread, number int) (string, error) {
+	lc, err := l.resolve(ctx, t)
+	if err != nil {
+		return "", err
+	}
+	slug := lc.repo.Slug()
+	if number <= 0 {
+		link, err := l.ownItem(t, slug, 0, true)
+		if err != nil {
+			return "", err
+		}
+		number = link.Number
+	}
+	own, err := l.store.FindThreadLink(t.ID, slug, number)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return "", err
+	}
+	role := db.LinkCommented
+	if own != nil && own.Role == db.LinkOpened {
+		role = db.LinkOpened
+	}
+	// Read first: the record may be stale, a merged PR must not be recorded as
+	// closed, and the card shows the title and who opened it.
+	kind, cur, err := l.read(ctx, lc.repo, number)
+	if err != nil {
+		return "", err
+	}
+	if cur.State != db.LinkStateOpen {
+		var rerr error
+		if own != nil {
+			l.forgetView(t, number)
+			_, rerr = l.record(t, lc.repo, kind, own.Role, cur)
+		}
+		return fmt.Sprintf("%s #%d is already %s, nothing to do: %s%s", kind, cur.Number, cur.State, cur.URL, saved(rerr)), nil
+	}
+	opener := l.openerOf(t, role, slug, number, cur)
+	if err := l.authorize(ctx, t, Approval{
+		Tool:    githubToolRule(toolClose),
+		Summary: fmt.Sprintf("Close %s #%d %q, opened by %s", kind, number, clip(cur.Title, 80), opener),
+		Reason:  fmt.Sprintf("closing %s #%d on GitHub is the user's call (opened by %s)", kind, number, opener),
+		Input:   map[string]any{"number": number, "title": cur.Title, "url": cur.URL, "opened_by": opener},
+	}); err != nil {
+		return "", err
+	}
+	it, err := l.gh.Close(ctx, lc.repo, number)
+	if err != nil {
+		return "", err
+	}
+	if it.State == "" || it.State == db.LinkStateOpen {
+		return "", fmt.Errorf("GitHub did not close %s #%d", kind, number)
+	}
+	// The answer is the issues API's: no branches, checks or mergeability.
+	it.IsPR, it.Draft, it.Head, it.Base, it.CI, it.Checks, it.MergeState = cur.IsPR, cur.Draft, cur.Head, cur.Base, cur.CI, cur.Checks, ""
+	l.forgetView(t, number)
+	_, rerr := l.record(t, lc.repo, kind, role, it)
+	return fmt.Sprintf("closed %s #%d (opened by %s; not merged, no branch deleted): %s%s", kind, it.Number, opener, it.URL, saved(rerr)), nil
+}
+
+// openerOf says who opened item number of repo, for the card: this thread,
+// another thread (by title) when one has it recorded as opened, else its
+// GitHub author.
+func (l *Links) openerOf(t *db.Thread, role, repo string, number int, it GitHubItem) string {
+	if role == db.LinkOpened {
+		return "this thread"
+	}
+	if linked, err := l.store.LinkedThreads(); err == nil {
+		for _, o := range linked {
+			if o.ID == t.ID {
+				continue
+			}
+			for _, k := range o.Links {
+				if k.Repo == repo && k.Number == number && k.Role == db.LinkOpened {
+					if ot, err := l.store.GetThread(o.ID); err == nil {
+						return fmt.Sprintf("another thread, %q", clip(ot.Title, 60))
+					}
+					return "another thread"
+				}
+			}
+		}
+	}
+	if it.Author != "" {
+		return "@" + it.Author + " on GitHub, not a thread"
+	}
+	return "someone on GitHub, not a thread"
 }
 
 // editTarget is the item an edit means and the role the thread's record of it

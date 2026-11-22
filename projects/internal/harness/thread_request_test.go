@@ -58,7 +58,7 @@ func TestThreadSessionReachesTheCoordinatorOnlyThroughNotify(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	slices.Sort(tools)
-	assert.Equal(t, []string{"comment", "create_issue", "create_pr", "merge", "notify_coordinator", "send_file", "update", "view"}, tools,
+	assert.Equal(t, []string{"close", "comment", "create_issue", "create_pr", "merge", "notify_coordinator", "send_file", "update", "view"}, tools,
 		"a thread's tools; no start_thread, propose_threads or message_thread")
 }
 
