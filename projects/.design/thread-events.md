@@ -1,6 +1,6 @@
 # 事件如何触发流程：值得流转的信息
 
-> 状态：**第 1 步已实现（E1 合并、E2 关闭，见 §8）；E3 冲突未实现**（2026-11-22）。范围已由用户确定（§7）。与 [thread-lifecycle.md](thread-lifecycle.md) 互为补充：那里定义线程**处于什么状态、谁能改**；本文定义**什么信息会让谁去做决定**。
+> 状态：**第 1 步（E1 合并、E2 关闭）和第 2 步（E3 冲突）已实现，见 §8、§9**（2026-11-22）。范围已由用户确定（§7）。与 [thread-lifecycle.md](thread-lifecycle.md) 互为补充：那里定义线程**处于什么状态、谁能改**；本文定义**什么信息会让谁去做决定**。
 > 前提（用户决定）：系统不自动关闭线程，不替任何人做决定。事件只把事实送到能做决定的人手里，并且不改变线程状态。
 
 ## 1 第一性原理
@@ -87,7 +87,7 @@
 3. 协调者调用 `get_thread` 看清情况（线程在不在跑、PR 的 base、冲突前的工作），然后**必须**调用 `request_decision`，**不得**直接 `message_thread`。卡片的选项：
    - **让线程把 main 合进分支、解决冲突后推送**（推荐）。线程不能强推，所以是 merge 而不是 rebase；推送是普通推送，PR 自动更新。
    - **我自己处理**：协调者什么都不做，冲突解决后（Sweep 读到 `conflicts` 消失）记一条 “Conflicts resolved.”。
-   - **放弃这个 PR**：协调者告诉用户 PR 需要用户在 GitHub 上关闭（线程不能关闭 PR）。
+   - **放弃这个 PR**：协调者带 cite 让线程用 `close` 工具关闭它（除非项目设置自动放行 close，否则工具会弹卡问用户）。
    - 线程正在跑时，卡片的 context 写明“线程还在跑，选第一项会在这一轮结束后执行”。
 4. 用户在网页或 IM 上选择。选择作为用户消息回到协调者（已有流程），协调者用 `message_thread` 带上 `cite` 转给线程，线程把这句话当作用户的授权。
 5. 用户一直不选：卡片留着，不催、不超时。冲突在此期间自己消失的（用户在别处解决了），记一条 “Conflicts resolved.”，**不再唤醒**协调者，也不再发卡片。
@@ -242,6 +242,27 @@ Thread now: status=ready running=no
 - harness 不变量 `github.never-moves-status` 只能检查：事件发出时已 resolved 的线程现在仍是 resolved；发出时未 resolved 的线程，resolved 时间不早于事件。事件之后线程状态本来就会因别的原因变化（一轮结束），所以不比较状态本身；“不改状态”主要由代码路径（事件处理里没有写状态的调用）和单元测试保证。harness 里有一条旅程：线程用 `merge` 工具合并，协调者收到一次 `pr_merged`，线程未被 resolved。Sweep 的路径在 harness 里没有旅程：Links 的时钟是私有的，Sweep 要等 5 分钟，所以由 `links_events_test.go` 用注入时钟覆盖。
 - 前端未改：协调者对话里 `thread_update` 的 kind 显示为 `github`（i18n 无此键，回退为原文）。
 
-### 给 E3 留的缝
+## 9 第 2 步：已实现什么（E3 冲突）
 
-`prTransition(before, after)` 决定什么算事件，`prChange.sentence` 决定怎么说，`prFacts.state` 决定信封里的事实；`kind` 是字符串，加 `pr_conflicts` 只需：在 `prTransition` 里加“`merge_state` 进入 conflicts”（`before` 要换成带 MergeState 的旧记录）、在 `sentence` 加一句、在 `prEvent` 上加 `needs_user`（`renderGitHub` 里写成属性）、30 分钟上限放在 `Links` 里，提示词加 §4.6 的第二半。`onPRChanges` 已按项目合并，不用改。
+代码：同在 `links_events.go`；折叠行在 `Coordinator.foldNeedsUser`，回合结束的判断在 `coordinator_session.go`。
+
+- **检测**（`prTransition`，现在拿整条旧记录）：线程自己开的、仍开着的 PR，`merge_state` 从任何别的值（含 unknown、从未读过）变成 `conflicts` 为**进入** → `pr_conflicts`。**第一次读取就已是 conflicts 也算进入**（选择：PR 一开始就冲突，用户同样需要知道）。保持 conflicts 不算。`conflicts` 变成 GitHub 已确定的别的值（不是空、不是 unknown）为**离开** → `pr_conflicts_gone`；变成 unknown 不算离开，避免 GitHub 重算时来回抖动。离开后再进入算新的进入。从 conflicts 直接变 merged / closed 仍是 E1 / E2。
+- **离开只记录**：线程里记 “Conflicts on PR #34 are resolved.”，不进协调者输入（`prChange.Quiet`）。
+- **30 分钟上限**：`Links.capConflicts`，同一个 PR 上次唤醒协调者后 30 分钟内再次进入，只在线程里记（Quiet），不唤醒。时间记在内存里（`conflictWoke`），重启后清空：重启后同一个 PR 最多多唤醒一次。
+- **线程事件**：一行事实，例如 `PR #34 has merge conflicts with main. Thread: ready, no turn running, 0 unpushed commits, no uncommitted changes.`
+- **回退一行（IM）**：协调者离线、回合失败或被停、或回合结束时既没发卡也没回复，都发一行（`coordinatorSessions.turn` 的 defer）。
+- **协调者输入**：`kind="pr_conflicts" needs_user="true"`（只有这一种带），仍按项目、按一次 Sweep 合并，与 merged / closed 可以在同一条输入里。提示词（`coordinatorSystemPrompt`）要求：用 `request_decision`，选项为“把 base 合进分支并推送（推荐，普通推送不需要强推）/ 我自己处理 / 放弃这个 PR（线程用 `close` 关闭，按项目设置弹卡或自动放行）”；只有用户选了之后才带 `cite` 给线程发消息，不得自行发，不得关闭线程。
+- **IM 兜底**：一行折叠消息 `[#2 标题] PR #34 has merge conflicts with main. Reply with @2 to tell the thread what to do.`（无序号时是 “Open Projects in the web UI to decide.”）。两种情况发：(i) 协调者离线（项目暂停 / 归档）：`onReport` 的离线分支对 `needs_user` 事件发；(ii) 协调者处理了这条输入，但回合结束时既没有发决策卡（回合开始之后主对话里没有新的 `EvDecision`）也没有回复文字（`no_update` 或空）：`coordinatorSessions.turn` 末尾判断。回合出错、被用户停止时不发（走已有的错误 / 恢复路径）。
+- **只记录且不兜底**：线程已 resolved / 归档；30 分钟内再次进入；离开。
+
+### 与设计 / 要求的差别和限制
+
+- 兜底判断“发过卡片”只看回合开始后有没有任何决策卡，不核对卡片是否关于这个 PR。
+- 兜底只发给协调者那一轮的 `needs_user` 事件；同一条输入里的 merged / closed 事件照旧不兜底。
+- 冲突只能在读取（Sweep、手动刷新、`view`）时发现。线程自己调用 `create_pr` / `comment` 等工具时 `record` 会直接覆盖 `merge_state`，那一次读取里的“进入”不会被报告，下一次 Sweep 看到的旧值已是 conflicts。要补上需要把检测放进 `record`（它没有 `Silent` 的上下文，所以这一步没做）。
+- 上限的计数在内存里；一次 Sweep 里被上限吞掉的进入仍会占用同一条线程记录，但不占用新的 30 分钟窗口。
+- harness 里没有冲突旅程：需要 Links 的时钟前进 5 分钟，同第 1 步。覆盖在 `links_conflicts_test.go`（Sweep + 注入时钟、`coordtest` 脚本化的协调者、假的 IM sink）。
+
+### 变异检查
+
+把 30 分钟上限改成永不命中 → `TestConflictsWakeTheCoordinatorOncePerPRInThirtyMinutes` 失败；去掉“进入”的守卫（`!conflicting(&before)`）→ `TestEnteringConflictsIsOneEvent…` 和 `TestPRTransitionIsOnlyOutOfOpen` 失败。均已用 Edit 恢复。

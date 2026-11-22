@@ -295,7 +295,15 @@ func (s *coordinatorSessions) takeStop(sid string) bool {
 	return stopped
 }
 
-func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db.ThreadEvent, inputID string) error {
+func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db.ThreadEvent, inputID string) (err error) {
+	// What is the user's to decide must reach them: a turn that fails, is
+	// stopped or ends without asking or replying leaves the chats a folded line.
+	surfaced := false
+	defer func() {
+		if pending := needsUserOf(event); !surfaced && len(pending) > 0 {
+			s.c.foldNeedsUser(p.ID, pending)
+		}
+	}()
 	main, err := s.c.store.GetThread(p.MainThreadID)
 	if err != nil {
 		return err
@@ -462,6 +470,7 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 	if end.Stopped || end.NotSent {
 		return fmt.Errorf("coordinator session stopped before completion")
 	}
+	replied := false
 	if !toolTurn.quiet.Load() {
 		s.mu.Lock()
 		text := strings.TrimSpace(strings.Join(run.text, "\n\n"))
@@ -477,7 +486,9 @@ func (s *coordinatorSessions) turn(ctx context.Context, p *db.Project, event *db
 		} else if text != "" && text != noUpdate {
 			s.c.final(s.c.addEvent(p.ID, &db.ThreadEvent{Kind: db.EvAssistant, Content: text}))
 		}
+		replied = text != "" && text != noUpdate
 	}
+	surfaced = s.c.answeredNeedsUser(main.ID, event, replied)
 	if compacted {
 		// The compacted transcript may no longer contain the settings we sent.
 		digest = ""

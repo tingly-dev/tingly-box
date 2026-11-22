@@ -2,8 +2,10 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -20,27 +22,43 @@ import (
 // is what the chats hear.
 const ReportGitHub = "github"
 
-// Kinds of a GitHub event, as the envelope's kind attribute says them. A kind
-// for conflicts joins them in its own change: add it to prTransition (what
-// counts), prEvent.sentence (what is said) and the prompt.
+// Kinds of a GitHub event, as the envelope's kind attribute says them.
+// EventPRConflicts is the one that needs the user (needs_user="true");
+// EventPRConflictsGone is only ever recorded in the thread, never sent.
 const (
-	EventPRMerged = "pr_merged"
-	EventPRClosed = "pr_closed"
+	EventPRMerged        = "pr_merged"
+	EventPRClosed        = "pr_closed"
+	EventPRConflicts     = "pr_conflicts"
+	EventPRConflictsGone = "pr_conflicts_gone"
 )
 
+// conflictWakeGap is how soon after waking the coordinator about a PR's
+// conflicts it may be woken about the same PR again; the count is kept in
+// memory, so a restart forgets it.
+const conflictWakeGap = 30 * time.Minute
+
 // prChange is one change of a PR the thread opened: Link is the record as it
-// is now.
+// is now. Quiet is set for a change that is only recorded in the thread.
 type prChange struct {
 	ThreadID string
 	Kind     string
 	Link     db.ThreadLink
+	Quiet    bool
 }
 
-// prTransition is the kind of event a record's move from state before to after
-// is, or "" when it is none. Only a PR the thread opened, and only the move
-// out of open: a finished record read again is no change.
-func prTransition(before string, after *db.ThreadLink) string {
-	if after.Kind != db.LinkPR || after.Role != db.LinkOpened || before != db.LinkStateOpen {
+// conflicting is a merge state of an open PR that cannot be merged as it is.
+func conflicting(k *db.ThreadLink) bool {
+	return k.State == db.LinkStateOpen && k.MergeState == "conflicts"
+}
+
+// prTransition is the kind of event a record's move from before to after is,
+// or "" when it is none. Only an open PR the thread opened counts (a new
+// record starts open, so its first reading counts too), and only a move out
+// of open, into conflicts from any other merge state, or out of them to a
+// state GitHub has settled on: a finished record read again, or a conflict
+// that is still there, is no change.
+func prTransition(before db.ThreadLink, after *db.ThreadLink) string {
+	if after.Kind != db.LinkPR || after.Role != db.LinkOpened || before.State != db.LinkStateOpen {
 		return ""
 	}
 	switch after.State {
@@ -49,17 +67,43 @@ func prTransition(before string, after *db.ThreadLink) string {
 	case db.LinkStateClosed:
 		return EventPRClosed
 	}
+	switch {
+	case conflicting(after) && !conflicting(&before):
+		return EventPRConflicts
+	case conflicting(&before) && after.State == db.LinkStateOpen && after.MergeState != "" && after.MergeState != "unknown" && after.MergeState != "conflicts":
+		return EventPRConflictsGone
+	}
 	return ""
 }
 
-// changeOf is the change a record's move from state before to the state it now
-// has is, or nil.
-func changeOf(threadID, before string, after *db.ThreadLink) *prChange {
+// changeOf is the change a record's move from before to the state it now has
+// is, or nil. A change of conflicts is recorded only (Quiet) when it is the
+// leaving of them.
+func changeOf(threadID string, before db.ThreadLink, after *db.ThreadLink) *prChange {
 	kind := prTransition(before, after)
 	if kind == "" {
 		return nil
 	}
-	return &prChange{ThreadID: threadID, Kind: kind, Link: *after}
+	return &prChange{ThreadID: threadID, Kind: kind, Link: *after, Quiet: kind == EventPRConflictsGone}
+}
+
+// capConflicts makes a change of entering conflicts quiet when the coordinator
+// was already woken about the same PR within conflictWakeGap. The caller holds
+// l.transitions.
+func (l *Links) capConflicts(ch *prChange) {
+	if ch == nil || ch.Kind != EventPRConflicts {
+		return
+	}
+	key := fmt.Sprintf("%s|%s#%d", ch.ThreadID, ch.Link.Repo, ch.Link.Number)
+	now := l.now()
+	if last, ok := l.conflictWoke[key]; ok && now.Sub(last) < conflictWakeGap {
+		ch.Quiet = true
+		return
+	}
+	if l.conflictWoke == nil {
+		l.conflictWoke = map[string]time.Time{}
+	}
+	l.conflictWoke[key] = now
 }
 
 // deliver hands changes to whoever tells the coordinator; nils are skipped.
@@ -129,6 +173,11 @@ type prEvent struct {
 	Said  string `json:"said"`
 	Note  string `json:"note"`
 	Facts string `json:"facts"`
+	// Line is the sentence alone, for the chat's fallback line.
+	Line string `json:"line"`
+	// NeedsUser is set for conflicts: the user decides, so the coordinator
+	// must ask.
+	NeedsUser bool `json:"needs_user,omitempty"`
 }
 
 // sentence is what happened to the PR; withTitle adds its title.
@@ -143,8 +192,42 @@ func (c prChange) sentence(withTitle bool) string {
 			return name + " was merged into " + c.Link.Base + "."
 		}
 		return name + " was merged."
+	case EventPRConflicts:
+		if c.Link.Base != "" {
+			return name + " has merge conflicts with " + c.Link.Base + "."
+		}
+		return name + " has merge conflicts."
+	case EventPRConflictsGone:
+		return fmt.Sprintf("Conflicts on PR #%d are resolved.", c.Link.Number)
 	}
 	return name + " was closed without merging."
+}
+
+// now is the facts as the thread's one line says them for a PR that needs the
+// user's choice: where the thread stands, not what happened since.
+func (f prFacts) now() string {
+	parts := []string{f.Status}
+	if f.Running {
+		parts = append(parts, "a turn is running")
+	} else {
+		parts = append(parts, "no turn running")
+	}
+	if f.CommitsKnown {
+		parts = append(parts, fmt.Sprintf("%d unpushed %s", f.Commits, plural(f.Commits, "commit")))
+	}
+	if f.Uncommitted {
+		parts = append(parts, "uncommitted changes")
+	} else {
+		parts = append(parts, "no uncommitted changes")
+	}
+	return "Thread: " + strings.Join(parts, ", ") + "."
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return word + "s"
 }
 
 // since is the facts as the thread's one line says them.
@@ -231,11 +314,20 @@ func (c *Coordinator) onPRChanges(changes []prChange) {
 			ThreadID: t.ID, Seq: t.Seq, Title: t.Title, Kind: ch.Kind,
 			Item:  fmt.Sprintf("%s#%d", ch.Link.Repo, ch.Link.Number),
 			Said:  ch.sentence(true),
-			Note:  ch.sentence(false) + " " + f.since(ch.Kind),
+			Line:  ch.sentence(false),
 			Facts: f.state(ch.Kind),
+			Note:  ch.sentence(false) + " " + f.since(ch.Kind),
+
+			NeedsUser: ch.Kind == EventPRConflicts,
+		}
+		switch ch.Kind {
+		case EventPRConflicts:
+			ev.Note = ev.Line + " " + f.now()
+		case EventPRConflictsGone:
+			ev.Note = ev.Line
 		}
 		c.noteInThread(t, ev, f)
-		if t.Status == db.ThreadResolved || t.ResolvedAt != nil || t.ArchivedAt != nil {
+		if ch.Quiet || t.Status == db.ThreadResolved || t.ResolvedAt != nil || t.ArchivedAt != nil {
 			continue
 		}
 		if _, ok := byProject[t.ProjectID]; !ok {
@@ -273,8 +365,68 @@ func (c *Coordinator) noteInThread(t *db.Thread, ev prEvent, f prFacts) {
 func renderGitHub(events []prEvent, at string) []string {
 	var out []string
 	for _, e := range events {
+		needs := ""
+		if e.NeedsUser {
+			needs = "true"
+		}
 		out = append(out, envelope(trustRelay, e.Said+"\nThread now: "+e.Facts,
-			"source", "github", "kind", e.Kind, "thread", e.Title, "id", short(e.ThreadID), "item", e.Item, "at", at))
+			"source", "github", "kind", e.Kind, "needs_user", needs, "thread", e.Title, "id", short(e.ThreadID), "item", e.Item, "at", at))
 	}
 	return out
+}
+
+// needsUserOf are the events of a github report that the user decides.
+func needsUserOf(e *db.ThreadEvent) []prEvent {
+	var pl struct {
+		Kind   string    `json:"kind"`
+		Events []prEvent `json:"events"`
+	}
+	if json.Unmarshal([]byte(e.Payload), &pl) != nil || pl.Kind != ReportGitHub {
+		return nil
+	}
+	var out []prEvent
+	for _, ev := range pl.Events {
+		if ev.NeedsUser {
+			out = append(out, ev)
+		}
+	}
+	return out
+}
+
+// foldNeedsUser tells the chats, as one folded line each, about events that
+// need the user when the coordinator cannot be counted on to ask: it is
+// offline, or answered with nothing.
+func (c *Coordinator) foldNeedsUser(projectID string, events []prEvent) {
+	p, err := c.store.GetProject(projectID)
+	if err != nil {
+		return
+	}
+	for _, ev := range events {
+		if !ev.NeedsUser {
+			continue
+		}
+		c.final(&db.ThreadEvent{
+			ThreadID: p.MainThreadID, Kind: db.EvThreadUpdate, Content: ev.Line,
+			Payload: jsonString(map[string]any{"thread_id": ev.ThreadID, "seq": ev.Seq, "title": ev.Title, "kind": ReportGitHub, "events": []prEvent{ev}}),
+		})
+	}
+}
+
+// answeredNeedsUser reports whether a coordinator turn on a needs_user input
+// said something to the user: a reply (text, when the turn was not ended with
+// no_update) or a decision card posted since the input.
+func (c *Coordinator) answeredNeedsUser(mainThreadID string, input *db.ThreadEvent, replied bool) bool {
+	if replied {
+		return true
+	}
+	recent, err := c.store.ListRecentThreadEvents(mainThreadID, 50)
+	if err != nil {
+		return true // cannot tell: do not say it twice
+	}
+	for _, e := range recent {
+		if e.Kind == db.EvDecision && !e.CreatedAt.Before(input.CreatedAt) {
+			return true
+		}
+	}
+	return false
 }
