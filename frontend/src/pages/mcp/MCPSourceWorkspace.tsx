@@ -31,6 +31,7 @@ import {
 import WebtoolsSettings from './WebtoolsSettings';
 import AdvisorSettings from './AdvisorSettings';
 import MCPSourceEditor from './MCPSourceEditor';
+import MCPPasteImport from './MCPPasteImport';
 import { connectionPatch } from './workspaceState';
 import { sourceToFormValue, type MCPCatalogTool, type MCPRouteSource, type MCPSourceConfig } from '../../features/mcp/types';
 
@@ -144,6 +145,7 @@ export default function MCPSourceWorkspace({
                             <AdvisorSettings advisorSource={source} onSave={(patch) => run(() => saveSource(patch))} />
                         ) : (
                             <Stack spacing={2}>
+                                {!form.preset && <MCPPasteImport value={form} onChange={setForm} />}
                                 <TextField
                                     label={label('connectionName', 'Connection name')}
                                     value={form.name}

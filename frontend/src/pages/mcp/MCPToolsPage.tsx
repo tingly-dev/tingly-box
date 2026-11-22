@@ -19,6 +19,7 @@ import {
 import { Add, Refresh } from '@/components/icons';
 import { PageLayout } from '@tingly/ui/components/PageLayout';
 import MCPSourceEditor from './MCPSourceEditor';
+import MCPPasteImport from './MCPPasteImport';
 import MCPSourceDrawer from './MCPSourceDrawer';
 import MCPToolsPanel from './MCPToolsPanel';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
@@ -160,6 +161,7 @@ export default function MCPToolsPage() {
                             </>
                         ) : (
                             <>
+                                <MCPPasteImport value={form} onChange={setForm} />
                                 <TextField
                                     label={label('connectionName', 'Connection name')}
                                     value={form.name}
