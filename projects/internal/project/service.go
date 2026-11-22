@@ -83,8 +83,7 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 		Coordinator: coord, Relay: relay,
 		Host: host,
 	}
-	svc.Links = NewLinks(store, nil, threads.republish)
-	svc.Links.approve = threads.askApproval
+	svc.SetGitHub(nil)
 	threads.links = func() *Links { return svc.Links }
 	svc.sessionToolsMCP = &sessionToolsMCP{service: svc}
 	threads.SessionToolsConfig = svc.sessionToolsMCP.config
@@ -102,6 +101,9 @@ func NewService(store *db.Store, layout Layout, agents Agents, host Host) *Servi
 func (s *Service) SetGitHub(gh GitHub) {
 	s.Links = NewLinks(s.Store, gh, s.Threads.republish)
 	s.Links.approve = s.Threads.askApproval
+	if s.Coordinator != nil {
+		s.Links.events = s.Coordinator.onPRChanges
+	}
 }
 
 // Start recovers interrupted threads and runs housekeeping until ctx ends,

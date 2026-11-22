@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +23,9 @@ import (
 //	                       resolved time, so reopening cannot leave one behind
 //	status.rests-by-one-rule  a resting thread (ready or idle) is the one
 //	                       db.RestingStatus picks, whichever path put it there
+//	github.never-moves-status  a GitHub event (a thread's PR merged or closed)
+//	                       is a note: the thread was not resolved by it, and one
+//	                       it found resolved is still resolved
 //	memory.index-resolves  every link in MEMORY.md names a file that exists
 func (w *World) CheckInvariants() {
 	t := w.T
@@ -65,6 +69,10 @@ func (w *World) CheckInvariants() {
 		}
 	}
 
+	for _, th := range w.ThreadList() {
+		w.checkGitHubNotes(th)
+	}
+
 	idx := w.Memory("MEMORY.md")
 	for _, m := range regexp.MustCompile(`\]\(([^)]+\.md)\)|\[\[([^\]]+\.md)\]\]`).FindAllStringSubmatch(idx, -1) {
 		name := m[1]
@@ -90,4 +98,38 @@ func withoutContext(prompt string) string {
 		return prompt[:start]
 	}
 	return prompt[:start] + prompt[start+end+len("</threads>\n"):]
+}
+
+// checkGitHubNotes holds a thread's notes of GitHub events to
+// github.never-moves-status. Each note keeps the thread's state when it was
+// written, so the later state can be held against it.
+func (w *World) checkGitHubNotes(th db.Thread) {
+	events, err := w.Store.ListThreadEvents(th.ID)
+	if err != nil {
+		w.T.Errorf("github.never-moves-status: cannot read events of %q: %v", th.Title, err)
+		return
+	}
+	for i, e := range events {
+		if e.Kind != db.EvSystem || !strings.Contains(e.Payload, `"github"`) {
+			continue
+		}
+		reopened := false
+		for _, later := range events[i+1:] {
+			reopened = reopened || (later.Kind == db.EvSystem && strings.HasPrefix(later.Content, "Reopened"))
+		}
+		var pl struct {
+			Github   string `json:"github"`
+			Status   string `json:"status"`
+			Resolved bool   `json:"resolved"`
+		}
+		if json.Unmarshal([]byte(e.Payload), &pl) != nil || pl.Github == "" {
+			continue
+		}
+		if pl.Resolved && th.ResolvedAt == nil && !reopened {
+			w.T.Errorf("github.never-moves-status: thread %q was resolved when %s arrived and is open now", th.Title, pl.Github)
+		}
+		if !pl.Resolved && th.ResolvedAt != nil && th.ResolvedAt.Before(e.CreatedAt) {
+			w.T.Errorf("github.never-moves-status: thread %q became resolved (%s) before %s arrived, which found it %s", th.Title, th.ResolvedAt, pl.Github, pl.Status)
+		}
+	}
 }

@@ -1,6 +1,6 @@
 # 事件如何触发流程：值得流转的信息
 
-> 状态：**设计**（2026-11-22），范围已由用户确定（§7），未实现。与 [thread-lifecycle.md](thread-lifecycle.md) 互为补充：那里定义线程**处于什么状态、谁能改**；本文定义**什么信息会让谁去做决定**。
+> 状态：**第 1 步已实现（E1 合并、E2 关闭，见 §8）；E3 冲突未实现**（2026-11-22）。范围已由用户确定（§7）。与 [thread-lifecycle.md](thread-lifecycle.md) 互为补充：那里定义线程**处于什么状态、谁能改**；本文定义**什么信息会让谁去做决定**。
 > 前提（用户决定）：系统不自动关闭线程，不替任何人做决定。事件只把事实送到能做决定的人手里，并且不改变线程状态。
 
 ## 1 第一性原理
@@ -223,3 +223,25 @@ Thread now: status=ready running=no
 
 - **都经协调者**：系统不把任何事件直接发给线程。线程只在用户或协调者的指示下行动；协调者手里有用户的规则，转给线程时带 `cite`。
 - **IM 兜底**：GitHub 事件平时只通过协调者的回复或决策卡到达 IM。协调者离线时，E3 推一行折叠消息（需要用户），E1、E2 只记录（用户回来后从线程和协调者那里看到）。协调者在线但没处理 E3 时，同样推这一行。
+
+## 8 第 1 步：已实现什么（E1、E2）
+
+代码：`internal/project/links_events.go`（检测、事实、协调者输入）；接线在 `links.go`、`coordinator.go`、`service.go`。
+
+- **检测**：`Links.applyReading` 在读取前从库里取记录的旧状态（不信调用者手里的副本），在同一把锁里写新状态；线程**自己开的** PR（`role=opened`）从 open 变成 merged / closed 才算（`prTransition`）。Sweep、手动刷新（含项目刷新）、`view` 都走这里。`Links.Merge`（`merge` 工具）在写入 merged 记录时用同一函数；之后的 Sweep / 刷新读到的旧状态已是 merged，不再触发。
+- **事实**（`factsOf`）：线程状态、是否有一轮在跑、PR 分支上 origin 没有的提交数（`refs/remotes/origin/<head>..<head>`，读不出来就省略）、线程其他开着的 PR 及其 base、`Uncommitted`（线程行里最近一轮的值）。线程里记一行 `EvSystem`，例如 `PR #11 was merged into main. Since then: 0 new commits · PR #12 still open (base tp/work) · no uncommitted changes.`；负载里带 `github`（kind）、`item`、发出时的 `status` 和 `resolved`，供 harness 不变量使用。
+- **唤醒**：报告类型 `github`（`Report.Events`）经 `Coordinator.onReport` 保存为协调者输入，同一个 Sweep 内同一项目的事件合成一条输入；`merge` 工具一次调用一条。渲染时每个事件一个 `<event trust="relay" source="github" kind="pr_merged|pr_closed" thread id item at>`，正文是带标题的一句话加 `Thread now: status=… commits_after_merge=…（closed 为 unpushed_commits）open_prs=#12(base=tp/work) uncommitted=no running=no`；标题是 GitHub 的文字，按 relay 转义。check-in 和 `no_update` 与其他线程报告相同。
+- **只记录**：线程已 resolved / 归档（线程里记，不进协调者）；项目暂停 / 归档（`onReport` 的离线分支，只写对话，不唤醒）；Merge 对话框合并（`MergeInput.Silent`，线程里已有 `markMerged` 的说明）。
+- **IM**：`github` 报告不调用 `OnFinal`，所以 IM 不会收到一行原始文字；协调者在线时由它的回复到达，离线时只记录。
+- **从不**：改状态、resolve、直接给线程发消息。协调者提示词里只有告知部分（§4.6 前半）。
+
+### 与设计的差别
+
+- 线程里那一行对关闭的 PR 也带 “Since then” 的事实（设计例子里没有）；合并写 “N new commits”，关闭写 “N unpushed commits”，因为“合并后的新提交”只能近似为“本地分支比 origin 多的提交”。
+- 手动刷新整个项目时每个 PR 单独成一条输入（只有 Sweep 和工具合并按项目合并）。
+- harness 不变量 `github.never-moves-status` 只能检查：事件发出时已 resolved 的线程现在仍是 resolved；发出时未 resolved 的线程，resolved 时间不早于事件。事件之后线程状态本来就会因别的原因变化（一轮结束），所以不比较状态本身；“不改状态”主要由代码路径（事件处理里没有写状态的调用）和单元测试保证。harness 里有一条旅程：线程用 `merge` 工具合并，协调者收到一次 `pr_merged`，线程未被 resolved。Sweep 的路径在 harness 里没有旅程：Links 的时钟是私有的，Sweep 要等 5 分钟，所以由 `links_events_test.go` 用注入时钟覆盖。
+- 前端未改：协调者对话里 `thread_update` 的 kind 显示为 `github`（i18n 无此键，回退为原文）。
+
+### 给 E3 留的缝
+
+`prTransition(before, after)` 决定什么算事件，`prChange.sentence` 决定怎么说，`prFacts.state` 决定信封里的事实；`kind` 是字符串，加 `pr_conflicts` 只需：在 `prTransition` 里加“`merge_state` 进入 conflicts”（`before` 要换成带 MergeState 的旧记录）、在 `sentence` 加一句、在 `prEvent` 上加 `needs_user`（`renderGitHub` 里写成属性）、30 分钟上限放在 `Links` 里，提示词加 §4.6 的第二半。`onPRChanges` 已按项目合并，不用改。
