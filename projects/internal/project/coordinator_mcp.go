@@ -16,6 +16,10 @@ type coordinatorToolTurn struct {
 	snapshot      *db.Project
 	userTriggered bool
 	quiet         atomic.Bool
+	// gen counts the turns begun, so a turn that ends after the next one
+	// began (the follow-up Claude Code starts by itself) leaves it open;
+	// quietGen is the turn that ended itself with no_update.
+	gen, quietGen uint64
 }
 
 func cloneProject(p *db.Project) *db.Project {
@@ -24,11 +28,15 @@ func cloneProject(p *db.Project) *db.Project {
 	return &c
 }
 
-func (t *coordinatorToolTurn) begin(p *db.Project, userTriggered bool) {
+// begin opens the tools for a turn and returns the turn's generation, which
+// end takes.
+func (t *coordinatorToolTurn) begin(p *db.Project, userTriggered bool) uint64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.snapshot, t.userTriggered = cloneProject(p), userTriggered
 	t.quiet.Store(false)
+	t.gen++
+	return t.gen
 }
 
 // adoptUser makes the turn one that must answer the user: a message of
@@ -45,10 +53,22 @@ func (t *coordinatorToolTurn) adoptUser() bool {
 	return true
 }
 
-func (t *coordinatorToolTurn) end() {
+// quietIn reports whether the turn begin numbered gen ended itself with
+// no_update, also once a later turn has begun.
+func (t *coordinatorToolTurn) quietIn(gen uint64) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.snapshot = nil
+	return gen != 0 && t.quietGen == gen
+}
+
+// end closes the tools of the turn begin numbered gen; a later turn's stay
+// open.
+func (t *coordinatorToolTurn) end(gen uint64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.gen == gen {
+		t.snapshot = nil
+	}
 }
 
 // run is the gate every coordinator-scope tool call passes. Calls are
@@ -92,6 +112,7 @@ func (t *coordinatorToolTurn) run(store *db.Store, tool string, editsProject boo
 		}
 		if tool == toolNoUpdate {
 			t.quiet.Store(true)
+			t.quietGen = t.gen
 		}
 	}
 	return res, err
