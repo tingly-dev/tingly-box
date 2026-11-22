@@ -149,6 +149,10 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 		"UPDATE projects SET main_thread_id = '' WHERE main_thread_id IS NULL",
 		fmt.Sprintf("UPDATE projects SET max_running_threads = %d WHERE type = 'project' AND (max_running_threads IS NULL OR max_running_threads < 1)", DefaultMaxRunningThreads),
 		"UPDATE threads SET parent_id = '' WHERE parent_id IS NULL",
+		// A project from before the GitHub settings keeps what it had: the tools
+		// that publish ran without a card unless it asked for one.
+		`UPDATE projects SET github_auto = '["publish"]' WHERE github_auto IS NULL AND COALESCE(thread_git_hub_access, '') <> 'ask'`,
+		"UPDATE projects SET github_auto = '[]' WHERE github_auto IS NULL",
 		"UPDATE threads SET reported_model = '' WHERE reported_model IS NULL",
 		"UPDATE threads SET effort_override = '' WHERE effort_override IS NULL",
 		"UPDATE threads SET agent = '' WHERE agent IS NULL",

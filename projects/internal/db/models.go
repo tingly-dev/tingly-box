@@ -101,10 +101,14 @@ type Project struct {
 	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
 	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
-	// ThreadGitHubAccess is how a thread's issue and PR tools that write to
-	// GitHub are approved: allow (the default, also when empty), which lets
-	// them run without a card, or ask. Reads are always allowed.
+	// ThreadGitHubAccess is the setting GitHubAuto replaced (allow, the default
+	// also when empty, or ask); it is read once, to migrate a project to it.
 	ThreadGitHubAccess string `gorm:"size:10" json:"thread_github_access,omitempty"`
+	// GitHubAuto are the groups of GitHub actions (project.GitHubGroups) that
+	// threads' tools may do without asking the user; any other call asks on a
+	// card. A new project has none; a project from before the setting was
+	// migrated to what thread_github_access gave it.
+	GitHubAuto []string `gorm:"column:github_auto;serializer:json" json:"github_auto"`
 	// DisableWorktree makes new threads share the selected repository checkout.
 	DisableWorktree bool `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads caps how many of the project's threads run at once

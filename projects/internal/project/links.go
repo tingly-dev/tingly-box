@@ -212,6 +212,13 @@ func (l *Links) CreateIssue(ctx context.Context, t *db.Thread, title, body strin
 	if err != nil {
 		return "", err
 	}
+	if err := l.gate(ctx, t, gateCall{groups: []string{GitHubPublish}}, Approval{
+		Tool:    githubToolRule(toolCreateIssue),
+		Summary: fmt.Sprintf("Open an issue in %s: %q", lc.repo.Slug(), clip(strings.TrimSpace(title), 80)),
+		Input:   map[string]any{"title": strings.TrimSpace(title), "body": clip(body, 500)},
+	}); err != nil {
+		return "", err
+	}
 	it, err := l.gh.CreateIssue(ctx, lc.repo, strings.TrimSpace(title), body)
 	if err != nil {
 		return "", err
@@ -239,6 +246,13 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 	if err != nil {
 		return "", err
 	}
+	if err := l.gate(ctx, t, gateCall{groups: []string{GitHubPublish}}, Approval{
+		Tool:    githubToolRule(toolComment),
+		Summary: fmt.Sprintf("Comment on %s #%d %q", kind, number, clip(it.Title, 80)),
+		Input:   map[string]any{"number": number, "body": clip(body, 500)},
+	}); err != nil {
+		return "", err
+	}
 	commentURL, err := l.gh.Comment(ctx, lc.repo, number, body)
 	if err != nil {
 		return "", err
@@ -258,7 +272,7 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 // not refused. A force over commits this checkout has not seen is an error: the
 // lease is never overridden.
 func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, base string, draft, force bool) (string, error) {
-	r, err := l.createPR(ctx, t, title, body, head, base, draft, true, force)
+	r, err := l.createPR(ctx, t, title, body, head, base, draft, true, force, nil, "")
 	if err != nil {
 		return "", err
 	}
@@ -342,7 +356,16 @@ func (l *Links) Merge(ctx context.Context, t *db.Thread, in MergeInput) (MergeOu
 			body = filled
 		}
 	}
-	r, err := l.createPR(ctx, t, title, body, in.Head, "", false, false, false)
+	// One card for the push and the merge: the merge's group joins the push's.
+	var also []string
+	then := ""
+	switch in.Method {
+	case MergeSquash:
+		also, then = []string{GitHubMerge}, ", then squash-merge its PR"
+	case MergeCommit:
+		also, then = []string{GitHubMerge}, ", then merge its PR with a merge commit"
+	}
+	r, err := l.createPR(ctx, t, title, body, in.Head, "", false, false, false, also, then)
 	if err != nil {
 		return MergeOutcome{}, err
 	}
@@ -403,7 +426,7 @@ type prResult struct {
 // With amend set, the open PR is put right to what title, body and base say
 // (only for a PR the thread has recorded as its own, and only the fields given
 // that differ); Merge passes it unset, as its title is only a default.
-func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, base string, draft, amend, force bool) (prResult, error) {
+func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, base string, draft, amend, force bool, also []string, then string) (prResult, error) {
 	if err := checkText("title", title, titleMax); err != nil {
 		return prResult{}, err
 	}
@@ -424,16 +447,18 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 		}
 		lc.head = head
 	}
-	// needs is why the user has to approve this call, one clause per boundary
-	// crossed; empty when the thread may do it on its own.
-	var needs []string
+	// gc is what the project's settings say about this call: its groups, and
+	// what makes it never automatic.
+	gc := gateCall{groups: append([]string{GitHubPublish}, also...)}
+	var why []string
 	if lc.head != "" && lc.head != own {
 		other, err := l.anothersBranch(t, lc)
 		if err != nil {
 			return prResult{}, err
 		}
 		if other != nil {
-			needs = append(needs, fmt.Sprintf("branch %s belongs to another thread (%q)", lc.head, other.Title))
+			gc.groups = append(gc.groups, GitHubOthers)
+			why = append(why, fmt.Sprintf("branch %s belongs to another thread (%q)", lc.head, other.Title))
 		}
 	}
 	if lc.head == "" {
@@ -458,12 +483,12 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 		return prResult{}, fmt.Errorf("branch %s is the base of its own PR: a PR comes from a branch other than its base", lc.head)
 	}
 	if lc.head == def {
-		needs = append(needs, fmt.Sprintf("branch %s is the repository's default branch", lc.head))
+		gc.never = append(gc.never, fmt.Sprintf("branch %s is the repository's default branch", lc.head))
 	}
 	if protected, err := l.gh.Protected(ctx, lc.repo, lc.head); err != nil {
 		return prResult{}, err
 	} else if protected {
-		needs = append(needs, fmt.Sprintf("branch %s is protected on GitHub", lc.head))
+		gc.never = append(gc.never, fmt.Sprintf("branch %s is protected on GitHub", lc.head))
 	}
 	if bad := checkBranchName(ctx, t.Cwd, base); bad != nil {
 		return prResult{}, bad
@@ -471,14 +496,16 @@ func (l *Links) createPR(ctx context.Context, t *db.Thread, title, body, head, b
 	if force {
 		if ok, err := l.mayForce(t, lc); err != nil {
 			return prResult{}, err
-		} else if !ok {
-			needs = append(needs, fmt.Sprintf("a force push of branch %s, which this thread neither created nor opened a PR from", lc.head))
+		} else if ok {
+			gc.groups = append(gc.groups, GitHubRewrite)
+		} else {
+			gc.never = append(gc.never, fmt.Sprintf("a force push of branch %s, which this thread neither created nor opened a PR from", lc.head))
 		}
 	}
 	// The one gate before the first push: everything that could be refused
 	// outright has been checked by now, so the user is asked about a call that
 	// would otherwise go through.
-	push := &pusher{l: l, t: t, git: lc.git, branch: lc.head, force: force, needs: needs, base: base, title: title}
+	push := &pusher{l: l, t: t, git: lc.git, branch: lc.head, force: force, gc: gc, why: why, then: then, base: base, title: title}
 	existing, err := l.gh.OpenPR(ctx, lc.repo, lc.head)
 	if err != nil {
 		return prResult{}, err
@@ -692,35 +719,39 @@ func (l *Links) mayForce(t *db.Thread, lc *linkContext) (bool, error) {
 // pusher is the push of one head for one create_pr call: it asks the user once
 // when needs says the call is beyond the thread's own work, then pushes.
 type pusher struct {
-	l           *Links
-	t           *db.Thread
-	git         githubRemote
-	branch      string
-	force       bool
-	needs       []string
+	l      *Links
+	t      *db.Thread
+	git    githubRemote
+	branch string
+	force  bool
+	// gc is the call's gate, why what the card adds to it, then what the call
+	// does after the push (a merge).
+	gc          gateCall
+	why         []string
+	then        string
 	base, title string
 }
 
 func (p *pusher) run(ctx context.Context) error {
-	if len(p.needs) > 0 {
-		verb := "Push"
-		if p.force {
-			verb = "Force-push (--force-with-lease)"
-		}
-		slug := ""
-		if lc, err := p.l.resolve(ctx, p.t); err == nil {
-			slug = lc.repo.Slug()
-		}
-		err := p.l.authorize(ctx, p.t, Approval{
-			Tool:    githubToolRule(toolCreatePR),
-			Summary: fmt.Sprintf("%s branch %s to GitHub and open or update its PR (base %s)", verb, p.branch, p.base),
-			Reason:  strings.Join(p.needs, "; "),
-			Input:   map[string]any{"head": p.branch, "base": p.base, "force": p.force, "title": p.title},
-			Key:     fmt.Sprintf("%s\x00%s\x00%s\x00force=%t", toolCreatePR, slug, p.branch, p.force),
-		})
-		if err != nil {
-			return err
-		}
+	verb, tool := "Push", toolCreatePR
+	if p.force {
+		verb = "Force-push (--force-with-lease)"
+	}
+	if p.then != "" {
+		tool = toolMerge
+	}
+	slug := ""
+	if lc, err := p.l.resolve(ctx, p.t); err == nil {
+		slug = lc.repo.Slug()
+	}
+	if err := p.l.gate(ctx, p.t, p.gc, Approval{
+		Tool:    githubToolRule(tool),
+		Summary: fmt.Sprintf("%s branch %s to GitHub and open or update its PR (base %s)%s", verb, p.branch, p.base, p.then),
+		Reason:  strings.Join(p.why, "; "),
+		Input:   map[string]any{"head": p.branch, "base": p.base, "force": p.force, "title": p.title},
+		Key:     fmt.Sprintf("%s\x00%s\x00%s\x00force=%t", tool, slug, p.branch, p.force),
+	}); err != nil {
+		return err
 	}
 	if !p.force {
 		return pushBranch(ctx, p.t.Cwd, p.git, p.branch, nil)
@@ -878,7 +909,7 @@ func (l *Links) Close(ctx context.Context, t *db.Thread, number int) (string, er
 		return fmt.Sprintf("%s #%d is already %s, nothing to do: %s%s", kind, cur.Number, cur.State, cur.URL, saved(rerr)), nil
 	}
 	opener := l.openerOf(t, role, slug, number, cur)
-	if err := l.authorize(ctx, t, Approval{
+	if err := l.gate(ctx, t, gateCall{groups: []string{GitHubClose}}, Approval{
 		Tool:    githubToolRule(toolClose),
 		Summary: fmt.Sprintf("Close %s #%d %q, opened by %s", kind, number, clip(cur.Title, 80), opener),
 		Reason:  fmt.Sprintf("closing %s #%d on GitHub is the user's call (opened by %s)", kind, number, opener),
@@ -928,6 +959,15 @@ func (l *Links) openerOf(t *db.Thread, role, repo string, number int, it GitHubI
 	return "someone on GitHub, not a thread"
 }
 
+// gateOwnEdit is the gate of an edit of what the thread opened.
+func (l *Links) gateOwnEdit(ctx context.Context, t *db.Thread, link *db.ThreadLink, what []string, input map[string]any) error {
+	return l.gate(ctx, t, gateCall{groups: []string{GitHubPublish}}, Approval{
+		Tool:    githubToolRule(toolUpdate),
+		Summary: fmt.Sprintf("Edit the %s of %s #%d %q", strings.Join(what, ", "), link.Kind, link.Number, clip(link.Title, 80)),
+		Input:   input,
+	})
+}
+
 // editTarget is the item an edit means and the role the thread's record of it
 // gets. One the thread opened needs nothing more. Any other (not recorded, or
 // one the thread only commented on) is read, shown to the user with what is to
@@ -937,20 +977,23 @@ func (l *Links) editTarget(ctx context.Context, t *db.Thread, lc *linkContext, n
 	slug := lc.repo.Slug()
 	if number <= 0 {
 		link, err := l.ownItem(t, slug, 0, true)
-		return link, db.LinkOpened, err
+		if err != nil {
+			return nil, "", err
+		}
+		return link, db.LinkOpened, l.gateOwnEdit(ctx, t, link, what, input)
 	}
 	link, err := l.store.FindThreadLink(t.ID, slug, number)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
 		return nil, "", err
 	}
 	if err == nil && link.Role == db.LinkOpened {
-		return link, db.LinkOpened, nil
+		return link, db.LinkOpened, l.gateOwnEdit(ctx, t, link, what, input)
 	}
 	kind, it, err := l.read(ctx, lc.repo, number)
 	if err != nil {
 		return nil, "", err
 	}
-	if err := l.authorize(ctx, t, Approval{
+	if err := l.gate(ctx, t, gateCall{groups: []string{GitHubOthers}}, Approval{
 		Tool:    githubToolRule(toolUpdate),
 		Summary: fmt.Sprintf("Edit the %s of %s #%d %q, which this thread did not open", strings.Join(what, ", "), kind, number, clip(it.Title, 80)),
 		Reason:  fmt.Sprintf("%s #%d was not opened by this thread", kind, number),

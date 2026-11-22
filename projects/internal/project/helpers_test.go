@@ -13,6 +13,11 @@ import (
 // mkProject stores p as a project with its main thread.
 func mkProject(t *testing.T, store *db.Store, p *db.Project) *db.Project {
 	t.Helper()
+	if p.GitHubAuto == nil {
+		// The tests from before the GitHub settings: the tools did these on
+		// their own then (merge asked through a rule outside the tools).
+		p.GitHubAuto = []string{GitHubPublish, GitHubRewrite, GitHubMerge}
+	}
 	require.NoError(t, store.CreateProjectWithMain(p, &db.Thread{Origin: "user"}, ""))
 	return p
 }

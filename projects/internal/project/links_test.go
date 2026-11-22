@@ -409,7 +409,7 @@ func TestGitHubToolsBelongToThreadsNotTheCoordinator(t *testing.T) {
 	}{{f.worker.ID, true}, {f.folder.ID, true}, {f.p.MainThreadID, false}} {
 		cs, _ := f.client(t, c.id)
 		names := toolNames(listTools(t, cs))
-		for _, tool := range append(githubWriteTools, toolView, toolMerge) {
+		for _, tool := range []string{toolCreateIssue, toolCreatePR, toolUpdate, toolComment, toolClose, toolView, toolMerge} {
 			assert.Equal(t, c.want, slices.Contains(names, tool), "%s for %s", tool, c.id)
 		}
 	}

@@ -76,27 +76,16 @@ func githubToolRule(tool string) string { return builtinToolsRule + "__" + tool 
 // is offered (see .design/github-tools.md). They are Tingly Box's own: a person
 // who gave the thread work expects them to run, so they are allowed without a
 // card in every permission mode. The scope stops at this server: Claude's own
-// tools keep following the permission mode, and the tools cannot close or
-// force-push. The one that merges (alwaysAskTools) always asks.
+// tools keep following the permission mode.
 //
-// A project can opt out of the tools that publish on GitHub with access "ask";
-// ask rules win over the allow rule (rules are checked deny, ask, then allow).
-// The other tools of the server stay allowed.
+// Whether a GitHub tool's call needs the user is not a rule here: the tool
+// decides it from the project's GitHub settings and asks on its own card
+// (Links.gate), which can name what the call does and holds in every
+// permission mode. A rule on the tool's name would only add a second card.
 //
 // Nothing here touches the Bash rules: `gh pr create`, `gh pr merge` and
 // `gh issue create` stay on the ask list of grantAutoGit.
-func grantBuiltinTools(doc map[string]any, p *db.Project) {
+func grantBuiltinTools(doc map[string]any, _ *db.Project) {
 	grantNativeChannel(doc)
-	perms := permissionsOf(doc)
-	addRules(perms, "allow", builtinToolsRule)
-	for _, tool := range alwaysAskTools {
-		addRules(perms, "ask", githubToolRule(tool))
-	}
-	if p.ThreadGitHubAccess == GitHubAsk {
-		var rules []string
-		for _, tool := range githubWriteTools {
-			rules = append(rules, githubToolRule(tool))
-		}
-		addRules(perms, "ask", rules...)
-	}
+	addRules(permissionsOf(doc), "allow", builtinToolsRule)
 }

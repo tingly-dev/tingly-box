@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -94,9 +95,12 @@ type UpdateProjectRequest struct {
 	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
-	// ThreadGitHubAccess is how threads' tools that write to GitHub (issues,
-	// PRs) are approved: allow (the default, also when empty) runs them
-	// without a card, ask asks each time. Only the owner sets it, here.
+	// GitHubAuto are the groups of GitHub actions threads' tools may do
+	// without a card (publish, rewrite, others, close, merge); any other call
+	// asks. The whole list is replaced. Only the owner sets it, here.
+	GitHubAuto *[]string `json:"github_auto,omitempty"`
+	// ThreadGitHubAccess is the setting GitHubAuto replaced, still taken: allow
+	// turns publish on, ask turns every group off.
 	ThreadGitHubAccess *string `json:"thread_github_access,omitempty" enum:"ask,allow"`
 	DisableWorktree    *bool   `json:"disable_worktree,omitempty"`
 	// MaxRunningThreads is how many threads of the project may run at once;
@@ -727,12 +731,30 @@ func (h *Handler) update(c *gin.Context) {
 	}
 	if req.ThreadGitHubAccess != nil {
 		switch *req.ThreadGitHubAccess {
-		case rt.GitHubAsk, rt.GitHubAllow:
-			p.ThreadGitHubAccess = *req.ThreadGitHubAccess
+		case rt.GitHubAsk:
+			p.GitHubAuto = []string{}
+		case rt.GitHubAllow:
+			if !slices.Contains(p.GitHubAuto, rt.GitHubPublish) {
+				p.GitHubAuto = append(slices.Clone(p.GitHubAuto), rt.GitHubPublish)
+			}
 		default:
 			apierr.BadRequest(c, "unknown GitHub access")
 			return
 		}
+		p.ThreadGitHubAccess = *req.ThreadGitHubAccess
+	}
+	if req.GitHubAuto != nil {
+		auto := []string{}
+		for _, g := range *req.GitHubAuto {
+			if !slices.Contains(rt.GitHubGroups, g) {
+				apierr.BadRequest(c, "unknown GitHub group "+g)
+				return
+			}
+			if !slices.Contains(auto, g) {
+				auto = append(auto, g)
+			}
+		}
+		p.GitHubAuto = auto
 	}
 	if req.DisableWorktree != nil {
 		for i := range p.Repos {
