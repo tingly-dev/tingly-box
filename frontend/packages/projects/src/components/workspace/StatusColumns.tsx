@@ -2,7 +2,7 @@ import type { ReactNode, Ref } from 'react';
 import { Box, Checkbox, IconButton, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Thread } from '../../client';
-import { STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
+import { NumberedTitle, STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
 import { ThreadRequestSubtitle, ThreadRequestsStrip } from '../project/ThreadRequests';
 import { ListRow } from '../ListRow';
 import { Star, StarBorder } from '../icons';
@@ -29,7 +29,7 @@ export function ThreadCard({ thread, selectedId, onOpen, onTasks, stacked, pinne
     const { t, i18n } = useTranslation('projects');
     return (
         <ListRow outlined stacked={stacked} selected={thread.id === selectedId || picked} onClick={selecting && onTogglePick ? onTogglePick : () => onOpen(thread.id)}
-            title={thread.title} subtitle={subtitle ?? <ThreadRequestSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} onTasks={onTasks} />} meta={timeAgo(thread.updated_at, i18n.language)}
+            title={<NumberedTitle thread={thread} />} subtitle={subtitle ?? <ThreadRequestSubtitle thread={thread} />} badges={<ThreadBadges thread={thread} links onTasks={onTasks} />} meta={timeAgo(thread.updated_at, i18n.language)}
             footer={<ThreadRequestsStrip thread={thread} onOpen={onOpen} />}
             // The star stays quiet: an unpinned card shows it on hover or keyboard focus only.
             sx={{ '&:hover .pin-star, &:focus-within .pin-star': { opacity: 1, pointerEvents: 'auto' } }}

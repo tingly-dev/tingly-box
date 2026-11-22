@@ -56,9 +56,18 @@ behind a popover.
   behind "Show N more", which opens in place. Clicks there never open the
   thread. Data is `Thread.links` of the thread list and its live events: no
   request of its own (refresh stays on the strip, the rail and the Issues &
-  PRs tab). The boards and the band's cards are a compact mode of their own
-  and do not show links yet; how they should (a pill with `+N` was tried,
-  branch `tp/pr-8ef493-card-pills`) is a separate discussion.
+  PRs tab).
+- **Issues & PRs on cards** (`ThreadLinkPills`, `ThreadBadges links`, only on
+  `ThreadCard`: the Overview's boards and the band's columns): a card is the
+  compact mode, so its links fold into one pill for the first link in the
+  same order (kind/state icon in its colour, `#214`, a red dot when an open
+  item has failing checks or a conflict; the pill opens it on GitHub), the
+  rest behind `+N`, whose card (hover, or click/tap on touch) lists every item
+  with where it stands, each a link. Hover title and `aria-label` carry
+  `repo#N title · state · checks`; clicks never open the thread. When that
+  pill is the PR of the thread's own branch it stands in for the commits pill
+  (while open) and the merged pill (once merged): the same fact twice
+  otherwise, on a card that is short of width. Same data, no request.
 - **Auto-answer** (`AutoAnswerSelect`) is a picker in the message box's row
   of pickers, after the permission mode: both say how far the thread goes
   without the user, and that row is where the thread's behaviour is changed
@@ -212,9 +221,8 @@ coordinator do too. Chosen over the 8-character id prefix: short, the same
 name in every channel, and no new stored field.
 
 - **Shown** as a muted `#3` before the title (`NumberedTitle`): list rows
-  (project threads and folder sessions), the status popovers, the
-  conversation's thread lines, the open thread's header. Board and band cards
-  wait for the card-mode discussion.
+  (project threads and folder sessions), board and band cards, the status
+  popovers, the conversation's thread lines, the open thread's header.
 - **Copied**: in the header the number is a button, and the thread menu has
   "Copy reference"; both copy `#3 Title` (`threadRef`, the IM tag) and say so.
 - **Understood by the coordinator**: its thread table, `list_threads`,

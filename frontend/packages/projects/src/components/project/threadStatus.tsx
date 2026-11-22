@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Star, Stream } from '../icons';
 import type { Thread } from '../../client';
 import { radius } from '@tingly/ui/theme/radius';
+import { ThreadLinkPills } from './ThreadLinkPills';
+import { stripLinks } from './linkView';
 
 /** Overview groups, in the order the Overview shows them: what runs first,
  * then what needs the user, then what waits for review. */
@@ -136,13 +138,15 @@ const pill = {
     '& svg': { fontSize: 13 },
 } as const;
 
-/** A thread's work at a glance, as small pills: its commits, or that it was
- * merged. Nothing for a thread without a branch; the details sit in the
+/** A thread's work at a glance, as small pills: on a card its issues and PRs
+ * (`ThreadLinkPills`, `links`), its commits, or that it was merged; on a card
+ * the commits and merged pills give way to the open or merged PR of the
+ * thread's own branch, which says the same. Nothing for a thread without a branch; the details sit in the
  * tooltip, so the pill stays one icon and one word wherever it shows. The
  * running-tasks pill is a count of what is running elsewhere: given
  * `onTasks` it opens what the count counts, instead of only explaining
  * itself. */
-export function ThreadBadges({ thread, tasks: showTasks = true, onTasks }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean; /** Opens the thread's task list from the pill; without it the pill stays a plain count. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
+export function ThreadBadges({ thread, tasks: showTasks = true, links: showLinks = false, onTasks }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean; /** True on a card: its issues and PRs as pills (the list unfolds them under the row instead). */ links?: boolean; /** Opens the thread's task list from the pill; without it the pill stays a plain count. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
     const open = (e: { stopPropagation(): void; currentTarget: HTMLElement }) => {
         e.stopPropagation();
@@ -159,9 +163,16 @@ export function ThreadBadges({ thread, tasks: showTasks = true, onTasks }: { thr
             <Stream />{t('thread.tasksBadge', { count: thread.running_tasks })}
         </Box>
     );
+    const links = showLinks && <ThreadLinkPills links={thread.links} />;
+    // The PR of the thread's own branch, when its pill leads: it already says
+    // what the commits or the merged pill would (open with the work, merged).
+    const lead = showLinks ? stripLinks(thread.links)[0] : undefined;
+    const branchPr = lead?.kind === 'pr' && !!thread.branch && lead.head === thread.branch ? lead.state : undefined;
+    if (thread.merged_at && branchPr === 'merged') return <>{links}{tasks}</>;
     if (thread.merged_at) {
         return (
             <>
+                {links}
                 <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })}
                     sx={pill}>
                     <Merge />{t('thread.mergedBadge')}
@@ -170,9 +181,10 @@ export function ThreadBadges({ thread, tasks: showTasks = true, onTasks }: { thr
             </>
         );
     }
-    if (!thread.branch || thread.commits_ahead === 0) return tasks || null;
+    if (!thread.branch || thread.commits_ahead === 0 || branchPr === 'open') return links || tasks ? <>{links}{tasks}</> : null;
     return (
         <>
+            {links}
             <Box component="span"
                 title={[thread.branch, t('thread.commits', { count: thread.commits_ahead }), t('thread.files', { count: thread.files_changed })].filter(Boolean).join(' · ')}
                 sx={pill}>
