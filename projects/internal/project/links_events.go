@@ -299,11 +299,17 @@ func yesNo(b bool) string {
 
 // onPRChanges records each change in its thread and tells the coordinator: one
 // input per project for all of its changes. A thread already resolved or
-// archived only records (the user has wrapped it up); a project that is
-// paused or archived has no coordinator to wake, which onReport handles.
+// archived only records (the user has wrapped it up), and so does a folder's
+// thread (a folder has no coordinator); a project that is paused or archived
+// has no coordinator to wake, which onReport handles.
 func (c *Coordinator) onPRChanges(changes []prChange) {
-	byProject := map[string][]prEvent{}
-	first := map[string]db.Thread{}
+	type told struct {
+		t  *db.Thread
+		ev prEvent
+		f  prFacts
+	}
+	byProject := map[string][]told{}
+	folder := map[string]bool{}
 	var order []string
 	for _, ch := range changes {
 		t, err := c.store.GetThread(ch.ThreadID)
@@ -328,33 +334,55 @@ func (c *Coordinator) onPRChanges(changes []prChange) {
 		case EventPRConflictsGone:
 			ev.Note = ev.Line
 		}
-		c.noteInThread(t, ev, f)
-		if ch.Quiet || t.Status == db.ThreadResolved || t.ResolvedAt != nil || t.ArchivedAt != nil {
+		isFolder, seen := folder[t.ProjectID]
+		if !seen {
+			p, err := c.store.GetProject(t.ProjectID)
+			isFolder = err == nil && p.Type == db.ProjectFolder
+			folder[t.ProjectID] = isFolder
+		}
+		if ch.Quiet || isFolder || t.Status == db.ThreadResolved || t.ResolvedAt != nil || t.ArchivedAt != nil {
+			c.noteInThread(t, ev, f, "")
 			continue
 		}
 		if _, ok := byProject[t.ProjectID]; !ok {
 			order = append(order, t.ProjectID)
-			first[t.ProjectID] = *t
 		}
-		byProject[t.ProjectID] = append(byProject[t.ProjectID], ev)
+		byProject[t.ProjectID] = append(byProject[t.ProjectID], told{t, ev, f})
 	}
 	for _, id := range order {
-		evs := byProject[id]
+		all := byProject[id]
 		var lines []string
-		for _, e := range evs {
-			lines = append(lines, e.Note)
+		var evs []prEvent
+		for _, e := range all {
+			lines = append(lines, e.ev.Note)
+			evs = append(evs, e.ev)
 		}
-		c.onReport(Report{Thread: first[id], Kind: ReportGitHub, Text: strings.Join(lines, "\n"), Events: evs})
+		// The input first, so each thread's note can point at it; the
+		// coordinator is woken once the notes are there for get_thread to see.
+		input := c.queueReport(Report{Thread: *all[0].t, Kind: ReportGitHub, Text: strings.Join(lines, "\n"), Events: evs})
+		inputID := ""
+		if input != nil {
+			inputID = input.ID
+		}
+		for _, e := range all {
+			c.noteInThread(e.t, e.ev, e.f, inputID)
+		}
+		if input != nil {
+			c.wake(id)
+		}
 	}
 }
 
 // noteInThread writes the change in the thread's own record as a system event.
-// The payload keeps the status it saw, for the invariant that this never moves it.
-func (c *Coordinator) noteInThread(t *db.Thread, ev prEvent, f prFacts) {
-	e := &db.ThreadEvent{
-		ThreadID: t.ID, Kind: db.EvSystem, Content: ev.Note,
-		Payload: jsonString(map[string]any{"github": ev.Kind, "item": ev.Item, "status": f.Status, "resolved": t.ResolvedAt != nil}),
+// The payload keeps the status it saw, for the invariant that this never moves
+// it, and the coordinator's input (coordinator_event) when it was told: the
+// page shows that, and leads to the coordinator's answer.
+func (c *Coordinator) noteInThread(t *db.Thread, ev prEvent, f prFacts, inputID string) {
+	pl := map[string]any{"github": ev.Kind, "item": ev.Item, "status": f.Status, "resolved": t.ResolvedAt != nil}
+	if inputID != "" {
+		pl["coordinator_event"] = inputID
 	}
+	e := &db.ThreadEvent{ThreadID: t.ID, Kind: db.EvSystem, Content: ev.Note, Payload: jsonString(pl)}
 	if err := c.store.AddThreadEvent(e); err != nil {
 		logrus.WithError(err).Warn("save thread event")
 		return
