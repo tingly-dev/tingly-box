@@ -26,7 +26,7 @@ func DefaultRegistry() *Registry {
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
-		ConsoleURL:         "https://console.anthropic.com/",
+		ConsoleURL:         "https://platform.claude.com/",
 		Hook:               &AnthropicHook{},
 		CallbackPorts:      []int{54545}, // Anthropic CLI standard port (preferred but not required)
 	})
