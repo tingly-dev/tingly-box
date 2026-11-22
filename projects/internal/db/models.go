@@ -158,6 +158,17 @@ const (
 	ThreadResolved = "resolved"
 )
 
+// RestingStatus is where an open thread rests when nothing runs and nothing
+// waits on the user: ready while its branch has commits that were not merged
+// from the Overview, idle otherwise. It is the one rule for it; see
+// projects/.design/thread-lifecycle.md.
+func RestingStatus(t *Thread) string {
+	if t.CommitsAhead > 0 && t.MergedAt == nil {
+		return ThreadReady
+	}
+	return ThreadIdle
+}
+
 // Thread is the one unit of conversation: a project's main thread (the
 // coordinator's loop, agent llm), a worker on its own branch (parent_id is the
 // main thread) or a Claude Code session in a folder project. See

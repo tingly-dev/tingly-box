@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
@@ -261,15 +260,7 @@ func (m *Threads) Archive(threadID string) (*db.Thread, error) {
 	if blockers := m.archiveBlockers(t); len(blockers) > 0 {
 		return nil, &BlockedArchive{Blockers: blockers}
 	}
-	// As in Resolve: let the turn take its interrupt before the process is
-	// closed, then evict; nothing can start a session, the lock is held.
-	if done := m.stopEnding(threadID); done != nil {
-		select {
-		case <-done:
-		case <-time.After(agentboot.SessionCloseTimeout):
-		}
-	}
-	m.engine.Evict(m.sessionOf(threadID))
+	m.endProcess(threadID)
 	// The worktree goes, the branch stays. A dirty worktree was refused
 	// above; --force is for submodules and ignored files (node_modules).
 	if t.RepoPath != "" && t.Cwd != "" && t.WorktreeFreedAt == nil && registeredWorktree(t.RepoPath, t.Cwd) {
@@ -278,12 +269,7 @@ func (m *Threads) Archive(threadID string) (*db.Thread, error) {
 		}
 		_, _ = git(context.Background(), t.RepoPath, "worktree", "prune")
 	}
-	t, err = m.update(threadID, func(t *db.Thread) {
-		now := time.Now()
-		if t.ResolvedAt == nil {
-			t.ResolvedAt = &now
-			t.Status, t.WaitReason = db.ThreadResolved, ""
-		}
+	t, err = m.close(threadID, func(t *db.Thread, now time.Time) {
 		if t.ArchivedAt == nil {
 			t.ArchivedAt = &now
 		}
@@ -292,10 +278,6 @@ func (m *Threads) Archive(threadID string) (*db.Thread, error) {
 		}
 	})
 	if err == nil {
-		m.releaseChats(t)
-		m.cleanTmp(t)
-		// After the save, as in Resolve.
-		m.revokeTools(threadID)
 		kept := "the branch stays"
 		if t.Branch != "" {
 			kept = "branch " + t.Branch + " stays"

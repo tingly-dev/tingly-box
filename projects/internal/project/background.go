@@ -155,7 +155,7 @@ func (m *Threads) release(threadID string) {
 	m.mu.Unlock()
 	t, err := m.update(threadID, func(t *db.Thread) {
 		if t.Status == db.ThreadWorking {
-			t.Status = restingStatus(t.CommitsAhead)
+			t.Status = db.RestingStatus(t)
 		}
 	})
 	if err != nil || t == nil || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
@@ -170,15 +170,6 @@ func (m *Threads) release(threadID string) {
 	if m.OnReport != nil {
 		m.OnReport(r)
 	}
-}
-
-// restingStatus is where a thread rests once its turn and background tasks
-// are over: ready for review if its branch has commits, idle otherwise.
-func restingStatus(commitsAhead int) string {
-	if commitsAhead > 0 {
-		return db.ThreadReady
-	}
-	return db.ThreadIdle
 }
 
 // tasksNote is the coordinator's marker for a thread that runs background tasks.

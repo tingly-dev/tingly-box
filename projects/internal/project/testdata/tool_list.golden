@@ -35,7 +35,7 @@
   description: Ask the user to pick one option on a card, when a choice changes their goal or a step cannot be undone. Ask once, with two to four options and one recommended; do not repeat the question in text. Keep working on the recommended option while you wait, unless that step cannot be undone.
   schema: {"properties":{"context":{"description":"Background the user needs to choose. Optional.","type":"string"},"options":{"items":{"properties":{"consequence":{"description":"What happens if chosen, one sentence.","type":"string"},"label":{"description":"The option, a few words.","type":"string"}},"required":["label"],"type":"object"},"maxItems":4,"minItems":2,"type":"array"},"question":{"description":"The question, verb first, in about twelve words.","type":"string"},"reason":{"description":"Why you recommend it, one sentence.","type":"string"},"recommended":{"description":"Index of the recommended option, from 0.","type":"integer"}},"required":["question","options","recommended"],"type":"object"}
 [coordinator] resolve_thread
-  description: Mark a thread resolved (done). Only when the user says so or its work is merged.
+  description: Mark a thread resolved (done). Only when the user asks for it: a merged PR alone does not mean the thread is done.
   schema: {"properties":{"thread_id":{"description":"Thread id or prefix.","type":"string"}},"required":["thread_id"],"type":"object"}
 [coordinator] send_file
   description: Publish a file to this conversation so the user can see it. <guidance>

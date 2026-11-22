@@ -1211,7 +1211,7 @@ func (m *Threads) giveUp(threadID string, a *activeThread) {
 func (m *Threads) stoppedBeforeTurn(threadID string, by Source, ending bool) {
 	t, err := m.update(threadID, func(t *db.Thread) {
 		if t.Status == db.ThreadWorking && !m.hasBackground(threadID) {
-			t.Status, t.WaitReason = db.ThreadIdle, ""
+			t.Status, t.WaitReason = db.RestingStatus(t), ""
 		}
 	})
 	if err != nil || ending || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
@@ -1323,6 +1323,11 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		case t.Model == "":
 			t.Model = tally.launchModel
 		}
+		// Commits made after a merge from the Overview are not merged: the
+		// branch is no longer what was merged.
+		if t.MergedAt != nil && stats.CommitsAhead > t.CommitsAhead {
+			t.MergedAt = nil
+		}
 		t.CommitsAhead, t.FilesChanged, t.Uncommitted = stats.CommitsAhead, stats.FilesChanged, stats.Uncommitted
 		if session {
 			t.HeadBranch = head
@@ -1334,7 +1339,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		t.WaitReason = ""
 		switch {
 		case end.Stopped:
-			t.Status = db.ThreadIdle
+			t.Status = db.RestingStatus(t)
 			report.Kind = ""
 		case end.Err != nil:
 			t.Status, t.WaitReason = db.ThreadFailed, "Failed: "+end.Err.Error()
@@ -1350,7 +1355,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 				t.Status = db.ThreadWorking
 				held = !session
 			} else {
-				t.Status = restingStatus(stats.CommitsAhead)
+				t.Status = db.RestingStatus(t)
 			}
 		}
 		if report.Text != "" && !tally.compact {
@@ -1558,6 +1563,14 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
+	m.endProcess(threadID)
+	return m.close(threadID, nil)
+}
+
+// endProcess stops the thread's turn for good and closes its process: what a
+// resolved or archived thread no longer needs. The caller holds the thread's
+// lifecycle lock, so nothing can start a session until it is released.
+func (m *Threads) endProcess(threadID string) {
 	if done := m.stopEnding(threadID); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
@@ -1565,44 +1578,50 @@ func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
 		case <-time.After(agentboot.SessionCloseTimeout):
 		}
 	}
-	// A resolved thread's process has nothing left to do.
 	m.engine.Evict(m.sessionOf(threadID))
+}
+
+// close is the one way a thread becomes resolved (Resolve, Archive): the status and resolved time, whatever mark adds to the
+// same save, then what only an open thread holds — its chats go back to the
+// parent, its scratch directory and its tool URL go. The caller holds the
+// lifecycle lock and has called endProcess. See .design/thread-lifecycle.md.
+func (m *Threads) close(threadID string, mark func(t *db.Thread, now time.Time)) (*db.Thread, error) {
 	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
-		t.Status, t.WaitReason, t.ResolvedAt = db.ThreadResolved, "", &now
+		if t.ResolvedAt == nil {
+			t.ResolvedAt = &now
+		}
+		t.Status, t.WaitReason = db.ThreadResolved, ""
+		if mark != nil {
+			mark(t, now)
+		}
 	})
 	if err == nil {
 		m.releaseChats(t)
 		m.cleanTmp(t)
 		// After the status is saved, not before: the stopped turn's own
 		// bookkeeping races the save (it writes no "Stopped." once the
-		// thread is resolved), and nothing can start a session meanwhile, as
-		// the lifecycle lock is held.
+		// thread is resolved).
 		m.revokeTools(threadID)
 	}
 	return t, err
 }
 
 // ArchiveSession stores an independent archive flag. A stopped waiting or
-// working session becomes idle: there is no longer a live request to answer.
+// working session rests (db.RestingStatus): there is no longer a live request
+// to answer.
 func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
 	lock := m.lifecycleLock(threadID)
 	lock.Lock()
 	defer lock.Unlock()
-	if done := m.stopEnding(threadID); done != nil {
-		select {
-		case <-done:
-		case <-time.After(agentboot.SessionCloseTimeout):
-		}
-	}
-	m.engine.Evict(m.sessionOf(threadID))
+	m.endProcess(threadID)
 	t, err := m.update(threadID, func(t *db.Thread) {
 		if t.ArchivedAt == nil {
 			now := time.Now()
 			t.ArchivedAt = &now
 		}
 		if t.Status == db.ThreadWaiting || t.Status == db.ThreadWorking {
-			t.Status, t.WaitReason = db.ThreadIdle, ""
+			t.Status, t.WaitReason = db.RestingStatus(t), ""
 		}
 	})
 	if err == nil {
@@ -1655,10 +1674,7 @@ func (m *Threads) Reopen(threadID string, by Source) (*db.Thread, error) {
 		}
 		reopened = true
 		t.ResolvedAt = nil
-		t.Status = db.ThreadIdle
-		if t.CommitsAhead > 0 && t.MergedAt == nil {
-			t.Status = db.ThreadReady
-		}
+		t.Status = db.RestingStatus(t)
 	})
 	if err == nil && reopened {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Reopened" + by.actor() + "."})
@@ -1717,9 +1733,10 @@ type MergeSpec struct {
 var ErrBadMergeMethod = errors.New(`method must be "squash" or "merge_request"`)
 
 // Merge merges a thread's branch on GitHub the way spec says (Links.Merge does
-// the GitHub side; the thread's merge tool calls the same). A squash resolves
-// the thread; a merge request leaves it as it is: the branch is not merged
-// until the PR is.
+// the GitHub side; the thread's merge tool calls the same). A squash records
+// the branch merged; a merge request leaves it as it is: the branch is not
+// merged until the PR is. Neither closes the thread: whether anything is left
+// to do is the user's call (.design/thread-lifecycle.md).
 func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*db.Thread, error) {
 	if spec.Method != MergeSquash && spec.Method != MergeMergeRequest {
 		return nil, ErrBadMergeMethod
@@ -1737,14 +1754,12 @@ func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*
 	if m.Running(threadID) {
 		return nil, errors.New("the thread is still working; wait for it to finish or stop it")
 	}
-	// A merge tool call may have merged it already: only the thread is left to close.
-	for _, k := range t.Links {
-		if k.Kind == db.LinkPR && k.State == db.LinkStateMerged && k.Head == t.Branch {
-			if spec.Method == MergeMergeRequest {
-				return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
-			}
-			return m.resolveMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
+	// A merge tool call may have merged it already: only the record is left.
+	if k := mergedAsPushed(t); k != nil {
+		if spec.Method == MergeMergeRequest {
+			return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
 		}
+		return m.markMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
 	}
 	var links *Links
 	if m.links != nil {
@@ -1759,23 +1774,50 @@ func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*
 	}
 	switch {
 	case out.Merged:
-		return m.resolveMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
+		return m.markMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
 	case out.Existed:
 		return m.noteLinks(threadID, fmt.Sprintf("PR #%d is already open for %s; the branch was pushed again: %s", out.Item.Number, t.Branch, out.Item.URL))
 	}
 	return m.noteLinks(threadID, fmt.Sprintf("Opened PR #%d for %s into %s: %s", out.Item.Number, t.Branch, t.BaseBranch, out.Item.URL))
 }
 
-// resolveMerged marks the thread's branch merged and the thread resolved.
-func (m *Threads) resolveMerged(threadID, note string) (*db.Thread, error) {
+// mergedAsPushed is the thread's merged PR when that merge holds the branch as
+// it stands: a PR of the branch is merged, none is open, and the local branch
+// has nothing origin does not (the merge pushed it). Commits made after the
+// merge make it nil, so they are merged again rather than called merged.
+func mergedAsPushed(t *db.Thread) *db.ThreadLink {
+	var merged *db.ThreadLink
+	for i, k := range t.Links {
+		if k.Kind != db.LinkPR || k.Head != t.Branch {
+			continue
+		}
+		switch k.State {
+		case db.LinkStateOpen:
+			return nil
+		case db.LinkStateMerged:
+			merged = &t.Links[i]
+		}
+	}
+	if merged == nil || !branchPushed(t.RepoPath, t.Branch) {
+		return nil
+	}
+	return merged
+}
+
+// markMerged records the thread's branch merged from the Overview and notes
+// it. The thread stays open: a resting one rests again (merged work is not
+// waiting for review), one that waits on the user still does. Merge holds
+// the lifecycle lock and has checked no turn runs.
+func (m *Threads) markMerged(threadID, note string) (*db.Thread, error) {
 	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
-		t.MergedAt, t.ResolvedAt, t.Status, t.WaitReason = &now, &now, db.ThreadResolved, ""
+		t.MergedAt = &now
+		if t.Status == db.ThreadReady || t.Status == db.ThreadIdle {
+			t.Status = db.RestingStatus(t)
+		}
 	})
 	if err == nil {
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
-		m.releaseChats(t)
-		m.cleanTmp(t)
 	}
 	return t, err
 }
@@ -1791,6 +1833,13 @@ func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
 	return t, nil
 }
 
+// Why a thread waits after a restart: its turn was cut off, or the question
+// it asked can no longer be answered. Either way a message continues it.
+const (
+	interruptedReason = "Interrupted when tingly-project stopped. Send a message to continue."
+	expiredReason     = "The question expired when tingly-project stopped. Send a message to continue."
+)
+
 // Recover runs at startup: turns that were running when the process stopped
 // are gone, so their threads wait on the user to continue them.
 func (m *Threads) Recover() {
@@ -1800,7 +1849,7 @@ func (m *Threads) Recover() {
 	}
 	for _, t := range threads {
 		_, _ = m.update(t.ID, func(t *db.Thread) {
-			t.Status, t.WaitReason, t.Queued = db.ThreadWaiting, "Interrupted when tingly-project stopped. Send a message to continue.", false
+			t.Status, t.WaitReason, t.Queued = db.ThreadWaiting, interruptedReason, false
 		})
 	}
 	// Failures were recorded as waiting before failed was a status.
@@ -1810,10 +1859,13 @@ func (m *Threads) Recover() {
 			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status = db.ThreadFailed })
 		}
 	}
-	// Approvals pending at shutdown can no longer be answered.
+	// Approvals pending at shutdown can no longer be answered. The thread
+	// still needs the user, but its reason must not name a question nobody
+	// can answer any more.
 	waiting, _ = m.store.ListThreadsByStatus(db.ThreadWaiting)
 	for _, t := range waiting {
 		events, _ := m.store.ListThreadEvents(t.ID)
+		expired := false
 		for i := range events {
 			e := &events[i]
 			if e.Kind == db.EvQueued && strings.Contains(e.Payload, `"state":"held"`) {
@@ -1823,22 +1875,11 @@ func (m *Threads) Recover() {
 			if (e.Kind == db.EvApproval || e.Kind == db.EvAsk) && strings.Contains(e.Payload, `"state":"pending"`) {
 				e.Payload = strings.Replace(e.Payload, `"state":"pending"`, `"state":"expired"`, 1)
 				_ = m.store.UpdateThreadEvent(e)
+				expired = true
 			}
 		}
-	}
-}
-
-// AutoResolve resolves threads that have been idle for a week, as the
-// official Overview does.
-func (m *Threads) AutoResolve(maxIdle time.Duration) {
-	threads, err := m.store.ListThreadsByStatus(db.ThreadIdle)
-	if err != nil {
-		return
-	}
-	for _, t := range threads {
-		// Folder threads are archived by hand.
-		if !m.isFolder(t.ProjectID) && time.Since(t.UpdatedAt) > maxIdle {
-			_, _ = m.Resolve(t.ID)
+		if expired {
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.WaitReason = expiredReason })
 		}
 	}
 }

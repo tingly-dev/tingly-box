@@ -20,6 +20,8 @@ import (
 //	                       branch has commits to review
 //	status.resolved-consistent  a thread is resolved exactly when it has a
 //	                       resolved time, so reopening cannot leave one behind
+//	status.rests-by-one-rule  a resting thread (ready or idle) is the one
+//	                       db.RestingStatus picks, whichever path put it there
 //	memory.index-resolves  every link in MEMORY.md names a file that exists
 func (w *World) CheckInvariants() {
 	t := w.T
@@ -48,6 +50,12 @@ func (w *World) CheckInvariants() {
 	for _, th := range w.ThreadList() {
 		if th.Status == db.ThreadReady && th.Branch != "" && th.CommitsAhead == 0 {
 			t.Errorf("status.ready-has-commits: thread %q is ready with no commits", th.Title)
+		}
+	}
+
+	for _, th := range w.ThreadList() {
+		if (th.Status == db.ThreadReady || th.Status == db.ThreadIdle) && th.Status != db.RestingStatus(&th) {
+			t.Errorf("status.rests-by-one-rule: thread %q is %s, but with %d commits ahead and merged_at %v it rests %s", th.Title, th.Status, th.CommitsAhead, th.MergedAt, db.RestingStatus(&th))
 		}
 	}
 

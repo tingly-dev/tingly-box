@@ -74,7 +74,7 @@ func (c *Coordinator) coordinatorTools() []Tool {
 			Properties: map[string]any{"status": strProp("Optional. Only threads with this status, e.g. working, waiting, ready, resolved."),
 				"contains": strProp("Optional. Only threads whose title, task or last report contains this text."),
 				"limit":    map[string]any{"type": "integer", "description": "How many threads, up to 40. Default 20."}}, Handle: textTool(c.listThreadsTool)},
-		{Name: "resolve_thread", CoordinatorOnly: true, Description: "Mark a thread resolved (done). Only when the user says so or its work is merged.",
+		{Name: "resolve_thread", CoordinatorOnly: true, Description: "Mark a thread resolved (done). Only when the user asks for it: a merged PR alone does not mean the thread is done.",
 			Properties: map[string]any{"thread_id": strProp("Thread id or prefix.")}, Required: []string{"thread_id"}, Handle: textTool(c.resolveThread)},
 		{Name: "rename_thread", CoordinatorOnly: true, Description: "Change a thread's card title when its goal has changed. Does not touch its branch or history. Same title rules as start_thread.",
 			Properties: map[string]any{"thread_id": strProp("Thread id or its 8-character prefix."), "title": strProp("New title: starts with a verb that names the goal, three to six words, no ids or paths.")}, Required: []string{"thread_id", "title"}, Handle: textTool(c.renameThread)},
