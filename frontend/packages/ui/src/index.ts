@@ -5,6 +5,8 @@ export { default as PageLayout } from './components/PageLayout';
 export { default as PageHeader } from './components/PageHeader';
 export { default as Surface } from './components/Surface';
 export { default as StatusDot } from './components/StatusDot';
+export { default as TriStateSwitch, triStateOf } from './components/TriStateSwitch';
+export type { TriState } from './components/TriStateSwitch';
 export { default as EmptyState } from './components/EmptyState';
 export { default as DialogHeader } from './components/DialogHeader';
 export { default as ConfirmDialog } from './components/ConfirmDialog';
