@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -325,6 +327,8 @@ func TestAConflictAnswerReachesItsOwnThread(t *testing.T) {
 		}
 		return ""
 	}
+	var mu sync.Mutex
+	var seen string // the answer's input, as the coordinator's session got it
 	f, svc, sink, _, w := conflictFixture(t, func(c *coordtest.Turn) error {
 		env := c.InputEnvelope()
 		switch {
@@ -337,6 +341,9 @@ func TestAConflictAnswerReachesItsOwnThread(t *testing.T) {
 			})
 			assert.False(t, isErr, out)
 		case attr(env, "kind") == "answer":
+			mu.Lock()
+			seen = env + "\n" + c.Input()
+			mu.Unlock()
 			out, isErr := c.Call("message_thread", map[string]any{"thread_id": attr(env, "id"), "message": "The user decided.", "cite": []string{attr(env, "msg")}})
 			assert.False(t, isErr, out)
 		default:
@@ -382,5 +389,12 @@ func TestAConflictAnswerReachesItsOwnThread(t *testing.T) {
 		}
 		return false
 	}, 5*time.Second, 20*time.Millisecond, "the thread got the user's pick and the question it answers")
+	mu.Lock()
+	got := seen
+	mu.Unlock()
+	t.Logf("the coordinator's input for the answer:\n%s", got)
+	assert.Contains(t, got, fmt.Sprintf(`thread="#%d Fix export"`, w.Seq))
+	assert.Contains(t, got, fmt.Sprintf("(System: answer to your decision card %s, about #%d Fix export · PR #", short(card.ID), w.Seq))
+	assert.Contains(t, got, "The user picked option 2:)\nI will handle it")
 	waitQuiet(t, f, svc, w.ID)
 }

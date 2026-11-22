@@ -170,6 +170,16 @@ describe('conversation presentation', () => {
         expect(screen.queryByText('conversation.decisionAbout')).toBeNull();
     });
 
+    it('puts the card an answer is for in front of the picked option, apart from the user\'s words', () => {
+        const answer = (a: object) => event('user', "I'll handle it", { id: `u-${JSON.stringify(a)}`, payload: JSON.stringify({ answer: { card: 'dec', question: 'Resolve?', ...a } }) });
+        show({ ...props([answer({ thread_id: 't1', thread_seq: 12, thread_title: 'Fix login', number: 2728, link_kind: 'pr' }), answer({})]), threads: new Map([['t1', { id: 't1', seq: 12, title: 'Fix login' } as Thread]]) });
+        const lead = screen.getByText('conversation.decisionAbout #12 Fix login · conversation.decisionPR');
+        const pick = screen.getAllByText("I'll handle it")[0];
+        expect(lead.parentElement).toBe(pick.parentElement);
+        expect(lead.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.getByText('conversation.answerTo')).toBeInTheDocument();
+    });
+
     it('leaves composer configuration, send callbacks and empty-state seeds intact', async () => {
         const p = { ...props(), disabled: true, model: 'chosen-model', onModelChange: vi.fn(), composerContext: <span>Controls</span> };
         show(p);

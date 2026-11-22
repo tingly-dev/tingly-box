@@ -57,7 +57,7 @@ export const project = {
         example3: 'From now on, propose threads and wait for my go-ahead before starting them.',
         suggested: 'Suggested threads', start: 'Start', startAll: 'Start all {{count}}',
         decision: 'Needs your decision', recommended: 'Recommended', choose: 'Choose', chosen: 'Chosen',
-        decisionAbout: 'About', decisionPR: 'PR #{{number}}', decisionIssue: 'Issue #{{number}}', decisionNumber: '#{{number}}',
+        decisionAbout: 'About', decisionPR: 'PR #{{number}}', decisionIssue: 'Issue #{{number}}', decisionNumber: '#{{number}}', answerTo: 'Re: {{question}}',
     },
     overview: {
         view: { label: 'View', list: 'List', board: 'Board' },

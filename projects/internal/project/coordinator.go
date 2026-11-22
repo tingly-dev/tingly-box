@@ -390,8 +390,13 @@ func renderHistory(history []db.ThreadEvent, libraryDir string) []historyMessage
 		case db.EvSystem:
 			add("user", envelope(trustSystem, m.Content, "source", "system", "kind", "update", "at", stamp(m.CreatedAt)))
 		case db.EvUser:
-			attrs := append([]string{"source", userSource(m), "msg", short(m.ID), "at", stamp(m.CreatedAt)}, answerOf(m.Payload).attrs()...)
-			add("user", envelope(trustPrincipal, withAttachments(m.Content, libraryDir, ParseAttachments(m.Payload)), attrs...))
+			answer := answerOf(m.Payload)
+			attrs := append([]string{"source", userSource(m), "msg", short(m.ID), "at", stamp(m.CreatedAt)}, answer.attrs()...)
+			body := withAttachments(m.Content, libraryDir, ParseAttachments(m.Payload))
+			if lead := answer.lead(); lead != "" {
+				body = lead + "\n" + body
+			}
+			add("user", envelope(trustPrincipal, body, attrs...))
 		case db.EvAssistant:
 			add("assistant", m.Content)
 		case db.EvThreadStarted:

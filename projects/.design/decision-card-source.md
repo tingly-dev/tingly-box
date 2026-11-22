@@ -15,15 +15,18 @@
    - PR 还是 issue（`link_kind`）从线程的 links 读取；不知道时显示为 `#N`。
    - 线程在项目里的编号 `thread_seq` 和标题 `thread_title` 在发卡时取一份快照。payload 里的这些字段都由系统写入，模型传进来的会被覆盖。
 2. **卡片上显示来源**。给用户看的地方都用项目内的线程编号称呼线程（`#12 Fix login`，与 IM 里 `threadTag`、`@12`、`/session 12` 一致），不用 id。网页卡片在“需要你来决定”下面显示一行“关于 #12 <线程标题> · PR #2728”，可点击打开线程（编号和标题取线程的当前值，快照作为后备）。IM 文字卡在问题下面加一行 `About #12 Fix login · PR #2728`；一个 chat 里有多张未答卡片、回复又不够明确时，列表的每一行也带上来源：`a3f9 · <问题> (#12 Fix login · PR #2728)`（四位代码规则沿用 #2692，未改）。
-3. **回答带上系统写的来源头**。`Choose`（网页点击、IM 按钮、IM 文字/代码回复都走这里）仍然把**只有选项文字**的用户消息交给协调者，同时在这条消息的 payload 里记录 `answer: {card, question, thread_id, thread_title, number, link_kind}`。协调者读到的信封是：
+3. **回答带上系统写的来源头**。`Choose`（网页点击、IM 按钮、IM 文字/代码回复都走这里）仍然把**只有选项文字**的用户消息交给协调者，同时在这条消息的 payload 里记录 `answer: {card, question, thread_id, thread_seq, thread_title, number, link_kind, option}`。协调者实际收到的输入（`TestTwoAnswersSayWhichCardAndThreadEachIsFor` 逐字断言；`TestAConflictAnswerReachesItsOwnThread` 从协调者会话真实收到的 prompt 里取出并断言）是：
 
    ```
-   <event source="web" msg="ab12cd34" at="…" kind="answer" card="ef56ab78" question="Resolve the conflicts of PR #2728?" thread="Fix login" id="1a2b3c4d" pr="2728" trust="principal">
-   I'll handle it
+   <event source="im" msg="f2baae5e" at="…" kind="answer" card="c361e317" question="Resolve the conflicts of PR #2682?" thread="#2 Add export" id="5a580a6c" pr="2682" trust="principal">
+   (System: answer to your decision card c361e317, about #2 Add export · PR #2682, "Resolve the conflicts of PR #2682?". The user picked option 3:)
+   Drop the PR
    </event>
    ```
 
-   来源都在信封属性里，是系统写的、在用户的话前面；正文仍是用户选的选项，trust 仍是 `principal`，所以它仍然是用户本人的批准，`msg` 仍可被 `cite`。问题文字放在属性里，不会被当成用户说的话（属性值经过 `attrValue` 清洗，不能伪造标签或换行）。
+   来源出现两次：信封属性（给协调者调工具用的 `card`、`id`）和正文第一行由系统写的可读说明（模型最先读到的就是它）。用户的话仍是单独一行的选项文字；存储的消息内容（`Content`）也仍只是选项文字，所以 cite 引用、网页气泡里用户的话都不含系统措辞。trust 仍是 `principal`，`msg` 仍可被 `cite`。系统那一行经过 `escapeEnvelope`，属性值经过 `attrValue` 清洗，都不能伪造标签。
+   - **网页**：回答气泡里，选项文字上面有一行灰色小字“关于 #3 Retry budget in the SDK · PR #37”（与卡片上的来源行同一写法），由 payload 渲染（`TranscriptEntry.context`），不是用户输入的文字；没有来源的卡显示“回复：<问题>”。
+   - **IM**：卡片被答后的改写/确认消息带来源：`Answered in a chat: #2 Add export · PR #2682 — Drop the PR`。
 4. **转给线程时也带上问题**。协调者用 `message_thread` 带 `cite` 引用这条回答时，系统在引用的用户原话下面追加一行 `(the user's pick on the decision card "…", about #12 Fix login · PR #2728)`。单独一句“我自己处理”对线程没有意义，附上问题线程才知道答的是什么。这一行同样由系统写入（协调者写不出 `quoted by the system` 标记）。
 5. **协调者提示词**：问题涉及某个线程或它的 PR 时传 `thread_id`（以及 `number`）；收到 `kind="answer"` 的用户事件，按信封里的 `card` 和 `id` 处理、转给对应线程并 cite 这条消息；连续几条回答各自对应各自的卡，不按顺序配对。`pr_conflicts` 的指令改为“用事件里的线程作为 thread_id、PR 作为 number”。协调者自己历史里的卡片记录也带上卡片 id 和来源：`(I asked the user, card ef56ab78 about #12 Fix login · PR #2728: …)`，与回答里的 `card` 对得上。
 
@@ -32,7 +35,6 @@
 ## 没有做的
 
 - 用户在网页聊天框里**用文字**回答卡片（不点按钮）仍是一条普通消息，不带来源头，卡片也不会关闭（与之前一致，见 `projects.md` 的决策卡一节）。
-- 网页上用户自己的回答气泡仍只显示选项文字，没有显示“回答：<问题>”。
 
 ## 测试
 

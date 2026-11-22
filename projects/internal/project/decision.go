@@ -48,6 +48,8 @@ type decisionAnswer struct {
 	ThreadTitle string `json:"thread_title,omitempty"`
 	Number      int    `json:"number,omitempty"`
 	LinkKind    string `json:"link_kind,omitempty"`
+	// Option is the picked option's number, from 1 as the card shows it.
+	Option int `json:"option,omitempty"`
 }
 
 // answerOf reads the card a user message answers from its payload.
@@ -71,7 +73,7 @@ func (a *decisionAnswer) attrs() []string {
 	}
 	out := []string{"kind", "answer", "card", short(a.Card), "question", a.Question}
 	if a.ThreadID != "" {
-		out = append(out, "thread", a.ThreadTitle, "id", short(a.ThreadID))
+		out = append(out, "thread", threadTag(a.ThreadSeq, a.ThreadTitle), "id", short(a.ThreadID))
 	}
 	if a.Number > 0 {
 		key := a.LinkKind
@@ -81,6 +83,30 @@ func (a *decisionAnswer) attrs() []string {
 		out = append(out, key, strconv.Itoa(a.Number))
 	}
 	return out
+}
+
+// lead is the line the system puts ahead of the user's pick in the
+// coordinator's input, so the card the pick answers is the first thing read,
+// not only an attribute. The pick itself follows on its own line, as the
+// user's words.
+func (a *decisionAnswer) lead() string {
+	if a == nil {
+		return ""
+	}
+	where := ""
+	if s := about(a.ThreadSeq, a.ThreadTitle, a.Number, a.LinkKind); s != "" {
+		where = ", about " + s
+	}
+	pick := "The user picked:"
+	if a.Option > 0 {
+		pick = fmt.Sprintf("The user picked option %d:", a.Option)
+	}
+	return escapeEnvelope(fmt.Sprintf("(System: answer to your decision card %s%s, %q. %s)", short(a.Card), where, oneLine(a.Question), pick))
+}
+
+// about names a's card's thread and PR in words.
+func (a *decisionAnswer) about() string {
+	return about(a.ThreadSeq, a.ThreadTitle, a.Number, a.LinkKind)
 }
 
 // about says in words what a card is about: its thread, by the project's
@@ -244,7 +270,7 @@ func (c *Coordinator) Choose(ctx context.Context, mainThreadID, eventID string, 
 	if index < 0 || index >= len(d.Options) {
 		return nil, fmt.Errorf("choose an option from 0 to %d", len(d.Options)-1)
 	}
-	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadSeq: d.ThreadSeq, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind}
+	answer := decisionAnswer{Card: m.ID, Question: d.Question, ThreadID: d.ThreadID, ThreadSeq: d.ThreadSeq, ThreadTitle: d.ThreadTitle, Number: d.Number, LinkKind: d.LinkKind, Option: index + 1}
 	if _, err := c.post(main.ProjectID, d.Options[index].Label, jsonString(map[string]any{"answer": answer}), src); err != nil {
 		return nil, err
 	}

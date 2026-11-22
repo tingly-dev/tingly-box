@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Chip, Collapse, Paper, Typography } from '@mui/material';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { Attachment, Thread, ThreadEvent } from '../../client';
 import { ImSourceBadge } from '../im/ImSourceBadge';
 import { AttachmentChips, AttachmentGallery, uploadAttachments } from '../attachments';
@@ -181,23 +182,44 @@ interface DecisionPayload {
     link_kind?: 'pr' | 'issue';
 }
 
-/** The thread ("#12 Fix login", numbered as chats name it) and PR or issue a card is about, with the thread a link to open it. */
-function DecisionSource({ d, threads, onOpen }: { d: DecisionPayload; threads: Map<string, Thread>; onOpen: (id: string) => void }) {
-    const { t } = useTranslation('projects');
+/** What a decision card is about, as the system resolved it (the card's payload, or an answer's copy of it). */
+type DecisionSourceFields = Pick<DecisionPayload, 'thread_id' | 'thread_seq' | 'thread_title' | 'number' | 'link_kind'>;
+
+/** A card's thread, named "#12 Fix login" as chats name it (current number and title, the card's copy as fallback), and its PR or issue. */
+function decisionSource(d: DecisionSourceFields, threads: Map<string, Thread>, t: TFunction) {
     const th = d.thread_id ? threads.get(d.thread_id) : undefined;
     const title = d.thread_id ? th?.title ?? d.thread_title : undefined;
     const seq = th?.seq || d.thread_seq;
-    if (!title && !d.number) return null;
+    const thread = title ? (seq ? `#${seq} ${title}` : title) : undefined;
     const item = d.number
         ? t(d.link_kind === 'pr' ? 'conversation.decisionPR' : d.link_kind === 'issue' ? 'conversation.decisionIssue' : 'conversation.decisionNumber', { number: d.number })
         : undefined;
+    return { thread, item };
+}
+
+/** The line in front of a picked option, saying which card it answers: its source, else its question. Written by the system, not the user. */
+function answerContext(e: ThreadEvent, threads: Map<string, Thread>, t: TFunction): string | undefined {
+    if (e.kind !== 'user') return undefined;
+    const a = parse<{ answer?: DecisionSourceFields & { question?: string } }>(e.payload)?.answer;
+    if (!a) return undefined;
+    const { thread, item } = decisionSource(a, threads, t);
+    const source = [thread, item].filter(Boolean).join(' · ');
+    if (source) return `${t('conversation.decisionAbout')} ${source}`;
+    return a.question ? t('conversation.answerTo', { question: a.question }) : undefined;
+}
+
+/** The thread and PR or issue a card is about, with the thread a link to open it. */
+function DecisionSource({ d, threads, onOpen }: { d: DecisionPayload; threads: Map<string, Thread>; onOpen: (id: string) => void }) {
+    const { t } = useTranslation('projects');
+    const { thread: title, item } = decisionSource(d, threads, t);
+    if (!title && !item) return null;
     return (
         <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, minWidth: 0, mb: 0.25 }}>
             <span>{t('conversation.decisionAbout')}</span>
             {title && d.thread_id && (
                 <Box component="button" type="button" onClick={() => onOpen(d.thread_id!)} title={t('conversation.openThread')}
                     sx={{ minWidth: 0, p: 0, border: 0, bgcolor: 'transparent', font: 'inherit', fontWeight: 600, color: 'text.primary', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
-                    {seq ? `#${seq} ${title}` : title}
+                    {title}
                 </Box>
             )}
             {title && item && <span>·</span>}
@@ -320,8 +342,8 @@ export function ConversationPane({ projectId, messages, more = false, onLoadEarl
     // same shared renderer a thread's panel uses. Only its own cards differ,
     // and they render through the transcript's host hook.
     const blocks = useMemo(
-        () => buildTranscript(threadTranscript(messages, busy, (e) => e.source === 'thread' ? t('thread.fromCoordinator') : undefined).entries),
-        [messages, busy, t],
+        () => buildTranscript(threadTranscript(messages, busy, (e) => e.source === 'thread' ? t('thread.fromCoordinator') : undefined, (e) => answerContext(e, threads, t)).entries),
+        [messages, busy, threads, t],
     );
     // Every file in the conversation, which a preview steps through.
     const galleryFiles = useMemo(() => blockAttachments(blocks), [blocks]);

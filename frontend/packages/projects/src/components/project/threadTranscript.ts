@@ -38,9 +38,10 @@ export interface ThreadTranscript {
  * threadTranscript converts a thread's events. author names who sent a
  * message to the thread when it is worth saying (the coordinator, which
  * writes with source `thread`); running
- * is whether a turn is live, so a pending request is still answerable.
+ * is whether a turn is live, so a pending request is still answerable;
+ * context is a line put in front of a user message in the host's words.
  */
-export function threadTranscript(events: ThreadEvent[], running: boolean, author: (e: ThreadEvent) => string | undefined): ThreadTranscript {
+export function threadTranscript(events: ThreadEvent[], running: boolean, author: (e: ThreadEvent) => string | undefined, context?: (e: ThreadEvent) => string | undefined): ThreadTranscript {
     const entries: TranscriptEntry[] = [];
     // Calls without a result yet, oldest first: a result belongs to the
     // latest of them, as the engine writes one right after its call.
@@ -60,7 +61,7 @@ export function threadTranscript(events: ThreadEvent[], running: boolean, author
         switch (e.kind) {
             case 'user': {
                 const pl = parse<{ attachments?: TranscriptEntry['attachments']; injected?: boolean }>(e.payload);
-                const entry: TranscriptEntry = { role: 'user', content: e.content, author: author(e), attachments: pl?.attachments, timestamp };
+                const entry: TranscriptEntry = { role: 'user', content: e.content, author: author(e), context: context?.(e), attachments: pl?.attachments, timestamp };
                 if (e.source === 'im') {
                     entry.imSource = { platform: e.source_platform ?? '', chatId: e.source_chat_id ?? '' };
                 }

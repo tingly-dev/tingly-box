@@ -82,7 +82,7 @@ func TestTwoAnswersSayWhichCardAndThreadEachIsFor(t *testing.T) {
 	head1 := strings.SplitN(got1, "\n", 2)[0]
 	assert.Contains(t, head1, `card="`+short(first.ID)+`"`)
 	assert.Contains(t, head1, `question="Resolve the conflicts of PR #2728?"`)
-	assert.Contains(t, head1, `thread="Fix login"`)
+	assert.Contains(t, head1, `thread="`+threadTag(a.Seq, "Fix login")+`"`)
 	assert.Contains(t, head1, `id="`+short(a.ID)+`"`)
 	assert.Contains(t, head1, `pr="2728"`)
 	assert.Contains(t, head1, `trust="principal"`)
@@ -90,11 +90,21 @@ func TestTwoAnswersSayWhichCardAndThreadEachIsFor(t *testing.T) {
 
 	head2 := strings.SplitN(got2, "\n", 2)[0]
 	assert.Contains(t, head2, `card="`+short(second.ID)+`"`)
-	assert.Contains(t, head2, `thread="Add export"`)
+	assert.Contains(t, head2, `thread="`+threadTag(b.Seq, "Add export")+`"`)
 	assert.Contains(t, head2, `id="`+short(b.ID)+`"`)
 	assert.Contains(t, head2, `pr="2682"`, "a thread with one open PR names it")
 	assert.Contains(t, head2, `source="im"`)
 	assert.NotContains(t, head2, "2728")
+
+	// The whole input, as the coordinator reads it: the source opens the
+	// body in the system's words, and the pick follows on its own line.
+	at := stamp(ev2.CreatedAt)
+	want := fmt.Sprintf(`<event source="im" msg="%s" at="%s" kind="answer" card="%s" question="Resolve the conflicts of PR #2682?" thread="#%d Add export" id="%s" pr="2682" trust="principal">
+(System: answer to your decision card %s, about #%d Add export · PR #2682, "Resolve the conflicts of PR #2682?". The user picked option 3:)
+Drop the PR
+</event>`, short(ev2.ID), at, short(second.ID), b.Seq, short(b.ID), short(second.ID), b.Seq)
+	assert.Equal(t, want, got2)
+	t.Logf("coordinator input for the second answer:\n%s", got2)
 }
 
 // A card about a PR alone finds the thread that owns the PR.
@@ -192,6 +202,8 @@ func TestTwoCardsInAChatAreToldApartBySource(t *testing.T) {
 	require.True(t, handled)
 	require.NotNil(t, chosen(t, svc, second))
 	assert.Nil(t, chosen(t, svc, first))
+	confirm := sink.next(t).text + "\n" + sink.next(t).text
+	assert.Contains(t, confirm, "Answered in a chat: "+threadTag(b.Seq, "Add export")+" · PR #2682 — Drop the PR", "the chat's echo names the source too")
 	ev, got := lastUserEvent(t, c, f.project)
 	assert.Equal(t, "Drop the PR", ev.Content)
 	head := strings.SplitN(got, "\n", 2)[0]

@@ -2,6 +2,7 @@ package project
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -37,6 +38,12 @@ func askShip(t *testing.T, svc *Service, projectID string) db.ThreadEvent {
 	}
 	t.Fatal("no decision card was posted")
 	return db.ThreadEvent{}
+}
+
+// echoAnswer is what the echoing coordinator says back to an answer of
+// shipDecision: its input, the system's line naming the card, then the pick.
+func echoAnswer(card db.ThreadEvent, option int, label string) string {
+	return fmt.Sprintf("Echo: (System: answer to your decision card %s, \"Ship it now?\". The user picked option %d:)\n%s\n\n[Demo]", short(card.ID), option, label)
 }
 
 func chosen(t *testing.T, svc *Service, card db.ThreadEvent) *int {
@@ -120,7 +127,7 @@ func TestPressingADecisionButtonAnswersTheCoordinator(t *testing.T) {
 	require.NotNil(t, chosen(t, svc, card))
 	assert.Equal(t, 0, *chosen(t, svc, card))
 	assert.Contains(t, sink.nextRestate(t).text, "Answered in a chat: Ship")
-	assert.Equal(t, "Echo: Ship\n\n[Demo]", sink.next(t).text, "the coordinator got the label as the user's message")
+	assert.Equal(t, echoAnswer(card, 1, "Ship"), sink.next(t).text, "the coordinator got the label as the user's message, after the system's line naming the card")
 
 	var user *db.ThreadEvent
 	events, _ := f.store.ListThreadEvents(f.project.MainThreadID)
@@ -184,7 +191,7 @@ func TestRepliesChooseADecisionOptionInAPlainChat(t *testing.T) {
 	require.True(t, handled)
 	require.NotNil(t, chosen(t, svc, card))
 	assert.Equal(t, 1, *chosen(t, svc, card), "the label, in any case")
-	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", "Echo: Wait\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text}, "the answer is confirmed, and the coordinator replies")
+	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", echoAnswer(card, 2, "Wait")}, []string{sink.next(t).text, sink.next(t).text}, "the answer is confirmed, and the coordinator replies")
 	_, _, waiting = awaitingOf(svc.Relay, "dingtalk", "dt")
 	assert.False(t, waiting, "answered: the next message is a message again")
 
@@ -194,7 +201,7 @@ func TestRepliesChooseADecisionOptionInAPlainChat(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, chosen(t, svc, card2))
 	assert.Equal(t, 0, *chosen(t, svc, card2), "the number")
-	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Ship", "Echo: Ship\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text})
+	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Ship", echoAnswer(card2, 1, "Ship")}, []string{sink.next(t).text, sink.next(t).text})
 }
 
 // A card answered on the web is restated in the chats, and a later "1" in
@@ -287,12 +294,12 @@ func TestAPlainChatIsToldWhichQuestionItAnswered(t *testing.T) {
 	sink.plain["dt"] = true
 	_, err := svc.BindChannel("dingtalk", "dt", "", "", f.project.ID)
 	require.NoError(t, err)
-	askShip(t, svc, f.project.ID)
+	card := askShip(t, svc, f.project.ID)
 	sink.next(t)
 
 	_, err = svc.PostFromChannel("dingtalk", "dt", "2", nil)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", "Echo: Wait\n\n[Demo]"}, []string{sink.next(t).text, sink.next(t).text})
+	assert.ElementsMatch(t, []string{"[Demo] Re: Ship it now?\nAnswered in a chat: Wait", echoAnswer(card, 2, "Wait")}, []string{sink.next(t).text, sink.next(t).text})
 }
 
 // awaitingOf is the oldest request a chat was asked that is not settled.

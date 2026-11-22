@@ -180,7 +180,11 @@ func (r *Relay) Decided(e db.ThreadEvent, src Source) {
 	if src.Kind == db.SourceIM {
 		where = " in a chat"
 	}
-	r.enqueueJob(relayJob{settle: e.ID, text: join("Answered"+where, d.Options[*d.Chosen].Label)})
+	pick := d.Options[*d.Chosen].Label
+	if a := d.about(); a != "" {
+		pick = a + " — " + pick
+	}
+	r.enqueueJob(relayJob{settle: e.ID, text: join("Answered"+where, pick)})
 }
 
 // ThreadReply relays the end of a turn of a non-main thread (a worker or a
