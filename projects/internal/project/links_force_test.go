@@ -273,3 +273,21 @@ func TestUpdateOfAPRTheThreadDidNotOpenAsksTheUserWithTheChange(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.LinkCommented, link.Role, "recorded as touched, not as opened: the next edit asks again")
 }
+
+// A branch deleted on GitHub (after a merge, say) that this checkout still
+// tracks: the force is refused and the error says to prune, not "unknown".
+func TestForceOnABranchGitHubNoLongerHasSaysToPrune(t *testing.T) {
+	f := newLinksFixture(t)
+	f.allowAll()
+	cs, _ := f.client(t, f.worker.ID)
+	_, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x"})
+	require.False(t, isErr)
+	run(t, f.remote, "git", "branch", "-D", "tp/work")
+	f.amendOwn(t)
+
+	out, isErr := f.call(t, cs, "create_pr", map[string]any{"title": "x", "force": true})
+	require.True(t, isErr, out)
+	assert.Contains(t, out, "GitHub no longer has branch tp/work")
+	assert.Contains(t, out, "git fetch --prune origin")
+	assert.False(t, f.remoteHas(t, "tp/work"), "nothing was pushed")
+}

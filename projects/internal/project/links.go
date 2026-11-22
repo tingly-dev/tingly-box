@@ -254,8 +254,9 @@ func (l *Links) Comment(ctx context.Context, t *db.Thread, number int, body stri
 // another stack branch. The push is a plain fast-forward one unless force is
 // set, which is --force-with-lease (see pushBranch). What is beyond the
 // thread's own say (another thread's branch, the default or a protected branch,
-// a force on a branch it did not create or open a PR from, overwriting commits
-// it has not seen) is put to the user, not refused.
+// a force on a branch it did not create or open a PR from) is put to the user,
+// not refused. A force over commits this checkout has not seen is an error: the
+// lease is never overridden.
 func (l *Links) CreatePR(ctx context.Context, t *db.Thread, title, body, head, base string, draft, force bool) (string, error) {
 	r, err := l.createPR(ctx, t, title, body, head, base, draft, true, force)
 	if err != nil {
@@ -1345,9 +1346,17 @@ func pushBranch(ctx context.Context, dir string, gr githubRemote, branch string,
 			if *lease != "" {
 				seen = "last saw it at " + (*lease)[:min(len(*lease), 10)]
 			}
-			now := "unknown"
+			now := ""
 			if f := strings.Fields(lsRemote(ctx, dir, gr, branch)); len(f) > 0 {
 				now = f[0][:min(len(f[0]), 10)]
+			}
+			if now == "" && *lease != "" {
+				// The branch is gone from GitHub (deleted after a merge, say) but this
+				// checkout still has its tracking ref.
+				return fmt.Errorf("force-pushing %s was refused: GitHub no longer has branch %s, but this checkout still remembers it at %s. Nothing was pushed. Run `git fetch --prune origin` and call create_pr again (without force, a new branch needs none). git said: %s", branch, branch, (*lease)[:min(len(*lease), 10)], clip(msg, 400))
+			}
+			if now == "" {
+				now = "unknown"
 			}
 			return fmt.Errorf("force-pushing %s was refused to protect commits on GitHub: origin/%s is at %s, this checkout %s, so a force would overwrite commits you have not seen. Nothing was pushed. Run `git fetch origin`, look at `git log %s..origin/%s`, rebase onto origin/%s and call create_pr with force=true again. git said: %s", branch, branch, now, seen, branch, branch, branch, clip(msg, 400))
 		// Only a push that lost to newer commits earns the rebase advice; a
