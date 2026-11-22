@@ -1,6 +1,6 @@
 # 用户在线程里直接说话：权限在执行点，协调者只需知道"谁在指挥"
 
-> 状态：**设计，待用户确认，未实现。** 相关：[coordinator-session.md](./coordinator-session.md)（输入与信封）、[thread-coordinator-channel.md](./thread-coordinator-channel.md)、[github-tools.md](./github-tools.md)（`merge` 每次都问）、[projects-harness.md](./projects-harness.md)。
+> 状态：**只改了提示词（已实现，2026-11-22 与用户商定）**；`directed_by` 字段**未做**，看提示词效果再定。官方做法的调研见 [../.research/claude-projects.md](../.research/claude-projects.md) §4.10：官方同样不把线程里的对话同步给协调者，审批只在线程里。 相关：[coordinator-session.md](./coordinator-session.md)（输入与信封）、[thread-coordinator-channel.md](./thread-coordinator-channel.md)、[github-tools.md](./github-tools.md)（`merge` 每次都问）、[projects-harness.md](./projects-harness.md)。
 
 ## 问题
 
@@ -66,12 +66,15 @@
 - 不转发用户在线程里的原话或批准列表（量大、难回应、实现复杂）。
 - 不新增输入种类、队列状态、游标或界面元素。
 
-## 实现（一个小 PR）
+## 已实现：只改提示词
 
-1. 线程两列 + 写 `EvUser` 处更新；报告信封、`<threads>` 列表、`message_thread` 返回加属性/提示。
-2. 两条提示词；升级后首回合 `takeResend` 重发一次项目上下文。
-3. 测试：字段在用户消息 / 协调者转达 / `start_thread` 后的取值（单测）；报告信封带 `directed_by`（golden）；提示词行（`prompts_test.go`）；harness 场景：用户在线程里发消息后线程报告，协调者回合输入里的报告带 `directed_by="user"`，协调者随后发消息时返回带提示；变异检查。模型是否遵守提示词，用 harness 真实模型层或真实 `tingly-project harness` 场景确认。
+用户决定（2026-11-22）：团队协作里这类信息差无法全部消除，先只改提示词，不加字段、不改信息流。
 
-## 需要确认
+- 协调者（`coordinatorSystemPrompt`，信任一条之后）：用户也会直接在线程里说话，协调者看不到；报告说用户在线程里要求或决定的（多开 PR、换方案、交接），当作用户的计划，不再问、不发冲突指令；需要批准的动作在线程里执行前已问过用户，做成了就是批过了，不说"没看到批准"；用户在主对话里改方向时用 `cite` 发给线程。
+- 线程（`threadSystemPrompt`，协调者转达一条之后）：其余消息都是用户直接说的，用户最新的指令为准；协调者消息除非引用了用户更新的原话，不推翻用户的直接指令；冲突时不两个都做，指出冲突并 `NEEDS_INPUT`；报告里说做了什么，必要时说明是用户在线程里要求的。
+- 测试：`prompts_test.go` 断言两条新规则在提示词里。模型是否遵守，靠实际使用观察。
+- 生效：协调者的项目上下文只在首回合、`system` 事件或重发时注入，已有协调者 session 要到那时才看到新规则；常驻线程进程在回收重启后才换新提示词。
 
-- 协调者信任"做成了就是批过了"依赖每个不可逆动作都在执行点问用户。已知缺口：`bypassPermissions` 模式下 Claude Code 可能跳过 `ask` 规则（`github-tools.md` 写明未探测）。这种项目里这条原则不成立，要么接受，要么让协调者在该模式下仍对不可逆动作问一次。
+## 未做（如提示词不够再考虑）
+
+`directed_by` 字段（上文"设计 1"）及其单测、golden、harness 场景。
