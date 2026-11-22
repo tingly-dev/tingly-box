@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../../client';
-import { stateTone, ThreadBadges, ThreadState, ThreadSubtitle } from './threadStatus';
+import { NumberedTitle, stateTone, threadRef, ThreadBadges, ThreadState, ThreadSubtitle } from './threadStatus';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { count?: number }) => (o?.count != null ? `${key}:${o.count}` : key) }) }));
 afterEach(cleanup);
@@ -107,5 +107,20 @@ describe('ThreadBadges', () => {
         render(<ThreadBadges thread={thread({ status: 'working', running_tasks: 3 })} />);
         expect(screen.queryByRole('button', { name: 'thread.tasksSubtitle:3' })).toBeNull();
         expect(screen.getByTitle('thread.tasksSubtitle:3')).toBeTruthy();
+    });
+});
+
+describe('thread numbers', () => {
+    it('mentions a thread as "#3 Title", the coordinator by its title', () => {
+        expect(threadRef({ seq: 3, title: 'Fix login' })).toBe('#3 Fix login');
+        expect(threadRef({ seq: 0, title: 'Payments' })).toBe('Payments');
+    });
+
+    it('puts the number before the title, none for the coordinator', () => {
+        const { container, rerender } = render(<NumberedTitle thread={{ seq: 3, title: 'Fix login' }} />);
+        expect(container.textContent).toBe('#3Fix login');
+        expect(container.querySelector('[data-thread-number]')?.textContent).toBe('#3');
+        rerender(<NumberedTitle thread={{ seq: 0, title: 'Payments' }} />);
+        expect(container.querySelector('[data-thread-number]')).toBeNull();
     });
 });

@@ -18,6 +18,8 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onClick'
     selected?: boolean;
     /** Under the text, inside the row: a control that belongs to this row alone (it must stop its own clicks). */
     footer?: ReactNode;
+    /** Under the whole row, across its full width: what belongs to it in detail (a list row's issues and PRs). It must stop its own clicks. */
+    trail?: ReactNode;
     /** Changed since the user last looked: the title goes bolder. */
     unseen?: boolean;
     /** Draw it as a bordered card (a column of the Overview band). */
@@ -33,7 +35,8 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'onClick'
  * background tasks all use it, so the same level of information sits in the
  * same place with the same type.
  */
-export function ListRow({ mark, title, subtitle, badges, meta, footer, end, selected, unseen, outlined, stacked, onClick, sx, ...rest }: Props & { sx?: object }) {
+export function ListRow({ mark, title, subtitle, badges, meta, footer, trail, end, selected, unseen, outlined, stacked, onClick, sx, ...rest }: Props & { sx?: object }) {
+    const line = { display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 } as const;
     return (
         <Box
             role={onClick ? 'button' : undefined}
@@ -43,7 +46,7 @@ export function ListRow({ mark, title, subtitle, badges, meta, footer, end, sele
             onKeyDown={onClick ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); } } : undefined}
             {...rest}
             sx={{
-                display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, px: 1.5, py: 1, borderRadius: radius.row, outline: 'none',
+                ...(trail != null ? { display: 'flex', flexDirection: 'column', minWidth: 0 } : line), px: 1.5, py: 1, borderRadius: radius.row, outline: 'none',
                 cursor: onClick ? 'pointer' : 'default',
                 ...(outlined && { px: 1.25, py: 0.75, border: 1, borderColor: 'divider' }),
                 bgcolor: selected ? 'action.selected' : undefined,
@@ -52,6 +55,7 @@ export function ListRow({ mark, title, subtitle, badges, meta, footer, end, sele
                 ...sx,
             }}
         >
+            <Box sx={trail != null ? line : { display: 'contents' }}>
             {mark != null && <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 16, flexShrink: 0, color: 'text.secondary' }}>{mark}</Box>}
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography noWrap component="div" sx={{ fontSize: fontSizes.base, fontWeight: unseen ? 650 : 500, color: 'text.primary' }}>{title}</Typography>
@@ -67,6 +71,8 @@ export function ListRow({ mark, title, subtitle, badges, meta, footer, end, sele
             {!stacked && badges}
             {!stacked && meta != null && <Typography component="span" sx={{ flexShrink: 0, fontSize: fontSizes.sm, color: 'text.disabled', minWidth: 28, textAlign: 'right' }}>{meta}</Typography>}
             {end}
+            </Box>
+            {trail}
         </Box>
     );
 }

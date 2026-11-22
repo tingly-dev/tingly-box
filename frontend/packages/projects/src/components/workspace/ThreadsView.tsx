@@ -9,8 +9,9 @@ import { useGroupFolds } from '../../hooks/useGroupFolds';
 import { usePinnedThreads } from '../../hooks/usePinnedThreads';
 import { timeAgo } from '../../utils/format';
 import { Checklist, CollapseAll, ExpandAll } from '../icons';
-import { needsUser, STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
+import { needsUser, NumberedTitle, STATUS_ORDER, ThreadBadges } from '../project/threadStatus';
 import { ThreadRequestSubtitle, ThreadRequestsStrip } from '../project/ThreadRequests';
+import { ThreadLinkRows } from '../project/ThreadLinks';
 import { StatusBoard } from './StatusBoard';
 import { StatusGroups, type GroupFold, type StatusGroup } from './StatusGroups';
 import { useThreadsView, ViewSwitch } from './ViewSwitch';
@@ -129,9 +130,10 @@ export function ThreadsView({ scope, threads, selectedId, onOpen, onTasks, group
     const shownKeys = [...(pinnedShown ? ['pinned'] : []), ...new Set(threads.filter((th) => !(view === 'board' && pinnedIds.includes(th.id))).map(groupOf))].filter((k) => k === 'pinned' || lanes.some((g) => g.key === k));
     const allFolded = shownKeys.every((k) => !fold.isOpen(k, false));
     const rows = threads.map((th) => ({
-        id: th.id, group: groupOf(th), title: th.title, selected: th.id === selectedId, needsYou: needsUser(th.status) && !th.archived_at,
+        id: th.id, group: groupOf(th), title: <NumberedTitle thread={th} />, selected: th.id === selectedId, needsYou: needsUser(th.status) && !th.archived_at,
         subtitle: subtitle ? subtitle(th) : <ThreadRequestSubtitle thread={th} />,
-        footer: <ThreadRequestsStrip thread={th} onOpen={onOpen} />, badges: <ThreadBadges thread={th} onTasks={onTasks} />, meta: timeAgo(th.updated_at, i18n.language),
+        // The list shows the thread's issues and PRs in full, under the row.
+        footer: <ThreadRequestsStrip thread={th} onOpen={onOpen} />, trail: <ThreadLinkRows links={th.links} />, badges: <ThreadBadges thread={th} onTasks={onTasks} />, meta: timeAgo(th.updated_at, i18n.language),
         onClick: selecting && pickable.has(th.id) ? () => togglePick(th.id) : undefined,
         end: selecting && pickable.has(th.id) ? <Checkbox size="small" checked={picked.has(th.id)} onChange={() => togglePick(th.id)} onClick={(e) => e.stopPropagation()} sx={{ p: 0.5 }} /> : undefined,
     }));

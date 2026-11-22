@@ -46,6 +46,19 @@ behind a popover.
   when the thread has a link, so it is the short list worth seeing while
   typing. It no longer carries the folder and branch (the Environment card
   has them) nor the "answers itself at …" line (the question card says it).
+- **Issues & PRs under list rows** (`ThreadLinkRows`, in `ThreadsView`'s
+  list: a project's Overview and a folder's sessions): the list is where a
+  thread's whole picture is read, so its links unfold under the subtitle as
+  a vertical trail, one line each, in the strip's order (open PR, open issue,
+  then what finished): kind/state icon, `#214 title` as a link to GitHub,
+  and where it stands (open or draft, checks, mergeability), behind a thin
+  guide line. Past three, and only when that hides two or more, the rest wait
+  behind "Show N more", which opens in place. Clicks there never open the
+  thread. Data is `Thread.links` of the thread list and its live events: no
+  request of its own (refresh stays on the strip, the rail and the Issues &
+  PRs tab). The boards and the band's cards are a compact mode of their own
+  and do not show links yet; how they should (a pill with `+N` was tried,
+  branch `tp/pr-8ef493-card-pills`) is a separate discussion.
 - **Auto-answer** (`AutoAnswerSelect`) is a picker in the message box's row
   of pickers, after the permission mode: both say how far the thread goes
   without the user, and that row is where the thread's behaviour is changed
@@ -189,3 +202,25 @@ only offers a place for a host's own cards.
   per-folder polling.
 - Not done: a failed state. The list's `ThreadCounts` has none; a failed turn
   surfaces as `waiting` with a reason.
+
+## Thread numbers
+
+A thread is mentioned by its number in the project, `Thread.seq` (from 1,
+stored, never reused; 0 for the coordinator, which shows none). IM already
+used it (`[#3 Title]` tags, `@3 text`, `/session 3`); now the web and the
+coordinator do too. Chosen over the 8-character id prefix: short, the same
+name in every channel, and no new stored field.
+
+- **Shown** as a muted `#3` before the title (`NumberedTitle`): list rows
+  (project threads and folder sessions), the status popovers, the
+  conversation's thread lines, the open thread's header. Board and band cards
+  wait for the card-mode discussion.
+- **Copied**: in the header the number is a button, and the thread menu has
+  "Copy reference"; both copy `#3 Title` (`threadRef`, the IM tag) and say so.
+- **Understood by the coordinator**: its thread table, `list_threads`,
+  `get_thread` and `start_thread` results name a thread `#3 a1b2c3d4`; the
+  thread tools take `#3` (also `#3 a1b2c3d4` or `#3 Title`, as copied) beside
+  the id prefix (`findThread`: ids never start with `#`). The prompt tells it
+  the user may name threads that way.
+- A PR's `#214` and a thread's `#3` do not meet on screen: a PR number always
+  sits behind its kind/state icon.

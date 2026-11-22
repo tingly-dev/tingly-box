@@ -39,7 +39,7 @@ error=true
 threads is empty
 == start_thread {"repo":"none","task":"do the first thing","title":"First task"}
 error=false
-started thread T9(short) "First task" (branch none, base none)
+started thread #1 T9(short) "First task" (branch none, base none)
 == start_thread {"repo":"none","task":"  ","title":"No task"}
 error=true
 task is required
@@ -48,23 +48,23 @@ error=true
 base "nope" is not a local branch of <repo>
 == start_thread {"repo":"none","task":"do the second thing","title":"Second task"}
 error=false
-started thread T15(short) "Second task" (branch none, base none)
+started thread #2 T15(short) "Second task" (branch none, base none)
 == list_threads {}
 error=false
 <event source="history" kind="list_threads" trust="relay">
-- T15(short) "Second task" status=working updated=<time>
-- T9(short) "First task" status=working updated=<time>
+- #2 T15(short) "Second task" status=working updated=<time>
+- #1 T9(short) "First task" status=working updated=<time>
 </event>
 == list_threads {"limit":1,"status":"working"}
 error=false
 <event source="history" kind="list_threads" trust="relay">
-- T15(short) "Second task" status=working updated=<time>
+- #2 T15(short) "Second task" status=working updated=<time>
 (1 more match and are hidden to keep the result small; narrow with status or contains)
 </event>
 == list_threads {"contains":"second"}
 error=false
 <event source="history" kind="list_threads" trust="relay">
-- T15(short) "Second task" status=working updated=<time>
+- #2 T15(short) "Second task" status=working updated=<time>
 </event>
 == list_threads {"contains":"nothing like this"}
 error=false
@@ -72,7 +72,7 @@ no thread matches
 == get_thread {"thread_id":"T9(short)"}
 error=false
 <event source="thread" kind="get_thread" trust="relay">
-thread T9(short) "First task" status=working branch=none base=none commits_ahead=0 files_changed=0 waiting_on=""
+thread #1 T9(short) "First task" status=working branch=none base=none commits_ahead=0 files_changed=0 waiting_on=""
 task: do the first thing
 last report: 
 recent transcript:
@@ -84,7 +84,7 @@ no thread "zzzz" in this project
 == get_thread {"full":true,"limit":1,"thread_id":"T9(short)"}
 error=false
 <event source="thread" kind="get_thread" trust="relay">
-thread T9(short) "First task" status=working branch=none base=none commits_ahead=0 files_changed=0 waiting_on=""
+thread #1 T9(short) "First task" status=working branch=none base=none commits_ahead=0 files_changed=0 waiting_on=""
 task: do the first thing
 last report: 
 recent transcript:
@@ -141,7 +141,7 @@ the thread is resolved; reopen it first
 == get_thread {"thread_id":"T15(short)"}
 error=false
 <event source="thread" kind="get_thread" trust="relay">
-thread T15(short) "Renamed second" status=resolved branch=none base=none commits_ahead=0 files_changed=0 waiting_on=""
+thread #2 T15(short) "Renamed second" status=resolved branch=none base=none commits_ahead=0 files_changed=0 waiting_on=""
 task: do the second thing
 last report: 
 recent transcript:
@@ -150,7 +150,7 @@ recent transcript:
 == list_threads {"status":"resolved"}
 error=false
 <event source="history" kind="list_threads" trust="relay">
-- T15(short) "Renamed second" status=resolved updated=<time>
+- #2 T15(short) "Renamed second" status=resolved updated=<time>
 </event>
 == read_conversation {}
 error=false
@@ -215,6 +215,6 @@ instructions updated
 == list_threads {}
 error=false
 <event source="history" kind="list_threads" trust="relay">
-- T15(short) "Renamed second" status=resolved updated=<time>
-- T9(short) "First task" status=idle updated=<time>
+- #2 T15(short) "Renamed second" status=resolved updated=<time>
+- #1 T9(short) "First task" status=idle updated=<time>
 </event>

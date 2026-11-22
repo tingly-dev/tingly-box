@@ -84,6 +84,23 @@ export function ThreadState({ status, compact, queued }: { status: string; compa
     );
 }
 
+/** How a thread is mentioned: "#3 Title", the tag IM chats already use; a
+ * thread without a number (the coordinator) is its title. */
+export const threadRef = (thread: Pick<Thread, 'seq' | 'title'>) => (thread.seq > 0 ? `#${thread.seq} ${thread.title}` : thread.title);
+
+/** The thread's number in the project, muted before its title: the `#3` that
+ * `@3` in IM and the coordinator's thread tools take. Nothing for the
+ * coordinator (0). */
+export function ThreadNumber({ seq }: { seq: number }) {
+    if (!(seq > 0)) return null;
+    return <Box component="span" data-thread-number sx={{ mr: 0.75, color: 'text.disabled', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>#{seq}</Box>;
+}
+
+/** A thread's title as rows and cards show it: its number, then the title. */
+export function NumberedTitle({ thread }: { thread: Pick<Thread, 'seq' | 'title'> }) {
+    return <><ThreadNumber seq={thread.seq} />{thread.title}</>;
+}
+
 const mono = { fontFamily: fontMono } as const;
 
 /** One line of backend text where `backticks` mark a literal (a command, a

@@ -85,6 +85,9 @@ export const project: Dict<typeof projectEn> = {
         tasksBadge_one: '{{count}} 个任务', tasksBadge_other: '{{count}} 个任务',
         noRepo: '无仓库——文件放入文件库', fromBase: '基于 {{base}}', uncommitted: '有未提交的改动',
         copyCd: '复制进入 worktree 的 cd 命令', back: '返回 Overview', backTo: '返回{{place}}', backCoordinator: '协调者',
+        copyRef: '复制引用',
+        copyRefOf: '复制“{{ref}}”',
+        refCopied: '已复制“{{ref}}”',
         editTitle: '重命名线程',
         requests: {
             approval: '需要你批准', question: '有问题等你回答', many: '{{count}} 个请求等你处理', review: '查看',

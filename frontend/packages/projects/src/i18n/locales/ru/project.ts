@@ -85,6 +85,9 @@ export const project: PluralDict<typeof en> = {
         tasksBadge_one: '{{count}} задача', tasksBadge_few: '{{count}} задачи', tasksBadge_many: '{{count}} задач', tasksBadge_other: '{{count}} задач',
         noRepo: 'Нет репозитория — файлы попадают в Библиотеку', fromBase: 'от {{base}}', uncommitted: 'незафиксированные изменения',
         copyCd: 'Скопировать команду cd в worktree', back: 'Назад к Обзору', backTo: 'Назад: {{place}}', backCoordinator: 'Координатор',
+        copyRef: 'Копировать ссылку',
+        copyRefOf: 'Копировать «{{ref}}»',
+        refCopied: 'Скопировано «{{ref}}»',
         editTitle: 'Переименовать поток',
         requests: {
             approval: 'Нужно ваше подтверждение', question: 'Есть вопрос к вам', many: 'Требуют вас: {{count}}', review: 'Открыть',

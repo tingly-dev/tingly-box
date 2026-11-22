@@ -22,7 +22,7 @@ import { ThreadInfoRail } from './ThreadInfoRail';
 import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
 import { LoadEarlier } from './LoadEarlier';
 import { needsUser, ThreadBadges, ThreadState, ThreadStateMark } from './threadStatus';
-import { ThreadTitle } from './ThreadTitle';
+import { ThreadRefButton, ThreadTitle, useCopyThreadRef } from './ThreadTitle';
 import { threadTranscript } from './threadTranscript';
 import { threadOps } from './threadOps';
 import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
@@ -112,6 +112,7 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
 export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
+    const { copy: copyRef } = useCopyThreadRef(thread ?? { seq: 0, title: '' });
     // Where the rail does not fit beside the conversation (a thread in a narrow pane), the Details button swaps the conversation for the same cards in place.
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
@@ -413,7 +414,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         : <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>)}
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
-                        : <ThreadTitle title={thread.title} onSave={saveTitle} />}
+                        : <><ThreadRefButton thread={thread} /><ThreadTitle title={thread.title} onSave={saveTitle} /></>}
                     {/* While work runs in the background it names itself. */}
                     {liveTasks.length > 0 && !rail && (
                         <Tooltip title={t('session.backgroundTasks')}>
@@ -437,6 +438,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     {actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                        {thread.seq > 0 && <MenuItem onClick={() => { setMenu(null); void copyRef(); }}>{t('thread.copyRef')}</MenuItem>}
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
                         <MenuItem onClick={() => { setMenu(null); setFocus(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
                         {view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}

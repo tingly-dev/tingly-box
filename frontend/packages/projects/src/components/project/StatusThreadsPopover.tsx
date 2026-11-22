@@ -5,7 +5,7 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
 import type { Thread } from '../../client';
 import { timeAgo } from '../../utils/format';
 import { ListRow } from '../ListRow';
-import { ThreadBadges, ThreadStateMark, ThreadSubtitle } from './threadStatus';
+import { NumberedTitle, ThreadBadges, ThreadStateMark, ThreadSubtitle } from './threadStatus';
 
 interface Props {
     /** The state the list stands for, as its heading says it. */
@@ -46,7 +46,7 @@ export function StatusThreadsPopover({ label, threads, onOpen, subtitleFor, onTa
                 <ListRow key={th.id} data-status-thread={th.id}
                     onClick={() => { onClose(); onOpen(th.id); }}
                     mark={<ThreadStateMark status={th.status} queued={th.queued} />}
-                    title={th.title}
+                    title={<NumberedTitle thread={th} />}
                     subtitle={subtitleFor ? subtitleFor(th) : <ThreadSubtitle thread={th} />}
                     badges={<ThreadBadges thread={th} onTasks={onTasks && ((ths, anchor) => { onClose(); onTasks(ths, anchor); })} />}
                     meta={timeAgo(th.updated_at, i18n.language)} />
