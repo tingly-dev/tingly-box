@@ -5,7 +5,7 @@ import type { Thread } from '../../client';
 import type { ReactNode } from 'react';
 import { needsUser, STATUS_ORDER } from '../project/threadStatus';
 import type { GroupFold, StatusGroup } from './StatusGroups';
-import { GroupHeader, useFoldTimeout } from './StatusGroups';
+import { GROUP_INDENT, GroupHeader, useFoldTimeout } from './StatusGroups';
 import { ThreadCard } from './StatusColumns';
 
 interface Props {
@@ -84,7 +84,7 @@ export function StatusBoard({ threads, selectedId, onOpen, onTasks, fold, groups
                             needsYou={s.list.filter((th) => needsUser(th.status) && !th.archived_at).length}
                             open={open} onToggle={() => fold.onToggle(s.key, !open)} controls={bodyId} />
                         <Collapse in={open} timeout={timeout} id={bodyId} sx={{ minWidth: 0 }}>
-                            <Box sx={{ minWidth: 0, pt: 0.75, display: 'grid', gap: 0.75, gridTemplateColumns: TRACKS, [`@container (min-width: ${RAIL_AT}px)`]: { pt: 0 } }}>{cards(s.list)}</Box>
+                            <Box sx={{ minWidth: 0, pt: 0.75, pl: GROUP_INDENT, display: 'grid', gap: 0.75, gridTemplateColumns: TRACKS, [`@container (min-width: ${RAIL_AT}px)`]: { pt: 0, pl: 0 } }}>{cards(s.list)}</Box>
                         </Collapse>
                     </Box>
                 );

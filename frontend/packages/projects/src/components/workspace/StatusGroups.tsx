@@ -96,6 +96,9 @@ export function GroupHeader({ label, status, count, needsYou = 0, open, onToggle
     );
 }
 
+/** Rows sit one step in from their group heading, so the group → row level reads at a glance. */
+export const GROUP_INDENT = 2;
+
 function Row({ row, onOpen }: { row: StatusRow; onOpen: (id: string) => void }) {
     return <ListRow title={row.title} subtitle={row.subtitle} badges={row.badges} meta={row.meta} footer={row.footer} trail={row.trail} end={row.end} selected={row.selected} unseen={row.unseen} onClick={row.onClick ?? (() => onOpen(row.id))} />;
 }
@@ -122,7 +125,7 @@ export function StatusGroups({ groups, rows, onOpen, fold, empty }: { groups: St
                     <Box key={g.key} component="section" aria-label={g.label} sx={{ mb: 1.5 }}>
                         <GroupHeader label={g.label} status={g.key} count={list.length} needsYou={list.filter((r) => r.needsYou).length}
                             open={open} onToggle={() => fold.onToggle(g.key, !open)} controls={bodyId} />
-                        <Collapse in={open} timeout={timeout} id={bodyId}>
+                        <Collapse in={open} timeout={timeout} id={bodyId} sx={{ pl: GROUP_INDENT }}>
                             {list.map((r) => <Row key={r.id} row={r} onOpen={onOpen} />)}
                         </Collapse>
                     </Box>

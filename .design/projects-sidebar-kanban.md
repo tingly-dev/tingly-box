@@ -59,6 +59,10 @@ both axes and make "what needs me" a hunt.
   lanes to it; it was reverted on the user's call (the board belongs to a project's thread list, the tree
   keeps its folder-and-sessions look). `NavTree`, `ProjectsSidebar`, `WorkdirPage` and `StatusGroups` are
   identical to `main`; a test guards that the section has no switch.
+- **Folding and indent.** Resolved and Archived start folded; every choice is remembered per scope in
+  `useGroupFolds` (`overview.folds.v1.<scope>`), shared by list and board. Rows/cards sit `GROUP_INDENT`
+  (spacing 2 = 16px) in from the group heading in the list and in the board's narrow stacked layout; in the
+  board's wide layout the 150px heading rail already sets them apart, so no extra indent.
 - **i18n**: `overview.view.{label,list,vertical,horizontal}`, `project.resizeBand`, in en, zh and ru. The
   Projects package ships en, zh and ru (the host loads them into the `projects` namespace); other
   languages fall back to English.
