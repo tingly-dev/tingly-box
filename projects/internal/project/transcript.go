@@ -119,9 +119,10 @@ func (s threadStore) watchGrantedRun(t *db.Thread, e engine.Entry) {
 	if g, ok := grantedCommand(t, input, time.Now()); ok {
 		s.tally(t.ID, func(tt *turnTally) {
 			if tt.granted == nil {
-				tt.granted = map[string]db.ThreadGrant{}
+				tt.granted, tt.calledGrants = map[string]db.ThreadGrant{}, map[string]bool{}
 			}
 			tt.granted[e.RequestID] = g
+			tt.calledGrants[g.ID] = true
 		})
 	}
 }
@@ -143,7 +144,7 @@ func (s threadStore) noteGrantedRun(t *db.Thread, e engine.Entry) {
 		IsError bool `json:"is_error"`
 	}
 	_ = json.Unmarshal(e.Payload, &res)
-	s.m.noteGrantedRun(t, g, e.RequestID, res.IsError)
+	s.m.noteGrantedRun(t, g, e.RequestID, e.Content, res.IsError)
 }
 
 func (s threadStore) tally(id string, fn func(*turnTally)) {

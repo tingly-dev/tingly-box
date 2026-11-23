@@ -163,11 +163,12 @@ gate(thread, groups, approval):
 - **`command`（新）**：一条确切的命令行。同意后写入 `Bash(<整行>)` 及每一段的精确规则（`commandRules`），即时下发；工具返回“现在就用你的 Bash 按原样运行它；之前被拦的，再运行一次即可通过”。拒绝含 `*` 的命令（规则里 `*` 是通配，会超出卡上写的范围）和 `gh` / `git push`（归 GitHub 工具）。
 - **`rule`** 保留给要多次运行的模式（`Bash(npm run build *)`、`WebFetch(domain:…)`）；新增拒绝以解释器开头的规则（`python`、`python3`、`node`、`deno`、`bun`、`ruby`、`perl`、`php`、`npx`、`bunx`）：等于放开任意命令，且 auto 模式会丢掉它，批了也没用——改用 `command`。
 - **去掉 `group`**：GitHub 工具本来就自己弹卡、同意后当场执行（§2.4），`request_permission(group)` 再加一次是重叠路径，而且先授权再调用正是“批一次、再调一次”的来源；合并他人分支（`merge` + `others`）或 §2.3 的动作还会再弹第二张卡。现在工具描述直接说：GitHub 工具直接调用，它们自己问。闸门不再读授权（`grantsCover` 删除）；库里已有的组授权不再生效（线程关闭时本来也会清空）。
-- **作用域**：`once`（默认）= 本轮；命令授权被运行它的那次调用用掉，剩下的在本轮结束时删除并在线程里写明“没有运行”。规则从运行中的进程撤回发生在下一轮开始（`applyLive`），不在本轮中途撤（中途撤可能与该调用的权限检查竞态）。`thread` = 直到线程关闭或 `minutes` 到期。`rule` 现在也可以是 `once`。
+- **作用域**：`once`（默认）= 本轮；命令授权被一次无错误的运行用掉；返回错误的那次（命令失败，或被授权解不开的东西拦下）不用掉，留给本轮重试，记录里引用错误的第一行；剩下的在本轮结束时删除，从没被调用过的在线程里写明“没有运行”。规则从运行中的进程撤回发生在下一轮开始（`applyLive`），不在本轮中途撤（中途撤可能与该调用的权限检查竞态）。`thread` = 直到线程关闭或 `minutes` 到期。`rule` 现在也可以是 `once`。
 - **profile 线程**：授权时用 `Launcher.LaunchEnv` 取 profile 的设置，`workerSettings` 重建会话设置文件，再 `RefreshSettings` 即时下发——与非 profile 线程一样当轮生效。下发失败时如实说“从下一轮起”，并让线程结束本轮而不是去跑注定被拦的命令。
-- **记录**：卡片和 “The user granted/denied …”（payload `user_answer`，多了 `command`）照旧；线程用 Bash 运行被授权的命令后，紧跟在结果下面记一条 “Ran with the user's grant (request xxxx): <命令>; it succeeded|it failed.”（payload `granted_run`：`request_id`、`command`、`tool_use_id`、`failed`）。协调者在线程记录里能看到授权、调用、结果三者连在一起。
+- **文件夹会话**（IM 会话就是它）：原先拒绝 `command` / `rule`，现在支持——`sessionSettings` 每轮在宿主（profile）设置之上拼出会话设置，授权一并写入（`grantRules`），授权时即时重建并下发。
+- **记录**：卡片和 “The user granted/denied …”（payload `user_answer`，多了 `command`）照旧；线程用 Bash 运行被授权的命令后，紧跟在结果下面记一条 “Ran with the user's grant (request xxxx): <命令>; it succeeded.” 或 “…; it returned an error: <第一行>.”（payload `granted_run`：`request_id`、`command`、`tool_use_id`、`failed`）。协调者在线程记录里能看到授权、调用、结果三者连在一起。
 
-**端到端验证**（`.research/permission-grant-probe/e2e.py`，真实 Projects + 真实 Claude Code，项目线程 auto 模式）：先请求再运行——1 张卡，命令执行，分类器 0 次；先被拦再请求——1 张卡，重跑通过；拒绝——工具返回“不要运行”，命令照拦。
+**端到端验证**（`.research/permission-grant-probe/e2e.py`，真实 Projects + 真实 Claude Code，项目线程 auto 模式）：项目线程先请求再运行——1 张卡，命令执行，分类器 0 次；先被拦再请求——1 张卡，重跑通过；拒绝——工具返回“不要运行”，命令照拦；文件夹会话先请求再运行——1 张卡，命令执行，分类器 0 次。
 
 仍不能保证的（如实）：用户 profile 的 deny 规则、线程自己的 ask 规则（如强推）、操作系统沙箱（bwrap / seatbelt）照样优先；同一轮里同一条 `once` 命令跑第二次也会通过（规则在进程里留到下一轮开始）。
 

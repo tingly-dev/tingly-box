@@ -32,7 +32,7 @@ func (f *sessionToolsMCP) permissionTools() []Tool {
 			"reason":  strProp("Why you need it."),
 			"command": strProp("Optional. The exact command line you will run with your Bash tool (for example \"task codegen\" or \"HOME=$TMPDIR/home ./bin/tingly-project swagger\"). No * in it."),
 			"rule":    strProp("Optional. A Claude Code permission rule with a pattern, such as Bash(npm run build *) or WebFetch(domain:example.com)."),
-			"scope":   map[string]any{"type": "string", "enum": []string{db.GrantOnce, db.GrantThread}, "description": "once (default): this turn; a command is used up by the call that runs it. thread: until the thread is closed or minutes pass."},
+			"scope":   map[string]any{"type": "string", "enum": []string{db.GrantOnce, db.GrantThread}, "description": "once (default): this turn; a command is used up once it runs without an error. thread: until the thread is closed or minutes pass."},
 			"minutes": map[string]any{"type": "integer", "description": "Optional. How long a thread-scoped grant lasts."},
 		},
 		Required: []string{"action", "reason"},
@@ -176,9 +176,6 @@ func (m *Threads) RequestPermission(ctx context.Context, t *db.Thread, in Permis
 			return "", err
 		}
 	}
-	if (in.Command != "" || in.Rule != "") && m.isFolder(t.ProjectID) {
-		return "", errors.New("commands and rules are granted to project threads only: a folder session's settings come from its profile")
-	}
 	id := uuid.NewString()
 	input := map[string]any{"action": in.Action, "scope": in.Scope}
 	switch {
@@ -287,10 +284,26 @@ func (m *Threads) applyGrants(ctx context.Context, t *db.Thread) (why string, li
 }
 
 // turnSettingsFile writes the settings file thread t's turns run on, with its
-// grants as they are now, and returns its path: the project's settings file,
-// or for a thread under a profile the one built from the profile's settings
-// (workerSettings, as each turn does).
+// grants as they are now, and returns its path, as turnLaunch picks it: for a
+// folder session the one built over its host's settings (sessionSettings), for
+// a thread under a profile the one built from the profile's (workerSettings),
+// else the project's settings file.
 func (m *Threads) turnSettingsFile(ctx context.Context, p *db.Project, t *db.Thread) (string, error) {
+	if m.isFolder(p.ID) {
+		host := ""
+		if l, ok := m.env.(Launcher); ok {
+			// A profile that cannot be read runs on the default routing,
+			// without its settings (launchEnv).
+			if _, s, err := l.LaunchEnv(ctx, t.Profile); err == nil {
+				host = s
+			}
+		}
+		path, err := m.sessionSettings(p, t, host)
+		if err != nil {
+			return "", err
+		}
+		return path, nil
+	}
 	if l, ok := m.env.(Launcher); ok && workerProfile(t) != "" {
 		_, host, err := l.LaunchEnv(ctx, workerProfile(t))
 		if err != nil {
@@ -340,10 +353,12 @@ func grantedCommand(t *db.Thread, input map[string]any, now time.Time) (db.Threa
 }
 
 // noteGrantedRun records in the thread that a Bash call ran a granted command,
-// and how it ended, and uses up a grant for this turn: the coordinator reads
-// the grant, the call and its outcome together.
-func (m *Threads) noteGrantedRun(t *db.Thread, g db.ThreadGrant, toolUseID string, failed bool) {
-	if g.Scope == db.GrantOnce {
+// and how it ended: the coordinator reads the grant, the call and its outcome
+// together. A grant for this turn is used up by a call that succeeded; one that
+// returned an error (the command failed, or something the grant does not lift
+// blocked it) leaves it for a retry in the turn, and the note quotes the error.
+func (m *Threads) noteGrantedRun(t *db.Thread, g db.ThreadGrant, toolUseID, errText string, failed bool) {
+	if g.Scope == db.GrantOnce && !failed {
 		if _, err := m.store.UpdateThreadGrants(t.ID, func(gs []db.ThreadGrant) []db.ThreadGrant {
 			return slices.DeleteFunc(gs, func(x db.ThreadGrant) bool { return x.ID == g.ID })
 		}); err != nil {
@@ -352,23 +367,27 @@ func (m *Threads) noteGrantedRun(t *db.Thread, g db.ThreadGrant, toolUseID strin
 	}
 	outcome := "it succeeded"
 	if failed {
-		outcome = "it failed"
+		outcome = "it returned an error"
+		if line := firstLine(errText, 160); line != "" {
+			outcome += ": " + line
+		}
 	}
 	fact := map[string]any{"granted_run": map[string]any{"request_id": g.ID, "command": g.Command, "tool_use_id": toolUseID, "failed": failed}}
 	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Ran with the user's grant (request %s): %s; %s.", shortID(g.ID), g.Command, outcome), Payload: jsonString(fact)})
 }
 
 // endTurnGrants drops thread t's grants for this turn when a turn ends, and
-// notes a granted command the turn did not run. The running process loses
-// their rules when the next turn starts (its settings are sent again then).
-func (m *Threads) endTurnGrants(t *db.Thread) {
+// notes a granted command the turn never called (called holds the ids of the
+// grants it did). The running process loses their rules when the next turn
+// starts (its settings are sent again then).
+func (m *Threads) endTurnGrants(t *db.Thread, called map[string]bool) {
 	var unused []db.ThreadGrant
 	if _, err := m.store.UpdateThreadGrants(t.ID, func(gs []db.ThreadGrant) []db.ThreadGrant {
 		return slices.DeleteFunc(gs, func(g db.ThreadGrant) bool {
 			if g.Scope != db.GrantOnce {
 				return false
 			}
-			if g.Command != "" {
+			if g.Command != "" && !called[g.ID] {
 				unused = append(unused, g)
 			}
 			return true

@@ -230,6 +230,62 @@ func TestAnUnusedGrantForTheTurnEndsWithIt(t *testing.T) {
 	assert.NotContains(t, allow, "Bash(task codegen)", "the next turn's settings no longer allow it")
 }
 
+// A granted command whose call returned an error (it failed, or something the
+// grant does not lift blocked it) keeps the grant for a retry in the turn; the
+// note quotes the error, and the turn's end does not call it unrun.
+func TestAGrantedCommandThatErrsKeepsItsGrantForTheTurn(t *testing.T) {
+	granted := make(chan struct{})
+	retried := make(chan struct{})
+	turns := 0
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		turns++
+		if turns == 2 {
+			<-granted
+			turn.Use("tu-1", "Bash", map[string]any{"command": "task codegen"})
+			turn.Result("tu-1", "Permission to use Bash has been denied.", true)
+			<-retried
+		}
+		turn.Say("done", 1, 1)
+		return nil
+	})
+	th := startedThread(t, f)
+	_, err := f.threads.Send(context.Background(), th.ID, "regenerate", Source{}, nil)
+	require.NoError(t, err)
+	askPermission(t, f, th.ID, PermissionRequest{Action: "regenerate", Reason: "asked", Command: "task codegen"}, Answer{Allow: true})
+	close(granted)
+	require.Eventually(t, func() bool {
+		for _, n := range systemNotes(t, f.store, th.ID) {
+			if strings.Contains(n, "task codegen; it returned an error: Permission to use Bash has been denied.") {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 5*time.Millisecond)
+	got, _ := f.store.GetThread(th.ID)
+	assert.Len(t, got.Grants, 1, "an error does not use the grant up")
+	close(retried)
+	f.report(t)
+	waitStatus(t, f.store, th.ID, db.ThreadIdle)
+	got, _ = f.store.GetThread(th.ID)
+	assert.Empty(t, got.Grants, "it ends with the turn")
+	for _, n := range systemNotes(t, f.store, th.ID) {
+		assert.NotContains(t, n, "was not run", "it was called")
+	}
+}
+
+// A folder session's settings are built over its host's each turn: a grant
+// goes into them at once, like a project thread's.
+func TestAGrantReachesAFolderSession(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "x"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	out := askPermission(t, f, s.ID, PermissionRequest{Action: "regenerate", Reason: "asked", Command: "task codegen"}, Answer{Allow: true})
+	assert.Contains(t, out, "run it now")
+	allow, _ := settingsPerms(t, f.threads.layout.SessionSettingsFile(s.ID))
+	assert.Contains(t, allow, "Bash(task codegen)")
+}
+
 // A thread under a profile runs on settings built from the profile's: a grant
 // is written there at once, not only at the next turn.
 func TestAGrantReachesAThreadUnderAProfileAtOnce(t *testing.T) {

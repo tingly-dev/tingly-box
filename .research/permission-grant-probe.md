@@ -32,6 +32,7 @@ everything). Two probes:
 | e2e `early` | 1 card (request_permission), the thread's own Bash ran, 0 classifier calls; notes "The user granted…" and "Ran with the user's grant…; it succeeded." |
 | e2e `late` | the first call blocked (10 classifier calls), 1 card, the retry ran |
 | e2e `deny` | 1 card denied, the tool said "Do not run it", the Bash call stayed blocked |
+| e2e `folder` (folder session, auto) | 1 card, the thread's own Bash ran, 0 classifier calls |
 
 ## What it means
 

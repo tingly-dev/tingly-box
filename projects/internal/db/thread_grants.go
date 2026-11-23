@@ -8,8 +8,9 @@ import (
 
 // Grant scopes.
 const (
-	// GrantOnce is for this turn: a command grant is used up by the call that
-	// runs it, and whatever is left is dropped when the turn ends.
+	// GrantOnce is for this turn: a command grant is used up by a call that
+	// runs it without an error, and whatever is left is dropped when the turn
+	// ends.
 	GrantOnce = "once"
 	// GrantThread lasts until the thread is closed, or until it expires.
 	GrantThread = "thread"

@@ -11,6 +11,7 @@ blocks (the mock answers it with nothing it can parse, which blocks):
   early  request_permission(command) first, the user allows, then Bash
   late   Bash first (blocked), request_permission(command), allow, Bash again
   deny   request_permission(command), the user denies, then Bash anyway
+  folder early, in a folder session (POST /projects/{id}/threads, auto)
 
 The probe answers every card: allow for request_permission (deny in deny),
 deny for anything else, and counts them. Everything lives in a temporary
@@ -44,7 +45,7 @@ def pick(req):
     done = sum(len(results(m)) for m in req["messages"] if m["role"] == "user")
     bash = ("tool", "Bash", {"command": CMD, "description": "probe"})
     perm = ("tool", ask, {"action": "run the probe tool", "reason": "the probe needs it", "command": CMD})
-    plan = {"early": [perm, bash], "deny": [perm, bash], "late": [bash, perm, bash]}[SC]
+    plan = {"early": [perm, bash], "folder": [perm, bash], "deny": [perm, bash], "late": [bash, perm, bash]}[SC]
     if done < len(plan):
         return [plan[done]]
     return [("text", "PROBE DONE")]
@@ -107,6 +108,24 @@ def call(url, method="GET", body=None):
         raise RuntimeError(f"{method} {url}: {e.code} {e.read().decode()[:300]}")
 
 
+def start_project_thread(base, repo):
+    """A project thread in auto mode, started by the mock coordinator."""
+    proj = call(base + "/projects", "POST", {"name": "Probe", "repos": [str(repo)]})
+    call(base + f"/projects/{proj['id']}", "PATCH", {"thread_permission_mode": "auto"})
+    proj = call(base + f"/projects/{proj['id']}")
+    pid = proj.get("id") or proj["project"]["id"]
+    main = proj.get("main_thread_id") or proj.get("project", {}).get("main_thread_id")
+    call(base + f"/threads/{main}/messages", "POST", {"content": "start the probe thread"})
+    for _ in range(200):
+        lst = call(base + f"/projects/{pid}/threads")
+        ths = lst if isinstance(lst, list) else lst.get("threads", [])
+        ws = [t for t in ths if t["id"] != main]
+        if ws:
+            return ws[0]["id"]
+        time.sleep(.1)
+    raise RuntimeError("the coordinator started no thread")
+
+
 def run(claude, app, sc):
     with tempfile.TemporaryDirectory(prefix="grant-e2e-", ignore_cleanup_errors=True) as temp:
         temp = Path(temp)
@@ -137,20 +156,11 @@ def run(claude, app, sc):
                     except Exception:
                         time.sleep(.1)
                 call(base + "/settings", "PUT", {"api_style": "anthropic", "base_url": f"http://127.0.0.1:{mp}", "api_key": "k", "default_model": "claude-sonnet-4-6"})
-                proj = call(base + "/projects", "POST", {"name": "Probe", "repos": [str(repo)]})
-                call(base + f"/projects/{proj['id']}", "PATCH", {"thread_permission_mode": "auto"})
-                proj = call(base + f"/projects/{proj['id']}")
-                main = proj.get("main_thread_id") or proj.get("project", {}).get("main_thread_id")
-                call(base + f"/threads/{main}/messages", "POST", {"content": "start the probe thread"})
-                tid = None
-                for _ in range(200):
-                    lst = call(base + f"/projects/{proj.get('id') or proj['project']['id']}/threads")
-                    ths = lst if isinstance(lst, list) else lst.get("threads", [])
-                    ws = [t for t in ths if t["id"] != main]
-                    if ws:
-                        tid = ws[0]["id"]
-                        break
-                    time.sleep(.1)
+                if sc == "folder":
+                    fp = call(base + "/projects", "POST", {"type": "folder", "path": str(repo)})
+                    tid = call(base + f"/projects/{fp['id']}/threads", "POST", {"title": "Probe", "content": "run the probe tool", "permission_mode": "auto"})["id"]
+                else:
+                    tid = start_project_thread(base, repo)
                 seen = []
                 for _ in range(600):
                     seen = call(base + f"/threads/{tid}/events?limit=300")["events"]
@@ -181,7 +191,7 @@ def run(claude, app, sc):
 
 if __name__ == "__main__":
     claude, app = map(os.path.abspath, sys.argv[1:3])
-    for sc in (sys.argv[3:] or ["early", "late", "deny"]):
+    for sc in (sys.argv[3:] or ["early", "late", "deny", "folder"]):
         r = run(claude, app, sc)
         print(f"== {sc}: ran={r['ran']} cards={r['cards']} classifier_calls={r['classifier_calls']} errors={r['errors']}")
         for t in r["tool_results"]:
