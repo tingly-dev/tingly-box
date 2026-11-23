@@ -140,6 +140,11 @@ func (t *Turn) Use(id, tool string, input map[string]any) {
 	t.send(&claude.ToolUseMessage{Type: "tool_use", Name: tool, Input: input, ToolUseID: id})
 }
 
+// Result emits the result of tool call id, as Claude Code reports one.
+func (t *Turn) Result(id, output string, isError bool) {
+	t.send(&claude.ToolResultMessage{Type: "tool_result", Output: output, ToolUseID: id, IsError: isError})
+}
+
 // ErrNoAnswer is returned by Approve and Ask when the turn ended first.
 var ErrNoAnswer = errors.New("enginetest: the turn ended before an answer")
 

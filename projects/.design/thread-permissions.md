@@ -1,6 +1,6 @@
 # 线程权限：项目级 GitHub 开关与 `request_permission`
 
-> 状态：**§2 已实现**（#2740 后端，用户确认了分组与默认值；§2.6 界面 #2742）；**§3 `request_permission` 已实现**（#2741，见 §3.7 与提案的差异）。
+> 状态：**§2 已实现**（#2740 后端，用户确认了分组与默认值；§2.6 界面 #2742）；**§3 `request_permission` 已实现**（#2741，见 §3.7 与提案的差异），**§3.8 改为“批准后直接执行”**（用户反馈：批了还得再调、还可能再被拦；取代 §3.1–§3.7 中与之冲突的部分）。
 > 建在 #2734（工具自己弹审批卡：`approval.go`、`Links.authorize`）、#2736（`close`）、#2737（`merge` 的 `head` 与 merge commit）之上。
 > 相关：[github-tools.md](github-tools.md)（工具与边界）、[mcp-tools.md](mcp-tools.md)（工具粒度）、[mcp-tools-coverage.md](mcp-tools-coverage.md)（场景卡点）、项目记忆 `ask-dont-refuse-beyond-boundary`、`mcp-tool-granularity`。
 
@@ -60,7 +60,6 @@ Claude Code 原生的权限提示又不可靠：auto 模式分类器会静默拒
 gate(thread, groups, approval):
     if 动作属于 §2.3            → 弹卡（Key = 确切目标）
     if groups 全部开启          → 放行
-    if 线程有有效授权覆盖 groups → 放行（once 授权在此消耗）
     if 本线程“对本线程允许”过这组 → 放行
     否则                         → 弹卡（Key = 组名，“对本线程允许”记住整组）
 ```
@@ -144,6 +143,34 @@ gate(thread, groups, approval):
 - `engine.RefreshSettings` 有单元测试（只发变化的部分、失败下次重发）；它与一轮开始时的 `applyLive` 不互斥，两者同时发时可能有一次是多余的下发，不会丢规则（下一轮按文件重算）。
 - “同一请求被拒后不重复弹卡”只写在工具描述里，没有在服务端强制。
 - 记录：拒绝 / 同意各一条 system 事件（“The user denied: …” / “The user granted: … (scope; request xxxx)”），payload 是 `{"user_answer": {request_id, action, group, rule, scope, allowed, answer, answered_via}}`。
+
+### 3.8 批准后直接执行（取代上文冲突处）
+
+用户：“ask 了、同意了，就能直接执行”，“申明了权限就很确定了，就是可以执行了”；以及“环境分开了会影响 claude 的执行，看能否把权限直接注入给 claude 实例”。验收：一次 `request_permission` + 一次同意 → 动作在线程自己的 Claude Code 里执行；不弹第二张卡、不需要额外手动步骤、之后不会被分类器静默拦截；授权与执行都有记录。
+
+**探针**（真实 Claude Code 2.1.259 + 脚本化模型，分类器一律拦截；方法与数据见仓库根 `.research/permission-grant-probe.md`）：
+
+1. `apply_flag_settings` 在一轮进行中下发的 allow 规则，从下一次工具调用起生效，auto 模式下分类器不再被调用（不重启）。§3.6 探针 1、2 由此回答。
+2. 已被拦的调用，规则下发后再调一次即通过。
+3. auto 模式**丢弃解释器的通配规则**（`Bash(python3 -c *)`、`Bash(node -e *)` 下发后照拦），同一命令的精确规则生效。
+4. 管道 `a | b` 只给整行规则不够，再给每一段的精确规则就通过。
+5. 旧实现里 profile 线程的规则要等下一轮，所以“批了这一轮还被拦”。
+6. auto 模式下被拦的调用不经过 `can_use_tool`，没有挂起的原生提示可以去“回答”；所以授权在调用之前（或被拦之后），模型自己的那次调用就是执行本身。
+
+**决定**：
+
+- **执行留在线程自己的 Claude Code 里**：Projects 不代为运行命令（环境、cwd、shell 状态、工具上下文都会分家，用户明确不要）。授权写进线程实际运行的设置文件并即时下发给常驻进程；线程紧接着用自己的 Bash 执行。
+- **`command`（新）**：一条确切的命令行。同意后写入 `Bash(<整行>)` 及每一段的精确规则（`commandRules`），即时下发；工具返回“现在就用你的 Bash 按原样运行它；之前被拦的，再运行一次即可通过”。拒绝含 `*` 的命令（规则里 `*` 是通配，会超出卡上写的范围）和 `gh` / `git push`（归 GitHub 工具）。
+- **`rule`** 保留给要多次运行的模式（`Bash(npm run build *)`、`WebFetch(domain:…)`）；新增拒绝以解释器开头的规则（`python`、`python3`、`node`、`deno`、`bun`、`ruby`、`perl`、`php`、`npx`、`bunx`）：等于放开任意命令，且 auto 模式会丢掉它，批了也没用——改用 `command`。
+- **去掉 `group`**：GitHub 工具本来就自己弹卡、同意后当场执行（§2.4），`request_permission(group)` 再加一次是重叠路径，而且先授权再调用正是“批一次、再调一次”的来源；合并他人分支（`merge` + `others`）或 §2.3 的动作还会再弹第二张卡。现在工具描述直接说：GitHub 工具直接调用，它们自己问。闸门不再读授权（`grantsCover` 删除）；库里已有的组授权不再生效（线程关闭时本来也会清空）。
+- **作用域**：`once`（默认）= 本轮；命令授权被一次无错误的运行用掉；返回错误的那次（命令失败，或被授权解不开的东西拦下）不用掉，留给本轮重试，记录里引用错误的第一行；剩下的在本轮结束时删除，从没被调用过的在线程里写明“没有运行”。规则从运行中的进程撤回发生在下一轮开始（`applyLive`），不在本轮中途撤（中途撤可能与该调用的权限检查竞态）。`thread` = 直到线程关闭或 `minutes` 到期。`rule` 现在也可以是 `once`。
+- **profile 线程**：授权时用 `Launcher.LaunchEnv` 取 profile 的设置，`workerSettings` 重建会话设置文件，再 `RefreshSettings` 即时下发——与非 profile 线程一样当轮生效。下发失败时如实说“从下一轮起”，并让线程结束本轮而不是去跑注定被拦的命令。
+- **文件夹会话**（IM 会话就是它）：原先拒绝 `command` / `rule`，现在支持——`sessionSettings` 每轮在宿主（profile）设置之上拼出会话设置，授权一并写入（`grantRules`），授权时即时重建并下发。
+- **记录**：卡片和 “The user granted/denied …”（payload `user_answer`，多了 `command`）照旧；线程用 Bash 运行被授权的命令后，紧跟在结果下面记一条 “Ran with the user's grant (request xxxx): <命令>; it succeeded.” 或 “…; it returned an error: <第一行>.”（payload `granted_run`：`request_id`、`command`、`tool_use_id`、`failed`）。协调者在线程记录里能看到授权、调用、结果三者连在一起。
+
+**端到端验证**（`.research/permission-grant-probe/e2e.py`，真实 Projects + 真实 Claude Code，项目线程 auto 模式）：项目线程先请求再运行——1 张卡，命令执行，分类器 0 次；先被拦再请求——1 张卡，重跑通过；拒绝——工具返回“不要运行”，命令照拦；文件夹会话先请求再运行——1 张卡，命令执行，分类器 0 次。
+
+仍不能保证的（如实）：用户 profile 的 deny 规则、线程自己的 ask 规则（如强推）、操作系统沙箱（bwrap / seatbelt）照样优先；同一轮里同一条 `once` 命令跑第二次也会通过（规则在进程里留到下一轮开始）。
 
 ## 4 实现与拆分
 

@@ -2594,6 +2594,8 @@ export interface components {
         ThreadGrant: {
             /** @description Field action */
             action: string;
+            /** @description Field command */
+            command?: string;
             /**
              * Format: date-time
              * @description Field expires_at
@@ -2604,8 +2606,6 @@ export interface components {
              * @description Field granted_at
              */
             granted_at: string;
-            /** @description Field group */
-            group?: string;
             /** @description Field id */
             id: string;
             /** @description Field rule */

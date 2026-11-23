@@ -8,21 +8,24 @@ import (
 
 // Grant scopes.
 const (
-	// GrantOnce is used up by the first call it covers.
+	// GrantOnce is for this turn: a command grant is used up by a call that
+	// runs it without an error, and whatever is left is dropped when the turn
+	// ends.
 	GrantOnce = "once"
 	// GrantThread lasts until the thread is closed, or until it expires.
 	GrantThread = "thread"
 )
 
 // ThreadGrant is one permission the user gave a thread on a request_permission
-// card. Group is a GitHub group the project's switches name; Rule is a Claude
-// Code permission rule; at most one is set, and with neither it is a record of
-// the user's yes and enforces nothing. See projects/.design/thread-permissions.md.
+// card. Command is an exact command line the thread runs with its own Bash
+// tool; Rule is a Claude Code permission rule with a pattern; at most one is
+// set, and with neither it is a record of the user's yes and enforces nothing.
+// See projects/.design/thread-permissions.md.
 type ThreadGrant struct {
 	// ID is the request's id, which the card and the thread's note quote.
 	ID        string     `json:"id"`
 	Action    string     `json:"action"`
-	Group     string     `json:"group,omitempty"`
+	Command   string     `json:"command,omitempty"`
 	Rule      string     `json:"rule,omitempty"`
 	Scope     string     `json:"scope"`
 	GrantedAt time.Time  `json:"granted_at"`

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -60,8 +61,11 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		ev = &db.ThreadEvent{Kind: db.EvAssistant, Content: e.Content}
 	case e.Kind == engine.KindToolUse:
 		ev = &db.ThreadEvent{Kind: db.EvToolUse, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}
+		s.watchGrantedRun(t, e)
 	case e.Kind == engine.KindToolResult:
 		ev = &db.ThreadEvent{Kind: db.EvToolResult, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}
+		// After the result, so the note reads under it.
+		defer s.noteGrantedRun(t, e)
 	case e.Kind == engine.KindUsage:
 		var u engine.TurnUsage
 		if json.Unmarshal(e.Payload, &u) == nil {
@@ -100,6 +104,47 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 	if ev.Parent == "" && (ev.Kind == db.EvAssistant || ev.Kind == db.EvToolUse) && s.m.OnStep != nil {
 		s.m.OnStep(*t, *ev)
 	}
+}
+
+// watchGrantedRun remembers a Bash call that runs a command the user granted
+// the thread, so its result is noted with the grant (noteGrantedRun).
+func (s threadStore) watchGrantedRun(t *db.Thread, e engine.Entry) {
+	if e.Content != "Bash" || len(t.Grants) == 0 || e.RequestID == "" {
+		return
+	}
+	var input map[string]any
+	if json.Unmarshal(e.Payload, &input) != nil {
+		return
+	}
+	if g, ok := grantedCommand(t, input, time.Now()); ok {
+		s.tally(t.ID, func(tt *turnTally) {
+			if tt.granted == nil {
+				tt.granted, tt.calledGrants = map[string]db.ThreadGrant{}, map[string]bool{}
+			}
+			tt.granted[e.RequestID] = g
+			tt.calledGrants[g.ID] = true
+		})
+	}
+}
+
+// noteGrantedRun notes, after its result, a Bash call that ran a granted
+// command.
+func (s threadStore) noteGrantedRun(t *db.Thread, e engine.Entry) {
+	var g db.ThreadGrant
+	ok := false
+	s.tally(t.ID, func(tt *turnTally) {
+		if g, ok = tt.granted[e.RequestID]; ok {
+			delete(tt.granted, e.RequestID)
+		}
+	})
+	if !ok {
+		return
+	}
+	var res struct {
+		IsError bool `json:"is_error"`
+	}
+	_ = json.Unmarshal(e.Payload, &res)
+	s.m.noteGrantedRun(t, g, e.RequestID, e.Content, res.IsError)
 }
 
 func (s threadStore) tally(id string, fn func(*turnTally)) {

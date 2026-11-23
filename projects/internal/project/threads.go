@@ -296,6 +296,11 @@ type turnTally struct {
 	// compact marks a turn that compacts the conversation: it reports to
 	// the chats that hear the thread, not to the coordinator.
 	compact bool
+	// granted is the Bash calls of the turn that run a command the user
+	// granted, by tool use id, until their results come.
+	granted map[string]db.ThreadGrant
+	// calledGrants is the ids of the grants a call of the turn ran.
+	calledGrants map[string]bool
 }
 
 // addUsage folds a "usage" entry in; main is false for a subagent's.
@@ -1155,6 +1160,8 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 	// A folder session has the Projects tools too: the permission rules are the
 	// same as a project thread's.
 	grantBuiltinTools(doc, p)
+	// And what the user granted it on a request_permission card.
+	grantRules(doc, t, time.Now())
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -1247,6 +1254,13 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 	}
 
 	if !end.NotSent {
+		if t, err := m.store.GetThread(threadID); err == nil && len(t.Grants) > 0 {
+			var called map[string]bool
+			if tally != nil {
+				called = tally.calledGrants
+			}
+			m.endTurnGrants(t, called)
+		}
 		m.settle(threadID, end, tally)
 	}
 
