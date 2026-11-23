@@ -5624,6 +5624,10 @@
             "type": "string",
             "description": "Field action"
           },
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          },
           "expires_at": {
             "type": "string",
             "format": "date-time",
@@ -5633,10 +5637,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Field granted_at"
-          },
-          "group": {
-            "type": "string",
-            "description": "Field group"
           },
           "id": {
             "type": "string",

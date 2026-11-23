@@ -296,6 +296,9 @@ type turnTally struct {
 	// compact marks a turn that compacts the conversation: it reports to
 	// the chats that hear the thread, not to the coordinator.
 	compact bool
+	// granted is the Bash calls of the turn that run a command the user
+	// granted, by tool use id, until their results come.
+	granted map[string]db.ThreadGrant
 }
 
 // addUsage folds a "usage" entry in; main is false for a subagent's.
@@ -1247,6 +1250,9 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 	}
 
 	if !end.NotSent {
+		if t, err := m.store.GetThread(threadID); err == nil && len(t.Grants) > 0 {
+			m.endTurnGrants(t)
+		}
 		m.settle(threadID, end, tally)
 	}
 
