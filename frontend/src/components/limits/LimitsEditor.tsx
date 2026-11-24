@@ -1,5 +1,4 @@
-import {Box, Stack, TextField, Typography} from '@mui/material';
-import SelectWithCustom from '@tingly/ui/components/SelectWithCustom';
+import {Box, MenuItem, Stack, TextField, Typography} from '@mui/material';
 import {formatDurationShort} from '@tingly/ui/utils/duration';
 import {useTranslation} from 'react-i18next';
 import type {components} from '@/client';
@@ -16,7 +15,6 @@ const WINDOW_OPTIONS = [
 ] as const;
 
 const DEFAULT_WINDOW_SECONDS = 3600;
-const MAX_WINDOW_MINUTES = 30 * 24 * 60;
 
 interface LimitsEditorProps {
     value?: Limits;
@@ -42,10 +40,9 @@ function numField(v?: number): string {
 export default function LimitsEditor({value, onChange, showQuota = false, showSoft = true, disabled}: LimitsEditorProps) {
     const {t} = useTranslation();
     const v = value ?? {};
-    const hasBudget = !!(v.max_requests || v.max_tokens);
     const set = (patch: Partial<Limits>) => onChange({...v, ...patch});
     const windowSeconds = v.window_seconds || DEFAULT_WINDOW_SECONDS;
-    const windowOptions = WINDOW_OPTIONS.map((o) => ({value: o.seconds as number, label: t(`limits.${o.key}`)}));
+    const isPreset = WINDOW_OPTIONS.some(({seconds}) => seconds === windowSeconds);
 
     return (
         <Stack spacing={2} data-testid="limits-editor">
@@ -57,30 +54,19 @@ export default function LimitsEditor({value, onChange, showQuota = false, showSo
                 slotProps={{htmlInput: {min: 1, 'aria-label': t('limits.maxConcurrent')}}}
             />
             <Box sx={{display: 'grid', gridTemplateColumns: {xs: '1fr', sm: '1fr 1fr 1fr'}, gap: 1.5}}>
-                <SelectWithCustom<number>
-                    disabled={disabled || !hasBudget}
+                <TextField
+                    select size="small" disabled={disabled}
                     label={t('limits.window')} value={windowSeconds}
-                    onChange={(seconds) => set({window_seconds: seconds})}
-                    options={windowOptions}
-                    custom={{
-                        label: t('limits.windowCustom'),
-                        dialogTitle: t('limits.windowCustomTitle'),
-                        inputLabel: t('limits.window'),
-                        helperText: t('limits.windowCustomHelp', {max: MAX_WINDOW_MINUTES}),
-                        unit: t('limits.windowMinutes'),
-                        inputMode: 'numeric',
-                        confirmLabel: t('limits.windowApply'),
-                        cancelLabel: t('limits.windowCancel'),
-                        parse: (raw) => {
-                            const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
-                            return n >= 1 && n <= MAX_WINDOW_MINUTES
-                                ? {value: n * 60}
-                                : {error: t('limits.windowCustomInvalid', {max: MAX_WINDOW_MINUTES})};
-                        },
-                        toInput: (seconds) => String(Math.round(seconds / 60)),
-                        format: (seconds) => formatDurationShort(seconds),
-                    }}
-                />
+                    onChange={(e) => set({window_seconds: Number(e.target.value)})}
+                >
+                    {WINDOW_OPTIONS.map(({seconds, key}) => (
+                        <MenuItem key={seconds} value={seconds}>{t(`limits.${key}`)}</MenuItem>
+                    ))}
+                    {/* Show a previously saved duration without offering it as a choice. */}
+                    {!isPreset && (
+                        <MenuItem value={windowSeconds} disabled hidden>{formatDurationShort(windowSeconds)}</MenuItem>
+                    )}
+                </TextField>
                 <TextField
                     size="small" type="number" disabled={disabled}
                     label={t('limits.maxRequests')} value={numField(v.max_requests)}

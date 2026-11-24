@@ -1,6 +1,7 @@
 import {fireEvent, render, screen} from '@testing-library/react';
+import {useState} from 'react';
 import {describe, expect, it, vi} from 'vitest';
-import LimitsEditor, {compactLimits, isEmptyLimits} from './LimitsEditor';
+import LimitsEditor, {compactLimits, isEmptyLimits, type Limits} from './LimitsEditor';
 import {buildRuleUpdatePayload} from '@/components/rule-card/ruleUpdatePayload';
 import type {ConfigRecord} from '@/components/RoutingGraphTypes';
 
@@ -10,6 +11,45 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('LimitsEditor', () => {
+    it.each([
+        ['window5h', 18_000],
+        ['window24h', 86_400],
+        ['window7d', 604_800],
+    ])('lets users pick %s before entering a budget', (option, seconds) => {
+        const onChange = vi.fn();
+        function Editor() {
+            const [limits, setLimits] = useState<Limits>({});
+            return <LimitsEditor value={limits} onChange={(next) => {
+                setLimits(next);
+                onChange(compactLimits(next));
+            }}/>;
+        }
+
+        render(<Editor/>);
+        const usageWindow = screen.getByRole('combobox', {name: /^limits\.window\b/});
+        fireEvent.mouseDown(usageWindow);
+        fireEvent.click(screen.getByRole('option', {name: `limits.${option}`}));
+        expect(usageWindow.textContent).toBe(`limits.${option}`);
+        expect(onChange).toHaveBeenLastCalledWith({});
+
+        fireEvent.change(screen.getByLabelText('limits.maxRequests'), {target: {value: '100'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_requests: 100, window_seconds: seconds});
+    });
+
+    it('offers four presets and preserves a previously saved custom duration when editing the cap', () => {
+        const onChange = vi.fn();
+        render(<LimitsEditor value={{max_requests: 10, window_seconds: 1_800}} onChange={onChange}/>);
+        const usageWindow = screen.getByRole('combobox', {name: /^limits\.window\b/});
+        expect(usageWindow.textContent).toBe('30m');
+        fireEvent.mouseDown(usageWindow);
+        expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+            'limits.window1h', 'limits.window5h', 'limits.window24h', 'limits.window7d',
+        ]);
+        fireEvent.keyDown(screen.getByRole('listbox'), {key: 'Escape'});
+        fireEvent.change(screen.getByLabelText('limits.maxRequests'), {target: {value: '20'}});
+        expect(onChange).toHaveBeenLastCalledWith({max_requests: 20, window_seconds: 1_800});
+    });
+
     it('emits parsed numbers and drops empty fields', () => {
         const onChange = vi.fn();
         render(<LimitsEditor value={{}} onChange={onChange}/>);
