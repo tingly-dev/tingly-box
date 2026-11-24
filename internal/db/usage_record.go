@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -176,9 +177,8 @@ func (UsageDailyScenarioRecord) TableName() string {
 // UsageStore persists usage records in SQLite using GORM.
 type UsageStore struct {
 	storeConn
-	// mu guards the database: writes take the write lock, queries the read
-	// lock (WAL mode supports concurrent readers), so dashboard queries do
-	// not serialize behind proxy usage writes or each other.
+	// mu coordinates writes and rollup operations. Single-statement raw
+	// dashboard reads can use SQLite's WAL snapshots directly.
 	mu sync.RWMutex
 
 	// perf caches GetPerformanceSummary for perfCacheTTL (see
@@ -186,6 +186,8 @@ type UsageStore struct {
 	// resets it.
 	perf         perfCache
 	perfCacheTTL time.Duration
+	// Bound concurrent full-range percentile scans and sorts.
+	performanceQuery chan struct{}
 }
 
 // PerformanceMetricSummary describes the typical and tail values for one
@@ -224,7 +226,7 @@ func newUsageStore(conn storeConn) (*UsageStore, error) {
 	if err := migrateUsageTables(conn.db); err != nil {
 		return nil, err
 	}
-	return &UsageStore{storeConn: conn, perfCacheTTL: defaultPerfCacheTTL}, nil
+	return &UsageStore{storeConn: conn, perfCacheTTL: defaultPerfCacheTTL, performanceQuery: make(chan struct{}, 1)}, nil
 }
 
 // migrateUsageTables aligns and auto-migrates usage_records, usage_daily and
@@ -575,9 +577,6 @@ func (b aggBucket) toAggregatedStat() AggregatedStat {
 // false, sorting/limiting is left to the caller (used for edge-day scans that
 // are merged with usage_daily results afterwards).
 func (us *UsageStore) rawAggBuckets(query UsageStatsQuery, applyLimit bool) ([]aggBucket, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-
 	db := us.db.Model(&UsageRecord{}).Scopes(
 		withinTimeRange(query.StartTime, query.EndTime),
 		withStatsFilters(query),
@@ -683,9 +682,6 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 // rawSeriesBuckets groups usage_records into time buckets keyed by the Unix
 // seconds of the bucket start.
 func (us *UsageStore) rawSeriesBuckets(interval string, startTime, endTime time.Time, filters map[string]string) ([]aggBucket, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-
 	var timeFormat string
 	switch interval {
 	case "minute":
@@ -792,6 +788,11 @@ func TokensPerSecond(outputTokens, latencyMs, ttftMs int) float64 {
 // range. Only successful requests participate: failures and cancellations have
 // different completion semantics and would distort the user-experience view.
 func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
+	return us.GetPerformanceSummaryContext(context.Background(), startTime, endTime, filters)
+}
+
+// GetPerformanceSummaryContext cancels waiting and reading when the caller leaves.
+func (us *UsageStore) GetPerformanceSummaryContext(ctx context.Context, startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
 	if err := validateFilterColumns(filters); err != nil {
 		return PerformanceSummary{}, err
 	}
@@ -799,8 +800,21 @@ func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filter
 	if cached, ok := us.perf.get(key, us.perfCacheTTL); ok {
 		return cached, nil
 	}
+	select {
+	case us.performanceQuery <- struct{}{}:
+		defer func() { <-us.performanceQuery }()
+	case <-ctx.Done():
+		return PerformanceSummary{}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return PerformanceSummary{}, err
+	}
+	// A request that owned the scan slot may have just filled this entry.
+	if cached, ok := us.perf.get(key, us.perfCacheTTL); ok {
+		return cached, nil
+	}
 	gen := us.perf.generation()
-	summary, err := us.queryPerformanceSummary(startTime, endTime, filters)
+	summary, err := us.queryPerformanceSummary(ctx, startTime, endTime, filters)
 	if err != nil {
 		return PerformanceSummary{}, err
 	}
@@ -808,15 +822,13 @@ func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filter
 	return summary, nil
 }
 
-func (us *UsageStore) queryPerformanceSummary(startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-
-	// Stream plain ints instead of materializing a UsageRecord per row: this
-	// runs over every successful request in the range (hundreds of thousands
-	// on a 30-day window), where gorm's per-row reflection dominated.
-	rows, err := us.db.Model(&UsageRecord{}).
-		Select("latency_ms", "ttft_ms", "output_tokens", "streamed").
+func (us *UsageStore) queryPerformanceSummary(ctx context.Context, startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
+	// A single SELECT reads a consistent WAL snapshot while proxy writes
+	// proceed. Exhausting the rows releases the snapshot before sorting.
+	// Check cancellation between rows. Passing a cancellable context to the
+	// SQLite driver would start a goroutine for each row in this scan.
+	rows, err := us.db.WithContext(context.WithoutCancel(ctx)).Model(&UsageRecord{}).
+		Select("COALESCE(latency_ms, 0), COALESCE(ttft_ms, 0), output_tokens, COALESCE(streamed, false)").
 		Where("+status = ?", "success").
 		Scopes(
 			withinTimeRange(startTime, endTime),
@@ -828,9 +840,12 @@ func (us *UsageStore) queryPerformanceSummary(startTime, endTime time.Time, filt
 	defer rows.Close()
 
 	var completion, ttft, tps []float64
+	var latencyMs, ttftMs, outputTokens int
+	var streamed bool
 	for rows.Next() {
-		var latencyMs, ttftMs, outputTokens int
-		var streamed bool
+		if err := ctx.Err(); err != nil {
+			return PerformanceSummary{}, err
+		}
 		if err := rows.Scan(&latencyMs, &ttftMs, &outputTokens, &streamed); err != nil {
 			return PerformanceSummary{}, err
 		}
@@ -848,6 +863,9 @@ func (us *UsageStore) queryPerformanceSummary(startTime, endTime time.Time, filt
 		}
 	}
 	if err := rows.Err(); err != nil {
+		return PerformanceSummary{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return PerformanceSummary{}, err
 	}
 

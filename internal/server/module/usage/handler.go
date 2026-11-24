@@ -272,7 +272,7 @@ func (h *Handler) GetPerformanceSummary(c *gin.Context) {
 		filters["user_id"] = userID
 	}
 
-	summary, err := h.usageStore.GetPerformanceSummary(startTime, endTime, filters)
+	summary, err := h.usageStore.GetPerformanceSummaryContext(c.Request.Context(), startTime, endTime, filters)
 	if err != nil {
 		apierr.Message(c, http.StatusInternalServerError, err.Error())
 		return
