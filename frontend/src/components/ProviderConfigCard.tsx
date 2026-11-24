@@ -91,6 +91,10 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
     const showOptionalSections = (showPlugins && scenario) || modeSelection || extraContent;
     const hasDivider = showApiKeyRow && showOptionalSections;
 
+    const [localEnvMode, setLocalEnvMode] = useState<EnvironmentMode>('local');
+    const envMode = envModeProp ?? localEnvMode;
+    const setEnvMode = onEnvModeChange ?? setLocalEnvMode;
+
     // Compact mode: single horizontal layout with tab switching
     if (compact) {
         return (
@@ -132,16 +136,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
         );
     }
 
-    // Standard mode: two separate rows using ConfigRow (single tab each)
-    const [localEnvMode, setLocalEnvMode] = useState<EnvironmentMode>('local');
-    const envMode = envModeProp ?? localEnvMode;
-    const setEnvMode = onEnvModeChange ?? setLocalEnvMode;
-
-    // Build full URL based on environment mode
-    const fullUrl = React.useMemo(() => {
-        const url = `${baseUrl}${baseUrlPath}`;
-        return transformUrlByMode(url, envMode);
-    }, [baseUrl, baseUrlPath, envMode]);
+    const fullUrl = transformUrlByMode(`${baseUrl}${baseUrlPath}`, envMode);
 
     return (
         <Box {...containerProps}>

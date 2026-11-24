@@ -1,7 +1,7 @@
 import { Grid, Box } from '@mui/material';
 import type { GridProps } from '@mui/material';
 import type { ReactNode } from 'react';
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 interface CardGridProps extends Omit<GridProps, 'container'> {
   children: ReactNode;
@@ -19,21 +19,13 @@ interface CardGridProps extends Omit<GridProps, 'container'> {
   overscan?: number;
 }
 
-const defaultColumns = {
-  xs: 12,
-  sm: 6,
-  md: 4,
-  lg: 3,
-  xl: 3,
-};
-
 export const CardGrid = ({
   children,
-  columns = defaultColumns,
+  columns: _columns,
   spacing = 2,
   virtualized = false,
   itemHeight = 300,
-  containerHeight: propContainerHeight = 600,
+  containerHeight = 600,
   overscan = 5,
   ...gridProps
 }: CardGridProps) => {
@@ -50,24 +42,56 @@ export const CardGrid = ({
     );
   }
 
-  // Enhanced virtualization implementation
+  return (
+    <VirtualizedCardGrid
+      spacing={spacing}
+      itemHeight={itemHeight}
+      containerHeight={containerHeight}
+      overscan={overscan}
+    >
+      {children}
+    </VirtualizedCardGrid>
+  );
+};
+
+type VirtualizedCardGridProps = Required<Pick<CardGridProps,
+  'children' | 'spacing' | 'itemHeight' | 'containerHeight' | 'overscan'
+>>;
+
+function VirtualizedCardGrid({
+  children,
+  spacing,
+  itemHeight,
+  containerHeight,
+  overscan,
+}: VirtualizedCardGridProps) {
   const [scrollTop, setScrollTop] = useState(0);
+  const [measuredHeight, setMeasuredHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewportHeight = measuredHeight || containerHeight;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => setMeasuredHeight(container.clientHeight));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   const childrenArray = useMemo(() => {
     const filtered = Array.isArray(children) ? children.filter(Boolean) : [children].filter(Boolean);
     return filtered;
   }, [children]);
 
-  // Calculate visible items with proper column support
   const visibleItems = useMemo(() => {
-    const currentContainerHeight = containerRef.current?.clientHeight || propContainerHeight;
     const spacingValue = spacing * 4; // Convert spacing unit to pixels (approximate)
     const actualItemHeight = itemHeight + spacingValue;
 
     const startIndex = Math.max(0, Math.floor(scrollTop / actualItemHeight) - overscan);
     const endIndex = Math.min(
       childrenArray.length,
-      Math.ceil((scrollTop + currentContainerHeight) / actualItemHeight) + overscan
+      Math.ceil((scrollTop + viewportHeight) / actualItemHeight) + overscan
     );
 
     return childrenArray.slice(startIndex, endIndex).map((child, index) => ({
@@ -81,7 +105,7 @@ export const CardGrid = ({
         height: itemHeight,
       },
     }));
-  }, [childrenArray, scrollTop, itemHeight, spacing, overscan, propContainerHeight]);
+  }, [childrenArray, scrollTop, itemHeight, spacing, overscan, viewportHeight]);
 
   const totalHeight = Math.max(0, childrenArray.length * (itemHeight + spacing * 8));
 
@@ -93,7 +117,7 @@ export const CardGrid = ({
     <Box
       ref={containerRef}
       sx={{
-        height: propContainerHeight,
+        height: containerHeight,
         overflowY: 'auto',
         overflowX: 'hidden',
         scrollBehavior: 'smooth',
@@ -126,7 +150,7 @@ export const CardGrid = ({
       </Box>
     </Box>
   );
-};
+}
 
 interface CardGridItemProps {
   children: ReactNode;

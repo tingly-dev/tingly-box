@@ -797,7 +797,7 @@ export default {
       "testTool": "Test tool",
       "restrictedTool": "Excluded by the connection allow list. Adjust it in connection settings.",
       "toolEnabled": "On",
-      "connectionSettings": "Settings",
+      "sourceSettings": "Settings",
       "failed": "Failed",
       "builtinRuns": "Runs inside Tingly Box.",
       "toolsOn": "{{on}} of {{total}} tools on",

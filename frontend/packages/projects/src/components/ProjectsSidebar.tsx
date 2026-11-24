@@ -135,6 +135,8 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
     );
 }
 
+const EMPTY_SECTIONS: NonNullable<ProjectsSidebarProps['sections']> = [];
+
 /**
  * The Projects navigation: the user's projects and working folders, one flat
  * row each that opens the project or folder (its threads are observed inside,
@@ -142,7 +144,7 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
  * whatever sections the host adds. It knows nothing about the host; Tingly Box
  * passes its working folders in as a section.
  */
-export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, sections = [], onNavigate }: ProjectsSidebarProps) {
+export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, sections = EMPTY_SECTIONS, onNavigate }: ProjectsSidebarProps) {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();

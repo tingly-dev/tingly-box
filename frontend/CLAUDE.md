@@ -26,4 +26,4 @@ These get reinvented locally often enough that it's worth naming explicitly:
 
 ## Type checking
 
-`pnpm typecheck` runs in CI (`release-cli.yml`) as a non-blocking, `continue-on-error` step — the repo has pre-existing legacy type errors that aren't being fixed as part of unrelated changes, so this only warns instead of failing the build. Still run `pnpm typecheck` locally before opening a PR and fix anything your change introduces; don't rely on CI to catch it.
+`pnpm typecheck` must pass in both the PR compile check and the release frontend build. The PR check also runs `pnpm test` and `pnpm lint` from `frontend/`.

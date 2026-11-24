@@ -1,6 +1,6 @@
 name: Verify Compile
 
-# PR-time compile check (unit tests ready but disabled), split by surface so each one only runs
+# PR-time checks, split by surface so each one only runs
 # when something it builds from changed:
 #   - compile-cli      : go build/vet of ./cli/... (the tingly-box binary)
 #   - compile-gui      : go build/vet of the Wails3 GUI (Linux, GTK4 +
@@ -8,12 +8,11 @@ name: Verify Compile
 #   - test-go          : go test of the root module and the other go.work
 #                        modules (afk, agentboot, ai, imbot, swagger)
 #                        (DISABLED for now, see below)
-#   - compile-frontend : pnpm build of frontend/ and its lint (vitest DISABLED),
+#   - compile-frontend : typecheck, test, lint and build of frontend/,
 #                        plus typecheck, vitest and build of @tingly/projects
 #   - test-projects    : go vet, go test and the boundary check of projects/
 #                        (Projects, its own go.work module; enabled: it was
 #                        tested on every change before it moved here)
-# Unit tests are commented out for now (all passed when added); uncomment to enable.
 # The jobs are independent: the Go builds embed the committed PLACEHOLDER
 # dist, so they never wait on the frontend build. Full release
 # builds (and the release-asset checks) live in release.yml and the
@@ -326,26 +325,21 @@ jobs:
       - name: Set up frontend
         uses: ./.github/actions/setup-frontend
 
-      # Same policy as build-frontend.yml (the release build): legacy type errors exist, so report them
-      # without failing the check.
-      - name: Type check (non-blocking)
-        continue-on-error: true
-        run: |
-          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
+      - name: Type check
+        run: pnpm typecheck
 
       - name: Build frontend
         run: pnpm build
 
-      # @tingly/projects (the Projects web UI) is type-clean, so its checks block.
+      # Projects also runs as a standalone web UI with its own configuration.
       - name: Projects web UI
         run: |
           pnpm --filter @tingly/projects typecheck
           pnpm --filter @tingly/projects test
           pnpm --filter @tingly/projects build
 
-      # Unit tests: disabled for now; uncomment to run vitest.
-      # - name: Unit tests
-      #   run: pnpm test
+      - name: Unit tests
+        run: pnpm test
 
       - name: Lint
         run: pnpm lint

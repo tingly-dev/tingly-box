@@ -31,7 +31,8 @@ describe('ui prefs sync', () => {
 
     it('mirrors only the listed keys', () => {
         expect(isSyncedKey('scenario.hiddenScenarios')).toBe(true);
-        expect(isSyncedKey('setup-card-step2-done-codex')).toBe(true);
+        expect(isSyncedKey('scenario.hiddenDefaultsVersion')).toBe(true);
+        expect(isSyncedKey('setup-card-step2-done-codex')).toBe(false);
         expect(isSyncedKey('user_auth_token')).toBe(false);
     });
 
@@ -51,25 +52,30 @@ describe('ui prefs sync', () => {
     });
 
     it('uploads values only this surface has, and nothing unrelated', async () => {
+        localStorage.setItem('scenario.hiddenDefaultsVersion', '2');
         localStorage.setItem('setup-card-step2-done-codex', 'true');
         localStorage.setItem('user_auth_token', 'secret');
 
         await syncUiPrefs();
 
-        expect(calls).toContainEqual({ method: 'PATCH', body: { prefs: { 'setup-card-step2-done-codex': 'true' } } });
+        expect(calls.filter(c => c.method === 'PATCH')).toEqual([
+            { method: 'PATCH', body: { prefs: { 'scenario.hiddenDefaultsVersion': '2' } } },
+        ]);
     });
 
     it('writes through on set and remove', () => {
         setSyncedItem('scenario.hiddenScenarios', '[]');
-        removeSyncedItem('setup-card-collapsed-codex');
+        localStorage.setItem('scenario.hiddenDefaultsVersion', '2');
+        removeSyncedItem('scenario.hiddenDefaultsVersion');
         setSyncedItem('not-synced', 'x');
 
         expect(localStorage.getItem('scenario.hiddenScenarios')).toBe('[]');
         expect(localStorage.getItem('not-synced')).toBe('x');
+        expect(localStorage.getItem('scenario.hiddenDefaultsVersion')).toBeNull();
         const bodies = calls.filter(c => c.method === 'PATCH').map(c => c.body);
         expect(bodies).toEqual([
             { prefs: { 'scenario.hiddenScenarios': '[]' } },
-            { prefs: { 'setup-card-collapsed-codex': null } },
+            { prefs: { 'scenario.hiddenDefaultsVersion': null } },
         ]);
     });
 });

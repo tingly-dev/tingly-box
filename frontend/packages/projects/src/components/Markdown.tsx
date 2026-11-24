@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
@@ -40,6 +41,19 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     );
 }
 
+const markdownComponents: Components = {
+    a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+    pre: ({ children }) => <>{children}</>,
+    code: ({ className, children }) => {
+        const match = /language-(\w+)/.exec(className ?? '');
+        const code = String(children ?? '');
+        if (!match && !code.includes('\n')) {
+            return <code>{children}</code>;
+        }
+        return <CodeBlock code={code.replace(/\n$/, '')} language={match?.[1] ?? ''} />;
+    },
+};
+
 /** Renders assistant Markdown (GFM) with highlighted, copyable code blocks. */
 export const Markdown = memo(function Markdown({ text, conversation = false }: { text: string; conversation?: boolean }) {
     return (
@@ -72,18 +86,7 @@ export const Markdown = memo(function Markdown({ text, conversation = false }: {
         >
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                components={{
-                    a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
-                    pre: ({ children }) => <>{children}</>,
-                    code: ({ className, children }) => {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const code = String(children ?? '');
-                        if (!match && !code.includes('\n')) {
-                            return <code>{children}</code>;
-                        }
-                        return <CodeBlock code={code.replace(/\n$/, '')} language={match?.[1] ?? ''} />;
-                    },
-                }}
+                components={markdownComponents}
             >
                 {text}
             </ReactMarkdown>
