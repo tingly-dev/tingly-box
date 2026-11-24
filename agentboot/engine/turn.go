@@ -735,6 +735,14 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 			mcpConfig = append(mcpConfig, b...)
 		}
 	}
+	for _, path := range opts.AdditionalMCPConfigPaths {
+		mcpConfig = append(mcpConfig, 0)
+		mcpConfig = append(mcpConfig, path...)
+		if b, err := os.ReadFile(path); err == nil {
+			sum := sha256.Sum256(b)
+			mcpConfig = append(mcpConfig, sum[:]...)
+		}
+	}
 	mcpHash := sha256.Sum256(mcpConfig)
 	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00") + "\x00" + hex.EncodeToString(mcpHash[:])
 }

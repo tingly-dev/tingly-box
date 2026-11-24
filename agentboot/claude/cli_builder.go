@@ -26,6 +26,8 @@ type CommonOptions struct {
 	PermissionMode       string
 	SettingsPath         string
 
+	AdditionalMCPConfigPaths []string
+
 	// PermissionPromptTool specifies the tool for permission prompts (e.g., "stdio")
 	PermissionPromptTool string
 }
@@ -147,7 +149,7 @@ func buildMCPArgs(config Config, opts CommonOptions) []string {
 		maps.Copy(mcpServers, opts.MCPServers)
 	}
 
-	if len(mcpServers) > 0 || opts.MCPConfigPath != "" {
+	if len(mcpServers) > 0 || opts.MCPConfigPath != "" || len(opts.AdditionalMCPConfigPaths) > 0 {
 		args = append(args, "--mcp-config")
 	}
 	if len(mcpServers) > 0 {
@@ -158,6 +160,7 @@ func buildMCPArgs(config Config, opts CommonOptions) []string {
 	if opts.MCPConfigPath != "" {
 		args = append(args, opts.MCPConfigPath)
 	}
+	args = append(args, opts.AdditionalMCPConfigPaths...)
 
 	// Strict MCP config
 	if config.StrictMcpConfig || opts.StrictMcpConfig {

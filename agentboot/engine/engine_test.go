@@ -104,6 +104,21 @@ func TestLaunchSignatureChangesWhenMCPChanges(t *testing.T) {
 	}
 }
 
+func TestLaunchSignatureChangesWhenProfileMCPFileChanges(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	if err := os.WriteFile(path, []byte(`{"mcpServers":{}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	opts := agentboot.ExecutionOptions{AdditionalMCPConfigPaths: []string{path}}
+	before := launchSignature(opts)
+	if err := os.WriteFile(path, []byte(`{"mcpServers":{"tb":{"type":"http","url":"http://localhost/mcp"}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if launchSignature(opts) == before {
+		t.Fatal("resident session would keep the previous MCP config")
+	}
+}
+
 // recorder collects OnTurnEnd calls.
 type recorder struct{ ends chan TurnEnd }
 

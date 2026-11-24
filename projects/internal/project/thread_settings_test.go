@@ -14,6 +14,39 @@ import (
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 )
 
+type mcpProfiles struct{ profiles }
+
+func (mcpProfiles) LaunchMCP(_ context.Context, profile string) (string, error) {
+	return profile + "-mcp.json", nil
+}
+
+func TestProfileMCPJoinsProjectsToolsInWorkerAndFolderSessions(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	require.NoError(t, os.WriteFile(settings, []byte(`{}`), 0600))
+	f.threads.env = mcpProfiles{profiles{settings: settings}}
+	f.threads.SessionToolsConfig = func(string) (string, error) { return "projects-mcp.json", nil }
+	f.project.ThreadProfile = "work"
+	require.NoError(t, f.store.SaveProject(f.project))
+
+	worker, err := f.threads.Start(t.Context(), f.project, StartSpec{Task: "review"})
+	require.NoError(t, err)
+	f.report(t)
+	waitStatus(t, f.store, worker.ID, db.ThreadIdle)
+
+	folder, err := f.startFolder(realTempDir(t), FolderThreadSpec{Task: "review", Profile: "work"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, folder.ID, db.ThreadIdle)
+
+	launches := f.agent.Launches()
+	require.Len(t, launches, 2)
+	for _, launch := range launches {
+		assert.Equal(t, "projects-mcp.json", launch.MCPConfigPath)
+		assert.Equal(t, []string{"work-mcp.json"}, launch.AdditionalMCPConfigPaths)
+		assert.False(t, launch.StrictMcpConfig)
+	}
+}
+
 func TestWorkerLaunchKeepsDefaultsOfItsStartAfterWaitingForCapacity(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
 	const limit = 2

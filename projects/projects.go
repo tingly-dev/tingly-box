@@ -54,6 +54,8 @@ type Model = project.Model
 type (
 	// Launcher routes a session's turns by a profile the host names.
 	Launcher = project.Launcher
+	// MCPLauncher supplies the optional MCP configuration for a worker or folder profile.
+	MCPLauncher = project.MCPLauncher
 	// Handoffer names the program that continues a session in a terminal.
 	Handoffer = project.Handoffer
 	// OutboxHost lets a host that reaches IM (Tingly Box) give Projects the

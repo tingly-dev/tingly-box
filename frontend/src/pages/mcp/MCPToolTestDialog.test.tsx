@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPToolTestDialog from './MCPToolTestDialog';
 const call = vi.hoisted(() => vi.fn());
-vi.mock('@/services/api', () => ({ api: { callMCPTool: call } }));
+const probe = vi.hoisted(() => vi.fn());
+vi.mock('@/services/api', () => ({ api: { callMCPTool: call, probeMCPProfile: probe } }));
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (_: string, o: { defaultValue: string }) => o.defaultValue }),
 }));
@@ -15,7 +16,10 @@ const tool = {
     usage: { client: false, gateway: false },
     input_schema: { type: 'object' },
 };
-beforeEach(() => call.mockReset());
+beforeEach(() => {
+    call.mockReset();
+    probe.mockReset();
+});
 describe('shared administrative tool test', () => {
     it('rejects array arguments and retains structured upstream error content', async () => {
         call.mockResolvedValue({
@@ -38,7 +42,19 @@ describe('shared administrative tool test', () => {
         expect(result).toHaveTextContent('AQID');
         expect(result).toHaveTextContent('isError');
         expect(result).toHaveTextContent('structuredContent');
+        expect(screen.getByRole('alert')).toHaveTextContent('Tool test failed');
         expect(call).toHaveBeenCalledWith({ source_id: 'docs', tool_name: 'read', arguments: { note_id: 'review' } });
+    });
+    it('calls through the selected profile and displays the actual comment failure', async () => {
+        probe.mockResolvedValue({
+            success: true,
+            result: { isError: true, content: [{ type: 'text', text: 'Resource not accessible by personal access token' }] },
+        });
+        render(<MCPToolTestDialog tool={tool} enabled profileId="review" onClose={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Run test' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Resource not accessible by personal access token');
+        expect(probe).toHaveBeenCalledWith('review', { tool_name: tool.normalized_name, arguments: {} });
+        expect(call).not.toHaveBeenCalled();
     });
     it('resets old results on retry and displays a rejected API response', async () => {
         call.mockResolvedValueOnce({ success: true, result: { content: 'old-content' } }).mockResolvedValueOnce({

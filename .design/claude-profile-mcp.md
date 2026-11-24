@@ -257,19 +257,23 @@ inside model requests, turn on Search / Fetch under Server Tools.
   MCP Integration / custom MCP profiles, a link to the chosen one, a warning
   when it is gone), shown while MCP is on.
 
+### 4.5 Projects launches
+
+Worker threads, folder sessions and IM-backed turns load the MCP profile
+selected in their named Claude Code profile. The embedded host supplies its
+`mcp.json` path through `LaunchMCP`. Agentboot passes both that file and the
+Projects tools file in one `--mcp-config` flag and checks their contents when
+reusing a resident session. Claude Code applies its regular MCP permissions.
+The coordinator uses its own strict Projects configuration and delegates
+MCP work to threads.
+
 ## 5. Next
 
-1. **Projects launches** (worker threads, folder sessions, IM chats): the
-   embedded host's `Launcher` hands Projects the profile's `mcp.json` path (an
-   optional `LaunchMCP(ctx, profile)`), agentboot takes several
-   `--mcp-config` files (`tingly-projects` and `tb`). Coordinator stays off
-   (strict config, it delegates). Standalone Projects is unchanged: threads
-   get `tingly-projects` plus the user's own `~/.claude.json` servers.
-2. **Default (no profile)**: the main `claude_code` scenario has no
+1. **Default (no profile)**: the main `claude_code` scenario has no
    `ProfileMeta`; it needs its own `mcp_profile` (and `tingly-box cc` without
    a profile the same file under `claude/default/`).
-3. MCP profile page: "Used by Claude Code profiles: …".
-4. Later, on request: Codex/OpenCode equivalents; an "Add to Claude Code"
+2. MCP profile page: "Used by Claude Code profiles: …".
+3. Later, on request: Codex/OpenCode equivalents; an "Add to Claude Code"
    button for `~/.claude.json`; per-MCP-profile tokens.
 
 ## 6. To probe
