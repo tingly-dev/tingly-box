@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, unwrap, type Subagent, type ThreadEvent } from '../client';
 import type { SubagentSteps } from '../transcript';
 
@@ -111,9 +111,12 @@ export function useTranscript(threadId: string) {
     // Switching threads shows the cached transcript (or none) at once.
     if (state.threadId !== threadId) setState({ threadId, t: cache.get(threadId) ?? null });
     const current = useRef(threadId);
-    current.current = threadId;
     // Live entries that came before the first read landed, so it cannot miss them.
     const early = useRef<ThreadEvent[]>([]);
+    useLayoutEffect(() => {
+        current.current = threadId;
+        early.current = [];
+    }, [threadId]);
 
     const update = useCallback((id: string, fn: (t: Transcript | null) => Transcript | null) => {
         if (id !== current.current) return;
@@ -136,6 +139,7 @@ export function useTranscript(threadId: string) {
             update(id, (t) => t && { ...t, events: mergeEvents(t.events, r.events) });
         } else {
             const r = await fetchEvents(id, { limit: TAIL });
+            if (id !== current.current) return;
             const pending = early.current.filter((e) => e.thread_id === id);
             early.current = [];
             update(id, (t) => ({ events: mergeEvents(mergeEvents(r.events, t?.events ?? []), pending), more: r.more, agents: t?.agents ?? {} }));

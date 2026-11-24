@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { isFolder, type ProjectSummary } from '../client';
 import { getProjectList, reloadProjectListSoon, subscribeProjectList } from './projectListStore';
 import type { ProjectEvent } from './useProjectEvents';
@@ -29,9 +29,11 @@ export const waitingCount = (list: ProjectSummary[] | null): number => (list ?? 
  */
 export function useProjectList(enabled = true, onEvent?: (ev: ProjectEvent) => void, onOpen?: () => void): ProjectList {
     const forward = useRef(onEvent);
-    forward.current = onEvent;
     const reopened = useRef(onOpen);
-    reopened.current = onOpen;
+    useLayoutEffect(() => {
+        forward.current = onEvent;
+        reopened.current = onOpen;
+    }, [onEvent, onOpen]);
 
     // Stable: a new function per render would leave and rejoin the store (and its stream) every time.
     const subscribe = useCallback(

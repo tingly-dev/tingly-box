@@ -1,6 +1,8 @@
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROJECTS_CHANGED } from '../host/ProjectsHost';
 import { getProjectList, POLL_MS, RELOAD_DEBOUNCE_MS, reloadProjectListSoon, subscribeProjectList } from './projectListStore';
+import { useProjectList } from './useProjectList';
 import type { ProjectEvent } from './useProjectEvents';
 
 const m = vi.hoisted(() => ({ get: vi.fn(), open: vi.fn(), close: vi.fn(), emit: undefined as undefined | ((ev: ProjectEvent) => void) }));
@@ -34,6 +36,25 @@ describe('shared project list', () => {
         leave[1]();
         expect(m.close).not.toHaveBeenCalled();
         leave[2]();
+        expect(m.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses the latest event listener without reopening the shared stream', async () => {
+        const first = vi.fn();
+        const second = vi.fn();
+        const view = renderHook(({ onEvent }) => useProjectList(true, onEvent), { initialProps: { onEvent: first } });
+        const event: ProjectEvent = { type: 'thread_event', project_id: 'f1', data: {} };
+
+        act(() => m.emit?.(event));
+        view.rerender({ onEvent: second });
+        act(() => m.emit?.(event));
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        expect(first).toHaveBeenCalledExactlyOnceWith(event);
+        expect(second).toHaveBeenCalledExactlyOnceWith(event);
+        expect(m.open).toHaveBeenCalledTimes(1);
+        expect(m.close).not.toHaveBeenCalled();
+        view.unmount();
         expect(m.close).toHaveBeenCalledTimes(1);
     });
 
