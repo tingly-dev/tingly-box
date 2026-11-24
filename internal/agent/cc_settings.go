@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -279,6 +280,20 @@ func isCCProfileRuleOwnedEnvKey(key string) bool {
 	return slices.Contains(ccProfileRuleOwnedEnvKeys, key)
 }
 
+// Read the JSON names once so validation includes typed preferences whose
+// empty values are omitted by ClaudeCodePrefs.Values.
+var ccProfilePreferenceKeys = func() map[string]bool {
+	fields := reflect.TypeFor[ClaudeCodePrefs]()
+	keys := make(map[string]bool, fields.NumField())
+	for i := range fields.NumField() {
+		name, _, _ := strings.Cut(fields.Field(i).Tag.Get("json"), ",")
+		if name != "" && name != "-" {
+			keys[name] = true
+		}
+	}
+	return keys
+}()
+
 // ResolveCCProfileSettings composes main settings, rule-derived profile model
 // slots, stored runtime overrides, and protected connection values in that
 // order. Legacy stored model-slot overrides are ignored.
@@ -378,7 +393,6 @@ func BuildCCProfileOverrides(desired ClaudeCodePrefs, defaultMode string, keys [
 		return nil, err
 	}
 	overrides := &typ.ClaudeCodeProfileConfig{Env: map[string]string{}}
-	selectedEnv := make(map[string]string, len(keys))
 	for _, key := range keys {
 		switch {
 		case key == "defaultMode":
@@ -389,31 +403,16 @@ func BuildCCProfileOverrides(desired ClaudeCodePrefs, defaultMode string, keys [
 			overrides.DefaultMode = mode
 		case isCCProfileRuleOwnedEnvKey(key):
 			return nil, fmt.Errorf("%s is derived from Model Rules and cannot be overridden by a profile", key)
-		case key != strings.ToUpper(key):
+		case !ccProfilePreferenceKeys[key]:
 			return nil, fmt.Errorf("invalid Claude Code profile override key: %q", key)
-		default:
-			selectedEnv[key] = values[key]
-		}
-	}
-	// Validate even selected keys whose empty value was omitted by Values.
-	data, err := json.Marshal(selectedEnv)
-	if err != nil {
-		return nil, err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	var selected ClaudeCodePrefs
-	if err := decoder.Decode(&selected); err != nil {
-		return nil, err
-	}
-	for key, value := range selectedEnv {
-		if value == "" {
+		case values[key] == "":
 			overrides.UnsetEnv = append(overrides.UnsetEnv, key)
-		} else {
-			overrides.Env[key] = value
+		default:
+			overrides.Env[key] = values[key]
 		}
 	}
 	slices.Sort(overrides.UnsetEnv)
+	overrides.UnsetEnv = slices.Compact(overrides.UnsetEnv)
 	return overrides, nil
 }
 

@@ -191,13 +191,15 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
 
     const [basePrefs, setBasePrefs] = React.useState<ClaudeCodePrefs>({});
     const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>({});
-    const [loadedPrefs, setLoadedPrefs] = React.useState<ClaudeCodePrefs>({});
     const [inheritedMode, setInheritedMode] = React.useState<ClaudeCodeDefaultMode>('auto');
     const [defaultMode, setDefaultMode] = React.useState<ClaudeCodeDefaultMode>('auto');
-    const [loadedMode, setLoadedMode] = React.useState<ClaudeCodeDefaultMode>('auto');
     const [selectedKeys, setSelectedKeys] = React.useState<Set<OverrideKey>>(new Set());
-    const [loadedKeys, setLoadedKeys] = React.useState<Set<OverrideKey>>(new Set());
-    const [hasOverrides, setHasOverrides] = React.useState(false);
+    const [saved, setSaved] = React.useState({
+        prefs: {} as ClaudeCodePrefs,
+        defaultMode: 'auto' as ClaudeCodeDefaultMode,
+        keys: new Set<OverrideKey>(),
+        hasOverrides: false,
+    });
     const [loading, setLoading] = React.useState(true);
     const [savingAction, setSavingAction] = React.useState<'save' | 'restore' | null>(null);
     const [loadError, setLoadError] = React.useState(false);
@@ -215,15 +217,17 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         const nextMode = (result.data.defaultMode || nextInheritedMode) as ClaudeCodeDefaultMode;
         setBasePrefs(nextBase);
         setPrefs(nextPrefs);
-        setLoadedPrefs(nextPrefs);
         setInheritedMode(nextInheritedMode);
         setDefaultMode(nextMode);
-        setLoadedMode(nextMode);
         const storedKeys = new Set<string>(result.data.overrideKeys);
         const nextKeys = new Set(FIELD_ORDER.filter(key => storedKeys.has(key)));
         setSelectedKeys(nextKeys);
-        setLoadedKeys(nextKeys);
-        setHasOverrides(!!result.data.hasOverrides);
+        setSaved({
+            prefs: nextPrefs,
+            defaultMode: nextMode,
+            keys: nextKeys,
+            hasOverrides: !!result.data.hasOverrides,
+        });
         onArtifactChange?.({
             settingsPath: result.data.settingsPath || '',
             settingsExists: !!result.data.settingsExists,
@@ -256,14 +260,13 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         () => FIELD_ORDER.filter(key => selectedKeys.has(key)),
         [selectedKeys],
     );
-    const availableCommon = COMMON_KEYS.filter(key => !selectedKeys.has(key));
-    const availableMore = FIELD_ORDER.filter(key => !COMMON_KEYS.includes(key) && !selectedKeys.has(key));
+    const availableKeys = FIELD_ORDER.filter(key => !selectedKeys.has(key));
     const isRowChanged = (key: OverrideKey) => {
-        if (selectedKeys.has(key) !== loadedKeys.has(key)) return true;
+        if (selectedKeys.has(key) !== saved.keys.has(key)) return true;
         if (!selectedKeys.has(key)) return false;
         return key === 'defaultMode'
-            ? defaultMode !== loadedMode
-            : (prefs[key] ?? '') !== (loadedPrefs[key] ?? '');
+            ? defaultMode !== saved.defaultMode
+            : (prefs[key] ?? '') !== (saved.prefs[key] ?? '');
     };
     const isDirty = FIELD_ORDER.some(isRowChanged);
     const saving = savingAction !== null;
@@ -296,9 +299,9 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     };
 
     const discardChanges = () => {
-        setPrefs(loadedPrefs);
-        setDefaultMode(loadedMode);
-        setSelectedKeys(loadedKeys);
+        setPrefs(saved.prefs);
+        setDefaultMode(saved.defaultMode);
+        setSelectedKeys(saved.keys);
         setMessage(null);
     };
 
@@ -416,7 +419,6 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         if (group === 'network') return text.network;
         return text.runtime;
     };
-    const availableKeys = [...availableCommon, ...availableMore];
     const normalizedAddQuery = addQuery.trim().toLocaleLowerCase();
     const filteredAvailableKeys = normalizedAddQuery
         ? availableKeys.filter(key => `${fieldLabel(key)} ${fieldPurpose(key)} ${key}`.toLocaleLowerCase().includes(normalizedAddQuery))
@@ -465,7 +467,7 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
                                 {savingAction === 'save' ? <CircularProgress size={15} color="inherit" /> : text.save}
                             </Button>
                         </>
-                    ) : !loading && !loadError && hasOverrides && (
+                    ) : !loading && !loadError && saved.hasOverrides && (
                         <Tooltip title={text.restoreAll} arrow>
                             <span>
                                 <Button

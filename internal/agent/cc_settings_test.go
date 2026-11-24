@@ -350,6 +350,16 @@ func TestDiffCCProfileConfig_RejectsModelSlotOverride(t *testing.T) {
 	}
 }
 
+func TestBuildCCProfileOverrides_RejectsUnsupportedKeys(t *testing.T) {
+	for _, key := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_AUTH_TOKEN", "disable_telemetry", "EXTRA"} {
+		t.Run(key, func(t *testing.T) {
+			if _, err := BuildCCProfileOverrides(ClaudeCodePrefs{}, "", []string{key}); err == nil {
+				t.Fatalf("unexpectedly accepted override key %q", key)
+			}
+		})
+	}
+}
+
 func TestCCProfileArtifactDir(t *testing.T) {
 	root := t.TempDir()
 	tests := []struct {
