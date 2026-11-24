@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import api from '@/services/api';
@@ -54,11 +54,14 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
     const { t } = useTranslation();
     const [data, setData] = useState<PerformanceSummaryData | null>(null);
     const [loading, setLoading] = useState(false);
-    const requestSeq = useRef(0);
-
     useEffect(() => {
-        if (!queryParams) return;
-        const seq = ++requestSeq.current;
+        if (!queryParams) {
+            setData(null);
+            setLoading(false);
+            return;
+        }
+        const controller = new AbortController();
+        const { signal } = controller;
         setLoading(true);
         setData(null);
         (async () => {
@@ -71,14 +74,15 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                 if (queryParams.model !== 'all') filters.model = queryParams.model;
                 if (queryParams.user !== 'all') filters.user_id = queryParams.user;
                 if (queryParams.scenario && queryParams.scenario !== 'all') filters.scenario = queryParams.scenario;
-                const result = await api.getUsagePerformance(filters);
-                if (seq === requestSeq.current && result?.ttft) setData(result);
+                const result = await api.getUsagePerformance(filters, signal);
+                if (!signal.aborted && result?.ttft) setData(result);
             } catch (error) {
-                console.error('Failed to load performance summary:', error);
+                if (!signal.aborted) console.error('Failed to load performance summary:', error);
             } finally {
-                if (seq === requestSeq.current) setLoading(false);
+                if (!signal.aborted) setLoading(false);
             }
         })();
+        return () => controller.abort();
     }, [queryParams]);
 
     const metrics = [

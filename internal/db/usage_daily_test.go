@@ -1,6 +1,8 @@
 package db
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -396,6 +398,52 @@ func TestGetPerformanceSummary(t *testing.T) {
 	}
 	if summary.Completion.SampleCount != 2 || summary.Completion.P50 != 1150 {
 		t.Fatalf("completion summary = %+v, want count=2 p50=1150", summary.Completion)
+	}
+}
+
+func TestPerformanceSummaryUsesWALSnapshot(t *testing.T) {
+	store := newUsageStoreForTest(t)
+	now := time.Now()
+	if err := store.RecordUsage(&UsageRecord{Timestamp: now, Status: "success", LatencyMs: 550}); err != nil {
+		t.Fatal(err)
+	}
+	// Old records can have NULL streaming fields.
+	if err := store.db.Exec("UPDATE usage_records SET ttft_ms = NULL, streamed = NULL").Error; err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	type result struct {
+		summary PerformanceSummary
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		summary, err := store.GetPerformanceSummaryContext(ctx, now.Add(-time.Hour), now.Add(time.Hour), nil)
+		done <- result{summary: summary, err: err}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil || got.summary.Completion.SampleCount != 1 || got.summary.Completion.P50 != 550 || got.summary.TTFT.SampleCount != 0 {
+			t.Fatalf("summary with store write lock held = %+v", got)
+		}
+	case <-ctx.Done():
+		t.Fatal("performance query blocked on the store write lock")
+	}
+}
+
+func TestPerformanceSummaryCancelsWhileQueued(t *testing.T) {
+	store := newUsageStoreForTest(t)
+	store.performanceQuery <- struct{}{}
+	defer func() { <-store.performanceQuery }()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := store.GetPerformanceSummaryContext(ctx, time.Time{}, time.Time{}, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled request returned %v", err)
 	}
 }
 
