@@ -131,6 +131,59 @@ func TestEngine_InjectJoinsTheRunningTurn(t *testing.T) {
 	}
 }
 
+func TestEngine_RestartClosesProcessBlockedOnApproval(t *testing.T) {
+	var started atomic.Int32
+	p := newLiveProc(t, func(h *process.FakeHandle, dec *json.Decoder, in chan map[string]any) {
+		first := started.Add(1) == 1
+		read(dec, in)
+		if first {
+			send(t, h, map[string]any{
+				"type": "control_request", "request_id": "stuck",
+				"request": map[string]any{"subtype": "can_use_tool", "tool_name": "Bash", "input": map[string]any{}},
+			})
+			// The CLI does not read any more input, even an interrupt.
+			<-h.Done()
+			return
+		}
+		result(t, h)
+		read(dec, in)
+		h.FinishOutput()
+		h.SignalExit(nil)
+	})
+	e, rec := p.engine(t)
+	dir := t.TempDir()
+	if !e.Start("id", dir, "first", false, nil) {
+		t.Fatal("Start refused")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !e.AwaitingInput("id") {
+		if time.Now().After(deadline) {
+			t.Fatal("approval not received")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if err := e.Restart("id"); err != nil {
+		t.Fatal(err)
+	}
+	if end := rec.wait(t); !end.Stopped || end.Err != nil {
+		t.Fatalf("turn end = %+v, want stopped", end)
+	}
+	if e.Busy("id") || e.AwaitingInput("id") || e.pool.Len() != 0 {
+		t.Fatal("restart left the old turn or process active")
+	}
+	if !e.Start("id", dir, "again", true, nil) {
+		t.Fatal("resume refused")
+	}
+	if end := rec.wait(t); end.Err != nil || end.Stopped {
+		t.Fatalf("resumed turn end = %+v", end)
+	}
+	launches := p.factory.Starts()
+	if len(launches) != 2 || !strings.Contains(strings.Join(launches[1].Command, " "), "--resume id") {
+		t.Fatalf("launches = %+v, want a fresh process resuming id", launches)
+	}
+}
+
 // Switching model and permission mode between turns is a control request to
 // the live process, not a restart; changing a launch-time setting still
 // restarts it.

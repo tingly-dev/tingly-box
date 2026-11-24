@@ -150,7 +150,9 @@ type Threads struct {
 	// take a message into its running turn; the service sets it.
 	coordinatorInsertable func(main *db.Thread) bool
 
-	mu sync.Mutex
+	mu         sync.Mutex
+	startMu    sync.Mutex      // serializes a launch with the restart reservation
+	restarting map[string]bool // protected by mu
 	// stalled holds the running threads already reported as quiet.
 	stalled map[string]bool
 	// held holds the finished report of a worker whose turn ended while it
@@ -177,11 +179,12 @@ type Threads struct {
 // activeThread is a thread with a message in flight: waiting for a slot,
 // or in a turn it started.
 type activeThread struct {
-	cancel  context.CancelFunc // gives up waiting for a slot
-	current *queued            // the message of the turn in flight
-	slot    *limiter           // held while current runs
-	queue   []queued
-	stopped bool
+	cancelCurrent bool
+	cancel        context.CancelFunc // gives up waiting for a slot
+	current       *queued            // the message of the turn in flight
+	slot          *limiter           // held while current runs
+	queue         []queued
+	stopped       bool
 	// stoppedBy is who stopped the turn, for the "Stopped" note.
 	stoppedBy Source
 	// ending is a stop on the way to resolving or archiving the thread: that
@@ -321,7 +324,7 @@ func (t *turnTally) addUsage(u engine.TurnUsage, main bool) {
 func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env ThreadEnv) *Threads {
 	m := &Threads{
 		store: store, layout: layout, hub: hub, env: env,
-		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
+		restarting: map[string]bool{}, active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
 		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{}, lifecycle: map[string]*sync.Mutex{},
 		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{}, cards: map[string]*db.ThreadEvent{},
@@ -825,12 +828,20 @@ func (m *Threads) Send(ctx context.Context, threadID, text string, src Source, a
 	if _, err := m.sendable(threadID); err != nil {
 		return nil, err
 	}
-	m.enqueue(threadID, queued{text: text, src: src, atts: atts, relayed: src.Kind == db.SourceThread})
+	if err := m.enqueue(threadID, queued{text: text, src: src, atts: atts, relayed: src.Kind == db.SourceThread}); err != nil {
+		return nil, err
+	}
 	return m.store.GetThread(threadID)
 }
 
 // sendable is the thread if a message may be sent to it now.
 func (m *Threads) sendable(threadID string) (*db.Thread, error) {
+	m.mu.Lock()
+	restarting := m.restarting[threadID]
+	m.mu.Unlock()
+	if restarting {
+		return nil, ErrRestarting
+	}
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return nil, err
@@ -859,10 +870,18 @@ func (m *Threads) sendable(threadID string) (*db.Thread, error) {
 
 // enqueue records the message and starts a turn unless the thread is busy,
 // in which case it runs after the current one.
-func (m *Threads) enqueue(threadID string, q queued) {
+func (m *Threads) enqueue(threadID string, q queued) error {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+	m.mu.Lock()
+	restarting := m.restarting[threadID]
+	m.mu.Unlock()
+	if restarting {
+		return ErrRestarting
+	}
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
-		return
+		return err
 	}
 	if q.held && m.Running(threadID) {
 		q.eventID = m.holdMessage(t, q)
@@ -891,7 +910,7 @@ func (m *Threads) enqueue(threadID string, q queued) {
 			// nothing left to pick this message up.
 			m.next(threadID)
 		}
-		return
+		return nil
 	}
 	a := &activeThread{current: &q}
 	m.active[threadID] = a
@@ -899,6 +918,7 @@ func (m *Threads) enqueue(threadID string, q queued) {
 	// The turn ended while the message was being held: it goes now.
 	m.releaseHeld(t, &q)
 	go m.begin(threadID, a)
+	return nil
 }
 
 var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
@@ -985,6 +1005,9 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	defer cancel()
 	m.mu.Lock()
 	a.cancel = cancel
+	if a.cancelCurrent {
+		cancel()
+	}
 	m.mu.Unlock()
 	slot := m.slot(p)
 	waited := false
@@ -1002,7 +1025,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	}
 
 	m.mu.Lock()
-	if a.stopped {
+	if a.cancelCurrent {
 		m.mu.Unlock()
 		slot.release()
 		m.giveUp(threadID, a)
@@ -1029,7 +1052,15 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		m.giveUp(threadID, a)
 		return
 	}
+	m.startMu.Lock()
+	if ctx.Err() != nil {
+		m.startMu.Unlock()
+		slot.release()
+		m.giveUp(threadID, a)
+		return
+	}
 	if req := a.current.compact; req != nil {
+		m.startMu.Unlock()
 		m.mu.Lock()
 		m.turns[threadID] = &turnTally{launchModel: model, compact: true}
 		m.mu.Unlock()
@@ -1042,6 +1073,7 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
 	started := m.engine.Start(m.sessionOf(threadID), t.Cwd, prompt, t.Turns > 0, func(context.Context) agentboot.ExecutionOptions { return opts })
+	m.startMu.Unlock()
 	if !started {
 		// Claude started a turn of its own in the meantime: this message
 		// waits for it (turnEnded picks it up).
@@ -1206,7 +1238,7 @@ func (m *Threads) drop(threadID string) {
 // and moves on to anything sent since.
 func (m *Threads) giveUp(threadID string, a *activeThread) {
 	m.mu.Lock()
-	a.current = nil
+	a.current, a.slot = nil, nil
 	stopped, by, ending := a.stopped, a.stoppedBy, a.ending
 	m.mu.Unlock()
 	if stopped {
@@ -1233,14 +1265,12 @@ func (m *Threads) stoppedBeforeTurn(threadID string, by Source, ending bool) {
 // turnEnded settles a finished turn: the thread's status and counters, its
 // report to the coordinator, and the next queued message.
 func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
-	m.prompter(threadID).cancelAll()
-
 	m.mu.Lock()
 	a := m.active[threadID]
 	var slot *limiter
 	if a != nil && !end.Unsolicited {
 		slot, a.slot = a.slot, nil
-		if end.NotSent && a.current != nil {
+		if end.NotSent && a.current != nil && !a.cancelCurrent {
 			// Claude took the turn first; the message goes after it.
 			a.queue = append([]queued{*a.current}, a.queue...)
 		}
@@ -1294,6 +1324,7 @@ func (m *Threads) next(threadID string) {
 	q := a.queue[0]
 	a.queue = a.queue[1:]
 	a.current = &q
+	a.cancelCurrent = false
 	m.mu.Unlock()
 	if t, err := m.store.GetThread(threadID); err == nil {
 		m.releaseHeld(t, &q)
@@ -1326,7 +1357,7 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		// A compaction is not a conversation turn and makes no model call: it
 		// leaves the turn count, the model that answered and the last turn's
 		// figures as they were.
-		if !tally.compact {
+		if !tally.compact && !end.NotStarted {
 			t.Turns++
 			t.ReportedModel = tally.model
 			t.AddUsage(tally.usage, time.Now().UTC())
@@ -1473,9 +1504,15 @@ func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
 func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
+	m.stopQueued(threadID, by)
+	done, _ := m.engine.Stop(m.sessionOf(threadID))
+	return done
+}
+
+func (m *Threads) stopQueued(threadID string, by Source) {
 	m.mu.Lock()
 	if a, ok := m.active[threadID]; ok {
-		a.stopped, a.stoppedBy = true, by
+		a.stopped, a.stoppedBy, a.cancelCurrent = true, by, true
 		m.dropHeld(threadID, a.queue)
 		a.queue = nil
 		if a.cancel != nil {
@@ -1483,8 +1520,6 @@ func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
 		}
 	}
 	m.mu.Unlock()
-	done, _ := m.engine.Stop(m.sessionOf(threadID))
-	return done
 }
 
 // stopEnding is stop on the way to resolving or archiving the thread. The
@@ -1503,8 +1538,9 @@ func (m *Threads) stopEnding(threadID string) <-chan struct{} {
 func (m *Threads) Running(threadID string) bool {
 	m.mu.Lock()
 	_, ok := m.active[threadID]
+	restarting := m.restarting[threadID]
 	m.mu.Unlock()
-	return ok || m.engine.Busy(m.sessionOf(threadID))
+	return ok || restarting || m.engine.Busy(m.sessionOf(threadID))
 }
 
 // StopProject interrupts every running thread of a project (pause, archive,
@@ -2030,8 +2066,11 @@ type pending struct {
 	event db.ThreadEvent
 	tool  string
 	// retime wakes a waiting question when the auto-answer setting changed.
-	retime chan struct{}
-	ch     chan Answer
+	retime   chan struct{}
+	ch       chan Answer
+	cancel   context.CancelFunc
+	done     chan struct{}
+	answered bool
 }
 
 // threadPrompter routes a turn's approvals and questions to the thread view:
@@ -2044,6 +2083,7 @@ type threadPrompter struct {
 
 	mu      sync.Mutex
 	pending map[string]*pending
+	paused  bool
 }
 
 func newThreadPrompter(m *Threads, threadID string) *threadPrompter {
@@ -2134,6 +2174,9 @@ func (p *threadPrompter) autoDeadline(asked time.Time, suggested bool) *time.Tim
 }
 
 func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, payload requestPayload) (Answer, error) {
+	if err := ctx.Err(); err != nil {
+		return Answer{}, err
+	}
 	t, err := p.m.store.GetThread(p.threadID)
 	if err != nil {
 		return Answer{}, err
@@ -2145,12 +2188,31 @@ func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, 
 	}
 	asked := time.Now()
 	payload.AutoAt = p.autoDeadline(asked, suggested != nil)
-	ev := &db.ThreadEvent{Kind: kind, Content: question, Payload: jsonString(payload)}
-	p.m.addEvent(t, ev)
-	pd := &pending{event: *ev, tool: tool, ch: make(chan Answer, 1), retime: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ev := &db.ThreadEvent{ThreadID: t.ID, Kind: kind, Content: question, Payload: jsonString(payload)}
 	p.mu.Lock()
+	if p.paused {
+		p.mu.Unlock()
+		return Answer{}, ErrRestarting
+	}
+	// A reply must find the request even if it arrives via a transcript read.
+	if err := p.m.store.AddThreadEvent(ev); err != nil {
+		p.mu.Unlock()
+		return Answer{}, err
+	}
+	pd := &pending{event: *ev, tool: tool, ch: make(chan Answer, 1), retime: make(chan struct{}, 1), cancel: cancel, done: make(chan struct{})}
 	p.pending[payload.RequestID] = pd
 	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if p.pending[payload.RequestID] == pd {
+			delete(p.pending, payload.RequestID)
+		}
+		close(pd.done)
+	}()
+	p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
 	reason := question
 	if kind == db.EvApproval {
 		reason = "Approve: " + question
@@ -2199,8 +2261,10 @@ wait:
 			fire = arm()
 		case <-fire:
 			p.mu.Lock()
-			_, still := p.pending[payload.RequestID]
-			delete(p.pending, payload.RequestID)
+			still := !p.paused && !pd.answered && p.pending[payload.RequestID] == pd
+			if still {
+				pd.answered = true
+			}
 			p.mu.Unlock()
 			if !still {
 				// Answered at the same moment (theirs wins), or the turn is
@@ -2212,17 +2276,18 @@ wait:
 			payload.Auto = true
 			break wait
 		case <-ctx.Done():
-			p.mu.Lock()
-			delete(p.pending, payload.RequestID)
-			p.mu.Unlock()
-			payload.State, payload.AutoAt = "expired", nil
-			ev.Payload = jsonString(payload)
-			_ = p.m.store.UpdateThreadEvent(ev)
-			p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
-			settled()
-			return Answer{}, ctx.Err()
+			break wait
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		payload.State, payload.AutoAt = "expired", nil
+		ev.Payload = jsonString(payload)
+		_ = p.m.store.UpdateThreadEvent(ev)
+		p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
+		settled()
+		return Answer{}, err
+	}
+
 	payload.AutoAt = nil
 	if kind == db.EvAsk {
 		ans = settleAsk(question, payload.Input, ans)
@@ -2379,13 +2444,11 @@ func settleAsk(question string, input map[string]any, ans Answer) Answer {
 func (p *threadPrompter) resolve(requestID string, ans Answer) error {
 	p.mu.Lock()
 	pd, ok := p.pending[requestID]
-	if ok {
-		delete(p.pending, requestID)
-	}
-	p.mu.Unlock()
-	if !ok {
+	defer p.mu.Unlock()
+	if !ok || pd.answered || p.paused {
 		return ErrNoPrompt
 	}
+	pd.answered = true
 	pd.ch <- ans
 	return nil
 }
@@ -2395,7 +2458,7 @@ func (p *threadPrompter) request(requestID string) (db.ThreadEvent, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	pd, ok := p.pending[requestID]
-	if !ok {
+	if !ok || pd.answered || p.paused {
 		return db.ThreadEvent{}, false
 	}
 	return pd.event, true
@@ -2406,19 +2469,13 @@ func (p *threadPrompter) requests() []db.ThreadEvent {
 	p.mu.Lock()
 	out := make([]db.ThreadEvent, 0, len(p.pending))
 	for _, pd := range p.pending {
-		out = append(out, pd.event)
+		if !pd.answered && !p.paused {
+			out = append(out, pd.event)
+		}
 	}
 	p.mu.Unlock()
 	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
 	return out
-}
-
-func (p *threadPrompter) cancelAll() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for id := range p.pending {
-		delete(p.pending, id)
-	}
 }
 
 // describeTool renders a permission request as the concrete thing the

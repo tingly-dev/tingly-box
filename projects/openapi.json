@@ -2757,6 +2757,39 @@
         }
       }
     },
+    "/api/v1/threads/{id}/restart": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Stop the agent process and its work; the next message resumes the same session in a fresh process",
+        "description": "Stop the agent process and its work; the next message resumes the same session in a fresh process",
+        "operationId": "apiV1ThreadsIdRestartPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/restore": {
       "post": {
         "tags": [

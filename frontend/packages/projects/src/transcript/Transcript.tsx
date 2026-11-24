@@ -47,6 +47,7 @@ interface TranscriptProps {
     // The label of a second "allow" on an approval card that also allows the
     // tool from now on ("Allow Bash in this thread"); none unless passed.
     rememberLabel?: (tool: string) => string;
+    responseRecovery?: ReactNode;
     // When the reader last saw this transcript: a "New" divider marks what
     // arrived since. None on a first visit.
     newSince?: string;
@@ -423,7 +424,7 @@ const RequestCard = ({block, onRespond}: {
     onRespond: (approved: boolean, answer: string, remember?: boolean) => Promise<boolean>;
 }) => {
     const {t} = useTranslation();
-    const {rememberLabel} = useTranscriptHost();
+    const {rememberLabel, responseRecovery} = useTranscriptHost();
     const {message} = block;
     const [request, setRequest, latestRequest] = useDraft(`requestDraft:${message.request_id ?? ''}`, decodeApproval);
     const [details, setDetails] = useState(false);
@@ -468,7 +469,7 @@ const RequestCard = ({block, onRespond}: {
                     </>
                 )}
             </Box>
-            {failed && <Alert severity="error" sx={{mb: 1}}>{t('projects.transcript.responseRetry', {defaultValue: 'Response was not accepted. Your answer is kept; try again.'})}</Alert>}
+            {failed && <Alert severity="error" action={responseRecovery} sx={{mb: 1}}>{t('projects.transcript.responseRetry', {defaultValue: 'Response was not accepted. Your answer is kept; try again.'})}</Alert>}
             {submitted && <Typography role="status" variant="caption">{t('projects.transcript.responseSubmitted', {defaultValue: 'Response sent — waiting for the agent…'})}</Typography>}
             <Stack direction="row" spacing={1}>
                 <Button size="small" variant="contained" startIcon={<Check/>} disabled={busy || submitted} onClick={() => respond(true)}>
@@ -1025,7 +1026,7 @@ const VERB_DEFAULTS: Record<WorkingVerb, string> = {
 // shows, with the room of the whole pane. The host shows older steps above
 // it (SubagentSteps.load with earlier) and says where it sits in the
 // conversation.
-export const SubagentFocus = ({block, working, detail = 'detailed', expandAll = false, onRespond, pendingRequestId, drafts, subagents, codeBlock, attachments, rememberLabel}: {
+export const SubagentFocus = ({block, working, detail = 'detailed', expandAll = false, onRespond, pendingRequestId, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery}: {
     detail?: MessageDetail;
     block: Extract<TranscriptBlock, {type: 'agent'}>;
     // The thread's turn runs (a foreground subagent left running without it was cut off).
@@ -1038,8 +1039,9 @@ export const SubagentFocus = ({block, working, detail = 'detailed', expandAll = 
     codeBlock?: CodeBlockComponent;
     attachments?: AttachmentsComponent;
     rememberLabel?: (tool: string) => string;
+    responseRecovery?: ReactNode;
 }) => (
-    <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+    <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery}>
         <FocusBody block={block} working={working} expandAll={expandAll} onRespond={onRespond} pendingRequestId={pendingRequestId}/>
     </TranscriptHostProvider>
 );
@@ -1061,7 +1063,7 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince, hideChecklist = false, messageSource, renderCustom}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, newSince, hideChecklist = false, messageSource, renderCustom}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
     // gets a line saying what it does and for how long.
     const showWorking = working && !pendingRequestId;
@@ -1069,7 +1071,7 @@ const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', exp
     const currentGroup = groups.at(-1);
 
     return (
-        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} messageSource={messageSource} renderCustom={renderCustom}>
+        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} messageSource={messageSource} renderCustom={renderCustom}>
             <Stack spacing={messageSpacing}>
                 {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
                 <BlockList anchored timeMarked blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>

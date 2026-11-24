@@ -53,20 +53,20 @@ func retryPause(ctx context.Context) bool {
 // flight: the claim is atomic, so of two requests for one session arriving
 // together exactly one wins.
 func (e *Engine) Start(id, dir, prompt string, resume bool, launch Launch) bool {
-	_, ok := e.begin(id, dir, prompt, resume, launch, nil)
+	_, ok := e.begin(context.Background(), id, dir, prompt, resume, launch, nil)
 	return ok
 }
 
 // begin claims the session and starts its turn. A non-nil capture makes it a
 // compaction (Compact): the prompt is the backend's compaction request, which
 // is not recorded as the user's message and is not offered to Retry.
-func (e *Engine) begin(id, dir, prompt string, resume bool, launch Launch, capture *compactCapture) (*run, bool) {
+func (e *Engine) begin(ctx context.Context, id, dir, prompt string, resume bool, launch Launch, capture *compactCapture) (*run, bool) {
 	turnCtx, cancel := context.WithTimeout(context.Background(), turnTimeout)
 	prompter := newWebPrompter(id, e.store)
 	done := make(chan struct{})
 
 	e.mu.Lock()
-	if _, busy := e.runs[id]; busy {
+	if _, busy := e.runs[id]; busy || e.restarting[id] || ctx.Err() != nil {
 		e.mu.Unlock()
 		cancel()
 		return nil, false
@@ -101,17 +101,12 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 			r.end = end
 		}
 		delete(e.runs, sessionID)
-		e.settling[sessionID]++
+		e.startSettling(sessionID)
 		e.mu.Unlock()
 		cancel()
 		close(done)
 		e.turnEnded(sessionID, end)
-		e.mu.Lock()
-		e.settling[sessionID]--
-		if e.settling[sessionID] == 0 {
-			delete(e.settling, sessionID)
-		}
-		e.mu.Unlock()
+		e.finishSettling(sessionID)
 	}()
 
 	var opts agentboot.ExecutionOptions
@@ -128,6 +123,9 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 	if e.pool != nil {
 		var handled bool
 		if werr, handled = e.runPersistentTurn(ctx, sessionID, projectPath, prompt, opts, prompter); handled {
+			if errors.Is(werr, errCanceledBeforeLaunch) {
+				end.NotStarted, werr = true, ctx.Err()
+			}
 			if errors.Is(werr, agentboot.ErrTurnInFlight) {
 				end.NotSent, werr = true, nil
 			}
@@ -135,6 +133,11 @@ func (e *Engine) runTurn(ctx context.Context, sessionID, projectPath, prompt str
 			e.settleTurn(sessionID, prompt, end.Err)
 			return
 		}
+	}
+	if ctx.Err() != nil {
+		end.NotStarted = true
+		end.Err, end.Stopped = e.finishTurn(ctx, sessionID, ctx.Err(), nil)
+		return
 	}
 
 	settled := &settleStore{LifecycleStore: e.store}
@@ -205,6 +208,8 @@ func (s *settleStore) SetFailed(id, errMsg string) bool {
 	return s.LifecycleStore.SetFailed(id, errMsg)
 }
 
+var errCanceledBeforeLaunch = errors.New("turn canceled before launch")
+
 // runPersistentTurn drives one turn through a long-lived Claude Code process
 // kept in e.pool, mirroring remoteagent.ClaudeCodeExecutor's own
 // runPersistentTurn (.design/claude-code-session.md §5.3) — same pool package, same
@@ -221,6 +226,9 @@ func (s *settleStore) SetFailed(id, errMsg string) bool {
 // persistent path has no Runner-owned lifecycle hook to attach it to), so
 // session status transitions are driven directly.
 func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, prompter agentboot.Prompter) (werr error, handled bool) {
+	if ctx.Err() != nil {
+		return errCanceledBeforeLaunch, true
+	}
 	sig := launchSignature(opts)
 	want := launchState{sig: sig, model: opts.Model, mode: opts.PermissionMode, live: liveSettings(opts)}
 	persistentSession, found := e.pool.Acquire(sessionID)
@@ -231,6 +239,9 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		found = false
 	}
 	if found {
+		if persistentSession.Status() == agentboot.SessionStateClosing {
+			return agentboot.ErrSessionClosed, true
+		}
 		e.mu.Lock()
 		have := e.launch[sessionID]
 		e.mu.Unlock()
@@ -244,6 +255,9 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		}
 	}
 
+	if ctx.Err() != nil {
+		return errCanceledBeforeLaunch, true
+	}
 	e.store.SetRunning(sessionID)
 	if !found {
 		// A first turn that failed strictly pre-output (launch flake,
@@ -257,7 +271,7 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		// .design/claude-code-session.md §5.4.
 		for attempt := 0; ; attempt++ {
 			res, werr = e.openPersistentTurn(ctx, sessionID, projectPath, prompt, opts, want, prompter)
-			if werr == nil || attempt >= maxPreOutputRetries ||
+			if werr == nil || ctx.Err() != nil || attempt >= maxPreOutputRetries ||
 				!agentboot.PreOutputFailure(werr) || (res != nil && res.c.TurnOutputSeen()) {
 				break
 			}
@@ -304,7 +318,7 @@ func (e *Engine) runPersistentTurn(ctx context.Context, sessionID, projectPath, 
 		// turn from the transcript — the user's message is never re-sent
 		// — and interrupted tool calls are not re-run (CLI-guaranteed).
 		// One attempt only: a recovery that also fails surfaces the error.
-		if agentboot.PreOutputFailure(werr) && res.c.TurnOutputSeen() {
+		if ctx.Err() == nil && agentboot.PreOutputFailure(werr) && res.c.TurnOutputSeen() {
 			logrus.WithError(werr).Warnf("engine: session %s crashed mid-turn, resuming the interrupted turn", sessionID)
 			recRes, recErr := e.recoverInterruptedTurn(ctx, sessionID, projectPath, opts, want, prompter)
 			if recErr == nil {
@@ -428,6 +442,9 @@ func (e *Engine) finishTurn(ctx context.Context, sessionID string, werr error, s
 // and the launch bookkeeping, and awaits the turn. A nil resident means
 // nothing was sent — the caller falls back to a one-shot turn.
 func (e *Engine) openPersistentTurn(ctx context.Context, sessionID, projectPath, prompt string, opts agentboot.ExecutionOptions, want launchState, prompter agentboot.Prompter) (*resident, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	opened, operr := e.agent.Open(ctx, "", projectPath, prompt, opts)
 	if operr != nil {
 		return nil, operr
@@ -442,6 +459,15 @@ func (e *Engine) openPersistentTurn(ctx context.Context, sessionID, projectPath,
 	e.launch[sessionID] = want
 	e.mu.Unlock()
 	res := e.newResident(sessionID, opened)
+	// Restart may have canceled this turn before the resident was registered.
+	if ctx.Err() != nil {
+		res.cancel()
+		closeCtx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+		defer cancel()
+		_ = opened.Close(closeCtx)
+		<-res.c.Done()
+		return res, ctx.Err()
+	}
 	_, werr := res.c.Await(ctx, prompter)
 	return res, werr
 }

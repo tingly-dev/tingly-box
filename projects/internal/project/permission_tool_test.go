@@ -332,3 +332,34 @@ func TestGrantRulesThatReachPastTheGateOrRunAnythingAreRefused(t *testing.T) {
 		assert.NoError(t, checkGrantRule(r), r)
 	}
 }
+
+func TestRestartCancelsIndependentPermissionToolRequest(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
+	th := startedThread(t, f)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.threads.RequestPermission(ctx, th, PermissionRequest{Action: "inspect build output", Reason: "verify the build"})
+		done <- err
+	}()
+	waitStatus(t, f.store, th.ID, db.ThreadWaiting)
+	pending := f.threads.PendingRequests(th.ID)
+	require.Len(t, pending, 1)
+
+	got, err := f.threads.Restart(th.ID)
+	require.NoError(t, err)
+	assert.Equal(t, th.SessionID, got.SessionID)
+	assert.Equal(t, db.RestingStatus(got), got.Status)
+	assert.Empty(t, got.Grants)
+	assert.Empty(t, f.threads.PendingRequests(th.ID))
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "context canceled")
+	case <-time.After(time.Second):
+		t.Fatal("the tool call is still waiting for permission")
+	}
+	event, err := f.store.GetThreadEvent(pending[0].ID)
+	require.NoError(t, err)
+	assert.Contains(t, event.Payload, `"state":"expired"`)
+}

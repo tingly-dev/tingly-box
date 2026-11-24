@@ -537,6 +537,13 @@ func (s *Store) ListThreadEvents(threadID string) ([]ThreadEvent, error) {
 	return s.ListRecentThreadEvents(threadID, 0)
 }
 
+// ListRequestEvents reads a thread's approvals and questions, including subagents'.
+func (s *Store) ListRequestEvents(threadID string) ([]ThreadEvent, error) {
+	var out []ThreadEvent
+	err := s.db.Where("thread_id = ? AND kind IN ?", threadID, []string{EvApproval, EvAsk}).Find(&out).Error
+	return out, err
+}
+
 // ListRecentThreadEvents returns the latest limit events of a thread in
 // chronological order (all when limit <= 0).
 func (s *Store) ListRecentThreadEvents(threadID string, limit int) ([]ThreadEvent, error) {

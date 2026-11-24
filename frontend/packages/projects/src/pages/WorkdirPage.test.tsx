@@ -130,6 +130,30 @@ describe('WorkdirPage live transcript', () => {
         await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', { params: { path: { id: 't1' } }, body: { content: 'continue', attachments: [], mode: 'next_turn' } }));
     });
 
+    it('can force restart a session from its menu while a turn is running', async () => {
+        m.post.mockResolvedValue({ data: { ...thread, status: 'idle' }, response: new Response() });
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        fireEvent.click(await screen.findByRole('button', { name: 'common.more' }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'session.restart' }));
+        expect(m.post).not.toHaveBeenCalled();
+        fireEvent.click(await screen.findByRole('button', { name: 'session.restart' }));
+        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/restart', { params: { path: { id: 't1' } } }));
+    });
+
+    it('offers force restart when a tool approval reply fails', async () => {
+        m.post.mockResolvedValue({ error: { error: 'no pending request with that id' }, response: new Response(null, { status: 409 }) });
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        await waitFor(() => expect(m.projectCb).not.toBeNull());
+        act(() => m.projectCb?.({
+            type: 'thread_event',
+            data: { ...entry('approval', 'Approve tool'), kind: 'approval', payload: '{"request_id":"stuck","tool":"mcp__example__request_permission","state":"pending"}' },
+        }));
+        fireEvent.click(await screen.findByRole('button', { name: /^projects.transcript.approve / }));
+        fireEvent.click(await screen.findByRole('button', { name: 'session.restart' }));
+        expect(await screen.findByRole('dialog', { name: 'session.restartConfirm' })).toBeInTheDocument();
+        expect(m.post).toHaveBeenCalledTimes(1);
+    });
+
     // The real hub sends thread_event only on /projects/{id}/events; the
     // all-projects stream (useProjectList) carries thread / project frames.
     it('takes transcript entries from the open folder\'s own stream, not the all-projects one', async () => {
