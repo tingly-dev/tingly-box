@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import {
     Box,
@@ -188,34 +188,34 @@ const AccessControl = () => {
     const [showModelToken, setShowModelToken] = useState(false);
     const [showMCPToken, setShowMCPToken] = useState(false);
 
-    const loadTokenInfo = async () => {
+    const loadTokenInfo = useCallback(async () => {
         setLoading(true);
         const result = await api.getUserAuthTokenInfo();
         if (result.success && result.data) {
             setUserTokenInfo(result.data);
         }
         setLoading(false);
-    };
+    }, []);
 
-    const loadModelToken = async () => {
+    const loadModelToken = useCallback(async () => {
         const result = await api.getToken();
         if (result && result.token) {
             setModelToken(result.token);
         }
-    };
+    }, []);
 
-    const loadMCPToken = async () => {
+    const loadMCPToken = useCallback(async () => {
         const result = await api.getMCPToken();
         if (result?.success && result.data?.token) {
             setMCPToken(result.data.token);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        loadTokenInfo();
-        loadModelToken();
-        loadMCPToken();
-    }, []);
+        void loadTokenInfo();
+        void loadModelToken();
+        void loadMCPToken();
+    }, [loadTokenInfo, loadModelToken, loadMCPToken]);
 
 
     const handleUserResetClick = () => {

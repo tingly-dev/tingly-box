@@ -3,7 +3,7 @@ import type {ExperimentalFeature} from '@/components/ExperimentalFeatureGate';
 import { Folder as IconFolder, Psychology as IconBrain, Shield as IconShield, SettingsApplications, TestPipe as IconTestPipe } from '@/components/icons';
 import {Alert, Box, Chip, Typography,} from '@mui/material';
 import {alpha} from '@mui/material/styles';
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../../services/api';
@@ -36,7 +36,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     const [actionError, setActionError] = useState(false);
     const {refresh} = useFeatureFlags();
 
-    const loadFeatures = async () => {
+    const loadFeatures = useCallback(async () => {
         try {
             setLoading(true);
             // Load skill features
@@ -70,7 +70,7 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const finishUpdate = async (
         featureKey: ExperimentalFeature,
@@ -129,8 +129,8 @@ const GlobalExperimentalFeatures: React.FC<GlobalExperimentalFeaturesProps> = ({
     };
 
     useEffect(() => {
-        loadFeatures();
-    }, []);
+        void loadFeatures();
+    }, [loadFeatures]);
 
     if (loading) {
         return null;

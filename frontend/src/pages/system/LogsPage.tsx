@@ -9,19 +9,19 @@ const LogsPage = () => {
     const [loadingDebug, setLoadingDebug] = useState(false);
 
     useEffect(() => {
-        fetchDebugMode();
-    }, []);
-
-    const fetchDebugMode = async () => {
-        try {
-            const data = await controlApi((client, headers) => client.GET('/api/v1/system/logs/level', {headers}));
-            if (data?.success !== false) {
-                setDebugMode(data.level === 'debug');
+        const fetchDebugMode = async () => {
+            try {
+                const data = await controlApi((client, headers) => client.GET('/api/v1/system/logs/level', {headers}));
+                if (data?.success !== false) {
+                    setDebugMode(data.level === 'debug');
+                }
+            } catch (error) {
+                console.error('Failed to fetch debug mode:', error);
             }
-        } catch (error) {
-            console.error('Failed to fetch debug mode:', error);
-        }
-    };
+        };
+
+        void fetchDebugMode();
+    }, []);
 
     const handleDebugModeChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const newDebugMode = event.target.checked;

@@ -9,7 +9,7 @@ import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { Box, Button, CircularProgress, Divider, IconButton, InputAdornment, Link, Stack, Switch, TextField, Tooltip, Typography, Chip, type SxProps, type Theme } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '@/contexts/HealthContext.tsx';
 import { useVersion } from '@/contexts/VersionContext.tsx';
@@ -163,38 +163,6 @@ const System = () => {
 
     const shownVersion = displayVersion(currentVersion);
 
-    useEffect(() => {
-        loadAllData();
-
-        const statusInterval = setInterval(() => {
-            loadServerStatus();
-        }, 30000);
-
-        return () => {
-            clearInterval(statusInterval);
-        };
-    }, []);
-
-    const loadAllData = async () => {
-        setLoading(true);
-        await Promise.all([
-            loadServerStatus(),
-            loadProxyConfig(),
-        ]);
-        setLoading(false);
-    };
-
-    const loadProxyConfig = async () => {
-        const result = await api.getConfig();
-        if (result.success && result.data) {
-            const value = result.data.http_transport?.respect_env_proxy;
-            setRespectEnvProxy(value === null ? false : value);
-            const gpUrl = result.data.http_transport?.global_proxy_url ?? '';
-            setGlobalProxyUrl(gpUrl);
-            setGlobalProxyInput(gpUrl);
-        }
-    };
-
     const saveGlobalProxyUrl = async () => {
         setProxyUrlSaving(true);
         const result = await api.updateConfig({
@@ -209,12 +177,38 @@ const System = () => {
         setProxyUrlSaving(false);
     };
 
-    const loadServerStatus = async () => {
+    const loadServerStatus = useCallback(async () => {
         const result = await api.getStatus();
         if (result.success) {
             setServerStatus(result.data);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        const loadProxyConfig = async () => {
+            const result = await api.getConfig();
+            if (result.success && result.data) {
+                const value = result.data.http_transport?.respect_env_proxy;
+                setRespectEnvProxy(value === null ? false : value);
+                const gpUrl = result.data.http_transport?.global_proxy_url ?? '';
+                setGlobalProxyUrl(gpUrl);
+                setGlobalProxyInput(gpUrl);
+            }
+        };
+
+        const loadAllData = async () => {
+            setLoading(true);
+            try {
+                await Promise.all([loadServerStatus(), loadProxyConfig()]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadAllData();
+        const statusInterval = setInterval(() => { void loadServerStatus(); }, 30000);
+        return () => clearInterval(statusInterval);
+    }, [loadServerStatus]);
 
     const toggleProxy = () => {
         const newValue = !respectEnvProxy;

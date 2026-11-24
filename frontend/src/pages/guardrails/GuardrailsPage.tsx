@@ -1,5 +1,5 @@
 import StatusDot from '@tingly/ui/components/StatusDot';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Button,
@@ -53,7 +53,7 @@ const GuardrailsPage = () => {
     const [selectedExportPaths, setSelectedExportPaths] = useState<string[]>([]);
     const [exporting, setExporting] = useState(false);
 
-    const loadGuardrails = async () => {
+    const loadGuardrails = useCallback(async () => {
         try {
             setLoading(true);
             const [guardrailsConfig, guardrailsHistory] = await Promise.all([
@@ -73,11 +73,11 @@ const GuardrailsPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        loadGuardrails();
-    }, []);
+        void loadGuardrails();
+    }, [loadGuardrails]);
 
     const stats = useMemo(() => {
         const total = policies.length;

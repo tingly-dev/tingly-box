@@ -53,16 +53,26 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
         };
     }, [open]);
 
+    const handleClose = React.useCallback(() => {
+        setActiveStep(0);
+        onClose();
+        // Restore focus to trigger element
+        if (triggerRef.current) {
+            triggerRef.current.focus();
+        }
+    }, [onClose]);
+
     // Handle keyboard escape
     React.useEffect(() => {
+        if (!open) return;
         const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && open) {
+            if (e.key === 'Escape') {
                 handleClose();
             }
         };
         document.addEventListener('keydown', handleEscape);
         return () => document.removeEventListener('keydown', handleEscape);
-    }, [open]);
+    }, [handleClose, open]);
 
     const handleNext = () => {
         if (activeStep < maxSteps - 1) {
@@ -74,15 +84,6 @@ export const TierGuideDialog: React.FC<TierGuideDialogProps> = ({
 
     const handleBack = () => {
         setActiveStep(Math.max(0, activeStep - 1));
-    };
-
-    const handleClose = () => {
-        setActiveStep(0);
-        onClose();
-        // Restore focus to trigger element
-        if (triggerRef.current) {
-            triggerRef.current.focus();
-        }
     };
 
     const handleStepChange = (step: number) => {

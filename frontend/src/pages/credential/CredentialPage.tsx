@@ -34,7 +34,7 @@ import {
     ToggleButtonGroup,
     Tooltip,
 } from '@mui/material';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
@@ -97,13 +97,31 @@ const CredentialPage = () => {
         reason: string;
     }>({ open: false, providerUuid: '', providerName: '', reason: '' });
 
-    useEffect(() => { loadProviders(); }, []);
-
     const { quotaData, refreshing, refreshQuota, redeemReward } = useProviderQuota(providers, { fetchOnMount: true });
 
     const showNotification = useCallback((message: string, severity: 'success' | 'error') => {
         notify[severity](message);
     }, [notify]);
+
+    const applyProviders = (result: Awaited<ReturnType<typeof api.getProviders>>) => {
+        if (result.success) { setProviders(result.data); }
+        else { showNotification(t('credentialPage.loadFailed', { error: result.error }), 'error'); }
+        setLoading(false);
+    };
+
+    const loadProviders = async () => {
+        setLoading(true);
+        applyProviders(await api.getProviders());
+    };
+
+    const applyInitialProviders = useEffectEvent(applyProviders);
+    useEffect(() => {
+        let active = true;
+        void api.getProviders().then((result) => {
+            if (active) applyInitialProviders(result);
+        });
+        return () => { active = false; };
+    }, []);
 
     // Standard "Connect AI" add flow: picker + every downstream dialog
     // (form / OAuth / paste / import) via the shared hook + ConnectAIDialogs.
@@ -111,14 +129,6 @@ const CredentialPage = () => {
         onProviderAdded: () => loadProviders(),
     });
     const { handleConnectAIClick } = connectAI;
-
-    const loadProviders = async () => {
-        setLoading(true);
-        const result = await api.getProviders();
-        if (result.success) { setProviders(result.data); }
-        else { showNotification(t('credentialPage.loadFailed', { error: result.error }), 'error'); }
-        setLoading(false);
-    };
 
     const { editProvider: handleEditProvider, providerEditDialogs } = useProviderEditDialog({
         showNotification,
@@ -140,6 +150,9 @@ const CredentialPage = () => {
     };
 
 
+    const openRequestedProvider = useEffectEvent(handleEditProvider);
+    const openRequestedPicker = useEffectEvent(handleConnectAIClick);
+
     // URL param handling for auto-opening dialogs
     useEffect(() => {
         const editProvider = searchParams.get('editProvider');
@@ -147,7 +160,7 @@ const CredentialPage = () => {
             const nextParams = new URLSearchParams(searchParams);
             nextParams.delete('editProvider');
             setSearchParams(nextParams, { replace: true });
-            handleEditProvider(editProvider);
+            openRequestedProvider(editProvider);
             return;
         }
 
@@ -157,9 +170,9 @@ const CredentialPage = () => {
             nextParams.delete('dialog');
             setSearchParams(nextParams, { replace: true });
             // All "add credential" entry points funnel through the unified Connect AI picker.
-            handleConnectAIClick();
+            openRequestedPicker();
         }
-    }, [searchParams, setSearchParams, handleConnectAIClick]);
+    }, [searchParams, setSearchParams]);
 
     // Reauthorize handlers (add-flow OAuth success is handled by the shared hook)
     const handleReauthSuccess = () => {
