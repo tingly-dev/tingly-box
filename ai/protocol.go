@@ -11,9 +11,11 @@ import (
 type APIStyle string
 
 const (
-	APIStyleOpenAI    APIStyle = "openai"
-	APIStyleAnthropic APIStyle = "anthropic"
-	APIStyleGoogle    APIStyle = "google"
+	APIStyleOpenAI         APIStyle = "openai"
+	APIStyleAnthropic      APIStyle = "anthropic"
+	APIStyleGoogle         APIStyle = "google"
+	APIStyleLibreTranslate APIStyle = "libretranslate"
+	APIStyleDeepL          APIStyle = "deepl"
 )
 
 // APIType represents the target API style for protocol conversion

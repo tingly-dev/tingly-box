@@ -186,6 +186,29 @@ token (`ModelToken` or a scoped API token) and returns the OpenAI JSON.
 OpenAI wire only, no streaming — tb accepts it on any scenario. Routing is
 tb's; the SDK doesn't duplicate it.
 
+### Translation
+
+`Client.translate(text: list[str], target_lang, source_lang="auto",
+model="translate", scenario=None)` calls `/tingly/{scenario}/v1/translate`
+with the gateway credential and returns its ordered JSON response, annotated
+with stdlib `TypedDict` types `TranslationResponse` / `TranslationResult`.
+It reuses the same HTTP/error handling as chat. Native prompts, adapter
+selection and language normalization live in the gateway; see
+[translation.md](translation.md). Model service routes are outside the admin
+OpenAPI generator, so these two small response types mirror that contract.
+
+`sdk/python/examples/translation/hunyuan_server.py` loads actual Tencent weights through
+Transformers and registers its serving function with `Server.openai_chat`.
+It returns the complete ChatCompletion dict to preserve measured usage and
+finish status. No new Server endpoint or external serving framework is needed. Examples are
+colocated in `sdk/python/examples/translation/`; `setup.py` registers the provider
+and rule through ordinary tb management APIs, as the existing E2E harness does.
+`sdk/python/examples/translation/client.py` retains the caller side of the same path.
+The same serving example accepts `--generic-chat` for an ordinary instruction LLM;
+setup supports existing `api_style` values and native `libretranslate` / `deepl`
+services without requiring a fabricated upstream model. Optional detection and
+billed-character response fields are annotated with stdlib TypedDict metadata.
+
 ### Quota — the one generated surface
 
 `list_quota()` / `get_quota(uuid)` / `quota_summary()` return pydantic
