@@ -71,6 +71,7 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 // http.Client. Provider-specific clients (Gemini, Antigravity) use this to
 // inject their round tripper without going through the generic transport path.
 func newGoogleClientFromHTTPClient(provider *typ.Provider, httpClient *http.Client) (*GoogleClient, error) {
+	httpClient.Transport = probeErrorBodyTransport{inner: httpClient.Transport}
 	config := &genai.ClientConfig{
 		APIKey: provider.GetAccessToken(),
 		HTTPOptions: genai.HTTPOptions{

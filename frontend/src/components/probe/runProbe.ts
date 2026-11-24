@@ -31,6 +31,7 @@ export async function runProbe(body: ProbeRequest): Promise<ProbeResult> {
             error: {
                 message: response?.error?.message || response?.error || 'Probe failed',
                 type: response?.error?.type || 'client_error',
+                response_body: response?.error?.response_body,
             },
         };
     }

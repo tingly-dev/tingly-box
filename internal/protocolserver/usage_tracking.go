@@ -176,6 +176,7 @@ func (ph *ProtocolHandler) trackUsageWithTokenUsage(c *gin.Context, usage *proto
 	// Capture its terminal error independently of metrics/recording so the
 	// access log, request summary, and root span can observe the failure.
 	if streamed && err != nil && c.Writer.Written() && c.Writer.Status() < 400 && c.Request.Context().Err() == nil && !errors.Is(err, context.Canceled) {
+		protocol.CaptureProbeError(c.Request, err, true)
 		logErr := protocol.LoggableUpstreamError(err)
 		c.Error(logErr).SetType(gin.ErrorTypePrivate)
 		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{

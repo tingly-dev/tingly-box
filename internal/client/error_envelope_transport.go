@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 // stringErrorTransport rewrites {"error":"text"} into {"error":{"message":"text"}}
@@ -33,6 +35,8 @@ func (t *stringErrorTransport) RoundTrip(req *http.Request) (*http.Response, err
 		return resp, nil
 	}
 
+	protocol.CaptureProbeHTTPBody(req.Context(), body)
+
 	var probe struct {
 		Error any `json:"error"`
 	}
@@ -51,3 +55,25 @@ func (t *stringErrorTransport) RoundTrip(req *http.Request) (*http.Response, err
 type errReader struct{ err error }
 
 func (r errReader) Read([]byte) (int, error) { return 0, r.err }
+
+// probeErrorBodyTransport retains bodies before SDK decoding for clients
+// whose transports do not already read and normalize HTTP errors.
+type probeErrorBodyTransport struct {
+	inner http.RoundTripper
+}
+
+func (t probeErrorBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.inner.RoundTrip(req)
+	if err != nil || resp.StatusCode < http.StatusBadRequest || resp.Body == nil || !protocol.HasProbeErrorCapture(req.Context()) {
+		return resp, err
+	}
+	body, readErr := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if readErr != nil {
+		resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), errReader{readErr}))
+		return resp, nil
+	}
+	protocol.CaptureProbeHTTPBody(req.Context(), body)
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	return resp, nil
+}

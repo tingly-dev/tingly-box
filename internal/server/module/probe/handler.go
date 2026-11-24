@@ -26,13 +26,12 @@ func NewHandler(e2e *probe.E2EProber, light *probe.LightProber) *Handler {
 	return &Handler{e2e: e2e, light: light}
 }
 
-// errorDetail mirrors the JSON shape of the server's global ErrorDetail so
-// the API contract is unchanged. Defined locally to keep this package free
-// of any internal/server import.
+// errorDetail carries the probe summary and any original upstream response.
 type errorDetail struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    string `json:"code,omitempty"`
+	Message      string `json:"message"`
+	Type         string `json:"type"`
+	Code         string `json:"code,omitempty"`
+	ResponseBody string `json:"response_body,omitempty"`
 }
 
 // E2EResponse is the JSON envelope returned by POST /probe.
@@ -90,11 +89,23 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	data, err := h.e2e.Probe(ctx, &req)
 
 	if err != nil {
+		var failure *protocol.ProbeFailure
+		var responseBody string
+		if errors.As(err, &failure) {
+			responseBody = failure.ResponseBody
+			if failure.Upstream != nil {
+				err = failure.Upstream
+			}
+		}
+		if responseBody == "" {
+			responseBody = protocol.ProbeErrorBody(err)
+		}
 		c.JSON(http.StatusOK, E2EResponse{
 			Success: false,
 			Error: &errorDetail{
-				Message: probeErrorMessage(err),
-				Type:    "probe_error",
+				Message:      probeErrorMessage(err),
+				Type:         "probe_error",
+				ResponseBody: responseBody,
 			},
 		})
 		return

@@ -34,6 +34,7 @@ interface ProbeControlsProps {
         locked: boolean;
         disabled: boolean;
         lockHint?: string;
+        fallbackLabel?: string;
     };
     scopeDisabled: boolean;
     scopeHint: string;
@@ -77,7 +78,7 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
             <Axis
                 label={t('probe.protocol')}
                 hint={
-                    protocol.locked || protocol.disabled
+                    protocol.locked || protocol.disabled || !protocol.options.length
                         ? protocol.lockHint
                         : `${PROTOCOL_META[protocol.value]?.full || ''} · ${t('probe.protocolHint')}`
                 }
@@ -87,9 +88,9 @@ export const ProbeControls: React.FC<ProbeControlsProps> = ({
                     onChange={(v) => set({ protocol: v as ProbeProtocol })}
                     options={protocolOptions.map((p) => ({
                         value: p,
-                        label: (protocolOptions.length === 1 ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || p,
+                        label: (protocolOptions.length === 1 ? PROTOCOL_META[p]?.full : PROTOCOL_META[p]?.short) || protocol.fallbackLabel || t('probe.protocolProviderDefault'),
                     }))}
-                    disabled={protocol.locked || protocol.disabled}
+                    disabled={protocol.locked || protocol.disabled || !protocol.options.length}
                 />
             </Axis>
 

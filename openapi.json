@@ -24683,6 +24683,10 @@
             "type": "string",
             "description": "Field message"
           },
+          "response_body": {
+            "type": "string",
+            "description": "Field response_body"
+          },
           "type": {
             "type": "string",
             "description": "Field type"

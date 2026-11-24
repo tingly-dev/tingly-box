@@ -26,6 +26,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	pkgotel "github.com/tingly-dev/tingly-box/internal/otel"
 	"github.com/tingly-dev/tingly-box/internal/otel/tracker"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertool"
 	"github.com/tingly-dev/tingly-box/internal/recording"
 	"github.com/tingly-dev/tingly-box/internal/routing"
@@ -209,6 +210,7 @@ func resolveSessionID(c *gin.Context, req interface{}) typ.SessionID {
 // request model name, honoring the probe headers used by service-target
 // probes (X-Tingly-Probe-Rule / X-Tingly-Probe-Service).
 func (ph *ProtocolHandler) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
+	ctx.Request = protocol.BindProbeErrorCapture(ctx.Request)
 	cfg := ph.deps.Config
 
 	// X-Tingly-Probe-Rule: load a specific rule by UUID (for applying its flags
