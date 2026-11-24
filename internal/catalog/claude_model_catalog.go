@@ -180,5 +180,12 @@ func normalizeClaudeCatalogID(model string) (string, bool) {
 	if at := strings.IndexByte(m, '@'); at >= 0 {
 		m = m[:at]
 	}
+	// Antigravity uses model IDs with a reasoning effort suffix.
+	if last := strings.LastIndexByte(m, '-'); last >= 0 {
+		switch m[last+1:] {
+		case "low", "medium", "high", "max":
+			m = m[:last]
+		}
+	}
 	return m, m != ""
 }

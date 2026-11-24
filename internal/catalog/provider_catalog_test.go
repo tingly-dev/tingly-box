@@ -766,7 +766,7 @@ func TestCloudTemplatesResolveModels(t *testing.T) {
 			apiBase:   "https://us-central1-aiplatform.googleapis.com",
 			apiStyle:  protocol.APIStyleGoogle,
 			authType:  typ.AuthTypeGCPVertex,
-			wantModel: "gemini-2.5-pro",
+			wantModel: "gemini-4-neon",
 		},
 		{
 			// Multi-regional "us"/"eu" hosts don't contain the canonical
@@ -826,10 +826,10 @@ func TestVertexDisambiguationByStyle(t *testing.T) {
 		t.Fatalf("gemini: %v", err)
 	}
 
-	if !slices.Contains(claudeModels, "claude-opus-4-8") || slices.Contains(claudeModels, "gemini-2.5-pro") {
+	if !slices.Contains(claudeModels, "claude-opus-4-8") || slices.Contains(claudeModels, "gemini-4-neon") {
 		t.Errorf("anthropic-style Vertex resolved wrong family: %v", claudeModels)
 	}
-	if !slices.Contains(geminiModels, "gemini-2.5-pro") || slices.Contains(geminiModels, "claude-opus-4-8") {
+	if !slices.Contains(geminiModels, "gemini-4-neon") || slices.Contains(geminiModels, "claude-opus-4-8") {
 		t.Errorf("google-style Vertex resolved wrong family: %v", geminiModels)
 	}
 }
