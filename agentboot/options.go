@@ -89,6 +89,9 @@ type ExecutionOptions struct {
 	MCPConfigPath   string
 	StrictMcpConfig bool
 
+	// AdditionalMCPConfigPaths are loaded after MCPConfigPath.
+	AdditionalMCPConfigPaths []string
+
 	// System prompts (per-execution override)
 	CustomSystemPrompt string
 	AppendSystemPrompt string

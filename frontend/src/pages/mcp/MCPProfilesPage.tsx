@@ -30,6 +30,7 @@ import { api } from '@/services/api';
 import ProfileConnect from './ProfileConnect';
 import MCPToolGroup from './MCPToolGroup';
 import MCPToolRow from './MCPToolRow';
+import MCPToolTestDialog from './MCPToolTestDialog';
 import GitHubScope from './GitHubScope';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
 import { useMCPWorkspace } from './useMCPWorkspace';
@@ -93,8 +94,11 @@ export default function MCPProfilesPage() {
         void getApiBaseUrl().then(setApiBase);
     }, []);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const [probe, setProbe] = useState<{ success: boolean; tools: string[]; error?: string } | null>(null);
+    const [lastProbe, setProbe] = useState<{ profileId: string; success: boolean; tools: string[]; error?: string } | null>(null);
+    const [test, setTest] = useState<{ profileId: string; name: string } | null>(null);
+    const probe = lastProbe?.profileId === profile.id ? lastProbe : null;
     const rows = profileRows(profile, routing);
+    const testTool = test?.profileId === profile.id ? rows.find((row) => row.name === test.name && row.on)?.tool : undefined;
     const route = routing?.profiles.find((p) => p.id === profile.id);
     const exposed = enabled && route?.enabled ? route.sources.reduce((sum, source) => sum + source.tools.length, 0) : 0;
     const save = (next: MCPProfile) =>
@@ -205,7 +209,7 @@ export default function MCPProfilesPage() {
                                     void ws.run(async () => {
                                         setProbe(null);
                                         const result = await api.probeMCPProfile(profile.id, {});
-                                        setProbe({ success: result.success, tools: result.tools || [], error: result.error });
+                                        setProbe({ profileId: profile.id, success: result.success, tools: result.tools || [], error: result.error });
                                     })
                                 }
                             >
@@ -326,6 +330,8 @@ export default function MCPProfilesPage() {
                                                     groupRole
                                                     ariaLabel={`${row.sourceName} / ${row.tool?.name || row.name}`}
                                                     onToggle={(on) => void save(setProfileToolOn(profile, row.name, on))}
+                                                    onTest={row.tool ? () => setTest({ profileId: profile.id, name: row.name }) : undefined}
+                                                    testDisabled={busy || !enabled || profile.enabled === false || !row.on || globallyOff}
                                                     onRemove={custom ? () => void save(removeProfileTool(profile, row.name)) : undefined}
                                                     removeDisabled={busy}
                                                 />
@@ -357,6 +363,8 @@ export default function MCPProfilesPage() {
                     })
                 }
             />
+            {testTool && <MCPToolTestDialog key={`${profile.id}/${testTool.normalized_name}`} tool={testTool}
+                enabled={enabled && profile.enabled !== false} profileId={profile.id} onClose={() => setTest(null)} />}
             <Dialog open={renaming !== null} onClose={() => setRenaming(null)} maxWidth="xs" fullWidth>
                 <DialogTitle>{label('renameProfile', 'Rename profile')}</DialogTitle>
                 <DialogContent>

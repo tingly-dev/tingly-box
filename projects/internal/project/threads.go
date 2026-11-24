@@ -930,8 +930,9 @@ var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
 // thread has already been marked failed and noted.
 func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread, p *db.Project, folder bool) (model string, opts agentboot.ExecutionOptions, err error) {
 	env, defModel, settings := m.launchEnv(ctx, t, folder)
+	profile := t.Profile
 	if !folder {
-		profile := workerProfile(t)
+		profile = workerProfile(t)
 		if l, ok := m.env.(Launcher); ok && profile != "" {
 			env, settings, err = l.LaunchEnv(ctx, profile)
 			if err == nil {
@@ -968,6 +969,13 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 			opts.MCPConfigPath = config
 		} else {
 			logrus.WithError(err).Warn("projects: cannot start session tools")
+		}
+	}
+	if host, ok := m.env.(MCPLauncher); ok && profile != "" {
+		if path, err := host.LaunchMCP(ctx, profile); err != nil {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Cannot load MCP for profile %q: %v", profile, err)})
+		} else if path != "" {
+			opts.AdditionalMCPConfigPaths = []string{path}
 		}
 	}
 	if !folder {

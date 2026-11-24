@@ -240,6 +240,8 @@ func (d *Driver) buildArgs(
 		PermissionMode:       opts.PermissionMode,
 		SettingsPath:         opts.SettingsPath,
 		PermissionPromptTool: opts.PermissionPromptTool,
+
+		AdditionalMCPConfigPaths: opts.AdditionalMCPConfigPaths,
 	}
 
 	// Auto-enable stdio permission protocol for stream-json mode.

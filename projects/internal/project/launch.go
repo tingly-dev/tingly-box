@@ -25,6 +25,12 @@ type Launcher interface {
 	CheckLaunch(ctx context.Context, profile, model string) error
 }
 
+// MCPLauncher supplies the host's MCP configuration for a Claude Code profile.
+// A blank path means the profile has no available MCP connection.
+type MCPLauncher interface {
+	LaunchMCP(ctx context.Context, profile string) (path string, err error)
+}
+
 // Handoffer names the program that starts Claude Code in a terminal the way
 // the host's turns do under profile, when that is not plain `claude`. Projects
 // adds the session, its model and the folder, quoted for the user's shell.

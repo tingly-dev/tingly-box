@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
 )
 
@@ -19,8 +20,9 @@ import (
 // its optional Launcher and Handoffer.
 
 var (
-	_ projectsapp.Launcher  = (*Host)(nil)
-	_ projectsapp.Handoffer = (*Host)(nil)
+	_ projectsapp.Launcher    = (*Host)(nil)
+	_ projectsapp.Handoffer   = (*Host)(nil)
+	_ projectsapp.MCPLauncher = (*Host)(nil)
 )
 
 // LaunchEnv routes a session's turn like @cc does: the main
@@ -33,6 +35,19 @@ func (h *Host) LaunchEnv(ctx context.Context, profile string) ([]string, string,
 	}
 	path, err := h.cc.GetClaudeCodeSettingsPathForProfile(ctx, profile)
 	return nil, path, err
+}
+
+func (h *Host) LaunchMCP(_ context.Context, profile string) (string, error) {
+	meta, ok := h.cfg.GetProfile(typ.ScenarioClaudeCode, profile)
+	if !ok {
+		return "", fmt.Errorf("Claude Code profile %q not found", profile)
+	}
+	port := h.cfg.GetServerPort()
+	if port == 0 {
+		port = 12580
+	}
+	baseURL := fmt.Sprintf("http://%s:%d", h.cfg.GetServerHost(), port)
+	return agent.MaterializeCCProfileMCPConfig(h.cfg, baseURL, meta)
 }
 
 // CheckLaunch accepts the default tier always, and a named tier only where

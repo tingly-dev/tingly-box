@@ -243,13 +243,17 @@ func TestDriverBuildMCPArgs(t *testing.T) {
 	assert.Contains(t, argsStr, "brave-search")
 }
 
-func TestMCPConfigPathIsAddedAlongsideConfiguredServers(t *testing.T) {
-	args := BuildCommonArgs(Config{MCPServers: map[string]interface{}{"existing": map[string]interface{}{"command": "example"}}}, CommonOptions{MCPConfigPath: "/private/projects-mcp.json"})
+func TestMCPConfigPathsAreAddedAlongsideConfiguredServers(t *testing.T) {
+	args := BuildCommonArgs(Config{MCPServers: map[string]interface{}{"existing": map[string]interface{}{"command": "example"}}}, CommonOptions{
+		MCPConfigPath:            "/private/projects-mcp.json",
+		AdditionalMCPConfigPaths: []string{"/private/profile-mcp.json"},
+		SettingsPath:             "/private/settings.json",
+	})
 	index := slices.Index(args, "--mcp-config")
 	require.GreaterOrEqual(t, index, 0)
-	require.GreaterOrEqual(t, len(args), index+3)
+	require.GreaterOrEqual(t, len(args), index+6)
 	assert.Contains(t, args[index+1], "existing")
-	assert.Equal(t, "/private/projects-mcp.json", args[index+2])
+	assert.Equal(t, []string{"/private/projects-mcp.json", "/private/profile-mcp.json", "--settings", "/private/settings.json"}, args[index+2:index+6])
 }
 
 func TestBuildCommonArgsEffort(t *testing.T) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material';
 import { api } from '@/services/api';
+import type { components } from '@/client';
 import MCPToolParameters from './MCPToolParameters';
 import { isServerWebtoolsSource } from './toolPresentation';
 import type { MCPCatalogTool } from '../../features/mcp/types';
@@ -9,10 +10,12 @@ import type { MCPCatalogTool } from '../../features/mcp/types';
 export default function MCPToolTestDialog({
     tool,
     enabled,
+    profileId,
     onClose,
 }: {
     tool: MCPCatalogTool;
     enabled: boolean;
+    profileId?: string;
     onClose: () => void;
 }) {
     const { t } = useTranslation();
@@ -29,13 +32,15 @@ export default function MCPToolTestDialog({
             const parsed: unknown = JSON.parse(args);
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
                 throw new Error(label('objectArgs', 'Arguments must be a JSON object.'));
-            const response = await api.callMCPTool({
-                source_id: tool.source_id,
-                tool_name: tool.name,
-                arguments: parsed as Record<string, unknown>,
-            });
+            const argumentsObject = parsed as Record<string, unknown>;
+            const response: components['schemas']['MCPToolCallResponse'] | components['schemas']['MCPClientProbeResponse'] = profileId
+                ? await api.probeMCPProfile(profileId, { tool_name: tool.normalized_name, arguments: argumentsObject })
+                : await api.callMCPTool({ source_id: tool.source_id, tool_name: tool.name, arguments: argumentsObject });
             setResult(response);
-            if (!response?.success) throw new Error(response?.error || 'Tool test failed');
+            if (!response?.success || response.result?.isError) {
+                const detail = response?.result?.content?.find((item) => item.type === 'text')?.text;
+                throw new Error(response?.error || detail || label('toolTestFailed', 'Tool test failed'));
+            }
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
