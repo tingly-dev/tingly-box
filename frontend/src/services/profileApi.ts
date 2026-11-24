@@ -117,12 +117,13 @@ export const profileApi = {
         scenario: string,
         id: string,
         preferences: Record<string, string>,
-        defaultMode: string,
+        overrideKeys: string[],
+        defaultMode?: string,
     ): Promise<any> => {
         return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/profiles/{id}/claude-config', {
             headers,
             params: {path: {scenario, id}},
-            body: {preferences, defaultMode},
+            body: {preferences, defaultMode, overrideKeys},
         }));
     },
 

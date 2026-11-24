@@ -158,12 +158,10 @@ const TEXT = {
 // Most used first: permission mode, then the context-size knobs.
 const COMMON_KEYS: OverrideKey[] = ['defaultMode', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS'];
 const PROFILE_OVERRIDE_FIELDS = CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind !== 'model');
-const RULE_OWNED_MODEL_KEYS = new Set(CLAUDE_CODE_FIELD_STRUCT.filter(field => field.kind === 'model').map(field => field.envName));
-
-// Model slots can change independently while this editor is open. They are
-// owned by routing rules and must not be submitted as stale profile overrides.
-export const profileRuntimePreferences = (prefs: ClaudeCodePrefs): Record<string, string> =>
-    Object.fromEntries(Object.entries(prefs).filter(([key]) => !RULE_OWNED_MODEL_KEYS.has(key as PrefsKey)));
+export const profileRuntimePreferences = (prefs: ClaudeCodePrefs, selectedKeys: ReadonlySet<OverrideKey>): Record<string, string> =>
+    Object.fromEntries(PROFILE_OVERRIDE_FIELDS
+        .filter(field => selectedKeys.has(field.envName))
+        .map(field => [field.envName, prefs[field.envName] ?? '']));
 const FIELD_ORDER: OverrideKey[] = [
     ...COMMON_KEYS,
     ...PROFILE_OVERRIDE_FIELDS
@@ -178,27 +176,6 @@ const FIELD_BY_KEY = new Map<PrefsKey, FieldStruct>(
 const COMPACT_INPUT_SX = {
     '& .MuiInputBase-input, & .MuiSelect-select': { py: 0.625 },
 } as const;
-
-const prefsEqual = (left: ClaudeCodePrefs, right: ClaudeCodePrefs): boolean => {
-    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
-    return [...keys].every(key => left[key as PrefsKey] === right[key as PrefsKey]);
-};
-
-const deriveOverrideKeys = (
-    basePrefs: ClaudeCodePrefs,
-    effectivePrefs: ClaudeCodePrefs,
-    inheritedMode: ClaudeCodeDefaultMode,
-    effectiveMode: ClaudeCodeDefaultMode,
-): Set<OverrideKey> => {
-    const keys = new Set<OverrideKey>();
-    for (const field of PROFILE_OVERRIDE_FIELDS) {
-        if ((basePrefs[field.envName] ?? '') !== (effectivePrefs[field.envName] ?? '')) {
-            keys.add(field.envName);
-        }
-    }
-    if (inheritedMode !== effectiveMode) keys.add('defaultMode');
-    return keys;
-};
 
 const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     profileId,
@@ -242,7 +219,8 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         setInheritedMode(nextInheritedMode);
         setDefaultMode(nextMode);
         setLoadedMode(nextMode);
-        const nextKeys = deriveOverrideKeys(nextBase, nextPrefs, nextInheritedMode, nextMode);
+        const storedKeys = new Set<string>(result.data.overrideKeys);
+        const nextKeys = new Set(FIELD_ORDER.filter(key => storedKeys.has(key)));
         setSelectedKeys(nextKeys);
         setLoadedKeys(nextKeys);
         setHasOverrides(!!result.data.hasOverrides);
@@ -280,12 +258,14 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
     );
     const availableCommon = COMMON_KEYS.filter(key => !selectedKeys.has(key));
     const availableMore = FIELD_ORDER.filter(key => !COMMON_KEYS.includes(key) && !selectedKeys.has(key));
-    const isDirty = !prefsEqual(prefs, loadedPrefs) || defaultMode !== loadedMode;
-    // Marks the rows the pending Save will write. Value-based (like isDirty), so
-    // a freshly added row still holding its inherited value stays unmarked.
-    const isRowChanged = (key: OverrideKey) => key === 'defaultMode'
-        ? defaultMode !== loadedMode
-        : (prefs[key] ?? '') !== (loadedPrefs[key] ?? '');
+    const isRowChanged = (key: OverrideKey) => {
+        if (selectedKeys.has(key) !== loadedKeys.has(key)) return true;
+        if (!selectedKeys.has(key)) return false;
+        return key === 'defaultMode'
+            ? defaultMode !== loadedMode
+            : (prefs[key] ?? '') !== (loadedPrefs[key] ?? '');
+    };
+    const isDirty = FIELD_ORDER.some(isRowChanged);
     const saving = savingAction !== null;
 
     const addOverride = (key: OverrideKey) => {
@@ -351,8 +331,9 @@ const ClaudeCodeProfileOverrides: React.FC<ClaudeCodeProfileOverridesProps> = ({
         () => api.updateClaudeCodeProfileConfig(
             'claude_code',
             profileId,
-            profileRuntimePreferences(prefs),
-            defaultMode,
+            profileRuntimePreferences(prefs, selectedKeys),
+            orderedSelectedKeys,
+            selectedKeys.has('defaultMode') ? defaultMode : undefined,
         ),
         text.saved,
     );

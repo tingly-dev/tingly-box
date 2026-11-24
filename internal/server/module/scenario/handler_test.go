@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -353,6 +354,76 @@ func TestDuplicateProfileEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"not valid"}`).Code)
 	assert.Equal(t, http.StatusNotFound, post("p99", `{}`).Code, "unknown source")
 	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 5)
+}
+
+func TestProfileClaudeConfigKeepsSelectedValuesEqualToBase(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	mainDir := filepath.Join(homeDir, ".claude")
+	require.NoError(t, os.Mkdir(mainDir, 0700))
+	mainSettings := filepath.Join(mainDir, "settings.json")
+	require.NoError(t, os.WriteFile(mainSettings, []byte(`{
+		"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000","MCP_TIMEOUT":"1000"},
+		"permissions":{"defaultMode":"plan"}
+	}`), 0600))
+
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	require.NoError(t, err)
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	route := "/scenario/:scenario/profiles/:id/claude-config"
+	router.GET(route, handler.GetProfileClaudeConfig)
+	router.PUT(route, handler.UpdateProfileClaudeConfig)
+	endpoint := "/scenario/claude_code/profiles/" + profile.ID + "/claude-config"
+	request := func(method, body string) ProfileClaudeConfigData {
+		t.Helper()
+		req := httptest.NewRequest(method, endpoint, bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		result := httptest.NewRecorder()
+		router.ServeHTTP(result, req)
+		require.Equal(t, http.StatusOK, result.Code, result.Body.String())
+		var response ProfileClaudeConfigResponse
+		require.NoError(t, json.Unmarshal(result.Body.Bytes(), &response))
+		return response.Data
+	}
+
+	keys := []string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS", "DISABLE_TELEMETRY", "defaultMode"}
+	saved := request(http.MethodPut, `{
+		"preferences":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000","DISABLE_TELEMETRY":""},
+		"defaultMode":"plan",
+		"overrideKeys":["CLAUDE_CODE_MAX_OUTPUT_TOKENS","DISABLE_TELEMETRY","defaultMode"]
+	}`)
+	assert.True(t, saved.HasOverrides)
+	assert.Equal(t, keys, saved.OverrideKeys)
+	assert.Equal(t, saved.BasePreferences, saved.Preferences)
+	assert.Equal(t, saved.InheritedDefaultMode, saved.DefaultMode)
+
+	stored, ok := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	require.True(t, ok)
+	require.NotNil(t, stored.ClaudeCode)
+	assert.Equal(t, map[string]string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"}, stored.ClaudeCode.Env)
+	assert.Equal(t, []string{"DISABLE_TELEMETRY"}, stored.ClaudeCode.UnsetEnv)
+	assert.Equal(t, "plan", stored.ClaudeCode.DefaultMode)
+
+	require.NoError(t, os.WriteFile(mainSettings, []byte(`{
+		"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"32000","DISABLE_TELEMETRY":"1","MCP_TIMEOUT":"2000"},
+		"permissions":{"defaultMode":"auto"}
+	}`), 0600))
+	reloaded := request(http.MethodGet, "")
+	assert.Equal(t, keys, reloaded.OverrideKeys)
+	assert.Equal(t, "64000", reloaded.Preferences.ClaudeCodeMaxOutputTokens)
+	assert.Empty(t, reloaded.Preferences.DisableTelemetry)
+	assert.Equal(t, "2000", reloaded.Preferences.McpTimeout)
+	assert.Equal(t, "plan", reloaded.DefaultMode)
+
+	cleared := request(http.MethodPut, `{"preferences":{},"overrideKeys":[]}`)
+	assert.False(t, cleared.HasOverrides)
+	assert.Equal(t, []string{}, cleared.OverrideKeys)
+	assert.Equal(t, cleared.BasePreferences, cleared.Preferences)
+	assert.Equal(t, cleared.InheritedDefaultMode, cleared.DefaultMode)
 }
 
 func TestScenarioTypes(t *testing.T) {
