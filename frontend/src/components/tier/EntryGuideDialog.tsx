@@ -68,16 +68,26 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
         };
     }, [open]);
 
+    const handleClose = React.useCallback(() => {
+        setActiveStep(0);
+        onClose();
+        // Restore focus to trigger element
+        if (triggerRef.current) {
+            triggerRef.current.focus();
+        }
+    }, [onClose]);
+
     // Handle keyboard escape
     React.useEffect(() => {
+        if (!open) return;
         const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && open) {
+            if (e.key === 'Escape') {
                 handleClose();
             }
         };
         document.addEventListener('keydown', handleEscape);
         return () => document.removeEventListener('keydown', handleEscape);
-    }, [open]);
+    }, [handleClose, open]);
 
     // Restart from the first step whenever the mode changes or the dialog opens.
     React.useEffect(() => {
@@ -94,15 +104,6 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
 
     const handleBack = () => {
         setActiveStep(Math.max(0, activeStep - 1));
-    };
-
-    const handleClose = () => {
-        setActiveStep(0);
-        onClose();
-        // Restore focus to trigger element
-        if (triggerRef.current) {
-            triggerRef.current.focus();
-        }
     };
 
     const handleStepChange = (step: number) => {

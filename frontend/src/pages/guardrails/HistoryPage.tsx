@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box,
     Button,
@@ -117,7 +117,7 @@ const GuardrailsHistoryPage = () => {
     const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
-    const loadHistory = async () => {
+    const loadHistory = useCallback(async () => {
         try {
             setLoading(true);
             const result = await api.getGuardrailsHistory();
@@ -128,11 +128,11 @@ const GuardrailsHistoryPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [notify]);
 
     useEffect(() => {
-        loadHistory();
-    }, []);
+        void loadHistory();
+    }, [loadHistory]);
 
     const handleClear = async () => {
         try {

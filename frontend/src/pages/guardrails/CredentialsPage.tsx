@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     Box,
@@ -75,7 +75,7 @@ const GuardrailsCredentialsPage = () => {
     const [editorState, setEditorState] = useState<CredentialEditorState>(emptyEditorState);
     const [editorMessage, setEditorMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    const loadCredentials = async () => {
+    const loadCredentials = useCallback(async () => {
         try {
             setLoading(true);
             const result = await api.getGuardrailsCredentials();
@@ -91,11 +91,11 @@ const GuardrailsCredentialsPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [notify]);
 
     useEffect(() => {
-        loadCredentials();
-    }, []);
+        void loadCredentials();
+    }, [loadCredentials]);
 
     const loadImportableProviders = async () => {
         const result = await api.getProviders();

@@ -3,7 +3,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 import VirtualModelsTable from '@/pages/virtualModels/VirtualModelsTable';
 import EmptyState from '@tingly/ui/components/EmptyState';
 import { Typography } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotify } from '@/hooks/useNotify';
 import { api } from '../../services/api';
@@ -15,7 +15,7 @@ const VirtualModelsPage = () => {
     const [providers, setProviders] = useState<Provider[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const loadProviders = async () => {
+    const loadProviders = useCallback(async () => {
         setLoading(true);
         const result = await api.getProviders();
         if (result.success) {
@@ -24,11 +24,11 @@ const VirtualModelsPage = () => {
             notify.error(`Failed to load providers: ${result.error}`);
         }
         setLoading(false);
-    };
+    }, [notify]);
 
     useEffect(() => {
-        loadProviders();
-    }, []);
+        void loadProviders();
+    }, [loadProviders]);
 
     const vmodelProviders = useMemo(
         () => providers.filter((p: any) => p.auth_type === 'vmodel'),

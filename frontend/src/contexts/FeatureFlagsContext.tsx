@@ -66,7 +66,7 @@ export const FeatureFlagsProvider: React.FC<FeatureFlagsProviderProps> = ({ chil
         if (!isAuthLoading) {
             loadFlags();
         }
-    }, [isAuthLoading]);
+    }, [isAuthLoading, loadFlags]);
 
     const refresh = loadFlags;
 
