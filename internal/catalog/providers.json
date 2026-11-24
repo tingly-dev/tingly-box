@@ -17,8 +17,8 @@
     "model_meta_fields": "可选字段：sources（string[]，支撑该条 model 具体数据/状态——context、max_output、note、deprecated、openai_endpoints——的参考链接）。用法与 provider_meta_fields 的 sources 相同，只是作用域缩小到单个 model：优先选官方文档/changelog/开源仓库 issue，其次官方博客；不确定来源、或多个 model 共享同一条 provider 级 sources 时就不必重复写。同样只在确实核实过这条 model 时添加，不必为未改动的 model 补齐历史。不进入 Go 的 ModelInfo 结构体，encoding/json 会静默丢弃——和 note/created/deprecated 一样，是给读源码的人看的引用轨迹，运行时/前端都看不到。首个试点：codex 模板（见 2026-09-18 的模型刷新）。",
     "token_limit_units": "context / max_output 一律写十进制整数：K=1000、M=1000000（1M=1000000、256K=256000、128K=128000、64K=64000），不写 2 的幂（1048576/262144/131072/65536）。官方给出的精确非整数值（如 gpt-3.5-turbo 的 16385）保持原样。"
   },
-  "version": "2.8.0",
-  "last_updated": "2026-11-18T00:00:00Z",
+  "version": "2.9.0",
+  "last_updated": "2026-11-24T00:00:00Z",
   "providers": {
     "aws-bedrock": {
       "id": "aws-bedrock",
@@ -114,19 +114,69 @@
       "description": "Gemini models on GCP Vertex AI (service-account auth)",
       "type": "cloud",
       "api_doc": "https://cloud.google.com/vertex-ai/generative-ai/docs",
-      "model_doc": "https://cloud.google.com/vertex-ai/generative-ai/docs/models",
+      "model_doc": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions",
       "pricing_doc": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
       "auth_type": "gcp_sa",
       "api_style": "google",
       "icon": "vertexai",
       "models": [
-        {"id": "gemini-4-carbon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
-        {"id": "gemini-4-argon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
+        {
+          "id": "gemini-4-neon",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-11-18",
+          "note": "Available to verified enterprise customers in select regions.",
+          "sources": [
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-neon",
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+          ]
+        },
+        {
+          "id": "gemini-4-carbon",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-11-10",
+          "sources": [
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-carbon",
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+          ]
+        },
+        {
+          "id": "gemini-4-argon",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-10-13",
+          "sources": [
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-argon",
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+          ]
+        },
+        {
+          "id": "gemini-4-hydrogen",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-11-12",
+          "sources": [
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-hydrogen",
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+          ]
+        },
+        {
+          "id": "gemini-3.8-flash",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-09-02",
+          "sources": [
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash",
+            "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
+          ]
+        },
         { "id": "gemini-3-flash" },
-        { "id": "gemini-3.5-flash" },
-        { "id": "gemini-2.5-pro" },
-        { "id": "gemini-2.5-flash" },
-        { "id": "gemini-2.5-flash-lite" }
+        { "id": "gemini-3.5-flash" }
+      ],
+      "last_updated": "2026-11-23",
+      "sources": [
+        "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions"
       ]
     },
     "azure-openai": {
@@ -151,6 +201,20 @@
       "models": [
         {"id": "gpt-6.1-sol", "context": 1050000, "max_output": 128000, "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]},
         {"id": "gpt-6.1-terra", "context": 1050000, "max_output": 128000, "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]},
+        {
+          "id": "gpt-6.2-astra",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-11-17",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
+        {
+          "id": "gpt-6.2-sol",
+          "context": 1050000,
+          "max_output": 128000,
+          "created": "2026-11-17",
+          "sources": ["https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure"]
+        },
         {
           "id": "gpt-6-astra",
           "context": 1050000,
@@ -270,7 +334,7 @@
           ]
         }
       ],
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-23",
       "sources": [
         "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure",
         "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
@@ -1038,11 +1102,37 @@
       "base_url_openai": "https://generativelanguage.googleapis.com/v1beta/openai",
       "base_url_anthropic": null,
       "models": [
-        {"id": "gemini-4-carbon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
-        {"id": "gemini-4-argon", "context": 1000000, "max_output": 64000, "sources": ["https://aistudio.google.com/docs/models"]},
+        {
+          "id": "gemini-4-neon",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-11-18",
+          "sources": ["https://aistudio.google.com/docs/models/gemini-4-neon"]
+        },
+        {
+          "id": "gemini-4-carbon",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-11-10",
+          "sources": ["https://aistudio.google.com/docs/models/gemini-4-carbon"]
+        },
+        {
+          "id": "gemini-4-argon",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-10-13",
+          "sources": ["https://aistudio.google.com/docs/models/gemini-4-argon"]
+        },
+        {
+          "id": "gemini-4-hydrogen",
+          "context": 1000000,
+          "max_output": 64000,
+          "created": "2026-11-12",
+          "sources": ["https://aistudio.google.com/docs/models/gemini-4-hydrogen"]
+        },
         {
           "id": "gemini-3.8-flash",
-          "context": 1024000,
+          "context": 1000000,
           "max_output": 64000,
           "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash"]
         },
@@ -1050,7 +1140,12 @@
           "id": "gemini-3.7-flash",
           "context": 1024000,
           "max_output": 64000,
-          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash"]
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
+            "https://aistudio.google.com/docs/deprecations"
+          ],
+          "legacy": true,
+          "deprecated": "API requests route to gemini-3.8-flash"
         },
         {
           "id": "gemini-3.6-flash",
@@ -1069,7 +1164,12 @@
           "context": 1024000,
           "max_output": 64000,
           "created": "2026-05",
-          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash"]
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
+            "https://aistudio.google.com/docs/deprecations"
+          ],
+          "legacy": true,
+          "deprecated": "API requests route to gemini-3.6-flash"
         },
         {
           "id": "gemini-3.1-flash-lite",
@@ -1087,9 +1187,12 @@
           "id": "gemini-3.1-pro-preview",
           "context": 1024000,
           "max_output": 64000,
-          "created": "2026-01",
-          "note": "preview; highest current Pro-tier id, no non-preview GA id published yet",
-          "sources": ["https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview"]
+          "created": "2026-02-19",
+          "note": "Preview endpoint",
+          "sources": [
+            "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview",
+            "https://aistudio.google.com/docs/deprecations"
+          ]
         },
         {
           "id": "gemini-3-flash-preview",
@@ -1104,14 +1207,16 @@
       ],
       "supports_models_endpoint": true,
       "icon": "gemini",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-23",
       "sources": [
         "https://ai.google.dev/gemini-api/docs/models",
         "https://ai.google.dev/gemini-api/docs/deprecations",
         "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
         "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
         "https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash",
-        "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite"
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite",
+        "https://aistudio.google.com/docs/changelog",
+        "https://aistudio.google.com/docs/deprecations"
       ]
     },
     "gemini-cli": {
@@ -1124,7 +1229,7 @@
       "region": "global",
       "plan": "oauth",
       "website": "https://ai.google.dev",
-      "description": "Google Gemini API via OAuth authorization (NOTE: Google folded Gemini CLI's free/Pro/Ultra OAuth tiers into Antigravity CLI starting 2026-06-18 per developers.googleblog.com; verify current availability before routing new traffic, this entry may need to be consolidated into the antigravity provider)",
+      "description": "Gemini CLI OAuth for Gemini Code Assist Standard and Enterprise accounts. Individual free, Google AI Pro, and Google AI Ultra access moved to Antigravity on 2026-06-18.",
       "auth_type": "oauth",
       "api_doc": "https://ai.google.dev/gemini-api/docs/oauth",
       "model_doc": "https://ai.google.dev/gemini-api/docs/models",
@@ -1178,7 +1283,7 @@
       "supports_models_endpoint": true,
       "oauth_provider": "gemini",
       "icon": "gemini",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-23",
       "sources": [
         "https://github.com/google-gemini/gemini-cli/discussions/27274",
         "https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/",
@@ -1195,7 +1300,7 @@
       "region": "global",
       "plan": "oauth",
       "website": "https://antigravity.google",
-      "description": "Google Antigravity agentic IDE via Google OAuth (Code Assist endpoint). Exposes Gemini 3, Anthropic Claude, and an OpenAI open model.",
+      "description": "Google Antigravity via Google OAuth (Code Assist). Model availability depends on the Google plan and account entitlements.",
       "auth_type": "oauth",
       "api_doc": "https://antigravity.google/docs",
       "model_doc": "https://antigravity.google/docs/models",
@@ -1203,16 +1308,146 @@
       "base_url_openai": "https://cloudcode-pa.googleapis.com",
       "base_url_anthropic": null,
       "models": [
-        { "id": "gemini-3-pro-high" },
-        { "id": "gemini-3-pro-low" },
-        { "id": "gemini-3-flash" },
-        { "id": "claude-sonnet-4-6" },
-        { "id": "claude-opus-4-6-thinking" },
-        { "id": "gpt-oss-120b-medium" }
+        {
+          "id": "gemini-4-neon-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-neon-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-neon-low",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-neon-xhigh",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-carbon-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-carbon-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-carbon-low",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-argon-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-argon-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-hydrogen-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-hydrogen-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-hydrogen-low",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-4-hydrogen-xhigh",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.8-flash-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.8-flash-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.7-flash-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.7-flash-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.6-flash-medium",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.6-flash-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "gemini-3.1-pro-high",
+          "sources": ["https://antigravity.google/docs/cli/headless/"]
+        },
+        {
+          "id": "claude-opus-5-5-medium",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-opus-5-5-low",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-opus-5-5-high",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-opus-5-5-max",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-sonnet-5-5-medium",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-sonnet-5-5-low",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-sonnet-5-5-high",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-sonnet-5-5-max",
+          "sources": ["https://antigravity.google/docs/enterprise"]
+        },
+        {
+          "id": "claude-sonnet-4-6",
+          "legacy": true,
+          "deprecated": "Removal scheduled for 2026-11-30",
+          "sources": ["https://antigravity.google/docs/models"]
+        },
+        {
+          "id": "claude-opus-4-6-thinking",
+          "legacy": true,
+          "deprecated": "Removal scheduled for 2026-11-30",
+          "sources": ["https://antigravity.google/docs/models"]
+        },
+        {
+          "id": "gpt-oss-120b-medium",
+          "legacy": true,
+          "deprecated": "Removal scheduled for 2026-11-30",
+          "sources": ["https://antigravity.google/docs/models"]
+        }
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "antigravity",
-      "icon": "google"
+      "icon": "google",
+      "last_updated": "2026-11-23",
+      "sources": [
+        "https://antigravity.google/docs/models",
+        "https://antigravity.google/docs/cli/headless/",
+        "https://antigravity.google/docs/enterprise"
+      ]
     },
     "x-ai": {
       "id": "x-ai",
@@ -1372,20 +1607,6 @@
       "base_url_anthropic": "https://api.deepseek.com/anthropic",
       "models": [
         {
-          "id": "deepseek-chat",
-          "context": 128000,
-          "max_output": 8000,
-          "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)",
-          "sources": ["https://api-docs.deepseek.com/updates"]
-        },
-        {
-          "id": "deepseek-reasoner",
-          "context": 128000,
-          "max_output": 64000,
-          "deprecated": "shutdown scheduled 2026-07-24 (legacy alias; maps to deepseek-v4-flash non-thinking/thinking mode)",
-          "sources": ["https://api-docs.deepseek.com/updates"]
-        },
-        {
           "id": "deepseek-flash",
           "context": 1000000,
           "max_output": 384000,
@@ -1394,6 +1615,36 @@
             "chat",
             "responses"
           ],
+          "sources": [
+            "https://api-docs.deepseek.com/quick_start/pricing",
+            "https://api-docs.deepseek.com/updates"
+          ],
+          "note": "Serves DeepSeek-V4.1-Flash-1017 and supports vision input."
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "context": 1000000,
+          "max_output": 384000,
+          "openai_endpoints": [
+            "chat",
+            "responses"
+          ],
+          "sources": [
+            "https://api-docs.deepseek.com/quick_start/pricing",
+            "https://api-docs.deepseek.com/updates"
+          ],
+          "note": "Serves DeepSeek-V4-Pro-0813."
+        },
+        {
+          "id": "deepseek-v4-flash-vision-exp",
+          "context": 1000000,
+          "max_output": 384000,
+          "openai_endpoints": [
+            "chat",
+            "responses"
+          ],
+          "legacy": true,
+          "deprecated": "Retired model ID routed to deepseek-flash",
           "sources": [
             "https://api-docs.deepseek.com/quick_start/pricing",
             "https://api-docs.deepseek.com/updates"
@@ -1408,21 +1659,8 @@
             "responses"
           ],
           "deprecated": "retired 2026-09-10; name temporarily routed to deepseek-flash (DeepSeek-V4.1-Flash), billed at Flash price",
-          "note": "legacy alias of deepseek-flash",
+          "note": "Legacy alias routed to deepseek-flash (DeepSeek-V4.1-Flash-1017).",
           "legacy": true,
-          "sources": [
-            "https://api-docs.deepseek.com/quick_start/pricing",
-            "https://api-docs.deepseek.com/updates"
-          ]
-        },
-        {
-          "id": "deepseek-v4-pro",
-          "context": 1000000,
-          "max_output": 384000,
-          "openai_endpoints": [
-            "chat",
-            "responses"
-          ],
           "sources": [
             "https://api-docs.deepseek.com/quick_start/pricing",
             "https://api-docs.deepseek.com/updates"
@@ -1431,7 +1669,7 @@
       ],
       "supports_models_endpoint": true,
       "icon": "deepseek",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-23",
       "sources": [
         "https://api-docs.deepseek.com/quick_start/pricing",
         "https://api-docs.deepseek.com/updates"
@@ -3075,7 +3313,7 @@
           "context": 1000000,
           "max_output": 128000,
           "created": "2026-08",
-          "note": "same base model as GLM-5.2, post-training improvements",
+          "note": "same base model as GLM-5.2, post-training improvements. Text input. Reasoning is always enabled with low, high, and max effort.",
           "sources": [
             "https://docs.z.ai/guides/llm/glm-5.3",
             "https://docs.z.ai/release-notes/new-released"
@@ -3102,7 +3340,7 @@
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-23",
       "sources": [
         "https://docs.z.ai/guides/llm/glm-5.3",
         "https://docs.z.ai/guides/llm/glm-5.3-flash",
@@ -3123,11 +3361,22 @@
       "description": "ZAI API service For GLM Coding Plan (International)",
       "type": "official",
       "api_doc": "https://docs.z.ai/guides/develop/http/introduction",
-      "model_doc": "https://docs.z.ai/guides/overview/pricing",
+      "model_doc": "https://docs.z.ai/devpack/latest-model",
       "pricing_doc": "https://docs.z.ai/guides/overview/pricing",
       "base_url_openai": "https://api.z.ai/api/coding/paas/v4",
       "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [
+        {
+          "id": "glm-5.4",
+          "context": 1000000,
+          "max_output": 128000,
+          "created": "2026-11-23",
+          "note": "Coding Plan model with video, image, text, and file input.",
+          "sources": [
+            "https://docs.z.ai/devpack/latest-model",
+            "https://docs.z.ai/guides/llm/glm-5.4"
+          ]
+        },
         {
           "id": "glm-5.3",
           "context": 1000000,
@@ -3136,7 +3385,8 @@
           "sources": [
             "https://docs.z.ai/devpack/overview",
             "https://docs.z.ai/guides/llm/glm-5.3"
-          ]
+          ],
+          "note": "Text input. Reasoning is always enabled with low, high, and max effort."
         },
         {
           "id": "glm-5.3-flash",
@@ -3173,7 +3423,7 @@
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-24",
       "sources": [
         "https://docs.z.ai/devpack/overview",
         "https://docs.z.ai/guides/llm/glm-5.3",
@@ -3231,7 +3481,7 @@
           "context": 1000000,
           "max_output": 128000,
           "created": "2026-08",
-          "note": "same base model as GLM-5.2, post-training improvements",
+          "note": "same base model as GLM-5.2, post-training improvements. Text input. Reasoning is always enabled with low, high, and max effort.",
           "sources": [
             "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3",
             "https://docs.bigmodel.cn/cn/guide/start/model-overview"
@@ -3255,7 +3505,7 @@
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-23",
       "sources": [
         "https://docs.bigmodel.cn/cn/guide/start/model-overview",
         "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3"
@@ -3281,6 +3531,17 @@
       "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [
         {
+          "id": "glm-5.4",
+          "context": 1000000,
+          "max_output": 128000,
+          "created": "2026-11-23",
+          "note": "Coding Plan model with video, image, text, and file input. The recommended coding client context window is 512000 tokens.",
+          "sources": [
+            "https://docs.bigmodel.cn/cn/coding-plan/latest-model",
+            "https://docs.bigmodel.cn/cn/guide/models/glm-5.4"
+          ]
+        },
+        {
           "id": "glm-5.3",
           "context": 1000000,
           "max_output": 128000,
@@ -3288,7 +3549,8 @@
           "sources": [
             "https://docs.bigmodel.cn/cn/coding-plan/overview",
             "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3"
-          ]
+          ],
+          "note": "Text input. Reasoning is always enabled with low, high, and max effort."
         },
         {
           "id": "glm-5.3-flash",
@@ -3325,7 +3587,7 @@
       "supports_models_endpoint": true,
       "web_search_schema": "web_search_glm",
       "icon": "zhipu",
-      "last_updated": "2026-09-29",
+      "last_updated": "2026-11-24",
       "sources": [
         "https://docs.bigmodel.cn/cn/coding-plan/overview",
         "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3",

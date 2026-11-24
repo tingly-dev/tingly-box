@@ -56,7 +56,7 @@ func TestLookupClaudeThinkingCaps(t *testing.T) {
 	})
 
 	t.Run("mandatory thinking is a catalog property", func(t *testing.T) {
-		for _, m := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5", "claude-fable-5-1"} {
+		for _, m := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5", "claude-fable-5-1", "claude-fable-5-2"} {
 			caps, ok := LookupClaudeThinkingCaps(m)
 			require.True(t, ok, m)
 			assert.True(t, caps.ThinkingMandatory, m)
@@ -133,6 +133,8 @@ func TestHasClaudeCatalogEntryUsesStrictNormalizedIdentity(t *testing.T) {
 		"anthropic.claude-haiku-4-5-20251001-v1:0",
 		"claude-haiku-4-5@20251001",
 		"claude-opus-4-6-thinking",
+		"claude-opus-5-5-medium",
+		"claude-sonnet-5-5-max",
 	} {
 		assert.True(t, hasClaudeCatalogEntry(model), model)
 	}
@@ -144,6 +146,7 @@ func TestHasClaudeCatalogEntryUsesStrictNormalizedIdentity(t *testing.T) {
 	assert.True(t, runtimeMatch, "regression fixture must demonstrate the permissive runtime lookup")
 	assert.False(t, hasClaudeCatalogEntry("claude-sonnet-4-7"))
 	assert.False(t, hasClaudeCatalogEntry("claude-opus-4-7-experimental"))
+	assert.False(t, hasClaudeCatalogEntry("claude-opus-9-high"))
 }
 
 // TestClaudeCatalogCoversProvidersJSON is the completeness invariant between
