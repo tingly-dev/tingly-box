@@ -3,21 +3,35 @@ package protocol
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/tidwall/gjson"
 	"google.golang.org/genai"
 )
 
-// UpstreamFailure is the client-facing status + message for a failed
+// UpstreamFailure is the client-facing status, code and message for a failed
 // upstream call. See ClassifyUpstreamFailure.
 type UpstreamFailure struct {
 	Status  int
 	Message string
+	Code    string
+}
+
+// CodeOr retains machine-readable provider errors that clients use for
+// recovery (notably Codex's context-overflow trimming during local compaction).
+func (f UpstreamFailure) CodeOr(fallback string) string {
+	if f.Code != "" {
+		return f.Code
+	}
+	return fallback
 }
 
 // ClassifyUpstreamFailure classifies err once into both the HTTP status to
-// answer the client with and a client-safe message — the status and message
+// answer the client with, its machine-readable code and a client-safe message.
+// The status and message
 // rules are documented on UpstreamStatus and UpstreamMessage respectively.
 // Prefer this over calling those two separately when a call site needs both,
 // so err is only classified once (see .design/logging.md §3 for why this
@@ -36,12 +50,37 @@ func ClassifyUpstreamFailure(err error, fallbackStatus int) UpstreamFailure {
 
 	var oaiErr *openai.Error
 	if errors.As(err, &oaiErr) {
-		return withSDKStatus(fallbackStatus, oaiErr.StatusCode, safeOpenAIMessage(oaiErr))
+		failure := withSDKStatus(fallbackStatus, oaiErr.StatusCode, safeOpenAIMessage(oaiErr))
+		failure.Code = oaiErr.Code
+		return failure
 	}
 
 	var anthropicErr *anthropic.Error
 	if errors.As(err, &anthropicErr) {
-		return withSDKStatus(fallbackStatus, anthropicErr.StatusCode, safeAnthropicMessage(anthropicErr))
+		failure := withSDKStatus(fallbackStatus, anthropicErr.StatusCode, safeAnthropicMessage(anthropicErr))
+		detail := gjson.Get(anthropicErr.RawJSON(), "error")
+		failure.Code = detail.Get("code").String()
+		// Anthropic uses an invalid_request_error message instead of a separate
+		// context code. Map only its explicit overflow signature.
+		if (anthropicErr.StatusCode == 400 || anthropicErr.StatusCode == 200) && detail.Get("type").String() == "invalid_request_error" && strings.HasPrefix(strings.ToLower(detail.Get("message").String()), "prompt is too long:") {
+			failure.Status = http.StatusBadRequest
+			failure.Code = "context_length_exceeded"
+		}
+		return failure
+	}
+	var streamErr *openaistream.StreamError
+	if errors.As(err, &streamErr) {
+		detail := gjson.GetBytes(streamErr.Event.Data, "error")
+		failure := UpstreamFailure{Status: fallbackStatus, Code: detail.Get("code").String(), Message: truncateClientDetail(detail.Get("message").String())}
+		if failure.Message == "" {
+			failure.Message = "upstream stream failed"
+		}
+		// An SSE error has no failing HTTP status. Context overflow has a
+		// defined 400 contract; 500 prevents the CLI from trimming history.
+		if failure.Code == "context_length_exceeded" {
+			failure.Status = http.StatusBadRequest
+		}
+		return failure
 	}
 
 	var genaiErr genai.APIError
