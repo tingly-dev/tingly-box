@@ -83,6 +83,7 @@ export default {
     "scopeRuleLocked": "Rule probes must traverse TB's middleware — that is what they test.",
     "protocol": "Protocol",
     "protocolHint": "Client-side wire protocol. Through TB, the loopback speaks it and TB transforms to the upstream exactly as production traffic does.",
+    "protocolProviderDefault": "Provider default",
     "protocolLockedProvider": "This provider speaks a single protocol.",
     "protocolGoogle": "Google providers use their own SDK — no protocol selection.",
     "vision": "Vision",

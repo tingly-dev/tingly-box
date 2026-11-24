@@ -64,6 +64,7 @@ func (ph *ProtocolHandler) failForward(c *gin.Context, err error) {
 
 // SendErrorResponse registers the error into gin context for logging middleware and sends JSON response.
 func SendErrorResponse(c *gin.Context, err error, desc string) {
+	protocol.CaptureProbeError(c.Request, err, false)
 
 	// Classifies err once for both the status (propagates the upstream
 	// provider's HTTP status when the error carries one, so a 401/429/4xx is

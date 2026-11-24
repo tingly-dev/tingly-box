@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { Box, Typography, Tooltip, ToggleButton, ToggleButtonGroup, Slider } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
+import type { Theme } from '@mui/material/styles';
 import type { ProbeThinking, ProbeProtocol } from '@/types/probe';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 
@@ -34,10 +35,16 @@ export const railGroupStyle = {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
     },
+    '& .MuiToggleButton-root.Mui-selected:not(.Mui-disabled)': {
+        bgcolor: (theme: Theme) => theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.primary.main,
+    },
     // A disabled axis must still read: MUI's disabled tint vanishes on the
     // rail background, so keep the labels visible but muted.
-    '& .MuiToggleButton-root.Mui-disabled:not(.Mui-selected)': {
-        color: 'text.disabled',
+    '& .MuiToggleButton-root.Mui-disabled, & .MuiToggleButton-root.Mui-disabled.Mui-selected': {
+        color: 'text.secondary',
+        bgcolor: 'transparent',
+        border: '1px solid',
+        borderColor: 'divider',
     },
 };
 

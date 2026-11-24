@@ -70,8 +70,15 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 		return &Result{Success: true, Message: "Verified recently (cached)"}, nil
 	}
 
+	errorCapture := &protocol.ProbeErrorCapture{}
 	if len(probeHeaders) > 0 {
+		token, capture, stop := protocol.BeginProbeErrorCapture()
+		defer stop()
+		errorCapture = capture
+		probeHeaders[protocol.ProbeErrorCaptureHeader] = token
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
+	} else {
+		ctx = protocol.WithProbeErrorCapture(ctx, errorCapture)
 	}
 	if len(req.Headers) > 0 {
 		ctx = client.WithProbeHeaderOverrides(ctx, req.Headers)
@@ -85,6 +92,13 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
 	if cacheable && err == nil && result != nil && result.Success {
 		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
+	}
+	upstream, streamFailed, responseBody := errorCapture.Failure()
+	if err != nil || streamFailed {
+		if err == nil {
+			err = upstream
+		}
+		return nil, &protocol.ProbeFailure{Cause: err, Upstream: upstream, ResponseBody: responseBody}
 	}
 	return result, err
 }

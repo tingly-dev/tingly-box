@@ -282,10 +282,16 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                         fontSize: fontSizes.md,
                         mt: 1,
                         color: 'text.primary',
-                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        whiteSpace: 'pre-wrap',
                     }}
                 >
                     {result.error.message}
+                    {result.error.response_body && (
+                        <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                            {result.error.response_body}
+                        </Box>
+                    )}
                 </Typography>
             )}
         </Alert>

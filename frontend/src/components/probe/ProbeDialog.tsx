@@ -160,14 +160,14 @@ export const ProbeDialog: React.FC<ProbeDialogProps> = ({
             return { value, options: RULE_PROTOCOLS, locked: false, disabled: false };
         }
         if (providerInfo?.api_style === 'google') {
-            return { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle') };
+            return { value: axes.protocol, options: [], locked: true, disabled: true, lockHint: t('probe.protocolGoogle'), fallbackLabel: 'Google SDK' };
         }
         return {
             value: axes.protocol,
             options: protoAvail.options,
             locked: protoAvail.locked,
             disabled: false,
-            lockHint: t('probe.protocolLockedProvider'),
+            lockHint: protoAvail.locked ? t('probe.protocolLockedProvider') : undefined,
         };
     }, [targetType, scenario, providerInfo, axes.protocol, protoAvail, t]);
 

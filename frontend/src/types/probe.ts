@@ -133,7 +133,7 @@ export interface ProbeResultData {
 // Envelope of POST /api/v2/probe.
 export interface ProbeResult {
     success: boolean;
-    error?: { message: string; type: string };
+    error?: { message: string; type: string; response_body?: string };
     data?: ProbeResultData;
 }
 

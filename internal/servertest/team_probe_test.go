@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -71,14 +73,13 @@ func TestProbeTeamRule_UpstreamStringErrorIsSurfaced(t *testing.T) {
 	require.Contains(t, protocol.UpstreamMessage(err), "invalid api key for team upstream")
 }
 
-// The dialog renders the probe response's error message, so the endpoint must
-// carry the upstream's own status and text, not the SDK's bare
-// "OpenAI API error: 401 Unauthorized" summary.
-func TestProbeEndpoint_TeamRuleShowsUpstreamMessage(t *testing.T) {
+// The dialog receives the exact upstream body in addition to the summary.
+func TestProbeEndpoint_PreservesUpstreamErrorBody(t *testing.T) {
+	rawBody := "{\n  \"error\": \"invalid api key for team upstream\",\n  \"details\": \"" + strings.Repeat("diagnostic ", 500) + "end\"\n}\n"
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"error":"invalid api key for team upstream"}`))
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(rawBody))
 	}))
 	defer upstream.Close()
 
@@ -107,23 +108,39 @@ func TestProbeEndpoint_TeamRuleShowsUpstreamMessage(t *testing.T) {
 		LBTactic: typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
 	}))
 
-	body, _ := json.Marshal(map[string]any{"target_type": "rule", "rule_uuid": "team-rule", "scenario": string(scope), "stream": true})
-	req, _ := http.NewRequest(http.MethodPost, "/api/v2/probe", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.GetUserToken())
-	w := httptest.NewRecorder()
-	ts.ginEngine.ServeHTTP(w, req)
+	for _, target := range []struct {
+		name   string
+		fields map[string]any
+	}{
+		{"team rule through TB", map[string]any{"target_type": "rule", "rule_uuid": "team-rule", "scenario": string(scope)}},
+		{"provider through TB", map[string]any{"target_type": "provider", "provider_uuid": "team-up", "model": "up-model"}},
+		{"direct", map[string]any{"target_type": "provider", "provider_uuid": "team-up", "model": "up-model", "direct": true}},
+	} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%t", target.name, stream), func(t *testing.T) {
+				target.fields["stream"] = stream
+				body, err := json.Marshal(target.fields)
+				require.NoError(t, err)
+				req := httptest.NewRequest(http.MethodPost, "/api/v2/probe", bytes.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer "+cfg.GetUserToken())
+				w := httptest.NewRecorder()
+				ts.ginEngine.ServeHTTP(w, req)
 
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var resp struct {
-		Success bool `json:"success"`
-		Error   struct {
-			Message string `json:"message"`
-		} `json:"error"`
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+				var resp struct {
+					Success bool `json:"success"`
+					Error   struct {
+						Message      string `json:"message"`
+						ResponseBody string `json:"response_body"`
+					} `json:"error"`
+				}
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+				require.False(t, resp.Success)
+				require.Contains(t, resp.Error.Message, "400")
+				require.Contains(t, resp.Error.Message, "invalid api key for team upstream")
+				require.Equal(t, rawBody, resp.Error.ResponseBody)
+			})
+		}
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.False(t, resp.Success)
-	require.NotContains(t, resp.Error.Message, "unmarshal")
-	require.Contains(t, resp.Error.Message, "401")
-	require.Contains(t, resp.Error.Message, "invalid api key for team upstream")
 }
