@@ -14,6 +14,7 @@ import (
 type responsesToChatNonStreamState struct {
 	content   strings.Builder
 	refusal   strings.Builder
+	reasoning strings.Builder
 	toolCalls []wire.ChatCompletionToolCallWire
 }
 
@@ -39,10 +40,11 @@ func BuildOpenAIChatPayloadFromResponses(rs *responses.Response, responseModel s
 func ConvertResponsesToOpenAIChat(rs *responses.Response, responseModel string) wire.ChatCompletionWire {
 	state := buildResponsesToChatNonStreamState(rs)
 	message := wire.ChatCompletionMessageWire{
-		Role:      "assistant",
-		Content:   state.content.String(),
-		Refusal:   state.refusal.String(),
-		ToolCalls: state.toolCalls,
+		Role:             "assistant",
+		Content:          state.content.String(),
+		Refusal:          state.refusal.String(),
+		ReasoningContent: state.reasoning.String(),
+		ToolCalls:        state.toolCalls,
 	}
 
 	// The canonical wire type owns the Chat usage shape; only total_tokens is
@@ -90,6 +92,10 @@ func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChat
 					state.refusal.WriteString(contentItem.Refusal)
 				}
 			}
+		case "reasoning":
+			for _, part := range output.Summary {
+				state.reasoning.WriteString(part.Text)
+			}
 		case "function_call", "custom_tool_call", "mcp_call":
 			state.toolCalls = append(state.toolCalls, wire.ChatCompletionToolCallWire{
 				ID:   firstNonEmpty(output.CallID, output.ID),
@@ -106,9 +112,6 @@ func buildResponsesToChatNonStreamState(rs *responses.Response) *responsesToChat
 }
 
 func mapResponsesFinishReason(rs *responses.Response, hasToolCalls bool) string {
-	if hasToolCalls {
-		return "tool_calls"
-	}
 
 	if rs != nil && rs.Status == "incomplete" {
 		switch rs.IncompleteDetails.Reason {
@@ -119,6 +122,9 @@ func mapResponsesFinishReason(rs *responses.Response, hasToolCalls bool) string 
 		}
 	}
 
+	if hasToolCalls {
+		return "tool_calls"
+	}
 	return "stop"
 }
 

@@ -915,3 +915,16 @@ so float64 normalization cannot conceal large-integer corruption. Initial text,
 Chat thinking, finish reasons, usage tails and Responses terminal snapshots are
 checked on the same path. `--mode=all` includes this section. Live provider
 behavior and actual tool execution are outside this suite's evidence.
+
+The Responses snapshot extension adds 33 real-HTTP cases for Chat and Anthropic
+V1/Beta clients with a Responses upstream. It inspects raw wire data to verify
+argument/item/terminal snapshot reconciliation, partial/deduplicated arguments,
+part-level text/refusal/reasoning snapshots, mixed output and incomplete status.
+Tool-call indices on Chat are dense and independent of Responses output indices;
+Anthropic deltas/stops must reference an open block. Combined with the 40 Anthropic
+upstream cases, `--mode=response_retention` runs 73 cases.
+
+Snapshot reconciliation appends only an un-emitted suffix when the existing
+output is a prefix of the snapshot. Conflicting snapshots cannot retract bytes
+already sent; the existing streamed output is preserved. This acceptance suite
+does not establish compatibility for contradictory provider payloads.

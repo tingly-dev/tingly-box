@@ -247,5 +247,5 @@ func responseRetentionCases() []recorderCase {
 
 // ExecuteAllResponseRetention shares the exact gateway cases with go test.
 func (m *Matrix) ExecuteAllResponseRetention() []TestResult {
-	return m.runRecorderCases(responseRetentionCases())
+	return m.runRecorderCases(append(responseRetentionCases(), responsesSnapshotCases()...))
 }
