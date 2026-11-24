@@ -169,6 +169,8 @@ function SectionView({ section, onNavigate }: { section: ProjectsSidebarSection;
     );
 }
 
+const EMPTY_SECTIONS: NonNullable<ProjectsSidebarProps['sections']> = [];
+
 /** The sticky IM block at the sidebar's bottom; the Workspace home's enablement hint anchors here. */
 export const IM_SIDEBAR_ANCHOR_ID = 'projects-sidebar-im';
 
@@ -178,7 +180,7 @@ export const IM_SIDEBAR_ANCHOR_ID = 'projects-sidebar-im';
  * whatever sections the host adds. It knows nothing about the host; Tingly Box
  * passes its working folders in as a section.
  */
-export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, imRows = [], sections = [], onNavigate }: ProjectsSidebarProps) {
+export function ProjectsSidebar({ showProjects = true, showWorkdirs = false, showIm = true, imRows = [], sections = EMPTY_SECTIONS, onNavigate }: ProjectsSidebarProps) {
     const { t } = useTranslation('projects');
     const navigate = useNavigate();
     const location = useLocation();

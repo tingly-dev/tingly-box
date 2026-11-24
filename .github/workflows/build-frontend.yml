@@ -34,12 +34,9 @@ jobs:
       - name: Set up frontend
         uses: ./.github/actions/setup-frontend
 
-      - name: Type check (non-blocking)
-        # Legacy type errors exist; report but don't fail the release build.
-        continue-on-error: true
+      - name: Type check
         working-directory: ./frontend
-        run: |
-          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
+        run: pnpm typecheck
 
       - name: Build frontend
         working-directory: ./frontend

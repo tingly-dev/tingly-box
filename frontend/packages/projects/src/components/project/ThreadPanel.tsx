@@ -113,7 +113,9 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
     return `[data-block="${anchor.block}"]`;
 };
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = [], onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
+const EMPTY_TASKS: BackgroundTask[] = [];
+
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = EMPTY_TASKS, onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { copy: copyRef } = useCopyThreadRef(thread ?? { seq: 0, title: '' });

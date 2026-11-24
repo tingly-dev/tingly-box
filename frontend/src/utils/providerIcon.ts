@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { getServiceProvidersSync, useProviderCatalogLoaded } from '@/services/serviceProviders';
 
 /** The slice of a provider the icon lookup reads. */
@@ -85,5 +84,5 @@ function iconIdFromCatalog(provider: IconSource | undefined): string | undefined
  */
 export function useProviderIconId() {
     useProviderCatalogLoaded();
-    return useCallback(providerIconId, []);
+    return providerIconId;
 }

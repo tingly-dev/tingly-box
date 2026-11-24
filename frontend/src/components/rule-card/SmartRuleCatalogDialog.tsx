@@ -291,7 +291,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
     };
 
     const allValid = ops.every(isOpValid);
-    const timezones = useMemo(timezoneOptions, []);
+    const timezones = useMemo(() => timezoneOptions(), []);
 
     const updateTimeRange = (op: SmartOp, updates: Partial<typeof DEFAULT_TIME_RANGE>) => {
         const range = parseTimeRange(op.value) || DEFAULT_TIME_RANGE;

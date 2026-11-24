@@ -61,6 +61,20 @@ const safeComponents: Components = {
     ),
 };
 
+const markdownComponents: Components = {
+    a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+    pre: ({ children }) => <>{children}</>,
+    code: ({ className, children }) => {
+        const match = /language-(\w+)/.exec(className ?? '');
+        const code = String(children ?? '');
+        if (!match && !code.includes('\n')) {
+            return <code>{children}</code>;
+        }
+        return <CodeBlock code={code.replace(/\n$/, '')} language={match?.[1] ?? ''} />;
+    },
+};
+const safeMarkdownComponents: Components = { ...markdownComponents, ...safeComponents };
+
 /**
  * Renders assistant Markdown (GFM) with highlighted, copyable code blocks.
  * `safe` is for documents nobody here wrote (a file in the library): links
@@ -101,19 +115,7 @@ export const Markdown = memo(function Markdown({ text, conversation = false, saf
             <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks, remarkAutolinkBoundary as RemarkPlugin]}
                 urlTransform={safe ? safeUrl : undefined}
-                components={{
-                    a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
-                    ...(safe ? safeComponents : {}),
-                    pre: ({ children }) => <>{children}</>,
-                    code: ({ className, children }) => {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const code = String(children ?? '');
-                        if (!match && !code.includes('\n')) {
-                            return <code>{children}</code>;
-                        }
-                        return <CodeBlock code={code.replace(/\n$/, '')} language={match?.[1] ?? ''} />;
-                    },
-                }}
+                components={safe ? safeMarkdownComponents : markdownComponents}
             >
                 {text}
             </ReactMarkdown>

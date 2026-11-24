@@ -1,6 +1,6 @@
 // UI preferences shared by every UI surface. The browser tab and the Wails
 // desktop window are different origins with separate localStorage, so a
-// preference kept only there (hidden agents, Quick Start progress) differs
+// preference kept only there (such as hidden agents) differs
 // between them. The keys listed in SYNCED are mirrored to the server
 // (GET/PATCH /api/v1/ui-prefs):
 //

@@ -1,7 +1,7 @@
 name: Verify Frontend
 
-# The only PR-time check. It builds and lints the frontend (and typechecks,
-# tests and builds @tingly/projects) when a PR touches frontend/ or the
+# The only PR-time check. It typechecks, tests and builds the frontend and
+# @tingly/projects, and runs frontend lint when a PR touches frontend/ or the
 # committed openapi.json its client is generated from.
 #
 # The Go-side checks (compile cli/gui, Projects and Remote tests, the IM and
@@ -41,12 +41,8 @@ jobs:
       - name: Set up frontend
         uses: ./.github/actions/setup-frontend
 
-      # Same policy as build-frontend.yml (the release build): legacy type errors exist, so report them
-      # without failing the check.
-      - name: Type check (non-blocking)
-        continue-on-error: true
-        run: |
-          pnpm typecheck || echo "::warning::TypeScript errors found (non-blocking, see step log)"
+      - name: Type check
+        run: pnpm typecheck
 
       - name: Build frontend
         run: pnpm build
@@ -58,9 +54,8 @@ jobs:
           pnpm --filter @tingly/projects test
           pnpm --filter @tingly/projects build
 
-      # Unit tests: disabled for now; uncomment to run vitest.
-      # - name: Unit tests
-      #   run: pnpm test
+      - name: Unit tests
+        run: pnpm test
 
       - name: Lint
         run: pnpm lint
