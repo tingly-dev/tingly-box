@@ -19211,6 +19211,13 @@
             "type": "string",
             "description": "Field inheritedDefaultMode"
           },
+          "overrideKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Field overrideKeys"
+          },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
           },
@@ -19228,6 +19235,7 @@
           "preferences",
           "inheritedDefaultMode",
           "defaultMode",
+          "overrideKeys",
           "hasOverrides",
           "settingsPath",
           "settingsExists"
@@ -19239,6 +19247,13 @@
           "defaultMode": {
             "type": "string",
             "description": "Field defaultMode"
+          },
+          "overrideKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicitly overridden fields. An empty list restores inheritance; omitting the list updates by comparing preferences with the base."
           },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"

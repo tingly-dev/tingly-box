@@ -556,6 +556,7 @@ func profileClaudeConfigResponse(profile typ.ProfileMeta, resolved agent.CCProfi
 			Preferences:          resolved.EffectivePreferences,
 			InheritedDefaultMode: resolved.InheritedDefaultMode,
 			DefaultMode:          resolved.EffectiveDefaultMode,
+			OverrideKeys:         resolved.OverrideKeys,
 			HasOverrides:         resolved.HasOverrides,
 			SettingsPath:         settingsPath,
 			SettingsExists:       settingsExists,
@@ -607,7 +608,7 @@ func (h *Handler) GetProfileClaudeConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// UpdateProfileClaudeConfig persists a minimal delta and materializes it
+// UpdateProfileClaudeConfig persists profile overrides and materializes them
 // immediately. CLI launch uses the same resolver and will reproduce the file.
 func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 	profile, profiledScenario, resolved, ok := h.resolveProfileClaudeConfig(c)
@@ -623,15 +624,21 @@ func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 		apierr.Failure(c, http.StatusBadRequest, message)
 		return
 	}
-	desiredDefaultMode := req.DefaultMode
-	if desiredDefaultMode == "" {
-		desiredDefaultMode = resolved.InheritedDefaultMode
+	var overrides *typ.ClaudeCodeProfileConfig
+	var err error
+	if req.OverrideKeys != nil {
+		overrides, err = agent.BuildCCProfileOverrides(*req.Preferences, req.DefaultMode, *req.OverrideKeys)
+	} else {
+		desiredDefaultMode := req.DefaultMode
+		if desiredDefaultMode == "" {
+			desiredDefaultMode = resolved.InheritedDefaultMode
+		}
+		if _, valid := agent.NormalizeClaudeCodeDefaultMode(desiredDefaultMode); !valid {
+			apierr.Failure(c, http.StatusBadRequest, "invalid defaultMode: "+desiredDefaultMode)
+			return
+		}
+		overrides, err = agent.DiffCCProfileConfig(resolved.BasePreferences, resolved.InheritedDefaultMode, *req.Preferences, desiredDefaultMode)
 	}
-	if _, valid := agent.NormalizeClaudeCodeDefaultMode(desiredDefaultMode); !valid {
-		apierr.Failure(c, http.StatusBadRequest, "invalid defaultMode: "+desiredDefaultMode)
-		return
-	}
-	overrides, err := agent.DiffCCProfileConfig(resolved.BasePreferences, resolved.InheritedDefaultMode, *req.Preferences, desiredDefaultMode)
 	if err != nil {
 		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return

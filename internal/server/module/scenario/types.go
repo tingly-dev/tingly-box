@@ -46,11 +46,11 @@ type ProfileUpdateRequest struct {
 	MCPProfile *string `json:"mcp_profile,omitempty"`
 }
 
-// ProfileClaudeConfigRequest is the complete desired typed configuration for
-// one Claude Code profile. The backend persists only its delta from inheritance.
+// ProfileClaudeConfigRequest updates the selected overrides for one Claude Code profile.
 type ProfileClaudeConfigRequest struct {
-	Preferences *agent.ClaudeCodePrefs `json:"preferences" binding:"required"`
-	DefaultMode string                 `json:"defaultMode,omitempty"`
+	Preferences  *agent.ClaudeCodePrefs `json:"preferences" binding:"required"`
+	DefaultMode  string                 `json:"defaultMode,omitempty"`
+	OverrideKeys *[]string              `json:"overrideKeys,omitempty" description:"Explicitly overridden fields. An empty list restores inheritance; omitting the list updates by comparing preferences with the base."`
 }
 
 type ProfileClaudeConfigData struct {
@@ -58,6 +58,7 @@ type ProfileClaudeConfigData struct {
 	Preferences          agent.ClaudeCodePrefs `json:"preferences"`
 	InheritedDefaultMode string                `json:"inheritedDefaultMode"`
 	DefaultMode          string                `json:"defaultMode"`
+	OverrideKeys         []string              `json:"overrideKeys"`
 	HasOverrides         bool                  `json:"hasOverrides"`
 	SettingsPath         string                `json:"settingsPath"`
 	SettingsExists       bool                  `json:"settingsExists"`

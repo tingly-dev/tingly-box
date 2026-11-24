@@ -1991,7 +1991,7 @@ const mockMainClaudeCodePreferences: Record<string, string> = {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
 }
 
-const mockProfileClaudeConfigs: Record<string, { preferences: Record<string, string>; defaultMode: string; hasOverrides: boolean }> = {}
+const mockProfileClaudeConfigs: Record<string, { preferences: Record<string, string>; defaultMode?: string; overrideKeys: string[] }> = {}
 
 const mockProfileClaudeConfigData = (profileId: string) => {
     const profile = mockClaudeCodeProfiles.find(item => item.id === profileId)
@@ -2006,12 +2006,21 @@ const mockProfileClaudeConfigData = (profileId: string) => {
         CLAUDE_CODE_SUBAGENT_MODEL: profile?.unified ? model : 'subagent',
     }
     const stored = mockProfileClaudeConfigs[profileId]
+    const overrideKeys = stored?.overrideKeys ?? []
+    const preferences: Record<string, string> = { ...basePreferences }
+    for (const key of overrideKeys) {
+        if (key === 'defaultMode') continue
+        const value = stored?.preferences[key]
+        if (value) preferences[key] = value
+        else delete preferences[key]
+    }
     return {
         basePreferences,
-        preferences: stored?.preferences || basePreferences,
+        preferences,
         inheritedDefaultMode: 'auto',
-        defaultMode: stored?.defaultMode || 'auto',
-        hasOverrides: stored?.hasOverrides || false,
+        defaultMode: overrideKeys.includes('defaultMode') ? stored?.defaultMode || 'auto' : 'auto',
+        overrideKeys,
+        hasOverrides: overrideKeys.length > 0,
         // Mirrors the backend contract: derive from current profile metadata;
         // never remember the path in the stored override object.
         settingsPath: `/Users/demo/.tingly-box/claude/${profileId}--${profile?.name}/settings.json`,
@@ -4403,11 +4412,19 @@ export const handlers = [
 
     http.put('/api/v1/scenario/:scenario/profiles/:profileId/claude-config', async ({ params, request }) => {
         const { profileId } = params as { profileId: string }
-        const body = await request.json() as { preferences?: Record<string, string>; defaultMode?: string }
+        const body = await request.json() as { preferences: Record<string, string>; defaultMode?: string; overrideKeys?: string[] }
+        const current = mockProfileClaudeConfigData(profileId)
+        const basePreferences: Record<string, string> = current.basePreferences
+        const overrideKeys = body.overrideKeys ?? [
+            ...Array.from(new Set([...Object.keys(basePreferences), ...Object.keys(body.preferences)]))
+                .filter(key => !key.startsWith('ANTHROPIC_') && key !== 'CLAUDE_CODE_SUBAGENT_MODEL')
+                .filter(key => (body.preferences[key] ?? '') !== (basePreferences[key] ?? '')),
+            ...(body.defaultMode && body.defaultMode !== current.inheritedDefaultMode ? ['defaultMode'] : []),
+        ]
         mockProfileClaudeConfigs[profileId] = {
-            preferences: body.preferences || {},
-            defaultMode: body.defaultMode || 'acceptEdits',
-            hasOverrides: true,
+            preferences: body.preferences,
+            defaultMode: body.defaultMode,
+            overrideKeys,
         }
         return HttpResponse.json({ success: true, data: mockProfileClaudeConfigData(profileId) })
     }),

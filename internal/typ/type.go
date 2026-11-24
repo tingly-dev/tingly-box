@@ -391,9 +391,9 @@ type ProfileMeta struct {
 	MCPProfile string `json:"mcp_profile,omitempty" yaml:"mcp_profile,omitempty"`
 }
 
-// ClaudeCodeProfileConfig stores only the delta from a profile's inherited
-// Claude Code configuration. Env contains explicit values, UnsetEnv contains
-// inherited keys the profile removes, and an empty DefaultMode means inherit.
+// ClaudeCodeProfileConfig stores explicit overrides of inherited Claude Code
+// settings. Env contains explicit values, UnsetEnv contains keys the profile
+// removes, and an empty DefaultMode means inherit.
 // Generated settings files remain disposable runtime artifacts.
 type ClaudeCodeProfileConfig struct {
 	Env         map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
