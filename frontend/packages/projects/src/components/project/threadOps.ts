@@ -15,6 +15,7 @@ export interface ThreadOps {
     /** Re-run the failed turn: the agent resumes it from its own transcript. */
     retry: () => Promise<unknown>;
     /** Resolve the thread; it stays readable and can be reopened. */
+    restart: () => Promise<unknown>;
     finish: () => Promise<unknown>;
     reopen: () => Promise<unknown>;
     archiveSession: () => Promise<unknown>;
@@ -42,6 +43,7 @@ export function threadOps(id: string): ThreadOps {
         stop: () => unwrap(api.POST('/api/v1/threads/{id}/stop', path)),
         retry: () => unwrap(api.POST('/api/v1/threads/{id}/retry', path)),
         finish: () => unwrap(api.POST('/api/v1/threads/{id}/resolve', path)),
+        restart: () => unwrap(api.POST('/api/v1/threads/{id}/restart', path)),
         reopen: () => unwrap(api.POST('/api/v1/threads/{id}/reopen', path)),
         archiveSession: () => unwrap(api.POST('/api/v1/threads/{id}/archive', path)),
         restoreSession: () => unwrap(api.POST('/api/v1/threads/{id}/restore', path)),

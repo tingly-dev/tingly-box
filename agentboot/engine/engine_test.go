@@ -458,3 +458,29 @@ func TestRefreshLiveSendsChangedRulesOnce(t *testing.T) {
 		t.Fatalf("a failed send is tried again: %v", f.applied)
 	}
 }
+
+func TestRestartBeforeLaunchReportsUnstartedTurn(t *testing.T) {
+	e, _, rec := newScripted(t, func(*enginetest.Turn) error {
+		t.Error("the canceled turn launched")
+		return nil
+	}, nil)
+	entered := make(chan struct{})
+	if !e.Start("id", t.TempDir(), "first", false, func(ctx context.Context) agentboot.ExecutionOptions {
+		close(entered)
+		<-ctx.Done()
+		return agentboot.ExecutionOptions{}
+	}) {
+		t.Fatal("Start refused")
+	}
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("launch callback did not start")
+	}
+	if err := e.Restart("id"); err != nil {
+		t.Fatal(err)
+	}
+	if end := rec.wait(t); !end.Stopped || !end.NotStarted || end.Err != nil {
+		t.Fatalf("turn end = %+v, want stopped before launch", end)
+	}
+}

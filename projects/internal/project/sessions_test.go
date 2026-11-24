@@ -134,6 +134,80 @@ func TestSessionApprovalsMessagesAndModeChange(t *testing.T) {
 	assert.Equal(t, db.ThreadIdle, reopened.Status)
 }
 
+func TestUnsentTurnLeavesAnApprovalAnswerable(t *testing.T) {
+	f := newFixture(t, func(*enginetest.Turn) error { return nil })
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "start"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	require.Eventually(t, func() bool { return !f.threads.Running(s.ID) }, time.Second, 10*time.Millisecond)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, err := f.threads.prompter(s.ID).wait(ctx, db.EvApproval, "Bash", "background approval",
+			requestPayload{RequestID: "background", State: "pending"})
+		result <- err
+	}()
+	waitStatus(t, f.store, s.ID, db.ThreadWaiting)
+	f.threads.turnEnded(s.ID, engine.TurnEnd{NotSent: true})
+	require.NoError(t, f.threads.Respond(s.ID, "background", Answer{Allow: false}))
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("approval did not receive its response")
+	}
+}
+
+func TestRestartSessionExpiresApprovalAndResumesConversation(t *testing.T) {
+	f := newFixture(t, func(turn *enginetest.Turn) error {
+		if !turn.Opts.Resume {
+			_, err := turn.Approve("stuck", "mcp__example__request_permission", nil)
+			return err
+		}
+		turn.Say("continued", 1, 1)
+		return nil
+	})
+	ctx := context.Background()
+	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "first"})
+	require.NoError(t, err)
+	waitStatus(t, f.store, s.ID, db.ThreadWaiting)
+	f.threads.addEvent(s, &db.ThreadEvent{
+		Kind:    db.EvAsk,
+		Payload: jsonString(requestPayload{RequestID: "stale", State: "pending"}),
+	})
+	_, err = f.threads.SendWith(ctx, s.ID, "queued", nil, Source{}, SendNextTurn)
+	require.NoError(t, err)
+
+	got, err := f.threads.Restart(s.ID)
+	require.NoError(t, err)
+	assert.Equal(t, db.ThreadIdle, got.Status)
+	assert.Empty(t, got.WaitReason)
+	assert.False(t, f.threads.Running(s.ID))
+	assert.Equal(t, s.SessionID, got.SessionID)
+	assert.ErrorIs(t, f.threads.Respond(s.ID, "stuck", Answer{Allow: true}), ErrNoPrompt)
+	assert.Len(t, chips(t, f, s.ID, "removed"), 1)
+	requests, err := f.store.ListRequestEvents(s.ID)
+	require.NoError(t, err)
+	require.Len(t, requests, 2)
+	for _, request := range requests {
+		assert.Contains(t, request.Payload, `"state":"expired"`)
+	}
+	assert.Equal(t, []string{"first"}, userTexts(t, f, s.ID))
+
+	_, err = f.threads.Send(ctx, s.ID, "continue", Source{}, nil)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		cur, err := f.store.GetThread(s.ID)
+		return err == nil && cur.Turns > got.Turns && cur.Status == db.ThreadIdle
+	}, 5*time.Second, 10*time.Millisecond)
+	launches := f.agent.Launches()
+	require.Len(t, launches, 2)
+	assert.True(t, launches[1].Resume)
+	assert.Equal(t, s.SessionID, launches[1].SessionID)
+}
+
 func TestFolderIsArchivedNotRemoved(t *testing.T) {
 	f := newFixture(t, func(turn *enginetest.Turn) error {
 		_, err := turn.Approve("r", "Bash", map[string]any{"command": "ls"})

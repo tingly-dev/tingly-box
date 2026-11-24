@@ -98,10 +98,14 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 	}
 	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/handoff", nil, &handoff))
 	assert.Contains(t, handoff.Command, "claude --resume "+s.SessionID)
+	require.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/restart", nil, &out))
+	assert.Equal(t, db.ThreadIdle, out.Status)
+	assert.Equal(t, s.SessionID, out.SessionID)
 	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/tasks/task1/stop", nil, &e))
 	assert.Equal(t, 400, c.do("GET", "/threads/"+s.ID+"/tasks/bad.id/output", nil, &e))
 	assert.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/resolve", nil, &out))
 	assert.Equal(t, db.ThreadResolved, out.Status)
+	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/restart", nil, &e))
 	assert.Equal(t, 409, c.do("POST", "/threads/"+s.ID+"/messages", map[string]any{"content": "late"}, &e))
 	assert.Equal(t, 200, c.do("POST", "/threads/"+s.ID+"/reopen", nil, &out))
 	assert.Equal(t, 404, c.do("GET", "/threads/missing", nil, &e))
@@ -113,6 +117,7 @@ func TestFolderThreadEndToEnd(t *testing.T) {
 	// A main thread is not an agent session: nothing to stop, but it can be read.
 	assert.Equal(t, 200, c.do("GET", "/threads/"+p.MainThreadID, nil, &detail))
 	assert.Equal(t, db.AgentLLM, detail.Thread.Agent)
+	assert.Equal(t, 400, c.do("POST", "/threads/"+p.MainThreadID+"/restart", nil, &e))
 
 	// Archiving a folder is how it goes away; DELETE does the same.
 	assert.Equal(t, 200, c.do("DELETE", "/projects/"+f.ID, nil, nil))

@@ -75,11 +75,12 @@ interface TranscriptHost {
     // Renders the host's own entries the transcript doesn't know (a
     // conversation can carry its cards); without one they show as text.
     renderCustom?: (message: TranscriptEntry) => ReactNode;
+    responseRecovery?: ReactNode;
 }
 
 const HostContext = createContext<TranscriptHost>({drafts: memoryDrafts, detail: 'detailed'});
 
-export const TranscriptHostProvider = ({detail = 'detailed', drafts, subagents, codeBlock, attachments, rememberLabel, messageSource, renderCustom, children}: {
+export const TranscriptHostProvider = ({detail = 'detailed', drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, messageSource, renderCustom, children}: {
     detail?: MessageDetail;
     drafts?: DraftStorage;
     subagents?: SubagentSteps;
@@ -88,9 +89,10 @@ export const TranscriptHostProvider = ({detail = 'detailed', drafts, subagents, 
     rememberLabel?: (tool: string) => string;
     messageSource?: (message: TranscriptEntry) => ReactNode;
     renderCustom?: (message: TranscriptEntry) => ReactNode;
+    responseRecovery?: ReactNode;
     children: ReactNode;
 }) => {
-    const value = useMemo(() => ({detail, drafts: drafts ?? memoryDrafts, subagents, codeBlock, attachments, rememberLabel, messageSource, renderCustom}), [detail, drafts, subagents, codeBlock, attachments, rememberLabel, messageSource, renderCustom]);
+    const value = useMemo(() => ({detail, drafts: drafts ?? memoryDrafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, messageSource, renderCustom}), [detail, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, messageSource, renderCustom]);
     return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 };
 

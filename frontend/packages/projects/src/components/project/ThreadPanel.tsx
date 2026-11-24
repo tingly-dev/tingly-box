@@ -165,7 +165,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // The handoff command stays on screen with its own copy button, since
     // copying right after the request can be refused by the browser.
     const [handoff, setHandoff] = useState<string | null>(null);
-    const [confirm, setConfirm] = useState<'resolve' | 'archive' | 'handoff' | 'delete' | null>(null);
+    const [confirm, setConfirm] = useState<'resolve' | 'archive' | 'handoff' | 'delete' | 'restart' | null>(null);
     // The cleanup report a confirm dialog shows (what archive/delete frees, what stays).
     const [report, setReport] = useState<CleanupReport | null>(null);
     // The branch name typed back when a delete has to force past a missing merged PR.
@@ -350,7 +350,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             return false;
         }
     };
-    const runConfirmed = async (what: 'resolve' | 'archive' | 'handoff' | 'delete') => {
+    const runConfirmed = async (what: NonNullable<typeof confirm>) => {
         setActing(true);
         if (what === 'delete' && report && !report.can_delete && thread?.branch && typed !== thread.branch) {
             // The branch has no merged PR: the typed confirmation did not match.
@@ -361,9 +361,11 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         const done = what === 'resolve' ? await act(ops.finish)
             : what === 'archive' ? await act(ops.archiveSession)
             : what === 'delete' ? await act(() => ops.deleteThread(!!report && !report.can_delete, thread?.branch || undefined))
+            : what === 'restart' ? await act(ops.restart)
             : await act(async () => setHandoff(await ops.handoff()));
         setActing(false);
         if (done) {
+            if (what === 'restart') notify(t('session.restartDone'), 'success');
             setConfirm(null);
             setReport(null);
             setTyped('');
@@ -372,6 +374,10 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     };
     // Resolving or handing off ends the process and every background task it
     // runs: ask first while any is running.
+    const offerRestart = () => {
+        setMenu(null);
+        setConfirm('restart');
+    };
     const guarded = (what: 'resolve' | 'archive' | 'handoff') => {
         setMenu(null);
         if (liveTasks.length > 0 || (what === 'archive' && running)) setConfirm(what);
@@ -409,6 +415,10 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // Only show the model reported by the last turn. The legacy model field
     // can hold a configured launch value when no model was reported.
     const observedModel = thread.reported_model;
+    const canRestart = thread.status !== 'resolved' && !thread.archived_at;
+    const responseRecovery = canRestart && (
+        <Button size="small" color="inherit" disabled={acting} onClick={offerRestart}>{t('session.restart')}</Button>
+    );
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
@@ -460,6 +470,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         )}
                         {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot resolve it. */}
                         <Divider />
+                        {canRestart && <MenuItem disabled={acting} onClick={offerRestart}>{t('session.restart')}</MenuItem>}
                         {!thread.archived_at && (thread.status !== 'resolved'
                             ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
                             : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
@@ -572,9 +583,9 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {events === null || (focused && !focusBlock)
                     ? <Skeleton variant="rounded" height={120} />
                     : focused && focusBlock
-                        ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} />
                     : view === 'chat'
-                        ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} renderCustom={renderCustom} />
+                        ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} renderCustom={renderCustom} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
                 </AttachmentGallery>
                 </Box>
@@ -639,7 +650,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         void act(ops.stop);
                     }}
                     canSubmit={!settingsSaving}
-                    disabled={disabled || thread.status === 'resolved'}
+                    disabled={disabled || thread.status === 'resolved' || (acting && confirm === 'restart')}
                     placeholder={thread.archived_at ? t('session.archivedPlaceholder') : thread.status === 'resolved' ? t(session ? 'session.resolvedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     attach={(files) => uploadAttachments(owner, files)}
                     onSend={async (text, attachments, mode) => {
@@ -671,11 +682,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             )}
             <ConfirmDialog
                 open={confirm !== null}
-                title={confirm === 'handoff' ? t('session.handoffConfirm')
+                title={confirm === 'restart' ? t('session.restartConfirm')
+                    : confirm === 'handoff' ? t('session.handoffConfirm')
                     : confirm === 'archive' ? t(session ? 'session.archiveConfirm' : 'thread.archiveConfirm')
                     : confirm === 'delete' ? t('thread.deleteConfirm')
                     : t('session.resolveConfirm')}
-                description={confirm === 'archive' && report ? (
+                description={confirm === 'restart' ? t('session.restartImpact') : confirm === 'archive' && report ? (
                     <Box sx={{ display: 'grid', gap: 1 }}>
                         {report.blockers?.length ? <Alert severity="warning">{report.blockers.join(' ')}</Alert> : null}
                         <Typography variant="body2">
@@ -697,7 +709,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 ) : liveTasks.length > 0 ? t('session.tasksWillStop', { count: liveTasks.length }) : undefined}
                 loading={acting}
                 cancelLabel={t('common.cancel')}
-                confirmLabel={confirm === 'handoff' ? t('session.handoff') : confirm === 'archive' ? t(session ? 'session.archive' : 'thread.archive') : confirm === 'delete' ? t('thread.delete') : t('session.resolve')}
+                confirmLabel={confirm === 'restart' ? t('session.restart') : confirm === 'handoff' ? t('session.handoff') : confirm === 'archive' ? t(session ? 'session.archive' : 'thread.archive') : confirm === 'delete' ? t('thread.delete') : t('session.resolve')}
                 confirmColor={confirm === 'delete' ? 'error' : 'warning'}
                 onClose={() => { setConfirm(null); setReport(null); }}
                 onConfirm={() => confirm && void runConfirmed(confirm)}

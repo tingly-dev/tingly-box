@@ -254,7 +254,7 @@ func (s *persistentSession) ApplySettings(ctx context.Context, settings map[stri
 
 func (s *persistentSession) Respond(reqID string, resp ControlResponse) error {
 	s.mu.Lock()
-	if s.state == SessionStateTerminated {
+	if s.state == SessionStateClosing || s.state == SessionStateTerminated {
 		s.mu.Unlock()
 		return ErrSessionClosed
 	}

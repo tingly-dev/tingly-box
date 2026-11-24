@@ -56,7 +56,7 @@ func (e *Engine) Compact(ctx context.Context, id, dir, instructions string, laun
 		return agentboot.CompactResult{}, err
 	}
 	capture := &compactCapture{}
-	r, ok := e.begin(id, dir, prompt, true, launch, capture)
+	r, ok := e.begin(ctx, id, dir, prompt, true, launch, capture)
 	if !ok {
 		return agentboot.CompactResult{}, ErrBusy
 	}

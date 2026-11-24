@@ -14,16 +14,19 @@ import (
 // that output unread and misattributed to the next message (.design/desk.md
 // §3.7).
 type resident struct {
-	c *agentboot.Conductor
+	c      *agentboot.Conductor
+	cancel context.CancelFunc
 }
 
 // newResident starts conducting a freshly opened process. Call it right
 // after Open, before the first turn's events pile up.
 func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *resident {
-	r := &resident{}
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &resident{cancel: cancel}
 	// One converter for the process's life: its dedupe state spans turns
 	// and it resets its usage tally at each turn's result.
 	conv := newConverter()
+	e.mu.Lock()
 	r.c = agentboot.NewConductor(ps, agentboot.ConductorHooks{
 		Sink: func(raw any) {
 			e.record(sessionID, conv, raw)
@@ -33,12 +36,13 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 			e.pool.Touch(sessionID)
 		},
 		OnUnsolicitedTurn: func() (context.Context, agentboot.Prompter) {
-			return e.beginUnsolicitedTurn(sessionID)
+			return e.beginUnsolicitedTurn(ctx, sessionID)
 		},
 		OnUnsolicitedTurnComplete: func(res *agentboot.Result, err error) {
 			e.endUnsolicitedTurn(sessionID, res, err)
 		},
 		OnTerminated: func(string) {
+			cancel()
 			e.mu.Lock()
 			gone := e.residents[sessionID] == r
 			if gone {
@@ -51,7 +55,6 @@ func (e *Engine) newResident(sessionID string, ps agentboot.PersistentSession) *
 			}
 		},
 	})
-	e.mu.Lock()
 	e.residents[sessionID] = r
 	e.mu.Unlock()
 	return r
@@ -87,18 +90,23 @@ func (e *Engine) record(sessionID string, conv *converter, raw any) {
 // beginUnsolicitedTurn registers the turn Claude Code started by itself as
 // the session's run, so the page shows it working and its approvals, Stop
 // and the "busy" check all behave as for any turn.
-func (e *Engine) beginUnsolicitedTurn(sessionID string) (context.Context, agentboot.Prompter) {
-	ctx, cancel := context.WithTimeout(context.Background(), turnTimeout)
+func (e *Engine) beginUnsolicitedTurn(residentCtx context.Context, sessionID string) (context.Context, agentboot.Prompter) {
+	ctx, cancel := context.WithTimeout(residentCtx, turnTimeout)
 	wp := newWebPrompter(sessionID, e.store)
 
 	e.mu.Lock()
+	if e.restarting[sessionID] {
+		e.mu.Unlock()
+		cancel()
+		return ctx, nil
+	}
 	if existing, ok := e.runs[sessionID]; ok {
 		// A message from the host claimed the session in the same instant;
 		// its Send will be refused (the agent's turn came first), so this
 		// turn answers approvals through that run's prompter.
 		e.mu.Unlock()
 		cancel()
-		return context.Background(), e.prompterFor(sessionID, existing.prompter, e.currentMode(sessionID))
+		return residentCtx, e.prompterFor(sessionID, existing.prompter, e.currentMode(sessionID))
 	}
 	e.runs[sessionID] = &run{cancel: cancel, prompter: wp, done: make(chan struct{}), unsolicited: true}
 	e.mu.Unlock()
@@ -119,6 +127,10 @@ func (e *Engine) currentMode(id string) string {
 func (e *Engine) endUnsolicitedTurn(sessionID string, res *agentboot.Result, err error) {
 	e.mu.Lock()
 	r, ok := e.runs[sessionID]
+	if e.restarting[sessionID] && (!ok || !r.unsolicited) {
+		e.mu.Unlock()
+		return
+	}
 	if ok && r.unsolicited {
 		delete(e.runs, sessionID)
 	} else {
@@ -127,16 +139,9 @@ func (e *Engine) endUnsolicitedTurn(sessionID string, res *agentboot.Result, err
 		// is still this turn's to settle.
 		r = nil
 	}
-	e.settling[sessionID]++
+	e.startSettling(sessionID)
 	e.mu.Unlock()
-	defer func() {
-		e.mu.Lock()
-		e.settling[sessionID]--
-		if e.settling[sessionID] == 0 {
-			delete(e.settling, sessionID)
-		}
-		e.mu.Unlock()
-	}()
+	defer e.finishSettling(sessionID)
 	interrupted := false
 	if r != nil {
 		interrupted = r.stopped.Load()

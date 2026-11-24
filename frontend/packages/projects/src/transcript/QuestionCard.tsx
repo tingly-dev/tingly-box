@@ -4,7 +4,7 @@ import {alpha} from '@mui/material/styles';
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {TFunction} from 'i18next';
-import {useDraft} from './context';
+import {useDraft, useTranscriptHost} from './context';
 import type {AskOption, AskQuestion} from './model';
 import { radius } from '@tingly/ui/theme/radius';
 import { fontSizes } from '@tingly/ui/theme/fonts';
@@ -97,6 +97,7 @@ const QuestionCard = ({requestId, title, questions, autoAt, onRespond}: {
     onRespond: (approved: boolean, answer: string, remember?: boolean, answers?: Record<string, string>) => Promise<boolean>;
 }) => {
     const {t} = useTranslation();
+    const {responseRecovery} = useTranscriptHost();
     const [draft, setDraft, latest] = useDraft(`questionDraft:${requestId}`, decodeQuestion);
     const [failed, setFailed] = useState(false);
     const busy = draft.status === 'sending';
@@ -207,7 +208,7 @@ const QuestionCard = ({requestId, title, questions, autoAt, onRespond}: {
                         />
                     </Box>
                 ))}
-                {failed && <Alert severity="error">{t('projects.transcript.responseRetry', {defaultValue: 'Response was not accepted. Your answer is kept; try again.'})}</Alert>}
+                {failed && <Alert severity="error" action={responseRecovery}>{t('projects.transcript.responseRetry', {defaultValue: 'Response was not accepted. Your answer is kept; try again.'})}</Alert>}
                 {autoAt && !submitted && (
                     <Typography variant="caption" sx={{color: 'text.secondary'}} data-testid="auto-answer-note">
                         {autoNote(t, shown, autoAt)}

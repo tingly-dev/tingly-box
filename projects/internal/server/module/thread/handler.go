@@ -254,6 +254,9 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.POST("/threads/:id/stop", h.stop, tag,
 		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive"),
 		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/restart", h.restart, tag,
+		swagger.WithDescription("Stop the agent process and its work; the next message resumes the same session in a fresh process"),
+		swagger.WithResponseModel(db.Thread{}))
 	api.POST("/threads/:id/retry", h.retry, tag,
 		swagger.WithDescription("Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again"),
 		swagger.WithErrorResponses(swagger.ErrorResponseConfig{Code: http.StatusConflict, Message: "no failed turn"}))
@@ -371,7 +374,7 @@ func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		apierr.Store(c, err, "thread")
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrThreadArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt),
+	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrThreadArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt), errors.Is(err, rt.ErrRestarting),
 		errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy), errors.Is(err, rt.ErrNoFailedTurn):
 		apierr.Message(c, http.StatusConflict, err.Error())
 	case errors.Is(err, rt.ErrTaskOutputUnset), errors.Is(err, os.ErrNotExist):
@@ -635,6 +638,19 @@ func (h *Handler) retry(c *gin.Context) {
 		return
 	}
 	h.reply(c, cur.ID)
+}
+
+func (h *Handler) restart(c *gin.Context) {
+	cur, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	t, err := h.svc.Threads.Restart(cur.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, t)
 }
 
 // reply answers with the thread as it is now.

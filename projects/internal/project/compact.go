@@ -62,7 +62,9 @@ func (m *Threads) compactReturned(t *db.Thread, a *activeThread, slot *limiter, 
 		// A turn of the agent's own holds the session: this waits for it.
 		m.mu.Lock()
 		delete(m.turns, t.ID)
-		a.queue = append([]queued{*a.current}, a.queue...)
+		if !a.cancelCurrent {
+			a.queue = append([]queued{*a.current}, a.queue...)
+		}
 		a.current, a.slot = nil, nil
 		m.mu.Unlock()
 		slot.release()

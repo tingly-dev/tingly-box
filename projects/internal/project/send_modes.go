@@ -72,7 +72,9 @@ func (m *Threads) sendWith(_ context.Context, threadID, text string, atts []Atta
 		joined = true
 	}
 	if !joined {
-		m.enqueue(threadID, q)
+		if err := m.enqueue(threadID, q); err != nil {
+			return nil, false, err
+		}
 	}
 	t, err := m.store.GetThread(threadID)
 	return t, joined, err
