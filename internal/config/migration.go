@@ -527,8 +527,14 @@ func canonicalRuleUUID(rule *typ.Rule) (string, bool) {
 	return BuiltinRuleUUID(rule.Scenario, tier), true
 }
 
+// ensureCurrentBuiltinRules seeds each current built-in rule template that a
+// release introduced, at most once per config. A per-template marker records
+// that the template was offered, so a rule the user later deletes is not
+// resurrected on every boot/upgrade; a template whose rule already exists is
+// just marked as seen. Templates added in a future release carry no marker yet
+// and are therefore still delivered once.
 func ensureCurrentBuiltinRules(c *Config) bool {
-	needsSave := false
+	changed := false
 
 	desktopRefServices := c.referenceServicesFor(typ.ScenarioClaudeCode, typ.ScenarioCodex)
 	for _, uuid := range []string{
@@ -536,27 +542,38 @@ func ensureCurrentBuiltinRules(c *Config) bool {
 		RuleUUIDBuiltinClaudeDesktopOpus46,
 		RuleUUIDBuiltinClaudeDesktopOpus47,
 	} {
-		newRule, ok := c.seedBuiltinRuleIfMissing(uuid, desktopRefServices)
-		if !ok {
-			continue
+		if c.seedBuiltinRuleOnce(uuid, desktopRefServices, "Added Claude Desktop built-in rule") {
+			changed = true
 		}
-		needsSave = true
+	}
+
+	if c.seedBuiltinRuleOnce(RuleUUIDBuiltinClaudeDesktopHaiku45, c.referenceServicesFor(typ.ScenarioClaudeDesktop), "Added Claude Desktop haiku-4-5 built-in rule") {
+		changed = true
+	}
+
+	if changed {
+		logrus.Info("Migration current-builtin-rules completed: ensured current built-in rules")
+	}
+	return changed
+}
+
+// seedBuiltinRuleOnce offers the built-in rule template to the config exactly
+// once, tracked by a "builtin-rule-seeded:<uuid>" marker. It reports whether
+// the config changed (a rule added and/or the marker recorded).
+func (c *Config) seedBuiltinRuleOnce(uuid string, services []*loadbalance.Service, addedMsg string) bool {
+	marker := "builtin-rule-seeded:" + uuid
+	if c.hasMigrationCompleted(marker) {
+		return false
+	}
+	if newRule, ok := c.seedBuiltinRuleIfMissing(uuid, services); ok {
 		logrus.WithFields(logrus.Fields{
 			"rule_uuid":      newRule.UUID,
 			"request_model":  newRule.RequestModel,
 			"response_model": newRule.ResponseModel,
-		}).Info("Added Claude Desktop built-in rule")
+		}).Info(addedMsg)
 	}
-
-	if _, ok := c.seedBuiltinRuleIfMissing(RuleUUIDBuiltinClaudeDesktopHaiku45, c.referenceServicesFor(typ.ScenarioClaudeDesktop)); ok {
-		needsSave = true
-		logrus.Info("Added Claude Desktop haiku-4-5 built-in rule")
-	}
-
-	if needsSave {
-		logrus.Info("Migration current-builtin-rules completed: ensured current built-in rules")
-	}
-	return needsSave
+	c.markMigrationCompleted(marker)
+	return true
 }
 
 // normalizeMultiTenantDefaults enables multi-tenant by default for configs

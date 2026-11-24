@@ -20,7 +20,10 @@ Use `kindOnce` whenever a migration sets a default a user could reasonably
 turn back off — a marker-gated migration won't re-clobber that choice on the
 next boot. Use `kindDated` for pure data repairs where re-running forever is
 harmless and cheap (missing field backfill, renames, dropping now-invalid
-data) — no marker bookkeeping needed. `kindBaseline` is reserved for the
+data) — no marker bookkeeping needed. Baseline steps that *seed* built-in rules (`ensureCurrentBuiltinRules`) follow the
+same principle: each template is offered once, tracked by a
+`builtin-rule-seeded:<uuid>` entry in `MigrationsCompleted`, so a rule the user
+deleted is not resurrected by every upgrade (#2402). `kindBaseline` is reserved for the
 handful of normalizers that define what a *valid* config looks like today;
 new ones are added rarely, when the baseline itself changes.
 
