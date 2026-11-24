@@ -81,6 +81,16 @@ export async function enrichBotsWithCapabilities(bots: BotSettings[]): Promise<B
     }));
 }
 
+export const setBotDirectChatAlias = (botUUID: string, chatID: string, alias: string) =>
+    botAccessCall((client, headers) => client.PUT('/api/v1/bots/{bot}/chats/{chat}/alias', {
+        headers, params: {path: {bot: botUUID, chat: chatID}}, body: {alias},
+    }));
+
+export const setBotGroupAlias = (botUUID: string, groupID: string, alias: string) =>
+    botAccessCall((client, headers) => client.PUT('/api/v1/bots/{bot}/groups/{group}/alias', {
+        headers, params: {path: {bot: botUUID, group: groupID}}, body: {alias},
+    }));
+
 // ========== Direct chats ==========
 
 export const listBotDirectChats = (botUUID: string): Promise<{chats: DirectChatDetail[]}> =>
@@ -149,6 +159,13 @@ export const addBotGroupActor = (botUUID: string, groupID: string, actorID: stri
         headers,
         params: {path: {bot: botUUID, group: groupID, actor: actorID}},
         body: {external_actor_id: externalActorID, display_name: displayName, label: 'Controller'},
+    }));
+
+export const setBotGroupActorPermission = (botUUID: string, groupID: string, actorID: string, capability: string, action: string, effect: 'allow' | 'deny') =>
+    botAccessCall((client, headers) => client.PUT('/api/v1/bots/{bot}/groups/{group}/actors/{actor}/permissions/{capability}/{action}', {
+        headers,
+        params: {path: {bot: botUUID, group: groupID, actor: actorID, capability, action}},
+        body: {effect},
     }));
 
 // ========== General bot interaction (notify / interact / wait) ==========

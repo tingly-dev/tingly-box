@@ -30,8 +30,8 @@ func TestMockModel_Static_Response(t *testing.T) {
 
 func TestMockModel_Tool_Response(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool-openai",
-		ToolCall: &vmodel.ToolCallConfig{Name: "web_search", Arguments: map[string]interface{}{"query": "test"}},
+		ID:        "tool-openai",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "web_search", Arguments: map[string]interface{}{"query": "test"}}},
 	})
 	resp, err := vm.HandleOpenAIChat(nil)
 	if err != nil {
@@ -55,10 +55,10 @@ func TestMockModel_SimulatedDelay(t *testing.T) {
 	}
 }
 
-// ── MockScenario ──────────────────────────────────────────────────────────────
+// ── Shared mock configuration ──────────────────────────────────────────────────────────────
 
-func TestMockScenario_OpenAI(t *testing.T) {
-	vm := NewMockFromScenario(&MockScenario{
+func TestMockConfig_OpenAI(t *testing.T) {
+	vm := NewMockModel(&MockModelConfig{
 		ID:      "sc-openai",
 		Content: "openai response",
 	})
@@ -74,10 +74,10 @@ func TestMockScenario_OpenAI(t *testing.T) {
 	}
 }
 
-func TestMockScenario_DefaultFinishReason_Tool(t *testing.T) {
-	vm := NewMockFromScenario(&MockScenario{
+func TestMockConfig_DefaultFinishReason_Tool(t *testing.T) {
+	vm := NewMockModel(&MockModelConfig{
 		ID:        "sc-defaults",
-		ToolCalls: []VToolCall{{ID: "t1", Name: "fn", Arguments: "{}"}},
+		ToolCalls: []vmodel.ToolCallConfig{{ID: "t1", Name: "fn", Arguments: map[string]interface{}{}}},
 	})
 	resp, _ := vm.HandleOpenAIChat(nil)
 	if resp.FinishReason != "tool_calls" {
@@ -104,8 +104,8 @@ func TestMockModel_HandleOpenAIChatStream_EmitsEvents(t *testing.T) {
 
 func TestMockModel_HandleOpenAIChatStream_ToolModel(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool-openai",
-		ToolCall: &vmodel.ToolCallConfig{Name: "search", Arguments: map[string]interface{}{"q": "test"}},
+		ID:        "tool-openai",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "search", Arguments: map[string]interface{}{"q": "test"}}},
 	})
 	var events []any
 	_ = vm.HandleOpenAIChatStream(context.Background(), nil, func(ev any) { events = append(events, ev) })

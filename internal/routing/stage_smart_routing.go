@@ -29,6 +29,7 @@ type QuotaProvider interface {
 type SmartRoutingStage struct {
 	affinityStore AffinityStore
 	quotaProvider QuotaProvider       // optional; wires service_quota ops to quota usage
+	limits        *LimitsGuard        // optional; wires service_concurrency / service_usage ops to live limit state
 	multiLogger   *pkgobs.MultiLogger // optional; used to emit structured smart-routing logs
 }
 
@@ -48,6 +49,12 @@ func (s *SmartRoutingStage) SetMultiLogger(ml *pkgobs.MultiLogger) {
 // evaluateServiceQuotaOp in internal/routing/smartrouting/routing.go).
 func (s *SmartRoutingStage) SetQuotaProvider(qp QuotaProvider) {
 	s.quotaProvider = qp
+}
+
+// SetLimits wires live limit state into the stage for the service_concurrency
+// and service_usage ops. Optional — when unset those ops pass through.
+func (s *SmartRoutingStage) SetLimits(g *LimitsGuard) {
+	s.limits = g
 }
 
 // Name returns the stage identifier
@@ -209,6 +216,10 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, candidates []*loadba
 	// Pre-collect quota usage the same way. A no-op (nil slice) when
 	// no QuotaProvider is wired, so service_quota ops simply pass through.
 	reqCtx.ServiceQuota = s.collectAllQuotaInfo(selectionLogContext(ctx), rule.SmartRouting)
+
+	// Live concurrency / usage-window load, same way. Nil unless limits are
+	// wired and a rule actually carries one of the two positions.
+	reqCtx.ServiceLimits = s.collectAllLimitInfo(rule)
 
 	// Create router and evaluate
 	router, err := smartrouting.NewRouter(rule.SmartRouting)
@@ -397,7 +408,10 @@ func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []sma
 			}
 			pctPtr, looked := pctByProvider[svc.Provider]
 			if !looked {
-				if usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil && usage != nil {
+				// A usage carrying LastError is the last good reading kept past a
+				// failed refresh, possibly hours old: shown to people, but not
+				// something to route on.
+				if usage, err := s.quotaProvider.GetQuota(ctx, svc.Provider); err == nil && usage != nil && usage.LastError == "" {
 					if pct, ok := usage.Pct(quota.WindowKindLimit); ok {
 						pctPtr = &pct
 					}
@@ -414,6 +428,50 @@ func (s *SmartRoutingStage) collectAllQuotaInfo(ctx context.Context, rules []sma
 		}
 	}
 	return result
+}
+
+// collectAllLimitInfo snapshots the live concurrency / usage load of every
+// service across all smart routing rules (deduplicated by service ID). Skipped
+// when limits are off or no rule uses a service_concurrency / service_usage op.
+func (s *SmartRoutingStage) collectAllLimitInfo(rule *typ.Rule) []smartrouting.ServiceLimitInfo {
+	if s.limits == nil || s.limits.reg == nil || !hasLimitOp(rule.SmartRouting) {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var result []smartrouting.ServiceLimitInfo
+	for _, r := range rule.SmartRouting {
+		for _, svc := range r.Services {
+			id := svc.ServiceID()
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			subs := s.limits.Subjects(rule.UUID, svc)
+			if len(subs) == 0 {
+				continue
+			}
+			u := s.limits.reg.Utilization(subs)
+			result = append(result, smartrouting.ServiceLimitInfo{
+				ServiceID:      id,
+				Concurrency:    u.Concurrency,
+				HasConcurrency: u.HasConcurrency,
+				Usage:          u.Usage,
+				HasUsage:       u.HasUsage,
+			})
+		}
+	}
+	return result
+}
+
+func hasLimitOp(rules []smartrouting.SmartRouting) bool {
+	for _, r := range rules {
+		for _, op := range r.Ops {
+			if op.Position == smartrouting.PositionServiceConcurrency || op.Position == smartrouting.PositionServiceUsage {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasServiceQuotaOp reports whether any rule carries a service_quota op.

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import api from '@/services/api';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { formatLatency } from '@/utils/formatLatency';
 
 interface MetricPercentiles {
     sample_count: number;
@@ -28,11 +30,6 @@ export interface PerformanceQueryParams {
     scenario?: string;
 }
 
-const fmtLatency = (ms: number) => {
-    if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${ms}ms`;
-};
-
 type PercentileKey = 'p99' | 'p95' | 'p90' | 'p50' | 'p10';
 
 const PERCENTILES: Array<{ key: PercentileKey; label: string }> = [
@@ -50,18 +47,21 @@ function formatMetricValue(metric: MetricPercentiles | undefined, kind: 'latency
     if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
     return kind === 'tps'
         ? value.toFixed(1)
-        : fmtLatency(Math.round(value));
+        : formatLatency(Math.round(value));
 }
 
 export default function PerformanceSummary({ queryParams }: { queryParams: PerformanceQueryParams | null }) {
     const { t } = useTranslation();
     const [data, setData] = useState<PerformanceSummaryData | null>(null);
     const [loading, setLoading] = useState(false);
-    const requestSeq = useRef(0);
-
     useEffect(() => {
-        if (!queryParams) return;
-        const seq = ++requestSeq.current;
+        if (!queryParams) {
+            setData(null);
+            setLoading(false);
+            return;
+        }
+        const controller = new AbortController();
+        const { signal } = controller;
         setLoading(true);
         setData(null);
         (async () => {
@@ -74,14 +74,15 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                 if (queryParams.model !== 'all') filters.model = queryParams.model;
                 if (queryParams.user !== 'all') filters.user_id = queryParams.user;
                 if (queryParams.scenario && queryParams.scenario !== 'all') filters.scenario = queryParams.scenario;
-                const result = await api.getUsagePerformance(filters);
-                if (seq === requestSeq.current && result?.ttft) setData(result);
+                const result = await api.getUsagePerformance(filters, signal);
+                if (!signal.aborted && result?.ttft) setData(result);
             } catch (error) {
-                console.error('Failed to load performance summary:', error);
+                if (!signal.aborted) console.error('Failed to load performance summary:', error);
             } finally {
-                if (seq === requestSeq.current) setLoading(false);
+                if (!signal.aborted) setLoading(false);
             }
         })();
+        return () => controller.abort();
     }, [queryParams]);
 
     const metrics = [
@@ -91,9 +92,9 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
     ];
 
     return (
-        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+        <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, backgroundColor: 'background.paper', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <Box sx={{ px: 2.25, pt: 2, pb: 0.75, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.primary' }}>{t('dashboard.performance.title', { defaultValue: 'Response Performance' })}</Typography>
+                <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base, color: 'text.primary' }}>{t('dashboard.performance.title', { defaultValue: 'Response Performance' })}</Typography>
                 {loading && <CircularProgress size={18} />}
             </Box>
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', pb: 0.5, '& > * + *': { borderTop: '1px solid', borderColor: 'divider' } }}>
@@ -105,7 +106,7 @@ export default function PerformanceSummary({ queryParams }: { queryParams: Perfo
                             return (
                                 <Typography key={metric.key} sx={{ whiteSpace: 'nowrap', fontSize: fontSizes.sm, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
                                     {metric.title}{' '}
-                                    <Box component="span" sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 650 }}>{value}</Box>
+                                    <Box component="span" sx={{ color: value === '—' ? 'text.disabled' : 'text.primary', fontWeight: 600 }}>{value}</Box>
                                 </Typography>
                             );
                         })}

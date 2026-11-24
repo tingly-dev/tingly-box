@@ -11,9 +11,9 @@ export function usePlatformLabel(): (platform: string) => string {
 }
 
 /** A platform's logo at `size` px, or a quiet initial when the host has none. */
-export function PlatformMark({ platform, size = 18 }: { platform: string; size?: number }): ReactNode {
+export function PlatformMark({ platform, size = 18, colored = false }: { platform: string; size?: number; colored?: boolean }): ReactNode {
     const { im } = useProjectsHost();
-    const icon = im?.platformIcon?.(platform, size);
+    const icon = im?.platformIcon?.(platform, size, colored);
     if (icon) return <Box component="span" aria-hidden="true" sx={{ display: 'inline-flex', flexShrink: 0, width: size, height: size }}>{icon}</Box>;
     return (
         <Box
@@ -22,7 +22,7 @@ export function PlatformMark({ platform, size = 18 }: { platform: string; size?:
             sx={{
                 width: size, height: size, borderRadius: '50%', flexShrink: 0, bgcolor: 'action.selected', color: 'text.secondary',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: Math.max(9, Math.round(size * 0.5)), fontWeight: 700, lineHeight: 1,
+                fontSize: Math.max(9, Math.round(size * 0.5)), fontWeight: 600, lineHeight: 1,
             }}
         >
             {capitalise(platform).charAt(0)}

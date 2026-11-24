@@ -6,10 +6,65 @@ import (
 	"time"
 )
 
-// Repo is a local git repository a project's threads work in.
+// Repo describes a project directory. Empty Kind and WorkspaceMode are legacy
+// Git entries whose mode comes from the project's DisableWorktree setting.
 type Repo struct {
-	Path       string `json:"path"`
-	BaseBranch string `json:"base_branch"`
+	Path          string `json:"path"`
+	BaseBranch    string `json:"base_branch"`
+	Kind          string `json:"kind,omitempty" enum:"git,directory"`
+	WorkspaceMode string `json:"workspace_mode,omitempty" enum:"shared,worktree"`
+}
+
+const (
+	RepoGit           = "git"
+	RepoDirectory     = "directory"
+	WorkspaceShared   = "shared"
+	WorkspaceWorktree = "worktree"
+)
+
+// EffectiveRepo returns the meaning of a directory, including legacy defaults.
+func (p *Project) EffectiveRepo(r Repo) Repo {
+	if r.Kind == "" {
+		r.Kind = RepoGit
+	}
+	if r.Kind == RepoDirectory {
+		r.WorkspaceMode = WorkspaceShared
+	} else if r.WorkspaceMode == "" {
+		if p.DisableWorktree {
+			r.WorkspaceMode = WorkspaceShared
+		} else {
+			r.WorkspaceMode = WorkspaceWorktree
+		}
+	}
+	return r
+}
+
+// PrimaryRepo returns the configured primary directory, or the historical first.
+func (p *Project) PrimaryRepo() *Repo {
+	if len(p.Repos) == 0 {
+		return nil
+	}
+	for i := range p.Repos {
+		if p.Repos[i].Path == p.PrimaryRepoPath {
+			return &p.Repos[i]
+		}
+	}
+	return &p.Repos[0]
+}
+
+// ApplyDirectoryDefaults materializes legacy defaults in memory only. A
+// project with no directories gets an empty list, not nil, so it reaches the
+// web client as [] and not null.
+func (p *Project) ApplyDirectoryDefaults() {
+	if p.Repos == nil {
+		p.Repos = []Repo{}
+	}
+	for i, r := range p.Repos {
+		p.Repos[i] = p.EffectiveRepo(r)
+	}
+	if primary := p.PrimaryRepo(); primary != nil {
+		p.PrimaryRepoPath = primary.Path
+	}
 }
 
 // Project is one ongoing stream of work: a goal, standing instructions, the
@@ -27,26 +82,54 @@ type Project struct {
 	Path string `gorm:"size:1000" json:"path,omitempty"`
 	// MainThreadID is the project's conversation, the thread its coordinator
 	// talks in; empty for a folder.
-	MainThreadID string `gorm:"size:36" json:"main_thread_id,omitempty"`
-	Name         string `gorm:"size:200;not null" json:"name"`
-	Goal         string `gorm:"type:text" json:"goal"`
-	Instructions string `gorm:"type:text" json:"instructions"`
-	Repos        []Repo `gorm:"serializer:json;type:text" json:"repos"`
+	MainThreadID    string `gorm:"size:36" json:"main_thread_id,omitempty"`
+	Name            string `gorm:"size:200;not null" json:"name"`
+	Goal            string `gorm:"type:text" json:"goal"`
+	Instructions    string `gorm:"type:text" json:"instructions"`
+	Repos           []Repo `gorm:"serializer:json;type:text" json:"repos"`
+	PrimaryRepoPath string `gorm:"type:text" json:"primary_repo_path,omitempty"`
+	// ThreadProfile, ThreadModel, ThreadEffort and ThreadPermissionMode are the
+	// defaults a new thread starts with: copied onto the thread, not followed.
 	// CoordinatorModel / ThreadModel are empty for "connection default".
 	// CoordinatorEffort / ThreadEffort are the thinking effort beside each of
 	// them (project.Efforts); empty for the endpoint's default.
-	CoordinatorModel  string `gorm:"size:200" json:"coordinator_model"`
-	ThreadModel       string `gorm:"size:200" json:"thread_model"`
-	CoordinatorEffort string `gorm:"size:32" json:"coordinator_effort"`
-	ThreadEffort      string `gorm:"size:32" json:"thread_effort"`
+	CoordinatorProfile string `gorm:"size:200" json:"coordinator_profile"`
+	ThreadProfile      string `gorm:"size:200" json:"thread_profile"`
+	CoordinatorModel   string `gorm:"size:200" json:"coordinator_model"`
+	ThreadModel        string `gorm:"size:200" json:"thread_model"`
+	CoordinatorEffort  string `gorm:"size:32" json:"coordinator_effort"`
+	ThreadEffort       string `gorm:"size:32" json:"thread_effort"`
 	// ThreadPermissionMode is the Claude Code permission mode threads run in.
-	ThreadPermissionMode string     `gorm:"size:40" json:"thread_permission_mode"`
-	Paused               bool       `json:"paused"`
-	Starred              bool       `json:"starred"`
-	ArchivedAt           *time.Time `json:"archived_at,omitempty"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	ThreadPermissionMode string `gorm:"size:40" json:"thread_permission_mode"`
+	// ThreadGitHubAccess is the setting GitHubAuto replaced (allow, the default
+	// also when empty, or ask); it is read once, to migrate a project to it.
+	ThreadGitHubAccess string `gorm:"size:10" json:"thread_github_access,omitempty"`
+	// GitHubAuto are the groups of GitHub actions (project.GitHubGroups) that
+	// threads' tools may do without asking the user; any other call asks on a
+	// card. A new project has none; a project from before the setting was
+	// migrated to what thread_github_access gave it.
+	GitHubAuto []string `gorm:"column:github_auto;serializer:json" json:"github_auto"`
+	// DisableWorktree makes new threads share the selected repository checkout.
+	DisableWorktree bool `json:"disable_worktree,omitempty"`
+	// MaxRunningThreads caps how many of the project's threads run at once
+	// (1..100); the rest wait their turn. A project starts at
+	// DefaultMaxRunningThreads, and Open gives rows from before the field the
+	// same. A folder does not use it.
+	MaxRunningThreads int        `json:"max_running_threads"`
+	Paused            bool       `json:"paused"`
+	Starred           bool       `json:"starred"`
+	ArchivedAt        *time.Time `json:"archived_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
+
+// DefaultThreadPermissionMode is the permission mode a thread starts in when
+// its project names none.
+const DefaultThreadPermissionMode = "acceptEdits"
+
+// DefaultMaxRunningThreads is how many threads a project runs at once until
+// its owner changes it.
+const DefaultMaxRunningThreads = 4
 
 // Project types.
 const (
@@ -79,6 +162,17 @@ const (
 	ThreadResolved = "resolved"
 )
 
+// RestingStatus is where an open thread rests when nothing runs and nothing
+// waits on the user: ready while its branch has commits that were not merged
+// from the Overview, idle otherwise. It is the one rule for it; see
+// projects/.design/thread-lifecycle.md.
+func RestingStatus(t *Thread) string {
+	if t.CommitsAhead > 0 && t.MergedAt == nil {
+		return ThreadReady
+	}
+	return ThreadIdle
+}
+
 // Thread is the one unit of conversation: a project's main thread (the
 // coordinator's loop, agent llm), a worker on its own branch (parent_id is the
 // main thread) or a Claude Code session in a folder project. See
@@ -96,8 +190,28 @@ type Thread struct {
 	Title  string `gorm:"size:300" json:"title"`
 	Task   string `gorm:"type:text" json:"task"`
 	Status string `gorm:"size:20;index" json:"status"`
+	// RunningTasks is how many background tasks (commands, subagents) the
+	// thread's process runs right now. It is read from the live process when a
+	// thread is sent out, never stored: the set dies with the process.
+	RunningTasks int `gorm:"-" json:"running_tasks"`
+	// Insertable is true while a message sent now would join the turn in
+	// flight (a turn runs on a process whose agent reads input mid-turn). It
+	// is read from the live process like RunningTasks and never stored; when
+	// it is false a message sent while the thread works waits for the next
+	// turn, whatever mode was asked for.
+	Insertable bool `gorm:"-" json:"insertable"`
+	// Links are the issues and PRs the thread touched through its tools. They
+	// are a JSON column of this row that SaveThread leaves alone: only
+	// UpdateThreadLinks and what is built on it write it.
+	Links []ThreadLink `gorm:"serializer:json;type:text" json:"links,omitempty"`
+	// Grants are what the user allowed the thread when it asked with
+	// request_permission (see UpdateThreadGrants, which alone writes them).
+	Grants []ThreadGrant `gorm:"serializer:json;type:text" json:"grants,omitempty"`
 	// WaitReason says why a waiting thread needs the user.
 	WaitReason string `gorm:"type:text" json:"wait_reason,omitempty"`
+	// Queued is true while a working thread's turn waits for a free slot under
+	// its project's running limit; it has not started yet.
+	Queued bool `json:"queued,omitempty"`
 	// Origin is coordinator, suggestion or user.
 	Origin     string `gorm:"size:20" json:"origin"`
 	RepoPath   string `gorm:"type:text" json:"repo_path,omitempty"`
@@ -111,24 +225,42 @@ type Thread struct {
 	// Model is the observed model for a project worker, or a folder thread's
 	// selected launch model. Never use a worker's observation as its choice.
 	Model string `gorm:"size:200" json:"model,omitempty"`
-	// ModelOverride is a project worker's requested model; empty inherits the
-	// project's thread model. Folder threads keep their choice in Model.
-	ModelOverride string `gorm:"size:200" json:"model_override,omitempty"`
-	// PermissionMode overrides the project's permission mode for this
-	// thread; a folder has no project mode, so it is a folder thread's only mode.
-	PermissionMode string `gorm:"size:40" json:"permission_mode,omitempty"`
-	LastReport     string `gorm:"type:text" json:"last_report,omitempty"`
-	CommitsAhead   int    `json:"commits_ahead"`
-	FilesChanged   int    `json:"files_changed"`
-	Uncommitted    bool   `json:"uncommitted"`
-	Turns          int    `json:"turns"`
-	InputTokens    int64  `json:"input_tokens"`
-	OutputTokens   int64  `json:"output_tokens"`
+	// ReportedModel is the model reported by the last turn, never a launch fallback.
+	ReportedModel string `gorm:"size:200" json:"reported_model,omitempty"`
+	// ProfileOverride, ModelOverride, EffortOverride and PermissionMode are a
+	// project worker's own launch settings. They are copied from the project's
+	// thread defaults when the thread starts and never read back from the
+	// project afterwards, so changing the defaults reaches only later threads.
+	// Empty model and effort mean the profile's (or connection's) default.
+	// ModelOverride is the requested model; folder threads keep theirs in Model.
+	// PermissionMode is empty only for a folder thread that follows its folder.
+	ProfileOverride *string `gorm:"size:200" json:"profile_override"`
+	ModelOverride   string  `gorm:"size:200" json:"model_override,omitempty"`
+	EffortOverride  string  `gorm:"size:32" json:"effort_override,omitempty"`
+	PermissionMode  string  `gorm:"size:40" json:"permission_mode,omitempty"`
+	LastReport      string  `gorm:"type:text" json:"last_report,omitempty"`
+	CommitsAhead    int     `json:"commits_ahead"`
+	FilesChanged    int     `json:"files_changed"`
+	Uncommitted     bool    `json:"uncommitted"`
+	Turns           int     `json:"turns"`
+	// InputTokens is every prompt token sent, cache hits and writes included;
+	// CacheReadTokens and CacheWriteTokens say how much of it they were.
+	InputTokens      int64 `json:"input_tokens"`
+	OutputTokens     int64 `json:"output_tokens"`
+	CacheReadTokens  int64 `json:"cache_read_tokens"`
+	CacheWriteTokens int64 `json:"cache_write_tokens"`
+	// ContextTokens is how full the context was on the last turn's last call;
+	// ContextWindow is the model's window when Claude Code reported it (0: unknown).
+	ContextTokens int64 `json:"context_tokens"`
+	ContextWindow int   `json:"context_window"`
+	// LastTurnMS and LastTurnAt are how long the last turn took and when it ended.
+	LastTurnMS int64      `json:"last_turn_ms"`
+	LastTurnAt *time.Time `json:"last_turn_at,omitempty"`
 	// Profile is a folder thread's launch profile, named by the host
 	// (Tingly Box: a Claude Code profile); empty for the host's default.
 	Profile string `gorm:"size:100" json:"profile,omitempty"`
 	// AutoAnswer says when a question with a suggested answer is answered
-	// without the user: off, delay or now. Empty is the kind's default
+	// without the user: off, delay, delay:<minutes> or now. Empty is the kind's default
 	// (delay for a project thread, off for a folder thread).
 	AutoAnswer string `gorm:"size:10" json:"auto_answer,omitempty"`
 	// HeadBranch is the branch a folder thread's folder is on, read when
@@ -137,14 +269,20 @@ type Thread struct {
 	// MergedAt is set when the branch was merged from the Overview.
 	MergedAt   *time.Time `json:"merged_at,omitempty"`
 	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+	// ArchivedAt hides a folder session from active work without resolving it.
+	ArchivedAt *time.Time `gorm:"index" json:"archived_at,omitempty"`
+	// WorktreeFreedAt is when the thread's worktree was freed (archive). Cwd
+	// still names the old path, so restore can rebuild the worktree there.
+	WorktreeFreedAt *time.Time `json:"worktree_freed_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // Thread event kinds.
 const (
 	EvUser       = "user"        // a message to the thread (from the user or the coordinator)
 	EvAssistant  = "assistant"   // the thread's text
+	EvFile       = "file"        // a file published by the thread
 	EvToolUse    = "tool_use"    // a tool call (content: tool name, payload: input)
 	EvToolResult = "tool_result" // a tool's output
 	EvApproval   = "approval"    // a permission request (payload: request + answer)
@@ -166,6 +304,9 @@ const (
 	// background tasks; project threads still show the plain transcript).
 	EvTask  = "task"  // a task event of a subagent or background command (payload: the event)
 	EvUsage = "usage" // one turn's token usage (payload: the usage)
+	// EvCommand is a slash command's outcome, one card updated in place
+	// (payload: name, state running|ok|failed, and the command's figures).
+	EvCommand = "command"
 )
 
 // ThreadEvent is one step of a thread's transcript.
@@ -237,16 +378,22 @@ type ChannelBinding struct {
 	ID       string `gorm:"primaryKey;size:36" json:"id"`
 	Platform string `gorm:"size:40;not null;uniqueIndex:idx_channel_chat" json:"platform"`
 	ChatID   string `gorm:"size:200;not null;uniqueIndex:idx_channel_chat" json:"chat_id"`
+	BotUUID  string `gorm:"size:100" json:"bot_uuid,omitempty"`
 	// ChatTitle is a display name for the chat, when the caller knows one.
 	ChatTitle string `gorm:"size:300" json:"chat_title"`
 	ThreadID  string `gorm:"size:36;index" json:"thread_id"`
+	// TargetProjectID identifies the bound project or folder independently of
+	// ThreadID, which follows the chat's current focus.
+	TargetProjectID string `gorm:"size:36;index" json:"target_project_id,omitempty"`
+	// TargetThreadID is set only when explicitly binding a folder session.
+	TargetThreadID string `gorm:"size:36" json:"target_thread_id,omitempty"`
 	// NewThread makes the chat's next message start a new thread in the
 	// folder of ThreadID instead of continuing it (/new in a folder chat).
 	NewThread bool `gorm:"not null;default:false" json:"-"`
 	// Folder, when set, is a folder (an absolute path) the chat's next
 	// message starts a new thread in, the chat moving there: a chat that never
 	// talked yet (ThreadID empty) or one that changed folder (/cd).
-	Folder string `gorm:"size:1000" json:"-"`
+	Folder string `gorm:"size:1000" json:"folder,omitempty"`
 	// Profile is the launch profile a chat that never talked starts its
 	// first thread under: the profile of the bot that brought it in. Later
 	// threads keep the profile of the one before.
@@ -255,9 +402,14 @@ type ChannelBinding struct {
 	// it says between tool calls, and each call), not only the reply.
 	Verbose bool `gorm:"not null;default:false" json:"verbose"`
 	// ProjectID is the thread's project, filled in when read.
-	ProjectID string    `gorm:"->;-:migration" json:"project_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ProjectID   string    `gorm:"->;-:migration" json:"project_id"`
+	FocusTitle  string    `gorm:"->;-:migration" json:"focus_title,omitempty"`
+	FocusSeq    int       `gorm:"->;-:migration" json:"focus_seq,omitempty"`
+	FocusAgent  string    `gorm:"->;-:migration" json:"focus_agent,omitempty"`
+	TargetTitle string    `gorm:"->;-:migration" json:"target_title,omitempty"`
+	TargetSeq   int       `gorm:"->;-:migration" json:"target_seq,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // EventRole is the role a conversation event plays in the coordinator's
@@ -270,4 +422,30 @@ func EventRole(kind string) string {
 		return RoleSystem
 	}
 	return RoleAssistant
+}
+
+// Usage is what one turn spent, as it lands on a thread.
+type Usage struct {
+	// Input counts every prompt token, cached ones included.
+	Input, Output, CacheRead, CacheWrite int64
+	ContextTokens                        int64
+	ContextWindow                        int
+	DurationMS                           int64
+}
+
+// AddUsage adds a finished turn's usage to the thread. The context figures
+// are the latest turn's, and a turn that never reached the model leaves them.
+func (t *Thread) AddUsage(u Usage, at time.Time) {
+	t.InputTokens += u.Input
+	t.OutputTokens += u.Output
+	t.CacheReadTokens += u.CacheRead
+	t.CacheWriteTokens += u.CacheWrite
+	if u.ContextTokens > 0 {
+		t.ContextTokens = u.ContextTokens
+	}
+	if u.ContextWindow > 0 {
+		t.ContextWindow = u.ContextWindow
+	}
+	t.LastTurnMS = u.DurationMS
+	t.LastTurnAt = &at
 }

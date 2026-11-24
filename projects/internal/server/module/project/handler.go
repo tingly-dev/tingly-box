@@ -6,11 +6,15 @@ package project
 import (
 	"errors"
 	"fmt"
-	"io"
+	"io/fs"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +22,6 @@ import (
 	rt "github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -40,6 +43,16 @@ type ProjectDetailResponse struct {
 	Counts  db.ThreadCounts `json:"counts"`
 	// CoordinatorBusy is true while the coordinator is working on a turn.
 	CoordinatorBusy bool `json:"coordinator_busy"`
+	// CoordinatorInsertable is true while a message sent now would join the
+	// coordinator's running turn rather than wait for the next one.
+	CoordinatorInsertable bool   `json:"coordinator_insertable"`
+	CoordinatorRecovery   string `json:"coordinator_recovery,omitempty"`
+	// Coordinator is the project's main thread: the conversation's session,
+	// with its turns, token use and context fill, for the status panel.
+	Coordinator *db.Thread `json:"coordinator,omitempty"`
+	// CoordinatorQueued counts inputs (messages, thread reports, settings
+	// changes) waiting behind the running turn.
+	CoordinatorQueued int `json:"coordinator_queued"`
 }
 
 // CreateProjectRequest is the New project dialog, or opens a folder.
@@ -55,23 +68,53 @@ type CreateProjectRequest struct {
 	Goal string `json:"goal,omitempty"`
 	// Repos are local repository paths; each thread branches from the
 	// repository's current branch.
-	Repos []string `json:"repos,omitempty"`
+	Repos           []string            `json:"repos,omitempty"`
+	Directories     *[]rt.DirectorySpec `json:"directories,omitempty"`
+	PrimaryRepoPath *string             `json:"primary_repo_path,omitempty"`
+	DisableWorktree *bool               `json:"disable_worktree,omitempty"`
+}
+
+// ForkProjectRequest names the fork; empty is "<source name> (fork)".
+type ForkProjectRequest struct {
+	Name string `json:"name,omitempty"`
 }
 
 // UpdateProjectRequest changes the fields that are set.
 type UpdateProjectRequest struct {
-	Name                 *string   `json:"name,omitempty"`
-	Goal                 *string   `json:"goal,omitempty"`
-	Instructions         *string   `json:"instructions,omitempty"`
-	Repos                *[]string `json:"repos,omitempty"`
-	CoordinatorModel     *string   `json:"coordinator_model,omitempty"`
-	ThreadModel          *string   `json:"thread_model,omitempty"`
-	CoordinatorEffort    *string   `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
-	ThreadEffort         *string   `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
-	ThreadPermissionMode *string   `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
-	Starred              *bool     `json:"starred,omitempty"`
-	Paused               *bool     `json:"paused,omitempty"`
-	Archived             *bool     `json:"archived,omitempty"`
+	Name                 *string             `json:"name,omitempty"`
+	Goal                 *string             `json:"goal,omitempty"`
+	Instructions         *string             `json:"instructions,omitempty"`
+	Repos                *[]string           `json:"repos,omitempty"`
+	Directories          *[]rt.DirectorySpec `json:"directories,omitempty"`
+	PrimaryRepoPath      *string             `json:"primary_repo_path,omitempty"`
+	PrimaryDirectoryMode *rt.DirectorySpec   `json:"primary_directory_mode,omitempty"`
+	CoordinatorProfile   *string             `json:"coordinator_profile,omitempty"`
+	ThreadProfile        *string             `json:"thread_profile,omitempty"`
+	CoordinatorModel     *string             `json:"coordinator_model,omitempty"`
+	ThreadModel          *string             `json:"thread_model,omitempty"`
+	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
+	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
+	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
+	// GitHubAuto are the groups of GitHub actions threads' tools may do
+	// without a card (publish, rewrite, others, close, merge); any other call
+	// asks. The whole list is replaced. Only the owner sets it, here.
+	GitHubAuto *[]string `json:"github_auto,omitempty"`
+	// ThreadGitHubAccess is the setting GitHubAuto replaced, still taken: allow
+	// turns publish on, ask turns every group off.
+	ThreadGitHubAccess *string `json:"thread_github_access,omitempty" enum:"ask,allow"`
+	DisableWorktree    *bool   `json:"disable_worktree,omitempty"`
+	// MaxRunningThreads is how many threads of the project may run at once;
+	// the rest wait. 1..100; a new project starts at 4.
+	MaxRunningThreads *int  `json:"max_running_threads,omitempty"`
+	Starred           *bool `json:"starred,omitempty"`
+	Paused            *bool `json:"paused,omitempty"`
+	Archived          *bool `json:"archived,omitempty"`
+}
+
+// RecoverCoordinatorRequest resolves an interrupted input after reviewing its effects.
+type RecoverCoordinatorRequest struct {
+	InputID string `json:"input_id" binding:"required"`
+	Action  string `json:"action" binding:"required" enum:"retry,skip"`
 }
 
 // MemoryResponse lists memory files.
@@ -95,6 +138,13 @@ type WriteMemoryRequest struct {
 type LibraryResponse struct {
 	Dir   string           `json:"dir"`
 	Files []rt.LibraryFile `json:"files"`
+}
+
+// LibraryTreeResponse lists one directory of the library.
+type LibraryTreeResponse struct {
+	Dir     string            `json:"dir"`
+	Path    string            `json:"path"`
+	Entries []rt.LibraryEntry `json:"entries"`
 }
 
 // UsageResponse is token use by model and by thread.
@@ -127,12 +177,22 @@ type InspectRepoResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// InspectDirectoryResponse describes a Git repository or a plain directory.
+type InspectDirectoryResponse struct {
+	OK     bool   `json:"ok"`
+	Root   string `json:"root"`
+	Kind   string `json:"kind" enum:",git,directory"`
+	Branch string `json:"branch"`
+	Dirty  bool   `json:"dirty"`
+	Error  string `json:"error"`
+}
+
 // ProjectModelsResponse lists the models the host offers. Error is set (and
 // Models may be empty) when the list could not be fetched; a model ID can
 // still be typed by hand.
 type ProjectModelsResponse struct {
-	Models []llm.Model `json:"models"`
-	Error  string      `json:"error,omitempty"`
+	Models []rt.Model `json:"models"`
+	Error  string     `json:"error,omitempty"`
 }
 
 // ProjectRuntimeResponse is what threads run on.
@@ -142,6 +202,8 @@ type ProjectRuntimeResponse struct {
 	// BaseURL is the gateway threads send model calls to; empty when
 	// Claude Code uses its own login.
 	BaseURL string `json:"base_url"`
+	// MaxRunningThreadsLimit is the most threads a project can be limited to.
+	MaxRunningThreadsLimit int `json:"max_running_threads_limit"`
 }
 
 // OKResponse acknowledges an action.
@@ -151,7 +213,8 @@ type OKResponse struct {
 
 // Handler is the Projects HTTP module.
 type Handler struct {
-	svc *rt.Service
+	svc      *rt.Service
+	updateMu sync.Mutex
 }
 
 // NewHandler builds the module.
@@ -178,12 +241,30 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/projects/runtime", h.runtime, tag,
 		swagger.WithDescription("What threads run on: the Claude Code CLI and the gateway it is pointed at"),
 		swagger.WithResponseModel(ProjectRuntimeResponse{}))
+	api.POST("/projects/directories", h.browseDirectories, tag,
+		swagger.WithDescription("Browse non-hidden directories under the server user home"),
+		swagger.WithRequestModel(BrowseDirectoriesRequest{}),
+		swagger.WithResponseModel(BrowseDirectoriesResponse{}))
+	api.POST("/projects/directories/inspect", h.inspectDirectory, tag,
+		swagger.WithDescription("Inspect a local directory or Git repository"),
+		swagger.WithRequestModel(InspectRepoRequest{}),
+		swagger.WithResponseModel(InspectDirectoryResponse{}))
 	api.POST("/projects/repos/inspect", h.inspectRepo, tag,
 		swagger.WithDescription("Check a local repository path and return its root and current branch"),
 		swagger.WithRequestModel(InspectRepoRequest{}),
 		swagger.WithResponseModel(InspectRepoResponse{}))
 	api.GET("/projects/:id", h.get, tag,
 		swagger.WithDescription("Get a project with its threads"),
+		swagger.WithResponseModel(ProjectDetailResponse{}))
+	api.POST("/projects/:id/links/refresh", h.refreshLinks, tag,
+		swagger.WithDescription("Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item."),
+		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
+	api.POST("/projects/:id/coordinator/recover", h.recoverCoordinator, tag,
+		swagger.WithDescription("Resolve an interrupted coordinator input; retry may repeat side effects"),
+		swagger.WithRequestModel(RecoverCoordinatorRequest{}),
+		swagger.WithResponseModel(ProjectDetailResponse{}))
+	api.POST("/projects/:id/coordinator/stop", h.stopCoordinator, tag,
+		swagger.WithDescription("Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery"),
 		swagger.WithResponseModel(ProjectDetailResponse{}))
 	api.PATCH("/projects/:id", h.update, tag,
 		swagger.WithDescription("Update project settings; pause, resume, archive, unarchive, star. A folder has no repos or thread model: setting either on a folder is a 400."),
@@ -192,6 +273,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.DELETE("/projects/:id", h.delete, tag,
 		swagger.WithDescription("Archive a project or folder (the same as PATCH archived=true): its threads stop and stay readable, its IM chats are unbound, nothing is deleted"),
 		swagger.WithResponseModel(OKResponse{}))
+	api.POST("/projects/:id/fork", h.fork, tag,
+		swagger.WithDescription("Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked"),
+		swagger.WithRequestModel(ForkProjectRequest{}),
+		swagger.WithResponseModel(db.Project{}))
 
 	api.GET("/projects/events", h.allEvents, tag,
 		swagger.WithDescription("Server-sent events for every project, for the sidebar and lists: project, thread and coordinator frames only. Transcript entries (thread_event) and streamed coordinator text are not sent here; subscribe to /projects/{id}/events for those"),
@@ -215,8 +300,15 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(OKResponse{}))
 
 	api.GET("/projects/:id/library", h.listLibrary, tag,
-		swagger.WithDescription("List library files (uploads and thread outputs)"),
+		swagger.WithDescription("List library files (uploads, thread outputs, and the threads' scratch under .tmp/)"),
 		swagger.WithResponseModel(LibraryResponse{}))
+	api.GET("/projects/:id/library/tree", h.libraryTree, tag,
+		swagger.WithDescription("List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too"),
+		swagger.WithQuery("path", "string", "Library-relative directory; empty is the library root"),
+		swagger.WithResponseModel(LibraryTreeResponse{}))
+	api.GET("/projects/:id/library/archive", h.archiveLibrary, tag,
+		swagger.WithDescription("Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out."),
+		swagger.WithQuery("path", "string", "Library-relative folder; empty is the library root"))
 	api.POST("/projects/:id/library", h.uploadLibrary, tag,
 		swagger.WithDescription("Upload files (multipart field \"files\") to the library"),
 		swagger.WithResponseModel(LibraryResponse{}))
@@ -236,18 +328,6 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithResponseModel(UsageResponse{}))
 }
 
-// storeErr maps runtime errors to statuses.
-func storeErr(c *gin.Context, err error, what string) {
-	switch {
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrResolved):
-		apierr.Message(c, http.StatusConflict, err.Error())
-	case errors.Is(err, db.ErrNotFound):
-		apierr.Store(c, err, what)
-	default:
-		apierr.Message(c, http.StatusBadRequest, err.Error())
-	}
-}
-
 func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
 	p, err := h.svc.Store.GetProject(c.Param("id"))
 	if err != nil {
@@ -255,6 +335,12 @@ func (h *Handler) project(c *gin.Context) (*db.Project, bool) {
 		return nil, false
 	}
 	return p, true
+}
+
+func projectView(p db.Project) db.Project {
+	p.Repos = append([]db.Repo(nil), p.Repos...)
+	p.ApplyDirectoryDefaults()
+	return p
 }
 
 func (h *Handler) list(c *gin.Context) {
@@ -270,7 +356,7 @@ func (h *Handler) list(c *gin.Context) {
 	}
 	out := make([]ProjectSummary, 0, len(projects))
 	for _, p := range projects {
-		out = append(out, ProjectSummary{Project: p, Threads: db.CountsOf(all[p.ID])})
+		out = append(out, ProjectSummary{Project: projectView(p), Threads: db.CountsOf(all[p.ID])})
 	}
 	c.JSON(http.StatusOK, ProjectListResponse{Projects: out})
 }
@@ -280,7 +366,19 @@ func (h *Handler) create(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	p, err := h.svc.Create(c.Request.Context(), rt.NewProjectSpec{Type: req.Type, Name: req.Name, Goal: req.Goal, Repos: req.Repos, Path: req.Path})
+	if req.Repos != nil && (req.Directories != nil || req.PrimaryRepoPath != nil) {
+		apierr.BadRequest(c, "repos cannot be combined with directory settings")
+		return
+	}
+	if req.Directories != nil && req.DisableWorktree != nil {
+		apierr.BadRequest(c, "directories cannot be combined with disable_worktree")
+		return
+	}
+	if req.Type == db.ProjectFolder && (req.Directories != nil || req.PrimaryRepoPath != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "directory settings do not apply to a folder")
+		return
+	}
+	p, err := h.svc.Create(c.Request.Context(), rt.NewProjectSpec{Type: req.Type, Name: req.Name, Goal: req.Goal, Repos: req.Repos, Path: req.Path, Directories: req.Directories, PrimaryRepoPath: req.PrimaryRepoPath})
 	if err != nil {
 		apierr.BadRequest(c, err.Error())
 		return
@@ -290,14 +388,46 @@ func (h *Handler) create(c *gin.Context) {
 		// Opening a folder returns its project, new or not.
 		status = http.StatusOK
 	}
-	c.JSON(status, p)
+	c.JSON(status, projectView(*p))
+}
+
+func (h *Handler) refreshLinks(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	results, err := h.svc.Links.RefreshProject(c.Request.Context(), p.ID)
+	if err != nil {
+		apierr.Store(c, err, "project")
+		return
+	}
+	c.JSON(http.StatusOK, rt.RefreshLinksResponse{Results: results})
+}
+
+func (h *Handler) fork(c *gin.Context) {
+	var req ForkProjectRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	fork, err := h.svc.Fork(c.Param("id"), req.Name)
+	if err != nil {
+		// An unknown project is 404; everything else (a folder, a failed
+		// copy) is the caller's mistake in words.
+		if errors.Is(err, db.ErrNotFound) {
+			apierr.Store(c, err, "project")
+			return
+		}
+		apierr.BadRequest(c, err.Error())
+		return
+	}
+	c.JSON(http.StatusCreated, projectView(*fork))
 }
 
 func (h *Handler) models(c *gin.Context) {
 	models, err := h.svc.Host.Models(c.Request.Context())
 	resp := ProjectModelsResponse{Models: models}
 	if resp.Models == nil {
-		resp.Models = []llm.Model{}
+		resp.Models = []rt.Model{}
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -307,13 +437,26 @@ func (h *Handler) models(c *gin.Context) {
 
 func (h *Handler) runtime(c *gin.Context) {
 	env, _ := h.svc.Host.ThreadEnv(c.Request.Context())
-	resp := ProjectRuntimeResponse{CLIPath: rt.ClaudeCLIPath()}
+	resp := ProjectRuntimeResponse{CLIPath: rt.ClaudeCLIPath(), MaxRunningThreadsLimit: rt.MaxRunningThreadsLimit}
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "ANTHROPIC_BASE_URL="); ok {
 			resp.BaseURL = v
 		}
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) inspectDirectory(c *gin.Context) {
+	var req InspectRepoRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	info, err := rt.InspectDirectory(c.Request.Context(), req.Path)
+	if err != nil {
+		c.JSON(http.StatusOK, InspectDirectoryResponse{Error: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, InspectDirectoryResponse{OK: true, Root: info.Root, Kind: info.Kind, Branch: info.Branch, Dirty: info.Dirty})
 }
 
 func (h *Handler) inspectRepo(c *gin.Context) {
@@ -334,6 +477,40 @@ func (h *Handler) inspectRepo(c *gin.Context) {
 	c.JSON(http.StatusOK, InspectRepoResponse{OK: true, Root: info.Root, Branch: info.Branch, Dirty: info.Dirty})
 }
 
+func (h *Handler) recoverCoordinator(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	var req RecoverCoordinatorRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	if req.Action != "retry" && req.Action != "skip" {
+		apierr.BadRequest(c, "action must be retry or skip")
+		return
+	}
+	if err := h.svc.Coordinator.RecoverInput(p.ID, req.InputID, req.Action == "retry"); err != nil {
+		apierr.Message(c, http.StatusConflict, err.Error())
+		return
+	}
+	h.get(c)
+}
+
+// stopCoordinator interrupts the running coordinator turn the way the stop
+// button means it: nothing is left uncertain, the conversation carries on.
+func (h *Handler) stopCoordinator(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.Coordinator.StopTurn(p.ID); err != nil {
+		apierr.BadRequest(c, err.Error())
+		return
+	}
+	h.get(c)
+}
+
 func (h *Handler) get(c *gin.Context) {
 	p, ok := h.project(c)
 	if !ok {
@@ -351,7 +528,46 @@ func (h *Handler) get(c *gin.Context) {
 	if threads == nil {
 		threads = []db.Thread{}
 	}
-	c.JSON(http.StatusOK, ProjectDetailResponse{Project: *p, Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: h.svc.Coordinator.Busy(p.ID)})
+	h.svc.Threads.Annotate(threads)
+	recovery, err := h.svc.Store.UncertainCoordinatorInput(p.ID)
+	if err != nil {
+		apierr.Store(c, err, "coordinator recovery")
+		return
+	}
+	queued, err := h.svc.Store.PendingCoordinatorInputs(p.ID)
+	if err != nil {
+		apierr.Store(c, err, "coordinator queue")
+		return
+	}
+	var coordinator *db.Thread
+	if p.MainThreadID != "" {
+		if coordinator, err = h.svc.Store.GetThread(p.MainThreadID); err != nil && !errors.Is(err, db.ErrNotFound) {
+			apierr.Store(c, err, "coordinator")
+			return
+		}
+	}
+	busy := h.svc.Coordinator.Busy(p.ID)
+	c.JSON(http.StatusOK, ProjectDetailResponse{Project: projectView(*p), Threads: threads, Counts: db.CountsOf(m), CoordinatorBusy: busy, CoordinatorInsertable: h.svc.Coordinator.Insertable(p.ID), CoordinatorRecovery: recovery, Coordinator: coordinatorView(coordinator, busy, recovery), CoordinatorQueued: queued})
+}
+
+// coordinatorView gives the main thread a thread's own status, so the page reads
+// the coordinator like any thread: working during a turn, waiting on the user
+// while an interrupted input needs a decision, otherwise idle. The row itself
+// does not track this; the coordinator's queue does.
+func coordinatorView(main *db.Thread, busy bool, recovery string) *db.Thread {
+	if main == nil {
+		return nil
+	}
+	view := *main
+	switch {
+	case recovery != "":
+		view.Status, view.WaitReason = db.ThreadWaiting, "An interrupted message needs your decision."
+	case busy:
+		view.Status, view.WaitReason = db.ThreadWorking, ""
+	default:
+		view.Status, view.WaitReason = db.ThreadIdle, ""
+	}
+	return &view
 }
 
 func (h *Handler) update(c *gin.Context) {
@@ -359,12 +575,26 @@ func (h *Handler) update(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
 	p, ok := h.project(c)
 	if !ok {
 		return
 	}
-	if p.Type == db.ProjectFolder && (req.Repos != nil || req.ThreadModel != nil || req.ThreadEffort != nil) {
-		apierr.BadRequest(c, "repos, thread_model and thread_effort do not apply to a folder")
+	if req.PrimaryDirectoryMode != nil && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.DisableWorktree != nil) {
+		apierr.BadRequest(c, "primary_directory_mode cannot be combined with directory settings")
+		return
+	}
+	if req.Repos != nil && (req.Directories != nil || req.PrimaryRepoPath != nil) {
+		apierr.BadRequest(c, "repos cannot be combined with directory settings")
+		return
+	}
+	if req.Directories != nil && req.DisableWorktree != nil {
+		apierr.BadRequest(c, "directories cannot be combined with disable_worktree")
+		return
+	}
+	if p.Type == db.ProjectFolder && (req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil || req.PrimaryDirectoryMode != nil || req.ThreadModel != nil || req.ThreadEffort != nil || req.ThreadProfile != nil || req.CoordinatorProfile != nil || req.DisableWorktree != nil || req.MaxRunningThreads != nil) {
+		apierr.BadRequest(c, "repository and project thread settings do not apply to a folder")
 		return
 	}
 	if req.Name != nil {
@@ -381,19 +611,97 @@ func (h *Handler) update(c *gin.Context) {
 	if req.Instructions != nil {
 		p.Instructions = *req.Instructions
 	}
-	if req.Repos != nil {
-		repos, err := rt.ResolveRepos(c.Request.Context(), *req.Repos)
+	if req.Repos != nil || req.Directories != nil || req.PrimaryRepoPath != nil {
+		repos := p.Repos
+		var err error
+		if req.Repos != nil {
+			specs, specErr := rt.LegacyDirectorySpecs(*req.Repos)
+			if specErr != nil {
+				apierr.BadRequest(c, specErr.Error())
+				return
+			}
+			repos, err = rt.ResolveDirectories(c.Request.Context(), specs, p.Repos, p.DisableWorktree)
+		} else if req.Directories != nil {
+			repos, err = rt.ResolveDirectories(c.Request.Context(), *req.Directories, p.Repos, p.DisableWorktree)
+		}
 		if err != nil {
 			apierr.BadRequest(c, err.Error())
 			return
 		}
-		p.Repos = repos
+		primary := p.PrimaryRepoPath
+		if req.PrimaryRepoPath != nil {
+			primary = *req.PrimaryRepoPath
+		} else if req.Repos != nil || req.Directories != nil {
+			found := false
+			for _, repo := range repos {
+				if repo.Path == primary {
+					found = true
+					break
+				}
+			}
+			if !found {
+				primary = ""
+				if len(repos) > 0 {
+					primary = repos[0].Path
+				}
+			}
+		}
+		if err := rt.SetProjectDirectories(p, repos, primary); err != nil {
+			apierr.BadRequest(c, err.Error())
+			return
+		}
+	}
+	if req.PrimaryDirectoryMode != nil {
+		primary := p.PrimaryRepo()
+		change := req.PrimaryDirectoryMode
+		if primary == nil || primary.Path != change.Path {
+			apierr.Message(c, http.StatusConflict, "primary directory changed; reload and try again")
+			return
+		}
+		if change.WorkspaceMode != db.WorkspaceShared && change.WorkspaceMode != db.WorkspaceWorktree {
+			apierr.BadRequest(c, "invalid workspace mode")
+			return
+		}
+		if p.EffectiveRepo(*primary).Kind == db.RepoDirectory && change.WorkspaceMode != db.WorkspaceShared {
+			apierr.BadRequest(c, "non-Git directory must use shared mode")
+			return
+		}
+		primary.WorkspaceMode = change.WorkspaceMode
+	}
+	for _, item := range []struct {
+		in  *string
+		out *string
+	}{{req.CoordinatorProfile, &p.CoordinatorProfile}, {req.ThreadProfile, &p.ThreadProfile}} {
+		if item.in != nil {
+			v := strings.TrimSpace(*item.in)
+			if !h.svc.Threads.Launchable(v) {
+				apierr.BadRequest(c, "profile unavailable")
+				return
+			}
+			*item.out = v
+		}
 	}
 	if req.CoordinatorModel != nil {
 		p.CoordinatorModel = strings.TrimSpace(*req.CoordinatorModel)
 	}
 	if req.ThreadModel != nil {
 		p.ThreadModel = strings.TrimSpace(*req.ThreadModel)
+	}
+	if l, ok := h.svc.Host.(rt.Launcher); ok {
+		for _, item := range []struct {
+			changed        bool
+			profile, model string
+		}{
+			{req.CoordinatorProfile != nil || req.CoordinatorModel != nil, p.CoordinatorProfile, p.CoordinatorModel},
+			{req.ThreadProfile != nil || req.ThreadModel != nil, p.ThreadProfile, p.ThreadModel},
+		} {
+			if item.changed && item.profile != "" {
+				if err := l.CheckLaunch(c.Request.Context(), item.profile, item.model); err != nil {
+					apierr.BadRequest(c, err.Error())
+					return
+				}
+			}
+		}
 	}
 	for _, effort := range []struct {
 		req *string
@@ -421,6 +729,50 @@ func (h *Handler) update(c *gin.Context) {
 			return
 		}
 	}
+	if req.ThreadGitHubAccess != nil {
+		switch *req.ThreadGitHubAccess {
+		case rt.GitHubAsk:
+			p.GitHubAuto = []string{}
+		case rt.GitHubAllow:
+			if !slices.Contains(p.GitHubAuto, rt.GitHubPublish) {
+				p.GitHubAuto = append(slices.Clone(p.GitHubAuto), rt.GitHubPublish)
+			}
+		default:
+			apierr.BadRequest(c, "unknown GitHub access")
+			return
+		}
+		p.ThreadGitHubAccess = *req.ThreadGitHubAccess
+	}
+	if req.GitHubAuto != nil {
+		auto := []string{}
+		for _, g := range *req.GitHubAuto {
+			if !slices.Contains(rt.GitHubGroups, g) {
+				apierr.BadRequest(c, "unknown GitHub group "+g)
+				return
+			}
+			if !slices.Contains(auto, g) {
+				auto = append(auto, g)
+			}
+		}
+		p.GitHubAuto = auto
+	}
+	if req.DisableWorktree != nil {
+		for i := range p.Repos {
+			if p.EffectiveRepo(p.Repos[i]).Kind == db.RepoDirectory || *req.DisableWorktree {
+				p.Repos[i].WorkspaceMode = db.WorkspaceShared
+			} else {
+				p.Repos[i].WorkspaceMode = db.WorkspaceWorktree
+			}
+		}
+		p.DisableWorktree = *req.DisableWorktree
+	}
+	if req.MaxRunningThreads != nil {
+		if !rt.ValidMaxRunningThreads(*req.MaxRunningThreads) {
+			apierr.BadRequest(c, fmt.Sprintf("max_running_threads must be a whole number from 1 to %d", rt.MaxRunningThreadsLimit))
+			return
+		}
+		p.MaxRunningThreads = *req.MaxRunningThreads
+	}
 	if req.Starred != nil {
 		p.Starred = *req.Starred
 	}
@@ -437,10 +789,12 @@ func (h *Handler) update(c *gin.Context) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, p)
+	c.JSON(http.StatusOK, projectView(*p))
 }
 
 func (h *Handler) delete(c *gin.Context) {
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
 	p, ok := h.project(c)
 	if !ok {
 		return
@@ -556,6 +910,41 @@ func (h *Handler) listLibrary(c *gin.Context) {
 	c.JSON(http.StatusOK, LibraryResponse{Dir: h.svc.Layout.LibraryDir(p.ID), Files: files})
 }
 
+func (h *Handler) libraryTree(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	rel := c.Query("path")
+	entries, err := h.svc.Layout.ListLibraryDir(p.ID, rel)
+	switch {
+	case errors.Is(err, rt.ErrInvalidLibraryPath), errors.Is(err, rt.ErrNotDirectory):
+		apierr.BadRequest(c, err.Error())
+		return
+	case errors.Is(err, fs.ErrNotExist):
+		apierr.Message(c, http.StatusNotFound, "folder not found")
+		return
+	case err != nil:
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// A scratch folder is named after its thread id; show the thread's title,
+	// keeping Path (what downloads and deletes address) the real one.
+	if rel == "" || rel == rt.ScratchDir {
+		for i := range entries {
+			e := &entries[i]
+			id, ok := strings.CutPrefix(e.Path, rt.ScratchDir+"/")
+			if e.Kind != "dir" || !ok || strings.Contains(id, "/") {
+				continue
+			}
+			if t, err := h.svc.Store.GetThread(id); err == nil && t.Title != "" {
+				e.Name = t.Title
+			}
+		}
+	}
+	c.JSON(http.StatusOK, LibraryTreeResponse{Dir: h.svc.Layout.LibraryDir(p.ID), Path: strings.Trim(rel, "/"), Entries: entries})
+}
+
 // maxUpload caps one uploaded library file.
 const maxUpload = 200 << 20
 
@@ -574,13 +963,12 @@ func (h *Handler) uploadLibrary(c *gin.Context) {
 			apierr.BadRequest(c, fmt.Sprintf("%s is larger than 200 MB", fh.Filename))
 			return
 		}
-		dst, err := h.svc.Layout.LibraryPath(p.ID, filepath.Base(fh.Filename))
-		if err != nil {
-			apierr.BadRequest(c, err.Error())
-			return
-		}
-		if err := saveUpload(func() (multipartFile, error) { return fh.Open() }, dst); err != nil {
-			apierr.Message(c, http.StatusInternalServerError, err.Error())
+		if err := h.saveUpload(p.ID, fh); err != nil {
+			if errors.Is(err, rt.ErrInvalidLibraryPath) {
+				apierr.BadRequest(c, err.Error())
+			} else {
+				apierr.Message(c, http.StatusInternalServerError, err.Error())
+			}
 			return
 		}
 	}
@@ -607,45 +995,86 @@ func (h *Handler) uploadAttachments(c *gin.Context) {
 	c.JSON(http.StatusCreated, rt.AttachmentsResponse{Attachments: atts})
 }
 
-func saveUpload(open func() (multipartFile, error), dst string) error {
-	src, err := open()
+func (h *Handler) saveUpload(projectID string, fh *multipart.FileHeader) error {
+	src, err := fh.Open()
 	if err != nil {
 		return err
 	}
 	defer src.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, src)
+	_, err = h.svc.Layout.WriteLibraryFile(projectID, filepath.Base(fh.Filename), src, false)
 	return err
 }
 
-func (h *Handler) downloadLibrary(c *gin.Context) {
-	path, err := h.svc.Layout.LibraryPath(c.Param("id"), c.Query("path"))
-	if err != nil {
+// libraryErr answers a failed library file lookup: 400 for a path the library
+// refuses, 404 for one that does not exist.
+func libraryErr(c *gin.Context, err error) {
+	if errors.Is(err, rt.ErrInvalidLibraryPath) {
 		apierr.BadRequest(c, err.Error())
 		return
 	}
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
-		apierr.Message(c, http.StatusNotFound, "file not found")
+	apierr.Message(c, http.StatusNotFound, "file not found")
+}
+
+// downloadLibrary serves the file from the handle it opened under the
+// library's access checks (not by re-opening its path), as an attachment.
+func (h *Handler) downloadLibrary(c *gin.Context) {
+	f, info, err := h.svc.Layout.OpenLibraryFile(c.Param("id"), c.Query("path"))
+	if err != nil {
+		libraryErr(c, err)
 		return
 	}
-	c.FileAttachment(path, filepath.Base(path))
+	defer f.Close()
+	module.ServeDownload(c, f, info, rt.DownloadName(c.Query("path")))
+}
+
+// archiveLibrary streams a library folder as a zip. The folder is counted
+// first, so a refusal (bad path, missing, too big) is a JSON error before any
+// of the zip is sent; nothing is written to disk.
+func (h *Handler) archiveLibrary(c *gin.Context) {
+	p, ok := h.project(c)
+	if !ok {
+		return
+	}
+	a, err := h.svc.Layout.OpenLibraryArchive(p.ID, c.Query("path"))
+	var tooBig *rt.ArchiveLimitError
+	switch {
+	case errors.As(err, &tooBig):
+		apierr.Message(c, http.StatusRequestEntityTooLarge, err.Error())
+		return
+	case errors.Is(err, rt.ErrInvalidLibraryPath), errors.Is(err, rt.ErrNotDirectory):
+		apierr.BadRequest(c, err.Error())
+		return
+	case errors.Is(err, fs.ErrNotExist):
+		apierr.Message(c, http.StatusNotFound, "folder not found")
+		return
+	case err != nil:
+		apierr.Message(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer a.Close()
+	if len(a.Files()) == 0 {
+		apierr.BadRequest(c, "this folder has no files to download")
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename()}))
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Status(http.StatusOK)
+	// Headers are out by now. Ending the response normally would give the
+	// client a truncated zip as a success, so the connection is closed
+	// instead and the download fails (a panic with http.ErrAbortHandler would
+	// do that too, but gin.Recovery swallows it).
+	if err := a.Stream(c.Writer); err != nil {
+		_ = c.Error(err)
+		if conn, _, herr := c.Writer.Hijack(); herr == nil {
+			_ = conn.Close()
+		}
+	}
 }
 
 func (h *Handler) deleteLibrary(c *gin.Context) {
-	path, err := h.svc.Layout.LibraryPath(c.Param("id"), c.Query("path"))
-	if err != nil {
-		apierr.BadRequest(c, err.Error())
-		return
-	}
-	if err := os.Remove(path); err != nil {
-		apierr.Message(c, http.StatusNotFound, "file not found")
+	if err := h.svc.Layout.RemoveLibraryFile(c.Param("id"), c.Query("path")); err != nil {
+		libraryErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, OKResponse{OK: true})
@@ -671,6 +1100,3 @@ func (h *Handler) usage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
-
-// multipartFile is what a multipart file header opens.
-type multipartFile = io.ReadCloser

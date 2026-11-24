@@ -12,9 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { Close, Edit, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { formatBytes, stripCardBasis, STRIP_CARD_HEIGHT } from './imageGenSession';
-import type { ImportedImage } from './ImageGenPlayground.types';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_CARD } from './imageThumbnails';
+import type { ImportedImage } from '../../../features/image/ImageGenPlayground.types';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_CARD } from '../../../features/image/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ImportedImageCardProps {
     item: ImportedImage;
@@ -58,7 +59,7 @@ const ImportedImageCard: React.FC<ImportedImageCardProps> = ({ item, onOpen, onU
                                 .join(' · ')}
                         </Typography>
                     </Box>
-                    <Box sx={{ position: 'relative', flex: { xs: 1, lg: 'none' }, aspectRatio: { lg: '1 / 1' }, minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                    <Box sx={{ position: 'relative', flex: { xs: 1, lg: 'none' }, aspectRatio: { lg: '1 / 1' }, minHeight: 0, borderRadius: radius.row, overflow: 'hidden', bgcolor: 'action.hover' }}>
                         <ButtonBase
                             onClick={onOpen}
                             aria-label={t('playground.openImported', { defaultValue: 'Open {{name}}', name: item.name })}

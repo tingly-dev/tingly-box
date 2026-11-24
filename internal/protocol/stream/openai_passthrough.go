@@ -401,8 +401,8 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 
 			// Note: Responses API may include cache tokens in usage details
 			// Check if available in the raw JSON
-			if respUsage.Get("input_tokens_details").Exists() {
-				if cachedTokens := respUsage.Get("input_tokens_details.cached_tokens"); cachedTokens.Exists() {
+			if respUsage.Get("input_tokens_details").IsObject() {
+				if cachedTokens := respUsage.Get("input_tokens_details.cached_tokens"); cachedTokens.Type != gjson.Null {
 					cacheTokens = cachedTokens.Int()
 					logrus.WithContext(c.Request.Context()).Debugf("cached tokens: %v", cacheTokens)
 				} else {
@@ -424,8 +424,12 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 			// Codex CLI's ResponseCompleted decoder rejects events whose
 			// output_tokens_details lacks reasoning_tokens. Backfill 0 when the
 			// upstream provider (e.g. DeepSeek) omits it.
-			if respUsage.Exists() {
-				if rt := respUsage.Get("output_tokens_details.reasoning_tokens"); rt.Exists() {
+			// An absent/null usage is valid in Codex. Do not turn it into an
+			// object containing only output_tokens_details: Codex then rejects
+			// response.completed for missing input/output/total_tokens and retries
+			// an otherwise successful turn.
+			if respUsage.IsObject() {
+				if rt := respUsage.Get("output_tokens_details.reasoning_tokens"); rt.Type != gjson.Null {
 					reasoningTokens = rt.Int()
 				} else {
 					if modified, err := sjson.SetRaw(eventRaw, "response.usage.output_tokens_details.reasoning_tokens", "0"); err == nil {

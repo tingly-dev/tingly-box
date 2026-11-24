@@ -1,3 +1,4 @@
+import { useEntityLabels } from '@/components/entity/useEntityLabels';
 import {
     ContentCopy as CopyIcon,
     Info as InfoIcon,
@@ -18,8 +19,9 @@ import { api } from '@/services/api';
 import { notify } from '@/utils/notify';
 import { isPairingRequired } from '@/types/bot';
 import type { BotSettings } from '@/types/bot';
-import { fontMono, fontSizes } from '@/theme/fonts';
-import { writeToClipboard } from '@/utils/clipboard';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
+import { radius } from '@tingly/ui/theme/radius';
 
 // formatRemaining returns null once expired so the caller can render a localized label.
 const formatRemaining = (expiresAt: string): string | null => {
@@ -33,19 +35,19 @@ const formatRemaining = (expiresAt: string): string | null => {
 
 interface Props {
     bot: BotSettings;
-    /** Show the full `/bind <code>` up front — for surfaces whose whole point is handing the user that command. */
+    /** Show the full `/pair <code>` up front — for surfaces whose whole point is handing the user that command. */
     revealByDefault?: boolean;
 }
 
 const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => {
     const { t } = useTranslation();
+    const entities = useEntityLabels();
     const required = useMemo(() => isPairingRequired(bot), [bot]);
 
     const [loading, setLoading] = useState(false);
     const [active, setActive] = useState(false);
     const [code, setCode] = useState('');
     const [expiresAt, setExpiresAt] = useState('');
-    const [message, setMessage] = useState('');
     const [revealed, setRevealed] = useState(revealByDefault);
 
     // Re-render countdown once per second while a code is active and revealed
@@ -65,12 +67,10 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                 setActive(Boolean(res.active));
                 setCode(res.code || '');
                 setExpiresAt(res.expires_at || '');
-                setMessage(res.message || '');
             } else {
                 setActive(false);
                 setCode('');
                 setExpiresAt('');
-                setMessage(res.error || t('remoteControl.pairing.fetchFailed', { defaultValue: 'Failed to fetch pairing code' }));
             }
         } finally {
             setLoading(false);
@@ -87,12 +87,12 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
     const handleCopy = useCallback(async () => {
         if (!code) return;
         try {
-            await writeToClipboard(`/bind ${code}`);
-            notify.success(t('remoteControl.pairing.copied', { defaultValue: 'Pairing command copied' }));
+            await writeToClipboard(`/pair ${code}`);
+            notify.success(t('remoteControl.pairing.copied', { defaultValue: 'Pairing command copied for {{bot}}', bot: entities.botText(bot) }));
         } catch {
             notify.error(t('remoteControl.pairing.copyFailed', { defaultValue: 'Copy failed — check clipboard permissions' }));
         }
-    }, [code, t]);
+    }, [code, t, entities, bot]);
 
     const handleRotate = useCallback(async () => {
         if (!bot.uuid) return;
@@ -103,16 +103,15 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                 setActive(true);
                 setCode(res.code);
                 setExpiresAt(res.expires_at || '');
-                setMessage('');
                 setRevealed(true);
-                notify.success(t('remoteControl.pairing.rotated', { defaultValue: 'Pairing code rotated' }));
+                notify.success(t('remoteControl.pairing.rotated', { defaultValue: 'Pairing code rotated for {{bot}}', bot: entities.botText(bot) }));
             } else {
                 notify.error(res.error || res.message || t('remoteControl.pairing.rotateFailed', { defaultValue: 'Rotate failed' }));
             }
         } finally {
             setLoading(false);
         }
-    }, [bot.uuid, t]);
+    }, [bot, t, entities]);
 
     if (!required) return null;
 
@@ -143,15 +142,15 @@ const PairingCodePanel: React.FC<Props> = ({ bot, revealByDefault = false }) => 
                         aria-label={revealed ? 'pairing code' : 'hidden pairing code'}
                         sx={{
                             fontFamily: fontMono,
-                            fontSize: fontSizes.lg,
+                            fontSize: fontSizes.md,
                             letterSpacing: revealed ? 0.5 : 2,
                             backgroundColor: 'action.hover',
                             px: 1,
                             py: 0.25,
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                         }}
                     >
-                        {revealed ? `/bind ${code}` : '••••••••'}
+                        {revealed ? `/pair ${code}` : '••••••••'}
                     </Typography>
                     {expiresAt && (
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>

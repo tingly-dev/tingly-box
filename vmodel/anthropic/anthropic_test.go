@@ -91,8 +91,8 @@ func TestMockModel_Static_SimulatedDelay(t *testing.T) {
 
 func TestMockModel_Tool_Handle_DoesNotModifyReq(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool-test",
-		ToolCall: &vmodel.ToolCallConfig{Name: "my_tool", Arguments: map[string]interface{}{"question": "proceed?"}},
+		ID:        "tool-test",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "my_tool", Arguments: map[string]interface{}{"question": "proceed?"}}},
 	})
 	req := makeReq("hi")
 	_, _ = vm.HandleAnthropic(req)
@@ -103,8 +103,8 @@ func TestMockModel_Tool_Handle_DoesNotModifyReq(t *testing.T) {
 
 func TestMockModel_Tool_Response_StopReasonIsToolUse(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool-test",
-		ToolCall: &vmodel.ToolCallConfig{Name: "my_tool", Arguments: map[string]interface{}{}},
+		ID:        "tool-test",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "my_tool", Arguments: map[string]interface{}{}}},
 	})
 	resp, _ := vm.HandleAnthropic(makeReq("hi"))
 	if resp.StopReason != "tool_use" {
@@ -114,8 +114,8 @@ func TestMockModel_Tool_Response_StopReasonIsToolUse(t *testing.T) {
 
 func TestMockModel_Tool_Response_ContentHasToolUseBlock(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool-test",
-		ToolCall: &vmodel.ToolCallConfig{Name: "ask_user", Arguments: map[string]interface{}{"question": "sure?"}},
+		ID:        "tool-test",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "ask_user", Arguments: map[string]interface{}{"question": "sure?"}}},
 	})
 	resp, _ := vm.HandleAnthropic(makeReq("hi"))
 
@@ -135,8 +135,8 @@ func TestMockModel_Tool_Response_ContentHasToolUseBlock(t *testing.T) {
 
 func TestMockModel_Tool_Response_DisplayContent_Question(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool-test",
-		ToolCall: &vmodel.ToolCallConfig{Name: "ask_user", Arguments: map[string]interface{}{"question": "are you sure?"}},
+		ID:        "tool-test",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "ask_user", Arguments: map[string]interface{}{"question": "are you sure?"}}},
 	})
 	resp, _ := vm.HandleAnthropic(makeReq("hi"))
 
@@ -209,10 +209,10 @@ func TestTransformModel_SimulatedDelay_IsZero(t *testing.T) {
 	}
 }
 
-// ── MockScenario ──────────────────────────────────────────────────────────────
+// ── Shared mock configuration ──────────────────────────────────────────────────────────────
 
-func TestMockScenario_Anthropic(t *testing.T) {
-	vm := NewMockFromScenario(&MockScenario{
+func TestMockConfig_Anthropic(t *testing.T) {
+	vm := NewMockModel(&MockModelConfig{
 		ID:      "sc-anthropic",
 		Content: "anthropic response",
 	})
@@ -228,10 +228,10 @@ func TestMockScenario_Anthropic(t *testing.T) {
 	}
 }
 
-func TestMockScenario_DefaultStopReasons(t *testing.T) {
-	vm := NewMockFromScenario(&MockScenario{
-		ID:       "sc-defaults",
-		ToolCall: &vmodel.ToolCallConfig{Name: "fn", Arguments: map[string]interface{}{}},
+func TestMockConfig_DefaultStopReasons(t *testing.T) {
+	vm := NewMockModel(&MockModelConfig{
+		ID:        "sc-defaults",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "fn", Arguments: map[string]interface{}{}}},
 	})
 	resp, _ := vm.HandleAnthropic(makeReq("hi"))
 	if resp.StopReason != "tool_use" {
@@ -273,8 +273,8 @@ func TestMockModel_HandleAnthropicStream_EmitsEvents(t *testing.T) {
 
 func TestMockModel_HandleAnthropicStream_ToolModel_EmitsToolUseEvent(t *testing.T) {
 	vm := NewMockModel(&MockModelConfig{
-		ID:       "tool",
-		ToolCall: &vmodel.ToolCallConfig{Name: "my_tool", Arguments: map[string]interface{}{"k": "v"}},
+		ID:        "tool",
+		ToolCalls: []vmodel.ToolCallConfig{{Name: "my_tool", Arguments: map[string]interface{}{"k": "v"}}},
 	})
 	var events []any
 	_ = vm.HandleAnthropicStream(context.Background(), makeReq("hi"), func(ev any) { events = append(events, ev) })

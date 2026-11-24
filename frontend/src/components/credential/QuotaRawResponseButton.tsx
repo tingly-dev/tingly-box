@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button, Tooltip } from '@mui/material';
 import { Code as CodeIcon } from '@/components/icons';
-import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
-import { fontSizes } from '@/theme/fonts';
+import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface QuotaRawResponseButtonProps {
   providerName?: string;
@@ -33,7 +33,7 @@ export function QuotaRawResponseButton({ providerName, response }: QuotaRawRespo
             minWidth: 0,
             px: 0.75,
             color: 'text.secondary',
-            fontSize: fontSizes.xs,
+            fontSize: fontSizes.micro,
             fontWeight: 400,
             textTransform: 'none',
             whiteSpace: 'nowrap',

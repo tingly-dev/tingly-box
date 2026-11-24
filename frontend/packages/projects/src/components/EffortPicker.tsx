@@ -21,13 +21,16 @@ interface Props {
     disabled?: boolean;
     /** What the effort is for, shown before it when a box holds more than one picker. */
     label?: string;
+    /** Text for the inherit option and its compact value in the composer. */
+    defaultLabel?: string;
+    defaultDisplayLabel?: string;
 }
 
 /**
  * Picks the thinking effort beside a model picker (the same quiet button
  * style). Empty is the endpoint's default, distinct from choosing a level.
  */
-export function EffortPicker({ value, onChange, disabled, label }: Props) {
+export function EffortPicker({ value, onChange, disabled, label, defaultLabel, defaultDisplayLabel }: Props) {
     const { t } = useTranslation('projects');
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
@@ -43,7 +46,7 @@ export function EffortPicker({ value, onChange, disabled, label }: Props) {
                 sx={{ color: 'text.secondary', fontWeight: 500, fontSize: fontSizes.sm, px: 0.75, minWidth: 0, borderRadius: radius.row }}
             >
                 <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {label ? `${label} · ` : ''}{value ? t(`effort.${value}`) : t('effort.default')}
+                    {label ? `${label} · ` : ''}{value ? t(`effort.${value}`) : (defaultDisplayLabel || defaultLabel || t('effort.default'))}
                 </Box>
             </Button>
             <Menu
@@ -57,7 +60,7 @@ export function EffortPicker({ value, onChange, disabled, label }: Props) {
                 {CHOICES.map(([level, key]) => (
                     <MenuItem key={key} selected={level === value} onClick={() => { if (!disabled) { onChange(level); close(); } }}>
                         <ListItemText
-                            primary={t(key)}
+                            primary={level === '' && defaultLabel ? defaultLabel : t(key)}
                             secondary={t(`${key}Hint`)}
                             slotProps={{ primary: { sx: { fontSize: fontSizes.base } }, secondary: { sx: { fontSize: fontSizes.sm } } }}
                         />

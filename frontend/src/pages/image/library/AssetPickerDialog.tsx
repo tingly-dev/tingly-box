@@ -12,8 +12,10 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ImageAsset } from './assetTypes';
 import { useAssets } from './assetStore';
-import ThumbImage from '../components/ThumbImage';
-import { THUMB_EDGE_TILE } from '../components/imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_TILE } from '../../../features/image/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface Props {
     open: boolean;
@@ -37,7 +39,7 @@ const AssetPickerDialog: React.FC<Props> = ({ open, remaining, onClose, onPick }
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle sx={{ fontSize: '1.05rem' }}>
+            <DialogTitle sx={{ fontSize: fontSizes.title }}>
                 {t('imageLibrary.pickTitle', { defaultValue: 'Add references from the library' })}
             </DialogTitle>
             <DialogContent dividers>
@@ -54,7 +56,7 @@ const AssetPickerDialog: React.FC<Props> = ({ open, remaining, onClose, onPick }
                                 sx={{
                                     position: 'relative',
                                     aspectRatio: '1 / 1',
-                                    borderRadius: 1.5,
+                                    borderRadius: radius.card,
                                     overflow: 'hidden',
                                     bgcolor: 'action.hover',
                                     outline: selected ? '3px solid' : 'none',
@@ -65,7 +67,7 @@ const AssetPickerDialog: React.FC<Props> = ({ open, remaining, onClose, onPick }
                             >
                                 <ThumbImage src={asset.src} alt={asset.name} edge={THUMB_EDGE_TILE} fit="contain" />
                                 {selected && (
-                                    <Box sx={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: '#fff', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {order + 1}
                                     </Box>
                                 )}

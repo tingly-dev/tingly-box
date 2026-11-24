@@ -1,6 +1,6 @@
 # 线程工作区：从原始目录出发，共享的东西放在一处
 
-> 状态：草案，对应 TEP（见 PR 描述）。取代 [projects.md](./projects.md) §4.1 里“每个线程一个 worktree，放在 Projects 数据目录”的做法，
+> 状态：草案，对应 TEP（见 PR 描述）。**2026-11 更新**：本文件的“默认用 worktree、不提供设置”和无仓库项目 cwd 决定已被下方「项目目录与逐目录模式」取代；旧线程 cwd 不变。取代 [projects.md](./projects.md) §4.1 里“每个线程一个 worktree，放在 Projects 数据目录”的做法，
 > 并回应 [#2084](https://github.com/tingly-dev/tingly-box/issues/2084)（每个线程都开 worktree 未必合适）。
 > 相关：[../../.design/projects-sessions.md](../../.design/projects-sessions.md)（统一 Thread 模型）、
 > [../../.design/projects-attachments.md](../../.design/projects-attachments.md)（上传）。
@@ -27,6 +27,16 @@
 不新增工具，不做写前拦截钩子。启动 prompt 里加一句话，告诉 agent 它的工作区在哪、共享目录在哪、需要隔离时可以自己用 `EnterWorktree`。
 
 “默认用 worktree”先不做成设置项；以后需要“就地编辑”再加（见后续）。
+
+## 项目目录与逐目录模式（2026-11）
+
+项目可配置 Git 仓库和普通目录。每个 Git 目录分别选 `worktree`（每线程独立分支）或 `shared`（直接在现有 checkout 工作）；普通目录只能 `shared`，多个线程可能同时修改同一批文件。每个有目录的项目有一个主目录：未指定目录的新线程使用它，项目对话里的工作区模式和首次提示修改的也是它；其他目录的模式不随之改变。没有目录时仍用每线程 scratch，允许先创建空项目。
+
+旧项目没有新字段时，目录类型视为 Git、模式继承旧 `disable_worktree`、主目录为第一项；读取时不重新检查磁盘。旧客户端的全局开关仍统一作用于 Git 目录（无法表达混合模式），普通目录始终 shared。修改目录、主目录或模式只影响新线程；已有线程保留自己的 cwd 和分支。删除目录配置只是移除引用，绝不删除共享目录中的文件。检查目录会解析符号链接；Git 子目录沿用仓库根，普通目录保留选定路径；不接收与 Projects 数据根重叠的目录。
+
+项目对话中的模式选择只提交主目录路径与新模式，由服务端读取最新配置后修改该项；若主目录已改变则返回冲突，避免旧页面覆盖别的目录。项目设置保存完整列表时仍是整体替换，不解决多个设置页面同时编辑的冲突。
+
+线程的其他项目目录继续通过 additionalDirectories 授权，因此模式只决定选中目录的线程 cwd，不为其他目录提供隔离。shared 线程必须协调并发改动；UI 和启动提示明确说明这一点。
 
 ## 验证与事实依据
 
@@ -87,6 +97,8 @@
 ├── memory/                  项目记忆；autoMemoryDirectory 指向这里
 ├── library/uploads/         上传（项目与文件夹项目一致）
 ├── library/outputs/<slug>/  无仓库线程的产出
+├── library/.tmp/<thread-id>/ 线程的 TMPDIR（Library 页不显示，resolve 时清理；Library 树见 library-tree.md）
+├── library/.cache/          项目共享的工具缓存（GOMODCACHE/GOCACHE/npm/pip，见 thread-cleanup.md §3.10）
 └── threads/<id>.settings.json
 
 <repo>/.claude/worktrees/<slug>-<id6>/   新线程的 cwd（有仓库）
@@ -108,6 +120,29 @@
   "permissions": { "additionalDirectories": ["<library>", "<memory>", "<其他仓库>…"] }
 }
 ```
+
+### 共享上传目录（library）的授权
+
+library 就是共享上传目录（`library/uploads/` 上传，`library/outputs/<slug>/` 线程产出），项目线程和文件夹线程用同一套授权（`library_access.go` 的 `addDirectories` / `grantLibrary`，三处 settings 生成都走它）：
+
+- `permissions.additionalDirectories` 加 library：只放宽 acceptEdits 下文件工具能到的范围，不够。
+- `permissions.allow` 加 `Read(//<library>/**)`、`Edit(//<library>/**)`：任何权限模式下读写 library 都不再询问，范围只限这个目录。
+- `autoMode.environment` / `autoMode.allow` 各加一条（以 `$defaults` 开头，保留内置规则）：告诉 auto 模式的分类器 library 是被认可的写入目标，否则从 `/tmp` 往里 `cp` 会被分类器拒绝。
+- `send_file` 只收工作目录和 library 里的文件。因此线程提示词（项目线程）和 `send_file` 的工具描述（两种模式都有）都要求：截图、报告等直接存到 `library/outputs/<slug>/` 再发送，不要先放 `/tmp` 再拷；被拒绝时的错误信息也给出该目录。
+
+### 线程临时目录（TMPDIR）
+
+每个线程的 `TMPDIR` / `TMP` / `TEMP` 指向共享 library 里自己的目录，不再用全局 `/tmp`：`<library>/.tmp/<thread-id>/`（`Layout.TmpDir`；`Threads.withTmpEnv` 在每次 turn 启动前建目录并写进 env，项目线程、profile 线程、文件夹线程都走这一处，profile 自带的 env 保留）。
+
+- **为什么在 library 下**：library 已有 `Read`/`Edit` 授权和 auto 分类器条目（上节），`send_file` 也收 library 里的文件；临时文件落在这里就不需要拷贝，也就没有“从 /tmp 拷进 library 被拒”的问题。
+- **为什么用 `.tmp/<thread-id>/`，不用 `outputs/<slug>/tmp/`**：`ListLibrary` 跳过点开头的目录，草稿文件不会出现在 Library 页；thread id 唯一，而标题 slug 会重复。`outputs/<slug>/` 保持“要给用户看的产出”。
+- **提示词**：`ArtifactGuidance`（项目线程的系统提示词和 `send_file` 的工具描述，所以文件夹线程也看得到）告诉线程不要用 `/tmp`，草稿放 `TMPDIR`，要给用户看的放 `outputs/<slug>/`。
+- **清理**：线程被 Resolve、Archive 或 Delete 时 `cleanTmp` 删除该目录；`send_file` 已经把文件复制进 `uploads/`，发出去的文件不受影响。Reopen/Restore 后下一个 turn 重建。
+- **未解决**：从未 resolve 的线程留下的目录不会被回收（没有按时间的清理）；Claude Code 自己也读 `TMPDIR`，它的内部临时文件会落在同一目录，resolve 时一起清掉。
+
+### 共享工具缓存（`.cache`）
+
+提示词引导线程把工具/构建缓存（`GOMODCACHE`、`GOCACHE`、`npm_config_cache`、`PIP_CACHE_DIR` 及其它工具的同类变量）指到 `<library>/.cache`——项目统一缓存。**不预设启动 env、不加逻辑特例**；缓存按项目共享、不进 Library 树/zip/fork、不随线程 Archive/Delete 删除。理由和度量见 [thread-cleanup.md](../../.design/thread-cleanup.md) §3.10。
 
 `autoMemoryDirectory` 对所有项目线程设置（有仓库的也设），让一个项目只有一份记忆：Projects 自己的 `MEMORY.md` 机制与 Claude 的原生 auto memory 指向同一目录。
 

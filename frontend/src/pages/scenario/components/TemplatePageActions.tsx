@@ -7,6 +7,7 @@ import {
     Key as KeyIcon,
 } from '@/components/icons';
 import { Button, Stack, Tooltip } from '@mui/material';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 export interface TemplatePageActionsProps {
     collapsible: boolean;
@@ -35,10 +36,12 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     onProbeAll,
 }) => {
     const { t } = useTranslation();
+    const phone = usePhoneShell();
 
     return (
-        <Stack direction="row" spacing={1.5} sx={{
-            alignItems: "center"
+        <Stack direction="row" spacing={phone ? 1 : 1.5} useFlexGap={phone} sx={{
+            alignItems: "center",
+            ...(phone && { flexWrap: 'wrap' }),
         }}>
             {/* Diagnostics pair: "is it working now" (test all) + "why not" (logs) */}
             {onProbeAll && (

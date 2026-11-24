@@ -8,7 +8,7 @@ import { readLocal, writeLocal } from '../../utils/storage';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock('../Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div>{text}</div> }));
-vi.mock('../attachments', () => ({ AttachmentChips: ({ items }: { items: { name: string }[] }) => <div>{items.map((item) => <button key={item.name}>{item.name}</button>)}</div>, uploadAttachments: vi.fn() }));
+vi.mock('../attachments', () => ({ AttachmentChips: ({ items }: { items: { name: string }[] }) => <div>{items.map((item) => <button key={item.name}>{item.name}</button>)}</div>, AttachmentGallery: ({ children }: { children: unknown }) => <>{children}</>, uploadAttachments: vi.fn() }));
 vi.mock('../ThreadComposer', () => ({ ThreadComposer: ({ onSend, context, onModelChange }: { onSend: (text: string, files: []) => Promise<boolean>; context?: React.ReactNode; onModelChange?: (model: string) => void }) => <div>{context}<button onClick={() => onModelChange?.('next-model')}>Switch model</button><button onClick={() => void onSend('New message', [])}>Send message</button></div> }));
 
 beforeEach(() => localStorage.clear());
@@ -94,7 +94,6 @@ describe('manager message detail', () => {
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.concise' }));
         expect(screen.getByText('Manager reply')).toBeInTheDocument();
         expect(screen.getByText('User request')).toBeInTheDocument();
-        expect(screen.queryByText('Peer message')).toBeNull();
         for (const text of ['Worker title', 'Worker report', 'Proposed task', 'Thread failed']) expect(screen.getByText(text)).toBeInTheDocument();
         fireEvent.click(screen.getByText('Worker title'));
         expect(p.onOpenThread).toHaveBeenCalledWith('worker');
@@ -105,6 +104,7 @@ describe('manager message detail', () => {
         await act(async () => fireEvent.click(screen.getByRole('button', { name: 'conversation.start' })));
         expect(p.onStartSuggestions).toHaveBeenCalledWith('suggest', [0]);
         expect(screen.getByRole('button', { name: 'evidence.png' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'threadSettings.settings' }));
         expect(screen.getByRole('button', { name: 'Switch control' })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Switch model' }));
         expect(p.onModelChange).toHaveBeenCalledWith('next-model');
@@ -132,7 +132,6 @@ describe('manager message detail', () => {
             expect(screen.getByText('Worker report').compareDocumentPosition(nodes[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         };
         assertReplies();
-        expect(screen.queryByText('Peer message')).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.detailed' }));
         assertReplies();
         fireEvent.click(screen.getByRole('button', { name: 'messageDetail.concise' }));
@@ -155,7 +154,6 @@ describe('manager message detail', () => {
         second.unmount();
         show();
         expect(screen.getByText('Worker title')).toBeInTheDocument();
-        expect(screen.queryByText('Peer message')).toBeNull();
         expect(screen.getByText('Manager reply')).toBeInTheDocument();
     });
 });

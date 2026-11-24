@@ -2,7 +2,8 @@ import {Check, Close} from '@/components/icons';
 import {Box, Button, IconButton, Stack, Typography, alpha} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface VerificationResultPanelProps {
     result: VerificationResult;
@@ -19,7 +20,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
             sx={{
                 mt: 1,
                 p: 1.5,
-                borderRadius: 1.5,
+                borderRadius: radius.card,
                 bgcolor: 'background.default',
                 border: '1px solid',
                 borderColor: 'divider',
@@ -40,7 +41,8 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     <Close fontSize="small"/>
                 </IconButton>
             </Box>
-            <Typography variant="body2" color={result.success ? 'success.main' : 'error.main'} sx={{mb: 1, fontWeight: 600}}>{result.message}</Typography>
+            {/* Cancelled runs are not failures — render them neutral instead of red. */}
+            <Typography variant="body2" color={result.success ? 'success.main' : result.cancelled ? 'text.secondary' : 'error.main'} sx={{mb: 1, fontWeight: 600}}>{result.message}</Typography>
             <Stack spacing={0.75}>
                 {details.map((detail, index) => {
                     const isSuccess = detail.includes('✓');
@@ -72,8 +74,8 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                         fontSize="small"
                                         sx={{
                                             color: 'common.white',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
+                                            fontSize: fontSizes.sm,
+                                            fontWeight: 600,
                                         }}
                                     />
                                 </Box>
@@ -94,8 +96,8 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                                         variant="caption"
                                         sx={{
                                             color: 'common.white',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
+                                            fontSize: fontSizes.sm,
+                                            fontWeight: 600,
                                         }}
                                     >
                                         !
@@ -117,7 +119,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                         alignItems: "center",
                         mt: 1.5,
                         p: 1,
-                        borderRadius: 1,
+                        borderRadius: radius.row,
                         bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08),
                         border: '1px solid',
                         borderColor: 'warning.light'

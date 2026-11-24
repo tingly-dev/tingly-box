@@ -27,14 +27,17 @@ Playground 长到约 7k 行、5 份专属设计文档之后,仍然是 scenario �
 ## 2. 决定
 
 - activity bar 新增 **Image**,子项按顺序为:
+  - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。排在最上面，其下一条分隔线;
+    落点仍是 Playground(`defaultPath`),所以点 rail 图标、`/image` 都不会先看到它。
+  - (分隔线)
   - **Playground** — `/image/playground`,也是 `/image` 与点击 rail 图标的落点(天天用的那个优先);其后是各 profile 与 "New profile"。
   - (分隔线)
   - **Idea to Prompt**(扩写提示词) — `/image/idea-to-prompt`,偶尔用的工具：几个词进去，一段完整提示词出来(`idea-to-prompt.md`)。两个提示词工具里更常用的那个，排前。
   - **Image to Prompt**(反推提示词) — `/image/to-prompt`,一张图进去，一段提示词出来(`image-to-prompt.md`)。
   - **Library** — `/image/library`,跨 profile 保留下来的图。
-  - **Image API** — `/image/api`,即原 `/agent/image`(imagegen scenario:Base URL、Quick Start、规则)。
-  - 工作面在上，共享的东西在下;Image API 排最后：只有给自己的客户端接入的人才需要它，
-    而它排第一时，一个只想出图的人最先看到的是 Base URL 和规则(原则 1、2)。
+  - 顺序更新:Image API 起初排最后(担心排第一时，只想出图的人最先看到 Base URL 和规则);
+    后改为置顶并用分隔线隔开，由 `defaultPath` 保证默认落点仍是 Playground,
+    两个入口都一眼可见，同时不改变"点进来先看到工作面"。
 - 名字统一为 **Image API**:侧栏、Agent 概览卡、页面标题都是这一个词。
 - Gallery / 草图 / mask / 切分仍是 Playground 内的对话框(原则 12),不升级为子导航。
 

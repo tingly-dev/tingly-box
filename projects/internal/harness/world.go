@@ -1,9 +1,10 @@
 // Package harness runs whole Projects workflows in process: the real
 // coordinator, thread manager, store, event hub and a throwaway git
-// repository, with the two models scripted. The coordinator's model is a
-// Brain and a thread's Claude Code is an Actor, so one scenario can swap in a
-// different behaviour (diligent, lazy, overreaching) and check what the
-// system does about it.
+// repository, with the two models scripted. The coordinator's Claude Code
+// session is played by a Brain (through coordtest, which calls the real
+// Projects MCP tools) and a thread's Claude Code by an Actor, so one scenario
+// can swap in a different behaviour (diligent, lazy, overreaching) and check
+// what the system does about it.
 //
 // It checks workflows and rules, not wire protocols; see
 // .design/projects-harness.md.
@@ -21,9 +22,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 // Options describe the project a World starts with.
@@ -42,6 +43,7 @@ type World struct {
 	T       *testing.T
 	Store   *db.Store
 	Layout  project.Layout
+	Service *project.Service
 	Threads *project.Threads
 	Coord   *project.Coordinator
 	Project *db.Project
@@ -54,11 +56,13 @@ type World struct {
 	prompts []string
 }
 
-type staticEnv struct{}
+type host struct{}
 
-func (staticEnv) ThreadEnv(context.Context) ([]string, string) {
+func (host) ThreadEnv(context.Context) ([]string, string) {
 	return []string{"ANTHROPIC_BASE_URL=http://gw"}, "default-model"
 }
+
+func (host) Models(context.Context) ([]project.Model, error) { return nil, nil }
 
 // New starts a world and registers its cleanup and invariant checks with t.
 func New(t *testing.T, o Options) *World {
@@ -83,15 +87,14 @@ func New(t *testing.T, o Options) *World {
 	if actor == nil {
 		actor = Diligent("done")
 	}
-	w.Agent = &enginetest.Agent{Script: func(turn *enginetest.Turn) error {
+	w.Agent = &enginetest.Agent{Script: coordtest.Script(w.brain.turn, func(turn *enginetest.Turn) error {
 		w.mu.Lock()
 		w.prompts = append(w.prompts, turn.Prompt)
 		w.mu.Unlock()
 		return actor(&ActorCtx{World: w, Turn: turn, Prompt: turn.Prompt, Dir: turn.Opts.ProjectPath})
-	}}
-	hub := project.NewHub()
-	w.Threads = project.NewThreads(store, layout, hub, project.Agents{Service: w.Agent.Service()}, staticEnv{})
-	w.Coord = project.NewCoordinator(store, layout, hub, w.Threads, w.brain)
+	})}
+	w.Service = project.NewService(store, layout, project.Agents{Service: w.Agent.Service()}, host{})
+	w.Threads, w.Coord = w.Service.Threads, w.Service.Coordinator
 	t.Cleanup(w.settle)
 	t.Cleanup(w.CheckInvariants)
 	return w
@@ -104,7 +107,10 @@ func (w *World) settle() {
 	for time.Now().Before(deadline) && (w.Coord.Busy(w.Project.ID) || w.anyRunning()) {
 		time.Sleep(5 * time.Millisecond)
 	}
-	w.Threads.Shutdown(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	w.Threads.Shutdown(ctx)
+	_ = w.Service.CloseTools(ctx)
 	time.Sleep(50 * time.Millisecond)
 }
 
@@ -227,8 +233,8 @@ func (w *World) Quiet() {
 	})
 }
 
-// Requests are the model requests the coordinator made, in order.
-func (w *World) Requests() []llm.Request { return w.brain.requests() }
+// Requests are the coordinator's turns, in order.
+func (w *World) Requests() []Request { return w.brain.requests() }
 
 // Prompts are the messages each thread turn started with, in order.
 func (w *World) Prompts() []string {
@@ -241,7 +247,9 @@ func (w *World) Prompts() []string {
 func (w *World) Launches() []string {
 	var out []string
 	for _, l := range w.Agent.Launches() {
-		out = append(out, l.AppendSystemPrompt)
+		if !coordtest.IsCoordinator(l) {
+			out = append(out, l.AppendSystemPrompt)
+		}
 	}
 	return out
 }

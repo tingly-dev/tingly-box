@@ -3,6 +3,7 @@ import en from './en';
 import ru from './ru';
 import zh from './zh';
 import { en as projectsEn } from '@tingly/projects/locales/en';
+import { ru as projectsRu } from '@tingly/projects/locales/ru';
 import { zh as projectsZh } from '@tingly/projects/locales/zh';
 
 type Bundle = Record<string, unknown>;
@@ -71,9 +72,8 @@ describe('t() key coverage', () => {
 });
 
 // Projects' pages (everything in @tingly/projects but the transcript) read the
-// `projects` namespace, which Tingly Box loads from the package's en and zh
-// bundles when a Projects route opens (pages/projects/ProjectsRoute.tsx);
-// Russian falls back to English there.
+// `projects` namespace, which Tingly Box loads from the package's en, zh and ru
+// bundles when a Projects route opens (pages/projects/ProjectsRoute.tsx).
 const PROJECTS_SOURCES = import.meta.glob([
     '/packages/projects/src/**/*.{ts,tsx}',
     '!/packages/projects/src/transcript/**',
@@ -86,6 +86,7 @@ const PROJECTS_SOURCES = import.meta.glob([
 const PROJECTS_BUNDLES: Array<[string, Bundle]> = [
     ['en', projectsEn as unknown as Bundle],
     ['zh', projectsZh as unknown as Bundle],
+    ['ru', projectsRu as unknown as Bundle],
 ];
 
 describe('t() key coverage, projects namespace', () => {

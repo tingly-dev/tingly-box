@@ -180,6 +180,12 @@ Never hit in production since `StoreManager` builds `UsageStore` directly
 over its own already-open `*gorm.DB` — surfaced when
 `stats_usage_bench_test.go` became `NewUsageStore`'s first-ever caller.
 
+### Dashboard reads (`UsageStore`)
+
+The dashboard's read path (rollup tables, empty-day markers, index pinning,
+dropped indexes, performance cache) is documented with measurements in
+`usage-dashboard-db-cost.md`.
+
 ### Audit: is your store on a hot path?
 
 Every store under `internal/db/` follows the same shape: a GORM-backed
@@ -196,7 +202,7 @@ message path**:
 | `StatsStore`, `UsageStore` | Yes (write) | `usage_tracking.go` persists stats + a usage row every completed request | Partially fixed — merged transaction; batching still open |
 | `ImBotSettingsStore` | No | Bot lifecycle events, admin REST/CLI only | Not touched — genuinely low frequency |
 | `ModelStore` | No | Admin "list/refresh models" endpoints, OAuth completion, CLI | Not touched — already `RWMutex`, admin-paced |
-| `TaskStore` | Dead code | Zero callers; `internal/task` also has no external production callers (see `backend-organization.md`), so it is not a live replacement subsystem | Not touched — separate cleanup ticket |
+| `TaskStore` | Dead code | Zero callers; its would-be replacement `internal/task` had no production callers either and was deleted (see `backend-internal-refactor.md`) | Not touched — separate cleanup ticket |
 | `ToolConfigStore` | Effectively unreachable | `Config.GetToolConfig` is a different, in-memory-only implementation that never touches this store | Not touched — separate cleanup ticket |
 | `RemoteChatStore`, `RemoteSessionStore`, `BotAccessStore` | IM-bot message path | `remote/control/remoteagent/handler_message.go` et al. | Not touched — real traffic but chat-message-rate, not LLM-API-rate; no app-level mutex today |
 

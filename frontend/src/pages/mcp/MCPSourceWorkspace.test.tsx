@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPSourceWorkspace from './MCPSourceWorkspace';
-import type { MCPRouteSource, MCPSourceConfig } from './types';
+import type { MCPRouteSource, MCPSourceConfig } from '../../features/mcp/types';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (_: string, o: { defaultValue: string }) => o.defaultValue }),
@@ -56,7 +56,7 @@ describe('connection workspace', () => {
             ...source,
             tool_policies: { ...source.tool_policies, read: { enabled: true, usage: { client: true, gateway: true } } },
         });
-        const row = within(screen.getByRole('group', { name: 'read' }));
+        const row = within(screen.getByRole('article', { name: 'Docs / read' }));
         expect(row.queryByRole('checkbox')).toBeNull();
         fireEvent.click(row.getByRole('switch', { name: 'On' }));
         await waitFor(() =>
@@ -92,7 +92,7 @@ describe('connection workspace', () => {
     it('reports a rejected change and keeps the previous state', async () => {
         save.mockRejectedValue(new Error('Update failed'));
         open();
-        const row = within(screen.getByRole('group', { name: 'read' }));
+        const row = within(screen.getByRole('article', { name: 'Docs / read' }));
         fireEvent.click(row.getByRole('switch', { name: 'On' }));
         expect(await screen.findByText('Update failed')).toBeInTheDocument();
         expect(row.getByRole('switch', { name: 'On' })).toBeChecked();

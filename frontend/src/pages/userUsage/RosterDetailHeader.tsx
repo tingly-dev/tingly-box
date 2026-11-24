@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material';
 import type { AggregatedStat } from '@/components/dashboard';
 import { formatDateTime } from './userUsageModel';
 import type { UserUsageRow, ViewMode } from './userUsageModel';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 
 // Identity line for the detail card's header bar. Single baseline row (name +
 // id/provider + joined) so the header stays at the shared 72px minHeight and
@@ -24,7 +24,7 @@ export default function RosterDetailHeader({
 }) {
     return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 1.5, minWidth: 0 }}>
-            <Typography variant="h6" noWrap sx={{ fontWeight: 650 }}>
+            <Typography variant="h6" noWrap sx={{ fontWeight: 600 }}>
                 {viewMode === 'account'
                     ? selectedUser!.display_name
                     : viewMode === 'model'

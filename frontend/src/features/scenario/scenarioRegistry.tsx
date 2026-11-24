@@ -1,0 +1,358 @@
+// Scenario metadata + hidden-scenario state, kept free of page imports so
+// nav-level consumers (layout/useActivityItems.tsx, the Power-ups menu,
+// components/dashboard/AgentQuickNav.tsx) can read this list cheaply.
+import { useCallback, useEffect, useState } from 'react';
+import { setSyncedItem } from '@/services/uiPrefs';
+import {
+    CircleOutlined as IconCustom,
+    Photo as IconPhoto,
+    Users as IconUsers,
+    Decisions as IconDecisions,
+    Embedding as IconEmbedding,
+    Science as IconFlask,
+} from '@/components/icons';
+import {
+    Anthropic,
+    Claude,
+    ClaudeDesktop,
+    Codex,
+    Cursor,
+    DeepSeek,
+    OpenAI,
+    OpenCode,
+    Pi,
+    VSCode,
+    WorkBuddy,
+    Xcode,
+} from '@/components/BrandIcons';
+
+export interface ScenarioDescriptor {
+    id: string;
+    labelKey: string;
+    descKey: string;
+    path: string;
+    icon: (size: number) => React.ReactNode;
+    /** Hideable from the sidebar. Claude Code is always shown (anchors profiles). */
+    hideable: boolean;
+}
+
+export const SCENARIOS: ScenarioDescriptor[] = [
+    {
+        id: 'claude_code',
+        labelKey: 'layout.nav.useClaudeCode',
+        descKey: 'scenarioOverview.descriptions.claude_code',
+        path: '/agent/claude_code',
+        icon: (size) => <Claude size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'claude_desktop',
+        labelKey: 'layout.nav.useClaudeDesktop',
+        descKey: 'scenarioOverview.descriptions.claude_desktop',
+        path: '/agent/claude_desktop',
+        icon: (size) => <ClaudeDesktop size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'codex',
+        labelKey: 'layout.nav.useCodex',
+        descKey: 'scenarioOverview.descriptions.codex',
+        path: '/agent/codex',
+        icon: (size) => <Codex size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'opencode',
+        labelKey: 'layout.nav.useOpenCode',
+        descKey: 'scenarioOverview.descriptions.opencode',
+        path: '/agent/opencode',
+        icon: (size) => <OpenCode size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'pi',
+        labelKey: 'layout.nav.usePi',
+        descKey: 'scenarioOverview.descriptions.pi',
+        path: '/agent/pi',
+        icon: (size) => <Pi size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'workbuddy',
+        labelKey: 'layout.nav.useWorkBuddy',
+        descKey: 'scenarioOverview.descriptions.workbuddy',
+        path: '/agent/workbuddy',
+        icon: (size) => <WorkBuddy size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'dsh',
+        labelKey: 'scenarioOverview.titles.dsh',
+        descKey: 'scenarioOverview.descriptions.dsh',
+        path: '/agent/dsh',
+        icon: (size) => <DeepSeek size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'xcode',
+        labelKey: 'layout.nav.useXcode',
+        descKey: 'scenarioOverview.descriptions.xcode',
+        path: '/agent/xcode',
+        icon: (size) => <Xcode size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'vscode',
+        labelKey: 'layout.nav.useVSCode',
+        descKey: 'scenarioOverview.descriptions.vscode',
+        path: '/agent/vscode',
+        icon: (size) => <VSCode size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'cursor',
+        labelKey: 'layout.nav.useCursor',
+        descKey: 'scenarioOverview.descriptions.cursor',
+        path: '/agent/cursor',
+        icon: (size) => <Cursor size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'custom',
+        labelKey: 'layout.nav.useCustom',
+        descKey: 'scenarioOverview.descriptions.custom',
+        path: '/agent/custom',
+        icon: (size) => <IconCustom sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'openai',
+        labelKey: 'layout.nav.useOpenAI',
+        descKey: 'scenarioOverview.descriptions.openai',
+        path: '/agent/openai',
+        icon: (size) => <OpenAI size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'anthropic',
+        labelKey: 'layout.nav.useAnthropic',
+        descKey: 'scenarioOverview.descriptions.anthropic',
+        path: '/agent/anthropic',
+        icon: (size) => <Anthropic size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'vmodel',
+        labelKey: 'layout.virtualModelsNavLabel',
+        descKey: 'layout.virtualModelsTooltip',
+        path: '/agent/vmodel',
+        icon: (size) => <IconFlask sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'embed',
+        labelKey: 'layout.nav.useEmbed',
+        descKey: 'scenarioOverview.descriptions.embed',
+        path: '/agent/embed',
+        icon: (size) => <IconEmbedding sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'decisions',
+        labelKey: 'layout.nav.useDecisions',
+        descKey: 'scenarioOverview.descriptions.decisions',
+        path: '/agent/decisions',
+        icon: (size) => <IconDecisions sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'imagegen',
+        labelKey: 'layout.nav.useImageGen',
+        descKey: 'scenarioOverview.descriptions.imagegen',
+        // Lives under the Image rail item; hiding it here hides that rail item.
+        path: '/image/api',
+        icon: (size) => <IconPhoto sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+    {
+        id: 'team',
+        labelKey: 'layout.nav.useTeam',
+        descKey: 'scenarioOverview.descriptions.team',
+        // Lives under the Team rail item; hiding it here hides that rail item.
+        path: '/agent/team',
+        icon: (size) => <IconUsers sx={{ fontSize: size }} />,
+        hideable: true,
+    },
+];
+
+/**
+ * Display name of a usage-record `scenario` value. Profiled scenarios come as
+ * "claude_code:p1" — the agent's name, then the profile after a "·". Unknown
+ * ids (retired or custom scenarios) are shown as-is.
+ */
+export const scenarioLabel = (t: (key: string) => string, scenario: string): string => {
+    const [base, profile] = scenario.split(':', 2);
+    const known = SCENARIOS.find((s) => s.id === base);
+    const name = known ? t(known.labelKey) : base;
+    return profile ? `${name} · ${profile}` : name;
+};
+
+const STORAGE_KEY = 'scenario.hiddenScenarios';
+const DEFAULTS_VERSION_KEY = 'scenario.hiddenDefaultsVersion';
+const VISIBILITY_EVENT = 'scenario-visibility-change';
+// Every other agent is visible until the user hides it — a fresh sidebar shows
+// the whole list at a glance.
+// "cursor" is hidden by default because Cursor's "Override OpenAI Base URL"
+// is called from Cursor's own cloud backend (api2.cursor.sh), not from the
+// local Cursor app — a plain http://localhost:<port>/tingly/cursor Base URL
+// is unreachable from there and the chat silently hangs. It only works when
+// tingly-box is reachable over a public HTTPS URL (real deployment, or a
+// tunnel). See .design/cursor.md. Un-hide once we can detect/guide this
+// better, e.g. warn inline when baseUrl looks like localhost/a private IP.
+//
+// "vmodel" (the Virtual Models power-up) is off by default: the built-in
+// synthetic providers are for onboarding/demos/dry-runs and expose the
+// VModel scenario and Credentials sidebar row together. There is no defaults
+// version bump, so installs keep their existing visibility choice.
+const DEFAULT_HIDDEN = ['cursor', 'vmodel'];
+// Bump this whenever DEFAULT_HIDDEN gains a genuinely new entry, so existing
+// users pick up the new default without losing their own customisations.
+const DEFAULTS_VERSION = 5;
+
+// Scenario ids renamed in place (old -> new). A user's existing hidden/shown
+// choice for the old id carries over to the new one below, instead of being
+// reset by the DEFAULT_HIDDEN merge — a rename isn't a new scenario, so it
+// must not force-hide a scenario a user had explicitly chosen to show under
+// its old id.
+//
+// Composition with DEFAULT_HIDDEN/DEFAULTS_VERSION below: this rename runs
+// first and unconditionally (every read, not just on a version bump), then
+// the version-gated merge treats the *renamed* id as already-decided and
+// only folds in defaults for ids that were never a rename target.
+const RENAMED_SCENARIO_IDS: Record<string, string> = {
+    agent: 'custom', // OpenClaw
+};
+
+const readHidden = (): string[] => {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        // Nothing chosen yet on this surface: show the defaults without
+        // persisting them, so a later sync can still bring in a choice made
+        // elsewhere instead of treating these defaults as one.
+        if (raw === null) return DEFAULT_HIDDEN;
+        const parsed = JSON.parse(raw);
+        let stored: string[] = Array.isArray(parsed)
+            ? parsed.filter((x): x is string => typeof x === 'string')
+            : [];
+
+        // Skip the rename pass entirely once nothing in storage is on an old
+        // id — true for every read after the first post-rename one, i.e.
+        // almost always.
+        if (stored.some((id) => id in RENAMED_SCENARIO_IDS)) {
+            stored = Array.from(new Set(stored.map((id) => RENAMED_SCENARIO_IDS[id] ?? id)));
+        }
+
+        // Merge any new default-hidden entries that existing users haven't
+        // seen yet (i.e. the stored defaults-version is behind the current
+        // one) — excluding renamed ids, whose real preference was just
+        // carried over above rather than freshly defaulted.
+        const storedVersion = Number(localStorage.getItem(DEFAULTS_VERSION_KEY) ?? 0);
+        if (storedVersion < DEFAULTS_VERSION) {
+            // Team graduated from an experimental hidden scenario to a
+            // first-class profile group in the Agent layout. Remove the old
+            // default-hidden value once so existing installs see the new
+            // Team / tN / Add Team structure without manual discovery.
+            if (storedVersion < 4) stored = stored.filter((id) => id !== 'team');
+            const renamedTargets = new Set(Object.values(RENAMED_SCENARIO_IDS));
+            const genuinelyNewDefaults = DEFAULT_HIDDEN.filter((id) => !renamedTargets.has(id));
+            const merged = Array.from(new Set([...stored, ...genuinelyNewDefaults]));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            localStorage.setItem(DEFAULTS_VERSION_KEY, String(DEFAULTS_VERSION));
+            return merged;
+        }
+
+        return stored;
+    } catch {
+        return [];
+    }
+};
+
+// Only an explicit user choice writes through to the server (services/uiPrefs):
+// the defaults/rename/version writes in readHidden above are derived state that
+// every surface recomputes identically, and uploading them from a fresh
+// desktop window would overwrite the choices made in the browser.
+const writeHidden = (ids: string[]) => {
+    setSyncedItem(STORAGE_KEY, JSON.stringify(ids));
+    setSyncedItem(DEFAULTS_VERSION_KEY, String(DEFAULTS_VERSION));
+    window.dispatchEvent(new Event(VISIBILITY_EVENT));
+};
+
+export const getHiddenScenarios = (): Set<string> => new Set(readHidden());
+
+export const useHiddenScenarios = () => {
+    const [hidden, setHidden] = useState<Set<string>>(() => new Set(readHidden()));
+
+    useEffect(() => {
+        const sync = () => setHidden(new Set(readHidden()));
+        window.addEventListener(VISIBILITY_EVENT, sync);
+        window.addEventListener('storage', sync);
+        return () => {
+            window.removeEventListener(VISIBILITY_EVENT, sync);
+            window.removeEventListener('storage', sync);
+        };
+    }, []);
+
+    const isHidden = useCallback((id: string) => hidden.has(id), [hidden]);
+
+    const toggleHidden = useCallback((id: string) => {
+        const next = new Set(readHidden());
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        writeHidden([...next]);
+        setHidden(next);
+    }, []);
+
+    return { hidden, isHidden, toggleHidden };
+};
+
+// ── Pinned agents ────────────────────────────────────────────────────────────
+// The user's own order, one rule: pinned agents sit at the top of the Agent
+// sidebar (above Claude Code and its profiles), in the order they were pinned.
+// Synced like the hidden list so every surface agrees.
+const PINNED_KEY = 'scenario.pinnedScenarios';
+const PINNED_EVENT = 'scenario-pinned-change';
+
+const readPinned = (): string[] => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]');
+        return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+    } catch {
+        return [];
+    }
+};
+
+export const getPinnedScenarios = (): string[] => readPinned();
+
+export const usePinnedScenarios = () => {
+    const [pinned, setPinned] = useState<string[]>(() => readPinned());
+
+    useEffect(() => {
+        const sync = () => setPinned(readPinned());
+        window.addEventListener(PINNED_EVENT, sync);
+        window.addEventListener('storage', sync);
+        return () => {
+            window.removeEventListener(PINNED_EVENT, sync);
+            window.removeEventListener('storage', sync);
+        };
+    }, []);
+
+    const togglePinned = useCallback((id: string) => {
+        const current = readPinned();
+        const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+        setSyncedItem(PINNED_KEY, JSON.stringify(next));
+        window.dispatchEvent(new Event(PINNED_EVENT));
+        setPinned(next);
+    }, []);
+
+    return { pinned, togglePinned };
+};

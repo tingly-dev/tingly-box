@@ -18,7 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stage"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
-	"github.com/tingly-dev/tingly-box/internal/recording/recordingtest"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/recordingtest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

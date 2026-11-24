@@ -1,3 +1,5 @@
+import { serverNow } from './serverClock';
+
 /** 12345 → "12.3k", 1500000 → "1.5M". Token counts are shown as concrete values. */
 export function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${trim(n / 1_000_000)}M`;
@@ -28,7 +30,7 @@ function relativeFormat(locale: string, style: 'long' | 'narrow' = 'long'): Intl
 /** Relative time ("3 min ago") using the browser's locale; `short` is the narrow form ("3m ago") for tight rows. */
 export function timeAgo(iso: string | undefined, locale: string, short = false): string {
     if (!iso) return '';
-    const diff = (new Date(iso).getTime() - Date.now()) / 1000;
+    const diff = (new Date(iso).getTime() - serverNow()) / 1000;
     const rtf = relativeFormat(locale, short ? 'narrow' : 'long');
     const abs = Math.abs(diff);
     if (abs < 60) return rtf.format(Math.round(diff), 'second');

@@ -31,6 +31,7 @@ export async function runProbe(body: ProbeRequest): Promise<ProbeResult> {
             error: {
                 message: response?.error?.message || response?.error || 'Probe failed',
                 type: response?.error?.type || 'client_error',
+                response_body: response?.error?.response_body,
             },
         };
     }
@@ -56,5 +57,4 @@ export async function buildProbeCurl(body: ProbeRequest): Promise<ProbeCurlResul
     return response as ProbeCurlResult;
 }
 
-// formatLatency renders a millisecond latency compactly: "850ms" / "1.8s".
-export const formatLatency = (ms: number): string => (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
+export { formatLatency } from '@/utils/formatLatency';

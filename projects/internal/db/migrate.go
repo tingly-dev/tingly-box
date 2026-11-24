@@ -22,6 +22,10 @@ import (
 // migrationMarker is the settings key set once the move has been committed.
 const migrationMarker = "migrations.unified_threads"
 
+// pinnedSettingsMarker is the settings key set once every existing thread
+// carries its own profile, model, effort and permission mode.
+const pinnedSettingsMarker = "migrations.thread_settings_pinned"
+
 // CanonicalPath is a folder path in the one spelling Projects stores: cleaned
 // (no trailing slash, no "." or ".."), with symlinks resolved when the path
 // exists.
@@ -135,7 +139,7 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 			return fmt.Errorf("rename threads.worktree: %w", err)
 		}
 	}
-	if err = tx.AutoMigrate(&Project{}, &Thread{}, &ThreadEvent{}, &Conversation{}, &Message{}, &Setting{}, &ChannelBinding{}); err != nil {
+	if err = tx.AutoMigrate(&Project{}, &Thread{}, &ThreadEvent{}, &Conversation{}, &Message{}, &Setting{}, &ChannelBinding{}, &CoordinatorInput{}, &CoordinatorSettingsDelivery{}); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	// Columns added to old rows are NULL, not "".
@@ -143,10 +147,22 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 		"UPDATE projects SET type = 'project' WHERE type IS NULL OR type = ''",
 		"UPDATE projects SET path = '' WHERE path IS NULL",
 		"UPDATE projects SET main_thread_id = '' WHERE main_thread_id IS NULL",
+		fmt.Sprintf("UPDATE projects SET max_running_threads = %d WHERE type = 'project' AND (max_running_threads IS NULL OR max_running_threads < 1)", DefaultMaxRunningThreads),
 		"UPDATE threads SET parent_id = '' WHERE parent_id IS NULL",
+		// A project from before the GitHub settings keeps what it had: the tools
+		// that publish ran without a card unless it asked for one.
+		`UPDATE projects SET github_auto = '["publish"]' WHERE github_auto IS NULL AND COALESCE(thread_git_hub_access, '') <> 'ask'`,
+		"UPDATE projects SET github_auto = '[]' WHERE github_auto IS NULL",
+		"UPDATE threads SET reported_model = '' WHERE reported_model IS NULL",
+		"UPDATE threads SET effort_override = '' WHERE effort_override IS NULL",
 		"UPDATE threads SET agent = '' WHERE agent IS NULL",
 		"UPDATE threads SET seq = 0 WHERE seq IS NULL",
 		"UPDATE threads SET cwd = '' WHERE cwd IS NULL",
+		"UPDATE threads SET cache_read_tokens = 0 WHERE cache_read_tokens IS NULL",
+		"UPDATE threads SET cache_write_tokens = 0 WHERE cache_write_tokens IS NULL",
+		"UPDATE threads SET context_tokens = 0 WHERE context_tokens IS NULL",
+		"UPDATE threads SET context_window = 0 WHERE context_window IS NULL",
+		"UPDATE threads SET last_turn_ms = 0 WHERE last_turn_ms IS NULL",
 		"UPDATE threads SET model_override = '' WHERE model_override IS NULL",
 		"UPDATE thread_events SET source = '' WHERE source IS NULL",
 		"UPDATE thread_events SET source_ref = '' WHERE source_ref IS NULL",
@@ -154,6 +170,10 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 		"UPDATE thread_events SET source_chat_id = '' WHERE source_chat_id IS NULL",
 		"UPDATE thread_events SET parent = '' WHERE parent IS NULL",
 		"UPDATE channel_bindings SET new_thread = false WHERE new_thread IS NULL",
+		`UPDATE channel_bindings SET target_project_id = COALESCE(CASE WHEN COALESCE(folder, '') <> '' THEN
+			(SELECT id FROM projects WHERE type = 'folder' AND path = channel_bindings.folder AND archived_at IS NULL LIMIT 1)
+			ELSE (SELECT project_id FROM threads WHERE id = channel_bindings.thread_id) END, '') WHERE target_project_id IS NULL`,
+		"UPDATE channel_bindings SET target_thread_id = '' WHERE target_thread_id IS NULL",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_path ON projects(path) WHERE path <> ''",
 	} {
 		if err = tx.Exec(q).Error; err != nil {
@@ -172,11 +192,47 @@ func migrate(g *gorm.DB, o openOptions) (err error) {
 			return err
 		}
 	}
+	if err = pinThreadSettings(tx); err != nil {
+		return fmt.Errorf("pin thread settings: %w", err)
+	}
 	// Events written before updated_at existed (or moved in above) were last written when created.
 	if err = tx.Exec("UPDATE thread_events SET updated_at = created_at WHERE updated_at IS NULL").Error; err != nil {
 		return err
 	}
 	return tx.Commit().Error
+}
+
+// pinThreadSettings is the one-shot move from threads that follow their
+// project's thread defaults to threads that own their settings (see Thread.
+// ProfileOverride). A thread that followed gets the project's value as it is
+// now: the best that can be known, since what it had when it started was never
+// stored. Later changes to the defaults then stop reaching it. A thread that
+// already pinned a field, such as a profile or a model chosen in its own panel,
+// keeps it. An empty model or effort was indistinguishable from "follow", so it
+// takes the project's value too.
+func pinThreadSettings(tx *gorm.DB) error {
+	var n int64
+	tx.Raw("SELECT COUNT(*) FROM settings WHERE key = ?", pinnedSettingsMarker).Scan(&n)
+	if n > 0 {
+		return nil
+	}
+	workers := "agent <> '" + AgentLLM + "' AND project_id IN (SELECT id FROM projects WHERE type = '" + ProjectProject + "')"
+	own := func(col string) string {
+		return "COALESCE((SELECT " + col + " FROM projects WHERE projects.id = threads.project_id), '')"
+	}
+	for _, q := range []string{
+		// The model goes before the profile: a thread with a profile of its own
+		// chose its model (or the profile's default) with it.
+		"UPDATE threads SET model_override = " + own("thread_model") + " WHERE " + workers + " AND profile_override IS NULL AND COALESCE(model_override, '') = ''",
+		"UPDATE threads SET effort_override = " + own("thread_effort") + " WHERE " + workers + " AND COALESCE(effort_override, '') = ''",
+		"UPDATE threads SET profile_override = " + own("thread_profile") + " WHERE " + workers + " AND profile_override IS NULL",
+		"UPDATE threads SET permission_mode = COALESCE(NULLIF((SELECT thread_permission_mode FROM projects WHERE projects.id = threads.project_id), ''), '" + DefaultThreadPermissionMode + "') WHERE agent <> '" + AgentLLM + "' AND COALESCE(permission_mode, '') = ''",
+	} {
+		if err := tx.Exec(q).Error; err != nil {
+			return err
+		}
+	}
+	return tx.Exec("INSERT INTO settings (key, value, updated_at) VALUES (?, '1', ?)", pinnedSettingsMarker, time.Now()).Error
 }
 
 func count(tx *gorm.DB, query string, args ...any) int64 {

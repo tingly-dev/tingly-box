@@ -32,6 +32,7 @@ import {
     Baidu,
     Tencent,
     WorkBuddy,
+    Qoder,
     ZCode,
     IflytekCloud,
     Baichuan,
@@ -54,11 +55,14 @@ import {
     Vercel,
     Cloudflare,
     TypeSafe,
+    Runcrate,
+    CloudGPU,
     LlamaCpp,
     Omlx,
 } from './BrandIcons';
 import type {SxProps, Theme} from '@mui/material';
 import {Box} from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface BrandIconProps {
     size?: number;
@@ -90,6 +94,7 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'tinglybox': TinglyBox,
     'zcode': ZCode,
     'workbuddy': WorkBuddy,
+    'qoder': Qoder,
 
     // Local inference servers
     'ollama': Ollama,
@@ -143,6 +148,8 @@ const iconMap: Record<string, React.FC<BrandIconProps>> = {
     'vercel-ai-gateway': Vercel,
     'cloudflare-ai-gateway': Cloudflare,
     'typesafe-ai': TypeSafe,
+    'runcrate-ai': Runcrate,
+    'cloudgpu-app': CloudGPU,
     'claude_code': ClaudeCode,
     'claude-code': ClaudeCode,
     'kimi_code': Kimi,
@@ -212,7 +219,7 @@ const FallbackIcon: React.FC<BrandIconProps> = ({size = 20, sx, style}) => {
                 justifyContent: 'center',
                 flexShrink: 0,
                 bgcolor: 'action.hover',
-                borderRadius: 1,
+                borderRadius: radius.row,
                 ...sx,
             }}
             style={style}

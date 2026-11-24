@@ -47,7 +47,11 @@ func Open(path string, opts ...Option) (*Store, error) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return nil, fmt.Errorf("create data dir: %w", err)
 		}
-		path += "?_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL"
+		// _txlock=immediate: a transaction that reads and then writes cannot
+		// be upgraded after another writer committed, and SQLite fails it at
+		// once ("database is locked") without consulting the busy timeout.
+		// Beginning as a writer makes it wait instead (busy_test.go).
+		path += "?_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate"
 	}
 	g, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {

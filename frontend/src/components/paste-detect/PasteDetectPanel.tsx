@@ -20,7 +20,8 @@ import { VpnKey as VpnKeyIcon } from '@/components/icons';
 import {extractOnboardingCandidates, type OnboardingTokenCandidate} from '@/services/onboardingExtract';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';
 import {emptyForm} from '@/hooks/useProviderDialog';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Shell-agnostic core of the "Paste & detect" experience: a paste textarea, a
 // Detect button backed by the backend regex extractor, and the URLs/tokens
@@ -176,7 +177,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                                                     key={u}
                                                     selected={selectedURL === u}
                                                     onClick={() => setSelectedURL(prev => prev === u ? null : u)}
-                                                    sx={{borderRadius: 1, mb: 0.5}}
+                                                    sx={{borderRadius: radius.row, mb: 0.5}}
                                                 >
                                                     <ListItemText
                                                         primary={
@@ -223,7 +224,7 @@ const PasteDetectPanel: React.FC<PasteDetectPanelProps> = ({onPick, onManualFill
                                                     key={tok.value}
                                                     selected={selectedToken === tok.value}
                                                     onClick={() => setSelectedToken(prev => prev === tok.value ? null : tok.value)}
-                                                    sx={{borderRadius: 1, mb: 0.5}}
+                                                    sx={{borderRadius: radius.row, mb: 0.5}}
                                                 >
                                                     <ListItemText
                                                         primary={

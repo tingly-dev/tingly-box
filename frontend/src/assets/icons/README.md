@@ -10,6 +10,8 @@ The following collected assets fill gaps in that package. Brand names and artwor
 | `sglang.svg` | [Upstream asset](https://raw.githubusercontent.com/sgl-project/sglang/7a1f7fc5049d4fd5b3adc88fe48466fccbe676d8/assets/logo_square.svg) | Apache-2.0 |
 | `lemonade.svg` | [Upstream asset](https://raw.githubusercontent.com/lemonade-sdk/lemonade/4585c591246d35be4e8c63c93913cf63bc5a5eb8/src/app/assets/logo.svg) | Apache-2.0 |
 | `typesafe.png` | [Official site favicon](https://framerusercontent.com/images/aNFzSFxM4fjICmnibw7npfZjcQ.png), linked by [typesafe.ai](https://typesafe.ai/) | TypeSafe AI brand artwork |
+| `runcrate.png` | [Official site touch icon](https://www.runcrate.ai/apple-touch-icon.png), linked by [runcrate.ai](https://www.runcrate.ai/) | Runcrate brand artwork |
+| `cloudgpu.svg` | [Official site icon](https://cloudgpu.app/icon.svg), linked by [cloudgpu.app](https://cloudgpu.app/) (explanatory source comment removed) | CloudGPU brand artwork |
 | `amd.svg` | [Upstream asset](https://raw.githubusercontent.com/simple-icons/simple-icons/521c96fd04b0ea93034db8715eda5a4de27a58bb/icons/amd.svg) | CC0-1.0 (Simple Icons) |
 | `llamacpp.svg` | [Official llama.cpp icon](https://raw.githubusercontent.com/ggml-org/llama.cpp/2cfef4d117d67ab1dec002915b48a15d11ee1973/media/llama1-icon-transparent.svg) | MIT |
 | `omlx.svg`, `omlx-dark.svg` | [Official light](https://raw.githubusercontent.com/jundot/omlx/4cee64cad10c83a783200700e3d49e1a244fd7c0/docs/images/icon-rounded-light.svg) / [dark](https://raw.githubusercontent.com/jundot/omlx/4cee64cad10c83a783200700e3d49e1a244fd7c0/docs/images/icon-rounded-dark.svg) | Apache-2.0 |

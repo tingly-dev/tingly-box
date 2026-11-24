@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { isEmptyLimits, type Limits } from './limits/LimitsEditor';
 import { api } from '@/services/api';
 import type { Provider, ProviderModelsDataByUuid, ProviderModelData } from '@/types/provider';
 import type { ConfigRecord, FlagSpec, Rule, RuleFlags } from '@/components/RoutingGraphTypes';
@@ -62,6 +63,11 @@ export interface RuleCardProps {
     allowDeleteRule?: boolean;
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
+    /** Drag handle (from the sortable list); shown first in the header actions. */
+    dragHandle?: React.ReactNode;
+    /** Offers "Pin to top" in the "⋯" menu; `canPin` is false for the first rule. */
+    onPinRule?: (ruleUuid: string) => void;
+    canPin?: boolean;
     onToggleExpanded?: () => void;
     onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
     /** Increment to trigger this rule's quick probe externally ("test all"). */
@@ -84,6 +90,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     allowDeleteRule = false,
     onRuleDelete,
     allowToggleRule = true,
+    dragHandle,
+    onPinRule,
+    canPin = false,
     onToggleExpanded,
     onContext1MToggle,
     quickProbeSignal,
@@ -216,6 +225,18 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         [configRecord, updateField, setConfigRecord]
     );
 
+    // Handler: Save a service's concurrency/usage limits (its share of the account).
+    const handleProviderLimitsChange = useCallback(
+        async (serviceUuid: string, limits: Limits) => {
+            if (!configRecord) return;
+            const updated = configRecord.providers.map((p) =>
+                p.uuid === serviceUuid ? { ...p, limits: isEmptyLimits(limits) ? undefined : limits } : p,
+            );
+            await updateField(configRecord, setConfigRecord, 'providers', updated);
+        },
+        [configRecord, updateField, setConfigRecord]
+    );
+
     // Adapter: Convert ruleUuid to ruleIndex for smart routing handlers
     const handleAddServiceToSmartRuleByUuid = useCallback(
         (ruleUuid: string) => {
@@ -309,6 +330,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // RoutingGraph and SmartRoutingGraph
     const extraActions = (
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+            {dragHandle}
             {rule.uuid && (
                 <QuickProbeButton
                     ruleUuid={rule.uuid}
@@ -332,6 +354,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onEditFlags={handleOpenFlagEditor}
                 onOpenPlugins={() => openCatalog()}
                 pluginsCount={enabledPlugins.length}
+                pin={onPinRule ? { onPin: () => onPinRule(rule.uuid), canPin } : undefined}
                 smartCondition={{
                     state: (configRecord.smartRouting?.length ?? 0) === 0 ? 'none' : configRecord.smartEnabled ? 'on' : 'off',
                     onToggle: () => ((configRecord.smartRouting?.length ?? 0) > 0 && !configRecord.smartEnabled) || configRecord.smartEnabled
@@ -364,6 +387,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onServiceNodeClick={handleServiceNodeClick}
                 onEditProvider={editProvider}
                 onTierChange={handleProviderTierChange}
+                onLimitsChange={handleProviderLimitsChange}
                 onDeleteService={(serviceUuid) => handleDeleteProvider(configRecord.uuid, serviceUuid)}
                 onAddService={handleAddServiceButtonClick}
                 onAddSmartRule={smartHandlers.handleAddSmartRule}

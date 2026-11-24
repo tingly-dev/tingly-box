@@ -2,16 +2,14 @@ import { useState } from 'react';
 import { Box, Button, Stack, Tooltip } from '@mui/material';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import ChoiceToggle from '@/components/ChoiceToggle';
-import ConfigRow from '@/components/ConfigRow';
-import PageHeader from '@/components/PageHeader';
-import PageLayout from '@/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import type { EnvironmentMode } from '@/components/EnvironmentModeSwitcher';
 import { transformUrlByMode } from '@/utils/tokenUtils';
-import { type ClientConfigTool, useClientConfigStatus } from '@/hooks/useClientConfigStatus';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { type ClientConfigTool, useClientConfigStatus } from '@/pages/scenario/hooks/useClientConfigStatus';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 import { useContext1MToggle } from '@/pages/scenario/hooks/useContext1MToggle';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { useSlotRouting } from '@/pages/scenario/hooks/useSlotRouting';
@@ -25,6 +23,7 @@ import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader, agentPageHeaderS
 import PluginFeatures from '@/components/PluginFeatures';
 import { usePluginsActive } from '@/hooks/usePluginsActive';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
+import ClaudeCodeUseProfile from './components/ClaudeCodeUseProfile';
 import TemplatePage from './components/TemplatePage.tsx';
 
 /**
@@ -89,6 +88,8 @@ export interface AgentPageDescriptor {
     /** Product name; not translated. */
     title: string;
     tooltipKey?: string;
+    /** Extra control next to the title (e.g. Claude Code's "Duplicate as profile"). */
+    titleAddon?: React.ReactNode;
     connection?: {
         /** Title of the connection rows when it differs from `title`. */
         titleKey?: string;
@@ -103,14 +104,22 @@ export interface AgentPageDescriptor {
     setup: AgentSetup;
     install?: AgentInstall;
     headerLinks?: AgentHeaderLink[];
+    /** Direct model catalogs expose connection info without gateway rules or plugins. */
+    directModels?: boolean;
     /** Title of the routing rules card when it is not the default. */
     rulesTitleKey?: string;
+	/** Optional scenario-specific content shown immediately above routing rules. */
+	renderBeforeRules?: (slot: AgentPageSlot) => React.ReactNode;
+    /** Optional scenario-specific content shown immediately below routing rules. */
+    renderAfterRules?: (slot: AgentPageSlot) => React.ReactNode;
     /**
      * Fixed model slots (Claude Code): a Unified / Separate switch in the
      * header decides which rules are shown; rules can't be added, removed or
      * switched off, since each one backs a slot.
      */
     slotRouting?: { unifiedRuleUuid: string };
+    /** Offer the "Use profile" row on the default config (Claude Code's main scenario only). */
+    useProfileRow?: boolean;
 }
 
 /** What an agent's setup dialog gets from the page. */
@@ -138,17 +147,6 @@ export interface AgentPageSlot {
     isApplyLoading: boolean;
 }
 
-/** One more row of the connection list: a ConfigRow whose content is a control, not a value. */
-const ToggleRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-    <Box sx={{ py: 0.5 }}>
-        <ConfigRow
-            activeTab="row"
-            onTabChange={() => undefined}
-            tabs={[{ key: 'row', label, content: <Box sx={{ display: 'flex', alignItems: 'center' }}>{children}</Box> }]}
-        />
-    </Box>
-);
-
 const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) => {
     const { t } = useTranslation();
     const { scenario, setup, install, headerLinks, slotRouting, connection } = agent;
@@ -156,7 +154,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     // Rules: the scenario's own, or — with slot routing — the set for the current mode.
     const slots = useSlotRouting(scenario, slotRouting?.unifiedRuleUuid ?? '', !!slotRouting);
     const slotList = slotRouting ? slots.slots : undefined;
-    const internal = useScenarioPageInternal(scenario, { skipRules: !!slotRouting });
+    const internal = useScenarioPageInternal(scenario, { skipRules: !!slotRouting || !!agent.directModels });
     const { notification, showNotification, copyToClipboard, baseUrl, loadRules } = internal;
     const rules = slotRouting ? slots.rules : internal.rules;
     const isLoading = internal.isLoading || (!!slotRouting && slots.loading);
@@ -250,7 +248,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
     );
     const headerActions = (
         <>
-            <AgentLogButton onOpenLog={() => setLogOpen(true)} />
+            {!agent.directModels && <AgentLogButton onOpenLog={() => setLogOpen(true)} />}
             {install && (
                 <Button onClick={() => setGuideOpen(true)} variant="outlined" size="small">
                     {t('agentSetup.quickStart')}
@@ -275,9 +273,10 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         <ScenarioCardHeader
                             title={agent.title}
                             tooltipKey={agent.tooltipKey}
+                            addon={agent.titleAddon}
                         />
                     }
-                    meta={(
+                    meta={!agent.directModels && (
                         <AgentStatusRow
                             observation={observation.data}
                             connected={connected}
@@ -298,7 +297,7 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     url={accessUrl}
                     foldedExtras={(
                         <>
-                            {pluginsActive && pluginsRow}
+                            {!agent.directModels && pluginsActive && pluginsRow}
                         </>
                     )}
                 >
@@ -327,14 +326,18 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                         {/* Slots and plugins live in the connection card: they are
                             per-connection settings, set alongside the URL. Rows
                             use pt:1 so the gaps match the card's edge rhythm. */}
+                        {slotRouting && agent.useProfileRow && (
+                            <ClaudeCodeUseProfile onChanged={slots.reload} />
+                        )}
                         {slotRouting && (
                             <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
                         )}
-                        <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
+                        {!agent.directModels && <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>}
                     </Box>
                 </AgentAccessSection>
 
-                <TemplatePage
+                {agent.renderBeforeRules?.(slot)}
+                {!agent.directModels && <TemplatePage
                     scenario={scenario}
                     // One copy of the providers too: the rule toolbar's
                     // Connect AI and Quick Start's both refresh it.
@@ -344,7 +347,8 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                     // and the setup dialog (slot.rules) read the same state.
                     rules={rules}
                     {...(slotRouting
-                        // Each slot rule backs a model slot: it can't be added, removed or switched off.
+                        // Each slot rule backs a model slot: it can't be added, removed,
+                        // switched off or reordered — the slot precedence is product-defined.
                         ? { onRulesChange: slots.setRules, allowAddRule: false, allowToggleRule: false, allowDeleteRule: false }
                         : {
                             loadRules,
@@ -352,13 +356,15 @@ const AgentPageContent: React.FC<{ agent: AgentPageDescriptor }> = ({ agent }) =
                             onRuleDelete: internal.handleRuleDelete,
                             newlyCreatedRuleUuids: internal.newlyCreatedRuleUuids,
                             allowDeleteRule: true,
+                            allowReorder: true,
                         })}
                     {...(agent.rulesTitleKey ? { title: t(agent.rulesTitleKey) } : {})}
                     collapsible={true}
                     hideTroubleshoot
                     {...(agent.context1M ? { onContext1MToggle: handleContext1MToggle } : {})}
-                />
+                />}
 
+                {agent.renderAfterRules?.(slot)}
                 <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
                 {setup.kind !== 'none' && setup.renderDialog(slot)}
                 <EntryGuideDialog

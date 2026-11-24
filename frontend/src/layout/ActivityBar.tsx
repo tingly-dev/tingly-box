@@ -16,6 +16,7 @@ import {
     activityExpandHandleSx,
     activityIconsScrollSx,
     activityItemSx,
+    navRowSelectedSx,
     activityLogoButtonSx,
     activityLogoCellSx,
     activityRailSx,
@@ -25,12 +26,13 @@ import { useSidebarCollapsed } from './useSidebarCollapsed';
 import type { ActivityItem } from './types';
 import { PreferencesMenu } from './PreferencesMenu';
 import { QuotaMenu } from './QuotaMenu';
-import { CoachMark } from '@/components/CoachMark';
+import { CoachMark } from '@tingly/ui';
 import { useOneTimeTip } from '@/hooks/useOneTimeTip';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // Power-ups moved off the /agent page into the user menu's submenu; a
 // one-time callout on the user button says where they went.
+export const WORKSPACE_TIP_KEY = 'layout.workspaceTip.dismissed';
 export const POWER_UPS_TIP_KEY = 'layout.powerUpsTip.dismissed';
 
 interface ActivityBarProps {
@@ -58,6 +60,9 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
     const isHelpActive = location.pathname === '/help';
     const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
     const { dismissed: powerUpsTipDismissed, dismiss: dismissPowerUpsTip } = useOneTimeTip(POWER_UPS_TIP_KEY);
+    const { dismissed: workspaceTipDismissed, dismiss: dismissWorkspaceTip } = useOneTimeTip(WORKSPACE_TIP_KEY);
+    const [workspaceEl, setWorkspaceEl] = useState<HTMLElement | null>(null);
+    const workspaceRef = useCallback((el: HTMLElement | null) => { if (el && el.offsetParent !== null) setWorkspaceEl(el); }, []);
     // The rail renders in both the desktop nav and the (kept-mounted) mobile
     // drawer; only the copy on screen anchors the callout.
     const [userButtonEl, setUserButtonEl] = useState<HTMLElement | null>(null);
@@ -97,7 +102,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             component="img"
                             src="/assets/icon.svg"
                             alt="Tingly-Box"
-                            sx={{ width: 36, height: 36, borderRadius: 8 }}
+                            sx={{ width: 36, height: 36, borderRadius: '50%' }}
                         />
                     </Box>
                 </Tooltip>
@@ -116,18 +121,13 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     return (
                         <ListItemButton
                             key={item.key}
+                            ref={item.key === 'projects' ? workspaceRef : undefined}
                             component={targetPath ? RouterLink : 'div'}
                             to={targetPath}
-                            onClick={() => onActivityClick(item)}
+                            onClick={() => { if (item.key === 'projects') dismissWorkspaceTip(); onActivityClick(item); }}
                             sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isActiveItem ? 'primary.main' : 'action.hover',
-                                    color: isActiveItem ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isActiveItem && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                }),
+                                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                ...(isActiveItem && navRowSelectedSx),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
@@ -155,12 +155,13 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                                     whiteSpace: 'nowrap',
                                 }}
                             >
-                                {item.label}
+                                {item.railLabel ?? item.label}
                             </Typography>
                         </ListItemButton>
                     );
                 })}
 
+                <CoachMark open={!workspaceTipDismissed && powerUpsTipDismissed && !tipsBlocked && !!workspaceEl?.isConnected} anchorEl={workspaceEl} title={t('layout.workspaceTip.title', { defaultValue: 'Meet Workspace' })} text={t('layout.workspaceTip.text', { defaultValue: 'Organize projects, work in directories and connect IM chats in one place.' })} gotItLabel={t('layout.coachMarks.gotIt')} onDismiss={dismissWorkspaceTip} />
                 <Divider sx={{ mx: 2, my: 1 }} />
 
                 {/* Help — the onboarding front door now (replaces the old
@@ -175,14 +176,8 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                             to="/help"
                             onClick={onStandaloneNavigate}
                             sx={activityItemSx({
-                                '&:hover': {
-                                    bgcolor: isHelpActive ? 'primary.main' : 'action.hover',
-                                    color: isHelpActive ? 'primary.contrastText' : 'primary.main',
-                                },
-                                ...(isHelpActive && {
-                                    bgcolor: 'primary.main',
-                                    color: 'primary.contrastText',
-                                }),
+                                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                ...(isHelpActive && navRowSelectedSx),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
@@ -263,8 +258,6 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
             <Box
                 sx={{
                     py: 0.5,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -278,19 +271,21 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                 <Tooltip title={t('layout.activityBar.preferences')} placement="right" arrow>
                     <ListItemButton
                         ref={userButtonRef}
+                        data-settings-anchor
                         onClick={(e) => {
                             setPreferencesAnchorEl(e.currentTarget);
                             dismissPowerUpsTip();
                         }}
                         aria-label={t('layout.activityBar.preferences')}
-                        sx={activityBottomItemSx({
-                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                        sx={activityItemSx({
+                            width: '100%',
+                            '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
                             // On a System page the gear is the lit rail item.
-                            ...(activeActivity === 'system' && { color: 'primary.main', bgcolor: 'action.selected' }),
+                            ...(activeActivity === 'system' && navRowSelectedSx),
                         })}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <IconSettings sx={{ fontSize: 20 }} />
+                            <IconSettings sx={{ fontSize: 22 }} />
                         </ListItemIcon>
                     </ListItemButton>
                 </Tooltip>
@@ -301,6 +296,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
                     align="bottom"
                     title={t('layout.coachMarks.powerUps.title')}
                     text={t('layout.coachMarks.powerUps.text')}
+                    gotItLabel={t('layout.coachMarks.gotIt')}
                     onDismiss={dismissPowerUpsTip}
                 />
             </Box>

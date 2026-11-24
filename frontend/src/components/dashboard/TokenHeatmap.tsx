@@ -3,9 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNumber } from './chartStyles';
 import { type AppLanguage, resolveLanguage } from '@/i18n';
-import { fontSizes } from '@/theme/fonts';
-import { heatmapScale } from '@/theme/dataviz';
-import { elevation } from '@/theme/elevation';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { heatmapCellLine, heatmapEmpty, heatmapScale } from '@/theme/dataviz';
+import { overlay } from '@tingly/ui/theme/overlay';
+import { elevation } from '@tingly/ui/theme/elevation';
+import { radius } from '@tingly/ui/theme/radius';
 
 // BCP-47 tags for date formatting, keyed by the languages the UI ships.
 const HEATMAP_LOCALES: Record<AppLanguage, string> = {
@@ -22,11 +24,11 @@ const HEATMAP_COLORS = heatmapScale; // level 0 (none) .. 4 (very high)
 
 // Theme-aware background for the "no activity" cells / legend swatch.
 const emptyCellBg = (theme: { palette: { mode: string } }) =>
-    theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#ebedf0';
+    heatmapEmpty[theme.palette.mode === 'dark' ? 'dark' : 'light'];
 
 // Faint hairline so individual cells stay defined against the card background.
 const cellBorder = (theme: { palette: { mode: string } }) =>
-    `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(27,31,35,0.06)'}`;
+    `1px solid ${heatmapCellLine[theme.palette.mode === 'dark' ? 'dark' : 'light']}`;
 
 export interface DailyUsage {
     date: string;           // YYYY-MM-DD format
@@ -141,8 +143,8 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // One inline stat in the footer strip: bold value followed by a muted label.
 const StatInline = ({ value, label }: { value: string; label: string }) => (
     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, whiteSpace: 'nowrap' }}>
-        <Typography sx={{ fontSize: fontSizes.md, fontWeight: 700 }}>{value}</Typography>
-        <Typography sx={{ fontSize: fontSizes.xs, color: 'text.secondary' }}>{label}</Typography>
+        <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600 }}>{value}</Typography>
+        <Typography sx={{ fontSize: fontSizes.micro, color: 'text.secondary' }}>{label}</Typography>
     </Box>
 );
 
@@ -279,7 +281,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                 <Typography
                                     key={day}
                                     sx={{
-                                        fontSize: '10px',
+                                        fontSize: fontSizes.micro,
                                         color: 'text.secondary',
                                         pr: 1,
                                         gridColumn: 1,
@@ -301,7 +303,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                 <Typography
                                     key={`month-${weekIndex}`}
                                     sx={{
-                                        fontSize: '10px',
+                                        fontSize: fontSizes.micro,
                                         color: 'text.secondary',
                                         gridColumn: weekIndex + 2,
                                         gridRow: 1,
@@ -343,7 +345,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     px: 2,
                                                     py: 1.5,
                                                     bgcolor: 'grey.900',
-                                                    borderRadius: 1.5,
+                                                    borderRadius: radius.card,
                                                     boxShadow: elevation.popover,
                                                     border: '1px solid',
                                                     borderColor: 'grey.700',
@@ -352,10 +354,10 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                             >
                                                 <Typography
                                                     sx={{
-                                                        fontSize: '13px',
+                                                        fontSize: fontSizes.md,
                                                         fontWeight: 600,
                                                         mb: 1,
-                                                        color: '#ffffff',
+                                                        color: 'common.white',
                                                     }}
                                                 >
                                                     {new Date(`${day}T00:00:00`).toLocaleDateString(heatmapLocale, {
@@ -367,9 +369,9 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 </Typography>
                                                 <Typography
                                                     sx={{
-                                                        fontSize: '13px',
+                                                        fontSize: fontSizes.md,
                                                         fontWeight: 600,
-                                                        color: '#86efac',
+                                                        color: overlay.onDark.positive,
                                                         mb: 0.5,
                                                     }}
                                                 >
@@ -378,8 +380,8 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 {dayData && (dayData.inputTokens > 0 || dayData.outputTokens > 0 || (dayData.cacheTokens ?? 0) > 0) && (
                                                     <Typography
                                                         sx={{
-                                                            fontSize: '12px',
-                                                            color: 'rgba(255, 255, 255, 0.85)',
+                                                            fontSize: fontSizes.sm,
+                                                            color: overlay.onDark.text,
                                                             mt: 0.5,
                                                         }}
                                                     >
@@ -389,13 +391,13 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                     </Typography>
                                                 )}
                                                 {dayData?.breakdown && dayData.breakdown.length > 0 && (
-                                                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'rgba(255,255,255,0.1)' }}>
+                                                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: overlay.onDark.lineSoft }}>
                                                         {dayData.breakdown.slice(0, 3).map((model) => (
                                                             <Typography
                                                                 key={`${day}-${model.name}`}
                                                                 sx={{
-                                                                    fontSize: '12px',
-                                                                    color: 'rgba(255, 255, 255, 0.75)',
+                                                                    fontSize: fontSizes.sm,
+                                                                    color: overlay.onDark.textSoft,
                                                                 }}
                                                             >
                                                                 {model.name}: {formatTokenTotal(model.tokens)}
@@ -428,7 +430,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                                 height: cellSize,
                                                 backgroundColor: colorIndex === 0 ? emptyCellBg : fill,
                                                 border: cellBorder,
-                                                borderRadius: '3px',
+                                                borderRadius: radius.mark,
                                                 cursor: 'default',
                                                 transition: 'opacity 0.1s',
                                                 // Highlight with outline/opacity only. A hover
@@ -487,7 +489,7 @@ export const TokenHeatmap = ({ data }: TokenHeatmapProps) => {
                                         height: 10,
                                         backgroundColor: index === 0 ? emptyCellBg : color,
                                         border: cellBorder,
-                                        borderRadius: '2px',
+                                        borderRadius: radius.mark,
                                     }}
                                 />
                             ))}

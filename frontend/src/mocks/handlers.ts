@@ -92,13 +92,13 @@ const MOCK_TRACE_BASE = Date.now() - 6000
 // offsets in ms from the trace start, converted at request time.
 const mockTraceSpans: Record<string, Array<{ span_id: string; parent_span_id?: string; name: string; kind: string; start: number; end: number; status_code: string; status_message?: string; attributes?: Record<string, string> }>> = {
     a1b2c3d4e5f60718293a4b5c6d7e8f90: [
-        { span_id: 'r000000000000001', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 2210, status_code: 'Unset', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic', 'gen_ai.usage.input_tokens': '1204', 'gen_ai.usage.output_tokens': '388', 'tingly.scenario': 'openai', 'http.response.status_code': '200' } },
+        { span_id: 'r000000000000001', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 2210, status_code: 'Unset', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.response.model': 'claude-sonnet-5', 'gen_ai.provider.name': 'Anthropic', 'http.request.method': 'POST', 'url.path': '/openai/v1/chat/completions', 'tingly.protocol.inbound': 'openai.chat', 'tingly.protocol.upstream': 'anthropic.messages', 'gen_ai.usage.input_tokens': '1204', 'gen_ai.usage.output_tokens': '388', 'tingly.scenario': 'openai', 'http.response.status_code': '200' } },
         { span_id: 's000000000000001', parent_span_id: 'r000000000000001', name: 'routing', kind: 'internal', start: 2, end: 14, status_code: 'Unset', attributes: { 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'tingly.lb.tactic': 'tier' } },
         { span_id: 'a000000000000001', parent_span_id: 'r000000000000001', name: 'failover.attempt', kind: 'internal', start: 40, end: 620, status_code: 'Error', status_message: 'upstream status 529', attributes: { 'tingly.failover.attempt': '1', 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'http.response.status_code': '529' } },
         { span_id: 'a000000000000002', parent_span_id: 'r000000000000001', name: 'failover.attempt', kind: 'internal', start: 640, end: 2180, status_code: 'Ok', attributes: { 'tingly.failover.attempt': '2', 'tingly.lb.service_id': 'anthropic-uuid/claude-sonnet-5' } },
     ],
     ffee1122334455667788990011223344: [
-        { span_id: 'r000000000000002', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 740, status_code: 'Error', status_message: 'Bad Gateway', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.provider.name': 'OpenAI', 'error.type': '502', 'http.response.status_code': '502', 'tingly.scenario': 'openai' } },
+        { span_id: 'r000000000000002', name: 'chat gpt-5.6-sol', kind: 'client', start: 0, end: 740, status_code: 'Error', status_message: 'Bad Gateway', attributes: { 'gen_ai.operation.name': 'chat', 'gen_ai.request.model': 'gpt-5.6-sol', 'gen_ai.provider.name': 'OpenAI', 'http.request.method': 'POST', 'url.path': '/openai/v1/chat/completions', 'tingly.protocol.inbound': 'openai.chat', 'tingly.protocol.upstream': 'openai.chat', 'error.type': '502', 'http.response.status_code': '502', 'tingly.scenario': 'openai' } },
         { span_id: 's000000000000002', parent_span_id: 'r000000000000002', name: 'routing', kind: 'internal', start: 1, end: 9, status_code: 'Unset', attributes: { 'tingly.lb.service_id': 'openai-uuid/gpt-5.6-sol', 'tingly.lb.tactic': 'random' } },
     ],
 }
@@ -184,7 +184,7 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-provider-tingly-box', name: 'Tingly',
             api_base: 'https://box.example.com/tingly/claude_code', api_style: 'anthropic', auth_type: 'api_key',
-            token: 'tingly-****wxyz', enabled: true, proxy_url: '',
+            token: 'tingly-****wxyz', enabled: true, proxy_url: 'http://proxy.example.com:8080',
             api_base_openai: null, api_base_anthropic: 'https://box.example.com/tingly/claude_code',
         },
         models: ['claude-sonnet-5', 'claude-opus-4-8'],
@@ -205,7 +205,7 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
         provider: {
             uuid: 'mock-provider-openai', name: 'OpenAI',
             api_base: 'https://api.openai.com/v1', api_style: 'openai', auth_type: 'api_key',
-            token: 'sk-****efgh', enabled: true, proxy_url: '',
+            token: 'sk-****efgh', enabled: true, proxy_url: 'http://127.0.0.1:7890',
             api_base_openai: 'https://api.openai.com/v1', api_base_anthropic: null,
         },
         models: [
@@ -264,6 +264,15 @@ const mockStandardProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
+            uuid: 'mock-provider-kimi', name: 'Kimi',
+            api_base: 'https://api.moonshot.cn/v1', api_style: 'openai', auth_type: 'api_key',
+            token: 'sk-kimi-****mnop', enabled: true, proxy_url: '',
+            api_base_openai: 'https://api.moonshot.cn/v1', api_base_anthropic: null,
+        },
+        models: ['kimi-k2.5', 'kimi-k2-turbo'],
+    },
+    {
+        provider: {
             uuid: 'mock-provider-openrouter', name: 'OpenRouter',
             api_base: 'https://openrouter.ai/api/v1', api_style: 'openai', auth_type: 'api_key',
             token: 'sk-or-****ijkl', enabled: false, proxy_url: '',
@@ -282,9 +291,9 @@ const mockOAuthExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISO
 const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     {
         provider: {
-            uuid: 'mock-oauth-claude-code', name: 'Claude Code OAuth',
+            uuid: 'mock-oauth-claude-code', name: 'Claude Code',
             api_base: 'https://api.anthropic.com', api_style: 'anthropic', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: 'http://127.0.0.1:7890',
             api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-claude-code-access-token',
@@ -299,7 +308,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-gemini', name: 'Gemini CLI OAuth',
+            uuid: 'mock-oauth-gemini', name: 'Gemini CLI',
             api_base: 'https://cloudcode-pa.googleapis.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -316,7 +325,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-antigravity', name: 'Antigravity OAuth',
+            uuid: 'mock-oauth-antigravity', name: 'Antigravity',
             api_base: 'https://cloudcode-pa.googleapis.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -333,7 +342,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-qwen-code', name: 'Qwen Code OAuth',
+            uuid: 'mock-oauth-qwen-code', name: 'Qwen Code',
             api_base: 'https://portal.qwen.ai/v1', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -350,9 +359,9 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-codex', name: 'Codex OAuth',
+            uuid: 'mock-oauth-codex', name: 'Codex',
             api_base: 'https://chatgpt.com/backend-api', api_style: 'openai', auth_type: 'oauth',
-            token: '', enabled: true, proxy_url: '',
+            token: '', enabled: true, proxy_url: 'socks5://127.0.0.1:1080',
             api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
                 access_token: 'mock-codex-access-token',
@@ -368,7 +377,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-kimi-code', name: 'Kimi Code OAuth',
+            uuid: 'mock-oauth-kimi-code', name: 'Kimi Code',
             api_base: 'https://api.kimi.com/coding/v1', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -386,7 +395,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-testing', name: 'Mock OAuth',
+            uuid: 'mock-oauth-testing', name: 'Mock',
             api_base: 'https://oauth-mock.mock.beeceptor.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: null, api_base_anthropic: null,
@@ -404,7 +413,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     {
         // Dual-endpoint OAuth issuer (ZCode): one URL per protocol.
         provider: {
-            uuid: 'mock-oauth-zcode', name: 'ZCode OAuth',
+            uuid: 'mock-oauth-zcode', name: 'ZCode',
             api_base: 'https://api.z.ai/api/anthropic', api_style: 'anthropic', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '',
             api_base_openai: 'https://api.z.ai/api/coding/paas/v4', api_base_anthropic: 'https://api.z.ai/api/anthropic',
@@ -421,7 +430,7 @@ const mockOAuthProviderCatalog: MockProviderCatalogEntry[] = [
     },
     {
         provider: {
-            uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy OAuth',
+            uuid: 'mock-oauth-workbuddy', name: 'WorkBuddy',
             api_base: 'https://copilot.tencent.com', api_style: 'openai', auth_type: 'oauth',
             token: '', enabled: true, proxy_url: '', api_base_openai: null, api_base_anthropic: null,
             oauth_detail: {
@@ -500,11 +509,16 @@ const mockVirtualProviders = [
     },
 ]
 
+// Account limits (routing limits) shown in the provider edit dialog.
+const mockProviderLimits: Record<string, object> = {
+    'mock-provider-anthropic': { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
+}
+
 const getMockProviders = () => [
     ...mockStandardProviderCatalog.map(({ provider }) => provider),
     ...mockOAuthProviderCatalog.map(({ provider }) => provider),
     ...mockVirtualProviders,
-]
+].map((provider) => (mockProviderLimits[provider.uuid] ? { ...provider, limits: mockProviderLimits[provider.uuid] } : provider))
 
 const getMockProviderModels = (uuid: string): string[] => {
     const standardProvider = mockStandardProviderCatalog.find(({ provider }) => provider.uuid === uuid)
@@ -676,7 +690,7 @@ const mockV1Rules: Record<string, any[]> = {
             flags: { claude_code_compat: true, clean_header: true, skip_usage: true, session_affinity: 3600 },
             // Default providers in 3 tiers: T0 primary, T1 secondary, T2 budget
             services: [
-                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-5', weight: 1, active: true, tier: 0, limits: { max_concurrent: 2, max_requests: 200, window_seconds: 3600, soft_percent: 75 } },
                 { uuid: 'svc-cc-t0-b', provider: 'mock-provider-openai', model: 'gpt-5.6-sol', weight: 1, active: true, tier: 0 },
                 { uuid: 'svc-cc-t1-a', provider: 'mock-provider-gemini', model: 'gemini-3.5-flash', weight: 1, active: true, tier: 1 },
                 { uuid: 'svc-cc-t2-a', provider: 'mock-provider-deepseek', model: 'deepseek-v4-flash', weight: 1, active: true, tier: 2 },
@@ -1141,6 +1155,8 @@ const mockQuotas: Record<string, any> = {
         expires_at: inOneHour,
         last_error: 'user does not have an active coding plan',
         last_error_at: now.toISOString(),
+        // Four automatic refreshes in a row were refused: the next one waits.
+        backoff: { failures: 4, next_attempt_at: new Date(now.getTime() + 2.5 * 60 * 60 * 1000).toISOString() },
         raw_response: {
             type: 'error',
             error: {
@@ -1161,6 +1177,34 @@ const mockQuotas: Record<string, any> = {
         expires_at: inOneHour,
         last_error: 'quota API not available - see the OpenAI dashboard',
         last_error_at: now.toISOString(),
+    },
+
+    // The key was refused after a good reading: the server keeps that reading
+    // (fetched_at is the success, not the failure) with the error beside it, and
+    // says when automatic refreshes resume. The cell dims the old figure.
+    'mock-provider-kimi': {
+        provider_uuid: 'mock-provider-kimi',
+        provider_name: 'Kimi',
+        provider_type: 'kimi_k2',
+        fetched_at: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
+        expires_at: inOneHour,
+        last_error: 'unexpected status code: 403: {"error":{"type":"permission_denied","message":"api key is disabled"}}',
+        last_error_at: new Date(now.getTime() - 4 * 60 * 1000).toISOString(),
+        backoff: { failures: 3, next_attempt_at: new Date(now.getTime() + 36 * 60 * 1000).toISOString() },
+        windows: [
+            {
+                key: 'weekly', type: 'weekly', kind: 'limit',
+                used: 1450, limit: 2000, used_percent: 72.5, available: 550,
+                resets_at: inSixDays, window_minutes: 10080, unit: 'requests',
+                label: 'Weekly requests',
+            },
+            {
+                key: 'five_hour', type: 'session', kind: 'limit',
+                used: 31, limit: 100, used_percent: 31, available: 69,
+                resets_at: inOneHour, window_minutes: 300, unit: 'requests',
+                label: '5h requests',
+            },
+        ],
     },
 
     // Free key: monthly spend has no cap, so there is no percentage to report.
@@ -1378,7 +1422,7 @@ const mockQuotas: Record<string, any> = {
     // It must not report 0% — that reads as untouched and safe to spend against.
     'mock-oauth-claude-code': {
         provider_uuid: 'mock-oauth-claude-code',
-        provider_name: 'Claude Code OAuth',
+        provider_name: 'Claude Code',
         provider_type: 'anthropic',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1443,7 +1487,7 @@ const mockQuotas: Record<string, any> = {
     // reported 17.5% here and hidden which model is actually running down.
     'mock-oauth-gemini': {
         provider_uuid: 'mock-oauth-gemini',
-        provider_name: 'Gemini CLI OAuth',
+        provider_name: 'Gemini CLI',
         provider_type: 'gemini',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1495,7 +1539,7 @@ const mockQuotas: Record<string, any> = {
     // a card removes it and refills the windows — see the use handler below.
     'mock-oauth-zcode': {
         provider_uuid: 'mock-oauth-zcode',
-        provider_name: 'ZCode OAuth',
+        provider_name: 'ZCode',
         provider_type: 'glm',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1538,7 +1582,7 @@ const mockQuotas: Record<string, any> = {
     // 100 credits and the entry goes away, like the real endpoint.
     'mock-oauth-workbuddy': {
         provider_uuid: 'mock-oauth-workbuddy',
-        provider_name: 'WorkBuddy OAuth',
+        provider_name: 'WorkBuddy',
         provider_type: 'workbuddy',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1569,7 +1613,7 @@ const mockQuotas: Record<string, any> = {
     // rescues nor gates the account.
     'mock-oauth-codex': {
         provider_uuid: 'mock-oauth-codex',
-        provider_name: 'Codex OAuth',
+        provider_name: 'Codex',
         provider_type: 'codex',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1783,7 +1827,7 @@ const mockQuotas: Record<string, any> = {
     // topping up, so it reports no recovery time and sorts after the allowances.
     'mock-oauth-kimi-code': {
         provider_uuid: 'mock-oauth-kimi-code',
-        provider_name: 'Kimi Code OAuth',
+        provider_name: 'Kimi Code',
         provider_type: 'kimi_code',
         fetched_at: now.toISOString(),
         expires_at: inOneHour,
@@ -1851,6 +1895,16 @@ const mockQuotas: Record<string, any> = {
         },
     },
 }
+
+// A quota is stamped as read just now, except one that failed after a good
+// reading: its fetched_at stays the time of that reading (see mock-provider-kimi).
+const mockQuotaNow = (uuid: string) => {
+    const quota = mockQuotas[uuid]
+    return quota.last_error && quota.windows?.length
+        ? quota
+        : { ...quota, fetched_at: new Date().toISOString() }
+}
+
 if (isNewcomer) {
     for (const uuid of Object.keys(mockQuotas)) delete mockQuotas[uuid]
 }
@@ -1937,7 +1991,7 @@ const mockMainClaudeCodePreferences: Record<string, string> = {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
 }
 
-const mockProfileClaudeConfigs: Record<string, { preferences: Record<string, string>; defaultMode: string; hasOverrides: boolean }> = {}
+const mockProfileClaudeConfigs: Record<string, { preferences: Record<string, string>; defaultMode?: string; overrideKeys: string[] }> = {}
 
 const mockProfileClaudeConfigData = (profileId: string) => {
     const profile = mockClaudeCodeProfiles.find(item => item.id === profileId)
@@ -1952,12 +2006,21 @@ const mockProfileClaudeConfigData = (profileId: string) => {
         CLAUDE_CODE_SUBAGENT_MODEL: profile?.unified ? model : 'subagent',
     }
     const stored = mockProfileClaudeConfigs[profileId]
+    const overrideKeys = stored?.overrideKeys ?? []
+    const preferences: Record<string, string> = { ...basePreferences }
+    for (const key of overrideKeys) {
+        if (key === 'defaultMode') continue
+        const value = stored?.preferences[key]
+        if (value) preferences[key] = value
+        else delete preferences[key]
+    }
     return {
         basePreferences,
-        preferences: stored?.preferences || basePreferences,
+        preferences,
         inheritedDefaultMode: 'auto',
-        defaultMode: stored?.defaultMode || 'auto',
-        hasOverrides: stored?.hasOverrides || false,
+        defaultMode: overrideKeys.includes('defaultMode') ? stored?.defaultMode || 'auto' : 'auto',
+        overrideKeys,
+        hasOverrides: overrideKeys.length > 0,
         // Mirrors the backend contract: derive from current profile metadata;
         // never remember the path in the stored override object.
         settingsPath: `/Users/demo/.tingly-box/claude/${profileId}--${profile?.name}/settings.json`,
@@ -1972,6 +2035,11 @@ const defaultMockTeamID = '00000000-0000-0000-0000-000000000001'
 let mockTeams = [
     { id: defaultMockTeamID, name: 'Default', slug: 'default', enabled: true, is_default: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
     { id: '00000000-0000-0000-0000-000000000002', name: 'Platform', slug: 't1', enabled: true, is_default: false, created_at: '2026-08-01T00:00:00Z', updated_at: '2026-08-01T00:00:00Z' },
+]
+let mockLimitPolicies: Array<{ kind: string; ref: string; limits: Record<string, number>; overflow?: string; queue_timeout_seconds?: number }> = [
+    { kind: 'team', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, overflow: 'queue' },
+    { kind: 'team_member', ref: '00000000-0000-0000-0000-000000000002', limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, overflow: 'queue', queue_timeout_seconds: 20 },
+    { kind: 'user', ref: 'user-design', limits: { max_concurrent: 1, max_requests: 200, window_seconds: 3600 }, overflow: 'reject' },
 ]
 let mockSharingKeys = [
     { token_id: 'tb-share-design0000000000000000000000000001', user_id: 'user-design', team_id: defaultMockTeamID, display_name: 'Design team', enabled: true, created_at: '2026-06-08T00:00:00Z' },
@@ -2429,6 +2497,43 @@ export const handlers = [
         })
     }),
 
+    // Person / team / model limit policies (routing limits)
+    http.get('/api/v1/limit-policies', ({ request }) => {
+        const q = new URL(request.url).searchParams
+        const data = mockLimitPolicies.filter((p) => (!q.get('kind') || p.kind === q.get('kind')) && (!q.get('ref') || p.ref === q.get('ref')))
+        return HttpResponse.json({ success: true, data })
+    }),
+
+    http.put('/api/v1/limit-policies/:kind/:ref', async ({ params, request }) => {
+        const body = await request.json() as any
+        const empty = !body.limits || Object.values(body.limits).every((v) => !v)
+        mockLimitPolicies = mockLimitPolicies.filter((p) => !(p.kind === params.kind && p.ref === params.ref))
+        if (empty) return HttpResponse.json({ success: true, exists: false })
+        const policy = { kind: params.kind as string, ref: params.ref as string, limits: body.limits, overflow: body.overflow, queue_timeout_seconds: body.queue_timeout_seconds }
+        mockLimitPolicies = [...mockLimitPolicies, policy]
+        return HttpResponse.json({ success: true, exists: true, data: policy })
+    }),
+
+    // Live account/service limit state (routing limits)
+    http.get('/api/v1/limits/status', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { scope: 'team', key: 'team:00000000-0000-0000-0000-000000000002', ref: '00000000-0000-0000-0000-000000000002', label: 'Platform',
+                  limits: { max_concurrent: 6, max_tokens: 5000000, window_seconds: 18000 }, inflight: 3, requests: 212, tokens: 3900000, pressure: 0.78, state: 'ok' },
+                { scope: 'user', key: 'user:user-platform', ref: 'user-platform', label: 'Platform CI', inherited_from: 'team_member',
+                  limits: { max_concurrent: 2, max_tokens: 1000000, window_seconds: 18000 }, inflight: 2, requests: 96, tokens: 910000, pressure: 1, state: 'blocked' },
+                { scope: 'account', key: 'acct:mock-provider-anthropic', provider_uuid: 'mock-provider-anthropic', provider_name: 'Anthropic',
+                  limits: { max_concurrent: 4, max_tokens: 2000000, window_seconds: 18000, soft_percent: 80, quota_percent: 95 },
+                  inflight: 3, requests: 41, tokens: 1700000, pressure: 0.85, state: 'hot' },
+                { scope: 'service', key: 'svc:builtin:claude_code:cc/mock-provider-anthropic/claude-sonnet-5', provider_uuid: 'mock-provider-anthropic',
+                  provider_name: 'Anthropic', rule_uuid: 'builtin:claude_code:cc', scenario: 'claude_code', request_model: 'claude-sonnet-5', model: 'claude-sonnet-5',
+                  limits: { max_concurrent: 2, max_requests: 200, window_seconds: 3600, soft_percent: 75 },
+                  inflight: 1, requests: 64, tokens: 0, pressure: 0.5, state: 'ok' },
+            ],
+        })
+    }),
+
     // ============================================
     // v2 Providers API
     // ============================================
@@ -2530,7 +2635,7 @@ export const handlers = [
         const result: Record<string, any> = {}
         for (const uuid of uuids) {
             if (mockQuotas[uuid]) {
-                result[uuid] = { ...mockQuotas[uuid], fetched_at: new Date().toISOString() }
+                result[uuid] = mockQuotaNow(uuid)
             }
         }
         return HttpResponse.json({ success: true, data: result })
@@ -2578,7 +2683,7 @@ export const handlers = [
     http.get('/api/v1/provider-quota/:uuid', ({ params }) => {
         const { uuid } = params as { uuid: string }
         if (mockQuotas[uuid]) {
-            return HttpResponse.json({ ...mockQuotas[uuid], fetched_at: new Date().toISOString() })
+            return HttpResponse.json(mockQuotaNow(uuid))
         }
         return HttpResponse.json({ error: 'quota not found for provider' }, { status: 404 })
     }),
@@ -2619,7 +2724,7 @@ export const handlers = [
         // Simulate a short delay
         await new Promise(r => setTimeout(r, 800))
         if (mockQuotas[uuid]) {
-            return HttpResponse.json({ ...mockQuotas[uuid], fetched_at: new Date().toISOString() })
+            return HttpResponse.json(mockQuotaNow(uuid))
         }
         return HttpResponse.json({ error: 'quota not found for provider' }, { status: 404 })
     }),
@@ -2657,6 +2762,17 @@ export const handlers = [
         return HttpResponse.json({
             success: true,
             data: { token: `mock-model-token-${Math.random().toString(36).slice(2, 14)}` },
+        })
+    }),
+
+    http.get('/api/v1/auth/mcp-token', () => {
+        return HttpResponse.json({ success: true, data: { token: 'tb-mcp-mock-token' } })
+    }),
+
+    http.post('/api/v1/auth/mcp-token/reset', () => {
+        return HttpResponse.json({
+            success: true,
+            data: { token: `tb-mcp-mock-token-${Math.random().toString(36).slice(2, 14)}` },
         })
     }),
 
@@ -2703,6 +2819,17 @@ export const handlers = [
         const current = (mockCCSlots[scenario] ?? []).filter(s => s !== slot)
         mockCCSlots[scenario] = enabled ? [...current, slot] : current
         return HttpResponse.json({ success: true, data: { slots: mockCCSlots[scenario], rule } })
+    }),
+
+    // The default Claude Code routing overwritten with a copy of a profile's (mock: the main rule's services).
+    http.post('/api/v1/scenario/:scenario/claude-code/use-profile', async ({ request }) => {
+        const { profile } = await request.json() as { profile: string }
+        const found = mockClaudeCodeProfiles.find(item => item.id === profile || item.name === profile)
+        if (!found) return HttpResponse.json({ success: false, error: `profile "${profile}" not found` }, { status: 404 })
+        const main = getMockRulesForScenario('claude_code').find(r => r.uuid === 'builtin:claude_code:cc') ?? getMockRulesForScenario('claude_code')[0]
+        const source = getMockRulesForScenario(`claude_code:${found.id}`)[0]
+        if (main && source) main.services = structuredClone(source.services ?? [])
+        return HttpResponse.json({ success: true })
     }),
 
     // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)
@@ -2808,6 +2935,38 @@ export const handlers = [
         return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
     }),
 
+    // Hard ordering: apply a new list order to one scenario's rules, mirroring
+    // the backend's tolerant merge (unnamed scenario rules follow the named
+    // ones; foreign/unknown uuids are rejected).
+    http.post('/api/v1/rules/reorder', async ({ request }) => {
+        const body = await request.json() as { scenario?: string; ordered_uuids?: string[] }
+        const scenario = body.scenario?.trim()
+        const ordered = body.ordered_uuids ?? []
+        if (!scenario) {
+            return HttpResponse.json({ success: false, error: 'Scenario is required' }, { status: 400 })
+        }
+        if (ordered.length === 0) {
+            return HttpResponse.json({ success: false, error: 'ordered_uuids is required' }, { status: 400 })
+        }
+        const rules = mockV1Rules[scenario] ?? []
+        const seen = new Set<string>()
+        for (const uuid of ordered) {
+            if (seen.has(uuid)) {
+                return HttpResponse.json({ success: false, error: `uuid ${uuid} appears more than once` }, { status: 400 })
+            }
+            seen.add(uuid)
+            if (!rules.some(r => r.uuid === uuid)) {
+                return HttpResponse.json({ success: false, error: `rule with UUID ${uuid} not found in scenario ${scenario}` }, { status: 400 })
+            }
+        }
+        const named = ordered.map(uuid => rules.find(r => r.uuid === uuid)!)
+        const rest = rules.filter(r => !seen.has(r.uuid))
+        const next = [...named, ...rest]
+        rules.length = 0
+        rules.push(...next)
+        return HttpResponse.json({ success: true, data: next })
+    }),
+
     // ============================================
     // Rule Flag Registry
     // ============================================
@@ -2823,6 +2982,7 @@ export const handlers = [
                 { key: 'use_max_tokens', label: 'OpenAI: Use max_tokens (legacy)', description: 'Rewrite max_completion_tokens to max_tokens.', type: 'bool', category: 'request_openai' },
                 { key: 'block_tools', label: 'Block tools', description: 'Comma-separated tool names to strip.', type: 'string', category: 'request_openai', placeholder: 'e.g. web_search,run_terminal_cmd' },
                 { key: 'skip_usage', label: 'Skip usage in response', description: 'Strip usage from responses.', type: 'bool', category: 'response', shared: true, inheritance_mode: 'or' },
+                { key: 'disable_thinking_budget', label: 'Remove thinking budget', description: 'Remove thinking.budget_tokens from Anthropic-compatible upstream requests while retaining the thinking mode. Use for providers that reject a budget; Anthropic’s enabled thinking requires one.', type: 'bool', category: 'reasoning' },
                 { key: 'thinking_effort', label: 'Thinking', description: 'Extended thinking control.', type: 'enum', category: 'reasoning', options: [{ value: '', label: 'By Client' }, { value: 'off', label: 'Off' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }, { value: 'max', label: 'Max' }], shared: true, inheritance_mode: 'override' },
                 { key: 'vision_proxy_service', label: 'Vision Proxy', description: 'Describe images via a vision-capable model.', type: 'service_ref', category: 'vision' },
                 { key: 'session_affinity', label: 'Session affinity', description: 'TTL in seconds for session pinning.', type: 'int', category: 'routing', placeholder: 'e.g. 3600', shared: true, inheritance_mode: 'override' },
@@ -2991,9 +3151,11 @@ export const handlers = [
                         tools: ['query'],
                     },
                 ],
+                profiles: [{ id: 'prof-1a2b3c4d', name: 'Work repos', tools: [] }],
                 request_timeout: 30000,
                 strip_disabled_mcp_tools: true,
             },
+            enabled: true,
         })
     }),
 
@@ -3189,6 +3351,22 @@ export const handlers = [
         let number = 1
         while (used.has(number)) number++
         const team = {id: crypto.randomUUID(), name: body.name, slug: `t${number}`, enabled: true, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}
+        mockTeams = [...mockTeams, team]
+        return HttpResponse.json(team, {status: 201})
+    }),
+
+    http.post('/api/v1/teams/:teamId/duplicate', async ({params, request}) => {
+        const body = await request.json().catch(() => ({})) as any
+        const source = mockTeams.find((team) => team.id === params.teamId)
+        if (!source) return HttpResponse.json({error: {message: `team '${params.teamId}' not found`, type: 'invalid_request_error'}}, {status: 404})
+        const name = body.name || `${source.name} copy`
+        if (mockTeams.some((team) => team.name === name)) {
+            return HttpResponse.json({error: {message: `team name '${name}' already exists`, type: 'invalid_request_error'}}, {status: 409})
+        }
+        const used = new Set(mockTeams.map((team) => /^t(\d+)$/.exec(team.slug)?.[1]).filter(Boolean).map(Number))
+        let number = 1
+        while (used.has(number)) number++
+        const team = {id: crypto.randomUUID(), name, slug: `t${number}`, enabled: true, is_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}
         mockTeams = [...mockTeams, team]
         return HttpResponse.json(team, {status: 201})
     }),
@@ -3671,6 +3849,18 @@ export const handlers = [
                     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: {},
                 },
+                // A bot named after its platform account (the default), and one
+                // whose platform gave no name: it shows by its id.
+                {
+                    uuid: '1730600000123456789-imbot', name: '@ops_claude_bot', platform: 'telegram', enabled: true, auth_type: 'token',
+                    default_cwd: '/home/user/ops', default_agent: 'claude_code', chat_id_lock: '',
+                    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), auth: { token: 'mock-bot-token-****' },
+                },
+                {
+                    uuid: '1730600044998877665-imbot', name: '', platform: 'telegram', enabled: true, auth_type: 'token',
+                    default_cwd: '/home/user/lab', default_agent: 'claude_code', chat_id_lock: '',
+                    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), auth: { token: 'mock-bot-token-****' },
+                },
                 {
                     uuid: 'mock-bot-003',
                     name: 'Dev DingTalk Bot',
@@ -3748,10 +3938,11 @@ export const handlers = [
         // The Feishu bot has its own chat and the DingTalk bot has seen none.
         if (params.bot === 'mock-bot-002') {
             return HttpResponse.json({chats: [
+                // Feishu gave no sender name: no alias, so the chat shows by its id.
                 {chat: {id: 'direct-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_chat_id: 'feishu:oc_mock_chat_0001', peer_actor_id: 'actor-f1', blocked: false}, permissions: []},
             ]})
         }
-        if (params.bot === 'mock-bot-003') return HttpResponse.json({chats: []})
+        if (params.bot === 'mock-bot-003' || String(params.bot).endsWith('-imbot')) return HttpResponse.json({chats: []})
         // mock-bot-001 has one chat with full Remote Control so the Remote
         // page shows a ready bot next to ones that nobody can control yet.
         const remote = params.bot === 'mock-bot-001' ? [
@@ -3762,7 +3953,7 @@ export const handlers = [
         return HttpResponse.json({
             chats: [
                 {
-                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', peer_actor_id: 'actor-1', blocked: false},
+                    chat: {id: 'direct-1', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:123456789', name: 'Maya (phone)', peer_actor_id: 'actor-1', blocked: false},
                     permissions: [
                         {capability: 'notify', action: 'access', effect: 'allow'},
                         {capability: 'notify', action: 'notify.receive', effect: 'allow'},
@@ -3772,7 +3963,10 @@ export const handlers = [
                 },
                 {
                     chat: {id: 'direct-2', bot_uuid: 'mock-bot', platform: 'telegram', external_chat_id: 'telegram:987654321', peer_actor_id: 'actor-2', blocked: false},
-                    permissions: [],
+                    permissions: params.bot === 'mock-bot-001' ? [
+                        ...remote,
+                        {capability: 'remote_control', action: 'remote_control.privileged', effect: 'allow'},
+                    ] : [],
                 },
             ],
         })
@@ -3782,14 +3976,33 @@ export const handlers = [
     http.put('/api/v1/bots/:bot/chats/:chat/blocked', () => HttpResponse.json({ok: true})),
     http.delete('/api/v1/bots/:bot/chats/:chat', () => HttpResponse.json({ok: true})),
 
-    http.get('/api/v1/bots/:bot/groups', ({ params }) => HttpResponse.json({groups: params.bot !== 'mock-bot-002' && params.bot !== 'mock-bot-003' ? [
+    // The Telegram group's title became its default alias; the Feishu group has
+    // a long platform id and the platform gave no title.
+    http.get('/api/v1/bots/:bot/groups', ({ params }) => HttpResponse.json({groups: params.bot === 'mock-bot-002' ? [
+        {id: 'group-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_group_id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5', blocked: false},
+    ] : params.bot !== 'mock-bot-003' && !String(params.bot).endsWith('-imbot') ? [
         {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
     ] : []})),
-    http.get('/api/v1/bots/:bot/groups/:group', () => HttpResponse.json({
-        group: {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
+    http.get('/api/v1/bots/:bot/groups/:group', ({ params }) => HttpResponse.json(params.group === 'group-f1' ? {
+        group: {id: 'group-f1', bot_uuid: 'mock-bot-002', platform: 'feishu', external_group_id: 'oc_a1b2c3d4e5f6a7b8c9d0e1f2a3b4d4e5', blocked: false},
         capabilities: {notify: 'allow', remote_control: 'deny'},
         actors: [],
+    } : {
+        group: {id: 'group-1', bot_uuid: 'mock-bot', platform: 'telegram', external_group_id: 'telegram:-10024681012', name: 'Release Crew', blocked: false},
+        capabilities: {notify: 'allow', remote_control: 'allow'},
+        actors: [
+            {actor: {id: 'actor-g1', external_actor_id: 'telegram:555', display_name: 'Maya'}, label: 'Controller', permissions: [
+                {capability: 'remote_control', action: 'remote_control.start', effect: 'allow'},
+                {capability: 'remote_control', action: 'remote_control.approve', effect: 'allow'},
+            ]},
+            {actor: {id: 'actor-g2', external_actor_id: 'telegram:777', display_name: 'Ivan'}, label: 'Controller', permissions: [
+                {capability: 'remote_control', action: 'remote_control.start', effect: 'allow'},
+                {capability: 'remote_control', action: 'remote_control.approve', effect: 'allow'},
+                {capability: 'remote_control', action: 'remote_control.privileged', effect: 'allow'},
+            ]},
+        ],
     })),
+    http.put('/api/v1/bots/:bot/groups/:group/actors/:actor/permissions/:capability/:action', () => HttpResponse.json({ok: true})),
     http.put('/api/v1/bots/:bot/groups/:group/capabilities/:capability', () => HttpResponse.json({ok: true})),
     http.put('/api/v1/bots/:bot/groups/:group/blocked', () => HttpResponse.json({ok: true})),
 
@@ -4119,7 +4332,6 @@ export const handlers = [
     }),
 
     http.post('/api/v1/scenario/:scenario/profiles', async ({ params, request }) => {
-        const { scenario } = params as { scenario: string }
         const body = await request.json() as any
         const newProfile = {
             id: `profile-${Date.now()}`,
@@ -4134,6 +4346,31 @@ export const handlers = [
             success: true,
             data: newProfile,
         })
+    }),
+
+    http.post('/api/v1/scenario/:scenario/profiles/:profileId/duplicate', async ({ params, request }) => {
+        const { profileId } = params as { profileId: string }
+        const body = await request.json().catch(() => ({})) as any
+        // "default" is the main Claude Code config.
+        const source = profileId === 'default'
+            ? { name: 'default', unified: true, description: '' }
+            : mockClaudeCodeProfiles.find(p => p.id === profileId)
+        if (!source) {
+            return HttpResponse.json({ success: false, error: 'profile not found' }, { status: 404 })
+        }
+        const name = body.name || `${source.name}-copy`
+        if (mockClaudeCodeProfiles.some(p => p.name === name)) {
+            return HttpResponse.json({ success: false, error: `profile name '${name}' already exists` }, { status: 400 })
+        }
+        const copy = {
+            ...source,
+            id: `profile-${Date.now()}`,
+            name,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }
+        mockClaudeCodeProfiles.push(copy)
+        return HttpResponse.json({ success: true, data: copy })
     }),
 
     http.put('/api/v1/scenario/:scenario/profiles/:profileId', async ({ params, request }) => {
@@ -4158,6 +4395,7 @@ export const handlers = [
         if (body.name !== undefined) profile.name = body.name
         if (body.description !== undefined) profile.description = body.description
         if (body.unified !== undefined) profile.unified = body.unified
+        if (body.mcp_profile !== undefined) (profile as any).mcp_profile = body.mcp_profile
         profile.updated_at = new Date().toISOString()
 
         return HttpResponse.json({
@@ -4176,11 +4414,19 @@ export const handlers = [
 
     http.put('/api/v1/scenario/:scenario/profiles/:profileId/claude-config', async ({ params, request }) => {
         const { profileId } = params as { profileId: string }
-        const body = await request.json() as { preferences?: Record<string, string>; defaultMode?: string }
+        const body = await request.json() as { preferences: Record<string, string>; defaultMode?: string; overrideKeys?: string[] }
+        const current = mockProfileClaudeConfigData(profileId)
+        const basePreferences: Record<string, string> = current.basePreferences
+        const overrideKeys = body.overrideKeys ?? [
+            ...Array.from(new Set([...Object.keys(basePreferences), ...Object.keys(body.preferences)]))
+                .filter(key => !key.startsWith('ANTHROPIC_') && key !== 'CLAUDE_CODE_SUBAGENT_MODEL')
+                .filter(key => (body.preferences[key] ?? '') !== (basePreferences[key] ?? '')),
+            ...(body.defaultMode && body.defaultMode !== current.inheritedDefaultMode ? ['defaultMode'] : []),
+        ]
         mockProfileClaudeConfigs[profileId] = {
-            preferences: body.preferences || {},
-            defaultMode: body.defaultMode || 'acceptEdits',
-            hasOverrides: true,
+            preferences: body.preferences,
+            defaultMode: body.defaultMode,
+            overrideKeys,
         }
         return HttpResponse.json({ success: true, data: mockProfileClaudeConfigData(profileId) })
     }),

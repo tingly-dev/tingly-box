@@ -45,8 +45,17 @@ func getMap(m map[string]interface{}, key string) map[string]interface{} {
 // getInt extracts an int value from a map
 func getInt(m map[string]interface{}, key string) int {
 	if val, ok := m[key]; ok {
-		if f, ok := val.(float64); ok {
+		switch f := val.(type) {
+		case float64:
 			return int(f)
+		case int:
+			return f
+		case int64:
+			return int(f)
+		case json.Number:
+			if i, err := f.Int64(); err == nil {
+				return int(i)
+			}
 		}
 	}
 	return 0

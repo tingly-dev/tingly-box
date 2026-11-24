@@ -1,6 +1,7 @@
 package agentboot
 
 import (
+	"context"
 	"errors"
 
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
@@ -100,10 +101,16 @@ type SetModelRequest struct{ Model string }
 // SetPermissionModeRequest switches the permission mode of the running process.
 type SetPermissionModeRequest struct{ Mode string }
 
+// ApplySettingsRequest layers settings (permission rules, say) over those the
+// running process started with. Each top-level key replaces what an earlier
+// request set for that key; the process's own start-up settings stay under it.
+type ApplySettingsRequest struct{ Settings map[string]any }
+
 func (InterruptRequest) isControlRequest()         {}
 func (StopTaskRequest) isControlRequest()          {}
 func (SetModelRequest) isControlRequest()          {}
 func (SetPermissionModeRequest) isControlRequest() {}
+func (ApplySettingsRequest) isControlRequest()     {}
 
 // ControlRejectedError is the agent's error answer to a control request.
 type ControlRejectedError struct{ Message string }
@@ -125,6 +132,23 @@ type ControlRequestEncoder interface {
 	EncodeControlRequest(reqID string, req ControlRequest) any
 }
 
+// ErrInjectUnsupported is returned by [PersistentSession.Inject] when the
+// session's agent cannot take a user message while a turn runs; the message
+// is then for the next turn.
+var ErrInjectUnsupported = errors.New("agentboot: agent cannot take a message while a turn runs")
+
+// MidTurnInputEncoder is implemented by transports whose agent reads a user
+// message written to stdin while a turn is running, at its next step (Claude
+// Code's stream-json input does: the message joins the next model request,
+// after the running tool call returns). Optional: without it
+// [PersistentSession.Inject] returns [ErrInjectUnsupported] and hosts fall
+// back to sending the message as the next turn.
+type MidTurnInputEncoder interface {
+	// EncodeMidTurnMessage returns the wire value for a user message written
+	// during a turn.
+	EncodeMidTurnMessage(prompt string) any
+}
+
 // ControlResponseDecoder is implemented by transports whose agent answers a
 // host-initiated control request with a response event. Optional: without
 // it, [PersistentSession.SetModel] and friends return ErrControlUnsupported.
@@ -133,6 +157,22 @@ type ControlResponseDecoder interface {
 	// and, if so, which one (reqID) and whether the agent rejected it
 	// (non-nil err, a *[ControlRejectedError]).
 	DecodeControlResponse(ev protocol.Event) (reqID string, err error, ok bool)
+}
+
+// ControlResponseBodyDecoder is implemented by transports whose control
+// answers carry data (a context-usage query). Optional, alongside
+// [ControlResponseDecoder]: without it a success answer has no body.
+type ControlResponseBodyDecoder interface {
+	// ControlResponseBody returns the body of a success answer ev, nil if
+	// it has none.
+	ControlResponseBody(ev protocol.Event) map[string]any
+}
+
+// ContextUsageProvider is implemented by sessions that can report their
+// context size ([ContextUsageReader] on the transport does the decoding).
+// The persistent session returned by Runner.Open implements it.
+type ContextUsageProvider interface {
+	ContextUsage(ctx context.Context) (ContextUsage, error)
 }
 
 // TurnStartDetector is implemented by transports that can tell which event

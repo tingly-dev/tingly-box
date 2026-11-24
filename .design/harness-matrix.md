@@ -73,6 +73,14 @@ Assertions + SemanticEquivalence checks
 
 ### Key types
 
+File-defined scenarios use the same `vmodel/spec` loader as `tb vmodel`:
+`harness matrix --mode=single --config model.yaml`.
+Files replace the default scenarios and must supply test assertions. The
+runtime's `Scenario(id)` adapter preserves protocol/mode restrictions, raw
+recordings and named Go behavior; native-only decision checks use HTTP plus
+`Runtime.Check` outside the chat matrix. See the contract and rationale in
+[`vmodel-definitions.md`](./vmodel-definitions.md).
+
 - **`Scenario`** — named test case. Carries `MockResponses` per format,
   `Assertions` to check, and `SkipTransitive` flag for scenarios that
   produce no comparable output (e.g. error responses).
@@ -306,7 +314,7 @@ strictly (pydantic), and accumulate streams with protocol-enforcing state
 machines. `--client` swaps the sending stack while reusing the same matrix,
 scenarios, and assertions:
 
-| `--client` | Stack | CI leg (`harness-matrix.yml`) |
+| `--client` | Stack | CI leg (`harness-template.yml`) |
 |------------|-------|-------------------------------|
 | `http` *(default)* | raw JSON over `net/http` (`client_http.go`) | `matrix-single` / `matrix-transitive` / `matrix-idempotent` / `matrix-flags` |
 | `gosdk` | official `anthropic-sdk-go` + `openai-go`, in-process (`client_gosdk.go`) | `matrix-single-gosdk` / `matrix-idempotent-gosdk` |
@@ -824,11 +832,11 @@ source (anthropic_v1/beta, openai_chat, openai_responses)
   × client thinking level (none + minimal…max; budget for Anthropic,
                            reasoning effort for OpenAI clients)
   × client max_tokens (2048, 40000; OpenAI clients also absent)
-  × rule thinking_effort ("" / off / low / medium / high / max)
+  × rule thinking_effort ("" / off / low / medium / high / xhigh / max)
   × rule max-tokens field flag (Chat targets: none / use_max_completion_tokens
                                 / use_max_tokens)
   × streaming
-= 4200 combinations, one route (env) per source × target × rule flags
+= 4900 combinations, one route (env) per source × target × rule flags
 ```
 
 Each combination asserts properties of the request that reached the provider
@@ -896,3 +904,14 @@ provider) is still registered at the bottom of `flag_paths.go`. Run it with:
 go test ./internal/protocoltest -run TestFlagPaths -count=1
 go run ./cli/harness matrix --mode=flag_paths
 ```
+
+## Response retention acceptance
+
+`harness matrix --mode=response_retention` and `TestResponseRetention` share
+`response_retention.go`. Forty cases traverse the gateway over HTTP with a
+controlled Anthropic Messages provider, covering both V1/Beta and Chat/Responses,
+stream/nonstream. Tool argument strings are compared exactly on the client wire
+so float64 normalization cannot conceal large-integer corruption. Initial text,
+Chat thinking, finish reasons, usage tails and Responses terminal snapshots are
+checked on the same path. `--mode=all` includes this section. Live provider
+behavior and actual tool execution are outside this suite's evidence.

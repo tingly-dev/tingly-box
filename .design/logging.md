@@ -23,6 +23,21 @@ Route 选择:**轻量 logrus 关联**——给请求 context 挂一个 `request_
 **Requests** ——一行一个请求(scenario、路由到的 model、provider、状态、延迟)。
 Scenario / provider / status 过滤条。自动刷新,固定住的自动滚动。
 
+展开与刷新的交互约定(`AILogViewer` / `RequestJourney`):
+
+- 展开一个请求后,**stage 行默认展开**(耗时和属性就是展开它的目的),log 行保持折叠;
+  每个可展开行末尾有共享的 disclosure 箭头,读者手动折叠/展开的选择在刷新间保留
+  (按 span id / 事件内容为 key)。
+- Root span 的名字按 OTel GenAI 约定是 `{operation} {request model}`(导出到 OTLP 的后端依赖这个名字,不改);
+  名字只管标准化,细节在属性里。`RequestJourney` 不解析这个名字,而是读属性,把请求行拼成"谁到谁":
+  类目列 `REQUEST`、名称列 `chat`(`gen_ai.operation.name`),详情列
+  `<入口协议> · <请求模型> → <上游协议> · <实际模型>`(provider 名可能很长,不放进行里,在展开的 `gen_ai.provider.name=` 里)(取自 `tingly.protocol.inbound/upstream`、
+  `gen_ai.*`;自动换行不截断,带 tooltip)。缺属性时退回 `请求模型 → 实际模型`;完整 span 名仍在展开的 `name=` 里。
+- 自动刷新是静默的(不闪"Refreshing…"),已展开请求的详情只在它那一行数据变化时才重新拉取;
+  重新拉取 trace 期间继续显示上一份 stage,不会让 stage 行消失再出现。
+- 读者正在读时(有展开的请求,或列表滚离顶部),新到的请求**不插入**——已显示的行位置和顺序不动、
+  数据原地更新,新请求只计数并在列表顶部显示 "N new requests" 胶囊;点击胶囊、收起展开项或滚回顶部后合并。
+
 ![Requests list](images/logs-requests.png)
 
 **展开时间线**——一个请求的完整 pipeline:`smartrouting`(rule 匹配)→

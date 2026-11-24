@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -24,6 +25,7 @@ func routingMCPHarnessCases() []serverToolCase {
 		}
 	}
 	cases = append(cases, serverToolCase{test: "TestMCPRoutingExposure", scenario: "mcp_routing_exposure", source: protocol.APIType("mcp"), target: protocol.APIType("mcp"), sub: "advisor_context_required", run: routingMCPAdvisorCase})
+	cases = append(cases, serverToolCase{test: "TestMCPRoutingExposure", scenario: "mcp_routing_exposure", source: protocol.APIType("mcp"), target: protocol.APIType("mcp"), sub: "mcp_token", run: routingMCPTokenCase})
 	return cases
 }
 
@@ -55,7 +57,9 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 		source.Tools = []string{"another"}
 	}
 	wantClient := state != "revoked" && state != "disabled_tool" && state != "excluded_tool"
-	wantServer := serverUse && state != "disabled_tool" && state != "excluded_tool"
+	// A stored gateway usage (server_only, dual) never makes a connected MCP a
+	// model-request route: it is reached as an MCP server only.
+	wantServer := false
 	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(&typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{source, {ID: "webtools", Enabled: typ.BoolPtr(false), Transport: "stdio", Command: "tingly-box"}}, Profiles: []typ.MCPProfile{{ID: "reader", Tools: grant}}}))
 	token := env.appConfig.GetGlobalConfig().GetUserToken()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -115,7 +119,12 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 	if (len(listed.Tools) > 0) != wantClient {
 		failures = append(failures, "SDK tools/list differs from graph")
 	}
-	result, callErr := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: remoteToolName, Arguments: map[string]any{}})
+	// The client namespaces by server (mcp__tb__…), so the gateway prefix is not repeated.
+	clientName := strings.TrimPrefix(remoteToolName, "tingly_box_mcp__")
+	if wantClient && (len(listed.Tools) != 1 || listed.Tools[0].Name != clientName) {
+		failures = append(failures, "SDK tools/list does not use the short client name")
+	}
+	result, callErr := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: clientName, Arguments: map[string]any{}})
 	if wantClient {
 		if callErr != nil || result == nil || result.IsError || calls.Load() != 1 {
 			failures = append(failures, "authorized SDK call failed")
@@ -130,6 +139,54 @@ func routingMCPCase(t flagTB, transport, state string) ([]string, string) {
 		failures = append(failures, "blocked tool reached upstream or falsely succeeded")
 	}
 	return failures, fmt.Sprintf("transport=%s policy=%s client=%v server=%v SDK-listed=%d upstream-calls=%d", transport, state, wantClient, wantServer, len(listed.Tools), calls.Load())
+}
+
+// The MCP token opens the profile endpoint and nothing else; the user token
+// still opens it; the model token does not.
+func routingMCPTokenCase(t flagTB) ([]string, string) {
+	env := newCaseEnv(t, NewTestEnvOptionWithMCPConfig(&typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{ID: "webtools", Enabled: typ.BoolPtr(false), Transport: "stdio", Command: "tingly-box"}}}))
+	cfg := env.appConfig.GetGlobalConfig()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	status := func(method, path, token string) int {
+		req, _ := http.NewRequestWithContext(ctx, method, env.GatewayURL()+path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return -1
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	connects := func(token string) error {
+		client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "token-check", Version: "1"}, nil)
+		session, err := client.Connect(ctx, &sdkmcp.StreamableClientTransport{Endpoint: env.GatewayURL() + "/api/v1/mcp/default", HTTPClient: &http.Client{Transport: routingAuth{token: token}}}, nil)
+		if err == nil {
+			_, err = session.ListTools(ctx, nil)
+			session.Close()
+		}
+		return err
+	}
+	var failures []string
+	if !strings.HasPrefix(cfg.GetMCPToken(), "tb-mcp-") {
+		failures = append(failures, "no MCP token generated")
+	}
+	if err := connects(cfg.GetMCPToken()); err != nil {
+		failures = append(failures, "MCP token rejected: "+err.Error())
+	}
+	if err := connects(cfg.GetUserToken()); err != nil {
+		failures = append(failures, "user token rejected: "+err.Error())
+	}
+	if connects(cfg.GetModelToken()) == nil {
+		failures = append(failures, "model token accepted by the MCP endpoint")
+	}
+	if code := status(http.MethodGet, "/api/v1/mcp/routing", cfg.GetMCPToken()); code != http.StatusUnauthorized {
+		failures = append(failures, fmt.Sprintf("MCP token on the management API: %d", code))
+	}
+	if code := status(http.MethodGet, "/api/v1/auth/mcp-token", cfg.GetMCPToken()); code != http.StatusUnauthorized {
+		failures = append(failures, fmt.Sprintf("MCP token read its own token: %d", code))
+	}
+	return failures, "MCP token: endpoint only"
 }
 
 type routingAuth struct{ token string }
@@ -181,9 +238,11 @@ func routingMCPAdvisorCase(t flagTB) ([]string, string) {
 	if len(tools.Tools) != 0 {
 		failures = append(failures, "Advisor exposed through SDK tools/list")
 	}
-	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "tingly_box_mcp__builtin__advisor", Arguments: map[string]any{}})
-	if err == nil && (result == nil || !result.IsError) {
-		failures = append(failures, "context-free Advisor call falsely succeeded")
+	for _, name := range []string{"builtin__advisor", "tingly_box_mcp__builtin__advisor"} {
+		result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: name, Arguments: map[string]any{}})
+		if err == nil && (result == nil || !result.IsError) {
+			failures = append(failures, "context-free Advisor call falsely succeeded: "+name)
+		}
 	}
 	return failures, "Advisor available only to model loop; generic client has zero exposed tools"
 }

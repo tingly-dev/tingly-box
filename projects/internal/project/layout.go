@@ -1,6 +1,8 @@
 package project
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -16,6 +18,7 @@ import (
 //
 //	<root>/<project>/memory/MEMORY.md, memory/*.md
 //	<root>/<project>/library/...           uploads; threads write outputs/<thread>/
+//	<root>/<project>/library/.tmp/<thread>/ a thread's TMPDIR (hidden from the Library tab)
 //	<root>/<project>/threads/<thread>/     each new thread's working directory (older ones keep theirs)
 //	<root>/<project>/threads/<thread>.settings.json
 type Layout struct {
@@ -37,6 +40,21 @@ func (l Layout) LibraryDir(projectID string) string {
 func (l Layout) OutputDir(projectID, slug string) string {
 	return filepath.Join(l.LibraryDir(projectID), "outputs", slug)
 }
+
+// TmpDir is a thread's scratch directory, used as its TMPDIR. It sits inside
+// the library, so the thread may write there and send_file may read from it,
+// but under a dot directory; the Library lists it as scratch (see
+// ScratchDir), so what a thread left behind stays visible and reachable.
+// It is keyed by thread id (unlike OutputDir's title slug, which can repeat).
+func (l Layout) TmpDir(projectID, threadID string) string {
+	return filepath.Join(l.LibraryDir(projectID), ".tmp", threadID)
+}
+
+// ScratchDir is the library's dot directory holding the threads' scratch
+// (each thread's TmpDir). It is the one hidden path the library lists and
+// serves — origin "scratch" — so scratch files are not invisible; uploads
+// into it are still refused.
+const ScratchDir = ".tmp"
 
 // ThreadDir is a project thread's working directory: its worktree, or a
 // scratch directory when the project has no repository.
@@ -91,9 +109,13 @@ type MemoryFile struct {
 
 var memoryNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.md$`)
 
-// MemoryFileName turns a topic into a safe memory file name.
+// MemoryFileName turns a topic into a safe memory file name. The same topic
+// always gives the same name, so writing it again updates the file. A topic
+// with no ASCII letters or digits (a Chinese one, say) is named after a hash
+// of its text.
 func MemoryFileName(topic string) string {
 	topic = strings.TrimSuffix(strings.TrimSpace(topic), ".md")
+	raw := topic
 	var b strings.Builder
 	for _, r := range strings.ToLower(topic) {
 		switch {
@@ -107,7 +129,8 @@ func MemoryFileName(topic string) string {
 	}
 	name := strings.Trim(b.String(), "-")
 	if name == "" {
-		name = fmt.Sprintf("note-%d", time.Now().Unix())
+		sum := sha256.Sum256([]byte(raw))
+		name = "note-" + hex.EncodeToString(sum[:4])
 	}
 	if len(name) > 60 {
 		name = name[:60]
@@ -192,6 +215,9 @@ func (l Layout) ListMemory(projectID string) ([]MemoryFile, error) {
 // Remember writes a memory file for topic and indexes it in MEMORY.md with
 // a one-line summary. It returns the file name.
 func (l Layout) Remember(projectID, topic, content, summary string) (string, error) {
+	if strings.TrimSpace(topic) == "" {
+		return "", errors.New("topic is required: it names the memory file")
+	}
 	name := MemoryFileName(topic)
 	if err := l.WriteMemory(projectID, name, strings.TrimSpace(content)+"\n"); err != nil {
 		return "", err
@@ -256,7 +282,9 @@ func (l Layout) ListLibrary(projectID string) ([]LibraryFile, error) {
 			return err
 		}
 		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".") && p != root {
+			// Hidden directories are skipped, except the scratch subtree at
+			// the root (ScratchDir, a thread's TMPDIR).
+			if strings.HasPrefix(d.Name(), ".") && p != root && !(p == filepath.Join(root, ScratchDir) || strings.HasPrefix(p, filepath.Join(root, ScratchDir)+string(filepath.Separator))) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -270,6 +298,9 @@ func (l Layout) ListLibrary(projectID string) ([]LibraryFile, error) {
 		origin := "upload"
 		if strings.HasPrefix(rel, "outputs/") {
 			origin = "output"
+		}
+		if inScratch(rel) {
+			origin = "scratch"
 		}
 		out = append(out, LibraryFile{Path: rel, Size: info.Size(), UpdatedAt: info.ModTime(), Origin: origin})
 		return nil
@@ -287,4 +318,25 @@ func (l Layout) LibraryPath(projectID, rel string) (string, error) {
 		return "", fmt.Errorf("invalid library path %q", rel)
 	}
 	return p, nil
+}
+
+var (
+	// ErrInvalidLibraryPath is returned for a path outside the library or into a hidden directory.
+	ErrInvalidLibraryPath = errors.New("invalid library path")
+	// ErrNotDirectory is returned when a listing is asked of a file.
+	ErrNotDirectory = errors.New("not a directory")
+)
+
+// LibraryEntry is one file or folder directly inside a library directory.
+type LibraryEntry struct {
+	Name string `json:"name"`
+	// Path is relative to the library root, with forward slashes.
+	Path string `json:"path"`
+	// Kind is "dir" or "file".
+	Kind      string    `json:"kind"`
+	Size      int64     `json:"size"`
+	UpdatedAt time.Time `json:"updated_at"`
+	// Origin is "upload" or "output" (under outputs/, written by a thread),
+	// or "scratch" (under ScratchDir/, a thread's TMPDIR).
+	Origin string `json:"origin"`
 }

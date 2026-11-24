@@ -22,7 +22,21 @@ const (
 	DefaultTeamName = "Default"
 )
 
+// MaxTeamNameBytes is the longest team name the store accepts (the name column
+// is size:128 too).
+const MaxTeamNameBytes = 128
+
 var legacyDefaultTeamNames = []string{"Default Team", "default"}
+
+// TeamScenario is the routing scope a team's rules live under. The default
+// team keeps the legacy bare "team" scope so existing rules stay usable
+// without a migration; every other team is isolated as "team:<id>".
+func TeamScenario(teamID string) typ.RuleScenario {
+	if teamID == DefaultTeamID {
+		return typ.ScenarioTeam
+	}
+	return typ.ProfiledScenarioName(typ.ScenarioTeam, teamID)
+}
 
 // TeamRecord is an authorization and routing boundary for sharing keys.
 // Human-readable names and slugs may change; ID is the durable identity stored
@@ -101,8 +115,8 @@ func validateTeamName(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("team name cannot be empty")
 	}
-	if len(name) > 128 {
-		return errors.New("team name cannot exceed 128 characters")
+	if len(name) > MaxTeamNameBytes {
+		return fmt.Errorf("team name cannot exceed %d characters", MaxTeamNameBytes)
 	}
 	return nil
 }

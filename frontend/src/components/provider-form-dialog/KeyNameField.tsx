@@ -2,6 +2,7 @@ import {Edit} from '@/components/icons';
 import {Box, IconButton, TextField, Tooltip, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface KeyNameFieldProps {
     showField: boolean;
@@ -47,7 +48,7 @@ const KeyNameField: React.FC<KeyNameFieldProps> = ({
                 gap: 1,
                 px: 1.5,
                 py: 0.75,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 bgcolor: 'background.default',
                 border: 1,
                 borderColor: 'divider',

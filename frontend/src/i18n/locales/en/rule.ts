@@ -225,6 +225,10 @@ export default {
       "loadBalance": "Load balance",
       "fallbackTier": "Fallback tier"
     },
+    "phone": {
+      "conditionsOnDesktop": "Adding and editing conditions is on the desktop.",
+      "targetActions": "Model actions"
+    },
     "guideDiagrams": {
       "empty": { "description": "Example rule" },
       "single-provider": { "description": "Single provider rule" },
@@ -355,12 +359,21 @@ export default {
     "addModels_one": "Add {{count}} model",
     "addModels_other": "Add {{count}} models",
     "howRoutingWorks": "How routing works",
-    "sortOriginal": "Original order",
-    "sortByName": "Name (A→Z)",
-    "sortTooltipToName": "Showing original order — click to sort by name",
-    "sortTooltipToOriginal": "Showing by name — click to restore original order"
   },
   "templatePage": {
+    "reorder": {
+      "saved": "Moved {{name}} to position {{position}} of {{total}}",
+      "savedPlain": "Rule order saved",
+      "handle": "Drag to reorder {{name}}",
+      "instructions": "To reorder, press space to pick up the rule, use the arrow keys to move it, then press space to drop it or escape to cancel.",
+      "saveFailed": "Couldn't save the new order: {{message}}",
+      "announce": {
+        "start": "Picked up {{name}}, position {{position}} of {{total}}.",
+        "over": "{{name}} is now over position {{position}} of {{total}}.",
+        "end": "Dropped {{name}} at position {{position}} of {{total}}.",
+        "cancel": "Reordering cancelled. {{name}} stays where it was."
+      }
+    },
     "noProviders": {
       "title": "No Providers Configured",
       "description": "Add an API key provider to start routing requests",
@@ -369,6 +382,45 @@ export default {
     "noRules": "No rules yet. Click \"New Model\" to add one.",
     "noRulesFixed": "No model rules yet.",
     "copiedToClipboard": "{{label}} copied to clipboard!"
+  },
+  "decisionTry": {
+    "title": "Try Decisions",
+    "subtitle": "Ask a structured question through a configured rule.",
+    "noRules": "Add and enable a Decisions rule below to try it.",
+    "rule": "Rule",
+    "model": "Request model",
+    "concreteModel": "Enter a concrete model for a wildcard rule.",
+    "input": "Input text",
+    "type": "Question type",
+    "choice": "Choose an option",
+    "predicate": "Yes / no probability",
+    "score": "Score on a scale",
+    "question": "Question",
+    "options": "Options",
+    "levels": "Levels, lowest to highest",
+    "onePerLine": "One per line.",
+    "invalidOptions": "Enter 2–{{max}} distinct values, one per line.",
+    "run": "Run decision",
+    "running": "Running…",
+    "failed": "Decision request failed.",
+    "missingAnswer": "The response did not include the requested answer.",
+    "result": "Result",
+    "confidence": "Confidence",
+    "differentRule": "The request matched a different rule. Review your routing configuration.",
+    "raw": "Raw response",
+    "exampleInput": "My invoice shows an unexpected charge.",
+    "exampleQuestion": "Which team should handle this?",
+    "exampleOptions": "billing\ntechnical",
+    "examplePredicate": "Does the customer report an unexpected charge?",
+    "exampleScore": "How urgent is this request?",
+    "exampleLevels": "low\nmedium\nhigh",
+    "tokens": "Tokens: {{input}} input · {{output}} output",
+    "runningHint": "Waiting for the model’s decision…",
+    "emptyTitle": "Your result will appear here",
+    "emptyBody": "Review the example or add your own text, then run a decision.",
+    "answer": "Model answer",
+    "probabilities": "OPTION PROBABILITIES",
+    "stale": "Inputs have changed since this result. Run again to update it."
   },
   "decisionsGuide": {
     "title": "Decisions API Quick Start",

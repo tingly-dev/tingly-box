@@ -20,11 +20,14 @@ replace github.com/tingly-dev/tingly-box/afk => ./afk
 
 replace github.com/tingly-dev/tingly-box/projects => ./projects
 
+replace github.com/tingly-dev/tingly-box/remote => ./remote
+
 require (
 	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/ai v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/imbot v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/projects v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/remote v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/swagger v0.0.0-00010101000000-000000000000
 )
 

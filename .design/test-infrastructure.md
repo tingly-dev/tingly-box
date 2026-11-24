@@ -23,6 +23,16 @@ internal/servertest/        ← Gateway integration tests; endpoint-keyed dumb-e
 
 ## Packages
 
+### `vmodel/spec`
+
+Common `Definition` envelope and loader for JSON/YAML models, recordings and
+test expectations. `spec.New` compiles an isolated runtime; the HTTP handler
+backs standalone `tb vmodel`, while `Scenario(id)` and `Check(id, result)` reuse
+the existing matrix and assertion layers. All model files use explicit id/kind envelopes; alternate file loaders and
+legacy parsing have been removed. Dynamic Go behavior uses named catalog factories. Captured
+requests/golden outputs remain evidence rather than model definitions. See
+[`vmodel-definitions.md`](./vmodel-definitions.md).
+
 ### `vmodel/benchmark`
 
 The shared **reference test-bench** (and load generator). It is the single source

@@ -17,13 +17,13 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Close, DeleteSweep, Edit, ErrorOutline, Photo, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
-import ConfirmDialog from '@/components/ConfirmDialog';
-import EmptyState from '@/components/EmptyState';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import SearchField from '@/components/SearchField';
-import type { GenerationRun, ImportedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, ImportedImage } from '../../../features/image/ImageGenPlayground.types';
 import { buildGalleryTiles, filterGalleryTiles, formatBytes } from './imageGenSession';
-import { THUMB_EDGE_BADGE, THUMB_EDGE_TILE } from './imageThumbnails';
-import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE, THUMB_EDGE_TILE } from '../../../features/image/imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
 import {
     fullBleedDialogPaperSx,
     hoverRevealSx,
@@ -31,6 +31,8 @@ import {
     overlayPlateSx,
     zoomScrimSx,
 } from './ImageGenPlayground.chrome';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // Up to three of a run's reference images, in the corner of its tile. In a
 // grid of finished pictures there is otherwise nothing to say a tile came from
@@ -57,7 +59,7 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
                     top: 6,
                     left: 6,
                     p: 0.25,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     alignItems: 'center',
                 }}
             >
@@ -71,7 +73,7 @@ const TileSourceBadge: React.FC<{ sources: string[]; onOpen: (index: number) => 
                             defaultValue: 'View original image {{number}}',
                             number: i + 1,
                         })}
-                        sx={{ display: 'block', borderRadius: 0.5, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
+                        sx={{ display: 'block', borderRadius: radius.chip, overflow: 'hidden', '&:hover, &:focus-visible': { outline: '1px solid', outlineColor: 'common.white' } }}
                     >
                         <ThumbImage src={src} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 22, height: 22 }} />
                     </ButtonBase>
@@ -203,7 +205,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
             slotProps={{ paper: { sx: fullBleedDialogPaperSx } }}
         >
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5, pr: 1.5, flexWrap: 'wrap' }}>
-                <Typography variant="h6" component="span" sx={{ fontSize: '1.05rem' }}>
+                <Typography variant="h6" component="span" sx={{ fontSize: fontSizes.title }}>
                     {t('playground.gallery.title', { defaultValue: 'All session images' })}
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -304,7 +306,7 @@ const ImageGenGalleryDialog: React.FC<ImageGenGalleryDialogProps> = ({
                                     sx={{
                                         position: 'relative',
                                         aspectRatio: '1 / 1',
-                                        borderRadius: 1.5,
+                                        borderRadius: radius.card,
                                         overflow: 'hidden',
                                         border: '1px solid',
                                         borderColor: tile.kind === 'failed' ? 'error.main' : 'divider',

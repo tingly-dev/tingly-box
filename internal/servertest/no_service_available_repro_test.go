@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	"github.com/tingly-dev/tingly-box/internal/routing/routingtest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -29,7 +30,7 @@ func TestRepro_NoServiceAvailable_SingleServiceRateLimited(t *testing.T) {
 	healthMonitor, _, selector := newSelectorStack(cfg)
 
 	// A single-service rule, no smart routing / affinity -> no-affinity pipeline.
-	svc := routing.ServiceForTest(providerUUID, "tingly/cc-default", true)
+	svc := routingtest.Service(providerUUID, "tingly/cc-default", true)
 	rule := &typ.Rule{
 		Scenario:     typ.ScenarioClaudeCode,
 		RequestModel: "tingly/cc-default",

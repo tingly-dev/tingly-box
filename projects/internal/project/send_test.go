@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,9 @@ func TestSendRecordsWhereAMessageCameFrom(t *testing.T) {
 	} {
 		_, err := svc.Send(context.Background(), th.ID, "msg", nil, src)
 		require.NoError(t, err)
+		// The thread reads idle until the turn has started, so wait for the
+		// turn itself to be over.
+		require.Eventually(t, func() bool { return !f.threads.Running(th.ID) }, 5*time.Second, 5*time.Millisecond)
 		waitStatus(t, f.store, th.ID, db.ThreadIdle)
 	}
 
@@ -121,7 +125,7 @@ func TestChatBoundToAThreadTalksToThatThread(t *testing.T) {
 	require.True(t, handled)
 	waitStatus(t, f.store, th.ID, db.ThreadIdle)
 
-	assert.Equal(t, "[#1 Worker] ok", sink.next(t).text, "the worker answers the chat bound to it, named by its number")
+	assert.Equal(t, "ok\n\n[#1 Worker]", sink.next(t).text, "the worker answers the chat bound to it, named by its number")
 	evs := userEvents(t, f.store, th.ID)
 	last := evs[len(evs)-1]
 	assert.Equal(t, "from the chat", last.Content)
@@ -146,17 +150,23 @@ func TestNeedsYouReachesChatsOfTheThreadAndItsAncestors(t *testing.T) {
 	sink.none(t)
 }
 
-func TestBindingAFolderNeedsAThread(t *testing.T) {
+func TestBindingAFolderOrAThread(t *testing.T) {
 	f, svc, _ := channelFixture(t)
 	s, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "go"})
 	require.NoError(t, err)
 
-	_, err = svc.BindChannel("telegram", "1", "", "", s.ProjectID)
-	assert.ErrorIs(t, err, ErrBindFolder, "a folder has no main thread to stand for it")
-	waitStatus(t, f.store, s.ID, db.ThreadIdle)
-	b, err := svc.BindChannel("telegram", "1", "", s.ID, "")
+	b, err := svc.BindChannel("telegram", "1", "", "", s.ProjectID, "bot-1")
 	require.NoError(t, err)
 	assert.Equal(t, s.ProjectID, b.ProjectID)
+	assert.Equal(t, s.ProjectID, b.TargetProjectID)
+	assert.Empty(t, b.ThreadID)
+	assert.NotEmpty(t, b.Folder)
+	assert.Equal(t, "bot-1", b.BotUUID)
+	waitStatus(t, f.store, s.ID, db.ThreadIdle)
+	b, err = svc.BindChannel("telegram", "1", "", s.ID, "")
+	require.NoError(t, err)
+	assert.Equal(t, s.ProjectID, b.ProjectID)
+	assert.Equal(t, s.ID, b.TargetThreadID, "an explicit folder session is retained as the binding target")
 
 	_, err = svc.BindChannel("telegram", "1", "", s.ID, f.project.ID)
 	assert.ErrorIs(t, err, ErrBindingInvalid, "a thread or a project, not both")

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	"github.com/tingly-dev/tingly-box/internal/routing/routingtest"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -29,8 +30,8 @@ func TestRepro_SingleActiveServiceWithInactiveSibling(t *testing.T) {
 	providerUUID := addTestProvider(t, cfg, "the-provider")
 	healthMonitor, _, selector := newSelectorStack(cfg)
 
-	activeSvc := routing.ServiceForTest(providerUUID, "main-model", true)
-	inactiveSvc := routing.ServiceForTest(providerUUID, "old-model", false) // disabled by the user; must never be selected
+	activeSvc := routingtest.Service(providerUUID, "main-model", true)
+	inactiveSvc := routingtest.Service(providerUUID, "old-model", false) // disabled by the user; must never be selected
 	rule := &typ.Rule{
 		Scenario:     typ.ScenarioClaudeCode,
 		RequestModel: "main-model",

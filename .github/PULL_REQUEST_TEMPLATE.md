@@ -57,12 +57,3 @@ One bullet = one line (~15 words after the colon); 3+ lines means rewrite or
 split. Over budget → cut the weakest bullets, don't compress wording. One
 fact, one place — nothing repeats across title/Summary/bullets/Notes.
 -->
-
-<!--
-Footer — the only place for anything that is not about the change itself:
-requester, thread / session links, tracking ids, hidden markers. Keep it plain:
-a `---` rule, then one short line, e.g.
-  _Requested by name · [thread](…) · [session](…)_
-A hidden HTML-comment marker, if a tool needs one, sits on its own line here.
-No badges, banners, "Generated with" lines or model names.
--->

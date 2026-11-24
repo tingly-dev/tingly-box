@@ -42,6 +42,7 @@ type Config struct {
 	LegacyRules        []typ.Rule           `yaml:"-" json:"rules"`
 	UserToken          string               `yaml:"user_token" json:"user_token"`               // User token for UI and control API authentication
 	ModelToken         string               `yaml:"model_token" json:"model_token"`             // Model token for OpenAI and Anthropic API authentication
+	MCPToken           string               `yaml:"mcp_token" json:"mcp_token"`                 // MCP token for the MCP profile endpoints only
 	InternalAPIToken   string               `json:"-"`                                          // Internal API token for probe testing (generated at startup, not persisted)
 	EncryptProviders   bool                 `yaml:"encrypt_providers" json:"encrypt_providers"` // Whether to encrypt provider info (default false)
 	Scenarios          []typ.ScenarioConfig `yaml:"scenarios" json:"scenarios"`                 // Scenario-specific configurations
@@ -331,6 +332,14 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		cfg.ModelToken = modelToken
 		updated = true
 	}
+	if cfg.MCPToken == "" {
+		mcpToken, err := GenerateMCPToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate secure MCP token: %w", err)
+		}
+		cfg.MCPToken = mcpToken
+		updated = true
+	}
 
 	if cfg.RandomUUID == "" {
 		cfg.RandomUUID = uuid.New().String()
@@ -447,6 +456,8 @@ func NewConfigWithDir(configDir string, opts ...ConfigOption) (*Config, error) {
 
 // load loads the global configuration from file
 func (c *Config) load() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	// Store the config file path before unmarshaling
 	configFile := c.ConfigFile
 
@@ -482,6 +493,13 @@ func (c *Config) load() error {
 
 // Save saves the global configuration to file
 func (c *Config) Save() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.saveLocked()
+}
+
+// saveLocked persists the config while c.mu is held.
+func (c *Config) saveLocked() error {
 	if c.ConfigFile == "" {
 		return fmt.Errorf("ConfigFile is empty")
 	}
@@ -628,6 +646,13 @@ func (c *Config) CreateDefaultConfig() error {
 			return fmt.Errorf("failed to generate secure model token: %w", err)
 		}
 		c.ModelToken = "tingly-box-" + modelToken
+	}
+	if c.MCPToken == "" {
+		mcpToken, err := GenerateMCPToken()
+		if err != nil {
+			return fmt.Errorf("failed to generate secure MCP token: %w", err)
+		}
+		c.MCPToken = mcpToken
 	}
 
 	// Initialize merged fields with defaults

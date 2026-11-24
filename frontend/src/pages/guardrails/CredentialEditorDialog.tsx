@@ -12,7 +12,8 @@ import {
     Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@/components/icons';
-import CopyIconButton from '@/components/CopyIconButton';
+import CopyIconButton from '@tingly/ui/components/CopyIconButton';
+import { radius } from '@tingly/ui/theme/radius';
 
 export type CredentialEditorState = {
     name: string;
@@ -131,7 +132,7 @@ const CredentialEditorDialog = ({
                                         flex: 1,
                                         border: '1px solid',
                                         borderColor: selected ? 'primary.main' : 'divider',
-                                        borderRadius: 2,
+                                        borderRadius: radius.card,
                                         p: 1.5,
                                         cursor: 'pointer',
                                         bgcolor: selected ? 'action.selected' : 'transparent',

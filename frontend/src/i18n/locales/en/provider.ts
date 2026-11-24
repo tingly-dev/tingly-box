@@ -7,6 +7,9 @@ export default {
     "useProxy": "Use proxy & continue",
     "skip": "Continue without proxy"
   },
+  "qoderConnection": {
+    "scope": "This third-party connection uses Qoder client interfaces. Models, credits and permitted clients are determined by Qoder. A successful sign-in does not guarantee access from every client; use the connection within your account permissions and Qoder’s terms."
+  },
   "workbuddyConnection": {
     "cardSummary": "Everyday work · Routing & tools",
     "proxyHint": "Optional: configure a network proxy for this connection.",
@@ -68,7 +71,7 @@ export default {
     "editUx": {
       "proxySettings": "Proxy",
       "keyOptionalHint": "Optional for self-hosted services without authentication. Leave blank if no key is required.",
-      "keyEditHint": "Leave blank to keep the current key. Select “No API key required” for a service without authentication.",
+      "keyEditHint": "The current key is shown masked — click the eye to reveal it, type to replace. Select “No API key required” for a service without authentication.",
       "oauthStyleLocked": "API style is managed by OAuth and cannot be changed here.",
       "authentication": "Authentication",
       "googleCompatible": "Google Compatible",
@@ -94,6 +97,7 @@ export default {
       "saveFailed": "Could not save changes. Please try again.",
       "proxyHint": "Optional proxy settings",
       "testConnection": "Test Connection",
+      "stopTest": "Stop Test",
       "saving": "Saving…",
       "noKey": "No API key required",
       "showKey": "Show key",
@@ -135,8 +139,8 @@ export default {
     "apiKey": {
       "label": "API Key",
       "placeholderAdd": "Your API key",
-      "placeholderEdit": "Leave empty to keep current key",
-      "helperEdit": "Leave empty to keep current key"
+      "placeholderEdit": "Type to replace the saved key",
+      "helperEdit": "Type to replace the saved key"
     },
     "enabled": "Enabled",
     "export": {
@@ -163,6 +167,8 @@ export default {
       "missingFields": "Please fill in all required fields (API Style, Name, API Base URL, API Key)",
       "failed": "Connection check failed",
       "networkError": "Unable to connect. Please check your network and proxy settings.",
+      "cancelled": "Connection test cancelled",
+      "timedOut": "Connection test timed out (30s) and was stopped",
       "failureHint": "You can still add this provider using the 'Add Anyway' button if you're sure the configuration is correct.",
       "responseTime": "Response time: {{time}}ms",
       "modelsAvailable": "{{count}} models available",
@@ -196,6 +202,7 @@ export default {
       "leftOf": "{{value}} left of {{limit}}",
       "cost": "Cost",
       "readFailed": "Couldn't read quota",
+      "retryAt": "Next automatic retry at {{time}}",
       "noLimits": "No quota limits reported",
       "none": "No quota reading yet",
       "refresh": "Refresh",
@@ -251,6 +258,20 @@ export default {
     }
   },
   "credentialPage": {
+    "sortBy": "Sort by",
+    "sortName": "Name",
+    "sortProvider": "Provider",
+    "tableView": "Table view",
+    "endpoint": "Endpoint",
+    "twoEndpoints": "2 endpoints",
+    "viewMode": "View mode",
+    "listView": "List view",
+    "cardView": "Card view",
+    "status": "Status",
+    "expiresAt": "Expires at",
+    "baseUrl": "API base URL",
+    "never": "Never",
+    "expired": "Expired",
     "empty": "No credentials yet",
     "managing_one": "Managing {{count}} credential",
     "managing_other": "Managing {{count}} credentials",
@@ -267,6 +288,17 @@ export default {
     "deleted": "Provider deleted successfully!",
     "deleteFailed": "Failed to delete provider: {{error}}",
     "toggleFailed": "Failed to toggle provider: {{error}}",
+    "proxySwitchLabel": "Proxy for {{name}}",
+    "proxyOnHint": "Proxy on: {{url}}. Click to turn it off (this clears the URL).",
+    "proxyOffHint": "No proxy. Click to turn one on.",
+    "proxyEnabledToast": "Proxy on for {{name}}",
+    "proxyDisabledToast": "Proxy off for {{name}}",
+    "proxyToggleFailed": "Couldn't change the proxy for {{name}}: {{error}}",
+    "proxyEnableTitle": "Turn on proxy for {{name}}",
+    "proxyEnableConfirm": "Turn on",
+    "proxyUrlInvalid": "Enter a URL like http://host:port, https://host:port or socks5://host:port.",
+    "proxyFromGlobal": "Prefilled with the quick proxy from System Settings.",
+    "proxyEnterUrl": "The proxy this credential should connect through.",
     "tokenRefreshed": "Token refreshed successfully!",
     "reauthorized": "Provider reauthorized successfully!",
     "reauthorizeUnknownIssuer": "Cannot reauthorize: provider issuer is unknown",
@@ -282,6 +314,9 @@ export default {
     "copyButton": "Copy Token"
   },
   "sharingKeys": {
+    "phone": {
+      "keyActions": "Actions for {{name}}"
+    },
     "title": "Team Keys",
     "titleForTeam": "Team Keys · {{team}}",
     "createToken": "Create Token",
@@ -335,6 +370,7 @@ export default {
       "active": "Active",
       "inactive": "Disabled",
       "moveTooltip": "Move to another team",
+      "limitsTooltip": "Limits for this person",
       "deleteTooltip": "Delete token"
     }
   },
@@ -350,7 +386,12 @@ export default {
     "enableTeam": "Enable team",
     "disableTeam": "Disable team",
     "deleteTeam": "Delete team",
-    "deleteConfirm": "Delete {{team}}? Move or delete all of its Team Keys first.",
+    "duplicateTeam": "Duplicate team",
+    "duplicateTitle": "Duplicate Team",
+    "duplicateDescription": "Creates a new team with the same model routing. Team Keys are not copied; the new team starts without any. {{team}} stays unchanged.",
+    "duplicated": "Team duplicated",
+    "duplicateFailed": "Failed to duplicate team",
+    "deleteConfirm": "Delete {{team}} and its model routing? Move or delete all of its Team Keys first.",
     "loadFailed": "Failed to load teams",
     "saveFailed": "Failed to save team",
     "createSuccess": "Team created",
@@ -435,6 +476,23 @@ export default {
       "resetSuccessMessage": "Your new model token has been generated. Make sure to update your API clients.",
       "saved": "I've Updated My Clients",
       "pullToken": "Pull latest token from server"
+    },
+    "mcpToken": {
+      "title": "MCP Token (MCP Profiles)",
+      "description": "Give this token to agents (Claude Code, Codex, OpenCode) that connect to an MCP profile. It opens the MCP profile endpoints and nothing else.",
+      "resetToken": "Reset MCP Token",
+      "resetTitle": "Reset MCP Token",
+      "resetConfirm": "Are you sure you want to reset the MCP token?",
+      "resetPoints": {
+        "new": "A new random token will be generated",
+        "stop": "The old token will immediately stop working - every agent registered with it needs the new one"
+      },
+      "resetWarning": "Re-register the MCP profile in your agents after resetting.",
+      "resetCancel": "Cancel",
+      "resetConfirmButton": "Reset",
+      "resetSuccess": "MCP Token Reset Successfully",
+      "resetSuccessMessage": "Your new MCP token has been generated. Copy the registration command from the MCP profile page again.",
+      "saved": "I've Updated My Agents"
     },
     "securityInfo": {
       "title": "Token Security",

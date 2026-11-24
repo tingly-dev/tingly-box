@@ -89,8 +89,52 @@ func (m *Threads) SetProfile(ctx context.Context, id, profile string) (*db.Threa
 	return out, err
 }
 
-// SetModel sets the model the thread's next turn asks for. Empty restores
-// the project's model for a worker, or the host profile's default for a folder.
+// SetWorkerProfile selects a profile for a project worker. inherit copies the
+// project's current profile and model onto it again (a reset, not a link).
+func (m *Threads) SetWorkerProfile(ctx context.Context, id, profile string, inherit bool) (*db.Thread, error) {
+	t, err := m.store.GetThread(id)
+	if err != nil {
+		return nil, err
+	}
+	if m.isFolder(t.ProjectID) || t.Agent == db.AgentLLM {
+		return nil, errors.New("not a project worker")
+	}
+	profile = strings.TrimSpace(profile)
+	if !inherit && profile != "" {
+		l, ok := m.env.(Launcher)
+		if !ok {
+			return nil, ErrNoProfiles
+		}
+		if err := l.CheckLaunch(ctx, profile, ""); err != nil {
+			return nil, err
+		}
+	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	return m.update(id, func(t *db.Thread) {
+		if inherit {
+			profile = p.ThreadProfile
+			t.ModelOverride = p.ThreadModel
+		} else {
+			t.ModelOverride = ""
+		}
+		t.ProfileOverride = &profile
+	})
+}
+
+// workerProfile is the profile a worker runs under: its own, pinned when it
+// started. The project's is not consulted; a row without one uses the connection.
+func workerProfile(t *db.Thread) string {
+	if t.ProfileOverride != nil {
+		return *t.ProfileOverride
+	}
+	return ""
+}
+
+// SetModel sets the model the thread's next turn asks for. Empty is the
+// default model of the thread's profile (the connection's when it has none).
 func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, error) {
 	model = strings.TrimSpace(model)
 	t, err := m.store.GetThread(id)
@@ -101,8 +145,12 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 		return nil, errors.New("not available on a project's main thread; use the project's own settings")
 	}
 	folder := m.isFolder(t.ProjectID)
-	if l, ok := m.env.(Launcher); folder && ok && model != "" {
-		if err := l.CheckLaunch(ctx, t.Profile, model); err != nil {
+	if l, ok := m.env.(Launcher); ok && model != "" {
+		profile := t.Profile
+		if !folder {
+			profile = workerProfile(t)
+		}
+		if err := l.CheckLaunch(ctx, profile, model); err != nil {
 			return nil, err
 		}
 	}
@@ -119,11 +167,31 @@ func (m *Threads) SetModel(ctx context.Context, id, model string) (*db.Thread, e
 	return out, err
 }
 
+// SetEffort configures the thread's next turn; empty is the endpoint's default.
+// The project's defaults are never changed or consulted.
+func (m *Threads) SetEffort(id, effort string) (*db.Thread, error) {
+	effort = strings.TrimSpace(effort)
+	if !ValidEffort(effort) {
+		return nil, errors.New("invalid effort level")
+	}
+	t, err := m.store.GetThread(id)
+	if err != nil {
+		return nil, err
+	}
+	if t.Agent == db.AgentLLM {
+		return nil, ErrNotWorker
+	}
+	return m.update(id, func(t *db.Thread) { t.EffortOverride = effort })
+}
+
 // Handoff releases a session so it can go on in a terminal, and returns the
 // command that does it. The resident process is closed first: two processes
 // writing one Claude session file corrupt it. A turn in flight is refused
 // rather than killed; a message sent here afterwards starts it again.
 func (m *Threads) Handoff(id string) (string, error) {
+	lock := m.lifecycleLock(id)
+	lock.Lock()
+	defer lock.Unlock()
 	// A message sent while the process was closing waited for it.
 	defer m.next(id)
 	t, err := m.store.GetThread(id)
@@ -140,22 +208,25 @@ func (m *Threads) Handoff(id string) (string, error) {
 	}
 	argv := []string{"claude"}
 	if h, ok := m.env.(Handoffer); ok {
-		argv = h.HandoffLaunch(t.Profile)
+		profile := t.Profile
+		if !m.isFolder(t.ProjectID) {
+			profile = workerProfile(t)
+		}
+		argv = h.HandoffLaunch(profile)
 	}
 	argv = append(argv, "--resume", t.SessionID)
 	model := t.Model
 	if !m.isFolder(t.ProjectID) {
 		// A worker's Model is the model that last answered, not its next
-		// launch choice. Handoff must preserve the configured override/default.
+		// launch choice. Handoff must preserve the thread's own configured model.
 		model = t.ModelOverride
-		if model == "" {
-			if p, err := m.store.GetProject(t.ProjectID); err == nil {
-				model = p.ThreadModel
-			}
-		}
 	}
 	if model != "" {
 		argv = append(argv, "--model", model)
+	}
+	effort := t.EffortOverride
+	if effort != "" {
+		argv = append(argv, "--effort", effort)
 	}
 	return terminalCommand(runtime.GOOS, t.Cwd, argv), nil
 }

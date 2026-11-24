@@ -1,6 +1,7 @@
 import {createContext, useCallback, useContext, useMemo, useSyncExternalStore} from 'react';
 import type {ComponentType, ReactNode, SetStateAction} from 'react';
 import type {MessageDetail} from './messageDetail';
+import type {TranscriptEntry} from './model';
 
 // DraftStorage is where the transcript keeps what the user typed into a
 // request card, and whether it was already sent, so both survive the card
@@ -44,7 +45,8 @@ export type CodeBlockComponent = ComponentType<{code: string; language: string}>
 
 // AttachmentsComponent renders the files a user message carries. The host
 // passes its own (thumbnails fetched with its auth); without one, names only.
-export type AttachmentsComponent = ComponentType<{items: {name: string; path: string; type: string; size: number}[]}>;
+// captions (by path) are what a file was sent with, shown while the pointer is on it.
+export type AttachmentsComponent = ComponentType<{items: {name: string; path: string; type: string; size: number}[]; align?: 'flex-start' | 'flex-end'; captions?: Record<string, string>}>;
 
 /** Where a subagent's steps stand: not read yet, or read with or without older ones left. */
 export type AgentSteps = {loaded: false} | {loaded: true; more: boolean};
@@ -69,20 +71,28 @@ interface TranscriptHost {
     codeBlock?: CodeBlockComponent;
     attachments?: AttachmentsComponent;
     rememberLabel?: (tool: string) => string;
+    messageSource?: (message: TranscriptEntry) => ReactNode;
+    // Renders the host's own entries the transcript doesn't know (a
+    // conversation can carry its cards); without one they show as text.
+    renderCustom?: (message: TranscriptEntry) => ReactNode;
+    responseRecovery?: ReactNode;
 }
 
 const HostContext = createContext<TranscriptHost>({drafts: memoryDrafts, detail: 'detailed'});
 
-export const TranscriptHostProvider = ({detail = 'detailed', drafts, subagents, codeBlock, attachments, rememberLabel, children}: {
+export const TranscriptHostProvider = ({detail = 'detailed', drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, messageSource, renderCustom, children}: {
     detail?: MessageDetail;
     drafts?: DraftStorage;
     subagents?: SubagentSteps;
     codeBlock?: CodeBlockComponent;
     attachments?: AttachmentsComponent;
     rememberLabel?: (tool: string) => string;
+    messageSource?: (message: TranscriptEntry) => ReactNode;
+    renderCustom?: (message: TranscriptEntry) => ReactNode;
+    responseRecovery?: ReactNode;
     children: ReactNode;
 }) => {
-    const value = useMemo(() => ({detail, drafts: drafts ?? memoryDrafts, subagents, codeBlock, attachments, rememberLabel}), [detail, drafts, subagents, codeBlock, attachments, rememberLabel]);
+    const value = useMemo(() => ({detail, drafts: drafts ?? memoryDrafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, messageSource, renderCustom}), [detail, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, messageSource, renderCustom]);
     return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 };
 

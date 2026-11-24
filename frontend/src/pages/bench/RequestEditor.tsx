@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Button, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { RawRequest } from './benchState';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // RequestEditor: what the client sends. Protocol and Content (which body,
 // Message vs a whole-body preset) are chosen in Compose now, not here
@@ -53,7 +53,7 @@ export const RequestEditor: React.FC<{
                 <Box sx={{ flex: 1 }} />
                 {seedBody && (
                     <Tooltip title={t('bench.startFromPresetHint', { defaultValue: "What the probe's own request would send right now." })}>
-                        <Button size="small" variant="outlined" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: fontSizes.xs }}>
+                        <Button size="small" variant="outlined" onClick={() => onRawChange({ ...raw, body: seedBody })} sx={{ fontSize: fontSizes.micro }}>
                             {t('bench.startFromPreset', { defaultValue: 'Copy the preset request' })}
                         </Button>
                     </Tooltip>

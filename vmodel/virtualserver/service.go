@@ -24,14 +24,21 @@ type Service struct {
 // NewService creates a fully initialized Service with default models registered
 // in both protocol registries.
 func NewService() *Service {
+	s := NewEmptyService()
+	anthropicvm.RegisterDefaults(s.anthropicReg)
+	openaivm.RegisterDefaults(s.openaiReg)
+	decisionvm.RegisterDefaults(s.decisionReg)
+	return s
+}
+
+// NewEmptyService creates an isolated service for explicitly configured models.
+// It shares production routing and handlers without seeding demo defaults.
+func NewEmptyService() *Service {
 	a := anthropicvm.NewRegistry()
-	anthropicvm.RegisterDefaults(a)
 
 	o := openaivm.NewRegistry()
-	openaivm.RegisterDefaults(o)
 
 	d := decisionvm.NewRegistry()
-	decisionvm.RegisterDefaults(d)
 
 	return &Service{
 		anthropicReg: a,
@@ -46,6 +53,9 @@ func (s *Service) GetAnthropicRegistry() *anthropicvm.Registry { return s.anthro
 
 // GetOpenAIRegistry returns the OpenAI Chat-protocol model registry.
 func (s *Service) GetOpenAIRegistry() *openaivm.Registry { return s.openaiReg }
+
+// GetDecisionRegistry returns the Decisions-protocol model registry.
+func (s *Service) GetDecisionRegistry() *decisionvm.Registry { return s.decisionReg }
 
 // GetHandler returns the HTTP handler.
 func (s *Service) GetHandler() *Handler {
@@ -63,6 +73,7 @@ func (s *Service) SetupRoutes(group *gin.RouterGroup) {
 	group.POST("/chat/completions", s.handler.ChatCompletions)
 	group.POST("/responses", s.handler.Responses)
 	group.POST("/decisions", s.handler.Decisions)
+	group.POST("/systemone", s.handler.Decisions)
 	group.POST("/messages", s.handler.Messages)
 }
 
@@ -81,6 +92,7 @@ func (s *Service) SetupOpenAIRoutes(group *gin.RouterGroup) {
 	v1.POST("/chat/completions", s.handler.ChatCompletions)
 	v1.POST("/responses", s.handler.Responses)
 	v1.POST("/decisions", s.handler.Decisions)
+	v1.POST("/systemone", s.handler.Decisions)
 }
 
 // SetupAnthropicRoutes mounts the Anthropic-only entrypoints on the given

@@ -24,16 +24,21 @@ beforeEach(() => {
 });
 afterEach(() => {cleanup(); vi.unstubAllGlobals();});
 describe('provider edit', () => {
-    it('shows the name and preserves the saved key when the replacement is blank', async () => {
+    it('pre-fills the saved key, reveals it via the eye toggle and no-ops on unchanged save', async () => {
         await open();
         expect(screen.getByRole('dialog', {name: 'Edit AI Config'})).toBeInTheDocument();
         expect(screen.getByText('Authentication')).toBeInTheDocument();
         expect(screen.getByLabelText('HTTP/SOCKS Proxy URL (Optional)')).toBeVisible();
         expect(screen.getByRole('switch', {name: 'Enabled'})).toBeChecked();
         expect(screen.getByLabelText('Name')).toHaveValue('My provider');
-        expect(screen.getByLabelText('API Key')).toHaveValue('');
+        const keyField = screen.getByLabelText('API Key');
+        expect(keyField).toHaveValue('stored-secret');
+        expect(keyField).toHaveAttribute('type', 'password');
+        fireEvent.click(screen.getByRole('button', {name: 'Show key'}));
+        expect(keyField).toHaveAttribute('type', 'text');
+        fireEvent.click(screen.getByRole('button', {name: 'Hide key'}));
         fireEvent.click(screen.getByRole('button', {name: 'Save Changes'}));
-        await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({token: undefined})));
+        await waitFor(() => expect(api.updateProvider).toHaveBeenCalledWith('p1', expect.objectContaining({token: 'stored-secret'})));
     });
     it('validates every enabled URL and prevents protocol toggles from URL clicks', async () => {
         await open();
@@ -63,7 +68,7 @@ describe('provider edit', () => {
         await open();
         fireEvent.click(screen.getByRole('button', {name: 'Test Connection'}));
         expect(await screen.findAllByText(/Authentication failed/)).not.toHaveLength(0);
-        expect(api.probeProviderLightweight).toHaveBeenCalledWith('My provider', 'openai', provider.api_base, 'stored-secret', 'api_key');
+        expect(api.probeProviderLightweight).toHaveBeenCalledWith('My provider', 'openai', provider.api_base, 'stored-secret', 'api_key', expect.any(AbortSignal));
     });
     it('explicitly selects no authentication without resending the stored key', async () => {
         await open();
@@ -76,6 +81,7 @@ describe('provider edit', () => {
         vi.mocked(api.getProvider).mockResolvedValue({success: true, data: {...provider, no_key_required: true, token: ''}});
         await open();
         expect(screen.getByRole('checkbox', {name: 'No API key required'})).toBeChecked();
+        expect(screen.getByLabelText('API Key')).not.toHaveAttribute('placeholder', '****');
         fireEvent.click(screen.getByRole('button', {name: 'Test Connection'}));
         expect(screen.getByText('An API key is needed for this test. You can save without testing.')).toBeInTheDocument();
     });

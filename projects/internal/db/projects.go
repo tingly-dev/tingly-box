@@ -35,7 +35,21 @@ func (s *Store) CreateProject(p *Project) error {
 	if p.Type == "" {
 		p.Type = ProjectProject
 	}
+	defaultGitHubAuto(p)
 	return s.db.Create(p).Error
+}
+
+// defaultGitHubAuto gives a new project its GitHub settings when none were
+// chosen: a project auto-approves nothing (every write asks), a folder, which
+// has no settings to change it, keeps publishing without a card as before.
+func defaultGitHubAuto(p *Project) {
+	if p.GitHubAuto != nil {
+		return
+	}
+	p.GitHubAuto = []string{}
+	if p.Type == ProjectFolder {
+		p.GitHubAuto = []string{"publish"}
+	}
 }
 
 // CreateProjectWithMain inserts a project together with its main thread
@@ -53,6 +67,7 @@ func (s *Store) CreateProjectWithMain(p *Project, main *Thread, projectsDir stri
 		if main.Status == "" {
 			main.Status = ThreadIdle
 		}
+		defaultGitHubAuto(p)
 		p.MainThreadID = main.ID
 		if main.Cwd == "" && projectsDir != "" {
 			main.Cwd = filepath.Join(projectsDir, p.ID)
@@ -71,6 +86,49 @@ func (s *Store) GetProject(id string) (*Project, error) {
 		return nil, notFound(err)
 	}
 	return &p, nil
+}
+
+// DeleteProjectCascade removes a project and everything scoped to it: its
+// threads, their events, its coordinator inputs and its IM bindings. No user
+// action deletes a project (archiving is the only removal the app offers);
+// Fork calls this to roll back a copy that failed midway.
+func (s *Store) DeleteProjectCascade(projectID string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("target_project_id = ?", projectID).Delete(&ChannelBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", projectID).Delete(&CoordinatorInput{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM thread_events WHERE thread_id IN (SELECT id FROM threads WHERE project_id = ?)", projectID).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", projectID).Delete(&Thread{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", projectID).Delete(&Project{}).Error
+	})
+}
+
+// DeleteThreadCascade removes one thread and what is scoped to it: its
+// events, its coordinator settings delivery and the IM bindings that still
+// name it. Delete (of an archived thread) calls it; nothing else does.
+func (s *Store) DeleteThreadCascade(threadID string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("thread_id = ?", threadID).Delete(&ThreadEvent{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("thread_id = ?", threadID).Delete(&CoordinatorSettingsDelivery{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("target_thread_id = ?", threadID).Delete(&ChannelBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("thread_id = ?", threadID).Delete(&ChannelBinding{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", threadID).Delete(&Thread{}).Error
+	})
 }
 
 // SaveProject writes all fields of p.
@@ -118,7 +176,7 @@ func (s *Store) ProjectThreadCounts(projectID string) (ThreadCounts, error) {
 		Status string
 		N      int
 	}
-	if err := s.db.Model(&Thread{}).Select("status, COUNT(*) AS n").Where("project_id = ? AND agent <> ?", projectID, AgentLLM).Group("status").Scan(&rows).Error; err != nil {
+	if err := s.db.Model(&Thread{}).Select("status, COUNT(*) AS n").Where("project_id = ? AND agent <> ? AND archived_at IS NULL", projectID, AgentLLM).Group("status").Scan(&rows).Error; err != nil {
 		return ThreadCounts{}, err
 	}
 	m := map[string]int{}
@@ -136,7 +194,7 @@ func (s *Store) ThreadCounts() (map[string]map[string]int, error) {
 		Status    string
 		N         int
 	}
-	if err := s.db.Model(&Thread{}).Select("project_id, status, COUNT(*) AS n").Where("agent <> ?", AgentLLM).Group("project_id, status").Scan(&rows).Error; err != nil {
+	if err := s.db.Model(&Thread{}).Select("project_id, status, COUNT(*) AS n").Where("agent <> ? AND archived_at IS NULL", AgentLLM).Group("project_id, status").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := map[string]map[string]int{}
@@ -233,9 +291,21 @@ func (s *Store) GetThread(id string) (*Thread, error) {
 	return &t, nil
 }
 
-// SaveThread writes all fields of t.
+// SaveThread writes all fields of t except its links and grants (see
+// UpdateThreadLinks, UpdateThreadGrants).
 func (s *Store) SaveThread(t *Thread) error {
-	return s.db.Save(t).Error
+	return s.db.Omit("Links", "Grants").Save(t).Error
+}
+
+// SaveThreadUsage writes only what a turn's usage changed. A caller holding an
+// older copy of the thread cannot clobber its other columns with it.
+func (s *Store) SaveThreadUsage(t *Thread) error {
+	return s.db.Model(&Thread{}).Where("id = ?", t.ID).UpdateColumns(map[string]any{
+		"input_tokens": t.InputTokens, "output_tokens": t.OutputTokens,
+		"cache_read_tokens": t.CacheReadTokens, "cache_write_tokens": t.CacheWriteTokens,
+		"context_tokens": t.ContextTokens, "context_window": t.ContextWindow,
+		"last_turn_ms": t.LastTurnMS, "last_turn_at": t.LastTurnAt, "reported_model": t.ReportedModel,
+	}).Error
 }
 
 // SetThreadTitle renames a thread without bumping its UpdatedAt: a metadata
@@ -252,12 +322,38 @@ func (s *Store) ListThreads(projectID string) ([]Thread, error) {
 	return out, err
 }
 
+// MainThreadBySession returns the main thread whose coordinator session is
+// sessionID, or ErrNotFound.
+func (s *Store) MainThreadBySession(sessionID string) (*Thread, error) {
+	var t Thread
+	if sessionID == "" {
+		return nil, ErrNotFound
+	}
+	err := s.db.Where("session_id = ? AND agent = ?", sessionID, AgentLLM).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &t, err
+}
+
 // ListThreadsByStatus returns threads in any of the given statuses across
 // all projects.
 func (s *Store) ListThreadsByStatus(statuses ...string) ([]Thread, error) {
 	var out []Thread
-	err := s.db.Where("status IN ? AND agent <> ?", statuses, AgentLLM).Find(&out).Error
+	err := s.db.Where("status IN ? AND agent <> ? AND archived_at IS NULL", statuses, AgentLLM).Find(&out).Error
 	return out, err
+}
+
+// OtherThreadOnBranch returns a thread other than exceptID that was started on
+// branch in the repository at repoPath (archived ones too: the branch stays
+// theirs until the thread is deleted), or ErrNotFound.
+func (s *Store) OtherThreadOnBranch(repoPath, branch, exceptID string) (*Thread, error) {
+	var t Thread
+	err := s.db.Where("branch = ? AND repo_path = ? AND id <> ? AND agent <> ?", branch, repoPath, exceptID, AgentLLM).First(&t).Error
+	if err != nil {
+		return nil, notFound(err)
+	}
+	return &t, nil
 }
 
 // Lineage returns a thread and its ancestors, the thread first.
@@ -282,6 +378,16 @@ func (s *Store) Lineage(id string) ([]Thread, error) {
 // AddThreadEvent appends to a thread's transcript.
 func (s *Store) AddThreadEvent(e *ThreadEvent) error {
 	e.ID = newID()
+	return s.AddThreadEventAs(e)
+}
+
+// NewEventID is an id for an event whose text must name it before it is saved
+// (AddThreadEventAs).
+func (s *Store) NewEventID() string { return newID() }
+
+// AddThreadEventAs is AddThreadEvent for an event that already has its id
+// from NewEventID.
+func (s *Store) AddThreadEventAs(e *ThreadEvent) error {
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now()
 	}
@@ -401,6 +507,22 @@ func (s *Store) PageThreadEvents(threadID string, p EventPage) ([]ThreadEvent, b
 	return out, more, nil
 }
 
+// FindThreadEvent loads the event of a thread whose id starts with prefix; an
+// ambiguous or unknown prefix is not found.
+func (s *Store) FindThreadEvent(threadID, prefix string) (*ThreadEvent, error) {
+	if prefix == "" || strings.ContainsAny(prefix, "%_") {
+		return nil, ErrNotFound
+	}
+	var out []ThreadEvent
+	if err := s.db.Where("thread_id = ? AND id LIKE ?", threadID, prefix+"%").Limit(2).Find(&out).Error; err != nil {
+		return nil, err
+	}
+	if len(out) != 1 {
+		return nil, ErrNotFound
+	}
+	return &out[0], nil
+}
+
 // GetThreadEvent loads one event.
 func (s *Store) GetThreadEvent(id string) (*ThreadEvent, error) {
 	var e ThreadEvent
@@ -413,6 +535,13 @@ func (s *Store) GetThreadEvent(id string) (*ThreadEvent, error) {
 // ListThreadEvents returns a thread's transcript in order.
 func (s *Store) ListThreadEvents(threadID string) ([]ThreadEvent, error) {
 	return s.ListRecentThreadEvents(threadID, 0)
+}
+
+// ListRequestEvents reads a thread's approvals and questions, including subagents'.
+func (s *Store) ListRequestEvents(threadID string) ([]ThreadEvent, error) {
+	var out []ThreadEvent
+	err := s.db.Where("thread_id = ? AND kind IN ?", threadID, []string{EvApproval, EvAsk}).Find(&out).Error
+	return out, err
 }
 
 // ListRecentThreadEvents returns the latest limit events of a thread in

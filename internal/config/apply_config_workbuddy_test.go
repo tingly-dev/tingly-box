@@ -92,6 +92,9 @@ func TestApplyWorkBuddyConfig_PreservesObjectFile(t *testing.T) {
     {"id": "old-tingly", "url": "http://localhost:12580/tingly/workbuddy/v1/chat/completions", "apiKey": "old"}
   ]
 }`), 0o640))
+	// WriteFile's creation mode is filtered by the process umask. Set the
+	// intended initial permissions explicitly before testing preservation.
+	require.NoError(t, os.Chmod(path, 0o640))
 
 	res := applyWorkBuddyConfigAt(path, wbDisplay, wbBase, "new", []string{"fresh"})
 	require.True(t, res.Success, res.Message)

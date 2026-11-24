@@ -55,6 +55,8 @@ export interface ActivityItem {
     key: string;
     icon: ReactNode;
     label: string;
+    /** A shorter name for the 72px-wide rail, where long translations are cut; `label` stays the tooltip and the sidebar title. */
+    railLabel?: string;
     path?: string;
     children?: NavItem[];
     // Default path to use when there's no saved path in memory

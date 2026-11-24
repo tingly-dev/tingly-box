@@ -170,7 +170,7 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 - **文件夹 chat**：`/new 任务` 立刻在同一文件夹开新线程并把绑定移过去，模型、profile、权限模式沿用当前线程，第一条消息记为 `im` 来源；
   `/new` 不带文字只记下“下一条消息开新会话”（`channel_bindings.new_thread`，重绑时清除），不开空线程（文件夹线程不能没有第一条消息）。
   `/clear` = 停止当前回合 + 同上。旧线程保留在文件夹里。
-- **结束的会话不拒收**：文件夹 chat 绑定的线程已 resolve（手动归档或空闲自动 resolve）时，下一条消息直接开新线程，
+- **结束的会话不拒收**：文件夹 chat 绑定的线程已 resolve 或归档时，下一条消息直接开新线程，
   而不是回“线程已结束，请先 reopen”。回复前缀 `[#N 标题]` 变了，用户就知道换了会话。
 - **项目对话的 chat**：协调者不能被停止，也不由 chat 开线程；`/stop`、`/clear`、`/new` 回一句说明，不做任何事。
   子线程的 chat（只能经 API 绑）`/stop` 停它，`/new`、`/clear` 说明只对文件夹有效。
@@ -179,21 +179,45 @@ M3 之前，需要审批的线程在 IM 里只有提示，靠 Web 处理，这�
 
 ## M3 的落地
 
-- **发给谁**：线程停下来要审批或提问时（`Threads.OnWait`，带请求事件），发给绑在该线程**及其祖先**上的所有 chat，
-  与以前那句“需要你”同一批人；前缀 `[#N 标题]`。
+- **发给谁**：线程停下来要审批或提问时（`Threads.OnWait`，带请求事件），发给绑在该线程**及其祖先**上的 chat，
+  也发给整个 Project 的绑定（即使该 chat 已用 `/session` 跟随同项目另一线程）；明确绑定文件夹会话的 chat 不扩大到其他会话。
+  投递时重新检查绑定并去重。发送失败的请求不会留下等待文字回复的记录；前缀 `[#N 标题]`。
 - **按钮**：Host 可选能力 `ChannelPrompter`（`SendChannelPrompt` / `RestateChannelPrompt`）。审批是“允许 / 本线程都允许 / 拒绝”；
   提问只有**一个单选问题、1 到 8 个选项**时每个选项一个按钮（选项说明列在正文里）。多问题、多选、没有选项的提问，
   以及没有按钮的平台（今天：微信、企业微信、Slack、钉钉、Discord、WhatsApp、QQ）仍发一行“Needs you: …，请到 Web 处理”，同一线程同一 chat 5 分钟一次。
 - **按下去**：按钮负载是 `pj, 线程 id, 请求 id, 选择`（Telegram 的 64 字节限制由平台的负载编码处理）。`remoteagent` 的回调分派把它交给
-  `ProjectRouter.RouteAnswer` → `Service.AnswerFromChannel`：chat 必须绑在该线程或它的祖先上，否则拒绝（`ErrNotThisChat`）；
+  `ProjectRouter.RouteAnswer` → `Service.AnswerFromChannel`：先过 `Service.mayAnswer`，否则拒绝（`ErrNotThisChat`）。能回答的是：
+  绑在该线程或它的祖先上的 chat；以及**绑在整个项目上**的 chat（`TargetProjectID` 等于线程所在项目、`TargetThreadID` 为空、没有待迁移的 `Folder`），
+  它一次只“跟”一个线程（`/session N` 改的是 `ThreadID`），但仍可回答同项目任何线程的审批和提问——否则 chat 切到别的线程后，
+  之前发给它的按钮会报 “Could not answer: this chat is not bound to that thread”。显式绑到某个文件夹会话的 chat（`TargetThreadID` 非空）
+  仍只回答自己这条线的请求；别的项目的 chat 一律拒绝。文字回答（`answerWaiting`）对 chat 记着的每个待答请求也走同一个检查，
+  所以 chat 换了项目后，旧项目遗留的请求不会被它的下一句话答掉。
+  （协调者项目里按 `thread_id` 绑到某个工作线程的 chat 也记作项目绑定，因为只有文件夹会话才写 `TargetThreadID`。）
   然后就是 Web 用的同一个 `Threads.Respond`，答案带 `Via = im`，事件载荷里记 `via`。授权上，`pj` 与 `@cc` 的 `perm` 一样要求
-  `remote_control.approve`。
+  `remote_control.approve`。文字回答在 Projects 实际消费请求时，使用该入站消息的 bot、平台、chat 和发送者再次检查同一权限；
+  未授权时保留请求并告知原因；只有 `approve` 权限的用户仍可回答，不能因此发送普通消息。多个线程同时等待文字回答时，
+  不猜测要批准哪个请求：引导使用按钮或 Web。
 - **先答为准**：请求结束（任一边回答、建议答案自动作答、回合被停掉）时 `Threads.OnSettled` 触发，Relay 把发出去的每条按钮消息**改写**为原文加结果
   （“Allowed in a chat.” / “Denied on the web.” / “Answered in a chat: SQLite” / “No longer waiting: the turn ended.”），按钮随之消失；
   不能改写的平台补发一条结果。晚到的按钮回 “This was already answered.”。两条路都走 Relay 的同一个有序队列，所以改写总在发送之后。
 - **不用 `IMPrompter`**：它为 `@cc` 设计，找不到 bot 时自动批准、有全局“总是允许”白名单、超时自己作答，而且阻塞等待。Projects 的请求
   没有超时、只在线程里作答，所以按钮消息只是“发出去 + 之后改写”，回答走普通回调。
 - **没做**：用文字回答（引用回复或编号）给没有按钮的平台；`/threads` 列表。
+
+## 卡片投递与回复规则（M3 修订）
+
+绑在项目、项目对话或项目里任一线程上的 chat，等同于绑了整个项目：项目里所有的卡（审批、提问、决策卡、建议卡）都发给它，它也能回答。
+
+- **投递**：决策卡和建议卡（协调者发的，挂在主线程上）和审批/提问一样，发给线程血统上的 chat **以及**同项目的所有绑定（`requestProjectID`），投递时用 `mayAnswer` 过滤。此前决策卡只发给绑在主线程上的 chat，绑在 worker 上、或用 `/session N` 跟着别的线程的 chat 收不到。
+- **审批、提问、决策卡本来就由线程直接发给 chat**（`OnWait` → `Relay.NeedsUser`，不经协调者），协调者不转述。经协调者的只有线程的文字汇报：`failed` 和 `needs_input` 总是折成一行直接发出，`finished` 只在协调者不可用时折成一行，否则由协调者的回复代替，免得一件事说两遍。
+- **什么算回答**（`matchReplies`）：
+  - 消息以请求的**代码**开头（`a3f9 …`，请求 id 的 sha1 前 4 位十六进制，审批、提问、决策卡都带）：指名回答那一个请求，后面的话就是答案（审批里非 y/n 的话＝拒绝并告诉线程该怎么做）。
+  - 否则只有请求自己的选项才算：审批的 y / always / n；有选项的提问的编号或标签（多问题时每行一个）；决策卡的编号或标签；建议卡的 `start 1,3` / `start all`。
+  - 其余的**不是回答**，是普通消息，照常发给 chat 所在的线程或协调者，请求保持等待。由收到的一方根据话来判断它是什么，不替用户猜它回答了哪个请求。此前审批会把任何文字当“拒绝”，没有选项的提问会把任何文字当答案，有两个以上待答请求时任何文字都被一句“请用按钮”吞掉。
+  - 一条裸回复（没有代码）同时符合多个请求时，才问用户“是哪一个”，并列出各自的代码；决策卡和建议卡优先于审批，所以 `1` 不会被读成审批用语。
+- **建议卡进 IM**：`propose_threads` 的卡发到 chat，有按钮时是“全部启动”和每个提案一个按钮（最多 6 个），否则回复 `start 1,3` / `start all`。回答一次后卡在各 chat 里被改写为“Started …”，剩下的提案在 Web 上启动。
+- **按钮回调必须带回 chat 自己的 id**：绑定按 `(platform, chat_id)` 查，`chat_id` 是这个 chat 的消息带的 id（`GetReplyTarget`）。按下按钮时 `AnswerFromChannel` 用回调消息的 id 查绑定，查不到就是 `ErrNotThisChat`（“this chat is not bound to that thread”）。飞书/Lark 的单聊消息带的是用户的 `user_id`（没有该权限时是 `open_id`），而卡片回调只给 `open_chat_id`（`oc_…`），于是单聊里绑了项目的 chat 按任何卡片按钮都报未绑定（群聊两边都是 `oc_…`，不受影响）。修法在飞书适配层：发卡时把发送目标写进按钮的 value（`chat`），回调时取回它作为这条回调的 chat；只在它等于 `open_chat_id`、或等于按按钮的用户的 `user_id` / `open_id` 时才信，卡片被转发到别处时仍按 `open_chat_id` 算。修复前发出去的旧卡片没有 `chat`，照旧按 `open_chat_id`，要重新发卡（或用文字回复）。Telegram 和 Tingly 的回调与消息本来就是同一个 chat id；其余平台没有按钮，走文字回复。
+- 没做：真实 IM 平台上的端到端验证（只有 fake sink 的集成测试）；引用回复指代请求（平台出站接口不返回消息 id，见 M4）。
 
 ## M4 的落地
 

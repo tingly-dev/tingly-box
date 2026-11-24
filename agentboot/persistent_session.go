@@ -87,6 +87,11 @@ type PersistentSession interface {
 	// SetPermissionMode switches the permission mode like SetModel does.
 	SetPermissionMode(ctx context.Context, mode string) error
 
+	// ApplySettings layers settings over the running process like SetModel
+	// switches its model: permission rules take effect from the next tool
+	// call, with no restart (see [ApplySettingsRequest] for how keys merge).
+	ApplySettings(ctx context.Context, settings map[string]any) error
+
 	// Respond answers a pending ApprovalRequestEvent/AskRequestEvent from
 	// the in-flight turn, exactly like [ExecutionHandle.Respond].
 	Respond(reqID string, resp ControlResponse) error
@@ -113,6 +118,10 @@ type PersistentSession interface {
 	// until the process has been reaped or ctx is canceled.
 	Close(ctx context.Context) error
 }
+
+// sessionReasonClosed is the terminate reason for a session ended by an
+// explicit Close — not a process failure.
+const sessionReasonClosed = "closed"
 
 // persistentSession is the concrete PersistentSession returned by Runner.Open.
 type persistentSession struct {
@@ -142,7 +151,14 @@ type persistentSession struct {
 	controlSeq atomic.Uint64
 	// controlWaiters holds the callers of Control waiting for their answer,
 	// by request id; the pump delivers each answer.
-	controlWaiters map[string]chan error
+	controlWaiters map[string]chan controlAnswer
+}
+
+// controlAnswer is the agent's answer to a control request: the body of a
+// success, or the error of a refusal.
+type controlAnswer struct {
+	body map[string]any
+	err  error
 }
 
 func (s *persistentSession) Events() <-chan StreamEvent { return s.events }
@@ -151,6 +167,17 @@ func (s *persistentSession) Status() SessionState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state
+}
+
+// TurnOutputSeen reports whether the turn in flight — or the turn that was
+// in flight when the session terminated, whose completeTurn never ran — has
+// produced any output events. A terminated session reporting false failed
+// strictly pre-output, so re-running its prompt is safe (see
+// [PreOutputFailure]).
+func (s *persistentSession) TurnOutputSeen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.turnEvents) > 0
 }
 
 // Send encodes and writes the next turn directly onto the shared encoder.
@@ -193,13 +220,24 @@ func (s *persistentSession) Inject(_ context.Context, prompt string) error {
 	default:
 		return ErrSessionClosed
 	}
+	enc, ok := s.transport.(MidTurnInputEncoder)
+	if !ok {
+		return ErrInjectUnsupported
+	}
 	// A turn that ends between the check and the write leaves the message
 	// to start a turn of the agent's own; the pump tracks that like any
 	// unsolicited turn, so nothing is lost.
-	if err := s.encoder.Encode(s.transport.EncodeUserMessage(prompt)); err != nil {
+	if err := s.encoder.Encode(enc.EncodeMidTurnMessage(prompt)); err != nil {
 		return fmt.Errorf("agentboot: inject message: %w", err)
 	}
 	return nil
+}
+
+// CanInject reports whether the session's agent takes messages mid-turn,
+// whether or not a turn is running now.
+func (s *persistentSession) CanInject() bool {
+	_, ok := s.transport.(MidTurnInputEncoder)
+	return ok
 }
 
 func (s *persistentSession) SetModel(ctx context.Context, model string) error {
@@ -210,9 +248,13 @@ func (s *persistentSession) SetPermissionMode(ctx context.Context, mode string) 
 	return s.control(ctx, SetPermissionModeRequest{Mode: mode})
 }
 
+func (s *persistentSession) ApplySettings(ctx context.Context, settings map[string]any) error {
+	return s.control(ctx, ApplySettingsRequest{Settings: settings})
+}
+
 func (s *persistentSession) Respond(reqID string, resp ControlResponse) error {
 	s.mu.Lock()
-	if s.state == SessionStateTerminated {
+	if s.state == SessionStateClosing || s.state == SessionStateTerminated {
 		s.mu.Unlock()
 		return ErrSessionClosed
 	}
@@ -275,25 +317,32 @@ func (s *persistentSession) sendControl(req ControlRequest) error {
 
 // control writes req and waits for the agent's answer.
 func (s *persistentSession) control(ctx context.Context, req ControlRequest) error {
+	_, err := s.controlBody(ctx, req)
+	return err
+}
+
+// controlBody is control that also returns the body of the agent's success
+// answer, for the requests that ask a question.
+func (s *persistentSession) controlBody(ctx context.Context, req ControlRequest) (map[string]any, error) {
 	if _, ok := s.transport.(ControlResponseDecoder); !ok {
-		return ErrControlUnsupported
+		return nil, ErrControlUnsupported
 	}
 	enc, ok := s.transport.(ControlRequestEncoder)
 	if !ok {
-		return ErrControlUnsupported
+		return nil, ErrControlUnsupported
 	}
 	if st := s.Status(); st == SessionStateClosing || st == SessionStateTerminated {
-		return ErrSessionClosed
+		return nil, ErrSessionClosed
 	}
 	reqID := fmt.Sprintf("agentboot_ctl_%d", s.controlSeq.Add(1))
 	wire := enc.EncodeControlRequest(reqID, req)
 	if wire == nil {
-		return ErrControlUnsupported
+		return nil, ErrControlUnsupported
 	}
-	answer := make(chan error, 1)
+	answer := make(chan controlAnswer, 1)
 	s.mu.Lock()
 	if s.controlWaiters == nil {
-		s.controlWaiters = make(map[string]chan error)
+		s.controlWaiters = make(map[string]chan controlAnswer)
 	}
 	s.controlWaiters[reqID] = answer
 	s.mu.Unlock()
@@ -304,34 +353,51 @@ func (s *persistentSession) control(ctx context.Context, req ControlRequest) err
 	}
 	if err := s.encoder.Encode(wire); err != nil {
 		forget()
-		return fmt.Errorf("agentboot: send control request: %w", err)
+		return nil, fmt.Errorf("agentboot: send control request: %w", err)
 	}
 	timer := time.NewTimer(ControlTimeout)
 	defer timer.Stop()
 	select {
-	case err := <-answer:
-		return err
+	case a := <-answer:
+		return a.body, a.err
 	case <-ctx.Done():
 		forget()
-		return ctx.Err()
+		return nil, ctx.Err()
 	case <-timer.C:
 		forget()
-		return fmt.Errorf("agentboot: no answer to control request within %s", ControlTimeout)
+		return nil, fmt.Errorf("agentboot: no answer to control request within %s", ControlTimeout)
 	case <-s.done:
 		forget()
-		return ErrSessionClosed
+		return nil, ErrSessionClosed
 	}
+}
+
+// ContextUsage asks the process for its context size. It is not part of
+// [PersistentSession]; hosts reach it through [ContextUsageProvider].
+func (s *persistentSession) ContextUsage(ctx context.Context) (ContextUsage, error) {
+	reader, ok := s.transport.(ContextUsageReader)
+	if !ok {
+		return ContextUsage{}, ErrContextUnsupported
+	}
+	body, err := s.controlBody(ctx, ContextUsageRequest{})
+	if err != nil {
+		if errors.Is(err, ErrControlUnsupported) {
+			return ContextUsage{}, ErrContextUnsupported
+		}
+		return ContextUsage{}, err
+	}
+	return reader.DecodeContextUsage(body)
 }
 
 // answerControl hands the agent's answer to the Control caller waiting for
 // it. Answers nobody waits for (Interrupt, StopTask) are dropped.
-func (s *persistentSession) answerControl(reqID string, err error) {
+func (s *persistentSession) answerControl(reqID string, body map[string]any, err error) {
 	s.mu.Lock()
 	ch := s.controlWaiters[reqID]
 	delete(s.controlWaiters, reqID)
 	s.mu.Unlock()
 	if ch != nil {
-		ch <- err
+		ch <- controlAnswer{body: body, err: err}
 	}
 }
 
@@ -401,6 +467,16 @@ func (s *persistentSession) completeTurn(turnErr *ResultError) {
 	s.emit(TurnCompleteEvent{Result: result})
 }
 
+// emitMessages sends a turn's terminal event on as messages, ahead of the
+// TurnCompleteEvent: it is the turn's result, which carries the usage the
+// per-call events do not (output tokens, cache counts) and which a consumer
+// reading messages would otherwise never see.
+func (s *persistentSession) emitMessages(ev protocol.Event) {
+	for _, m := range s.transport.AccumulateMessage(ev) {
+		s.emit(MessageEvent{Raw: m})
+	}
+}
+
 // emit pushes a stream event, registering/cleaning up control-request
 // pending state exactly like runnerHandle.emit — see its doc comment.
 func (s *persistentSession) emit(ev StreamEvent) {
@@ -430,10 +506,15 @@ func (s *persistentSession) emit(ev StreamEvent) {
 func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr func() error) {
 	detector, _ := s.transport.(TurnStartDetector)
 	responses, _ := s.transport.(ControlResponseDecoder)
+	bodies, _ := s.transport.(ControlResponseBodyDecoder)
 	for ev := range decoderEvents {
 		if responses != nil {
 			if reqID, err, ok := responses.DecodeControlResponse(ev); ok {
-				s.answerControl(reqID, err)
+				var body map[string]any
+				if bodies != nil && err == nil {
+					body = bodies.ControlResponseBody(ev)
+				}
+				s.answerControl(reqID, body, err)
 				continue
 			}
 		}
@@ -460,9 +541,7 @@ func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr
 			// Drop.
 
 		case EventKindMessage:
-			for _, m := range s.transport.AccumulateMessage(ev) {
-				s.emit(MessageEvent{Raw: m})
-			}
+			s.emitMessages(ev)
 
 		case EventKindControl:
 			if parsed != nil {
@@ -483,9 +562,11 @@ func (s *persistentSession) pump(decoderEvents <-chan protocol.Event, decoderErr
 			}
 
 		case EventKindTerminalSuccess:
+			s.emitMessages(ev)
 			s.completeTurn(nil)
 
 		case EventKindTerminalError:
+			s.emitMessages(ev)
 			s.completeTurn(resultErrorFromEvent(s.agentType, ev))
 		}
 	}
@@ -509,7 +590,7 @@ func (s *persistentSession) terminate(streamErr error) {
 		waitErr := s.proc.Wait()
 		s.shutdownWG.Wait()
 
-		reason := "closed"
+		reason := sessionReasonClosed
 		switch {
 		case fatalDecode:
 			reason = fmt.Sprintf("protocol error: %v", streamErr)

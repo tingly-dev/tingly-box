@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot/engine"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
@@ -60,17 +61,16 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		ev = &db.ThreadEvent{Kind: db.EvAssistant, Content: e.Content}
 	case e.Kind == engine.KindToolUse:
 		ev = &db.ThreadEvent{Kind: db.EvToolUse, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}
+		s.watchGrantedRun(t, e)
 	case e.Kind == engine.KindToolResult:
 		ev = &db.ThreadEvent{Kind: db.EvToolResult, Content: e.Content, Payload: string(e.Payload), RequestID: e.RequestID}
+		// After the result, so the note reads under it.
+		defer s.noteGrantedRun(t, e)
 	case e.Kind == engine.KindUsage:
 		var u engine.TurnUsage
 		if json.Unmarshal(e.Payload, &u) == nil {
 			s.tally(id, func(t *turnTally) {
-				t.inputTokens += u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
-				t.outputTokens += u.OutputTokens
-				if u.Model != "" {
-					t.model = u.Model
-				}
+				t.addUsage(u, e.Parent == "")
 			})
 		}
 		if session {
@@ -80,12 +80,12 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 		// Every thread keeps task events: a subagent's card reads its state
 		// from them. A project thread also gets a line when one ends.
 		s.m.addEvent(t, &db.ThreadEvent{Kind: db.EvTask, Payload: string(e.Payload), RequestID: e.RequestID, Parent: e.Parent})
-		if session {
-			s.m.syncBackground(t, e)
-		}
+		s.m.syncBackground(t, e)
 		if note := taskNote(e); note != "" && !session {
 			ev = &db.ThreadEvent{Kind: db.EvSystem, Content: note}
 		}
+	case e.Kind == engine.KindCompact:
+		s.m.noteCompact(t, e)
 	case e.Kind == engine.KindError:
 		ev = &db.ThreadEvent{Kind: db.EvError, Content: e.Content}
 	case e.Kind == engine.KindSystem:
@@ -104,6 +104,47 @@ func (s threadStore) Append(sid string, e engine.Entry) {
 	if ev.Parent == "" && (ev.Kind == db.EvAssistant || ev.Kind == db.EvToolUse) && s.m.OnStep != nil {
 		s.m.OnStep(*t, *ev)
 	}
+}
+
+// watchGrantedRun remembers a Bash call that runs a command the user granted
+// the thread, so its result is noted with the grant (noteGrantedRun).
+func (s threadStore) watchGrantedRun(t *db.Thread, e engine.Entry) {
+	if e.Content != "Bash" || len(t.Grants) == 0 || e.RequestID == "" {
+		return
+	}
+	var input map[string]any
+	if json.Unmarshal(e.Payload, &input) != nil {
+		return
+	}
+	if g, ok := grantedCommand(t, input, time.Now()); ok {
+		s.tally(t.ID, func(tt *turnTally) {
+			if tt.granted == nil {
+				tt.granted, tt.calledGrants = map[string]db.ThreadGrant{}, map[string]bool{}
+			}
+			tt.granted[e.RequestID] = g
+			tt.calledGrants[g.ID] = true
+		})
+	}
+}
+
+// noteGrantedRun notes, after its result, a Bash call that ran a granted
+// command.
+func (s threadStore) noteGrantedRun(t *db.Thread, e engine.Entry) {
+	var g db.ThreadGrant
+	ok := false
+	s.tally(t.ID, func(tt *turnTally) {
+		if g, ok = tt.granted[e.RequestID]; ok {
+			delete(tt.granted, e.RequestID)
+		}
+	})
+	if !ok {
+		return
+	}
+	var res struct {
+		IsError bool `json:"is_error"`
+	}
+	_ = json.Unmarshal(e.Payload, &res)
+	s.m.noteGrantedRun(t, g, e.RequestID, e.Content, res.IsError)
 }
 
 func (s threadStore) tally(id string, fn func(*turnTally)) {
@@ -142,21 +183,29 @@ func (m *Threads) syncBackground(t *db.Thread, e engine.Entry) {
 	if json.Unmarshal(e.Payload, &ev) != nil || ev.Event != "background_tasks_changed" {
 		return
 	}
+	// The engine's set, not this event's: a late event cannot undo a newer one.
+	running := m.RunningTasks(t.ID)
+	if !m.isFolder(t.ProjectID) {
+		if running == 0 {
+			m.releaseSoon(t.ID, m.holdGrace())
+		}
+		// The set changed: the thread's card and rail show how many run.
+		m.republish(t.ID)
+		return
+	}
 	m.mu.Lock()
 	_, turn := m.active[t.ID]
 	m.mu.Unlock()
 	if turn {
+		m.republish(t.ID)
 		return
 	}
 	_, _ = m.update(t.ID, func(t *db.Thread) {
 		switch {
-		case len(ev.Tasks) > 0 && (t.Status == db.ThreadIdle || t.Status == db.ThreadReady):
+		case running > 0 && (t.Status == db.ThreadIdle || t.Status == db.ThreadReady):
 			t.Status = db.ThreadWorking
-		case len(ev.Tasks) == 0 && t.Status == db.ThreadWorking:
-			t.Status = db.ThreadIdle
-			if t.CommitsAhead > 0 {
-				t.Status = db.ThreadReady
-			}
+		case running == 0 && t.Status == db.ThreadWorking:
+			t.Status = db.RestingStatus(t)
 		}
 	})
 }

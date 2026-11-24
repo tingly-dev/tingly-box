@@ -18,6 +18,7 @@ import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import { QuotaHistoryView } from '@/components/dashboard';
 import api from '@/services/api';
 import { toLocalISOString } from '@/utils/datetime';
+import { radius } from '@tingly/ui/theme/radius';
 
 type TimeRange = '5h' | '1d' | '7d' | '30d';
 
@@ -77,7 +78,7 @@ export default function QuotaHistoryPage() {
             <Box component="h1" sx={visuallyHidden}>
                 {t('dashboard.quotaHistory.title', { defaultValue: 'Quota history' })}
             </Box>
-            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+            <Paper variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: radius.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
                         <FormControl size="small" sx={{ minWidth: 180 }}>
                             <InputLabel>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
                             <Select

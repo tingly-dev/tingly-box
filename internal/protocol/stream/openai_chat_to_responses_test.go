@@ -259,6 +259,7 @@ func TestChatToResponsesConverter_ToolOnlyUsesFirstOutputIndex(t *testing.T) {
 	conv.processChunk(&openai.ChatCompletionChunk{Choices: []openai.ChatCompletionChunkChoice{{
 		FinishReason: "tool_calls",
 	}}})
+	conv.emitCompletionEvents() // clean upstream end after the finish chunk
 
 	added := conv.pending[0].(wire.ResponsesOutputItemAddedEvent)
 	assert.Equal(t, 0, added.OutputIndex)
@@ -292,6 +293,7 @@ func TestChatToResponsesConverter_CompletedEvent(t *testing.T) {
 			{FinishReason: "stop"},
 		},
 	})
+	conv.emitCompletionEvents() // clean upstream end after the finish chunk
 
 	// Should emit response.completed
 	var completed *wire.ResponsesCompletedEvent
@@ -319,6 +321,7 @@ func TestChatToResponsesConverter_WithReasoningTokens(t *testing.T) {
 			{FinishReason: "stop"},
 		},
 	})
+	conv.emitCompletionEvents() // clean upstream end after the finish chunk
 
 	var completed *wire.ResponsesCompletedEvent
 	for _, evt := range conv.pending {
@@ -438,6 +441,7 @@ func TestChatToResponsesConverter_ItemIDsAreCanonicalAndStable(t *testing.T) {
 	conv.processChunk(&openai.ChatCompletionChunk{
 		Choices: []openai.ChatCompletionChunkChoice{{FinishReason: "tool_calls"}},
 	})
+	conv.emitCompletionEvents() // clean upstream end after the finish chunk
 
 	added := map[string]string{} // call_id -> item id
 	done := map[string]string{}

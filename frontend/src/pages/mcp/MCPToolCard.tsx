@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import MCPToolRow from './MCPToolRow';
 import { isAdvisorTool, isServerToolSource, needsSearchKey, isToolRestricted, type MCPToolPatch } from './toolPresentation';
-import type { MCPCatalogTool, MCPSourceConfig } from './types';
+import type { MCPCatalogTool, MCPSourceConfig } from '../../features/mcp/types';
 
 // One tool of a connection with its global switch. Off here means off in every profile.
 export default function MCPToolCard({
@@ -11,7 +11,6 @@ export default function MCPToolCard({
     busy,
     onChange,
     onTest,
-    inWorkspace = false,
 }: {
     tool: MCPCatalogTool;
     source?: MCPSourceConfig;
@@ -19,7 +18,6 @@ export default function MCPToolCard({
     busy: boolean;
     onChange: (patch: MCPToolPatch) => void;
     onTest?: () => void;
-    inWorkspace?: boolean;
 }) {
     const { t } = useTranslation();
     const label = (key: string, fallback: string) => t(`mcp.workspace.${key}`, { defaultValue: fallback });
@@ -42,8 +40,7 @@ export default function MCPToolCard({
             switchDisabled={busy || restricted}
             muted={!tool.enabled || restricted}
             note={note}
-            groupRole={inWorkspace}
-            ariaLabel={inWorkspace ? tool.name : `${source?.name || tool.source_id} / ${tool.name}`}
+            ariaLabel={`${source?.name || tool.source_id} / ${tool.name}`}
             onToggle={(on) => onChange({ enabled: on })}
             onTest={onTest}
             testDisabled={busy || (!enabled && !serverTool) || !tool.enabled || restricted || advisor || missingSearchKey}

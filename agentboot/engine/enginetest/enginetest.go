@@ -39,6 +39,13 @@ func (a *Agent) Service() *agentboot.AgentService {
 	return svc
 }
 
+// CompactPrompt makes the agent compactable: Engine.Compact runs a turn whose
+// prompt starts with "/compact", and the script answers it with Compacted or
+// CompactRefused.
+func (a *Agent) CompactPrompt(instructions string) string {
+	return (&claude.Agent{}).CompactPrompt(instructions)
+}
+
 // Launches returns the options of every turn started so far, in order.
 func (a *Agent) Launches() []agentboot.ExecutionOptions {
 	a.mu.Lock()
@@ -116,9 +123,26 @@ func (t *Turn) Say(text string, inputTokens, outputTokens int64) {
 	}})
 }
 
+// Compacted reports a finished compaction, as the CLI does for /compact.
+func (t *Turn) Compacted(res agentboot.CompactResult) {
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactDone, Result: res})
+}
+
+// CompactRefused reports a compaction the agent declined.
+func (t *Turn) CompactRefused(reason string) {
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	t.send(agentboot.CompactEvent{Phase: agentboot.CompactFailed, Reason: reason})
+}
+
 // Use emits a tool call, as Claude Code reports one it makes.
 func (t *Turn) Use(id, tool string, input map[string]any) {
 	t.send(&claude.ToolUseMessage{Type: "tool_use", Name: tool, Input: input, ToolUseID: id})
+}
+
+// Result emits the result of tool call id, as Claude Code reports one.
+func (t *Turn) Result(id, output string, isError bool) {
+	t.send(&claude.ToolResultMessage{Type: "tool_result", Output: output, ToolUseID: id, IsError: isError})
 }
 
 // ErrNoAnswer is returned by Approve and Ask when the turn ended first.

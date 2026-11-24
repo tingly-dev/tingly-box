@@ -61,7 +61,7 @@ const (
 )
 
 // ErrorInjection describes a synthetic failure that a mock virtual model
-// should simulate. Attach one to MockScenario.Error (or MockModelConfig.Error)
+// should simulate. Attach one to SharedMockSpec.Error (or MockModelConfig.Error)
 // and the virtualserver handler honors it without any real upstream
 // involvement.
 //
@@ -74,20 +74,18 @@ const (
 //     error event. firstChunkGate is already committed → failover MUST NOT
 //     retry.
 type ErrorInjection struct {
-	Stage ErrorStage
-
+	Stage ErrorStage `json:"stage,omitempty" yaml:"stage,omitempty"`
 	// PreContent fields: HTTP status (defaults to 500 if zero) and an
 	// optional message that the handler renders into the protocol-specific
 	// error envelope (OpenAI: error.message; Anthropic: error.error.message).
 	// Type defaults to "api_error" if empty.
-	Status  int
-	Message string
-	Type    string
-
+	Status  int    `json:"status,omitempty" yaml:"status,omitempty"`
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
+	Type    string `json:"type,omitempty" yaml:"type,omitempty"`
 	// MidStream fields: number of stream events to emit before tripping
 	// (default 1; values <= 0 are treated as 1), and how to terminate.
-	AfterEvents   int
-	MidStreamMode MidStreamMode
+	AfterEvents   int           `json:"after_events,omitempty" yaml:"after_events,omitempty"`
+	MidStreamMode MidStreamMode `json:"mid_stream_mode,omitempty" yaml:"mid_stream_mode,omitempty"`
 }
 
 // ExtractErrorInjection reports the model's error injection configuration,

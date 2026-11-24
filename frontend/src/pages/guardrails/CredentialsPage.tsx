@@ -9,7 +9,6 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Paper,
     Stack,
     Switch,
     Table,
@@ -26,14 +25,16 @@ import {
     Refresh as RefreshIcon,
     VpnKey,
 } from '@/components/icons';
-import PageLayout from '@/components/PageLayout';
+import PageLayout from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { blurActiveElement } from '@/utils/dom';
 import CredentialEditorDialog, { type CredentialEditorState } from './CredentialEditorDialog';
 import ProviderImportDialog, { type ImportableProvider } from './ProviderImportDialog';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 type ProtectedCredential = {
     id: string;
@@ -367,7 +368,7 @@ const GuardrailsCredentialsPage = () => {
                                     sx={{
                                         width: 72,
                                         height: 72,
-                                        borderRadius: 2,
+                                        borderRadius: radius.card,
                                         bgcolor: 'primary.main',
                                         color: 'primary.contrastText',
                                         display: 'flex',
@@ -401,7 +402,7 @@ const GuardrailsCredentialsPage = () => {
                             </Stack>
                         </Box>
                     ) : (
-                        <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+                        <TableContainer sx={tableFrameSx}>
                             <Table>
                                 <TableHead>
                                     <TableRow>
@@ -412,12 +413,12 @@ const GuardrailsCredentialsPage = () => {
                                                 onChange={(event) => setSelectedIDs(event.target.checked ? credentials.map((item) => item.id) : [])}
                                             />
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Name</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Type</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 220 }}>Alias Token</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>Stored Secret</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Status</TableCell>
-                                        <TableCell sx={{ fontWeight: 600, minWidth: 110 }}>Actions</TableCell>
+                                        <TableCell sx={{ minWidth: 180 }}>Name</TableCell>
+                                        <TableCell sx={{ minWidth: 120 }}>Type</TableCell>
+                                        <TableCell sx={{ minWidth: 220 }}>Alias Token</TableCell>
+                                        <TableCell sx={{ minWidth: 180 }}>Stored Secret</TableCell>
+                                        <TableCell sx={{ minWidth: 120 }}>Status</TableCell>
+                                        <TableCell sx={{ minWidth: 110 }}>Actions</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>

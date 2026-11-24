@@ -22,9 +22,9 @@ func TestRoutingAndClientProbeTraverseTheAuthenticatedGateway(t *testing.T) {
 	r.GET("/routing", h.GetRouting)
 	r.POST("/probe/:profile_id", h.ProbeClient)
 	// Use the production endpoint, not an adapter shortcut. Its auth middleware
-	// checks that the loopback SDK connection has the actual user's token.
+	// checks that the loopback SDK connection has the MCP token, as an agent would.
 	r.POST("/api/v1/mcp/:client_name", func(c *gin.Context) {
-		if c.GetHeader("Authorization") != "Bearer "+cfg.GetUserToken() {
+		if cfg.GetMCPToken() == "" || c.GetHeader("Authorization") != "Bearer "+cfg.GetMCPToken() {
 			c.AbortWithStatus(401)
 			return
 		}
@@ -53,7 +53,8 @@ func TestRoutingAndClientProbeTraverseTheAuthenticatedGateway(t *testing.T) {
 	require.NoError(t, cfg.SetServerPort(port))
 	name := "tingly_box_mcp__remote__echo"
 	listed := managementRequest(t, r, "POST", "/probe/reader", `{}`, 200)
-	require.Contains(t, listed.Body.String(), name)
+	// Clients see the short name; the probe also accepts the catalog's.
+	require.Contains(t, listed.Body.String(), `"tools":["remote__echo"]`)
 	require.Equal(t, int32(0), calls.Load(), "discovery probe must not execute a tool")
 	result := managementRequest(t, r, "POST", "/probe/reader", `{"tool_name":"`+name+`","arguments":{}}`, 200)
 	require.Contains(t, result.Body.String(), `"success":true`)

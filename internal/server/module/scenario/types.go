@@ -32,17 +32,25 @@ type ProfileCreateRequest struct {
 	Unified bool   `json:"unified,omitempty"` // Deprecated and ignored: Claude Code has no modes (TEP-2197)
 }
 
+// ProfileDuplicateRequest represents the request to copy a profile
+type ProfileDuplicateRequest struct {
+	Name string `json:"name,omitempty" example:"work-copy"` // Optional; empty picks a free "<source>-copy" name
+}
+
 // ProfileUpdateRequest represents the request to update a profile
 type ProfileUpdateRequest struct {
 	Name    string `json:"name,omitempty"`
 	Unified *bool  `json:"unified,omitempty"` // Pointer to distinguish zero from unset; nil = no change
+	// MCPProfile is the MCP profile a Claude Code profile's launches connect
+	// to ("" = none); nil = no change.
+	MCPProfile *string `json:"mcp_profile,omitempty"`
 }
 
-// ProfileClaudeConfigRequest is the complete desired typed configuration for
-// one Claude Code profile. The backend persists only its delta from inheritance.
+// ProfileClaudeConfigRequest updates the selected overrides for one Claude Code profile.
 type ProfileClaudeConfigRequest struct {
-	Preferences *agent.ClaudeCodePrefs `json:"preferences" binding:"required"`
-	DefaultMode string                 `json:"defaultMode,omitempty"`
+	Preferences  *agent.ClaudeCodePrefs `json:"preferences" binding:"required"`
+	DefaultMode  string                 `json:"defaultMode,omitempty"`
+	OverrideKeys *[]string              `json:"overrideKeys,omitempty" description:"Explicitly overridden fields. An empty list restores inheritance; omitting the list updates by comparing preferences with the base."`
 }
 
 type ProfileClaudeConfigData struct {
@@ -50,6 +58,7 @@ type ProfileClaudeConfigData struct {
 	Preferences          agent.ClaudeCodePrefs `json:"preferences"`
 	InheritedDefaultMode string                `json:"inheritedDefaultMode"`
 	DefaultMode          string                `json:"defaultMode"`
+	OverrideKeys         []string              `json:"overrideKeys"`
 	HasOverrides         bool                  `json:"hasOverrides"`
 	SettingsPath         string                `json:"settingsPath"`
 	SettingsExists       bool                  `json:"settingsExists"`
@@ -111,4 +120,14 @@ type ClaudeCodeSlotsData struct {
 type ClaudeCodeSlotsResponse struct {
 	Success bool                `json:"success"`
 	Data    ClaudeCodeSlotsData `json:"data"`
+}
+
+// ClaudeCodeUseProfileRequest names the profile (ID or name) whose routing the
+// default Claude Code config is overwritten with.
+type ClaudeCodeUseProfileRequest struct {
+	Profile string `json:"profile" binding:"required" example:"p1"`
+}
+
+type ClaudeCodeUseProfileResponse struct {
+	Success bool `json:"success"`
 }

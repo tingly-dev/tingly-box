@@ -4,8 +4,8 @@ import type {ClaudeCodeModels as ModelChoice, ClaudeCodeModelTier as ModelTier} 
 import {Box, MenuItem, Select, Stack, Typography} from '@mui/material';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {fontMono, fontSizes} from '@/theme/fonts';
-import {composerPickerLabelSx, composerPickerSx} from '@tingly/projects';
+import {fontMono, fontSizes} from '@tingly/ui/theme/fonts';
+import {composerPickerLabelSx, composerPickerMenuProps, composerPickerSx} from '@tingly/projects';
 
 interface ModelSelectProps {
     // The profile whose tiers are offered ('' is the main routing).
@@ -52,7 +52,8 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
     // A unified profile has one model for every tier: the menu still opens,
     // shows that model and says where to change it.
     const tiers = data.unified ? [data.tiers[0]] : data.tiers;
-    const selected = tiers.find((x) => x.alias === value) ?? tiers[0];
+    // Existing projects may have stored a concrete model instead of a tier alias.
+    const selected = tiers.find((x) => x.alias === value) ?? {alias: value, model: value, provider_name: '', provider_model: ''};
     return (
         <Select
             disabled={disabled}
@@ -68,17 +69,19 @@ const ModelSelect = ({profile, value, onChange, disabled}: ModelSelectProps) => 
                 <Stack direction="row" spacing={0.5} sx={{alignItems: 'center'}}>
                     <AutoAwesome/>
                     <Typography noWrap sx={composerPickerLabelSx}>
-                        {data.unified ? concrete(selected) : `${tierLabel(selected.alias)} · ${concrete(selected)}`}
+                        {!tiers.some((tier) => tier.alias === value) ? value : data.unified ? concrete(selected) : `${tierLabel(selected.alias)} · ${concrete(selected)}`}
                     </Typography>
                 </Stack>
             )}
             sx={composerPickerSx}
+            MenuProps={composerPickerMenuProps}
         >
+            {!tiers.some((tier) => tier.alias === value) && <MenuItem value={value}>{value}</MenuItem>}
             {tiers.map((tier) => (
                 <MenuItem key={tier.alias} value={tier.alias}>
                     <Box>
                         <Typography variant="body2" sx={{color: 'text.primary'}}>{data.unified ? concrete(tier) : tierLabel(tier.alias)}</Typography>
-                        <Typography sx={{color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.xs}}>{route(tier)}</Typography>
+                        <Typography sx={{color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.micro}}>{route(tier)}</Typography>
                     </Box>
                 </MenuItem>
             ))}

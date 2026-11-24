@@ -14,7 +14,7 @@ run-name: >-
 # parallel with the NPX publish workflow) — that release is created with
 # GITHUB_TOKEN, so the `release: published` trigger below only catches
 # releases published by hand. Can also be triggered manually against any tag.
-# PR-time compile checks live in verify-compile.yml.
+# PR-time checks: verify-frontend.yml (frontend), daily.yml (Go and harness).
 on:
   release:
     types: [published]

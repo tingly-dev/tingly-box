@@ -1,9 +1,12 @@
 package probe
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -23,13 +26,12 @@ func NewHandler(e2e *probe.E2EProber, light *probe.LightProber) *Handler {
 	return &Handler{e2e: e2e, light: light}
 }
 
-// errorDetail mirrors the JSON shape of the server's global ErrorDetail so
-// the API contract is unchanged. Defined locally to keep this package free
-// of any internal/server import.
+// errorDetail carries the probe summary and any original upstream response.
 type errorDetail struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    string `json:"code,omitempty"`
+	Message      string `json:"message"`
+	Type         string `json:"type"`
+	Code         string `json:"code,omitempty"`
+	ResponseBody string `json:"response_body,omitempty"`
 }
 
 // E2EResponse is the JSON envelope returned by POST /probe.
@@ -87,11 +89,23 @@ func (h *Handler) HandleE2EProbe(c *gin.Context) {
 	data, err := h.e2e.Probe(ctx, &req)
 
 	if err != nil {
+		var failure *protocol.ProbeFailure
+		var responseBody string
+		if errors.As(err, &failure) {
+			responseBody = failure.ResponseBody
+			if failure.Upstream != nil {
+				err = failure.Upstream
+			}
+		}
+		if responseBody == "" {
+			responseBody = protocol.ProbeErrorBody(err)
+		}
 		c.JSON(http.StatusOK, E2EResponse{
 			Success: false,
 			Error: &errorDetail{
-				Message: err.Error(),
-				Type:    "probe_error",
+				Message:      probeErrorMessage(err),
+				Type:         "probe_error",
+				ResponseBody: responseBody,
 			},
 		})
 		return
@@ -147,7 +161,7 @@ func (h *Handler) HandleCurlProbe(c *gin.Context) {
 		c.JSON(http.StatusOK, CurlResponse{
 			Success: false,
 			Error: &errorDetail{
-				Message: err.Error(),
+				Message: probeErrorMessage(err),
 				Type:    "probe_error",
 			},
 		})
@@ -198,4 +212,17 @@ func (h *Handler) HandleLightweightProbe(c *gin.Context) {
 
 	data := h.light.Probe(c.Request.Context(), provider)
 	c.JSON(http.StatusOK, LightweightResponse{Success: true, Data: data})
+}
+
+// probeErrorMessage describes a failed probe. The SDKs' own Error() text for an
+// upstream answer is just "<vendor> API error: 401 Unauthorized", so those are
+// rendered with the upstream's status and message instead; transport and
+// internal errors keep their raw text, which is what diagnoses them.
+func probeErrorMessage(err error) string {
+	var oaiErr *openai.Error
+	var anthropicErr *anthropic.Error
+	if errors.As(err, &oaiErr) || errors.As(err, &anthropicErr) {
+		return protocol.UpstreamMessage(err)
+	}
+	return err.Error()
 }

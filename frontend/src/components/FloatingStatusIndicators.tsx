@@ -1,13 +1,13 @@
 import { Box, IconButton, Tooltip } from '@mui/material';
-import { Error as IconAlertCircle, Star as IconStar } from '@/components/icons';
+import { Error as IconAlertCircle } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { Z_INDEX } from '../constants/zIndex';
+import { Z_INDEX } from '@tingly/ui/theme/zIndex';
 
 export const FloatingStatusIndicators = () => {
     const { t } = useTranslation();
-    const { hasUpdate, showUpdateDialog } = useAppVersion();
+    const { hasUpdate } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
 
     const showError = !isHealthy;

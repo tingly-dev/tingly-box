@@ -2,14 +2,18 @@ import { Box, ButtonBase, Card, Collapse, Tooltip, Typography } from '@mui/mater
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import ConfigRow from '@/components/ConfigRow';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
+import { radius } from '@tingly/ui/theme/radius';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 // Room kept at the card's right edge for the fold chevron, in both states, so
 // the row's own actions (Local | Docker, copy) never run underneath it at narrow
 // widths and the first row sits in the same place whether folded or open.
 const CHEVRON_GUTTER = 6;
+// The phone shell has no width to spare: just clear the chevron.
+const PHONE_CHEVRON_GUTTER = 4;
 
 const PREF_KEY = (scenario: string) => `agent-access-expanded-${scenario}`;
 
@@ -69,6 +73,7 @@ export interface AgentAccessSectionProps {
  */
 export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded, onToggle, url, children, foldedContent, foldedExtras }) => {
     const { t } = useTranslation();
+    const gutter = usePhoneShell() ? PHONE_CHEVRON_GUTTER : CHEVRON_GUTTER;
     const label = t(expanded ? 'agentAccess.collapse' : 'agentAccess.expand');
     // Folded and open are two different buttons, so toggling would drop keyboard
     // focus to the page: hand it to the new one.
@@ -92,7 +97,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
             sx={{
                 transition: 'transform 0.2s',
                 transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                fontSize: '1.1rem',
+                fontSize: 18,
                 color: 'text.secondary',
                 flexShrink: 0,
             }}
@@ -102,7 +107,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
         <Card
             sx={{
                 position: 'relative',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 boxShadow: 'none',
@@ -118,7 +123,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
                         onClick={handleToggle}
                         aria-expanded
                         aria-label={label}
-                        sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: 1 }}
+                        sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: radius.row }}
                     >
                         {chevron}
                     </ButtonBase>
@@ -139,7 +144,7 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
                     {/* With extras below, the bottom padding moves to the extras
                         wrapper so the URL→extras gap matches the card's own
                         top/bottom rhythm (8 + 4 on each side of the row). */}
-                    <Box sx={{ pt: 1, pb: foldedExtras ? 0.5 : 1, pr: CHEVRON_GUTTER }}>
+                    <Box sx={{ pt: 1, pb: foldedExtras ? 0.5 : 1, pr: gutter }}>
                         <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                             <Box sx={{ px: 2, py: 0.5 }}>
                                 {foldedContent ?? (
@@ -169,14 +174,14 @@ export const AgentAccessSection: React.FC<AgentAccessSectionProps> = ({ expanded
             {!expanded && foldedExtras && (
                 // Same row wrappers as the folded URL row above — just without
                 // its ButtonBase, so the extras' own controls stay clickable.
-                <Box sx={{ pt: 0.5, pb: 1, pr: CHEVRON_GUTTER }}>
+                <Box sx={{ pt: 0.5, pb: 1, pr: gutter }}>
                     <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                         <Box sx={{ px: 2, py: 0.5 }}>{foldedExtras}</Box>
                     </Box>
                 </Box>
             )}
             <Collapse in={expanded} timeout={0} unmountOnExit>
-                <Box sx={{ pt: 1, pb: 1, pr: CHEVRON_GUTTER }}>{children}</Box>
+                <Box sx={{ pt: 1, pb: 1, pr: gutter }}>{children}</Box>
             </Collapse>
         </Card>
     );

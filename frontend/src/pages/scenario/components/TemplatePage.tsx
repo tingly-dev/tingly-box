@@ -1,11 +1,11 @@
-import ApiKeyModal from '@/components/ApiKeyModal';
+import ApiKeyModal from '@/pages/scenario/components/ApiKeyModal';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Box, Fab} from '@mui/material';
 import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
-import EmptyState from '@/components/EmptyState';
+import EmptyState from '@tingly/ui/components/EmptyState';
 import RuleCard from '@/components/RuleCard.tsx';
 import ConnectAIDialogs from '@/components/ConnectAIDialogs';
 import UnifiedCard from '@/components/UnifiedCard';
@@ -14,14 +14,17 @@ import type {TemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
 import {TitleIconButtons} from './TitleIconButtons';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
-import {useRuleSort} from '@/pages/scenario/hooks/useRuleSort';
-import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
-import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
+import {SortableRuleList} from './SortableRuleList';
+import {pinToTop} from './ruleOrder';
+import {useCommitRuleOrder} from '@/pages/scenario/hooks/useCommitRuleOrder';
+import {useScrollToNewRule} from '@/pages/scenario/hooks/useScrollToNewRule';
+import {useModelSelectDialog} from '@/pages/scenario/hooks/useModelSelectDialog';
 import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
-import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
+import {useScenarioPageModal} from '@/features/scenario/ScenarioPageContext';
 import {ROUTING_GUIDE_SEEN_KEY} from '@/utils/onboardingFlags';
 import {ProviderQuotaProvider} from '@/contexts/ProviderQuotaContext';
+import {usePhoneShell} from '@tingly/ui/hooks/usePhoneShell';
 
 // First-run education: the Direct routing guide auto-opens once per user (new
 // and existing), then never again — the toolbar "?" stays as the manual
@@ -62,11 +65,10 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         allowDeleteRule = false,
         allowToggleRule = true,
         allowAddRule = true,
+        allowReorder = false,
         scenario,
         showAddApiKeyButton = true,
-        showCreateRuleButton = true,
         showExpandCollapseButton = true,
-        showImportButton = true,
         showEmptyState = true,
         rightAction: customRightAction,
         onAddApiKeyClick,
@@ -83,10 +85,10 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
     const onProvidersLoad = props.onProvidersLoad ?? internalData.loadProviders;
     const loadRules = props.loadRules ?? internalData.loadRules;
     const onRuleDelete = props.onRuleDelete ?? internalData.handleRuleDelete;
-    const newlyCreatedRuleUuids = props.newlyCreatedRuleUuids ?? internalData.newlyCreatedRuleUuids;
-    const isLoading = internalData.isLoading;
 
     const navigate = useNavigate();
+    // Dragging rules stays on the desktop (.design/mobile-ui.md); "Pin to top" still works.
+    const phone = usePhoneShell();
     const [allExpanded, setAllExpanded] = useState<boolean>(true);
     // Per-page collapse state of every rule, remembered across navigation and reload.
     const expandedStorageKey = `tingly:rule-expanded:${props.scenario ?? 'default'}`;
@@ -151,10 +153,14 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         setNewRuleUuid,
     } = useScrollToNewRule({rules});
 
-    // Display-only ordering for the Model Rules list — doesn't touch `rules`
-    // itself, so match priority (if any) and the scroll-to-new-rule logic
-    // above stay anchored to the real, backend-ordered array.
-    const {sortMode, toggleSortMode, sortedRules} = useRuleSort(rules);
+    // Hard ordering (drag and drop, "Pin to top"): the list is always shown in
+    // its real, persisted order — there is no display-only re-sort to mislead.
+    const commitOrder = useCommitRuleOrder({scenario, rules, onRulesChange, loadRules, showNotification});
+
+    const handlePinRule = useCallback((ruleUuid: string) => {
+        const next = pinToTop(rules.map(r => r.uuid), ruleUuid);
+        if (next) void commitOrder(next, ruleUuid);
+    }, [rules, commitOrder]);
 
     // Routed through a ref so onCreateFromModels doesn't capture a stale createRules.
     const createRulesRef = useRef(createRules);
@@ -216,9 +222,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
         },
     });
     const { handleConnectAIClick } = connectAI;
-
-    // Cloud-credential dialog state (Bedrock/Vertex/Azure)
-    const [cloudPresetId, setCloudPresetId] = useState<string | null>(null);
 
     const handleAddApiKeyClick = useCallback(() => {
         handleConnectAIClick();
@@ -380,8 +383,6 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                         onToggleExpandAll={handleToggleExpandAll}
                         showExpandCollapseButton={showExpandCollapseButton}
                         onShowGuide={() => setShowGuide(true)}
-                        sortMode={rules.length > 1 ? sortMode : undefined}
-                        onToggleSort={rules.length > 1 ? toggleSortMode : undefined}
                     />
                 }
                 rightAction={rightAction}
@@ -400,18 +401,21 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                             {t(allowAddRule ? 'templatePage.noRules' : 'templatePage.noRulesFixed')}
                         </Box>
                     ) : (
-                        sortedRules.map((rule, index) => {
-                            const isNewRule = rule.uuid === newRuleUuid;
-                            // "Last rule" for the auto-scroll-to-new-rule anchor is
-                            // meaningless once the list is name-sorted — that ref is
-                            // only a fallback for the initial mount scroll position,
-                            // so only attach it in the original, insertion-ordered view.
-                            const isLastRule = sortMode === 'original' && index === sortedRules.length - 1;
-                            const shouldAttachRef = isNewRule || (isLastRule && !newRuleUuid);
+                        (() => {
+                            // Scroll anchor: the new rule, else the last one (a fallback
+                            // for the initial mount scroll position).
+                            const anchorUuid = newRuleUuid ?? rules[rules.length - 1]?.uuid;
+                            const reorderEnabled = allowReorder && rules.length > 1;
+                            const dragEnabled = reorderEnabled && !phone;
 
                             return (
-                                <div key={rule.uuid} ref={shouldAttachRef ? lastRuleRef : null}>
-                                    {rule && rule.uuid && (
+                                <SortableRuleList
+                                    rules={rules}
+                                    enabled={dragEnabled}
+                                    anchorUuid={anchorUuid}
+                                    anchorRef={lastRuleRef}
+                                    onReorder={commitOrder}
+                                    renderRule={(rule, dragHandle) => rule && rule.uuid && (
                                         <RuleCard
                                             rule={rule}
                                             providers={providers}
@@ -428,14 +432,17 @@ const TemplatePage: React.FC<TemplatePageProps> = (props) => {
                                             allowDeleteRule={allowDeleteRule}
                                             onRuleDelete={onRuleDelete}
                                             allowToggleRule={allowToggleRule}
+                                            dragHandle={dragHandle}
+                                            onPinRule={reorderEnabled ? handlePinRule : undefined}
+                                            canPin={rule.uuid !== rules[0]?.uuid}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
                                             onContext1MToggle={onContext1MToggle}
                                             quickProbeSignal={probeAllSignal}
                                         />
                                     )}
-                                </div>
+                                />
                             );
-                        })
+                        })()
                     )}
                 </Box>
                 </ProviderQuotaProvider>

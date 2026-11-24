@@ -89,12 +89,25 @@ type ProviderUsage struct {
 	// Group breakdowns (e.g., by model, by region)
 	Breakdowns []*UsageBreakdown `json:"breakdowns,omitempty"`
 
-	// Error information (if fetch failed)
+	// Error information (if fetch failed). A failed fetch keeps the last good
+	// reading in Windows/Breakdowns/Cost, with FetchedAt the time of that
+	// success: LastErrorAt after FetchedAt means the newest attempt failed.
 	LastError   string     `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 
+	// Backoff is set while automatic refreshes are being held back after
+	// repeated failures. Runtime state, never stored.
+	Backoff *UsageBackoff `json:"backoff,omitempty"`
+
 	// Raw response data (for debugging and review)
 	RawResponse json.RawMessage `json:"raw_response,omitempty"`
+}
+
+// UsageBackoff says when the background refresher will next ask a provider
+// that keeps failing. A manual refresh is never held back.
+type UsageBackoff struct {
+	Failures      int       `json:"failures"`        // consecutive automatic failures
+	NextAttemptAt time.Time `json:"next_attempt_at"` // earliest next automatic refresh
 }
 
 // UsageBreakdown represents grouped quota breakdowns (e.g., by model, by region)
@@ -279,8 +292,7 @@ type Config struct {
 	Enabled         bool                           `json:"enabled"`          // whether quota tracking is enabled
 	RefreshInterval time.Duration                  `json:"refresh_interval"` // background refresh interval (default 5 minutes)
 	CacheTTL        time.Duration                  `json:"cache_ttl"`        // stored-data validity period (default 20 minutes; keep > RefreshInterval so data survives missed ticks)
-	RetryOnFailure  bool                           `json:"retry_on_failure"` // whether to retry on failure
-	MaxRetries      int                            `json:"max_retries"`      // maximum retry attempts
+	MaxBackoff      time.Duration                  `json:"max_backoff"`      // cap on how far failures delay a provider's automatic refresh (default 6 hours; zero means the default)
 	Providers       map[string]ProviderUsageConfig `json:"providers"`        // provider-specific configuration
 	// AutoClaimRewards lets the background refresher take rewards marked
 	// UsageRedeem.Auto (a daily check-in) once a day.
@@ -293,8 +305,7 @@ func DefaultConfig() *Config {
 		Enabled:         true,
 		RefreshInterval: 5 * time.Minute,
 		CacheTTL:        20 * time.Minute,
-		RetryOnFailure:  true,
-		MaxRetries:      3,
+		MaxBackoff:      defaultMaxBackoff,
 		Providers:       make(map[string]ProviderUsageConfig),
 
 		AutoClaimRewards: true,

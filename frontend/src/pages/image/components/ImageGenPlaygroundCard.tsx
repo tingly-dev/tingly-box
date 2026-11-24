@@ -24,14 +24,14 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { Rule } from '@/components/RoutingGraphTypes';
 import UnifiedCard from '@/components/UnifiedCard';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { AutoAwesome, Cable, Close, DeleteOutline, Description, Edit, OpenInFull, Palette, tablerMui } from '@/components/icons';
 import { IconTextPlus, IconWriting } from '@tabler/icons-react';
 import { fetchBlob } from '@tingly/vision';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import { api } from '@/services/api';
 import { downloadImage, slugify } from '@/utils/download';
-import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/utils/promptFile';
+import { isPromptFile, partitionDroppedFiles, readPromptFile } from '@/pages/image/utils/promptFile';
 import ImageSliceDialog from './ImageSliceDialog';
 import ImageGenGalleryDialog from './ImageGenGalleryDialog';
 import ImageGenLightbox from './ImageGenLightbox';
@@ -45,8 +45,8 @@ import ImageModelPicker from './ImageModelPicker';
 import { imageModelOptions } from './imageModelRules';
 import MaskEditorDialog from './MaskEditorDialog';
 import SketchCanvasDialog from './SketchCanvasDialog';
-import { createImageProfile, removeImageProfile, updateImageProfile } from '../profiles/imageProfileStore';
-import { newPromptId, type ImageProfile, type ProfilePrompt } from '../profiles/imageProfileTypes';
+import { createImageProfile, removeImageProfile, updateImageProfile } from '../../../features/image/imageProfileStore';
+import { newPromptId, type ImageProfile, type ProfilePrompt } from '../../../features/image/imageProfileTypes';
 import { PromptEditorCopyButton, PromptEditorField, PromptPanelField } from './PromptFields';
 import { usePromptFilled, usePromptStore } from './usePromptStore';
 import ProfilePromptTabs from '../profiles/ProfilePromptTabs';
@@ -58,15 +58,22 @@ import { useSnippets } from '../library/assetStore';
 import type { ImageAsset } from '../library/assetTypes';
 import type { ReferenceImage } from './ImageGenReferenceImages';
 import type { IdeaHandoff } from '../prompt/ideaPromptTemplates';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const TextPlus = tablerMui(IconTextPlus);
 const Writing = tablerMui(IconWriting);
+const IMAGE_SIZE_PRESETS = [
+    '256x256', '512x512', '1024x1024', '1024x1792',
+    '1792x1024', '1024x1536', '1536x1024', 'auto',
+];
 import type {
     GenerationRun,
+    ImageReasoningEffort,
     ImportedImage,
     Quality,
     SelectedImage,
-} from './ImageGenPlayground.types';
+} from '../../../features/image/ImageGenPlayground.types';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 // The results strip is "what's happening right now", not a scrollback buffer —
 // dragging through dozens of past generations to find one belongs in the
@@ -132,6 +139,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     profile,
 }) => {
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const navigate = useNavigate();
     // The picker's order, so the default is the first pair it shows.
     const models = useMemo(() => imageModelOptions(rules).map((option) => option.requestModel), [rules]);
@@ -160,8 +168,13 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
     // The prompt in a dialog-sized editor: the panel's field is one column of a
     // fixed-height panel, which is the wrong place to read or rework a long one.
     const [promptEditorOpen, setPromptEditorOpen] = useState(false);
-    const [size, setSize] = useState(profile?.size ?? '1024x1024');
+    const [size, setSize] = useState(profile?.size ?? 'auto');
+    const [customSizeOpen, setCustomSizeOpen] = useState(false);
+    const [customWidth, setCustomWidth] = useState('');
+    const [customHeight, setCustomHeight] = useState('');
+    const [customSizeError, setCustomSizeError] = useState(false);
     const [quality, setQuality] = useState<Quality>(profile?.quality ?? 'auto');
+    const [reasoningEffort, setReasoningEffort] = useState<ImageReasoningEffort>(profile?.reasoningEffort ?? 'auto');
     const [count, setCount] = useState(profile?.count ?? 1);
     // Where generated images land on disk — read-only, shown so the user can
     // navigate there themselves; this page never opens it for them.
@@ -351,23 +364,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
         if (imageFiles.length > 0) void handleAddReferenceImages(imageFiles);
     }, [handleAddReferenceImages, handleOpenPromptFile]);
 
-    // The Paste button is the click-shaped twin of Ctrl+V: it asks the
-    // clipboard directly (Chromium-family browsers grant this after a prompt)
-    // and, where the browser won't hand the clipboard to a click, says so and
-    // points at the shortcut that always works — never a silent no-op.
-    const handlePasteFromClipboard = useCallback(async () => {
-        const nothingPasted = () => showNotification(
-            t('playground.pasteHint', { defaultValue: 'Copy an image first, then press Ctrl+V / ⌘V here' }),
-            'info',
-        );
-        const files = await readClipboardImages();
-        if (files.length === 0) {
-            nothingPasted();
-            return;
-        }
-        await handleAddReferenceImages(files);
-    }, [handleAddReferenceImages, showNotification, t]);
-
     const handleOpenReference = useCallback((index: number) => {
         const image = referenceSelection(index);
         if (image) setSelectedImage(image);
@@ -394,10 +390,11 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            reasoningEffort,
             count,
             sources: referenceImages,
         });
-    }, [canSubmit, count, getPrompt, model, quality, referenceImages, runGeneration, size]);
+    }, [canSubmit, count, getPrompt, model, quality, reasoningEffort, referenceImages, runGeneration, size]);
 
     // ⌘/Ctrl+Enter from the prompt — in the panel or in the larger editor —
     // is the keyboard's Generate button.
@@ -419,6 +416,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             setSelectedModel(run.model);
             setSize(run.size);
             setQuality(run.quality);
+            setReasoningEffort(run.reasoningEffort ?? 'auto');
             setCount(run.count ?? 1);
             setReferenceImages(sources.slice(0, MAX_EDIT_REFERENCE_IMAGES));
             controlsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -563,9 +561,10 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model: selectedModel,
             size,
             quality,
+            reasoningEffort,
             count,
         });
-    }, [activePromptId, count, profileId, profilePrompts, quality, referenceImages, selectedModel, size]);
+    }, [activePromptId, count, profileId, profilePrompts, quality, reasoningEffort, referenceImages, selectedModel, size]);
 
     // Stable identities (they read through `latest`), so the memoised tab row
     // is not re-rendered by every keystroke in the prompt field.
@@ -636,6 +635,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             model,
             size,
             quality,
+            reasoningEffort,
             count,
         });
         navigate(`/image/profile/${created.id}`, { state: { rename: true } });
@@ -655,6 +655,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                reasoningEffort: run.reasoningEffort ?? 'auto',
                 count: run.count ?? 1,
             });
             copyRunToProfile(run, created.id);
@@ -715,7 +716,9 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
             <UnifiedCard
                 size="full"
                 titleHeadingLevel={1}
-                sx={{ height: { lg: '100%' } }}
+                // Clip, not hidden: a hidden card is a scroll container, and the
+                // phone's sticky Generate would stick to the card, not the screen.
+                sx={{ height: { lg: '100%' }, ...(phone && { overflow: 'clip' }) }}
                 title={profile ? (
                     renaming ? (
                         <TextField
@@ -730,7 +733,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             }}
                             onFocus={(event) => event.target.select()}
                             slotProps={{ htmlInput: { 'aria-label': t('imageProfile.name', { defaultValue: 'Profile name' }) } }}
-                            sx={{ width: 320, '& input': { fontSize: '1.25rem', fontWeight: 600, py: 0.5 } }}
+                            sx={{ width: 320, '& input': { fontSize: fontSizes.heading, fontWeight: 600, py: 0.5 } }}
                         />
                     ) : (
                         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -947,7 +950,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                 display: 'grid',
                                 gridTemplateColumns: {
                                     xs: 'repeat(2, minmax(0, 1fr))',
-                                    sm: 'minmax(0, 1fr) minmax(0, 1fr) 88px',
+                                    sm: 'repeat(3, minmax(0, 1fr)) 72px',
                                 },
                                 gap: 1.5,
                             }}
@@ -960,13 +963,27 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     labelId="image-size-label"
                                     label={t('playground.size', { defaultValue: 'Size' })}
                                     value={size}
-                                    onChange={(event) => setSize(event.target.value)}
+                                    onChange={(event) => {
+                                        if (event.target.value === '__custom__') {
+                                            const [width = '', height = ''] = size === 'auto' ? [] : size.split('x');
+                                            setCustomWidth(width);
+                                            setCustomHeight(height);
+                                            setCustomSizeError(false);
+                                            setCustomSizeOpen(true);
+                                        } else {
+                                            setSize(event.target.value);
+                                        }
+                                    }}
                                 >
-                                    <MenuItem value="256x256">256x256</MenuItem>
-                                    <MenuItem value="512x512">512x512</MenuItem>
-                                    <MenuItem value="1024x1024">1024x1024</MenuItem>
-                                    <MenuItem value="1024x1792">1024x1792</MenuItem>
-                                    <MenuItem value="1792x1024">1792x1024</MenuItem>
+                                    {IMAGE_SIZE_PRESETS.map((preset) => (
+                                        <MenuItem key={preset} value={preset}>{preset}</MenuItem>
+                                    ))}
+                                    {!IMAGE_SIZE_PRESETS.includes(size) && (
+                                        <MenuItem value={size}>{size}</MenuItem>
+                                    )}
+                                    <MenuItem value="__custom__">
+                                        {t('playground.customSize', { defaultValue: 'Custom…' })}
+                                    </MenuItem>
                                 </Select>
                             </FormControl>
                             <FormControl size="small">
@@ -986,6 +1003,22 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     <MenuItem value="standard">standard</MenuItem>
                                 </Select>
                             </FormControl>
+                            <FormControl size="small">
+                                <InputLabel id="image-reasoning-effort-label">
+                                    {t('playground.reasoningEffort', { defaultValue: 'Thinking effort' })}
+                                </InputLabel>
+                                <Select
+                                    labelId="image-reasoning-effort-label"
+                                    label={t('playground.reasoningEffort', { defaultValue: 'Thinking effort' })}
+                                    value={reasoningEffort}
+                                    onChange={(event) => setReasoningEffort(event.target.value as ImageReasoningEffort)}
+                                >
+                                    <MenuItem value="auto">auto</MenuItem>
+                                    <MenuItem value="low">low</MenuItem>
+                                    <MenuItem value="medium">medium</MenuItem>
+                                    <MenuItem value="high">high</MenuItem>
+                                </Select>
+                            </FormControl>
                             <TextField
                                 size="small"
                                 type="number"
@@ -996,12 +1029,12 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     setCount(Number.isFinite(nextCount) && nextCount > 0 ? Math.min(nextCount, 10) : 1);
                                 }}
                                 slotProps={{ htmlInput: { min: 1, max: 10 } }}
-                                sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
                             />
                         </Box>
 
                         <Tooltip title={t('playground.submitShortcut', { defaultValue: '⌘/Ctrl + Enter to generate' })} placement="top">
-                        <span>
+                        {/* Phone shell: Generate stays in reach while the form above it scrolls. */}
+                        <Box component="span" sx={phone ? { display: 'block', position: 'sticky', bottom: 8, zIndex: 2 } : undefined}>
                         <Button
                             variant="contained"
                             size="large"
@@ -1011,11 +1044,6 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                             startIcon={pendingCount > 0
                                 ? <CircularProgress size={18} color="inherit" />
                                 : <AutoAwesome />}
-                            sx={{
-                                '&.Mui-disabled': {
-                                    color: 'common.white',
-                                },
-                            }}
                         >
                             {pendingCount > 0
                                 ? t('playground.generateAnother', { defaultValue: 'Generate another · {{count}} running', count: pendingCount })
@@ -1027,7 +1055,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                                     })
                                     : t('playground.generate', { defaultValue: 'Generate' })}
                         </Button>
-                        </span>
+                        </Box>
                         </Tooltip>
                     </Stack>
 
@@ -1176,6 +1204,51 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 onClose={() => setSliceTarget(null)}
                 showNotification={showNotification}
             />
+            <Dialog open={customSizeOpen} onClose={() => setCustomSizeOpen(false)} maxWidth="xs" fullWidth>
+                <Box component="form" noValidate onSubmit={(event) => {
+                    event.preventDefault();
+                    if (![customWidth, customHeight].every((part) => /^\d+$/.test(part) && Number.isSafeInteger(Number(part)) && Number(part) > 0)) {
+                        setCustomSizeError(true);
+                        return;
+                    }
+                    setSize(`${Number(customWidth)}x${Number(customHeight)}`);
+                    setCustomSizeOpen(false);
+                }}>
+                    <DialogTitle>{t('playground.customSizeTitle', { defaultValue: 'Custom size' })}</DialogTitle>
+                    <DialogContent>
+                        <Stack direction="row" spacing={2} sx={{ pt: 1 }}>
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                type="number"
+                                label={t('playground.customWidth', { defaultValue: 'Width (px)' })}
+                                value={customWidth}
+                                onChange={(event) => { setCustomWidth(event.target.value); setCustomSizeError(false); }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                                error={customSizeError}
+                            />
+                            <TextField
+                                fullWidth
+                                type="number"
+                                label={t('playground.customHeight', { defaultValue: 'Height (px)' })}
+                                value={customHeight}
+                                onChange={(event) => { setCustomHeight(event.target.value); setCustomSizeError(false); }}
+                                slotProps={{ htmlInput: { min: 1, step: 1, inputMode: 'numeric' } }}
+                                error={customSizeError}
+                            />
+                        </Stack>
+                        {customSizeError && (
+                            <Typography color="error" variant="caption" role="alert" sx={{ display: 'block', mt: 1 }}>
+                                {t('playground.customSizeError', { defaultValue: 'Enter a positive whole number for width and height.' })}
+                            </Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setCustomSizeOpen(false)}>{t('common.cancel', { defaultValue: 'Cancel' })}</Button>
+                        <Button type="submit" variant="contained">{t('common.confirm', { defaultValue: 'Confirm' })}</Button>
+                    </DialogActions>
+                </Box>
+            </Dialog>
             <Dialog
                 open={promptEditorOpen}
                 onClose={() => setPromptEditorOpen(false)}
@@ -1183,7 +1256,7 @@ const ImageGenPlaygroundCard: React.FC<ImageGenPlaygroundCardProps> = ({
                 fullWidth
             >
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
-                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ flex: 1, fontSize: fontSizes.title }}>
                         {t('playground.promptEditorTitle', { defaultValue: 'Prompt' })}
                     </Typography>
                     <PromptEditorCopyButton store={promptStore} label={copyPromptLabel} copiedLabel={promptCopiedLabel} />

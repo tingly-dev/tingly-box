@@ -36,9 +36,9 @@
 | Goal（一句话目标） | ✅ | |
 | 仓库（本地路径）、文件库 Library（上传文件 + 线程产出） | ✅ | |
 | 协调者模型 / 线程模型分别设置 | ✅ | |
-| Pause / Archive / Delete | ✅ | |
+| Pause / Archive / Delete | ✅ | 暂停和归档都会停止全部线程、关闭其会话进程并撤销其工具入口（MCP capability URL，见 `mcp-tools.md`）；恢复或取消归档后，线程的下一轮用新进程和新入口；归档另外解绑 IM 聊天 |
 | 用量按线程 / 按模型 | ✅ 基础版 | 记录 token |
-| Review：diff + 本地合并（"Merge it"） | ✅ | 本地版的 PR |
+| Review：diff + 合并（"Merge…"：squash 或 merge request，仅此二种） | ✅ | 见 4.7 |
 | 线程推送自己的分支并开 PR（任务、项目指令或用户要求时；不自行合并） | ✅ 仅靠 prompt | 由模型自己选工具；失败如实报错 |
 | PR 自动修 CI / 回复 review | P2 | |
 | Routines（定时） | P2 | |
@@ -66,7 +66,7 @@ Browser ──REST──▶ HTTP modules (project / thread / settings)
                             │
                  ┌──────────┴───────────┐
            Coordinator（每项目串行队列）   Thread Manager
-           llm.Client + 工具循环          agentboot/engine → claude CLI
+           Claude Code 会话 + Projects MCP   agentboot/engine → claude CLI
                  │                         git worktree / prompter / 汇报
                  └────── Store (SQLite) + 项目目录（memory/、library/、worktrees/）
 ```
@@ -86,27 +86,34 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 - 项目对话 = 主线程（`agent=llm`）的 `thread_events`：kind(user|assistant|thread_started|suggestions|thread_update|error)，没有 role，由 kind 推出。旧的 `project_messages` 表迁移后只读保留一个版本。
 - 线程回报（`thread_update`）照常传给协调者；对话里按发生的先后各占一条很淡的折叠行（状态、线程名、结果，点开看回报正文），线程卡片只负责实时状态；对话下方有前端开关可隐藏这些行（仅存本机 localStorage）。
 - `threads`: id, project_id(必填), parent_id, seq(项目内序号，主线程为 0), agent(llm|claude-code), title, task, status, wait_reason, repo_path, base_branch, branch, cwd, session_id, model, last_report, commits_ahead, files_changed, input/output tokens, origin(coordinator|suggestion|user), timestamps, resolved_at。
+- **线程自己的启动设置**（`profile_override` / `model_override` / `effort_override` / `permission_mode`）：线程创建时（`Threads.Start`）从项目当前的 `thread_profile` / `thread_model` / `thread_effort` / `thread_permission_mode` **复制**到线程行上，之后每一轮、`--resume`、终端接管（Handoff）都只读线程自己的值，不再回看项目。所以改项目的“线程默认设置”只影响之后新建的线程；单个线程在自己面板里的修改也只改它自己。空的模型/effort 表示该 profile（或连接）的默认值，不再表示“跟随项目”；“项目默认”选项（`SetWorkerProfile inherit`、`SetPermissionMode("")`）是**一次性重新复制**项目当前的值，不是链接。字段名保留 `*_override` 只是为了接口兼容。
+  - 起因：#2274 起这些字段为空即“继承项目”，于是项目默认一改，所有没单独设置过的老线程（含已运行的）下一轮都跟着变，会话中途换模型还会让 prompt cache 失效。
+  - 迁移（`db.pinThreadSettings`，只跑一次，标记 `migrations.thread_settings_pinned`）：以前“跟随”的线程拿到**迁移时**项目的当前值（创建时的值从未存过，这是能得到的最接近的值）；线程自己已设的 profile / 模型 / 权限模式保留；协调者主线程不动。空的 effort 与“跟随”无法区分，同样取项目值。folder 线程只补权限模式（它们的模型和 profile 本来就存在线程上）。
+  - 模型 / profile 变更与 prompt cache：线程自己改模型仍走 `set_model`，缓存失效是用户显式换模型的代价；现在不会再被项目设置的改动连带触发。
 - `thread_events`: 线程过程。kind(user|assistant|tool_use|tool_result|approval|ask|system|error|report|thread_started|suggestions|thread_update), content, payload, source(空=网页|im|thread|system), source_ref, source_platform, source_chat_id, created_at。
 - 新线程的目录是 `threads/<thread-id>/`（旧线程保留 `cwd` 里记的 `worktrees/...`）。
 
 ### 4.3 线程状态（与官方 Overview 分组一致）
 
+摘要。状态、转移、谁能关闭线程以 [thread-lifecycle.md](thread-lifecycle.md) 为准，改状态先改那里。
+
 | 状态 | 进入条件 | Overview 分组 |
 |---|---|---|
-| `working` | 一轮在跑 | Working |
-| `waiting` | 有待回答的审批/提问；或上一轮以 `NEEDS_INPUT:` 结尾；或失败（`wait_reason` 说明） | **Waiting on you** |
-| `ready` | 一轮结束，分支上有领先于基线的提交 | Ready for review |
-| `idle` | 一轮结束，无待审内容 | Idle |
-| `resolved` | 用户标记 / 合并后自动 / 一周无活动 | Resolved（可重开） |
+| `working` | 一轮在跑、排队等槽位，或后台任务在跑 | Working |
+| `waiting` | 有待回答的审批/提问；或上一轮以 `NEEDS_INPUT:` 结尾；或重启时正在跑、问题已过期、建 worktree 失败（`wait_reason` 说明发消息继续） | **Waiting on you** |
+| `failed` | 上一轮出错（`wait_reason` 以 `Failed` 开头）；Retry 或发消息继续 | Failed |
+| `ready` | 歇着（一轮结束或被停下），分支上有没从 Overview 合并过的提交（合并后的新提交也算） | Ready for review |
+| `idle` | 歇着，无待审内容 | Idle |
+| `resolved` | 只由用户关闭（线程菜单、批量、Archive）；协调者只在用户要求时。系统不自动关闭，合并也不关闭 | Resolved（可重开） |
 
 （官方的 Landing 对应"PR 已批准排队合并"，本地合并是同步动作，MVP 不需要该状态。）
 
 ### 4.4 线程运行
 - 线程用 `agentboot/engine` 跑，和原来 Tingly Box 的 Desk 是同一个会话引擎（Desk 现已并入 Projects，成为工作目录）（`claude` CLI，stream-json，`--resume` 续会话，`PermissionPromptTool: stdio`）。引擎负责进程、转换和后台任务；本仓库只做线程这一层：排队、项目并发上限、线程内审批、每轮汇报。引擎按 Claude 会话 id 认线程（`Thread.SessionID`）。
-- **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，空闲 10 分钟回收，之后的轮次带 `--resume` 重开）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。
+- **常驻进程**：每个线程保留一个常驻 `claude` 进程（池上限 10，默认空闲 65 分钟回收，可用 `--thread-idle-timeout` 或 `projects.Options.Sessions` 配置，之后的轮次带 `--resume` 重开；协调者的常驻进程另有一个池和更长的空闲时间，见 `coordinator-session.md` 的“进程生命周期”）。后台任务（后台命令、子代理）因此能活过发起它的那一轮；任务结束后 Claude 自己接着跑的那一轮，照常定状态、汇报协调者。Stop 只中断当前轮，不杀进程；Resolve 才关掉进程。**改设置不重启进程**：模型和权限模式用 `set_model` / `set_permission_mode` 控制请求即时切换；线程设置文件里的权限规则（`permissions`、`autoMode`）在下一轮开始前用 `apply_flag_settings` 控制请求推送给存活的进程（`agentboot/engine` 的 `applyLive`），启动签名不再包含它们。进程拒绝推送（太旧的 CLI）时不重启，规则等进程下次自然启动（空闲回收后）再生效，下一轮会再试一次。只有环境变量、网关、profile 的其余设置、MCP 配置这类启动时才读的内容变了才重启。详见 `message-channel.md` 的“设置怎么应用”。
 - **事件**：引擎的对话记录条目转成线程事件（`transcript.go`）：主对话的文字、工具调用和结果照旧；子代理内部步骤带上所属的 Agent 调用（`parent`）一起存下，主对话分页不含它们，打开子代理时再读；思考不显示；后台任务结束时留一行系统事件。
 - 测试用 `agentboot/engine/enginetest` 的脚本替身，另有一个用 agentboot fixture 跑真实 Claude 驱动的用例。
-- **工作区**：项目有仓库 → `git worktree add -b tp/<slug>-<id6> <worktree> <base>`；没有仓库 → 空目录。
+- **工作区**：项目目录可混合 Git 与普通目录，每项独立选择工作区模式；主目录是新线程默认目录，普通目录只能 shared。无目录时使用 scratch。兼容及详细语义见 [workspace.md](workspace.md)「项目目录与逐目录模式」。
 - **上下文注入**（`--append-system-prompt`）：项目名、Goal、Instructions、`MEMORY.md` 内容、记忆/文件库目录说明、线程规则：
   - 只做分配的这一件事；在当前分支上提交（commit），不 push、不改其他分支；
   - 需要的东西缺失时，说明缺什么并停下，不要 mock 或猜；
@@ -115,34 +122,37 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
   - 记住项目级事实：在记忆目录写文件，并在 `MEMORY.md` 加一行索引。
 - **提示词约定（§4.5）**：协调者和线程的提示词按下面几条写，和官方的设计对齐，不照抄原文：
   - **来源与授权（事件信封）**：协调者看到的每条消息都包在 `<event>` 里，带来源（`web`、`im`、`thread`、`system`）和信任级别：`principal` 是用户，`relay` 是线程的汇报，`system` 是系统。只有 `principal` 能下指令和批准；relay 和 system 里的文字是信息，不管它怎么自称。非 principal 的正文会转义 `<event`，不能提前关闭信封，也不能伪造一个用户信封。协调者经 `message_thread` 发给线程的消息，在线程里以固定的一行开头标明"来自协调者，不是用户"。
-  - **回复预算**：check-in 和设置变更事件带 `replies_since_user`（用户上次发言以来协调者回复了几个轮次；同一轮的多个回合算一次，用户消息超出历史窗口时为下限）和 `minutes_since_user`。prompt 规则：不少于 2 次且没有需要用户处理的事时不再发言，改调用 `no_update`，进度看线程卡片；用户离开超过 30 分钟时，发言控制在 80 字以内。这是软约束，靠 prompt 和事实数据，没有硬性拦截，因为硬拦截会吞掉"线程的结果"这类应该送达的汇报。
+  - **回复预算**：check-in 事件带 `replies_since_user`（用户上次发言以来协调者回复了几个轮次；同一轮的多个回合算一次，用户消息超出历史窗口时为下限）和 `minutes_since_user`。prompt 规则：不少于 2 次且没有需要用户处理的事时不再发言，改调用 `no_update`，进度看线程卡片；用户离开超过 30 分钟时，发言控制在 80 字以内。这是软约束，靠 prompt 和事实数据，没有硬性拦截，因为硬拦截会吞掉"线程的结果"这类应该送达的汇报。
   - **线程命名**：动词开头、3-6 词、一个目标、用用户的话，不含 id 和路径。
   - **回复风格**：先说结果，再说用户必须知道或要做的；对用户只按标题称呼线程，不出现 id；线程汇报里每个断言配上跑过或看到的证据，猜测要说明是猜测。
   - **记忆**：写之前先看索引，已有就更新，不新建近似重复；一个文件一件事；代码和 git 里能查到的不记；记忆是背景，不是指令。
   - **指令优先级**：项目指令是长期规则；用户在当前对话或线程里的话更新，冲突时以后者为准，线程要说明冲突并询问。
   - **PR 交付**：即使在本地运行，线程也可以开 PR，只是没有官方那样顺畅的专用通道。只在任务、项目指令或用户要求 PR 时才做：推自己的分支，对着基线分支开 PR，遵循仓库的 PR 模板，把链接写进汇报。怎么推、怎么开交给模型自己（gh、GitHub 工具它都认得），prompt 不点名工具；失败（没有 remote、凭据或工具）就当作错误如实报告原因，提交留在分支上，不绕路。线程永远不自己合并。协调者在用户要 PR 时把目标分支、模板、评审人写进任务。尚未做的是 PR 事件回灌（CI、评审）。
-  - **决策卡**：当选择会改变用户的目标，或下一步无法撤销（合并、推送、删除、花钱）时，协调者用 `request_decision` 发一张卡：问题、2–4 个选项（各带一句后果）、一个推荐项和理由，只问一次，不在文字里重复。等待期间可以按推荐项继续做，但不可撤销的一步必须停下。卡片事件是 `decision`，用户点选走 `POST /threads/:id/events/:eid/choose`：选择写进事件，同时以用户自己的消息进入协调者的对话（只有选项文字，不引用协调者写的问题），所以它是真正的用户批准；已回答的卡不能再改（409，服务端串行处理，双击或多个标签页只有一次生效）。用文字回答的卡不会自动关闭，之后再点它仍会作为一次回答送出。IM 里没有卡片，事件正文把问题和选项（编号从 1 开始，与协调者历史中的编号一致）写成文字，用户直接回话即可。其余情况不问，按最可能的理解行动并说明所选理解。
+  - **决策卡**：当选择会改变用户的目标，或下一步无法撤销（合并、推送、删除、花钱）时，协调者用 `request_decision` 发一张卡：问题、2–4 个选项（各带一句后果）、一个推荐项和理由，只问一次，不在文字里重复。等待期间可以按推荐项继续做，但不可撤销的一步必须停下。卡片事件是 `decision`，用户点选走 `POST /threads/:id/events/:eid/choose`：选择写进事件，同时以用户自己的消息进入协调者的对话（只有选项文字，不引用协调者写的问题），所以它是真正的用户批准；卡片可用 `thread_id` / `number` 声明它关于哪个线程和 PR，回答的信封带系统写的 `kind="answer" card question thread id pr` 属性，说明它答的是哪张卡（见 `decision-card-source.md`）；已回答的卡不能再改（409，服务端串行处理，双击或多个标签页只有一次生效）。用文字回答的卡不会自动关闭，之后再点它仍会作为一次回答送出。IM 里没有卡片，事件正文把问题和选项（编号从 1 开始，与协调者历史中的编号一致）写成文字，用户直接回话即可。其余情况不问，按最可能的理解行动并说明所选理解。
   - **可信批准**：线程不能相信协调者的转述，所以批准要由系统原样转引。用户事件的信封带 `msg` 属性（消息 id），协调者给线程发消息时在 `cite` 里列出相关的用户消息 id，服务端取原文，附在消息末尾“The user's own words, quoted by the system”之下；只有这一段才算用户本人的话，线程规则里写明只有它能批准合并、推送等需要用户决定的事。`cite` 只接受主对话里用户自己的近期消息（最近 200 条）；协调者的回复、线程汇报、系统消息或未知 id 一律拒绝，不发送。决策卡上的点选本身就是一条用户消息，可以被引用。协调者自己的消息里若带有这段引用的标题就直接拒绝，所以标题不能被伪造。
   - **线程久无动静**：线程回合还在跑、却长时间没有任何事件（默认 20 分钟，每分钟检查）时，系统向协调者发一条 `stalled` 汇报（信封里 `outcome="stalled"`，relay 级别）。它只是信息：协调者用 `get_thread` 看一眼，看起来真卡住或用户在等才告诉用户，不会自己停止或重启线程；同一段安静期只报一次，有新动静后再安静才会再报。等待用户批准或回答的线程是 `waiting`，不算卡住。
   - **显式收尾**：协调者的每个轮次以三种方式之一结束：回复用户、调用做事的工具、或调用 `no_update` 工具表示无需发言。`no_update` 只对线程汇报和 check-in 轮次有效，立即结束轮次；用户消息触发的轮次调用它会被拒绝（用户的消息必须有回应）。旧模型回复 `NO_UPDATE` 文本在汇报轮次仍然静默（兼容）。用户消息触发的轮次如果什么都没做就结束，会被提醒一次，仍然为空则结束，保证循环有界。
   - **改名**：目标变了协调者用 `rename_thread` 改卡片标题，不动分支和历史，也不开新一轮。
   - 未做：用真实模型验证回复预算和信封是否真的被遵守（harness 阶段 4）。
-- **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入。
+- **目录权限**：生成 settings 文件，`permissions.additionalDirectories` = [library, memory, 其他仓库]，`--settings` 传入；library 另有 `allow` 规则和 auto 模式分类器条目，见 `workspace.md`「共享上传目录（library）的授权」。
 - **连接**：全局连接为 Anthropic 风格时，线程继承它（`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`），即默认走 Tingly Box；否则用本机 `claude` 自己的登录。
 - **权限模式**：默认 `acceptEdits`（编辑自动通过，命令等需审批 → Waiting on you）；项目设置可改为 `auto` / `bypassPermissions`。
 - **审批**：prompter 把请求记为线程事件、线程进入 `waiting`、阻塞等待用户在线程里回答（权限审批不超时）；"本线程同类都允许"按工具名记住。
-- **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 10 分钟后按推荐项回答，`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
+- **自动回答问题**（AskUserQuestion）：每个线程一个设置 `auto_answer`：`off` / `delay` / `delay:<分钟>` / `now`，空为按种类的默认值（项目线程 `delay`，用户多半不在；工作目录会话 `off`，用户多半在看）。只有每个子问题都有标了 “(Recommended)” 的选项、且都不是多选时才会自动回答，其余照旧等人。`delay` 在提问 5 分钟后按推荐项回答，选择器末尾的“自定义…”可改成 1–60 分钟（存成 `delay:<分钟>`，同一个字符串字段，不加列；键入 5 仍存 `delay`；服务端 `parseAutoAnswer` 校验，非法值 400）。等待要早于常驻进程的空闲回收（默认 65 分钟），免得回答时进程已被收掉，所以自定义上限取 60 分钟；`now` 立即回答；待回答事件带 `auto_at`，卡片写明“几点前没回答就按 X 继续”，自动回答后事件带 `auto: true`，记录里标“已按推荐答案自动回答”。改设置时正在等的问题按新设置重新计时。官方的决策卡也是“推荐一项、没人回答就按它继续”，这里只是把等待时长做成可选。未定：协调者是否要在汇报里提到这次猜测。
 - **消息排队**：线程忙时收到的消息（用户或协调者）排队，当前轮结束后依次执行。
 - **一轮结束后**：读取 git 状态（领先提交数、改动文件数）→ 定状态 → 记一条 `report` 事件 → 通知协调者。
 
 ### 4.5 协调者
-- 每个项目一个串行队列；触发源：用户消息、线程汇报（完成 / 需要输入 / 失败）、项目运行配置变更。
-- **配置变更**：保存名称、Goal、Instructions、仓库、模型或权限模式时，在同一事务中写入主线程的 `system` 事件（`source=system`），经现有队列合并通知协调者。协调者按新配置重新评估待办，无事则保持安静；收藏与重复保存不触发模型，暂停或归档时只记录变更。每轮模型请求重新读取配置并解析模型；执行工具前再次检查，若响应生成期间配置已变，先返回工具错误让模型重新规划。仓库变更作用于新线程，已有线程的 worktree 不搬迁。
+
+> **现行设计**：Coordinator 的会话、输入投递、共享路径和恢复方案见 [coordinator-session.md](coordinator-session.md)。以下保留初版设计背景；其中“每回合按最近 40 条事件重建模型上下文”、工具循环和配置变更的旧描述已由该文档取代，不是当前实现。
+- 每个项目一个串行队列；触发源：用户消息、线程汇报（完成 / 需要输入 / 失败）。
+- **配置变更**：保存名称、Goal、Instructions、仓库、模型或权限模式时记录可见 system 事件，但不注入协调者、不唤醒模型；下一条用户消息或线程汇报到达时才应用最新设置。仓库变更作用于新线程，已有线程的 worktree 不搬迁；运行中的工具调用仍检查配置快照。
 - **按需构建上下文**（与官方一致：基于最近消息、线程表和记忆，而不是全量历史）：系统提示 = 角色 + Goal + Instructions + MEMORY.md + 仓库列表 + 线程表（id、标题、状态、最近汇报摘要）；消息 = 最近 N 条项目对话。
+  - **读窗口之外的对话**：窗口按条数截断（最近 40 条），被截断时系统提示末尾会说明“更早的消息存在”。读取工具按**来源**分，同一来源只有一个工具，读法用参数区分，不重叠：`read_conversation`（主对话：默认从窗口最老的一条往前，`before` 翻页，`contains` 按文字搜索，最多回看 1000 条，`id` 读指定一条全文）、`get_thread`（某个线程：状态头加 `before` 翻页和 `full`）、`list_threads`（含已归档和旧线程，补线程表只显示 30 个的缺口，可按 `status`、`contains` 过滤）。三层上限，效果类似 grep / ls 的输出：单条上限（预览 600 字，`full` 或 `id` 为 4000 字）、总量上限（预览 6000 字，`full` 12000 字）、条目上限（默认 20，最多 40）。放不下的从最老的一端隐去，结果末尾明说“隐去了 N 条，用 `contains` 收窄或用 `before=<id>` 接着读”，被截断的单条也带“用 `id` 读全文”的提示，模型不会把被截断的结果当成全部。结果作为 relay 信封返回，是被引用的历史而不是用户此刻的话；其中的消息 id 可用于 `cite`（仅限最近 200 条）。这对应官方协调者按需拉取历史的做法。仍然没有滚动摘要：窗口外的内容要靠协调者主动读或写进记忆。
 - **工具**：`start_thread`、`propose_threads`、`message_thread`、`get_thread`、`resolve_thread`、`remember`、`forget`、`update_instructions`。
 - **路由规则**（提示词）：快速问题就地答；新工作开线程；同领域的后续交给已有线程并说明交给了谁；一条多任务拆多线程；用户表达的协调偏好（先提议、最多 N 个并行、更新简短……）用 `remember` 记下并遵守。
 - 线程汇报触发的协调者回合：简短更新，只在完成、受阻或需要用户时发言。
-- 并发上限：偏好由记忆表达；另有安全硬上限（默认同时 4 个运行中线程，超出排队）。
+- 并发上限：每个项目可在设置里设“同时运行的线程数”（`max_running_threads`，整数 1–100，新项目默认 4，没有“不限制”选项）。旧项目没有该字段，打开数据库时补成 4，行为与以前写死的 4 一致；任何无效值（0、负数）运行时也按 4 处理，绝不会变成不限制。“运行中”指已拿到名额的一轮；超出的轮次排队（线程 `queued=true`，状态仍是进行中，界面显示“排队中”），先到先得，有名额释放立刻开始。调高立即放行排队的轮次；调低不会停止运行中的线程，只是新轮次要等到运行数低于新上限。工作目录（folder）不受项目设置影响，共用一个全局上限（10）；两类互不叠加。偏好（“最多两个一起跑”）仍可由记忆表达，由协调者遵守。
 
 ### 4.6 实时
 `GET /api/v1/projects/:id/events`（SSE）：`message`（新增 / 更新，协调者流式文本）、`thread`（状态变化）、`thread_event`（线程过程新增）。前端进入项目页订阅，其余数据走 REST。
@@ -150,13 +160,18 @@ threads/<thread-id>.settings.json  线程的 Claude Code 设置（additionalDire
 `GET /api/v1/projects/events`（全部项目，不含流式文本和 `thread_event`）驱动侧栏和文件夹页共用的项目列表。`thread` 事件带上该项目变化后的线程计数（`threads`），列表据此就地更新那一行；`project` 事件就地合并（归档即移除）。只有遇到列表里没有的项目、流重连、标签页回到前台、页面报告变化时才重新拉 `GET /projects`，另有 5 分钟的兜底轮询。事件流不受服务器 `WriteTimeout` 限制。原因、不变量和被否决的做法见 `live-updates.md`。
 
 ### 4.7 Review 与合并（本地版 PR）
-- `GET /projects/:id/threads/:tid/diff`：`git diff <base>...<branch>`（+ 未提交改动提示）。
-- "Merge it"：仅当主仓库工作区干净且当前在 base 分支时执行 `git merge --no-ff <branch>`；否则给出原因和可复制的命令（UX 原则 11）。成功后线程 → `resolved`。
+- 看改动按 PR：`GET /threads/:id/prs/:number/diff`（及 `/diff/file`），每个 PR 看自己的 head 相对 base，只读本地 refs（本地没有分支时如实说明并给 GitHub 链接；读 GitHub 文件列表的路径已实现但默认关闭）；只给打开着的 PR。取舍见 `github-tools.md` 的 “A PR's diff”。线程本身不再有“当前分支相对 base”的 diff。
+- "Merge…"：`POST /threads/:id/merge`，必填 `method`，只有两种（其他值 400）。**两种都在 GitHub 上完成，本地工作区一律不动**；实现是线程的 `merge` MCP 工具（见 `github-tools.md`）背后的同一个 `Links.Merge`，HTTP 只是它的独立调用入口（用户点击即授权）：
+  - 都先推送线程分支（不强推）、找到或开出它的 PR（与 `create_pr` 同一套，已有打开的 PR 就重推并关联，不重复开），并记入线程的 Issue/PR 链接。
+  - `squash`：随后用 GitHub 的 `PUT pulls/N/merge`（`merge_method: squash`，带刚推送的 head `sha`，head 变了 GitHub 会拒绝）合并该 PR；`message`（首行为标题）缺省时与 `gh pr merge --squash` 一致：PR 的标题加 `(#编号)`，正文用 PR 的描述。GitHub 拒绝（冲突、必需的检查、保护规则、草稿…）时如实报错，PR 保持打开并保留关联，线程不变。成功后 PR 记为 merged，线程记 `merged_at` 并按歇着规则回到 idle，**不关闭**（是否做完由用户决定，见 [thread-lifecycle.md](thread-lifecycle.md)），分支保留（不删除）。若线程的 PR 已被 `merge` 工具合并且分支之后没有新提交，只记 `merged_at`，不再请求 GitHub；合并后的新提交会再开 PR 合并。
+  - `merge_request`：只开 PR，不合并；**线程不会 resolved**（分支要等 PR 合并才算合并）。
+  - 没有 origin、origin 不是 github.com、gh 缺失或未登录都如实报错；没有 GitHub 远端的仓库因此无法从这里合并。
+  - 前端：Review 对话框里的 "Merge…" 打开 `MergeDialog`：两个选项各一行说明，随后是对应字段（squash：提交信息；PR：标题、描述）；最近一次的选择按项目记在本机 localStorage（`merge-method.<project id>`，失败的方法不记）。
 - 删除项目：移除 worktree，保留分支（与官方"不影响分支和 PR"一致）。
 
 ## 5. UI
 
-- **项目页**：左侧项目对话（消息、线程卡片、提议卡片、输入框）；右侧 **Overview**（Threads 按状态分组 / Library / Memory 入口），点线程卡片或行 → 右侧切到线程详情（过程、审批、diff、操作、线程输入框）。头部：名称、收藏、Overview 开关（等你处理时有小红点）、设置。
+- **项目页**：左侧项目对话（消息、线程卡片、提议卡片、输入框）；右侧 **Overview**（Threads 按状态分组 / Library / Memory 入口），点线程卡片或行 → 右侧切到线程详情（过程、审批、PR 与其改动、操作、线程输入框）。头部：名称、收藏、Overview 开关（等你处理时有小红点）、设置。
 - **输入框上方的信息面板**：线程和工作目录会话的输入框正上方一块面板，回答“在哪跑、哪个分支、会不会等我”，一条信息占一行（图标、名称、值、行尾操作）：文件夹（完整路径，长了保留结尾；复制 `cd`）、当前分支（项目线程是 worktree 分支，会话读文件夹当前分支，每轮结束刷新；复制分支名）、自动回答（点值切换）。面板可折叠（默认折叠，按浏览器记住）；折叠时只露当下最相关的一条，其余记成 “+N”：先是不需要用户也会发生的事（等待中的问题几点自动回答，将来 CI 失败），再是会变的状态（当前分支，将来 PR / CI），文件夹路径只在没有别的可露时才露。这样宽屏窄栏都只占一行，加信息也不会把这一行越撑越长。路径和分支只在这里出现，不再在线程头部重复；以后的 PR / CI 等信息再加一行即可。
 - **项目设置**：General（名称、Goal、协调者模型、线程模型、权限模式、Pause / Archive / Delete）、Memory（Instructions + 记忆文件）、Environment（仓库）、Usage。
 - **新建项目**：名称必填，Goal、仓库（本地路径，即时校验是否 git 仓库并显示当前分支）可选。
@@ -196,10 +211,10 @@ MVP 已实现（§2 中标 ✅ 的部分）。验证：
 
 ### 9.2 后端边界
 
-依赖只朝一个方向：Tingly Box 根模块 → `projects` → `tingly-box/agentboot`、`tingly-box/swagger`。本模块绝不 import Tingly Box 根模块（`task projects:boundary` 用 `go list -deps` 按 module 检查，CI 的 `test-projects` 也跑）。同在一个 go.work 里时，根模块的包是解析得到的，所以这条检查比以前更要紧。对外只有两个公开包：门面 `projects` 和数据类型 `llm`，其余都在 `internal/` 下。
+依赖只朝一个方向：Tingly Box 根模块 → `projects` → `tingly-box/agentboot`、`tingly-box/swagger`。本模块绝不 import Tingly Box 根模块（`task projects:boundary` 用 `go list -deps` 按 module 检查，CI 的 `test-projects` 也跑）。同在一个 go.work 里时，根模块的包是解析得到的，所以这条检查比以前更要紧。对外只有一个公开包：门面 `projects`，其余都在 `internal/` 下（`internal/llm` 只给独立版的 Chats 和连接测试用）。
 
-- **门面**：`New(Options{DataDir, Host})`、`Register(api *swagger.RouteGroup)`（只挂路由，不启动任何东西）、`Start(ctx)`（恢复线程、跑后台任务；幂等，开关打开时再调用即可）、`Close()`。`DataDir` 为空时用内存库，供宿主生成 OpenAPI。
-- **Host**：宿主提供协调者的模型客户端（`ClientFor(ctx, model)`）、可选模型（`Models`）、线程里 Claude Code 的环境和默认模型（`ThreadEnv`）。独立版由设置模块实现；Tingly Box 用网关实现（`ThreadEnv` 复用它的 `tbclient.GetClaudeCodeEnv`）。
+- **门面**：`New(Options{DataDir, Host, Agents})`、`Register(api *swagger.RouteGroup)`（只挂路由，不启动任何东西）、`Start(ctx)`（恢复线程、跑后台任务；幂等，开关打开时再调用即可）、`Close()`。`DataDir` 为空时用内存库，供宿主生成 OpenAPI。`Agents` 为空时用 Claude Code CLI，测试传入脚本替身。
+- **Host**：宿主提供可选模型（`Models`）和协调者、线程里 Claude Code 的环境和默认模型（`ThreadEnv`）。协调者和线程都是 Claude Code 会话（见 [coordinator-session.md](coordinator-session.md)），Projects 本身不直接调用模型。独立版由设置模块实现；Tingly Box 用网关实现（`ThreadEnv` 复用它的 `tbclient.GetClaudeCodeEnv`）。
 
 ### 9.3 路由、鉴权、存储
 

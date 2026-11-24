@@ -1,15 +1,18 @@
 import { memo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import type { Components } from 'react-markdown';
+import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useTranslation } from 'react-i18next';
 import { Check, ContentCopy } from './icons';
-import { useCopyFeedback } from '../hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationMarkdown } from '../transcript/conversationStyles';
+import { remarkAutolinkBoundary } from '../transcript/autolink';
+import { remarkBreaks } from '../transcript/breaks';
+
+type RemarkPlugin = NonNullable<Options['remarkPlugins']>[number];
 
 /** A fenced code block: highlighted, with a copy button. */
 export function CodeBlock({ code, language }: { code: string; language: string }) {
@@ -41,6 +44,23 @@ export function CodeBlock({ code, language }: { code: string; language: string }
     );
 }
 
+// Targets a `safe` document may link to; everything else (javascript:, data:,
+// file:, relative paths, anchors) loses its target and is shown as plain text.
+const SAFE_URL = /^(https?|mailto):/i;
+const safeUrl = (url: string) => (SAFE_URL.test(url) ? url : '');
+
+const safeComponents: Components = {
+    a: ({ node: _node, href, children }) => href
+        ? <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+        : <span>{children}</span>,
+    // A remote image is a request the document's author chooses, so it is never made: the alt text stands in.
+    img: ({ node: _node, alt, src }) => (
+        <Box component="span" title={typeof src === 'string' && /^https?:/i.test(src) ? src : undefined} sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+            {alt || '[image]'}
+        </Box>
+    ),
+};
+
 const markdownComponents: Components = {
     a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
     pre: ({ children }) => <>{children}</>,
@@ -53,15 +73,21 @@ const markdownComponents: Components = {
         return <CodeBlock code={code.replace(/\n$/, '')} language={match?.[1] ?? ''} />;
     },
 };
+const safeMarkdownComponents: Components = { ...markdownComponents, ...safeComponents };
 
-/** Renders assistant Markdown (GFM) with highlighted, copyable code blocks. */
-export const Markdown = memo(function Markdown({ text, conversation = false }: { text: string; conversation?: boolean }) {
+/**
+ * Renders assistant Markdown (GFM) with highlighted, copyable code blocks.
+ * `safe` is for documents nobody here wrote (a file in the library): links
+ * are limited to http, https and mailto and open without opener or referrer,
+ * and images are never loaded.
+ */
+export const Markdown = memo(function Markdown({ text, conversation = false, safe = false }: { text: string; conversation?: boolean; safe?: boolean }) {
     return (
         <Box
             sx={conversation ? {
                 ...conversationMarkdown,
                 '& > :last-child': { mb: 0 },
-                '& :not(pre) > code': { px: 0.5, py: 0.125, borderRadius: radius.chip, bgcolor: 'action.hover', fontSize: '0.85em', fontFamily: fontMono },
+                '& :not(pre) > code': { px: 0.5, py: 0.125, borderRadius: radius.chip, bgcolor: 'action.hover', fontSize: fontSizes.inlineCode, fontFamily: fontMono },
                 '& pre, & pre code': { fontFamily: fontMono },
             } : {
                 wordBreak: 'break-word',
@@ -71,12 +97,14 @@ export const Markdown = memo(function Markdown({ text, conversation = false }: {
                 '& ul, & ol': { pl: 3, my: 1 },
                 '& li': { my: 0.25 },
                 '& h1, & h2, & h3, & h4': { mt: 2, mb: 1, lineHeight: 1.3 },
-                '& h1': { fontSize: '1.4rem' },
+                // Detail Markdown keeps its own heading sizes, deliberately larger than
+        // conversation replies (ConversationPane.test pins both).
+        '& h1': { fontSize: '1.4rem' },
                 '& h2': { fontSize: '1.2rem' },
                 '& h3': { fontSize: '1.05rem' },
                 '& a': { color: 'primary.main' },
                 '& blockquote': { m: 0, my: 1, pl: 2, borderLeft: 3, borderColor: 'divider', color: 'text.secondary' },
-                '& :not(pre) > code': { px: 0.5, py: 0.1, borderRadius: radius.chip, bgcolor: 'action.hover', fontSize: '0.85em', fontFamily: fontMono },
+                '& :not(pre) > code': { px: 0.5, py: 0.1, borderRadius: radius.chip, bgcolor: 'action.hover', fontSize: fontSizes.inlineCode, fontFamily: fontMono },
                 '& pre, & pre code': { fontFamily: fontMono },
                 '& table': { borderCollapse: 'collapse', my: 1.5, display: 'block', overflowX: 'auto' },
                 '& th, & td': { border: 1, borderColor: 'divider', px: 1.25, py: 0.5, textAlign: 'left' },
@@ -85,8 +113,9 @@ export const Markdown = memo(function Markdown({ text, conversation = false }: {
             }}
         >
             <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
+                remarkPlugins={[remarkGfm, remarkBreaks, remarkAutolinkBoundary as RemarkPlugin]}
+                urlTransform={safe ? safeUrl : undefined}
+                components={safe ? safeMarkdownComponents : markdownComponents}
             >
                 {text}
             </ReactMarkdown>

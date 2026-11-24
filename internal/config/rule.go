@@ -17,7 +17,8 @@ const (
 // GetEffectiveAffinity returns the effective affinity TTL for a rule.
 // session_affinity is rule-only — there is no scenario-level inheritance.
 // The built-in Claude Code / Claude Desktop / Codex rules seed 1800s by
-// default (init + migration); every other rule is disabled unless it sets
+// default (init + migration), and new Team rules get it at creation
+// (applyScenarioCreateDefaults); every other rule is disabled unless it sets
 // an explicit value. Returns 0 (disabled) when the rule's value is 0.
 func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 	if rule.Flags.SessionAffinity > 0 {
@@ -38,8 +39,12 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 // mid-conversation system-role messages that strict Anthropic-compatible
 // providers reject (ClaudeCodeCompat) and Claude Code's injected billing header
 // that must not leak upstream (CleanHeader). Default both on so team rules work
-// out of the box. Only seed when the caller sent no flags at all, so an explicit
-// payload that sets any flag is left untouched.
+// out of the box. They also get the 30-minute session affinity the built-in
+// agent rules have: a team's clients keep a conversation on one upstream, so
+// prompt-cache hits survive. This covers every team scope ("team" and
+// "team:<id>"). Only seed when the caller sent no flags at all, so an explicit
+// payload that sets any flag is left untouched; existing rules are never
+// back-filled (see .design/team.md).
 //
 // Cursor: every request routed through /tingly/cursor is, by construction,
 // from the Cursor IDE — that's the whole point of giving it its own scenario
@@ -50,6 +55,7 @@ func applyScenarioCreateDefaults(rule *typ.Rule) {
 	if rule.Scenario.Is(typ.ScenarioTeam) && rule.Flags.IsZero() {
 		rule.Flags.ClaudeCodeCompat = true
 		rule.Flags.CleanHeader = true
+		rule.Flags.SessionAffinity = defaultSessionAffinitySeconds
 	}
 	if rule.Scenario.Is(typ.ScenarioCursor) && rule.Flags.IsZero() {
 		rule.Flags.CursorCompat = true
@@ -109,7 +115,7 @@ func (c *Config) AddRule(rule typ.Rule) error {
 
 	// If not found, append new config
 	c.Rules = append(c.Rules, rule)
-	return c.Save()
+	return c.saveLocked()
 }
 
 func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
@@ -162,7 +168,7 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	for i, rc := range c.Rules {
 		if rc.UUID == uid {
 			c.Rules[i] = rule
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
@@ -186,7 +192,7 @@ func (c *Config) AddRequestConfig(reqConfig typ.Rule) error {
 
 	// No existing rule, append new one
 	c.Rules = append(c.Rules, reqConfig)
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetRequestConfigs returns all Rules
@@ -355,7 +361,7 @@ func (c *Config) SetRequestConfigs(requestConfigs []typ.Rule) error {
 	ensureRuleUUIDs(requestConfigs)
 	c.Rules = requestConfigs
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // UpdateRequestConfigAt updates the Rule at the given index
@@ -374,7 +380,7 @@ func (c *Config) UpdateRequestConfigAt(index int, reqConfig typ.Rule) error {
 	ensureRuleUUID(&reqConfig)
 
 	c.Rules[index] = reqConfig
-	return c.Save()
+	return c.saveLocked()
 }
 
 // UpdateRequestConfigByRequestModel updates a Rule by its request model name
@@ -390,7 +396,7 @@ func (c *Config) UpdateRequestConfigByRequestModel(requestModel string, reqConfi
 			}
 			ensureRuleUUID(&reqConfig)
 			c.Rules[i] = reqConfig
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
@@ -409,7 +415,7 @@ func (c *Config) UpdateRequestConfigByUUID(uuid string, reqConfig typ.Rule) erro
 				reqConfig.UUID = uuid
 			}
 			c.Rules[i] = reqConfig
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
@@ -429,14 +435,14 @@ func (c *Config) AddOrUpdateRequestConfigByRequestModel(reqConfig typ.Rule) erro
 			}
 			ensureRuleUUID(&reqConfig)
 			c.Rules[i] = reqConfig
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
 	// Rule not found, add new one
 	ensureRuleUUID(&reqConfig)
 	c.Rules = append(c.Rules, reqConfig)
-	return c.Save()
+	return c.saveLocked()
 }
 
 // IsTacticValid checks if the tactic params are valid (not zero values)
@@ -481,7 +487,91 @@ func (c *Config) DeleteRule(ruleUUID string) error {
 	}
 
 	c.Rules = append(c.Rules[:index], c.Rules[index+1:]...)
-	return c.Save()
+	return c.saveLocked()
+}
+
+// ReorderRules moves one scenario's rules into the given UUID order and writes
+// the new positions through to the store. It is the single entry point behind
+// POST /rules/reorder (the Web UI's pin-to-top / move buttons, and any future
+// drag-and-drop — all of which submit the whole visible list). The order is
+// hard state: it drives /v1/models listing, same-tier match priority in
+// MatchRuleByModelAndScenario, and the model order written into client
+// configs, because every consumer walks the same array.
+//
+// Semantics:
+//   - orderedUUIDs must be duplicate-free and name only rules of the scenario;
+//     anything else is a caller error (HTTP 400 material).
+//   - Scenario rules missing from orderedUUIDs (e.g. created on another
+//     surface after the caller loaded the page) keep their current relative
+//     order and follow the named ones — a tolerant merge so a stale client
+//     submission can never drop a rule it has not seen.
+//   - Rules of other scenarios keep their exact positions in c.Rules: the
+//     scenario's rules permute among the slots they already occupy, so a
+//     reorder of one scenario never shifts another scenario's rules.
+func (c *Config) ReorderRules(scenario typ.RuleScenario, orderedUUIDs []string) ([]typ.Rule, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(orderedUUIDs) == 0 {
+		return nil, fmt.Errorf("ordered_uuids is empty")
+	}
+
+	seen := make(map[string]bool, len(orderedUUIDs))
+	for _, uuid := range orderedUUIDs {
+		if seen[uuid] {
+			return nil, fmt.Errorf("uuid %s appears more than once in ordered_uuids", uuid)
+		}
+		seen[uuid] = true
+	}
+
+	// Index the current rules: every named uuid must exist and belong to the
+	// scenario; unnamed scenario rules (if any) queue up after the named ones.
+	scenarioOf := make(map[string]typ.RuleScenario, len(c.Rules))
+	for i := range c.Rules {
+		scenarioOf[c.Rules[i].UUID] = c.Rules[i].GetScenario()
+	}
+	for _, uuid := range orderedUUIDs {
+		if _, ok := scenarioOf[uuid]; !ok {
+			return nil, fmt.Errorf("rule with UUID %s not found", uuid)
+		}
+		if scenarioOf[uuid] != scenario {
+			return nil, fmt.Errorf("rule %s belongs to scenario %s, not %s", uuid, scenarioOf[uuid], scenario)
+		}
+	}
+
+	next := make([]string, 0, len(orderedUUIDs))
+	next = append(next, orderedUUIDs...)
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.GetScenario() == scenario && !seen[rule.UUID] {
+			next = append(next, rule.UUID)
+		}
+	}
+
+	// Splice: emit the scenario's rules in the new order wherever they sit,
+	// leave every other rule's slot untouched. Snapshot the block by value
+	// first — the pointers into c.Rules would alias the slots being written.
+	ruleByUUID := make(map[string]typ.Rule, len(next))
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.GetScenario() == scenario {
+			ruleByUUID[rule.UUID] = *rule
+		}
+	}
+	nextIdx := 0
+	reordered := make([]typ.Rule, 0, len(next))
+	for i := range c.Rules {
+		if c.Rules[i].GetScenario() == scenario {
+			c.Rules[i] = ruleByUUID[next[nextIdx]]
+			reordered = append(reordered, c.Rules[i])
+			nextIdx++
+		}
+	}
+
+	if err := c.saveLocked(); err != nil {
+		return nil, err
+	}
+	return reordered, nil
 }
 
 // validateSmartRoutingRules rejects invalid configured predicates before saving a rule.

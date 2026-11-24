@@ -55,7 +55,7 @@ func TestSendDuringATurnIsHeldWhenItCannotJoin(t *testing.T) {
 	require.NoError(t, err)
 	waitStatus(t, f.store, th.ID, db.ThreadWorking)
 
-	_, err = f.threads.SendWith(context.Background(), th.ID, "second", nil, Source{}, SendNow)
+	_, err = f.threads.SendWith(context.Background(), th.ID, "second", nil, Source{}, SendInsert)
 	require.NoError(t, err)
 	held := chips(t, f, th.ID, "held")
 	require.Len(t, held, 1)
@@ -83,7 +83,7 @@ func TestQueuedMessageCanBeTakenBack(t *testing.T) {
 	require.NoError(t, err)
 	waitStatus(t, f.store, th.ID, db.ThreadWorking)
 
-	_, err = f.threads.SendWith(context.Background(), th.ID, "never mind", nil, Source{}, SendQueue)
+	_, err = f.threads.SendWith(context.Background(), th.ID, "never mind", nil, Source{}, SendNextTurn)
 	require.NoError(t, err)
 	held := chips(t, f, th.ID, "held")
 	require.Len(t, held, 1)
@@ -109,7 +109,7 @@ func TestSendWhileIdleIsAPlainSend(t *testing.T) {
 	assert.Equal(t, "did first", f.report(t).Text)
 	assert.Eventually(t, func() bool { return !f.threads.Running(th.ID) }, 5*time.Second, 10*time.Millisecond)
 
-	for _, mode := range []SendMode{SendQueue, SendStopAndSend, SendNow} {
+	for _, mode := range []SendMode{SendNextTurn, SendInsert} {
 		_, err = f.threads.SendWith(context.Background(), th.ID, "again "+string(mode), nil, Source{}, mode)
 		require.NoError(t, err)
 		assert.Equal(t, "did again "+string(mode), f.report(t).Text)
@@ -118,50 +118,34 @@ func TestSendWhileIdleIsAPlainSend(t *testing.T) {
 	assert.Empty(t, chips(t, f, th.ID, "held"), "nothing was running, so nothing is held")
 }
 
-// Stop and send replaces the running turn, and Stop alone discards what was
-// held (the page hands that text back to the composer).
-func TestStopAndSendReplacesTheTurnAndStopDropsChips(t *testing.T) {
-	started := make(chan struct{})
-	f := newFixture(t, func(turn *enginetest.Turn) error {
-		if !turn.Opts.Resume {
-			close(started)
-			<-turn.Ctx.Done()
-			return turn.Ctx.Err()
-		}
-		turn.Say("did "+turn.Prompt, 1, 1)
-		return nil
+// Stop discards what was held (the page hands that text back to the composer).
+func TestStopDropsChips(t *testing.T) {
+	release := make(chan struct{})
+	g := newFixture(t, func(turn *enginetest.Turn) error {
+		<-release
+		<-turn.Ctx.Done()
+		return turn.Ctx.Err()
 	})
-	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Task: "long"})
+	th, err := g.threads.Start(context.Background(), g.project, StartSpec{Task: "long"})
 	require.NoError(t, err)
-	<-started
-
-	_, err = f.threads.SendWith(context.Background(), th.ID, "instead", nil, Source{}, SendStopAndSend)
+	waitStatus(t, g.store, th.ID, db.ThreadWorking)
+	_, err = g.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendNextTurn)
 	require.NoError(t, err)
-	assert.Equal(t, "did instead", f.report(t).Text)
-	assert.Eventually(t, func() bool { return !f.threads.Running(th.ID) }, 5*time.Second, 10*time.Millisecond)
-
-	t.Run("stop drops chips", func(t *testing.T) {
-		release := make(chan struct{})
-		g := newFixture(t, func(turn *enginetest.Turn) error {
-			<-release
-			<-turn.Ctx.Done()
-			return turn.Ctx.Err()
-		})
-		th, err := g.threads.Start(context.Background(), g.project, StartSpec{Task: "long"})
-		require.NoError(t, err)
-		waitStatus(t, g.store, th.ID, db.ThreadWorking)
-		_, err = g.threads.SendWith(context.Background(), th.ID, "later", nil, Source{}, SendQueue)
-		require.NoError(t, err)
-		require.Len(t, chips(t, g, th.ID, "held"), 1)
-		g.threads.Stop(th.ID)
-		close(release)
-		assert.Eventually(t, func() bool { return len(chips(t, g, th.ID, "removed")) == 1 }, 5*time.Second, 10*time.Millisecond)
-	})
+	require.Len(t, chips(t, g, th.ID, "held"), 1)
+	g.threads.Stop(th.ID, Source{})
+	close(release)
+	assert.Eventually(t, func() bool { return len(chips(t, g, th.ID, "removed")) == 1 }, 5*time.Second, 10*time.Millisecond)
 }
 
 func TestUnknownSendModeIsInvalid(t *testing.T) {
-	assert.False(t, SendMode("later").Valid())
-	for _, m := range []SendMode{"", SendNow, SendQueue, SendStopAndSend} {
+	for _, m := range []SendMode{"later", "stop_and_send"} {
+		assert.False(t, m.Valid(), m)
+	}
+	// A page loaded before the rename still sends the old names.
+	assert.Equal(t, SendInsert, SendMode("send").Canonical())
+	assert.Equal(t, SendNextTurn, SendMode("queue").Canonical())
+	assert.True(t, SendMode("queue").Valid())
+	for _, m := range []SendMode{"", SendInsert, SendNextTurn} {
 		assert.True(t, m.Valid())
 	}
 }

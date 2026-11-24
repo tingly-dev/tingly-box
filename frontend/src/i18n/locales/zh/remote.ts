@@ -14,7 +14,7 @@ export default {
       "editTitle": "编辑 Bot 配置",
       "platform": "平台",
       "alias": "别名",
-      "aliasHelper": "可选：为此 Bot 配置设置一个便于识别的名称。",
+      "aliasHelper": "可选。留空则使用该 Bot 在平台上的账号名称。",
       "proxyUrl": "代理地址",
       "proxyUrlHelper": "可选的 HTTP/HTTPS 代理，用于 Bot 的 API 请求。",
       "chatIdLock": "Chat ID 锁定",
@@ -55,15 +55,15 @@ export default {
       "botDisabled": "Bot 已停用",
       "toggleFailed": "切换 Bot 状态失败：{{error}}",
       "toggleFailedGeneric": "切换 Bot 状态失败",
-      "botRestarted": "Bot 已重启",
+      "botRestarted": "已重启 {{bot}}",
       "restartFailed": "重启 Bot 失败：{{error}}",
       "restartFailedGeneric": "重启 Bot 失败",
-      "botDeleted": "Bot 删除成功",
+      "botDeleted": "已删除 {{bot}}",
       "deleteFailed": "删除 Bot 失败：{{error}}",
       "deleteFailedGeneric": "删除 Bot 失败",
       "cwdUpdateFailed": "更新工作目录失败",
-      "remoteAgentOff": "远程控制已停用",
-      "remoteAgentOn": "远程控制已启用"
+      "remoteAgentOff": "已为 {{bot}} 停用远程控制",
+      "remoteAgentOn": "已为 {{bot}} 启用远程控制"
     },
     "guide": {
       "title": "{{platform}} 配置指南",
@@ -104,9 +104,9 @@ export default {
       "copy": "复制",
       "rotateTooltip": "轮换（当前配对码将失效）",
       "noActiveCode": "暂无有效配对码 —— Bot 可能已停止运行，或该配对码已被使用。点击「轮换」生成新的配对码。",
-      "copied": "配对指令已复制",
+      "copied": "已复制 {{bot}} 的配对命令",
       "copyFailed": "复制失败 —— 请检查剪贴板权限",
-      "rotated": "配对码已轮换",
+      "rotated": "{{bot}} 的配对码已轮换",
       "rotateFailed": "轮换失败",
       "fetchFailed": "获取配对码失败"
     },
@@ -260,7 +260,7 @@ export default {
     "subtitle": "把 {{platform}} Bot 挂载给远程控制，通过聊天操控 Claude Code / SmartGuide，并配置 Agent 行为。Bot 连接本身在机器人页面管理。",
     "notify": {
       "agentSettingsSaved": "Agent 设置已保存",
-      "ccProfileUpdated": "Claude Code 配置方案已更新",
+      "ccProfileUpdated": "{{bot}}：Claude Code 配置方案已更新",
       "ccProfileUpdateFailed": "更新 Claude Code 配置方案失败",
     },
     "pageTitle": "远程控制",
@@ -304,6 +304,7 @@ export default {
     "table": {
       "access": "访问权限",
       "actions": "操作",
+      "bot": "机器人",
       "botId": "Bot UUID",
       "capabilities": "能力",
       "chatIdCopied": "Chat ID 已复制",
@@ -324,18 +325,20 @@ export default {
       "uuidCopyFailed": "复制失败 —— 请检查剪贴板权限"
     },
     "toggle": {
-      "disabled": "Bot 已停用",
-      "enabled": "Bot 已启用",
+      "disabled": "已停用 {{bot}}",
+      "enabled": "已启用 {{bot}}",
       "failed": "切换 Bot 状态失败：{{error}}",
       "failedGeneric": "切换 Bot 状态失败"
     }
   },
   "botAccess": {
+    "alias": "别名",
+    "aliasHint": "留空则使用平台名称或 ID。",
     "actorId": "平台用户 ID",
     "actorIdHint": "填写 IM 平台上报的真实用户 ID。",
     "actors": "{{count}} 个已授权成员",
     "addActor": "添加成员",
-    "addActorInfo": "这会授予该成员在此群中的启动与审批权限。特权操作仍保持拒绝。",
+    "addActorInfo": "这会授予该成员在此群中的启动与审批权限。如需让其在此群使用 /cd、/dir 和 /project，请之后再为其打开“任意文件夹和文件”。",
     "addActorTitle": "添加授权成员",
     "addController": "添加遥控者",
     "addMessage": "要添加某人：让对方私聊 bot 发一条消息，该会话随后会出现在下方。",
@@ -357,6 +360,10 @@ export default {
     "directChatsRemoteHint": "私聊过这个 bot 的人，以及每个人能否遥控它。",
     "displayName": "显示名称（可选）",
     "fullAccess": "完整权限",
+    "privileged": "任意文件夹和文件",
+    "privilegedHint": "允许此会话按路径切换到任意文件夹（/cd）并发送文件。从已注册的文件夹和项目中选择（/dir、/project）无需此权限。",
+    "privilegedNeedsControl": "请先选择“可遥控”。",
+    "privilegedGroupHint": "在群里，/cd、/dir 和 /project 都需要此权限，因为群内所有人共用一个工作文件夹。",
     "group": "群组",
     "groups": "群组",
     "groupsHint": "群组的能力开关与授权成员是两项独立的控制。",
@@ -372,8 +379,16 @@ export default {
     "remoteControl": "遥控",
     "titleAll": "{{name}} 的访问权限",
     "titleRemote": "谁能遥控 {{name}}",
+    "rename": "重命名",
     "unpairedChat": "未配对的会话",
     "unpairedHint": "请先配对 —— 未配对的会话无法授予遥控权限。"
+  },
+  "entity": {
+    "copied": "已复制",
+    "copyId": "复制 ID",
+    "deleted": "（已删除）",
+    "group": "{{platform}}群",
+    "noAlias": "未设置别名"
   },
   "notify": {
     "title": "IM 通知",
@@ -387,15 +402,16 @@ export default {
     "loadFailed": "加载通知目标失败",
     "toggleFailed": "更新通知设置失败",
     "chat": {
-      "copied": "目标 UUID 已复制",
+      "copied": "目标 UUID 已复制：{{chat}}",
       "copyFailed": "复制失败 —— 请检查剪贴板权限",
-      "deleted": "会话已删除"
+      "deleted": "已删除 {{chat}}",
+      "internalUuid": "内部目标 UUID"
     },
     "target": {
       "direct": "私聊",
       "group": "群组",
-      "blocked": "目标已屏蔽",
-      "unblocked": "目标已解除屏蔽"
+      "blocked": "已屏蔽 {{chat}}",
+      "unblocked": "已解除屏蔽 {{chat}}"
     },
     "probe": {
       "showRaw": "查看原始载荷"
@@ -427,22 +443,42 @@ export default {
       "statusReceivers": "{{count}} 个目标可接收"
     },
     "guide": {
-      "title": "IM 通知 API 指南",
       "action": "API 指南",
-      "description": "认证方式、请求示例与目标 ID",
-      "auth": {
-        "title": "1. 使用你的用户 Token 认证",
-        "body": "任何集成都可以驱动 Bot 的会话。认证复用你现有的操作员用户 Token（与本 Web 界面所用相同），作为 Bearer 头传入 —— 无需另外申请凭据。交互式提示（/interact）与单向通知（/notify）是不同的 URL，因此请求形态本身就决定了模式。"
+      "back": "返回 Bot",
+      "description": "选择目标，复制可直接运行的请求，或发送一条测试",
+      "enable": {
+        "noBots": "尚未连接任何 Bot。请先在 Bot 页面连接一个。",
+        "off": "通知已关闭。请在 Bot 卡片上打开开关，然后回到本指南。",
+        "on": "已为 {{bots}} 开启通知。",
+        "title": "开启通知"
+      },
+      "fields": {
+        "body": "消息正文，支持 Markdown。",
+        "heading": "请求字段",
+        "id": "投递目标的内部 ID —— 根据你选择的目标自动填入。",
+        "kind": "direct_chat 或 group —— 根据你选择的目标自动填入。",
+        "level": "严重程度提示：info、warn 或 error。",
+        "optional": "可选",
+        "required": "必填",
+        "responses": "200 已投递 · 400 请求体无效 · 404 Bot 未运行或目标不可达 · 500 投递失败",
+        "title": "显示在消息上方的简短标题。"
       },
       "send": {
-        "title": "2. 发送一条单向通知",
-        "body": "向 /api/v1/bots/{bot}/notify 发起 POST，路径中带上 Bot UUID。返回 200 即表示已投递。",
-        "json": "请求体："
+        "auth": "使用你的用户 Token（即本 Web 界面所用的 Token）作为 Bearer 头认证。示例从 ${{env}} 读取它。",
+        "delivered": "已投递 · {{latency}}",
+        "failed": "失败：{{error}}",
+        "test": "发送测试",
+        "testHint": "使用本 Web 界面的 Token，原样发送上方的请求。",
+        "title": "发送"
       },
-      "chatid": {
-        "title": "3. 从「投递目标」复制目标 UUID",
-        "body": "本页每个会话节点都会显示便于识别的真实平台 Chat ID；其提示浮层还会显示 API 所需的稳定内部目标 UUID。使用节点旁的复制操作，或直接从测试台发送一条测试。"
-      }
+      "target": {
+        "empty": "暂无会话。请在对应平台向 Bot 发送任意消息，它就会出现在这里。",
+        "label": "投递目标",
+        "notAllowed": "尚未授权",
+        "notAllowedHint": "该目标暂时无法接收通知。请先在 Bot 卡片上点击“允许通知并测试”。",
+        "title": "选择投递位置"
+      },
+      "title": "IM 通知 API 指南"
     },
     "test": {
       "title": "发送测试通知",
@@ -454,8 +490,8 @@ export default {
       "bodyField": "正文（markdown）",
       "resetMarkdown": "重置为 markdown 示例",
       "send": "发送",
-      "sent": "通知已发送",
-      "sendFailed": "发送失败：{{error}}",
+      "sent": "通知已发送到 {{chat}}",
+      "sendFailed": "发送到 {{chat}} 失败：{{error}}",
       "paired": "已配对"
     }
   },

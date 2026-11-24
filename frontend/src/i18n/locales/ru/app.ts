@@ -10,6 +10,13 @@ export default {
     "search": "Поиск запросов",
     "errorsOnly": "Только ошибки",
     "load": "Загрузить",
+    "customLimit": "Своё значение…",
+    "customLimitTitle": "Сколько строк загрузить",
+    "customLimitInput": "Строки",
+    "customLimitHelp": "Целое число от 1 до {{max}}.",
+    "customLimitInvalid": "Введите целое число от 1 до {{max}}.",
+    "customLimitApply": "Применить",
+    "customLimitCancel": "Отмена",
     "latest_one": "Последняя {{count}}",
     "latest_few": "Последние {{count}}",
     "latest_many": "Последние {{count}}",
@@ -31,6 +38,10 @@ export default {
     "autoRefresh": "Автообновление",
     "refreshNow": "Обновить сейчас",
     "refreshRequests": "Обновить запросы",
+    "newRequests_one": "{{count}} новый запрос",
+    "newRequests_few": "{{count}} новых запроса",
+    "newRequests_many": "{{count}} новых запросов",
+    "newRequests_other": "{{count}} нового запроса",
     "columns": {
       "time": "Время",
       "agent": "Агент",
@@ -59,6 +70,7 @@ export default {
     "save": "Сохранить",
     "delete": "Удалить",
     "edit": "Изменить",
+    "duplicate": "Дублировать",
     "confirm": "Подтвердить",
     "loading": "Загрузка...",
     "enabled": "Включено",
@@ -90,10 +102,41 @@ export default {
     "clear": "Сбросить выбор",
     "dismiss": "Скрыть",
     "moveDown": "Вниз",
+    "pinToTop": "Закрепить вверху",
     "moveUp": "Вверх",
     "saved": "Сохранено"
   },
+  "mobile": {
+    "tabBar": "Основная навигация",
+    "shell": {
+      "title": "Интерфейс",
+      "desktop": "Десктоп",
+      "mobile": "Телефон",
+      "auto": "Авто",
+      "hint": "«Телефон» включает мобильную раскладку на этом устройстве, «Десктоп» — полный интерфейс. Запоминается для браузера."
+    },
+    "subPages": {
+      "switch": "Переключить страницу: {{title}}"
+    },
+    "modelPicker": {
+      "backToProviders": "Назад к поставщикам"
+    },
+    "more": {
+      "title": "Ещё",
+      "tab": "Ещё",
+      "manage": "Управление",
+      "system": "Система",
+      "preferences": "Тема, язык и обратная связь",
+      "interface": "Интерфейс",
+      "useDesktop": "Использовать десктопный интерфейс",
+      "useDesktopHint": "Вернуться к полному интерфейсу"
+    }
+  },
   "layout": {
+    "workspace": "Рабочее пространство",
+    "workspaceRail": "Проекты",
+    "workspaceTip": { "title": "Знакомьтесь: рабочее пространство", "text": "Проекты, рабочие каталоги и чаты IM — в одном месте." },
+    "workspaceGate": { "title": "Включите рабочее пространство", "text": "Включите расширение «Рабочее пространство», чтобы пользоваться проектами, рабочими каталогами и чатами IM.", "enable": "Включить рабочее пространство", "error": "Не удалось включить рабочее пространство. Попробуйте ещё раз." },
     "projects": "Проекты",
     "projectsWaiting": "Claude ждёт вашего ответа",
     "appTitle": "Tingly Box",
@@ -138,6 +181,7 @@ export default {
       "doneEditing": "Готово",
       "expand": "Развернуть боковую панель"
     },
+    "featureSwitch": { "disable": "Отключить {{name}}", "disabledTitle": "{{name}} отключено", "disabledText": "Включить снова можно в Настройки → Расширения.", "teamTitle": "Команда включена", "teamText": "Команда включена по умолчанию. Эта кнопка её отключает." },
     "coachMarks": {
       "gotIt": "Понятно",
       "agentVisibility": {
@@ -160,7 +204,6 @@ export default {
       "light": "Светлая",
       "dark": "Тёмная",
       "system": "Системная",
-      "sunlit": "Солнечная",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "Нажмите",
@@ -191,9 +234,11 @@ export default {
     "days": "Дней",
     "remote": "IM",
     "image": "Изображения",
+    "imageRail": "Картинки",
     "imagePlayground": "Песочница",
     "remoteControl": "Удалённый доступ",
     "notify": "Уведомления IM",
+    "imBots": "IM-боты",
     "bots": "Боты",
     "overview": "Обзор",
     "platforms": {
@@ -232,6 +277,7 @@ export default {
     "help": "Советы и помощь",
     "helpShort": "Помощь",
     "powerUps": "Расширения",
+    "powerUpsRail": "Модули",
     "tools": "Утилиты",
     "servertool": "Серверные",
     "botsRunning": "Работает ботов: {{active}} из {{total}}"

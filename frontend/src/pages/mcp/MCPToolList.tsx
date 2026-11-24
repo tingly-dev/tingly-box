@@ -3,14 +3,15 @@ import { Box, Button, InputAdornment, Menu, MenuItem, Stack, TextField, Typograp
 import { useTranslation } from 'react-i18next';
 import { KeyboardArrowDown, Search } from '@/components/icons';
 import MCPToolCard from './MCPToolCard';
-import { isToolRestricted, type MCPToolPatch } from './toolPresentation';
-import type { MCPCatalogTool, MCPSourceConfig } from './types';
+import type { MCPToolPatch } from './toolPresentation';
+import type { MCPCatalogTool, MCPSourceConfig } from '../../features/mcp/types';
 
 const FOLDED = 5;
 const FILTERABLE = 8;
 
-// A connection's tools as one list: how many are on, a filter and all on/off
-// for long lists, and only the first few shown until asked.
+// A group's tool rows: a filter (with on/off for the matching rows) for long
+// lists, and only the first few shown until asked. How many are on and the
+// switch for the whole group sit in the group header (MCPToolGroup).
 export default function MCPToolList({
     tools,
     source,
@@ -39,29 +40,25 @@ export default function MCPToolList({
         ? tools.filter((tool) => `${tool.name} ${tool.description || ''}`.toLowerCase().includes(query))
         : tools;
     const shown = all || query ? matched : matched.slice(0, FOLDED);
-    const on = tools.filter((tool) => tool.enabled && !isToolRestricted(tool, source)).length;
     const bulk = (value: boolean) => {
         setMenu(null);
         onBulk(matched, value);
     };
     return (
         <Box>
-            <Stack
-                direction="row"
-                sx={{
-                    alignItems: 'center',
-                    gap: 1,
-                    px: 2,
-                    py: 1,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: 'action.hover',
-                }}
-            >
-                <Typography variant="caption" sx={{ fontWeight: 600, flex: 1 }}>
-                    {label('toolsOn', '{{on}} of {{total}} tools on', { on, total: tools.length })}
-                </Typography>
-                {tools.length > FILTERABLE && (
+            {tools.length > FILTERABLE && (
+                <Stack
+                    direction="row"
+                    sx={{
+                        alignItems: 'center',
+                        gap: 1,
+                        px: 2,
+                        py: 1,
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                    }}
+                >
                     <TextField
                         size="small"
                         value={filter}
@@ -79,26 +76,28 @@ export default function MCPToolList({
                             },
                         }}
                     />
-                )}
-                {tools.length > 1 && (
-                    <>
-                        <Button
-                            size="small"
-                            color="inherit"
-                            disabled={busy}
-                            endIcon={<KeyboardArrowDown sx={{ fontSize: 16 }} />}
-                            onClick={(e) => setMenu(e.currentTarget)}
-                            sx={{ color: 'text.secondary' }}
-                        >
-                            {query ? label('bulkMatching', 'Matching') : label('bulkAll', 'All')}
-                        </Button>
-                        <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
-                            <MenuItem onClick={() => bulk(true)}>{label('turnAllOn', 'Turn on')}</MenuItem>
-                            <MenuItem onClick={() => bulk(false)}>{label('turnAllOff', 'Turn off')}</MenuItem>
-                        </Menu>
-                    </>
-                )}
-            </Stack>
+                    <Box sx={{ flex: 1 }} />
+                    {/* The whole group is switched in the group header; this acts on the filtered rows only. */}
+                    {query && matched.length > 0 && (
+                        <>
+                            <Button
+                                size="small"
+                                color="inherit"
+                                disabled={busy}
+                                endIcon={<KeyboardArrowDown sx={{ fontSize: 16 }} />}
+                                onClick={(e) => setMenu(e.currentTarget)}
+                                sx={{ color: 'text.secondary' }}
+                            >
+                                {label('bulkMatching', 'Matching')}
+                            </Button>
+                            <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
+                                <MenuItem onClick={() => bulk(true)}>{label('turnAllOn', 'Turn on')}</MenuItem>
+                                <MenuItem onClick={() => bulk(false)}>{label('turnAllOff', 'Turn off')}</MenuItem>
+                            </Menu>
+                        </>
+                    )}
+                </Stack>
+            )}
             {shown.map((tool) => (
                 <MCPToolCard
                     key={tool.normalized_name}

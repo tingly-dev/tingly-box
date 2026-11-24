@@ -22,7 +22,8 @@ import {useInRouterContext, useNavigate} from 'react-router-dom';
 import {type UniqueProvider, useProviderCatalogs, useCloudProviders, searchProviders} from '../services/serviceProviders';
 import ProviderIcon from './ProviderIcon';
 import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './oauth/fallbackProviders';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // What the picker emits when a card is chosen. The parent routes each kind to
 // the matching existing dialog (API-key form, OAuth flow, or a blank custom
@@ -93,7 +94,7 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
                 {icon}
             </Box>
             <Typography variant="subtitle2" sx={{
-                fontWeight: 700
+                fontWeight: 600
             }}>{title}</Typography>
             {typeof count === 'number' && (
                 <Chip label={count} size="small" sx={{height: 18, fontWeight: 600}}/>
@@ -120,7 +121,7 @@ const ProviderCard: React.FC<{
             variant="outlined"
             sx={{
                 position: 'relative',
-                border: 1, borderColor: 'divider', borderRadius: 1,
+                border: 1, borderColor: 'divider', borderRadius: radius.row,
                 display: 'flex', alignItems: 'stretch',
                 boxShadow: 0,
                 transition: 'border-color 0.15s ease, background-color 0.15s ease',
@@ -189,7 +190,7 @@ const ProviderCard: React.FC<{
                                 fontSize: fontSizes.micro, fontWeight: 600, lineHeight: 1,
                                 color: theme.palette[badge.tone].main,
                                 px: 0.5, py: 0.25,
-                                borderRadius: 0.5,
+                                borderRadius: radius.chip,
                                 bgcolor: alpha(theme.palette[badge.tone].main, 0.1),
                             })}
                         >
@@ -203,7 +204,7 @@ const ProviderCard: React.FC<{
                             color: "text.disabled",
                             display: 'block',
                             mt: 0.25,
-                            fontSize: fontSizes.xs,
+                            fontSize: fontSizes.micro,
                             letterSpacing: '0.01em'
                         }}>
                         {meta}
@@ -373,7 +374,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                             <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
                         ),
                         sx: {
-                            borderRadius: 1,
+                            borderRadius: radius.row,
                             mb: 2,
                         },
                     }
@@ -393,7 +394,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                         // a scrollbar thumb. `divider` is the subtle,
                         // theme-matched value this was actually going for.
                         backgroundColor: 'divider',
-                        borderRadius: 4,
+                        borderRadius: radius.pill,
                     },
                     '&::-webkit-scrollbar-track': {backgroundColor: 'transparent'},
                 }}

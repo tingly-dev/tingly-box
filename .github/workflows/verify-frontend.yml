@@ -1,0 +1,61 @@
+name: Verify Frontend
+
+# The only PR-time check. It typechecks, tests and builds the frontend and
+# @tingly/projects, and runs frontend lint when a PR touches frontend/ or the
+# committed openapi.json its client is generated from.
+#
+# The Go-side checks (compile cli/gui, Projects and Remote tests, the IM and
+# Projects harness) no longer run per PR: daily.yml runs them once a day on
+# main, and release.yml gates every release on the harness and builds every
+# binary. See .design/ci.md.
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '!frontend/**/*.md'
+      # The client is generated from the committed spec (setup-frontend).
+      - 'openapi.json'
+      - '.github/actions/setup-frontend/**'
+      - '.github/workflows/verify-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-frontend:
+    name: Compile frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # Same install + codegen as the release build (build-frontend.yml).
+      - name: Set up frontend
+        uses: ./.github/actions/setup-frontend
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build frontend
+        run: pnpm build
+
+      # @tingly/projects (the Projects web UI) is type-clean, so its checks block.
+      - name: Projects web UI
+        run: |
+          pnpm --filter @tingly/projects typecheck
+          pnpm --filter @tingly/projects test
+          pnpm --filter @tingly/projects build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint

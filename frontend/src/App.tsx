@@ -1,5 +1,5 @@
 import { Error as ErrorIcon, Refresh } from '@/components/icons';
-import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { Suspense, useMemo } from 'react';
@@ -11,12 +11,13 @@ import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeModeProvider, useThemeMode } from './contexts/ThemeContext';
-import { useVersion, VersionProvider } from './contexts/VersionContext';
+import { VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
 import { TeamProvider } from './contexts/TeamContext';
 import { appRoutes } from './routes/appRoutes';
-import createAppTheme from './theme';
-import { elevation } from '@/theme/elevation';
+import createAppTheme from '@tingly/ui/theme';
+import { elevation } from '@tingly/ui/theme/elevation';
+import { radius } from '@tingly/ui/theme/radius';
 
 
 // Route-switch fallback: Layout/nav chrome is already on screen (it renders
@@ -31,7 +32,7 @@ const RouteFallback = () => (
 // Dialogs component that uses the health context
 const AppDialogs = () => {
     const { t } = useTranslation();
-    const { isHealthy, checking, checkHealth, disconnectDialogOpen, closeDisconnectDialog } = useHealth();
+    const { checking, checkHealth, disconnectDialogOpen, closeDisconnectDialog } = useHealth();
 
     return (
         <>
@@ -44,7 +45,7 @@ const AppDialogs = () => {
                 slotProps={{
                     paper: {
                         sx: {
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             boxShadow: elevation.overlay,
                         }
                     }

@@ -1,0 +1,72 @@
+name: one-thread
+description: >
+  The coordinator starts one thread; the thread writes a file, asks to commit
+  (an approval card the user allows), commits and reports; the coordinator
+  passes the report on. The in-process counterpart is
+  TestJourneyNewWorkBecomesAThreadAndIsReported.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: one-thread
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            expect:
+              last_text_contains: "Add a CHANGELOG"
+              tools_exclude: [SendMessage, ListAgents, Bash]
+            reply:
+              tool_calls:
+                - id: start
+                  name: mcp__tingly-projects__start_thread
+                  arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md with an Unreleased section and commit it."}
+                  spawns: thread
+                  expect_result: {contains: "started thread", is_error: false}
+          - id: started
+            reply: {content: "Started one thread: Add CHANGELOG."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is committed on its branch and waits for review."}
+      thread:
+        bind:
+          system_contains: "Your task: Add CHANGELOG"
+          tools_include: ["__notify_coordinator", "__create_pr"]
+          tools_exclude: [ListAgents]
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: write
+            reply:
+              content: I'll create CHANGELOG.md.
+              tool_calls:
+                - id: write
+                  name: Write
+                  arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n\n## Unreleased\n"}
+                  expect_result: {is_error: false}
+          - id: commit
+            reply:
+              content: Now commit it.
+              tool_calls:
+                - id: commit
+                  name: Bash
+                  arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'", description: Commit CHANGELOG.md}
+                  expect_result: {is_error: false}
+          - id: done
+            reply: {content: "Added CHANGELOG.md and committed it; git log -1 shows the commit."}
+steps:
+  - say: Add a CHANGELOG please.
+  - approve: {thread: Add CHANGELOG}
+  - wait: {thread: Add CHANGELOG, status: ready}
+  - served: coordinator.report
+expect:
+  threads: 1
+  thread:
+    Add CHANGELOG: {status: ready, commits_ahead: 1, branch_prefix: "tp/"}
+  conversation_contains: ["waits for review"]

@@ -124,9 +124,15 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
+	case ScenarioVModel:
+		// The fixed VModel endpoint selects builtin models by ID directly.
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic},
+			AllowRuleBinding:   false,
+			AllowDirectPathUse: true,
+		}
 	case ScenarioDsh:
-		// DeepSeek Harness: the provider layer is a plugin, so the emitted
-		// protocol is not fixed — accept both OpenAI and Anthropic transports.
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic},

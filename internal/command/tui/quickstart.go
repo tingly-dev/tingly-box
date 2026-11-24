@@ -6,9 +6,11 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/catalog"
+	"github.com/tingly-dev/tingly-box/internal/command/readiness"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -915,10 +917,19 @@ func startServer(mgr TUIManager) error {
 	if port == 0 {
 		port = 12580
 	}
-	if err := mgr.StartServerAt(port); err != nil {
+	// StartServerAt blocks for as long as the server runs, so run it aside and
+	// announce the URL only once the health endpoint answers.
+	exited := make(chan error, 1)
+	go func() { exited <- mgr.StartServerAt(port) }()
+
+	url := readiness.ProbeURL("localhost", port)
+	if err := readiness.Wait(context.Background(), url, exited, 30*time.Second); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 	fmt.Println(successStyle.Render(fmt.Sprintf("Server started at http://localhost:%d", port)))
 	fmt.Println(descStyle.Render("Press Ctrl+C to stop"))
-	select {}
+	if err := <-exited; err != nil {
+		return fmt.Errorf("server stopped unexpectedly: %w", err)
+	}
+	return nil
 }

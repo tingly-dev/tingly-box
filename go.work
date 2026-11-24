@@ -8,5 +8,6 @@ use (
 	./gui/wails3
 	./imbot
 	./projects
+	./remote
 	./swagger
 )

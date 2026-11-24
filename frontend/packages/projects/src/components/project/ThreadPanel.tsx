@@ -1,26 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert, Box, Button, Collapse, Divider, IconButton, Menu, MenuItem,
-    Popover, Skeleton, Tooltip, Typography,
+    Popover, Skeleton, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { Attachment, BackgroundTask, Subagent, Thread, ThreadEvent } from '../../client';
-import { buildTranscript, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
+import { api, unwrap, type Attachment, type BackgroundTask, type CleanupReport, type Subagent, type Thread, type ThreadEvent } from '../../client';
+import { blockAttachments, buildTranscript, todoGroups, ChecklistCard, SubagentFocus, Trajectory, Transcript, type Respond, type TrajectoryAnchor } from '../../transcript';
 import type { TranscriptSubagents } from '../../hooks/useTranscript';
+import { ControlTooltip } from '../ControlTooltip';
 import { ThreadComposer, type ThreadComposerHandle } from '../ThreadComposer';
 import { HeldMessages, heldMessages } from './HeldMessages';
-import { AttachmentChips, uploadAttachments, type AttachOwner } from '../attachments';
+import { AttachmentChips, AttachmentGallery, uploadAttachments, type AttachOwner } from '../attachments';
 import { CodeBlock, Markdown } from '../Markdown';
 import { ConfirmDialog, CopyIconButton } from '@tingly/ui';
-import { ArrowBack, DiffIcon, MoreVert, Robot, Stream, Terminal, Warning } from '../icons';
+import { ArrowBack, MoreVert, RailHide, RailShow, Refresh, Robot, Stream, Terminal, Warning } from '../icons';
 import { useNotify } from '../../hooks/useNotify';
-import { formatTokens } from '../../utils/format';
-import { DiffDialog } from './DiffDialog';
+import { formatBytes, formatTokens } from '../../utils/format';
 import { ComposerStrip } from './ComposerStrip';
-import { RAIL_MIN_PANEL, ThreadInfoRail } from './ThreadInfoRail';
+import { AutoAnswerSelect } from './AutoAnswerSelect';
+import { ThreadInfoRail } from './ThreadInfoRail';
+import { RAIL_MIN_PANEL, useInfoRail } from './infoRail';
 import { LoadEarlier } from './LoadEarlier';
 import { needsUser, ThreadBadges, ThreadState, ThreadStateMark } from './threadStatus';
-import { ThreadTitle } from './ThreadTitle';
+import { ThreadRefButton, ThreadTitle, useCopyThreadRef } from './ThreadTitle';
 import { threadTranscript } from './threadTranscript';
 import { threadOps } from './threadOps';
 import { BackgroundTasksPanel } from '../workdir/BackgroundTasksPanel';
@@ -31,6 +33,9 @@ import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 import { useMessageDetail } from '../../hooks/useMessageDetail';
 import { MessageDetailControl } from '../MessageDetailControl';
+import { ImSourceBadge } from '../im/ImSourceBadge';
+import { GitHubEventNote, coordinatorEventOf } from './GitHubEventNote';
+import type { TranscriptEntry } from '../../transcript';
 
 const mono = { fontFamily: fontMono } as const;
 
@@ -66,16 +71,23 @@ interface Props {
     running: boolean;
     disabled: boolean;
     onBack: () => void;
+    /** Where Back goes ("Coordinator", "New session"), written on the button; the arrow alone says nothing about the place. */
+    backLabel?: string;
     /** In a window the window's title bar names the thread: leave the title and the back arrow out. */
     hideTitle?: boolean;
     /** Buttons before the thread's menu: pop out, dock. */
     actions?: React.ReactNode;
     /** Pickers shown above the message box (a folder session's permission mode, a host's own). */
     composerContext?: React.ReactNode;
+    /** Model selector, kept visible next to the composer. */
+    modelControl?: React.ReactNode;
+    effortControl?: React.ReactNode;
     settingsSaving?: boolean;
     canSend?: () => boolean;
     /** Resolved configuration labels; not the last observed response model. */
     configuredModel?: string;
+    /** Cards the host adds to the info rail (SessionSlots.railExtra). */
+    railExtra?: React.ReactNode;
     permissionLabel?: string;
     /** Under the message box (a host's status line). */
     belowComposer?: React.ReactNode;
@@ -83,9 +95,14 @@ interface Props {
     liveTasks?: BackgroundTask[];
     /** Re-reads the session, e.g. after a task was stopped. */
     onRefresh?: () => void;
-    /** A card the rail carries above its own (a folder's session list); the rail then stays on, from `railMinPanel` wide. */
-    railTop?: React.ReactNode;
-    railMinPanel?: number;
+    /** A subagent a drill-in asked to open on its own (the status area's list). */
+    initialFocus?: string;
+    /** A background task a drill-in asked to open: its panel, with the row expanded. */
+    initialTask?: string;
+    /** Tells the page the drill-in was taken, so it can clean the URL. */
+    onDrillConsumed?: () => void;
+    /** Shows the coordinator's answer to a GitHub event of this thread: its input (eventId) in the project conversation. */
+    onShowCoordinatorReply?: (eventId: string) => void;
 }
 
 type View = 'chat' | 'trajectory';
@@ -98,29 +115,18 @@ const anchorSelector = (anchor: TrajectoryAnchor): string => {
 
 const EMPTY_TASKS: BackgroundTask[] = [];
 
-export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, hideTitle, actions, composerContext, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = EMPTY_TASKS, onRefresh, railTop, railMinPanel = RAIL_MIN_PANEL }: Props) {
+export function ThreadPanel({ projectId, folder = false, threadId, thread, events, more = false, onLoadEarlier, subagents, running, disabled, onBack, backLabel, hideTitle, actions, composerContext, modelControl, effortControl, settingsSaving = false, canSend, configuredModel, permissionLabel, belowComposer, liveTasks = EMPTY_TASKS, onRefresh, railExtra, initialFocus, initialTask, onDrillConsumed, onShowCoordinatorReply }: Props) {
     const { t } = useTranslation('projects');
     const notify = useNotify();
-    const [diffOpen, setDiffOpen] = useState(false);
+    const { copy: copyRef } = useCopyThreadRef(thread ?? { seq: 0, title: '' });
+    // Where the rail does not fit beside the conversation (a thread in a narrow pane), the Details button swaps the conversation for the same cards in place.
+    const [detailsOpen, setDetailsOpen] = useState(false);
     const [menu, setMenu] = useState<HTMLElement | null>(null);
     const [taskOpen, setTaskOpen] = useState(false);
     // The info rail sits beside the conversation when the panel is wide enough; the user can hide it.
-    const panelRef = useRef<HTMLDivElement>(null);
-    const [wide, setWide] = useState(false);
-    const [railOn, setRailOn] = useState(() => readLocal('thread.rail') !== '0');
-    useEffect(() => {
-        const el = panelRef.current;
-        if (!el || typeof ResizeObserver === 'undefined') return;
-        const ro = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= railMinPanel));
-        ro.observe(el);
-        return () => ro.disconnect();
-        // The panel's box exists once the thread has loaded.
-    }, [!!thread, railMinPanel]);
-    const toggleRail = () => {
-        writeLocal('thread.rail', railOn ? '0' : '1');
-        setRailOn(!railOn);
-    };
-    const rail = wide && (railOn || railTop != null);
+    const { ref: panelRef, wide, on: railOn, toggle: toggleRail } = useInfoRail(RAIL_MIN_PANEL, !!thread);
+    const rail = wide && railOn;
+    const sheet = detailsOpen && !wide;
     // Chat and Trajectory read the same transcript; the choice and whether
     // every tool call starts open are remembered per browser.
     const [view, setViewState] = useState<View>(() => readLocal('thread.view') === 'trajectory' ? 'trajectory' : 'chat');
@@ -129,6 +135,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         writeLocal('thread.view', next);
     };
     const [detail, setDetail] = useMessageDetail('thread');
+    // A GitHub event the coordinator was told of says so under its note; the
+    // transcript draws every other entry as it would without a host renderer.
+    const renderCustom = useCallback((message: TranscriptEntry) => {
+        if (message.kind === 'system') return coordinatorEventOf(message) ? <GitHubEventNote message={message} onShowReply={onShowCoordinatorReply} /> : null;
+        return <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>{message.content}</Typography>;
+    }, [onShowCoordinatorReply]);
     const [expandAll, setExpandAll] = useState(() => readLocal('thread.expandTools') === '1');
     const toggleExpand = () => {
         writeLocal('thread.expandTools', expandAll ? '0' : '1');
@@ -155,14 +167,19 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     // The handoff command stays on screen with its own copy button, since
     // copying right after the request can be refused by the browser.
     const [handoff, setHandoff] = useState<string | null>(null);
-    const [confirm, setConfirm] = useState<'archive' | 'handoff' | null>(null);
+    const [confirm, setConfirm] = useState<'resolve' | 'archive' | 'handoff' | 'delete' | 'restart' | null>(null);
+    // The cleanup report a confirm dialog shows (what archive/delete frees, what stays).
+    const [report, setReport] = useState<CleanupReport | null>(null);
+    // The branch name typed back when a delete has to force past a missing merged PR.
+    const [typed, setTyped] = useState('');
     const [acting, setActing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const stick = useRef(true);
+    const [awayFromBottom, setAwayFromBottom] = useState(false);
     // A folder thread has no branch to review or merge; its uploads are its own.
     const session = folder;
     const owner = useMemo<AttachOwner>(() => (session ? { threadId } : { projectId }), [session, projectId, threadId]);
-    const Attachments = useMemo(() => ({ items }: { items: Attachment[] }) => <AttachmentChips owner={owner} items={items} />, [owner]);
+    const Attachments = useMemo(() => ({ items, align, captions }: { items: Attachment[]; align?: 'flex-start' | 'flex-end'; captions?: Record<string, string> }) => <AttachmentChips owner={owner} items={items} align={align} captions={captions} />, [owner]);
     const ops = useMemo(() => threadOps(threadId), [threadId]);
     const composer = useRef<ThreadComposerHandle>(null);
     // Messages held for after the running turn.
@@ -191,6 +208,33 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         const { entries, pendingRequestId } = threadTranscript(events ?? [], running, (e) => e.source === 'thread' ? coordinator : undefined);
         return { blocks: buildTranscript(entries), pendingRequestId };
     }, [events, running, coordinator]);
+    // Every file in the conversation, which a preview steps through.
+    const galleryFiles = useMemo(() => blockAttachments(blocks), [blocks]);
+
+    // Load the older progress calls separately so a long conversation's
+    // paginated transcript does not lose its current checklist.
+    const [progressHistory, setProgressHistory] = useState<{threadId: string; events: ThreadEvent[]} | null>(null);
+    useEffect(() => {
+        if (!threadId || !more) return;
+        let active = true;
+        unwrap(api.GET('/api/v1/threads/{id}/events', {params: {path: {id: threadId}}})).then((r) => {
+            if (!active) return;
+            const names = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet']);
+            const ids = new Set(r.events.filter((e) => !e.parent && e.kind === 'tool_use' && names.has(e.content)).map((e) => e.request_id));
+            setProgressHistory({threadId, events: r.events.filter((e) => !e.parent && ((e.kind === 'tool_use' && names.has(e.content)) || (e.kind === 'tool_result' && ids.has(e.request_id))))});
+        }).catch(() => { /* The loaded transcript still supplies current progress. */ });
+        return () => { active = false; };
+    }, [threadId, more]);
+    const groups = useMemo(() => {
+        const history = progressHistory?.threadId === threadId ? progressHistory.events : [];
+        if (!history.length) return todoGroups(blocks);
+        const combined = new Map(history.map((e) => [e.id, e]));
+        for (const e of events ?? []) combined.set(e.id, e);
+        const all = [...combined.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        return todoGroups(buildTranscript(threadTranscript(all, running, () => undefined).entries));
+    }, [blocks, events, progressHistory, running, threadId]);
+
+    const currentGroup = groups.at(-1);
 
     const focusCallLoaded = !!focused && !!events?.some((e) => !e.parent && e.kind === 'tool_use' && e.request_id === focused);
     useEffect(() => {
@@ -220,15 +264,26 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     const focusSteps = focused ? host?.steps(focused) : undefined;
     const focusType = focusBlock?.task?.subagentType || (focusBlock?.call.input as { subagent_type?: string } | undefined)?.subagent_type;
 
-    // The waiting question's own deadline, for the strip's folded line.
-    const pendingAutoAt = useMemo(() => {
-        const b = blocks.find((x) => x.type === 'request' && !!pendingRequestId && x.message.request_id === pendingRequestId);
-        return b?.type === 'request' ? b.message.autoAt : undefined;
-    }, [blocks, pendingRequestId]);
+    // A drill-in from the status area: the URL asked for one subagent (opened
+    // on its own, like the panel's own list opens one) or one background task
+    // (its panel, with the row expanded). The page cleans the URL once taken.
+    const columnRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!initialFocus) return;
+        setView('chat');
+        setFocus({ threadId, call: initialFocus });
+        onDrillConsumed?.();
+    }, [initialFocus, threadId, onDrillConsumed]);
+    useEffect(() => {
+        if (!initialTask) return;
+        setTasksAnchor(columnRef.current);
+        onDrillConsumed?.();
+    }, [initialTask, threadId, onDrillConsumed]);
 
-    const tasks = useMemo(() => session
-        ? backgroundTasks(threadTranscript(events ?? [], running, () => undefined).entries, liveTasks)
-        : [], [session, events, running, liveTasks]);
+    const tasks = useMemo(() => backgroundTasks(threadTranscript(events ?? [], running, () => undefined).entries, liveTasks),
+        [events, running, liveTasks]);
+    // A folder session always has its tasks panel; a project thread only while it has tasks to show.
+    const hasTasks = session || tasks.length > 0;
 
     // Scroll the conversation to a message and flash it: "where did this
     // come from" is one click from the trajectory and the tasks panel.
@@ -237,7 +292,7 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
         if (!el) return;
         stick.current = false;
         el.scrollIntoView({ block: 'center' });
-        el.animate?.([{ outline: '2px solid transparent' }, { outline: '2px solid var(--mui-palette-primary-main, #1976d2)' }, { outline: '2px solid transparent' }], { duration: 1600 });
+        el.animate?.([{ outline: '2px solid transparent' }, { outline: '2px solid var(--mui-palette-primary-main, currentColor)' }, { outline: '2px solid transparent' }], { duration: 1600 });
     };
     // Shows a message in the conversation, reading the conversation back to
     // it first when it is older than the loaded page.
@@ -297,20 +352,60 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             return false;
         }
     };
-    const runConfirmed = async (what: 'archive' | 'handoff') => {
+    const runConfirmed = async (what: NonNullable<typeof confirm>) => {
         setActing(true);
-        const done = what === 'archive'
-            ? await act(ops.finish)
+        if (what === 'delete' && report && !report.can_delete && thread?.branch && typed !== thread.branch) {
+            // The branch has no merged PR: the typed confirmation did not match.
+            notify(t('thread.deleteTypeBranch', { branch: thread.branch }), 'error');
+            setActing(false);
+            return;
+        }
+        const done = what === 'resolve' ? await act(ops.finish)
+            : what === 'archive' ? await act(ops.archiveSession)
+            : what === 'delete' ? await act(() => ops.deleteThread(!!report && !report.can_delete, thread?.branch || undefined))
+            : what === 'restart' ? await act(ops.restart)
             : await act(async () => setHandoff(await ops.handoff()));
         setActing(false);
-        if (done) setConfirm(null);
+        if (done) {
+            if (what === 'restart') notify(t('session.restartDone'), 'success');
+            setConfirm(null);
+            setReport(null);
+            setTyped('');
+            onRefresh?.();
+        }
     };
-    // Archiving or handing off ends the process and every background task it
+    // Resolving or handing off ends the process and every background task it
     // runs: ask first while any is running.
-    const guarded = (what: 'archive' | 'handoff') => {
+    const offerRestart = () => {
         setMenu(null);
-        if (liveTasks.length > 0) setConfirm(what);
+        setConfirm('restart');
+    };
+    const guarded = (what: 'resolve' | 'archive' | 'handoff') => {
+        setMenu(null);
+        if (liveTasks.length > 0 || (what === 'archive' && running)) setConfirm(what);
         else void runConfirmed(what);
+    };
+    // Archive and delete open on the cleanup report, so the dialog says what
+    // is freed and what stays; the server re-checks and refuses with the
+    // blockers if anything moved in between.
+    const openCleanup = (what: 'archive' | 'delete') => {
+        setMenu(null);
+        if (session) {
+            if (what === 'archive') guarded('archive');
+            return;
+        }
+        void (async () => {
+            setActing(true);
+            try {
+                setReport(await ops.cleanup());
+                setTyped('');
+                setConfirm(what);
+            } catch (e) {
+                notify((e as Error).message, 'error');
+            } finally {
+                setActing(false);
+            }
+        })();
     };
     // Renaming is metadata: it persists at once and the thread's next event
     // carries it to every surface that shows it.
@@ -319,29 +414,31 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
     if (!thread) {
         return <Box sx={{ p: 2 }}><Skeleton height={40} /><Skeleton variant="rounded" height={200} /></Box>;
     }
-    const canReview = !!thread.branch && thread.commits_ahead > 0 && !thread.merged_at;
+    // Only show the model reported by the last turn. The legacy model field
+    // can hold a configured launch value when no model was reported.
+    const observedModel = thread.reported_model;
+    const canRestart = thread.status !== 'resolved' && !thread.archived_at;
+    const responseRecovery = canRestart && (
+        <Button size="small" color="inherit" disabled={acting} onClick={offerRestart}>{t('session.restart')}</Button>
+    );
 
     return (
         <Box ref={panelRef} sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0 }}>
-            <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Box ref={columnRef} sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, height: '100%', minHeight: 0, bgcolor: 'background.default' }}>
+            <Box sx={{ px: 1.5, pt: 1, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
                 {/* One row to name the thread and act on it, one quiet row of facts. */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    {!hideTitle && <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>}
+                    {!hideTitle && (backLabel
+                        ? <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={onBack} aria-label={t('thread.backTo', { place: backLabel })}
+                            sx={{ color: 'text.secondary', flexShrink: 0, minWidth: 0, maxWidth: 140, px: 0.75, '& .MuiButton-icon': { mr: 0.5 } }}>
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{backLabel}</Box>
+                        </Button>
+                        : <IconButton size="small" onClick={onBack} aria-label={t('thread.back')}><ArrowBack fontSize="small" /></IconButton>)}
                     {hideTitle
                         ? <Box sx={{ flex: 1 }} />
-                        : <ThreadTitle title={thread.title} onSave={saveTitle} />}
-                    {canReview && (
-                        <Tooltip title={t('thread.review')}>
-                            {/* Icon-only, but still the contained call to action the text button was. */}
-                            <IconButton size="small" aria-label={t('thread.review')} onClick={() => setDiffOpen(true)}
-                                sx={{ flexShrink: 0, bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}>
-                                <DiffIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    )}
+                        : <><ThreadRefButton thread={thread} /><ThreadTitle title={thread.title} onSave={saveTitle} /></>}
                     {/* While work runs in the background it names itself. */}
-                    {session && liveTasks.length > 0 && !rail && (
+                    {liveTasks.length > 0 && !rail && (
                         <Tooltip title={t('session.backgroundTasks')}>
                             <Button size="small" variant="outlined" color="inherit" startIcon={<Stream sx={{ fontSize: '16px !important' }} />} onClick={(e) => setTasksAnchor(e.currentTarget)}
                                 sx={{ borderRadius: radius.pill, borderColor: 'divider', color: 'text.secondary', py: 0, px: 1.25, minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -349,24 +446,47 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                             </Button>
                         </Tooltip>
                     )}
+                    {/* The Details button is always here: where the rail fits it docks or folds the column, where it does not the same cards take the conversation's place until it is pressed again. */}
+                    {thread && (
+                        <Tooltip title={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}>
+                            <IconButton size="small" onClick={() => (wide ? toggleRail() : setDetailsOpen((open) => !open))}
+                                aria-expanded={wide ? railOn : sheet}
+                                aria-label={wide ? (railOn ? t('rail.hide') : t('rail.show')) : (sheet ? t('rail.close') : t('rail.title'))}
+                                sx={{ flexShrink: 0, ...(sheet && { bgcolor: 'action.selected' }) }}>
+                                {wide && !railOn ? <RailShow fontSize="small" /> : <RailHide fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     {actions}
                     <IconButton size="small" onClick={(e) => setMenu(e.currentTarget)} aria-label={t('common.more')}><MoreVert fontSize="small" /></IconButton>
                     <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
+                        {thread.seq > 0 && <MenuItem onClick={() => { setMenu(null); void copyRef(); }}>{t('thread.copyRef')}</MenuItem>}
                         <MenuItem onClick={() => { setMenu(null); setTaskOpen((v) => !v); }}>{taskOpen ? t('thread.hideTask') : t('thread.showTask')}</MenuItem>
                         <MenuItem onClick={() => { setMenu(null); setFocus(null); setView(view === 'chat' ? 'trajectory' : 'chat'); }}>{view === 'chat' ? t('thread.showTrajectory') : t('thread.showChat')}</MenuItem>
                         {view === 'chat' && detail === 'detailed' && <MenuItem onClick={() => { setMenu(null); toggleExpand(); }}>{expandAll ? t('thread.collapseTools') : t('thread.expandTools')}</MenuItem>}
                         {/* The panel opens where the menu was, under the More button. */}
-                        {session && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
-                        {wide && railTop == null && <MenuItem onClick={() => { setMenu(null); toggleRail(); }}>{railOn ? t('rail.hide') : t('rail.show')}</MenuItem>}
+                        {hasTasks && !rail && <MenuItem onClick={() => { setTasksAnchor(menu); setMenu(null); }}>{t('session.backgroundTasks')}</MenuItem>}
                         {subagents && <MenuItem onClick={() => { setAgentsAnchor(menu); setMenu(null); }}>{t('subagents.title')}</MenuItem>}
-                        {session && thread.status !== 'resolved' && (
+                        {session && !thread.archived_at && thread.status !== 'resolved' && (
                             <MenuItem disabled={running || acting} onClick={() => guarded('handoff')}>{running ? t('session.handoffBusy') : t('session.handoff')}</MenuItem>
                         )}
-                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot archive. */}
+                        {/* Finishing sits in the menu, apart from the buttons used all the time: a stray click cannot resolve it. */}
                         <Divider />
-                        {thread.status !== 'resolved'
-                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('archive'); else void act(ops.finish); }}>{t(session ? 'session.archive' : 'thread.resolve')}</MenuItem>
-                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>}
+                        {canRestart && <MenuItem disabled={acting} onClick={offerRestart}>{t('session.restart')}</MenuItem>}
+                        {!thread.archived_at && (thread.status !== 'resolved'
+                            ? <MenuItem disabled={acting} onClick={() => { setMenu(null); if (session) guarded('resolve'); else void act(ops.finish); }}>{t(session ? 'session.resolve' : 'thread.resolve')}</MenuItem>
+                            : <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.reopen).then((ok) => { if (ok) onRefresh?.(); }); }}>{t(session ? 'session.reopen' : 'thread.reopen')}</MenuItem>)}
+                        {!thread.archived_at && !session && (
+                            <MenuItem disabled={acting} onClick={() => openCleanup('archive')}>{t('thread.archive')}</MenuItem>
+                        )}
+                        {thread.archived_at ? (
+                            <>
+                                <MenuItem disabled={acting} onClick={() => { setMenu(null); void act(ops.restoreSession).then((ok) => { if (ok) onRefresh?.(); }); }}>{session ? t('session.restore') : t('thread.restore')}</MenuItem>
+                                <MenuItem disabled={acting} onClick={() => openCleanup('delete')} sx={{ color: 'error.main' }}>{t('thread.delete')}</MenuItem>
+                            </>
+                        ) : session && (
+                            <MenuItem disabled={acting} onClick={() => guarded('archive')}>{t('session.archive')}</MenuItem>
+                        )}
                         {/* Run details, for when they matter: kept off the header. */}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && <Divider />}
                         {(thread.model || thread.input_tokens > 0 || thread.output_tokens > 0) && (
@@ -379,12 +499,15 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 </Box>
                 <Box sx={{ pl: hideTitle ? 0.5 : 4.5 }}>
                     <MetaLine items={[
-                        <ThreadState status={thread.status} />,
-                        // The folder and branch float above the message box.
+                        <ThreadState status={thread.status} queued={thread.queued} />,
+                        <Box component="span" title={t('threadSettings.lastModel')} sx={{ ...mono, overflowWrap: 'anywhere' }}>
+                            {t('threadSettings.lastModel')}: {observedModel || t('threadSettings.modelUnknown')}
+                        </Box>,
+                        // The folder and branch are the details rail's.
                         !thread.branch && !session && t('thread.noRepo'),
                         // The work, as badges whose details hover out (the
                         // rail's Changes card carries them in full).
-                        <ThreadBadges thread={thread} />,
+                        <ThreadBadges thread={thread} tasks={false} work />,
                         thread.uncommitted && (
                             <Tooltip title={t('thread.uncommitted')}>
                                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
@@ -401,11 +524,39 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                 {needsUser(thread.status) && thread.wait_reason && !pendingRequestId && (
                     <Box sx={{ mt: 1, display: 'flex', alignItems: 'flex-start', gap: 1, px: 1.25, py: 0.75, borderRadius: radius.row, bgcolor: 'action.hover', fontSize: fontSizes.md, color: 'text.primary', overflowWrap: 'anywhere' }}>
                         <Box sx={{ pt: '3px' }}><ThreadStateMark status={thread.status} /></Box>
-                        <Box>{thread.wait_reason}</Box>
+                        <Box sx={{ flex: 1 }}>{thread.wait_reason}</Box>
+                        {/* A failed turn is retried where it failed: the agent resumes it from its own transcript, no message re-sent. */}
+                        {thread.status === 'failed' && (
+                            <Button size="small" color="inherit" variant="outlined" startIcon={<Refresh sx={{ fontSize: '16px !important' }} />}
+                                disabled={acting}
+                                onClick={() => { void act(ops.retry).then((ok) => { if (ok) onRefresh?.(); }); }}>
+                                {t('thread.retry')}
+                            </Button>
+                        )}
                     </Box>
                 )}
             </Box>
 
+            {sheet && thread && (
+                <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', bgcolor: 'background.default' }}>
+                    <ThreadInfoRail
+                        sheet
+                        thread={thread}
+                        folder={session}
+                        tasks={tasks}
+                        onChanged={() => onRefresh?.()}
+                        onReveal={(call) => { setDetailsOpen(false); void openInChat({ call }); }}
+                        subagents={subagents}
+                        onOpenAgent={(agent) => { setDetailsOpen(false); openAgent(agent); }}
+                        onShowAgent={(agent) => { setDetailsOpen(false); void openInChat({ call: agent.call }, agent.event_id); }}
+                        extra={railExtra}
+                        configuredModel={configuredModel}
+                        permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
+                    />
+                </Box>
+            )}
+            {/* The conversation stays mounted under the cards, so its scroll and draft survive. */}
+            <Box sx={{ display: sheet ? 'none' : 'contents' }}>
             {focused && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <Button size="small" color="inherit" startIcon={<ArrowBack sx={{ fontSize: '16px !important' }} />} onClick={() => setFocus(null)} sx={{ color: 'text.secondary', flexShrink: 0 }}>
@@ -419,22 +570,38 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     <Button size="small" onClick={() => void openInChat({ call: focused }, own?.call === focused ? own.events.find((e) => e.kind === 'tool_use')?.id : undefined)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{t('subagents.show')}</Button>
                 </Box>
             )}
+            {!focused && currentGroup && <Box sx={{ px: 2, pt: 1 }}><ChecklistCard key={`${threadId}:${currentGroup.id}`} todos={currentGroup.todos} history={groups.slice(0, -1)} working={running} /></Box>}
             <Box ref={scrollRef} onScroll={() => {
                 const el = scrollRef.current;
-                if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                if (el) {
+                    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                    setAwayFromBottom(!stick.current);
+                }
             }} sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', px: 2, py: 2, overscrollBehavior: 'contain' }}>
+                <Box sx={{ maxWidth: 800, mx: 'auto', width: '100%' }}>
                 {!focused && events !== null && more && onLoadEarlier && <LoadEarlier scrollRef={scrollRef} onLoad={onLoadEarlier} />}
                 {focused && focusSteps?.loaded && focusSteps.more && host && <LoadEarlier scrollRef={scrollRef} label={t('subagents.earlier')} onLoad={() => host.load(focused, true)} />}
+                <AttachmentGallery owner={owner} files={galleryFiles}>
                 {events === null || (focused && !focusBlock)
                     ? <Skeleton variant="rounded" height={120} />
                     : focused && focusBlock
-                        ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        ? <SubagentFocus detail={detail} block={focusBlock} subagents={host} working={running} pendingRequestId={pendingRequestId} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} />
                     : view === 'chat'
-                        ? <Transcript detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} />
+                        ? <Transcript hideChecklist detail={detail} blocks={blocks} subagents={host} pendingRequestId={pendingRequestId} working={running} newSince={newSince.at} expandAll={expandAll} onRespond={respond} codeBlock={CodeBlock} attachments={Attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} messageSource={(message) => message.imSource && <ImSourceBadge platform={message.imSource.platform} chatId={message.imSource.chatId} />} renderCustom={renderCustom} />
                         : <Trajectory blocks={blocks} working={running} pendingRequestId={pendingRequestId} project={thread.cwd} onOpen={(anchor) => void openInChat(anchor)} />}
+                </AttachmentGallery>
+                </Box>
             </Box>
 
-            <Box sx={{ px: 2, pb: 2 }}>
+            <Box sx={{ px: 2, pb: 2, position: 'relative' }}>
+                {awayFromBottom && (
+                    <Button size="small" variant="contained" onClick={() => {
+                        stick.current = true;
+                        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+                        setAwayFromBottom(false);
+                    }} sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', mb: 1, borderRadius: radius.pill, boxShadow: 3, whiteSpace: 'nowrap', zIndex: 1 }}>↓ {t('conversation.latest', { defaultValue: 'Latest messages' })}</Button>
+                )}
+                <Box sx={{ maxWidth: 800, mx: 'auto' }}>
                 {handoff && (
                     <Alert severity="info" variant="outlined" icon={<Terminal fontSize="small" />} onClose={() => setHandoff(null)}
                         sx={{ mb: 1, '& .MuiAlert-message': { minWidth: 0, flex: 1 } }}>
@@ -448,15 +615,33 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     </Alert>
                 )}
                 {(view === 'chat' || focused) && <MessageDetailControl detail={detail} onChange={setDetail} surface="thread" />}
-                <ComposerStrip thread={thread} folder={session} autoAt={pendingAutoAt} onAutoAnswer={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                <ComposerStrip thread={thread} />
                 <HeldMessages held={held} onEdit={(h) => void takeBack([h.id], true)} onRemove={(h) => void takeBack([h.id], false)} />
-                {running && composerContext && <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>{t('threadSettings.nextTurn')}</Typography>}
                 <ThreadComposer
                     ref={composer}
                     draftKey={threadId}
-                    context={composerContext}
+                    leftSlot={(modelControl || effortControl || composerContext || thread.status !== 'resolved') && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
+                            {(modelControl || effortControl || composerContext) && (
+                                <ControlTooltip title={t('threadSettings.nextTurn')} disableHoverListener={!running} disableFocusListener={!running}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexWrap: 'wrap' }}>
+                                        {modelControl}
+                                        {effortControl}
+                                        {composerContext}
+                                    </Box>
+                                </ControlTooltip>
+                            )}
+                            {/* Beside the permission mode, outside the next-turn hint: a question already waiting is re-timed at once. */}
+                            {thread.status !== 'resolved' && (
+                                <AutoAnswerSelect thread={thread} folder={session} disabled={acting}
+                                    onChange={(mode) => { void act(() => ops.setAutoAnswer(mode)).then((ok) => ok && onRefresh?.()); }} />
+                            )}
+                            {running && (modelControl || effortControl || composerContext) && <Typography variant="caption" color="text.secondary">{t('threadSettings.modelNextTurn')}</Typography>}
+                        </Box>
+                    )}
                     streaming={running}
                     sendModes
+                    insertable={thread.insertable !== false}
                     onStop={() => {
                         // Stop drops what was held: hand it back to the box rather than lose it.
                         if (held.length > 0) {
@@ -467,8 +652,8 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                         void act(ops.stop);
                     }}
                     canSubmit={!settingsSaving}
-                    disabled={disabled || thread.status === 'resolved'}
-                    placeholder={thread.status === 'resolved' ? t(session ? 'session.archivedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
+                    disabled={disabled || thread.status === 'resolved' || (acting && confirm === 'restart')}
+                    placeholder={thread.archived_at ? t('session.archivedPlaceholder') : thread.status === 'resolved' ? t(session ? 'session.resolvedPlaceholder' : 'thread.resolvedPlaceholder') : running ? t(session ? 'session.queuePlaceholder' : 'thread.queuePlaceholder') : t(session ? 'session.placeholder' : 'thread.placeholder')}
                     attach={(files) => uploadAttachments(owner, files)}
                     onSend={async (text, attachments, mode) => {
                         if (settingsSaving || (canSend && !canSend())) return false;
@@ -483,12 +668,12 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
                     }}
                 />
                 {belowComposer}
+                </Box>
             </Box>
-            <DiffDialog thread={thread} open={diffOpen} onClose={() => setDiffOpen(false)} />
-            {session && (
+            {hasTasks && (
                 <Popover open={!!tasksAnchor} anchorEl={tasksAnchor} onClose={() => setTasksAnchor(null)}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
+                    <BackgroundTasksPanel sessionId={threadId} tasks={tasks} initialOpenId={initialTask} onChanged={() => onRefresh?.()} onReveal={(call) => void openInChat({ call })} />
                 </Popover>
             )}
             {subagents && (
@@ -499,26 +684,51 @@ export function ThreadPanel({ projectId, folder = false, threadId, thread, event
             )}
             <ConfirmDialog
                 open={confirm !== null}
-                title={confirm === 'handoff' ? t('session.handoffConfirm') : t('session.archiveConfirm')}
-                description={t('session.tasksWillStop', { count: liveTasks.length })}
+                title={confirm === 'restart' ? t('session.restartConfirm')
+                    : confirm === 'handoff' ? t('session.handoffConfirm')
+                    : confirm === 'archive' ? t(session ? 'session.archiveConfirm' : 'thread.archiveConfirm')
+                    : confirm === 'delete' ? t('thread.deleteConfirm')
+                    : t('session.resolveConfirm')}
+                description={confirm === 'restart' ? t('session.restartImpact') : confirm === 'archive' && report ? (
+                    <Box sx={{ display: 'grid', gap: 1 }}>
+                        {report.blockers?.length ? <Alert severity="warning">{report.blockers.join(' ')}</Alert> : null}
+                        <Typography variant="body2">
+                            {t('thread.archiveFrees', { worktree: formatBytes(report.worktree_bytes), tmp: formatBytes(report.tmp_bytes) })}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">{(report.kept ?? []).join(' · ')}</Typography>
+                        {report.warnings?.length ? <Typography variant="body2" color="text.secondary">{report.warnings.join(' ')}</Typography> : null}
+                    </Box>
+                ) : confirm === 'delete' ? (
+                    <Box sx={{ display: 'grid', gap: 1 }}>
+                        <Typography variant="body2">{t('thread.deleteBody')}</Typography>
+                        {report && !report.can_delete && thread?.branch ? (
+                            <>
+                                <Alert severity="warning">{t('thread.deleteForce', { branch: thread.branch })}</Alert>
+                                <TextField size="small" label={t('thread.deleteTypeBranchLabel', { branch: thread.branch })} value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus />
+                            </>
+                        ) : null}
+                    </Box>
+                ) : liveTasks.length > 0 ? t('session.tasksWillStop', { count: liveTasks.length }) : undefined}
                 loading={acting}
                 cancelLabel={t('common.cancel')}
-                confirmLabel={confirm === 'handoff' ? t('session.handoff') : t('session.archive')}
-                confirmColor="warning"
-                onClose={() => setConfirm(null)}
+                confirmLabel={confirm === 'restart' ? t('session.restart') : confirm === 'handoff' ? t('session.handoff') : confirm === 'archive' ? t(session ? 'session.archive' : 'thread.archive') : confirm === 'delete' ? t('thread.delete') : t('session.resolve')}
+                confirmColor={confirm === 'delete' ? 'error' : 'warning'}
+                onClose={() => { setConfirm(null); setReport(null); }}
                 onConfirm={() => confirm && void runConfirmed(confirm)}
             />
+            </Box>
         </Box>
         {rail && (
             <ThreadInfoRail
                 thread={thread}
                 folder={session}
                 tasks={tasks}
-                canReview={canReview}
-                onReview={() => setDiffOpen(true)}
                 onChanged={() => onRefresh?.()}
                 onReveal={(call) => void openInChat({ call })}
-                top={railTop}
+                subagents={subagents}
+                onOpenAgent={openAgent}
+                onShowAgent={(agent) => void openInChat({ call: agent.call }, agent.event_id)}
+                extra={railExtra}
                 configuredModel={configuredModel}
                 permission={permissionLabel || (session ? (thread.permission_mode || t('session.permissionDefault')) : undefined)}
             />

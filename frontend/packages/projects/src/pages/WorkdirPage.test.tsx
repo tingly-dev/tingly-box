@@ -57,7 +57,8 @@ describe('WorkdirPage removing a folder', () => {
     it('asks first, counting the sessions it would stop', async () => {
         m.folders = [folder(1, 1)];
         show();
-        fireEvent.click(await screen.findByRole('button', { name: 'workdir.remove' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'workdir.actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'workdir.remove' }));
         expect(await screen.findByText(/workdir\.removeRunning.*"count":2/)).toBeInTheDocument();
         expect(m.del).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'workdir.removeConfirm' }));
@@ -67,7 +68,8 @@ describe('WorkdirPage removing a folder', () => {
     it('removes at once when nothing is running', async () => {
         m.folders = [folder(0, 0)];
         show();
-        fireEvent.click(await screen.findByRole('button', { name: 'workdir.remove' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'workdir.actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'workdir.remove' }));
         await waitFor(() => expect(m.del).toHaveBeenCalledTimes(1));
         expect(screen.queryByText(/workdir\.removeRunning/)).not.toBeInTheDocument();
     });
@@ -97,6 +99,15 @@ describe('WorkdirPage live transcript', () => {
         });
     });
 
+    it('starts a new session from the more menu', async () => {
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        expect(await screen.findByPlaceholderText('session.queuePlaceholder')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'session.new' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'workdir.actions' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'session.new' }));
+        expect(await screen.findByPlaceholderText('session.promptPlaceholder')).toBeInTheDocument();
+    });
+
     it('saves thread permissions before continuing and never sends while that save is pending', async () => {
         let finish!: (value: unknown) => void;
         m.put.mockReturnValue(new Promise((r) => { finish = r; }));
@@ -116,7 +127,31 @@ describe('WorkdirPage live transcript', () => {
         expect(input).toHaveValue('continue');
         await act(async () => finish({ data: { ...thread, permission_mode: 'plan' }, response: new Response() }));
         fireEvent.keyDown(input, { key: 'Enter', altKey: true });
-        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', { params: { path: { id: 't1' } }, body: { content: 'continue', attachments: [], mode: 'queue' } }));
+        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/messages', { params: { path: { id: 't1' } }, body: { content: 'continue', attachments: [], mode: 'next_turn' } }));
+    });
+
+    it('can force restart a session from its menu while a turn is running', async () => {
+        m.post.mockResolvedValue({ data: { ...thread, status: 'idle' }, response: new Response() });
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        fireEvent.click(await screen.findByRole('button', { name: 'common.more' }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'session.restart' }));
+        expect(m.post).not.toHaveBeenCalled();
+        fireEvent.click(await screen.findByRole('button', { name: 'session.restart' }));
+        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/restart', { params: { path: { id: 't1' } } }));
+    });
+
+    it('offers force restart when a tool approval reply fails', async () => {
+        m.post.mockResolvedValue({ error: { error: 'no pending request with that id' }, response: new Response(null, { status: 409 }) });
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        await waitFor(() => expect(m.projectCb).not.toBeNull());
+        act(() => m.projectCb?.({
+            type: 'thread_event',
+            data: { ...entry('approval', 'Approve tool'), kind: 'approval', payload: '{"request_id":"stuck","tool":"mcp__example__request_permission","state":"pending"}' },
+        }));
+        fireEvent.click(await screen.findByRole('button', { name: /^projects.transcript.approve / }));
+        fireEvent.click(await screen.findByRole('button', { name: 'session.restart' }));
+        expect(await screen.findByRole('dialog', { name: 'session.restartConfirm' })).toBeInTheDocument();
+        expect(m.post).toHaveBeenCalledTimes(1);
     });
 
     // The real hub sends thread_event only on /projects/{id}/events; the
@@ -143,5 +178,39 @@ describe('WorkdirPage live transcript', () => {
         act(() => m.projectCb?.({ type: 'thread_event', data: { ...entry('e2', ''), kind: 'task', payload: '{"event":"background_tasks_changed"}' } }));
         await waitFor(() => expect(calls('/api/v1/threads/{id}')).toBe(thread0 + 1));
         expect(calls('/api/v1/threads/{id}/events')).toBe(1);
+    });
+});
+
+describe('folder session archive', () => {
+    it('offers restore for an archived resolved session', async () => {
+        m.folders = [folder(0, 0)];
+        const archived = { id: 't1', project_id: 'f1', title: 'old session', status: 'resolved', archived_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };
+        m.get.mockImplementation(async (url: string) => ({
+            data: url.endsWith('permission-modes') ? { modes: [] }
+                : url === '/api/v1/threads/{id}' ? { thread: archived, background_tasks: [], running: false }
+                    : url === '/api/v1/threads/{id}/events' ? { events: [] } : { threads: [archived] },
+            response: new Response(),
+        }));
+        m.post.mockResolvedValue({ data: { ...archived, archived_at: undefined }, response: new Response() });
+        show('/?path=%2Fhome%2Fme%2Fapp&session=t1');
+        expect(await screen.findByPlaceholderText('session.archivedPlaceholder')).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
+        expect(screen.queryByRole('menuitem', { name: 'session.reopen' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('menuitem', { name: 'session.restore' }));
+        await waitFor(() => expect(m.post).toHaveBeenCalledWith('/api/v1/threads/{id}/restore', { params: { path: { id: 't1' } } }));
+    });
+
+    it('shows archived sessions separately without marking their failures as waiting', async () => {
+        m.folders = [folder(0, 0)];
+        const archived = { id: 'archived', project_id: 'f1', title: 'old session', status: 'failed', wait_reason: 'old error', archived_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' };
+        m.get.mockImplementation(async (url: string) => ({
+            data: url.endsWith('permission-modes') ? { modes: [] } : { threads: [archived] }, response: new Response(),
+        }));
+        show();
+        expect(await screen.findByRole('button', { name: /session.group.archived/ })).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('session.group.failed')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /session.group.archived/ }));
+        expect(await screen.findByText('old session')).toBeVisible();
+        expect(screen.queryByText('old error')).not.toBeInTheDocument();
     });
 });

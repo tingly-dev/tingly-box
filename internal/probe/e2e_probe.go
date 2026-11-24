@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -69,17 +70,35 @@ func (e *E2EProber) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error
 		return &Result{Success: true, Message: "Verified recently (cached)"}, nil
 	}
 
+	errorCapture := &protocol.ProbeErrorCapture{}
 	if len(probeHeaders) > 0 {
+		token, capture, stop := protocol.BeginProbeErrorCapture()
+		defer stop()
+		errorCapture = capture
+		probeHeaders[protocol.ProbeErrorCaptureHeader] = token
 		ctx = client.WithProbeHeaders(ctx, probeHeaders)
+	} else {
+		ctx = protocol.WithProbeErrorCapture(ctx, errorCapture)
 	}
 	if len(req.Headers) > 0 {
 		ctx = client.WithProbeHeaderOverrides(ctx, req.Headers)
 	}
 	params := req.probeParams(model)
+	if req.Operation == "decisions" {
+		params.DecisionRequest = req.DecisionRequest
+		endpointOverride = "decisions"
+	}
 	params.ClaudeCodePreamble = e.targetIsClaudeCode(req)
 	result, err := e.probeProviderWithSDK(ctx, provider, params, endpointOverride)
 	if cacheable && err == nil && result != nil && result.Success {
 		e.endpointCache.remember(provider.UUID, model, endpointOverride, shapeKey)
+	}
+	upstream, streamFailed, responseBody := errorCapture.Failure()
+	if err != nil || streamFailed {
+		if err == nil {
+			err = upstream
+		}
+		return nil, &protocol.ProbeFailure{Cause: err, Upstream: upstream, ResponseBody: responseBody}
 	}
 	return result, err
 }
@@ -247,7 +266,7 @@ func (e *E2EProber) resolveProviderTarget(ctx context.Context, req *E2ERequest) 
 // speak Responses, everything else defaults to Chat.
 func resolveOpenAIProbeEndpoint(override string, provider *typ.Provider) string {
 	switch override {
-	case "chat", "responses":
+	case "chat", "responses", "decisions":
 		return override
 	default:
 		if provider.IsCodexProvider() {
@@ -354,7 +373,22 @@ func (e *E2EProber) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*ty
 		"X-Tingly-Debug-Routing": "1",
 	}
 
-	provider, model, err := e.loopbackConfigTarget(ctx, string(scenario), apiBase, apiStyle, rule.RequestModel)
+	model := rule.RequestModel
+	if req.Operation == "decisions" {
+		if !rule.Active {
+			return nil, "", nil, fmt.Errorf("selected rule is disabled")
+		}
+		if req.Model != "" && model != "*" && req.Model != model {
+			return nil, "", nil, fmt.Errorf("model does not match the selected rule")
+		}
+		if model == "*" {
+			model = req.Model
+		}
+		if strings.TrimSpace(model) == "" || model == "*" {
+			return nil, "", nil, fmt.Errorf("a concrete model is required for this rule")
+		}
+	}
+	provider, model, err := e.loopbackConfigTarget(ctx, string(scenario), apiBase, apiStyle, model)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -408,6 +442,8 @@ func (e *E2EProber) probeProviderWithSDK(ctx context.Context, provider *typ.Prov
 			result, err = probeOpenAIChat(ctx, oc, params)
 		case "responses":
 			result, err = probeOpenAIResponses(ctx, oc, params)
+		case "decisions":
+			result, err = probeDecisions(ctx, oc, params)
 		default:
 			// Unreachable: resolveOpenAIProbeEndpoint only returns "chat" or
 			// "responses". Explicit so a future third value fails loudly

@@ -73,6 +73,7 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 // we propagate the upstream provider's status (401/429/4xx) instead of
 // flattening every pre-stream failure into a 500.
 func SendStreamingError(c *gin.Context, err error) {
+	protocol.CaptureProbeError(c.Request, err, false)
 	c.Error(protocol.LoggableUpstreamError(err)).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 	c.JSON(failure.Status, protocol.ErrorResponse{
@@ -86,6 +87,7 @@ func SendStreamingError(c *gin.Context, err error) {
 // SendForwardingError sends an error response for request forwarding failures,
 // propagating the upstream provider's HTTP status when the error carries one.
 func SendForwardingError(c *gin.Context, err error) {
+	protocol.CaptureProbeError(c.Request, err, false)
 	c.Error(protocol.LoggableUpstreamError(err)).SetType(gin.ErrorTypePublic) //nolint:errcheck
 	failure := protocol.ClassifyUpstreamFailure(err, http.StatusInternalServerError)
 	c.JSON(failure.Status, protocol.ErrorResponse{

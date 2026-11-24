@@ -1,0 +1,63 @@
+name: insert-into-thread
+description: >
+  The user writes to a thread while it works: the message joins the running
+  turn and is in the thread's next model request, which changes what it does.
+  The thread's request is held until the message is in, so where it lands is
+  certain.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: insert-into-thread
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - {id: start, name: mcp__tingly-projects__start_thread, arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md for version 0.1."}, spawns: thread, expect_result: {contains: "started thread"}}
+          - id: started
+            reply: {content: "Started Add CHANGELOG."}
+          - id: report
+            expect: {last_text_contains: "0.2"}
+            reply: {content: "Add CHANGELOG now targets 0.2."}
+      thread:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: draft
+            reply:
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n\n## 0.1\n"}, expect_result: {is_error: false}}
+          - id: check
+            # Held until the user's message is in; the reply has a tool call,
+            # so the turn makes one more request, and that one carries it.
+            after: ["signal:sent"]
+            reply:
+              tool_calls:
+                - {id: read, name: Read, arguments: {file_path: "{{cwd}}/CHANGELOG.md"}}
+          - id: change
+            # Claude Code 2.1.259 puts the mid-turn message in a role
+            # "system" entry: "The user sent a new message while you were
+            # working: ...".
+            expect: {inserted_contains: "Make it 0.2"}
+            reply:
+              tool_calls:
+                - {id: rewrite, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n\n## 0.2\n"}, expect_result: {is_error: false}}
+          - id: done
+            reply: {content: "Switched CHANGELOG.md to 0.2 as you asked while I worked."}
+steps:
+  - say: Add a CHANGELOG for 0.1.
+  - reached: thread.check
+  - message: {thread: Add CHANGELOG, content: "Make it 0.2, not 0.1."}
+  - signal: sent
+  - served: coordinator.report
+expect:
+  conversation_contains: ["now targets 0.2"]

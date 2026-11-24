@@ -1,12 +1,12 @@
 import CardGrid from "@/components/CardGrid.tsx";
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import AgentStatusRow, { AgentLogButton } from './components/AgentStatusRow';
 import AgentAccessSection, { useAccessExpanded } from './components/AgentAccessSection';
 import ProfileSetupDialog from './components/ProfileSetupDialog';
 import { useAgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
-import { isCredentialProvider } from '@/utils/providers';
+import { isCredentialProvider } from '@/pages/scenario/utils/providers';
 import ScenarioPageSkeleton from './components/ScenarioPageSkeleton';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, agentPageHeaderSx } from './components/ScenarioCardHeader';
 import PluginFeatures from '@/components/PluginFeatures';
@@ -23,9 +23,9 @@ import { copyableTextStyle } from '@/styles/textStyles';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { Delete as DeleteIcon } from '@/components/icons';
 import { Edit as EditIcon } from '@/components/icons';
+import { Duplicate as DuplicateIcon } from '@/components/icons';
 import { Info as InfoIcon } from '@/components/icons';
 import { Terminal as TerminalIcon } from '@/components/icons';
-import Switch from '@mui/material/Switch';
 import {
     Box,
     Button,
@@ -33,21 +33,25 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Divider,
     IconButton,
     Stack,
     TextField,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
+import ClaudeCodeMCPRow from './components/ClaudeCodeMCPRow';
 import ClaudeCodeProfileOverrides, { type ClaudeCodeProfileSettingsArtifact } from './components/ClaudeCodeProfileOverrides';
-import ConfirmDialog from '@/components/ConfirmDialog';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
+import { suggestProfileCopyName } from '@/pages/scenario/utils/copyName';
+import { useDuplicateProfile } from '@/pages/scenario/hooks/useDuplicateProfile';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 const BASE_SCENARIO = 'claude_code';
 
@@ -71,12 +75,10 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const { profileId } = useParams<{ profileId: string }>();
     const navigate = useNavigate();
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const scenario = `${BASE_SCENARIO}:${profileId}`;
 
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         showNotification,
         providers,
         notification,
@@ -93,6 +95,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
     const [logOpen, setLogOpen] = useState(false);
     const [renameProfileOpen, setRenameProfileOpen] = useState(false);
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
+    const duplicateProfile = useDuplicateProfile();
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
     const [appVersion, setAppVersion] = useState('');
@@ -224,8 +228,8 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                 // The profile's alias is its name: "Claude Code - ds". Rename / delete act on
                 // that name, so they sit right next to it rather than among the page actions.
                 title={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: phone ? 0 : 1, minWidth: 0, ...(phone && { flexWrap: 'wrap' }) }}>
+                        <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', ...(phone && { mr: 0.5 }) }}>
                             {`Claude Code - ${currentProfile?.name || profileId}`}
                         </Box>
                         <Tooltip title={`Base URL: ${baseUrl}/tingly/${scenario}`}>
@@ -236,6 +240,11 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         <Tooltip title={t('claudeCode.profile.renameProfile')}>
                             <IconButton size="small" aria-label={t('claudeCode.profile.renameProfile')} onClick={() => { setRenameName(currentProfile?.name || ''); setRenameProfileOpen(true); }}>
                                 <EditIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('claudeCode.profile.duplicateProfile')}>
+                            <IconButton size="small" aria-label={t('claudeCode.profile.duplicateProfile')} onClick={() => setDuplicateOpen(true)}>
+                                <DuplicateIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                             </IconButton>
                         </Tooltip>
                         <Tooltip title={t('claudeCode.profile.deleteProfile')}>
@@ -335,7 +344,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                                         value: 'npx', label: 'NPX', tooltip: 'Use npx command',
                                                         // The same green "n" disc the old icon-only switch used for npx.
                                                         icon: (
-                                                            <Box component="span" sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'success.main', color: 'background.paper', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>
+                                                            <Box component="span" sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'success.main', color: 'background.paper', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, lineHeight: 1 }}>
                                                                 n
                                                             </Box>
                                                         ),
@@ -432,6 +441,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         pt:1 so the gaps match the card's edge rhythm. */}
                     <Box sx={{ px: 2, pt: 1 }}>{slots.slotsRow}</Box>
                     <Box sx={{ px: 2, pt: 1 }}>{pluginsRow}</Box>
+                    <ClaudeCodeMCPRow scenario={BASE_SCENARIO} profileId={profileId || ''} />
                   </Box>
                 </AgentAccessSection>
             <CardGrid>
@@ -498,6 +508,15 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                     </DialogActions>
                 </Dialog>
 
+                <DuplicateDialog
+                    open={duplicateOpen}
+                    onClose={() => setDuplicateOpen(false)}
+                    title={t('claudeCode.profile.duplicateTitle')}
+                    description={t('claudeCode.profile.duplicateDescription', { name: currentProfile?.name || profileId || '', interpolation: { escapeValue: false } })}
+                    label={t('claudeCode.profile.profileName')}
+                    initialName={suggestProfileCopyName(currentProfile?.name || '', getProfiles(BASE_SCENARIO).map(p => p.name))}
+                    onSubmit={(name) => duplicateProfile(profileId || '', name)}
+                />
                 <ConfirmDialog
                     open={deleteProfileOpen}
                     onClose={() => setDeleteProfileOpen(false)}

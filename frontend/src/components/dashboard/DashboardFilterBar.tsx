@@ -20,12 +20,14 @@ import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import type { TimeRange } from '@/hooks/useDashboardData';
 import { TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
 import type { ProviderOptionGroup, ScenarioOption, UsageIdentity } from '@/hooks/useDashboardData';
-import { scenarioLabel } from '@/pages/scenario/scenarioRegistry';
+import { scenarioLabel } from '@/features/scenario/scenarioRegistry';
 import { shortenUserId } from '@/hooks/useDashboardData';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { groupByTeam } from '@/utils/team';
+import { usageAccountLabel } from '@/utils/usageAccountLabel';
 import { useMemo } from 'react';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Owner label is rendered through t() so a live language switch updates it;
 // sharing-key labels carry their own display name instead.
@@ -37,7 +39,7 @@ const identityLabel = (t: (key: string, options?: Record<string, unknown>) => st
 // Shared by the provider and sharing-key pickers so both group the same way.
 const GROUP_SUBHEADER_SX = {
     fontWeight: 600,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.micro,
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     lineHeight: '28px',
@@ -57,7 +59,7 @@ const TIME_RANGES = Object.keys(TIME_RANGE_CONFIG) as TimeRange[];
 
 // Every select in the bar shares this size so the row stays compact.
 const SELECT_SX = {
-    borderRadius: 2,
+    borderRadius: radius.card,
     '& .MuiOutlinedInput-input': { py: 1 },
 } as const;
 
@@ -140,7 +142,7 @@ export default function DashboardFilterBar({
     return (
         // The Paper is the size container, so the layout reacts to the toolbar's own
         // width (sidebar collapsed or not), not the viewport's.
-        <Paper variant="outlined" sx={{ containerType: 'inline-size', px: 1.5, py: 1, borderRadius: 2 }}>
+        <Paper variant="outlined" sx={{ containerType: 'inline-size', px: 1.5, py: 1, borderRadius: radius.card }}>
             <Box
                 sx={{
                     display: 'flex',
@@ -184,7 +186,7 @@ export default function DashboardFilterBar({
                     }}
                 >
                     <FormControl size="small" sx={{ width: { xs: 140, md: 114 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.agent', { defaultValue: 'Agent' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.agent', { defaultValue: 'Agent' })}</InputLabel>
                         <Select
                             value={selectedScenario}
                             label={t('dashboard.overview.agent', { defaultValue: 'Agent' })}
@@ -201,7 +203,7 @@ export default function DashboardFilterBar({
                     </FormControl>
 
                     <FormControl size="small" sx={{ width: { xs: 140, md: 124 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.provider', { defaultValue: 'Provider' })}</InputLabel>
                         <Select
                             value={selectedProvider}
                             label={t('dashboard.overview.provider', { defaultValue: 'Provider' })}
@@ -226,7 +228,7 @@ export default function DashboardFilterBar({
                     </FormControl>
 
                     <FormControl size="small" sx={{ width: { xs: 140, md: 114 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.model', { defaultValue: 'Model' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.model', { defaultValue: 'Model' })}</InputLabel>
                         <Select
                             value={selectedModel}
                             label={t('dashboard.overview.model', { defaultValue: 'Model' })}
@@ -243,7 +245,7 @@ export default function DashboardFilterBar({
                     </FormControl>
 
                     <FormControl size="small" sx={{ width: { xs: 160, md: 130 } }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>{t('dashboard.overview.identity', { defaultValue: 'Identity' })}</InputLabel>
+                        <InputLabel sx={{ fontWeight: 500, fontSize: fontSizes.base }}>{t('dashboard.overview.identity', { defaultValue: 'Identity' })}</InputLabel>
                         <Select
                             value={selectedUser}
                             label={t('dashboard.overview.identity', { defaultValue: 'Identity' })}
@@ -267,7 +269,7 @@ export default function DashboardFilterBar({
                                     <MenuItem key={identity.userId} value={identity.userId}>
                                         <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                                             <Typography variant="body2" noWrap>
-                                                {identityLabel(t, identity)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
+                                                {identity.type === 'owner' ? identityLabel(t, identity) : usageAccountLabel(identity.label, identity.teamId, teams)}{!identity.enabled ? t('dashboard.overview.disabledSuffix', { defaultValue: ' (disabled)' }) : ''}
                                             </Typography>
                                             <Tooltip title={identity.userId} placement="right">
                                                 <Typography

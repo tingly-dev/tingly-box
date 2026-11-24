@@ -10,7 +10,7 @@ describe('provider icon coverage', () => {
     it('renders a brand image for every catalog entry', () => {
         render(<>{Object.values(catalog.providers).map(provider => (
             <div key={provider.id} data-testid={provider.id}>
-                <ProviderIcon identifier={provider.icon || provider.id} />
+                <ProviderIcon identifier={(provider as { icon?: string }).icon || provider.id} />
             </div>
         ))}</>);
         for (const provider of Object.values(catalog.providers)) {
@@ -29,6 +29,13 @@ describe('provider icon coverage', () => {
             expect(within(screen.getByTestId(issuer)).getByRole('img')).toHaveAttribute('alt');
         }
         expect(within(screen.getByTestId('chatgpt')).getByRole('img')).toHaveAttribute('alt', 'Codex');
+    });
+
+    it.each(['qoder', 'qoder_cn'])('uses the Qoder brand for %s', issuer => {
+        const identifier = providerIconId({ oauth_detail: { issuer } });
+        expect(identifier).toBe('qoder');
+        render(<ProviderIcon identifier={identifier!} />);
+        expect(screen.getByRole('img')).toHaveAttribute('alt', 'Qoder');
     });
 
     it.each(['light', 'dark'] as const)('keeps monochrome local brands legible in %s mode', mode => {

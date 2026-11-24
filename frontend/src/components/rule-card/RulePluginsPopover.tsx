@@ -3,7 +3,7 @@ import { Extension as ExtensionIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { RulePluginsList } from './RulePluginsCard';
 
 export interface RulePluginsPopoverProps {
@@ -44,7 +44,7 @@ export const RulePluginsPopover: React.FC<RulePluginsPopoverProps> = ({
         >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: fontSizes.xs, color: 'text.secondary' }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: fontSizes.micro, color: 'text.secondary' }}>
                     {t('ruleHeader.plugins')} ({enabled.length})
                 </Typography>
             </Box>

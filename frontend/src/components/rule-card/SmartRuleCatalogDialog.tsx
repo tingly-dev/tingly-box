@@ -41,8 +41,9 @@ import {
     timezoneOptions,
 } from './timeRange';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PositionMeta {
     value: SmartOp['position'];
@@ -63,6 +64,8 @@ const POSITION_OPTIONS: PositionMeta[] = [
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)', category: 'service', placeholder: 'ms' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)', category: 'service', placeholder: '0–100' },
     { value: 'service_quota', label: 'Service Quota', description: 'Tightest upstream quota usage across services (%)', category: 'service', placeholder: '0–100' },
+    { value: 'service_concurrency', label: 'Service Concurrency', description: 'In-flight requests vs the concurrency cap, tightest service (%)', category: 'service', placeholder: '0–100' },
+    { value: 'service_usage', label: 'Service Usage', description: 'Request/token window usage vs its budget, tightest service (%)', category: 'service', placeholder: '0–100' },
 ];
 
 const VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }> | undefined> = {
@@ -115,6 +118,18 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         { value: 'pct_ge', label: 'Quota ≥', description: 'Tightest quota usage across services >= value (%)', valueType: 'int' },
         { value: 'pct_lt', label: 'Quota <', description: 'Tightest quota usage across services < value (%)', valueType: 'int' },
         { value: 'pct_gt', label: 'Quota >', description: 'Tightest quota usage across services > value (%)', valueType: 'int' },
+    ],
+    service_concurrency: [
+        { value: 'util_le', label: 'Busy ≤', description: 'Tightest in-flight/cap ratio across services <= value (%)', valueType: 'int' },
+        { value: 'util_ge', label: 'Busy ≥', description: 'Tightest in-flight/cap ratio across services >= value (%)', valueType: 'int' },
+        { value: 'util_lt', label: 'Busy <', description: 'Tightest in-flight/cap ratio across services < value (%)', valueType: 'int' },
+        { value: 'util_gt', label: 'Busy >', description: 'Tightest in-flight/cap ratio across services > value (%)', valueType: 'int' },
+    ],
+    service_usage: [
+        { value: 'pct_le', label: 'Used ≤', description: 'Tightest usage-window consumption across services <= value (%)', valueType: 'int' },
+        { value: 'pct_ge', label: 'Used ≥', description: 'Tightest usage-window consumption across services >= value (%)', valueType: 'int' },
+        { value: 'pct_lt', label: 'Used <', description: 'Tightest usage-window consumption across services < value (%)', valueType: 'int' },
+        { value: 'pct_gt', label: 'Used >', description: 'Tightest usage-window consumption across services > value (%)', valueType: 'int' },
     ],
     'agent.claude_code': [
         { value: 'equals', label: 'Equals', description: 'Claude Code request kind equals the value', valueType: 'string' },
@@ -458,7 +473,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                         p: 1.5,
                                         border: '1px solid',
                                         borderColor: posOps.length > 0 ? 'primary.light' : 'divider',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         bgcolor: posOps.length > 0 ? 'action.hover' : 'transparent',
                                         transition: 'border-color 0.15s, background-color 0.15s',
                                     }}
@@ -507,7 +522,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                         sx={{
                                                             p: 1.25,
                                                             bgcolor: 'background.paper',
-                                                            borderRadius: 1,
+                                                            borderRadius: radius.row,
                                                             border: '1px solid',
                                                             borderColor: pulseOpUuid === op.uuid ? 'primary.main' : valid ? 'divider' : 'warning.light',
                                                             boxShadow: (theme) => pulseOpUuid === op.uuid ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}` : 'none',

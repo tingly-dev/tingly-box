@@ -4,15 +4,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/config"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -289,6 +295,137 @@ func TestProfileClaudeConfigLifecycle(t *testing.T) {
 	assert.Nil(t, cleared.ClaudeCode)
 }
 
+func TestDuplicateProfileEndpoint(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	router.POST("/scenario/:scenario/profiles/:id/duplicate", handler.DuplicateProfile)
+	post := func(id, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/scenario/claude_code/profiles/"+id+"/duplicate", bytes.NewReader([]byte(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	// An empty body is fine: the name is picked.
+	w := post(profile.ID, "")
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp struct {
+		Data typ.ProfileMeta `json:"data"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "work-copy", resp.Data.Name)
+	assert.NotEqual(t, profile.ID, resp.Data.ID)
+	copyScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, resp.Data.ID)
+	assert.NotEmpty(t, cfg.ClaudeCodeRuleUUID(copyScenario, "cc"))
+
+	// The copy gets its generated settings file, like a created profile.
+	settingsPath, _, err := agent.InspectCCProfileSettings(resp.Data.ID, resp.Data.Name)
+	assert.NoError(t, err)
+	_, statErr := os.Stat(settingsPath)
+	assert.NoError(t, statErr)
+
+	// "default" copies the main Claude Code config.
+	main := post("default", `{"name":"from-main"}`)
+	assert.Equal(t, http.StatusOK, main.Code, main.Body.String())
+	assert.Contains(t, main.Body.String(), `"from-main"`)
+
+	// A chunked body with nothing in it (ContentLength -1) is empty too.
+	chunked := httptest.NewRequest(http.MethodPost, "/scenario/claude_code/profiles/"+profile.ID+"/duplicate", io.NopCloser(bytes.NewReader(nil)))
+	chunked.ContentLength = -1
+	chunkedW := httptest.NewRecorder()
+	router.ServeHTTP(chunkedW, chunked)
+	assert.Equal(t, http.StatusOK, chunkedW.Code, chunkedW.Body.String())
+
+	assert.Equal(t, http.StatusOK, post(profile.ID, `{"name":"named"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"work"}`).Code, "taken name")
+	assert.Equal(t, http.StatusBadRequest, post(profile.ID, `{"name":"not valid"}`).Code)
+	assert.Equal(t, http.StatusNotFound, post("p99", `{}`).Code, "unknown source")
+	assert.Len(t, cfg.GetProfiles(typ.ScenarioClaudeCode), 5)
+}
+
+func TestProfileClaudeConfigKeepsSelectedValuesEqualToBase(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	mainDir := filepath.Join(homeDir, ".claude")
+	require.NoError(t, os.Mkdir(mainDir, 0700))
+	mainSettings := filepath.Join(mainDir, "settings.json")
+	require.NoError(t, os.WriteFile(mainSettings, []byte(`{
+		"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000","MCP_TIMEOUT":"1000"},
+		"permissions":{"defaultMode":"plan"}
+	}`), 0600))
+
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	require.NoError(t, err)
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	route := "/scenario/:scenario/profiles/:id/claude-config"
+	router.GET(route, handler.GetProfileClaudeConfig)
+	router.PUT(route, handler.UpdateProfileClaudeConfig)
+	endpoint := "/scenario/claude_code/profiles/" + profile.ID + "/claude-config"
+	request := func(method, body string) ProfileClaudeConfigData {
+		t.Helper()
+		req := httptest.NewRequest(method, endpoint, bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		result := httptest.NewRecorder()
+		router.ServeHTTP(result, req)
+		require.Equal(t, http.StatusOK, result.Code, result.Body.String())
+		var response ProfileClaudeConfigResponse
+		require.NoError(t, json.Unmarshal(result.Body.Bytes(), &response))
+		return response.Data
+	}
+
+	keys := []string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS", "DISABLE_TELEMETRY", "defaultMode"}
+	saved := request(http.MethodPut, `{
+		"preferences":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"64000","DISABLE_TELEMETRY":""},
+		"defaultMode":"plan",
+		"overrideKeys":["CLAUDE_CODE_MAX_OUTPUT_TOKENS","DISABLE_TELEMETRY","defaultMode"]
+	}`)
+	assert.True(t, saved.HasOverrides)
+	assert.Equal(t, keys, saved.OverrideKeys)
+	assert.Equal(t, saved.BasePreferences, saved.Preferences)
+	assert.Equal(t, saved.InheritedDefaultMode, saved.DefaultMode)
+
+	stored, ok := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+	require.True(t, ok)
+	require.NotNil(t, stored.ClaudeCode)
+	assert.Equal(t, map[string]string{"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000"}, stored.ClaudeCode.Env)
+	assert.Equal(t, []string{"DISABLE_TELEMETRY"}, stored.ClaudeCode.UnsetEnv)
+	assert.Equal(t, "plan", stored.ClaudeCode.DefaultMode)
+
+	require.NoError(t, os.WriteFile(mainSettings, []byte(`{
+		"env":{"CLAUDE_CODE_MAX_OUTPUT_TOKENS":"32000","DISABLE_TELEMETRY":"1","MCP_TIMEOUT":"2000"},
+		"permissions":{"defaultMode":"auto"}
+	}`), 0600))
+	reloaded := request(http.MethodGet, "")
+	assert.Equal(t, keys, reloaded.OverrideKeys)
+	assert.Equal(t, "64000", reloaded.Preferences.ClaudeCodeMaxOutputTokens)
+	assert.Empty(t, reloaded.Preferences.DisableTelemetry)
+	assert.Equal(t, "2000", reloaded.Preferences.McpTimeout)
+	assert.Equal(t, "plan", reloaded.DefaultMode)
+
+	cleared := request(http.MethodPut, `{"preferences":{},"overrideKeys":[]}`)
+	assert.False(t, cleared.HasOverrides)
+	assert.Equal(t, []string{}, cleared.OverrideKeys)
+	assert.Equal(t, cleared.BasePreferences, cleared.Preferences)
+	assert.Equal(t, cleared.InheritedDefaultMode, cleared.DefaultMode)
+}
+
 func TestScenarioTypes(t *testing.T) {
 	// Test ScenarioFlagUpdateRequest
 	flagReq := ScenarioFlagUpdateRequest{
@@ -418,4 +555,90 @@ func TestScenarioUpdateResponseStructure(t *testing.T) {
 	if response.Data.Scenario != "claude_code" {
 		t.Errorf("expected Scenario 'claude_code', got %q", response.Data.Scenario)
 	}
+}
+
+func TestUseClaudeCodeProfileEndpoint(t *testing.T) {
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiled := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profile.ID)
+	profileRule := cfg.GetRuleByUUID("builtin:" + string(profiled) + ":cc")
+	if profileRule == nil {
+		t.Fatal("profile has no cc rule")
+	}
+	provider := &typ.Provider{UUID: "work-prov", Name: "work-prov", APIBase: "https://example.invalid", APIStyle: protocol.APIStyleOpenAI, Token: "k", Enabled: true}
+	if err := cfg.AddProvider(provider); err != nil {
+		t.Fatal(err)
+	}
+	profileRule.Services = append(profileRule.Services, &loadbalance.Service{Provider: provider.UUID, Model: "work-model", Active: true})
+	if err := cfg.UpdateRule(profileRule.UUID, *profileRule); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	router.POST("/scenario/:scenario/claude-code/use-profile", handler.UseClaudeCodeProfile)
+	post := func(scenario, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/scenario/"+scenario+"/claude-code/use-profile", bytes.NewBufferString(body)))
+		return w
+	}
+
+	// Only the default can use a profile: not a profile, not another scenario.
+	assert.Equal(t, http.StatusBadRequest, post(string(profiled), `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post("openai", `{"profile":"work"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, post("claude_code", `{}`).Code)
+	assert.Equal(t, http.StatusNotFound, post("claude_code", `{"profile":"missing"}`).Code)
+	assert.Empty(t, cfg.GetRuleByUUID("builtin:claude_code:cc").Services, "a refused request changes nothing")
+
+	w := post("claude_code", `{"profile":"`+profile.ID+`"}`)
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	mainRule := cfg.GetRuleByUUID("builtin:claude_code:cc")
+	if assert.NotNil(t, mainRule) && assert.NotEmpty(t, mainRule.Services) {
+		assert.Equal(t, "work-model", mainRule.Services[0].Model)
+	}
+}
+
+// A Claude Code profile names the MCP profile its launches connect to; the
+// choice is validated and kept across other edits.
+func TestUpdateProfileMCPProfile(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	cfg, err := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	require.NoError(t, cfg.SetToolConfig(config.ToolTypeMCPRuntime, &typ.MCPRuntimeConfig{Profiles: []typ.MCPProfile{{ID: "prof-1a2b3c4d", Name: "Work"}}}))
+	profile, err := cfg.CreateProfile(typ.ScenarioClaudeCode, "work")
+	require.NoError(t, err)
+	handler := NewHandler(cfg, &mockRemoteControlController{})
+	router := gin.New()
+	router.PUT("/scenario/:scenario/profiles/:id", handler.UpdateProfile)
+	put := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/scenario/claude_code/profiles/"+profile.ID, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+	stored := func() string {
+		p, _ := cfg.GetProfile(typ.ScenarioClaudeCode, profile.ID)
+		return p.MCPProfile
+	}
+
+	require.Equal(t, "", stored(), "nothing is connected until the user chooses")
+	require.Equal(t, http.StatusOK, put(`{"mcp_profile":"prof-1a2b3c4d"}`).Code)
+	require.Equal(t, "prof-1a2b3c4d", stored())
+	require.Equal(t, http.StatusBadRequest, put(`{"mcp_profile":"prof-missing"}`).Code)
+	require.Equal(t, "prof-1a2b3c4d", stored(), "a refused choice changes nothing")
+	require.Equal(t, http.StatusOK, put(`{"name":"work"}`).Code)
+	require.Equal(t, "prof-1a2b3c4d", stored(), "an edit without the field keeps the choice")
+	require.Equal(t, http.StatusOK, put(`{"mcp_profile":"default"}`).Code)
+	require.Equal(t, "default", stored())
+	require.Equal(t, http.StatusOK, put(`{"mcp_profile":""}`).Code)
+	require.Equal(t, "", stored())
 }

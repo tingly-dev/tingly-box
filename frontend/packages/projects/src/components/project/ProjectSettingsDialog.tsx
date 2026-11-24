@@ -1,23 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
-    Alert, Autocomplete, Box, Button, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack,
-    Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Typography,
+    Alert, Autocomplete, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Stack, Switch,
+    Tab, TableHead, TableRow, Tabs, TextField, Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { EmptyState } from '@tingly/ui';
 import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type Usage } from '../../client';
 import { TextEditDialog } from '../TextEditDialog';
-import { Add, Close, Delete, Description } from '../icons';
+import { Add, Close, Delete, Description, Duplicate } from '../icons';
+import { ForkProjectDialog } from './ForkProjectDialog';
 import { useModels } from '../../hooks/useModels';
 import { useNotify } from '../../hooks/useNotify';
 import { useProjectsHost } from '../../host/ProjectsHost';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
-import { RepoField, type RepoEntry } from './RepoField';
+import { usageEntries } from '../usage/usageData';
+import { UsageCard, UsageHeadCell, UsageRows, UsageStatStrip } from '../usage/UsageViews';
+import { directoryPayload, primaryPath, projectDirectories, RepoField, type RepoEntry } from './RepoField';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
 export type SettingsTab = 'general' | 'memory' | 'environment' | 'usage';
 
 const MAX_INSTRUCTIONS = 16000;
+// Until the server reports its limit (/projects/runtime).
+const MAX_RUNNING_FALLBACK = 100;
+// The groups of GitHub writes a project can let its threads do on their own,
+// in the order the server lists them (project.GitHubGroups).
+const GITHUB_GROUPS = ['publish', 'rewrite', 'others', 'close', 'merge'] as const;
 const mono = { fontFamily: fontMono } as const;
 
 type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'];
@@ -40,44 +49,92 @@ function ModelField({ label, value, onChange, help }: { label: string; value: st
     );
 }
 
-function General({ project, patch }: { project: Project; patch: (p: Patch) => Promise<void> }) {
+/** One settings action: what it does on the left, its button on the right. */
+function ActionRow({ title, help, action }: { title: string; help: string; action: ReactNode }) {
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ flex: 1 }}>
+                <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{title}</Typography>
+                <Typography variant="body2" color="text.secondary">{help}</Typography>
+            </Box>
+            {action}
+        </Box>
+    );
+}
+
+function General({ project, patch, onFork }: { project: Project; patch: (p: Patch) => Promise<void>; onFork: () => void }) {
     const { t } = useTranslation('projects');
+    const { session } = useProjectsHost();
     const [name, setName] = useState(project.name);
     const [goal, setGoal] = useState(project.goal);
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
-    const dirty = name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits');
+    const savedGithub = GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g));
+    const [github, setGithub] = useState<string[]>(savedGithub);
+    const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
+    const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
+    useEffect(() => {
+        unwrap(api.GET('/api/v1/projects/runtime')).then((r) => setMaxLimit(r.max_running_threads_limit)).catch(() => {});
+    }, []);
+    const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
+    const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || github.join() !== savedGithub.join();
 
     return (
         <Stack spacing={2.5}>
             <TextField label={t('project.name')} value={name} onChange={(e) => setName(e.target.value)} fullWidth />
             <TextField label={t('project.goal')} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t('project.goalPlaceholder')} helperText={t('project.goalHelp')} fullWidth />
-            <ModelField label={t('projectSettings.coordinatorModel')} value={coord} onChange={setCoord} help={t('projectSettings.coordinatorModelHelp')} />
-            <ModelField label={t('projectSettings.threadModel')} value={threadModel} onChange={setThreadModel} help={t('projectSettings.threadModelHelp')} />
+            {!session?.launchPickers && <ModelField label={t('projectSettings.coordinatorModel')} value={coord} onChange={setCoord} help={t('projectSettings.coordinatorModelHelp')} />}
+            {!session?.launchPickers && <ModelField label={t('projectSettings.threadModel')} value={threadModel} onChange={setThreadModel} help={t('projectSettings.threadModelHelp')} />}
             <TextField select label={t('projectSettings.permissionMode')} value={mode} onChange={(e) => setMode(e.target.value as Mode)} helperText={t(`projectSettings.mode.${mode}Help`)}>
                 {['acceptEdits', 'default', 'auto', 'bypassPermissions'].map((m) => (
                     <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
                 ))}
             </TextField>
+            <Box role="group" aria-label={t('projectSettings.githubAuto')}>
+                <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('projectSettings.githubAuto')}</Typography>
+                <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                    {GITHUB_GROUPS.map((g) => (
+                        <Box key={g} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography sx={{ color: 'text.primary' }}>{t(`projectSettings.githubGroups.${g}`)}</Typography>
+                                <Typography variant="body2" color="text.secondary">{t(`projectSettings.githubGroups.${g}Help`)}</Typography>
+                            </Box>
+                            <Switch checked={github.includes(g)} onChange={(_, on) => setGithub(GITHUB_GROUPS.filter((x) => (x === g ? on : github.includes(x))))}
+                                slotProps={{ input: { 'aria-label': t(`projectSettings.githubGroups.${g}`) } }} />
+                        </Box>
+                    ))}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{t('projectSettings.githubAutoFoot')}</Typography>
+            </Box>
+            <TextField label={t('projectSettings.maxRunning')} value={maxRunning} onChange={(e) => setMaxRunning(e.target.value)} error={runningInvalid}
+                helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
+                slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="contained" disabled={!dirty || !name.trim()} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode })}>{t('common.save')}</Button>
+                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, github_auto: github, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('projectSettings.pauseHelp')}</Typography>
-                </Box>
-                <Button variant="outlined" onClick={() => void patch({ paused: !project.paused })}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Button>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Typography>
-                    <Typography variant="body2" color="text.secondary">{t('projectSettings.archiveHelp')}</Typography>
-                </Box>
-                <Button variant="outlined" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>
-            </Box>
+            <ActionRow
+                title={project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}
+                help={t('projectSettings.pauseHelp')}
+                action={<Button variant="outlined" onClick={() => void patch({ paused: !project.paused })}>{project.paused ? t('projectSettings.resume') : t('projectSettings.pause')}</Button>}
+            />
+            <ActionRow
+                title={project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}
+                help={t('projectSettings.archiveHelp')}
+                action={<Button variant="outlined" onClick={() => void patch({ archived: !project.archived_at })}>{project.archived_at ? t('projectSettings.unarchive') : t('projectSettings.archive')}</Button>}
+            />
+            {project.type !== 'folder' && (
+                <>
+                    <Divider />
+                    <ActionRow
+                        title={t('projectSettings.fork')}
+                        help={t('projectSettings.forkHelp')}
+                        action={<Button variant="outlined" startIcon={<Duplicate />} onClick={onFork}>{t('projectSettings.fork')}</Button>}
+                    />
+                </>
+            )}
         </Stack>
     );
 }
@@ -178,18 +235,19 @@ function Environment({ project, patch }: { project: Project; patch: (p: Patch) =
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/runtime')).then(setRuntime).catch(() => {});
     }, []);
-    const initial = project.repos.map((r) => ({ root: r.path, branch: r.base_branch }));
+    const initial = projectDirectories(project);
     const [repos, setRepos] = useState<RepoEntry[]>(initial);
-    useEffect(() => setRepos(project.repos.map((r) => ({ root: r.path, branch: r.base_branch }))), [project.repos]);
-    const dirty = JSON.stringify(repos.map((r) => r.root)) !== JSON.stringify(initial.map((r) => r.root));
+    const [primary, setPrimary] = useState(primaryPath(project));
+    useEffect(() => { setRepos(projectDirectories(project)); setPrimary(primaryPath(project)); }, [project.repos, project.primary_repo_path]);
+    const dirty = JSON.stringify(directoryPayload(repos, primary)) !== JSON.stringify(directoryPayload(initial, primaryPath(project)));
     return (
         <Stack spacing={2}>
             <Box>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('project.repos')}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('projectSettings.reposHelp')}</Typography>
-                <RepoField value={repos} onChange={setRepos} />
+                <RepoField value={repos} onChange={setRepos} primary={primary} onPrimaryChange={setPrimary} />
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                    <Button variant="contained" disabled={!dirty} onClick={() => void patch({ repos: repos.map((r) => r.root) })}>{t('common.save')}</Button>
+                    <Button variant="contained" disabled={!dirty} onClick={() => void patch(directoryPayload(repos, primary))}>{t('common.save')}</Button>
                 </Box>
             </Box>
             <Divider />
@@ -218,26 +276,53 @@ function UsageTab({ projectId }: { projectId: string }) {
     useEffect(() => {
         unwrap(api.GET('/api/v1/projects/{id}/usage', { params: { path: { id: projectId } } })).then(setUsage).catch(() => {});
     }, [projectId]);
-    if (!usage) return null;
+    if (!usage) {
+        return (
+            <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}>
+                <CircularProgress size={24} aria-label={t('projectSettings.usage.loading')} />
+            </Box>
+        );
+    }
+    const { models, threads, totals } = usageEntries(usage);
+    if (models.length === 0 && threads.length === 0) {
+        return <EmptyState compact title={t('projectSettings.usage.emptyTitle')} description={t('projectSettings.usage.emptyBody')} />;
+    }
+    // Compact strings carry the tile and cells; the exact figures ride on
+    // title attributes for the hover.
+    const exact = (n: number) => ({ value: formatTokens(n), title: String(n) });
     return (
         <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">{t('projectSettings.usageHelp')}</Typography>
-            <Table size="small">
-                <TableHead><TableRow><TableCell>{t('projectSettings.model')}</TableCell><TableCell align="right">{t('overview.threads')}</TableCell><TableCell align="right">In</TableCell><TableCell align="right">Out</TableCell></TableRow></TableHead>
-                <TableBody>
-                    {usage.by_model.map((m) => (
-                        <TableRow key={m.model}><TableCell sx={mono}>{m.model || '—'}</TableCell><TableCell align="right">{m.threads}</TableCell><TableCell align="right">{formatTokens(m.input_tokens)}</TableCell><TableCell align="right">{formatTokens(m.output_tokens)}</TableCell></TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-            <Table size="small">
-                <TableHead><TableRow><TableCell>{t('projectSettings.thread')}</TableCell><TableCell align="right">{t('projectSettings.turns')}</TableCell><TableCell align="right">In</TableCell><TableCell align="right">Out</TableCell></TableRow></TableHead>
-                <TableBody>
-                    {usage.by_thread.map((u) => (
-                        <TableRow key={u.thread_id}><TableCell>{u.title}</TableCell><TableCell align="right">{u.turns}</TableCell><TableCell align="right">{formatTokens(u.input_tokens)}</TableCell><TableCell align="right">{formatTokens(u.output_tokens)}</TableCell></TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+            <Typography variant="body2" color="text.secondary">{t('projectSettings.usage.help')}</Typography>
+            <UsageStatStrip stats={[
+                { label: t('projectSettings.usage.totalTokens'), ...exact(totals.total) },
+                { label: t('projectSettings.usage.input'), ...exact(totals.input) },
+                { label: t('projectSettings.usage.output'), ...exact(totals.output) },
+                { label: t('projectSettings.usage.threads'), value: String(totals.threads) },
+            ]} />
+            <UsageCard title={t('projectSettings.usage.models')} count={models.length} maxHeight={280}>
+                <TableHead>
+                    <TableRow>
+                        <UsageHeadCell label={t('projectSettings.usage.model')} />
+                        <UsageHeadCell label={t('projectSettings.usage.threads')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.share')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.in')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.out')} numeric />
+                    </TableRow>
+                </TableHead>
+                <UsageRows rows={models} countTitle={t('projectSettings.usage.threads')} formatTokens={formatTokens} />
+            </UsageCard>
+            <UsageCard title={t('projectSettings.usage.threads')} count={threads.length} maxHeight={320}>
+                <TableHead>
+                    <TableRow>
+                        <UsageHeadCell label={t('projectSettings.usage.thread')} />
+                        <UsageHeadCell label={t('projectSettings.usage.turns')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.share')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.in')} numeric />
+                        <UsageHeadCell label={t('projectSettings.usage.out')} numeric />
+                    </TableRow>
+                </TableHead>
+                <UsageRows rows={threads} countTitle={t('projectSettings.usage.turns')} formatTokens={formatTokens} />
+            </UsageCard>
         </Stack>
     );
 }
@@ -256,6 +341,7 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
     const { t } = useTranslation('projects');
     const notify = useNotify();
     const { onProjectsChanged } = useProjectsHost();
+    const [forking, setForking] = useState(false);
     const patch = async (body: Patch) => {
         try {
             const p = await unwrap(api.PATCH('/api/v1/projects/{id}', { params: { path: { id: project.id } }, body }));
@@ -272,18 +358,20 @@ export function ProjectSettingsDialog({ project, open, tab, onTab, onClose, onCh
                 <Box component="span" sx={{ flex: 1 }}>{t('projectSettings.title')}</Box>
                 <IconButton onClick={onClose} aria-label={t('common.close')}><Close /></IconButton>
             </DialogTitle>
-            <Tabs value={tab} onChange={(_, v) => onTab(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs value={tab} onChange={(_, v) => onTab(v)} variant="scrollable" scrollButtons="auto" sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
                 <Tab value="general" label={t('projectSettings.tabGeneral')} />
                 <Tab value="memory" label={t('projectSettings.tabMemory')} />
                 <Tab value="environment" label={t('projectSettings.tabEnvironment')} />
                 <Tab value="usage" label={t('projectSettings.tabUsage')} />
             </Tabs>
             <DialogContent sx={{ pt: 2.5 }}>
-                {tab === 'general' && <General project={project} patch={patch} />}
+                {tab === 'general' && <General project={project} patch={patch} onFork={() => setForking(true)} />}
                 {tab === 'memory' && <Memory project={project} patch={patch} refreshKey={memoryKey} />}
                 {tab === 'environment' && <Environment project={project} patch={patch} />}
                 {tab === 'usage' && <UsageTab projectId={project.id} />}
             </DialogContent>
+            {/* Forking can only be armed from General's guarded row above. */}
+            <ForkProjectDialog project={project} open={forking} onClose={() => setForking(false)} onForked={onClose} />
         </Dialog>
     );
 }

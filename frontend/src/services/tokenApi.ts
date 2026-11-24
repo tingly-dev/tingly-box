@@ -111,6 +111,14 @@ export const tokenApi = {
             body: data,
         })),
 
+    // Copy a Team's routing into a new Team (Team Keys are not copied). An empty name lets the backend pick "<name> copy".
+    duplicateTeam: async (teamId: string, name?: string): Promise<any> =>
+        teamApiCall((client, headers) => client.POST('/api/v1/teams/{team_id}/duplicate', {
+            headers,
+            params: {path: {team_id: teamId}},
+            body: name ? {name} : {},
+        })),
+
     setTeamEnabled: async (teamId: string, enabled: boolean): Promise<any> =>
         teamApiCall((client, headers) => enabled
             ? client.PUT('/api/v1/teams/{team_id}/enable', {headers, params: {path: {team_id: teamId}}})

@@ -10,7 +10,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	servertransform "github.com/tingly-dev/tingly-box/internal/protocolserver/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertransform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -54,7 +54,7 @@ type mcpTransformCache struct {
 func (ph *ProtocolHandler) mcpChainTransforms(stripEnabled bool) []transform.Transform {
 	ph.mcpTC.once.Do(func() {
 		rt := ph.deps.MCPRuntime
-		ph.mcpTC.injection = servertransform.NewMCPToolInjectionTransform(rt).WithConnectedTools(ph.mcpEnabled)
+		ph.mcpTC.injection = servertransform.NewMCPToolInjectionTransform(rt)
 		ph.mcpTC.strip = servertransform.NewNativeWebSearchStripTransform(rt)
 		ph.mcpTC.guardOn = servertransform.NewMCPToolStripGuardTransform(rt, true)
 		ph.mcpTC.guardOff = servertransform.NewMCPToolStripGuardTransform(rt, false)

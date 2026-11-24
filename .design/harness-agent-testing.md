@@ -1,22 +1,22 @@
 # Runbook — tingly-box 阶段验收基线
 
-> 一个开发阶段结束后、发 PR 前的**真实补充测试**操作手册。
-> 入口：`scripts/harness-baseline.sh`；全量命令参考 [`cli/harness/README.md`](../cli/harness/README.md)。
+> 一个开发阶段结束后、发 PR 前的 **真实补充测试**操作手册。
+> 入口：`tests/harness-baseline.sh`；全量命令参考 [`cli/harness/README.md`](../cli/harness/README.md)。
 
 ## 这套测试是什么 / 不是什么
 
 - **是**：用**真实 agent CLI**（claude / codex / opencode）打**真实 tingly-box gateway**，跑一遍
   数据面（协议转换 + 路由 + dispatch + 真实上游）。
 - **不是 CI**：依赖开发者本机的 agent CLI，以及（真实模式下）provider 凭证。CI 侧的 hermetic
-  覆盖在 `.github/workflows/harness-matrix.yml`；本基线是它的**真实补充**——CI 保证协议函数对，
+  覆盖在 `.github/workflows/harness-template.yml`（每日 `daily.yml` 与发版门禁调用）；本基线是它的**真实补充**——CI 保证协议函数对，
   本基线保证「真实 agent 接进来真的能用」。
 
 两条路径（都在 harness 的 Tier C `agent` 命令里）：
 
 | 路径 | 命令 | 上游 | 依赖 | 何时用 |
 |---|---|---|---|---|
-| **mock 冒烟** | `--mock` | 进程内 vmodel 虚拟上游 | 仅本地 CLI | 每次先跑，零配置 |
-| **真实扫描** | `--config providers.yaml` | 真实 provider | 本地 CLI + 凭证 | 接入真实 provider 后 |
+| **mock 冒烟** | `--mock` | 进程内 VirtualServer mock 上游（`virtual`，非 vmodel provider） | 仅本地 CLI | 每次先跑，零配置 |
+| **真实扫描** | `--providers providers.yaml` | 真实 provider | 本地 CLI + 凭证 | 接入真实 provider 后 |
 
 ---
 
@@ -26,10 +26,10 @@
 ./scripts/harness-baseline.sh
 ```
 
-build harness → 预检三个 CLI 在 PATH → 跑 `agent batch --mock`（claude/codex/opencode 各一次，vmodel
-虚拟上游）→ 打印汇总表 + 写产物。分钟级（opencode 因 bun 启动较慢，单条 ~15–20s）。
+build harness → 预检三个 CLI 在 PATH → 跑 `agent batch --mock`（claude/codex/opencode 各一次，VirtualServer
+mock 上游）→ 打印汇总表 + 写产物。分钟级（opencode 因 bun 启动较慢，单条 ~15–20s）。
 
-绿了 = 数据面在 vmodel 虚拟上游下三个真实 agent CLI 都能跑通（协议转换 + 规则匹配 + dispatch +
+绿了 = 数据面在 VirtualServer mock 上游下三个真实 agent CLI 都能跑通（协议转换 + 规则匹配 + dispatch +
 响应回写），且输出含真实回答内容（不只 exit 0）。
 
 ## 2. 配置 `providers.yaml`（真实测试用）
@@ -148,12 +148,12 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 **直接用 harness**（跳过 mock / 精细控制）：
 
 ```bash
-./harness agent batch  --config providers.yaml                  # 全部 agent × 全部 provider×model
-./harness agent claude --config providers.yaml                   # 单 agent
-./harness agent claude --config providers.yaml "你的 prompt"     # + CLI prompt（覆盖 yaml）
-./harness agent claude --config providers.yaml --filter anthropic  # 指定 agent 只跑指定 provider（按 name，含其全部 model）
-./harness agent batch  --config providers.yaml --filter anthropic,openai  # 全部 agent 只跑指定 provider
-./harness agent batch  --config providers.yaml --timeout 5m      # 放宽每条超时（默认 2m）
+./harness agent batch  --providers providers.yaml                  # 全部 agent × 全部 provider×model
+./harness agent claude --providers providers.yaml                   # 单 agent
+./harness agent claude --providers providers.yaml "你的 prompt"     # + CLI prompt（覆盖 yaml）
+./harness agent claude --providers providers.yaml --filter anthropic  # 指定 agent 只跑指定 provider（按 name，含其全部 model）
+./harness agent batch  --providers providers.yaml --filter anthropic,openai  # 全部 agent 只跑指定 provider
+./harness agent batch  --providers providers.yaml --timeout 5m      # 放宽每条超时（默认 2m）
 ```
 
 ## 4. 读结果
@@ -172,8 +172,8 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 ```bash
 ./scripts/harness-baseline.sh --real providers.yaml --only-failing    # 只重跑 FAIL/TIMEOUT 的条目
 ./scripts/harness-baseline.sh --real providers.yaml --resume          # 跳过已记录的，补跑没跑过的
-./harness agent batch --config providers.yaml --only-failing          # 直接 harness 形式
-./harness agent batch --config providers.yaml --resume ""
+./harness agent batch --providers providers.yaml --only-failing          # 直接 harness 形式
+./harness agent batch --providers providers.yaml --resume ""
 ```
 
 `--only-failing` 与 `--resume` 互斥。CSV 是 **append-only**：重跑只追加新行，看结果取最新一行。
@@ -224,7 +224,7 @@ agent CLI。真实扫描的失败**不阻塞** mock 结论，但反映在退出�
 | `2` | 环境错误（CLI 缺失 / build 失败 / config 不存在）|
 
 本基线**不进 CI**（依赖本地凭证 + CLI）。CI hermetic 覆盖见
-`.github/workflows/harness-matrix.yml`（matrix / replay virtual+vmodel / lb / duo / routing，
+`.github/workflows/harness-template.yml`（matrix / replay virtual+vmodel / lb / duo / routing，
 详见 [`cli/harness/README.md`](../cli/harness/README.md) 的 `CI` 一节）；
 真实扫描留作 manual / nightly，因为需要真实凭证、结果不确定。
 
@@ -242,8 +242,8 @@ $EDITOR providers.yaml                              # 填 apikey、留想测的 
 ./scripts/harness-baseline.sh --real providers.yaml # 跑（mock + real）
 
 # 精细控制（直接 harness，跳过 mock）
-./harness agent batch --config providers.yaml --filter anthropic,openai --timeout 5m
-./harness agent claude --config providers.yaml "自定义 prompt"
+./harness agent batch --providers providers.yaml --filter anthropic,openai --timeout 5m
+./harness agent claude --providers providers.yaml "自定义 prompt"
 
 # 重跑红的 / 续跑
 ./scripts/harness-baseline.sh --real providers.yaml --only-failing

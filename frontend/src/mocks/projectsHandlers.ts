@@ -1,4 +1,5 @@
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
+import { resolveMockDataProfile } from './mockConfig'
 
 // Mock-mode data for Projects (/api/v1/projects and /api/v1/threads,
 // @tingly/projects): a few projects in different states, one of them with a
@@ -16,7 +17,7 @@ type Proj = {
     name: string; goal: string; instructions: string; paused: boolean; starred: boolean
     repos: { path: string; base_branch: string }[]; coordinator_model: string; thread_model: string
     coordinator_effort: string; thread_effort: string
-    thread_permission_mode: string; created_at: string; updated_at: string; archived_at?: string
+    thread_permission_mode: string; github_auto: string[]; max_running_threads: number; created_at: string; updated_at: string; archived_at?: string
 }
 
 const projects: Proj[] = [
@@ -24,19 +25,19 @@ const projects: Proj[] = [
         id: 'p-latency', type: 'project', main_thread_id: 'main-p-latency', name: 'Payments API latency', goal: 'Get p99 of /charge under 300 ms without dropping retries.',
         instructions: 'Keep changes behind the existing feature flags.', paused: false, starred: true,
         repos: [repo('/Users/me/code/payments-api'), repo('/Users/me/code/payments-sdk')],
-        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits',
+        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits', github_auto: ['publish'], max_running_threads: 4,
         created_at: ago(60 * 26), updated_at: ago(4),
     },
     {
         id: 'p-docs', type: 'project', main_thread_id: 'main-p-docs', name: 'Docs refresh', goal: 'Every public endpoint documented with a runnable example.',
         instructions: '', paused: false, starred: false, repos: [repo('/Users/me/code/website')],
-        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-haiku-4-5', coordinator_effort: '', thread_effort: '', thread_permission_mode: 'default',
+        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-haiku-4-5', coordinator_effort: '', thread_effort: '', thread_permission_mode: 'default', github_auto: [], max_running_threads: 4,
         created_at: ago(60 * 24 * 5), updated_at: ago(60 * 3),
     },
     {
         id: 'p-migrate', type: 'project', main_thread_id: 'main-p-migrate', name: 'Postgres 17 migration', goal: 'Move every service off Postgres 13 with zero downtime.',
         instructions: '', paused: true, starred: false, repos: [repo('/Users/me/code/infra')],
-        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-sonnet-4-5', coordinator_effort: '', thread_effort: 'max', thread_permission_mode: 'default',
+        coordinator_model: 'claude-sonnet-4-5', thread_model: 'claude-sonnet-4-5', coordinator_effort: '', thread_effort: 'max', thread_permission_mode: 'default', github_auto: [], max_running_threads: 2,
         created_at: ago(60 * 24 * 12), updated_at: ago(60 * 24 * 2),
     },
 ]
@@ -44,7 +45,7 @@ const projects: Proj[] = [
 // Working folders: projects of type folder (no goal, memory or main thread).
 const folderProject = (id: string, path: string, min: number): Proj => ({
     id, type: 'folder', path, name: path.split('/').pop() ?? path, goal: '', instructions: '', paused: false, starred: false, repos: [],
-    coordinator_model: '', thread_model: '', coordinator_effort: '', thread_effort: '', thread_permission_mode: '', created_at: ago(60 * 24 * 3), updated_at: ago(min),
+    coordinator_model: '', thread_model: '', coordinator_effort: '', thread_effort: '', thread_permission_mode: '', github_auto: [], max_running_threads: 0, created_at: ago(60 * 24 * 3), updated_at: ago(min),
 })
 projects.push(
     folderProject('f-notes', '/Users/me/code/notes-app', 2),
@@ -52,19 +53,53 @@ projects.push(
     folderProject('f-scratch', '/Users/me/scratch', 60 * 30),
 )
 
+// What a thread's turns spent, derived from its turn count and tokens so every mock thread carries a plausible status.
+const usageOf = (o: { turns?: unknown; input_tokens?: unknown; updated_at?: unknown }) => {
+    const turns = Number(o.turns ?? 0)
+    const input = Number(o.input_tokens ?? 0)
+    return {
+        cache_read_tokens: Math.round(input * 0.72), cache_write_tokens: Math.round(input * 0.04),
+        context_tokens: turns > 0 ? Math.min(188_000, 24_000 + turns * 11_000) : 0, context_window: 200_000,
+        last_turn_ms: turns > 0 ? 2_400 + turns * 1_300 : 0, last_turn_at: turns > 0 ? (o.updated_at as string) : undefined,
+    }
+}
+
 const thread = (o: Partial<Record<string, unknown>> & { id: string; title: string; status: string; task: string }) => ({
     project_id: 'p-latency', parent_id: 'main-p-latency', seq: 1, agent: 'claude-code', origin: 'coordinator', commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0,
     turns: 0, uncommitted: false, cwd: `/Users/me/.tingly-box/projects/p-latency/threads/${o.id}`,
     repo_path: '/Users/me/code/payments-api', base_branch: 'main', branch: `projects/${o.id}`,
-    model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), ...o,
+    model: 'claude-sonnet-4-5', reported_model: 'claude-sonnet-4-5', created_at: ago(90), updated_at: ago(5), session_id: `${(o.id as string).length.toString(16).padStart(2, '0')}c9d5e7a-4b1e-4f7a-9d0e-5a2b7c3d8e9f`,
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0,
+    // A turn that has started takes messages mid-turn; one still waiting for a project slot cannot.
+    insertable: o.status === 'working' && !o.queued, ...o,
+})
+// A worker owns the launch settings copied from its project's defaults when it started.
+const pinned = (projectId: string) => {
+    const p = projects.find((x) => x.id === projectId)
+    return { profile_override: '', model_override: p?.thread_model ?? '', effort_override: p?.thread_effort ?? '', permission_mode: p?.thread_permission_mode || 'acceptEdits' }
+}
+const threadWithUsage = (o: Parameters<typeof thread>[0]) => { const t = { ...thread(o), ...pinned((o.project_id as string | undefined) ?? 'p-latency') }; return { ...t, ...usageOf(t), ...o } }
+
+// Issues and PRs a thread opened through its tools, as the server last read them.
+const link = (o: Partial<Record<string, unknown>> & { number: number; title: string }) => ({
+    kind: 'pr', repo: 'acme/payments-api', url: `https://github.com/acme/payments-api/pull/${o.number}`,
+    role: 'opened', state: 'open', refreshed_at: ago(3), attempted_at: ago(3), created_at: ago(40), ...o,
 })
 
+type MockLink = ReturnType<typeof link>
+
 const threads = [
-    thread({ id: 't-pool', title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
-    thread({ id: 't-cache', title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18) }),
-    thread({ id: 't-sdk', title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1) }),
-    thread({ id: 't-backoff', title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
-    thread({ id: 't-trace', title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20) }),
+    threadWithUsage({ id: 't-pool', seq: 1, title: 'Tune the DB connection pool', status: 'waiting', task: 'Profile /charge and size the connection pool for peak load.', wait_reason: 'Allow `go test ./... -run Bench` to run against staging?', turns: 9, input_tokens: 182_000, output_tokens: 9_400, commits_ahead: 1, files_changed: 2, updated_at: ago(4) }),
+    threadWithUsage({ id: 't-cache', seq: 2, title: 'Cache idempotency keys in Redis', status: 'ready', task: 'Move idempotency-key lookups from Postgres to Redis with a 24h TTL.', last_report: 'Lookups moved to Redis behind `IDEMPOTENCY_REDIS`. p99 for /charge drops from 410 ms to 260 ms in the load test. Tests pass.', turns: 14, input_tokens: 240_000, output_tokens: 15_100, commits_ahead: 3, files_changed: 6, updated_at: ago(18),
+        links: [link({ number: 212, title: 'Read idempotency keys through an interface', head: 'projects/t-cache-iface', base: 'main', state: 'merged', refreshed_at: ago(10), created_at: ago(60) }), link({ number: 214, title: 'Cache idempotency keys in Redis', head: 'projects/t-cache', base: 'main', ci: 'failing', merge_state: 'blocked',
+            checks: { passing: 11, failing: 2, pending: 1, failed: [{ name: 'go test ./... (race)', url: 'https://github.com/acme/payments-api/actions/runs/1' }, { name: 'lint / golangci', url: 'https://github.com/acme/payments-api/actions/runs/2' }] } }), link({ number: 209, kind: 'issue', title: 'Idempotency lookups dominate /charge p99', url: 'https://github.com/acme/payments-api/issues/209', created_at: ago(70) })] }),
+    threadWithUsage({ id: 't-sdk', seq: 3, title: 'Retry budget in the SDK', status: 'working', task: 'Cap client retries with a token bucket so retries cannot amplify an outage.', repo_path: '/Users/me/code/payments-sdk', turns: 5, input_tokens: 64_000, output_tokens: 3_100, files_changed: 1, uncommitted: true, updated_at: ago(1),
+        links: [link({ number: 37, head: 'projects/t-sdk', base: 'main', repo: 'acme/payments-sdk', url: 'https://github.com/acme/payments-sdk/pull/37', title: 'Retry budget in the SDK', draft: true, ci: 'pending', merge_state: 'unknown', created_at: ago(6) })] }),
+    // Over the project's limit: its turn waits for a free slot.
+    threadWithUsage({ id: 't-queued', seq: 4, title: 'Audit logging for refunds', status: 'working', queued: true, task: 'Add audit log entries for every refund path.', updated_at: ago(0) }),
+    threadWithUsage({ id: 't-backoff', seq: 5, title: 'Pick a retry backoff', status: 'waiting', task: 'Choose how the SDK backs off between retries and wire it in.', repo_path: '/Users/me/code/payments-sdk', wait_reason: 'Which backoff should retries use?', turns: 3, input_tokens: 38_000, output_tokens: 1_900, updated_at: ago(2) }),
+    threadWithUsage({ id: 't-trace', seq: 6, title: 'Add tracing spans to /charge', status: 'resolved', task: 'Add OpenTelemetry spans around each downstream call in /charge.', turns: 7, input_tokens: 90_000, output_tokens: 6_200, commits_ahead: 2, files_changed: 4, merged_at: ago(60 * 20), resolved_at: ago(60 * 20), updated_at: ago(60 * 20),
+        links: [link({ number: 201, title: 'Add tracing spans to /charge', head: 'projects/t-trace', base: 'main', state: 'merged', refreshed_at: ago(60 * 20), created_at: ago(60 * 22) })] }),
 ]
 
 // A thread's transcript: the coordinator's brief, then what the thread did.
@@ -89,6 +124,7 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ev('assistant', 'Raised the pool to 40 open / 10 idle. To confirm under load I need to run the benchmark against staging.', 5),
             ev('tool_use', 'Bash', 4, { payload: JSON.stringify({ command: 'go test ./... -run Bench -staging' }) }),
             ev('approval', 'Run go test ./... -run Bench -staging', 4, { payload: JSON.stringify({ request_id: 'req-pool', tool: 'Bash', input: { command: 'go test ./... -run Bench -staging' }, state: 'pending' }) }),
+            ev('approval', 'Edit bench/results.md', 4, { payload: JSON.stringify({ request_id: 'req-pool-notes', tool: 'Edit', input: { file_path: 'bench/results.md' }, state: 'pending' }) }),
         ]
     }
     if (th.id === 't-backoff') {
@@ -109,6 +145,12 @@ const threadEvents = (th: (typeof threads)[number]) => {
     if (th.id === 't-sdk') {
         return [
             ev('user', th.task, 3, { source: 'thread', source_ref: 'main-p-latency' }),
+            ...call('TaskCreate', { subject: 'Inspect the retry loop' }, 'Task #1 created successfully: Inspect the retry loop', 3),
+            ...call('TaskUpdate', { taskId: '1', status: 'completed' }, 'Updated task #1', 3),
+            ...call('TaskCreate', { subject: 'Add retry budget', activeForm: 'Adding retry budget' }, 'Task #2 created successfully: Add retry budget', 3),
+            ...call('TaskCreate', { subject: 'Run client tests' }, 'Task #3 created successfully: Run client tests', 3),
+            ...call('TaskCreate', { subject: 'Document the rollout' }, 'Task #4 created successfully: Document the rollout', 3),
+            ...call('TaskUpdate', { taskId: '2', status: 'in_progress' }, 'Updated task #2', 3),
             ...call('Read', { file_path: 'client/retry.go' }, 'for attempt := 0; attempt < max; attempt++ {', 3),
             ev('assistant', 'Adding a token bucket in front of the retry loop; refills at 10% of the request rate.', 2),
             ...call('Edit', { file_path: 'client/budget.go' }, 'Created budget.go', 2),
@@ -130,6 +172,8 @@ const threadEvents = (th: (typeof threads)[number]) => {
             ev('user', 'Also keep the Postgres path as a fallback.', 25),
             ev('assistant', report, 18),
             ev('report', report, 18, { payload: '{"commits_ahead":3,"files_changed":6}' }),
+            // Its first PR merged on GitHub: the coordinator was told (m7f) and answered (m7g).
+            ev('system', 'PR #212 was merged into main. Since then: PR #214 still open (base main) · no uncommitted changes.', 10, { payload: JSON.stringify({ github: 'pr_merged', item: 'acme/payments-api#212', status: 'ready', resolved: false, coordinator_event: 'm7f' }) }),
         ]
     }
     return [brief]
@@ -138,9 +182,9 @@ const threadEvents = (th: (typeof threads)[number]) => {
 const counts = (pid: string) => {
     const list: { status: string }[] = pid === 'p-latency' ? threads : pid.startsWith('f-') ? sessions.filter((x) => x.project_id === pid) : []
     const n = (s: string) => list.filter((t) => t.status === s).length
-    if (pid === 'p-docs') return { waiting: 0, ready: 1, working: 1, idle: 0, resolved: 4 }
-    if (pid === 'p-migrate') return { waiting: 0, ready: 0, working: 0, idle: 2, resolved: 1 }
-    return { waiting: n('waiting'), ready: n('ready'), working: n('working'), idle: n('idle'), resolved: n('resolved') }
+    if (pid === 'p-docs') return { waiting: 0, failed: 0, ready: 1, working: 1, idle: 0, resolved: 4 }
+    if (pid === 'p-migrate') return { waiting: 0, failed: 0, ready: 0, working: 0, idle: 2, resolved: 1 }
+    return { waiting: n('waiting'), failed: n('failed'), ready: n('ready'), working: n('working'), idle: n('idle'), resolved: n('resolved') }
 }
 
 // The project conversation is its main thread's events: kinds user,
@@ -161,14 +205,43 @@ const messages = [
     msg('m6', 'thread_started', '', 29, { thread_ids: ['t-sdk'] }),
     msg('m7', 'thread_update', '', 18, { thread_id: 't-cache', title: 'Cache idempotency keys in Redis', kind: 'finished' }),
     msg('m7a', 'user', 'Cross-thread message: Redis validation finished; load-test details are in the thread report.', 17, undefined, { source: 'thread', source_ref: 't-cache' }),
+    // Files the threads sent into the conversation (send_file): in a row they read as one.
+    msg('m7b', 'file', 'p99 before and after the pool change', 16.5, { attachments: [{ name: 'p99.png', path: 'outputs/load-test-2026-10-14/charts/p99.png', type: 'image/png', size: 54_300 }] }),
+    msg('m7c', 'file', 'Throughput at the same load', 16.4, { attachments: [{ name: 'throughput.png', path: 'outputs/load-test-2026-10-14/charts/throughput.png', type: 'image/png', size: 61_870 }] }),
+    msg('m7d', 'file', '', 16.3, { attachments: [{ name: 'p99-by-route.png', path: 'outputs/load-test-2026-10-14/charts/p99-by-route.png', type: 'image/png', size: 48_120 }] }),
+    msg('m7e', 'file', 'The full report', 16.2, { attachments: [{ name: 'report.md', path: 'outputs/load-test-2026-10-14/report.md', type: 'text/markdown', size: 4_812 }] }),
+    msg('m7f', 'thread_update', 'PR #212 was merged into main. Since then: PR #214 still open (base main) · no uncommitted changes.', 10, { thread_id: 't-cache', title: 'Cache idempotency keys in Redis', kind: 'github', status: 'ready' }),
+    msg('m7g', 'assistant', 'PR #212 (the lookup interface) is merged into main. PR #214 with the Redis cache is still open and its CI is failing; I asked the thread to check what is left and report back.', 9.8),
     msg('m8', 'thread_update', '', 4, { thread_id: 't-pool', title: 'Tune the DB connection pool', kind: 'needs_input' }),
     msg('m9', 'assistant', 'The Redis change is ready for review, and the tracing work is merged. Next, approve or deny the staging benchmark in the pool thread; I will keep the retry-budget work separate until its tests finish.', 3),
+    msg('m9a', 'file', 'Pool saturation during the last run', 3.5, { attachments: [{ name: 'pool-saturation.png', path: 'outputs/pool-saturation.png', type: 'image/png', size: 40_220 }] }),
+    // Two decision cards about two threads' PRs: each says which one it is
+    // about, and the answer reaches the coordinator naming its card.
+    msg('m10', 'decision', '', 2.5, { question: 'Resolve the conflicts of the SDK PR with main?', thread_id: 't-sdk', thread_seq: 3, thread_title: 'Retry budget in the SDK', number: 37, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The conflict is in one import block.', chosen: 1 }),
+    msg('m10a', 'user', "I'll handle it", 2.4, { answer: { card: 'm10', question: 'Resolve the conflicts of the SDK PR with main?', thread_id: 't-sdk', thread_seq: 3, thread_title: 'Retry budget in the SDK', number: 37, link_kind: 'pr' } }),
+    msg('m11', 'decision', '', 2, { question: 'Resolve the conflicts of the Redis PR with main?', thread_id: 't-cache', thread_seq: 2, thread_title: 'Cache idempotency keys in Redis', number: 214, link_kind: 'pr', options: [{ label: 'Merge main and push', consequence: 'The thread merges main into its branch; a plain push, no force.' }, { label: "I'll handle it" }, { label: 'Drop the PR', consequence: 'The thread closes it.' }], recommended: 0, reason: 'The branch is two commits behind and CI was green before.' }),
 ]
 
 const library = [
     { path: 'load-test-2026-10-14.md', origin: 'thread', size: 4_812, updated_at: ago(18) },
     { path: 'charge-flamegraph.svg', origin: 'user', size: 182_330, updated_at: ago(60 * 22) },
 ]
+
+// The Library tree: path → one level of entries (folders first; the real
+// server hides dot entries such as the threads' .tmp).
+const entry = (path: string, kind: 'dir' | 'file', size = 0, min = 60) => ({ name: path.split('/').pop()!, path, kind, size, updated_at: ago(min), origin: path.startsWith('outputs') ? 'output' : 'upload' })
+const libraryTree: Record<string, ReturnType<typeof entry>[]> = {
+    '': [entry('outputs', 'dir', 0, 18), entry('uploads', 'dir', 0, 60 * 22), entry('baseline-p99.csv', 'file', 31_204, 60 * 5), entry('charge-flamegraph.svg', 'file', 182_330, 60 * 22)],
+    outputs: [entry('outputs/load-test-2026-10-14', 'dir', 0, 18), entry('outputs/redis-keys', 'dir', 0, 60 * 3), entry('outputs/summary.md', 'file', 2_410, 40)],
+    'outputs/load-test-2026-10-14': [entry('outputs/load-test-2026-10-14/charts', 'dir', 0, 18), entry('outputs/load-test-2026-10-14/report.md', 'file', 4_812, 18), entry('outputs/load-test-2026-10-14/results.json', 'file', 96_020, 19)],
+    'outputs/load-test-2026-10-14/charts': [entry('outputs/load-test-2026-10-14/charts/p99.png', 'file', 54_300, 18), entry('outputs/load-test-2026-10-14/charts/throughput.png', 'file', 61_870, 18)],
+    'outputs/redis-keys': [entry('outputs/redis-keys/design.md', 'file', 3_120, 60 * 3)],
+    uploads: [entry('uploads/incident-2026-10-02.pdf', 'file', 842_000, 60 * 22), entry('uploads/slo-targets.xlsx', 'file', 18_950, 60 * 30)],
+}
+
+// Library file bodies for the preview: a chart PNG, text for the rest.
+const chartPng = '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'
+const libraryText = (path: string) => path.endsWith('.csv') ? 'minute,p99_ms\n0,212\n1,208\n2,231\n3,219\n' : `# ${path.split('/').pop()}\n\nP99 charge latency dropped from 212 ms to 148 ms after the pool change.\n\n- Run: 2026-10-14, staging\n- Load: 400 rps for 20 min\n`
 
 // Folder threads: Claude Code in plain folders (projects of type folder). One
 // waits on an approval, one is working, one finished, one is archived.
@@ -177,17 +250,40 @@ const folderId = (cwd: string) => projects.find((p) => p.type === 'folder' && p.
 const session = (o: Partial<Record<string, unknown>> & { id: string; title: string; status: string; task: string; cwd: string }) => ({
     project_id: folderId(o.cwd), seq: 1, agent: 'claude-code', origin: 'user', permission_mode: '' as string | undefined, profile: '' as string | undefined, commits_ahead: 0, files_changed: 0, input_tokens: 0, output_tokens: 0, turns: 1,
     uncommitted: false, model: '' as string | undefined, repo_path: '', base_branch: '', branch: '', session_id: o.id,
-    created_at: ago(120), updated_at: ago(8), ...o,
+    created_at: ago(120), updated_at: ago(8),
+    cache_read_tokens: 0, cache_write_tokens: 0, context_tokens: 0, context_window: 0, last_turn_ms: 0, insertable: o.status === 'working', ...o,
 })
+const sessionWithUsage = (o: Parameters<typeof session>[0]) => { const t = session(o); return { ...t, ...usageOf(t), ...o } }
 
 const sessions = [
-    session({ id: 's-dark', title: 'Add a dark mode toggle', status: 'waiting', cwd: '/Users/me/code/notes-app', head_branch: 'main', task: 'Add a dark mode toggle to the settings page and remember it.', wait_reason: 'Approve: Run `npm test`', input_tokens: 48_000, output_tokens: 2_900, updated_at: ago(2) }),
-    session({ id: 's-links', title: 'Fix the broken links check', status: 'working', cwd: '/Users/me/code/website', head_branch: 'fix/link-anchors', task: 'The link checker fails on anchors. Fix it.', updated_at: ago(1) }),
-    session({ id: 's-readme', title: 'Rewrite the README intro', status: 'idle', cwd: '/Users/me/code/website', head_branch: 'main', task: 'Rewrite the README intro in plain language.', permission_mode: 'plan', input_tokens: 21_000, output_tokens: 1_500, updated_at: ago(50) }),
-    session({ id: 's-old', title: 'Rename the config keys', status: 'resolved', cwd: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
+    sessionWithUsage({ id: 's-dark', title: 'Add a dark mode toggle', status: 'waiting', cwd: '/Users/me/code/notes-app', head_branch: 'main', task: 'Add a dark mode toggle to the settings page and remember it.', wait_reason: 'Approve: Run `npm test`', input_tokens: 48_000, output_tokens: 2_900, updated_at: ago(2) }),
+    sessionWithUsage({ id: 's-links', title: 'Fix the broken links check', status: 'working', cwd: '/Users/me/code/website', head_branch: 'fix/link-anchors', task: 'The link checker fails on anchors. Fix it.', updated_at: ago(1) }),
+    sessionWithUsage({ id: 's-readme', title: 'Rewrite the README intro', status: 'idle', cwd: '/Users/me/code/website', head_branch: 'main', task: 'Rewrite the README intro in plain language.', permission_mode: 'plan', input_tokens: 21_000, output_tokens: 1_500, updated_at: ago(50) }),
+    sessionWithUsage({ id: 's-old', title: 'Rename the config keys', status: 'resolved', cwd: '/Users/me/scratch', task: 'Rename the config keys to snake_case.', resolved_at: ago(60 * 30), updated_at: ago(60 * 30) }),
 ]
 
+// Threads are numbered per project from 1, in the order they were started (the coordinator is 0).
+for (const list of [threads, sessions] as { project_id: string; seq: number }[][]) {
+    const next: Record<string, number> = {}
+    for (const t of list) t.seq = next[t.project_id] = (next[t.project_id] ?? 0) + 1
+}
+
+// The project's main thread, with the coordinator session's own usage.
+const coordinatorOf = (p: Proj) => {
+    const turns = p.id === 'p-latency' ? 23 : 6
+    const input = p.id === 'p-latency' ? 1_240_000 : 210_000
+    const updated_at = ago(p.id === 'p-latency' ? 3 : 20)
+    return {
+        ...thread({ id: p.main_thread_id!, title: p.name, status: p.id === 'p-docs' ? 'working' : 'idle', task: '', turns, input_tokens: input, output_tokens: Math.round(input / 28), updated_at }),
+        ...usageOf({ turns, input_tokens: input, updated_at }), agent: 'llm', seq: 0, project_id: p.id, parent_id: '', branch: '', repo_path: '', cwd: `/Users/me/.tingly-project/projects/${p.id}`,
+        reported_model: 'claude-sonnet-4-5', session_id: '7d1f3a90-2c4e-4b7a-8e61-0a9b5c2d4f13',
+        context_tokens: p.id === 'p-latency' ? 112_000 : 41_000,
+    }
+}
+
 const stoppedTasks = new Set<string>()
+// Requests answered from a card or a thread page, so they stop being pending.
+const answeredRequests = new Set<string>()
 
 const sessionEvents = (s: (typeof sessions)[number]) => {
     let n = 0
@@ -201,6 +297,9 @@ const sessionEvents = (s: (typeof sessions)[number]) => {
     if (s.id === 's-dark') {
         return [
             first,
+            ...call('TodoWrite', { todos: [{ content: 'Review theme preferences', status: 'pending' }] }, 'ok', 15, 'todo-1'),
+            ...call('TodoWrite', { todos: [{ content: 'Review theme preferences', status: 'completed' }] }, 'ok', 14, 'todo-2'),
+            ...call('TodoWrite', { todos: [{ content: 'Add the theme toggle', status: 'completed' }, { content: 'Verify settings persist', activeForm: 'Verifying settings persist', status: 'in_progress' }, { content: 'Run the test suite', status: 'pending' }] }, 'ok', 13, 'todo-3'),
             ev('assistant', 'I will look at how the settings page stores preferences first.', 12),
             ...call('Read', { file_path: 'src/settings/Settings.tsx' }, 'export function Settings() { ... }', 11, 'c1'),
             ev('tool_use', 'Agent', 10, { request_id: 'agent-1', payload: JSON.stringify({ description: 'Find where the theme is applied', subagent_type: 'Explore' }) }),
@@ -228,14 +327,16 @@ const sessionEvents = (s: (typeof sessions)[number]) => {
 // latency project's main thread and a Telegram group on Docs'. The chat ids match the Remote
 // mocks (handlers.ts: bots/:bot/chats and /groups). Held in memory, so binding
 // and unbinding work within a mock session.
-type Binding = { id: string; platform: string; chat_id: string; chat_title: string; project_id: string; thread_id: string; created_at: string; updated_at: string }
+type Binding = { id: string; platform: string; chat_id: string; bot_uuid?: string; chat_title: string; project_id: string; thread_id: string; created_at: string; updated_at: string }
 const bindings: Binding[] = [
-    { id: 'cb-1', platform: 'telegram', chat_id: 'telegram:123456789', chat_title: '123456789', project_id: 'p-latency', thread_id: 'main-p-latency', created_at: ago(60 * 30), updated_at: ago(60 * 30) },
+    { id: 'cb-1', platform: 'telegram', chat_id: 'telegram:123456789', chat_title: 'Alice (ops)', project_id: 'p-latency', thread_id: 'main-p-latency', created_at: ago(60 * 30), updated_at: ago(60 * 30) },
     { id: 'cb-2', platform: 'telegram', chat_id: 'telegram:-10024681012', chat_title: 'Release Crew', project_id: 'p-docs', thread_id: 'main-p-docs', created_at: ago(60 * 48), updated_at: ago(60 * 48) },
+    // A chat that was deleted in Remote since it was bound: shown as deleted, with its saved alias.
+    { id: 'cb-3', platform: 'telegram', chat_id: 'telegram:55512345', chat_title: 'Old support chat', project_id: 'p-docs', thread_id: 'main-p-docs', created_at: ago(60 * 72), updated_at: ago(60 * 72) },
 ]
 // What the Remote mocks call a chat, to title a new binding.
 const mockChatTitles: Record<string, string> = {
-    'telegram:123456789': '123456789', 'telegram:987654321': '987654321', 'telegram:-10024681012': 'Release Crew',
+    'telegram:123456789': 'Alice (ops)', 'telegram:987654321': '987654321', 'telegram:-10024681012': 'Release Crew',
     'feishu:oc_mock_chat_0001': 'Platform team',
 }
 
@@ -248,7 +349,7 @@ export const projectsHandlers = [
     // IM channel bindings. Before '/api/v1/projects/:id' so "channel-bindings" is not read as an id.
     http.get('/api/v1/projects/channel-bindings', () => HttpResponse.json({ bindings })),
     http.put('/api/v1/projects/channel-bindings', async ({ request }) => {
-        const body = (await request.json()) as { platform: string; chat_id: string; project_id?: string; thread_id?: string }
+        const body = (await request.json()) as { platform: string; chat_id: string; bot_uuid?: string; project_id?: string; thread_id?: string }
         // A project resolves to its main thread; a folder has none, so it is bound by one of its threads.
         let thread_id = body.thread_id ?? ''
         let project_id = ''
@@ -270,10 +371,11 @@ export const projectsHandlers = [
         if (old) {
             old.project_id = project_id
             old.thread_id = thread_id
+            old.bot_uuid = body.bot_uuid || old.bot_uuid
             old.updated_at = now
             return HttpResponse.json(old)
         }
-        const b: Binding = { id: `cb-${Date.now()}`, platform: body.platform, chat_id: body.chat_id, chat_title: mockChatTitles[body.chat_id] ?? body.chat_id, project_id, thread_id, created_at: now, updated_at: now }
+        const b: Binding = { id: `cb-${Date.now()}`, platform: body.platform, chat_id: body.chat_id, bot_uuid: body.bot_uuid, chat_title: mockChatTitles[body.chat_id] ?? body.chat_id, project_id, thread_id, created_at: now, updated_at: now }
         bindings.push(b)
         return HttpResponse.json(b)
     }),
@@ -285,6 +387,17 @@ export const projectsHandlers = [
     }),
     // Every project's events (the sidebar's stream): an empty one that ends at once.
     http.get('/api/v1/projects/events', () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
+    // A refresh reads GitHub again: the mock answers after a moment, as if it had.
+    http.post('/api/v1/threads/:tid/links/refresh', async ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        await delay(700)
+        return HttpResponse.json({ results: ((th as { links?: MockLink[] }).links ?? []).map((l) => ({ repo: l.repo, kind: l.kind, number: l.number, status: 'refreshed' })) })
+    }),
+    http.post('/api/v1/projects/:id/links/refresh', async () => {
+        await delay(700)
+        return HttpResponse.json({ results: threads.flatMap((th) => ((th as { links?: MockLink[] }).links ?? []).filter((l) => l.state === 'open').map((l) => ({ repo: l.repo, kind: l.kind, number: l.number, status: 'refreshed' }))) })
+    }),
     http.get('/api/v1/threads/permission-modes', () => HttpResponse.json({ modes: ['default', 'acceptEdits', 'auto', 'plan', 'dontAsk', 'bypassPermissions'] })),
     http.get('/api/v1/threads/:tid', ({ params }) => {
         const th = findThread(params.tid as string)
@@ -301,6 +414,26 @@ export const projectsHandlers = [
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         return HttpResponse.json({ events: th.id.startsWith('t-') ? threadEvents(th as (typeof threads)[number]) : sessionEvents(th as (typeof sessions)[number]) })
     }),
+    // What a thread waits on right now: its transcript's pending approvals and questions that were not answered since.
+    http.get('/api/v1/threads/:tid/requests', ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        if (th.status !== 'waiting' || !th.id.startsWith('t-')) return HttpResponse.json({ requests: [] })
+        const requests = threadEvents(th as (typeof threads)[number]).filter((e) => {
+            if (e.kind !== 'approval' && e.kind !== 'ask') return false
+            const pl = JSON.parse((e as unknown as { payload: string }).payload) as { request_id: string; state: string }
+            return pl.state === 'pending' && !answeredRequests.has(pl.request_id)
+        })
+        return HttpResponse.json({ requests })
+    }),
+    http.post('/api/v1/threads/:tid/respond', async ({ params, request }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const { request_id } = (await request.json()) as { request_id: string }
+        if (answeredRequests.has(request_id)) return HttpResponse.json({ error: 'no pending request with that id' }, { status: 409 })
+        answeredRequests.add(request_id)
+        return HttpResponse.json(th)
+    }),
     http.post('/api/v1/threads/:tid/messages', ({ params }) => {
         const th = findThread(params.tid as string)
         if (th) return HttpResponse.json(th)
@@ -309,10 +442,15 @@ export const projectsHandlers = [
     }),
     http.post('/api/v1/threads/:tid/events/:eid/start', () => HttpResponse.json(messages[2])),
     http.put('/api/v1/threads/:tid/profile', async ({ params, request }) => {
-        const s = sessions.find((x) => x.id === params.tid)
-        if (!s) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
-        s.profile = ((await request.json()) as { profile: string }).profile
-        return HttpResponse.json(s)
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const body = (await request.json()) as { profile: string; inherit?: boolean }
+        if (th.parent_id) {
+            const project = projects.find((x) => x.id === th.project_id)
+            th.profile_override = body.inherit ? '' : body.profile; th.model_override = body.inherit ? project?.thread_model ?? '' : ''
+        }
+        else th.profile = body.profile
+        return HttpResponse.json(th)
     }),
     http.put('/api/v1/threads/:tid/model', async ({ params, request }) => {
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
@@ -322,10 +460,51 @@ export const projectsHandlers = [
         else th.model = model
         return HttpResponse.json(th)
     }),
+    http.put('/api/v1/threads/:tid/effort', async ({ params, request }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const effort = ((await request.json()) as { effort: string }).effort
+        if (!['', 'low', 'medium', 'high', 'max'].includes(effort)) return HttpResponse.json({ error: 'invalid effort level' }, { status: 400 })
+        th.effort_override = effort
+        return HttpResponse.json(th)
+    }),
     http.put('/api/v1/threads/:tid/title', async ({ params, request }) => {
         const th = findThread(params.tid as string) as Record<string, unknown> | undefined
         if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
         th.title = ((await request.json()) as { title: string }).title
+        return HttpResponse.json(th)
+    }),
+    http.get('/api/v1/threads/:tid/prs/:number/diff', ({ params }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        return HttpResponse.json({
+            number: Number(params.number), base: 'main', head: th.branch, source: 'local', unpushed: th.id === 't-cache' ? 1 : 0, additions: 56, deletions: 4,
+            files: [
+                { path: 'internal/idempotency/redis.go', status: 'added', additions: 48, deletions: 0 },
+                { path: 'internal/idempotency/store.go', status: 'modified', additions: 8, deletions: 4 },
+            ],
+        })
+    }),
+    http.get('/api/v1/threads/:tid/merge/draft', ({ params }) => {
+        const th = findThread(params.tid as string) as Record<string, unknown> | undefined
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const pr = (th.links as MockLink[] | undefined)?.find((l) => l.kind === 'pr' && l.state === 'open')
+        return HttpResponse.json(pr
+            ? { number: pr.number, source: 'pr', title: pr.title, body: 'Moves idempotency-key lookups from Postgres to Redis behind `IDEMPOTENCY_REDIS`, with a 24h TTL.' }
+            : { number: 0, source: 'commit', title: 'Retry budget with a token bucket', body: 'Caps client retries so they cannot amplify an outage.' })
+    }),
+    http.get('/api/v1/threads/:tid/prs/:number/diff/file', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        return HttpResponse.json({
+            path,
+            patch: `diff --git a/${path} b/${path}\n@@ -10,7 +10,7 @@ type Store interface {\n-\tLookup(ctx context.Context, key string) (*Result, error)\n+\tLookup(ctx context.Context, key string) (*Result, error) // 24h TTL\n \tSave(ctx context.Context, key string, r *Result) error\n }`,
+        })
+    }),
+    http.post('/api/v1/threads/:tid/merge', async ({ params, request }) => {
+        const th = findThread(params.tid as string)
+        if (!th) return HttpResponse.json({ error: 'thread not found' }, { status: 404 })
+        const { method } = (await request.json()) as { method: string }
+        if (method !== 'squash' && method !== 'merge_request') return HttpResponse.json({ error: 'method must be "squash" or "merge_request"' }, { status: 400 })
         return HttpResponse.json(th)
     }),
     http.post('/api/v1/threads/:tid/handoff', ({ params }) => {
@@ -355,6 +534,8 @@ export const projectsHandlers = [
         const url = new URL(request.url)
         const q = (url.searchParams.get('q') ?? '').toLowerCase()
         const archived = url.searchParams.get('archived') === 'true'
+        // A newcomer (?mockData=newcomer) has no projects or folders yet.
+        if (resolveMockDataProfile() === 'newcomer') return HttpResponse.json({ projects: [] })
         // Projects and folders in one list, each with its type.
         const list = projects
             .filter((p) => !!p.archived_at === archived)
@@ -386,11 +567,11 @@ export const projectsHandlers = [
         { id: 'sonnet', display_name: 'Claude Sonnet 4.5', provider_model: 'claude-sonnet-4-5', provider_name: 'anthropic-primary' },
         { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
     ] })),
-    http.get('/api/v1/projects/runtime', () => HttpResponse.json({ cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code' })),
+    http.get('/api/v1/projects/runtime', () => HttpResponse.json({ cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100 })),
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()
-        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: false })
+        return HttpResponse.json({ project: p, threads: p.id === 'p-latency' ? threads : p.type === 'folder' ? sessions.filter((x) => x.project_id === p.id) : [], counts: counts(p.id), coordinator_busy: p.id === 'p-docs', coordinator_insertable: p.id === 'p-docs', coordinator_queued: p.id === 'p-docs' ? 1 : 0, coordinator: p.type === 'folder' ? undefined : coordinatorOf(p) })
     }),
     http.patch('/api/v1/projects/:id', async ({ params, request }) => {
         const p = find(params.id as string)
@@ -419,9 +600,9 @@ export const projectsHandlers = [
     http.post('/api/v1/projects/:id/threads', async ({ params, request }) => {
         const f = find(params.id as string)
         if (!f || f.type !== 'folder') return HttpResponse.json({ error: 'only a folder starts threads directly' }, { status: 400 })
-        const body = (await request.json()) as { content: string; permission_mode?: string }
-        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, turns: 0, updated_at: ago(0) })
-        sessions.unshift(s)
+        const body = (await request.json()) as { content: string; effort?: string; permission_mode?: string; profile?: string; model?: string }
+        const s = session({ id: `s-${Date.now()}`, title: body.content.slice(0, 60), status: 'working', cwd: f.path!, task: body.content, permission_mode: body.permission_mode, effort_override: body.effort, profile: body.profile, model: body.model, turns: 0, updated_at: ago(0) })
+        sessions.unshift({ ...s, ...usageOf(s), last_turn_at: undefined } as (typeof sessions)[number])
         return HttpResponse.json(s, { status: 201 })
     }),
     // The live event stream: an empty stream that ends at once (the page
@@ -430,6 +611,25 @@ export const projectsHandlers = [
         new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
     http.get('/api/v1/projects/:id/library', ({ params }) =>
         HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/library`, files: params.id === 'p-latency' ? library : [] })),
+    http.get('/api/v1/projects/:id/library/tree', ({ params, request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        const entries = params.id === 'p-latency' ? libraryTree[path] : path === '' ? [] : undefined
+        return entries
+            ? HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/library`, path, entries })
+            : HttpResponse.json({ error: 'folder not found' }, { status: 404 })
+    }),
+    http.get('/api/v1/projects/:id/library/file', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        if (path.endsWith('.png')) return new HttpResponse(Uint8Array.from(atob(chartPng), (c) => c.charCodeAt(0)), { headers: { 'Content-Type': 'image/png' } })
+        return new HttpResponse(libraryText(path), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+    }),
+    // A folder zip: `uploads` is "too big", to show the server's message as a toast; the rest is an empty zip.
+    http.get('/api/v1/projects/:id/library/archive', ({ request }) => {
+        const path = new URL(request.url).searchParams.get('path') ?? ''
+        if (path === 'uploads') return HttpResponse.json({ error: 'this folder is larger than 40 MB (a zip download is limited to 200 files and 40 MB)' }, { status: 413 })
+        const emptyZip = Uint8Array.from([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)])
+        return new HttpResponse(emptyZip, { headers: { 'Content-Type': 'application/zip' } })
+    }),
     http.get('/api/v1/projects/:id/memory', ({ params }) => HttpResponse.json({ dir: `/Users/me/.tingly-box/projects/${params.id}/memory`, files: [] })),
     http.get('/api/v1/projects/:id/usage', () => HttpResponse.json({ by_model: [], by_thread: [] })),
 ]

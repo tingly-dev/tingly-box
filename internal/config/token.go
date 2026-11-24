@@ -30,7 +30,7 @@ func (c *Config) SetUserToken(token string) error {
 	defer c.mu.Unlock()
 
 	c.UserToken = token
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetUserToken returns the user token
@@ -55,7 +55,7 @@ func (c *Config) SetModelToken(token string) error {
 	defer c.mu.Unlock()
 
 	c.ModelToken = token
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetModelToken returns the model token
@@ -72,6 +72,23 @@ func (c *Config) HasModelToken() bool {
 	defer c.mu.RUnlock()
 
 	return c.ModelToken != ""
+}
+
+// SetMCPToken sets the token accepted by the MCP profile endpoints
+func (c *Config) SetMCPToken(token string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.MCPToken = token
+	return c.saveLocked()
+}
+
+// GetMCPToken returns the token accepted by the MCP profile endpoints
+func (c *Config) GetMCPToken() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.MCPToken
 }
 
 // GetInternalAPIToken returns the internal API token for probe testing
@@ -163,7 +180,7 @@ func (c *Config) SetMultiTenantEnabled(enabled bool) error {
 	defer c.mu.Unlock()
 
 	c.MultiTenantConfig.Enabled = enabled
-	return c.Save()
+	return c.saveLocked()
 }
 
 // SetMultiTenantConfig updates the entire multi-tenant configuration
@@ -172,5 +189,5 @@ func (c *Config) SetMultiTenantConfig(config MultiTenantConfig) error {
 	defer c.mu.Unlock()
 
 	c.MultiTenantConfig = config
-	return c.Save()
+	return c.saveLocked()
 }

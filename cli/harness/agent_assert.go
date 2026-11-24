@@ -55,7 +55,7 @@ func isANSICommandByte(c byte) bool {
 type contentAssertionRule string
 
 const (
-	ruleEmpty      contentAssertionRule = "output is empty after stripping whitespace"
+	ruleEmpty       contentAssertionRule = "output is empty after stripping whitespace"
 	ruleErrorMarker contentAssertionRule = "output contains an error marker"
 )
 

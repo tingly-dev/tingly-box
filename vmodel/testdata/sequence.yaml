@@ -1,0 +1,7 @@
+id: unified-sequence
+kind: sequence
+sequence:
+  steps:
+    - {status: 200, content: healthy}
+    - {status: 429, error_message: rate limited}
+  on_exhaust: clamp

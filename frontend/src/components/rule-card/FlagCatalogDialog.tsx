@@ -37,8 +37,10 @@ import ModelSelectDialog from '@/components/ModelSelectDialog';
 import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage, headersValue, multiEnumValues, toggleMultiEnumValue, flagToBool, flagToInt, flagToString, flagToServiceRef } from './flagHelpers';
 import { makeCategoryMeta, type CategoryMeta } from './catalogGrouping';
 import HeadersEditor from '@/components/flags/HeadersEditor';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
+import { ModelPickerDialog } from '@/components/model-select/ModelPickerDialog';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -335,7 +337,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                         : enabled
                                                             ? 'primary.light'
                                                             : 'divider',
-                                                    borderRadius: 1,
+                                                    borderRadius: radius.row,
                                                     backgroundColor: enabled ? 'action.hover' : 'transparent',
                                                     boxShadow: (theme) => pulsing ? `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}` : 'none',
                                                     transition: 'box-shadow 0.2s, border-color 0.2s',
@@ -519,19 +521,11 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                 </Button>
             </DialogActions>
             {/* Service picker for service_ref flags (e.g. vision_proxy_service). */}
-            <Dialog
+            <ModelPickerDialog
                 open={pickerKey !== null}
                 onClose={() => setPickerKey(null)}
-                maxWidth="lg"
-                fullWidth
-                slotProps={{
-                    paper: { sx: { height: '80vh' } }
-                }}
+                title={<Typography variant="h6" component="span">Pick Vision Proxy Model</Typography>}
             >
-                <DialogTitle sx={{ textAlign: 'center' }}>
-                    <Typography variant="h6">Pick Vision Proxy Model</Typography>
-                </DialogTitle>
-                <DialogContent>
                     {pickerKey !== null && (
                         <ModelSelectDialog
                             providers={providers || []}
@@ -549,8 +543,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                             }}
                         />
                     )}
-                </DialogContent>
-            </Dialog>
+            </ModelPickerDialog>
         </Dialog>
     );
 };

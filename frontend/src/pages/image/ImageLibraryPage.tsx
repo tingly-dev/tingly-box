@@ -18,15 +18,19 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import UnifiedCard from '@/components/UnifiedCard';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { Add, Close, DeleteOutline, Download, Edit } from '@/components/icons';
 import { api } from '@/services/api';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { downloadImage } from '@/utils/download';
 import type { ImageAsset, PromptSnippet } from './library/assetTypes';
 import { removeAsset, removeSnippet, renameAsset, saveSnippet, useAssets, useLibraryReady, useSnippets } from './library/assetStore';
-import ThumbImage from './components/ThumbImage';
-import { THUMB_EDGE_TILE } from './components/imageThumbnails';
+import ThumbImage from '../../features/image/ThumbImage';
+import { THUMB_EDGE_TILE } from '../../features/image/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 
 type Tab = 'images' | 'snippets';
 
@@ -36,6 +40,10 @@ type Tab = 'images' | 'snippets';
 // copies it). See .design/image-library.md.
 const ImageLibraryPage: React.FC = () => {
     const { t } = useTranslation();
+    // Phone shell: two thumbnails a row (not one a screen), and deleting a
+    // snippet asks first — a mistap is easy and there is no undo.
+    const phone = usePhoneShell();
+    const [snippetToDelete, setSnippetToDelete] = useState<PromptSnippet | null>(null);
     const [params, setParams] = useSearchParams();
     const tab: Tab = params.get('tab') === 'snippets' ? 'snippets' : 'images';
     const assets = useAssets();
@@ -119,14 +127,14 @@ const ImageLibraryPage: React.FC = () => {
                             {t('imageLibrary.emptyImages', { defaultValue: 'Nothing kept yet. Open any image in the Playground and choose “Keep in library”.' })}
                         </Typography>
                     ) : (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 2 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: phone ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(168px, 1fr))', gap: phone ? 1.5 : 2 }}>
                             {assets.map((asset) => (
                                 <ButtonBase
                                     key={asset.id}
                                     onClick={() => { setConfirmingDelete(false); setRenaming(false); setOpenAsset(asset); }}
-                                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: 1.5 }}
+                                    sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', borderRadius: radius.card }}
                                 >
-                                    <Box sx={{ aspectRatio: '1 / 1', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover' }}>
+                                    <Box sx={{ aspectRatio: '1 / 1', borderRadius: radius.card, overflow: 'hidden', bgcolor: 'action.hover' }}>
                                         <ThumbImage src={asset.src} alt={asset.name} edge={THUMB_EDGE_TILE} fit="contain" />
                                     </Box>
                                     <Typography noWrap sx={{ mt: 0.75, fontSize: 13 }}>{asset.name}</Typography>
@@ -150,7 +158,7 @@ const ImageLibraryPage: React.FC = () => {
                                     </IconButton>
                                 </Tooltip>
                                 <Tooltip title={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}>
-                                    <IconButton size="small" onClick={() => removeSnippet(snippet.id)} aria-label={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}>
+                                    <IconButton size="small" onClick={() => (phone ? setSnippetToDelete(snippet) : removeSnippet(snippet.id))} aria-label={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}>
                                         <DeleteOutline sx={{ fontSize: 18 }} />
                                     </IconButton>
                                 </Tooltip>
@@ -165,10 +173,24 @@ const ImageLibraryPage: React.FC = () => {
                 )}
             </UnifiedCard>
 
+            <ConfirmDialog
+                open={snippetToDelete !== null}
+                title={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}
+                description={snippetToDelete?.name}
+                confirmLabel={t('imageLibrary.deleteSnippet', { defaultValue: 'Delete' })}
+                cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+                confirmColor="error"
+                onClose={() => setSnippetToDelete(null)}
+                onConfirm={() => {
+                    if (snippetToDelete) removeSnippet(snippetToDelete.id);
+                    setSnippetToDelete(null);
+                }}
+            />
+
             <Dialog open={openAsset !== null} onClose={() => setOpenAsset(null)} maxWidth="sm" fullWidth>
                 {openAsset && (
                     <>
-                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: '1.05rem' }}>
+                        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1, fontSize: fontSizes.title }}>
                             {renaming ? (
                                 <TextField
                                     autoFocus
@@ -204,7 +226,7 @@ const ImageLibraryPage: React.FC = () => {
                             </IconButton>
                         </DialogTitle>
                         <DialogContent dividers>
-                            <Box sx={{ bgcolor: 'action.hover', borderRadius: 1.5, display: 'flex', justifyContent: 'center', mb: confirmingDelete ? 2 : 0 }}>
+                            <Box sx={{ bgcolor: 'action.hover', borderRadius: radius.card, display: 'flex', justifyContent: 'center', mb: confirmingDelete ? 2 : 0 }}>
                                 <Box component="img" src={openAsset.src} alt={openAsset.name} sx={{ maxWidth: '100%', maxHeight: 360, display: 'block' }} />
                             </Box>
                             {confirmingDelete && (
@@ -237,7 +259,7 @@ const ImageLibraryPage: React.FC = () => {
             </Dialog>
 
             <Dialog open={snippetDraft !== null} onClose={() => setSnippetDraft(null)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ fontSize: '1.05rem' }}>
+                <DialogTitle sx={{ fontSize: fontSizes.title }}>
                     {snippetDraft?.id
                         ? t('imageLibrary.editSnippetTitle', { defaultValue: 'Edit snippet' })
                         : t('imageLibrary.newSnippet', { defaultValue: 'New snippet' })}

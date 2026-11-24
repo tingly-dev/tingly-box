@@ -97,7 +97,7 @@ export function Sidebar({ onCollapse, onNavigate }: { onCollapse?: () => void; o
             <Box sx={{ display: 'flex', alignItems: 'center', px: 2, pt: 1.5, pb: 1 }}>
                 <Box component={NavLink} to="/" sx={{ display: 'flex', alignItems: 'center', gap: 1, textDecoration: 'none', color: 'text.primary', flex: 1 }}>
                     <Box component="img" src="/icon.svg" alt="" sx={{ width: 22, height: 22 }} />
-                    <Typography sx={{ fontWeight: 650, fontSize: fontSizes.base }}>Tingly Project</Typography>
+                    <Typography sx={{ fontWeight: 600, fontSize: fontSizes.base }}>Tingly Project</Typography>
                 </Box>
                 {onCollapse && (
                     <Tooltip title={t('nav.collapse')}>

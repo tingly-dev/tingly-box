@@ -64,13 +64,13 @@ func (c *Config) SetScenarioConfig(config typ.ScenarioConfig) error {
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == config.Scenario {
 			c.Scenarios[i] = config
-			return c.Save()
+			return c.saveLocked()
 		}
 	}
 
 	// Add new scenario config
 	c.Scenarios = append(c.Scenarios, config)
-	return c.Save()
+	return c.saveLocked()
 }
 
 // setClaudeCodeModeRulesActiveLocked switches the main scenario's unified and
@@ -181,7 +181,7 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		if err := c.setAllCCSlotsLocked(scenario, flagName == constant.FlagSeparate); err != nil {
 			return err
 		}
-		return c.Save()
+		return c.saveLocked()
 	}
 
 	// Find or create scenario config (seeded from base config for profiles)
@@ -210,7 +210,7 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Extensions[flagName] = value
 	}
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetScenarioStringFlag returns a string flag value for a scenario
@@ -259,7 +259,7 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetScenarioIntFlag returns an integer flag value for a scenario.
@@ -295,7 +295,7 @@ func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, 
 	//   case FlagFoo:
 	//       config := c.findOrCreateScenarioConfigLocked(scenario)
 	//       config.Flags.Foo = value
-	//       return c.Save()
+	//       return c.saveLocked()
 	default:
 		return fmt.Errorf("unknown int flag name: %s", flagName)
 	}
@@ -349,7 +349,7 @@ func (c *Config) SetScenarioExtensions(scenario typ.RuleScenario, values map[str
 		}
 		config.Extensions[key] = value
 	}
-	return c.Save()
+	return c.saveLocked()
 }
 
 // GetScenarioRecordingMode returns the effective recording mode for a scenario

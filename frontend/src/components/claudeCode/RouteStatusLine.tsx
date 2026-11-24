@@ -1,11 +1,11 @@
-import {getReadableAccent} from '@/theme/status';
+import {getReadableAccent} from '@tingly/ui/theme/status';
 import {useTheme, type Theme} from '@mui/material/styles';
 import {Box, Tooltip, Typography} from '@mui/material';
 import type {ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
 import {formatTokens} from '@tingly/projects/transcript';
 import {cacheHitPct, type SessionUsage} from './sessionUsage';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 // Where a session's requests are routed and the quota they draw on: the
 // Tingly Box half of the line (GET /scenario/:scenario/route).
@@ -32,7 +32,7 @@ const contextBar = (pct: number): string => {
     return '▓'.repeat(filled) + '░'.repeat(8 - filled);
 };
 
-const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined => {
+export const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined => {
     if (!iso) return undefined;
     const mins = Math.round((new Date(iso).getTime() - now) / 60_000);
     if (mins <= 0) return undefined;
@@ -42,7 +42,7 @@ const resetsIn = (iso: string | undefined, now = Date.now()): string | undefined
     return `${Math.round(h / 24)}d`;
 };
 
-const quotaColor = (theme: Theme, q: RouteQuota): string | undefined => {
+export const quotaColor = (theme: Theme, q: RouteQuota): string | undefined => {
     if (q.limit_reached || q.used_percent >= 90) return getReadableAccent(theme, 'error');
     if (q.used_percent >= 80) return getReadableAccent(theme, 'warning');
     return undefined;
@@ -128,7 +128,7 @@ const RouteStatusLine = ({status, usage}: RouteStatusLineProps) => {
             component="div"
             variant="caption"
             sx={{
-                mt: 0.75, px: 1.5, color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.xs,
+                mt: 0.75, px: 1.5, color: 'text.secondary', fontFamily: fontMono, fontSize: fontSizes.micro,
                 display: 'flex', flexWrap: 'wrap', columnGap: 1, rowGap: 0.25,
                 '& > *:not(:last-child)::after': {content: '"|"', ml: 1, color: 'text.disabled'},
             }}

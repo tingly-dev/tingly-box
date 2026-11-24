@@ -1,4 +1,5 @@
 import type { ThemePalette } from '../types';
+import type { ThemeTokens } from '../tokens';
 
 // Dark-mode surface ladder — aligned with MUI's official dark theme
 // (~7% / 12% lightness) but keeps a subtle slate hue instead of pure neutral
@@ -21,7 +22,7 @@ export const darkPalette: ThemePalette = {
   mode: 'dark',
   // Primary blue: dark mode shifts one notch up (blue-500 instead of
   // blue-600) so text-variant Buttons reach WCAG AA against Paper while
-  // staying visually aligned with the contained-Button gradient.
+  // matching the contained Button fill.
   primary: {
     main: '#3b82f6',
     light: '#60a5fa',
@@ -93,5 +94,60 @@ export const darkPalette: ThemePalette = {
       emptyIconBg: 'rgba(148, 163, 184, 0.1)',
     },
   },
-  isSunlit: false,
+};
+
+export const darkTokens: ThemeTokens = {
+  accent: '#3b82f6',
+  text: '#f3f5f9',
+  textMuted: '#cbd5e1',
+  textHelper: '#94a3b8',
+  placeholder: '#94a3b8',
+  error: '#f87171',
+  surface: {
+    card: darkBgPaper,
+    appBar: darkBgPaper,
+    menu: darkBgRaised,
+    popover: darkBgRaised,
+    dialog: darkBgRaised,
+    tooltip: darkBgRaised,
+    drawer: darkBgPaper,
+  },
+  border: {
+    card: 'rgba(255, 255, 255, 0.08)',
+    chrome: 'rgba(255, 255, 255, 0.08)',
+    menu: 'rgba(255, 255, 255, 0.1)',
+    tooltip: 'rgba(255, 255, 255, 0.1)',
+    divider: 'rgba(255, 255, 255, 0.1)',
+    dialog: 'rgba(255, 255, 255, 0.08)',
+    popover: 'rgba(255, 255, 255, 0.1)',
+  },
+  shadow: {
+    menu: '0 10px 32px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5)',
+    tooltip: '0 4px 12px rgba(0, 0, 0, 0.4)',
+  },
+  input: {
+    bg: darkInputBg,
+    hoverBg: darkInputBgHover,
+    border: darkInputBorder,
+    hoverBorder: darkInputBorderHover,
+    disabledBg: 'rgba(255, 255, 255, 0.02)',
+    disabledBorder: 'rgba(148, 163, 184, 0.18)',
+    filledBg: darkInputBg,
+    filledHoverBg: darkInputBgHover,
+    filledFocusBg: darkInputBgHover,
+  },
+  button: {
+    outlinedBorder: 'rgba(255, 255, 255, 0.23)',
+    outlinedText: '#e2e8f0',
+    outlinedHoverBorder: 'rgba(255, 255, 255, 0.4)',
+    outlinedHoverBg: 'rgba(255, 255, 255, 0.08)',
+  },
+  menuItem: {
+    hover: 'rgba(255, 255, 255, 0.08)',
+    selected: 'rgba(59, 130, 246, 0.24)',
+    selectedHover: 'rgba(59, 130, 246, 0.32)',
+  },
+  table: {
+    headBg: 'rgba(255, 255, 255, 0.03)',
+  },
 };

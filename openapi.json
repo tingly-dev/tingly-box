@@ -63,6 +63,50 @@
         }
       }
     },
+    "/api/v1/auth/mcp-token": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get the MCP token, accepted only by the MCP profile endpoints",
+        "description": "Get the MCP token, accepted only by the MCP profile endpoints",
+        "operationId": "apiV1AuthMcp-tokenGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/H"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mcp-token/reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Reset the MCP token to a new secure random value",
+        "description": "Reset the MCP token to a new secure random value",
+        "operationId": "apiV1AuthMcp-tokenResetPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/H"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/model-token/reset": {
       "post": {
         "tags": [
@@ -338,6 +382,57 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bots/{bot}/chats/{chat}/alias": {
+      "put": {
+        "tags": [
+          "bot-access"
+        ],
+        "operationId": "apiV1BotsBotChatsChatAliasPut",
+        "parameters": [
+          {
+            "name": "bot",
+            "in": "path",
+            "description": "Path parameter 'bot'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "chat",
+            "in": "path",
+            "description": "Path parameter 'chat'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AliasUpdateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -954,6 +1049,57 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PermissionUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bots/{bot}/groups/{group}/alias": {
+      "put": {
+        "tags": [
+          "bot-access"
+        ],
+        "operationId": "apiV1BotsBotGroupsGroupAliasPut",
+        "parameters": [
+          {
+            "name": "bot",
+            "in": "path",
+            "description": "Path parameter 'bot'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group",
+            "in": "path",
+            "description": "Path parameter 'group'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AliasUpdateRequest"
               }
             }
           }
@@ -3779,6 +3925,163 @@
         }
       }
     },
+    "/api/v1/limit-policies": {
+      "get": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "List person / team / model limit policies (optional kind and ref filters)",
+        "description": "List person / team / model limit policies (optional kind and ref filters)",
+        "operationId": "apiV1Limit-policiesGet",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Query parameter kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "description": "Query parameter ref",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitPoliciesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/limit-policies/{kind}/{ref}": {
+      "put": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Create or replace a limit policy for a person (kind user, ref = sharing key user_id), a whole team (team), each member of a team (team_member) or an upstream model (model). An empty limits object deletes it",
+        "description": "Create or replace a limit policy for a person (kind user, ref = sharing key user_id), a whole team (team), each member of a team (team_member) or an upstream model (model). An empty limits object deletes it",
+        "operationId": "apiV1Limit-policiesKindRefPut",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Path parameter 'kind'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Path parameter 'ref'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LimitPolicyUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Delete a limit policy",
+        "description": "Delete a limit policy",
+        "operationId": "apiV1Limit-policiesKindRefDelete",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Path parameter 'kind'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Path parameter 'ref'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitPolicyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/limits/status": {
+      "get": {
+        "tags": [
+          "limits"
+        ],
+        "summary": "Live state (in-flight, usage window, pressure) of every account and rule service that has limits configured",
+        "description": "Live state (in-flight, usage window, pressure) of every account and rule service that has limits configured",
+        "operationId": "apiV1LimitsStatusGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/log": {
       "get": {
         "tags": [
@@ -5089,14 +5392,14 @@
         "tags": [
           "projects"
         ],
-        "summary": "List the IM chats bound to threads, all of them or one project's or thread's",
-        "description": "List the IM chats bound to threads, all of them or one project's or thread's",
+        "summary": "List IM chats bound to threads, projects, or folders",
+        "description": "List IM chats bound to threads, projects, or folders",
         "operationId": "apiV1ProjectsChannel-bindingsGet",
         "parameters": [
           {
             "name": "project_id",
             "in": "query",
-            "description": "Only chats bound to a thread of this project",
+            "description": "Only chats bound to this project or folder",
             "required": false,
             "schema": {
               "type": "string"
@@ -5129,8 +5432,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
-        "description": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
+        "summary": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
+        "description": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
         "operationId": "apiV1ProjectsChannel-bindingsPut",
         "requestBody": {
           "description": "Request body",
@@ -5183,6 +5486,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/directories": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Browse non-hidden directories under the server user home",
+        "description": "Browse non-hidden directories under the server user home",
+        "operationId": "apiV1ProjectsDirectoriesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowseDirectoriesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseDirectoriesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/directories/inspect": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Inspect a local directory or Git repository",
+        "description": "Inspect a local directory or Git repository",
+        "operationId": "apiV1ProjectsDirectoriesInspectPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRepoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectDirectoryResponse"
                 }
               }
             }
@@ -5428,6 +5797,83 @@
         }
       }
     },
+    "/api/v1/projects/{id}/coordinator/recover": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "description": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "operationId": "apiV1ProjectsIdCoordinatorRecoverPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoverCoordinatorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/coordinator/stop": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery",
+        "description": "Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery",
+        "operationId": "apiV1ProjectsIdCoordinatorStopPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/events": {
       "get": {
         "tags": [
@@ -5461,13 +5907,57 @@
         }
       }
     },
+    "/api/v1/projects/{id}/fork": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked",
+        "description": "Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked",
+        "operationId": "apiV1ProjectsIdForkPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/library": {
       "get": {
         "tags": [
           "projects"
         ],
-        "summary": "List library files (uploads and thread outputs)",
-        "description": "List library files (uploads and thread outputs)",
+        "summary": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
+        "description": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
         "operationId": "apiV1ProjectsIdLibraryGet",
         "parameters": [
           {
@@ -5518,6 +6008,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/library/archive": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "operationId": "apiV1ProjectsIdLibraryArchiveGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative folder; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -5600,6 +6132,81 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/library/tree": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "operationId": "apiV1ProjectsIdLibraryTreeGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative directory; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTreeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "description": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "operationId": "apiV1ProjectsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
                 }
               }
             }
@@ -6451,6 +7058,39 @@
         }
       }
     },
+    "/api/v1/rules/reorder": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs",
+        "description": "Apply a new list order to one scenario's rules. The order is hard state: it drives /v1/models listing, same-tier match priority and the model order written into client configs",
+        "operationId": "apiV1RulesReorderPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRulesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario-descriptors": {
       "get": {
         "tags": [
@@ -6627,6 +7267,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ClaudeCodeSlotsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/claude-code/use-profile": {
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)",
+        "description": "Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)",
+        "operationId": "apiV1ScenarioScenarioClaude-codeUse-profilePost",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaudeCodeUseProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeCodeUseProfileResponse"
                 }
               }
             }
@@ -7156,6 +7840,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProfileClaudeConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario/{scenario}/profiles/{id}/duplicate": {
+      "post": {
+        "tags": [
+          "scenarios"
+        ],
+        "summary": "Copy a profile (rules, flags and Claude Code overrides) into a new profile",
+        "description": "Copy a profile (rules, flags and Claude Code overrides) into a new profile",
+        "operationId": "apiV1ScenarioScenarioProfilesIdDuplicatePost",
+        "parameters": [
+          {
+            "name": "scenario",
+            "in": "path",
+            "description": "Path parameter 'scenario'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileDuplicateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -7748,6 +8485,50 @@
         }
       }
     },
+    "/api/v1/teams/{team_id}/duplicate": {
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Duplicate a team's routing into a new team; sharing keys are not copied",
+        "description": "Duplicate a team's routing into a new team; sharing keys are not copied",
+        "operationId": "apiV1TeamsTeam_idDuplicatePost",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamDuplicateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/teams/{team_id}/enable": {
       "put": {
         "tags": [
@@ -7834,6 +8615,48 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
+        "description": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
+        "operationId": "apiV1ThreadsIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteThreadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/threads/{id}/archive": {
@@ -7841,8 +8664,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Archive (resolve) the thread; it stays readable and can be reopened",
-        "description": "Archive (resolve) the thread; it stays readable and can be reopened",
+        "summary": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
+        "description": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
         "operationId": "apiV1ThreadsIdArchivePost",
         "parameters": [
           {
@@ -7988,6 +8811,39 @@
         }
       }
     },
+    "/api/v1/threads/{id}/cleanup": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
+        "description": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
+        "operationId": "apiV1ThreadsIdCleanupGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/diff": {
       "get": {
         "tags": [
@@ -8014,6 +8870,101 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/diff/file": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "description": "One file of the thread's changes: its patch, left out when it is binary or too large",
+        "operationId": "apiV1ThreadsIdDiffFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path as listed by the diff",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "old_path",
+            "in": "query",
+            "description": "Where a renamed file came from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/effort": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Set the thread's next-turn effort; empty restores its default",
+        "description": "Set the thread's next-turn effort; empty restores its default",
+        "operationId": "apiV1ThreadsIdEffortPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EffortRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
                 }
               }
             }
@@ -8108,6 +9059,59 @@
         }
       }
     },
+    "/api/v1/threads/{id}/events/{eid}/choose": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "description": "Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message",
+        "operationId": "apiV1ThreadsIdEventsEidChoosePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eid",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEvent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/events/{eid}/start": {
       "post": {
         "tags": [
@@ -8194,13 +9198,57 @@
         }
       }
     },
+    "/api/v1/threads/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "description": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "operationId": "apiV1ThreadsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshLinksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/merge": {
       "post": {
         "tags": [
           "threads"
         ],
-        "summary": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
-        "description": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
+        "summary": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
+        "description": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
         "operationId": "apiV1ThreadsIdMergePost",
         "parameters": [
           {
@@ -8213,6 +9261,17 @@
             }
           }
         ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -8220,16 +9279,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "merge blocked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MergeBlockedResponse"
                 }
               }
             }
@@ -8460,9 +9509,75 @@
         "tags": [
           "threads"
         ],
-        "summary": "Reopen an archived thread",
-        "description": "Reopen an archived thread",
+        "summary": "Reopen a resolved thread",
+        "description": "Reopen a resolved thread",
         "operationId": "apiV1ThreadsIdReopenPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/requests": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond",
+        "description": "The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond",
+        "operationId": "apiV1ThreadsIdRequestsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/resolve": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Resolve the thread; it stays readable and can be reopened",
+        "description": "Resolve the thread; it stays readable and can be reopened",
+        "operationId": "apiV1ThreadsIdResolvePost",
         "parameters": [
           {
             "name": "id",
@@ -8525,6 +9640,115 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/restart": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Stop the agent process and its work; the next message resumes the same session in a fresh process",
+        "description": "Stop the agent process and its work; the next message resumes the same session in a fresh process",
+        "operationId": "apiV1ThreadsIdRestartPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/restore": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
+        "description": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
+        "operationId": "apiV1ThreadsIdRestorePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/retry": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again",
+        "description": "Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again",
+        "operationId": "apiV1ThreadsIdRetryPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "no failed turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -11035,6 +12259,18 @@
           "reasoning_tokens"
         ]
       },
+      "AliasUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          }
+        },
+        "required": [
+          "alias"
+        ]
+      },
       "ApplyClaudeConfigRequest": {
         "type": "object",
         "properties": {
@@ -11532,6 +12768,10 @@
       "BindChannelRequest": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -11776,6 +13016,43 @@
           "ok"
         ]
       },
+      "BrowseDirectoriesRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "BrowseDirectoriesResponse": {
+        "type": "object",
+        "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "type": "string"
+            }
+          },
+          "home": {
+            "type": "string",
+            "description": "Field home"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "home",
+          "path",
+          "directories"
+        ]
+      },
       "CapabilityListResponse": {
         "type": "object",
         "properties": {
@@ -11883,6 +13160,10 @@
       "ChannelBinding": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -11896,6 +13177,23 @@
             "format": "date-time",
             "description": "Field created_at"
           },
+          "focus_agent": {
+            "type": "string",
+            "description": "Field focus_agent"
+          },
+          "focus_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field focus_seq"
+          },
+          "focus_title": {
+            "type": "string",
+            "description": "Field focus_title"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -11907,6 +13205,23 @@
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "target_project_id": {
+            "type": "string",
+            "description": "Field target_project_id"
+          },
+          "target_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field target_seq"
+          },
+          "target_thread_id": {
+            "type": "string",
+            "description": "Field target_thread_id"
+          },
+          "target_title": {
+            "type": "string",
+            "description": "Field target_title"
           },
           "thread_id": {
             "type": "string",
@@ -11932,6 +13247,19 @@
           "project_id",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ChooseRequest": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field index"
+          }
+        },
+        "required": [
+          "index"
         ]
       },
       "ClaudeCodeEnvResponse": {
@@ -12213,6 +13541,31 @@
           "data"
         ]
       },
+      "ClaudeCodeUseProfileRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "description": "Field profile",
+            "example": "p1"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "ClaudeCodeUseProfileResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "ClaudeConfigResponse": {
         "type": "object",
         "properties": {
@@ -12252,6 +13605,73 @@
           "installStatusLine",
           "showThinkingSummaries",
           "coAuthoredBy"
+        ]
+      },
+      "CleanupReport": {
+        "type": "object",
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "description": "Field blockers",
+            "items": {
+              "type": "string"
+            }
+          },
+          "can_archive": {
+            "type": "boolean",
+            "description": "Field can_archive"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "description": "Field can_delete"
+          },
+          "kept": {
+            "type": "array",
+            "description": "Field kept",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "Field thread_id"
+          },
+          "tmp_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field tmp_bytes"
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Field warnings",
+            "items": {
+              "type": "string"
+            }
+          },
+          "worktree_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field worktree_bytes"
+          }
+        },
+        "required": [
+          "thread_id",
+          "worktree_bytes",
+          "tmp_bytes",
+          "kept",
+          "can_archive",
+          "can_delete"
+        ]
+      },
+      "CleanupResponse": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/CleanupReport"
+          }
+        },
+        "required": [
+          "report"
         ]
       },
       "ClientConfigDifference": {
@@ -12608,6 +14028,17 @@
       "CreateProjectRequest": {
         "type": "object",
         "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -12619,6 +14050,10 @@
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -12819,6 +14254,17 @@
           "content": {
             "type": "string",
             "description": "Field content"
+          },
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
           },
           "model": {
             "type": "string",
@@ -13075,9 +14521,27 @@
           "message"
         ]
       },
+      "DeleteThreadRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_branch": {
+            "type": "string",
+            "description": "Field confirm_branch"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Field force"
+          }
+        }
+      },
       "Diff": {
         "type": "object",
         "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
           "base": {
             "type": "string",
             "description": "Field base"
@@ -13086,17 +14550,22 @@
             "type": "string",
             "description": "Field branch"
           },
-          "patch": {
-            "type": "string",
-            "description": "Field patch"
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
           },
-          "stat": {
-            "type": "string",
-            "description": "Field stat"
+          "files": {
+            "type": "array",
+            "description": "Field files",
+            "items": {
+              "$ref": "#/components/schemas/DiffFile"
+            }
           },
-          "truncated": {
-            "type": "boolean",
-            "description": "Field truncated"
+          "files_omitted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field files_omitted"
           },
           "uncommitted": {
             "type": "string",
@@ -13106,15 +14575,60 @@
         "required": [
           "base",
           "branch",
-          "stat",
-          "patch",
-          "uncommitted",
-          "truncated"
+          "files",
+          "additions",
+          "deletions",
+          "uncommitted"
+        ]
+      },
+      "DiffFile": {
+        "type": "object",
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "Field generated"
+          },
+          "old_path": {
+            "type": "string",
+            "description": "Field old_path"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          }
+        },
+        "required": [
+          "path",
+          "status",
+          "additions",
+          "deletions"
         ]
       },
       "DirectChat": {
         "type": "object",
         "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -13135,6 +14649,10 @@
           "id": {
             "type": "string",
             "description": "Field id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
           },
           "paired_at": {
             "type": "string",
@@ -13201,6 +14719,27 @@
         },
         "required": [
           "chats"
+        ]
+      },
+      "DirectorySpec": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "",
+              "shared",
+              "worktree"
+            ]
+          }
+        },
+        "required": [
+          "path"
         ]
       },
       "DiscoverIdesResponse": {
@@ -13333,6 +14872,9 @@
             "type": "string",
             "description": "Field api_style"
           },
+          "decision_request": {
+            "description": "Field decision_request"
+          },
           "direct": {
             "type": "boolean",
             "description": "Field direct"
@@ -13360,6 +14902,10 @@
           "name": {
             "type": "string",
             "description": "Field name"
+          },
+          "operation": {
+            "type": "string",
+            "description": "Field operation"
           },
           "protocol": {
             "type": "string",
@@ -13436,6 +14982,25 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "EffortRequest": {
+        "type": "object",
+        "properties": {
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "required": [
+          "effort"
         ]
       },
       "Entry": {
@@ -13855,6 +15420,36 @@
           "helperText"
         ]
       },
+      "FileDiff": {
+        "type": "object",
+        "properties": {
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "lines_cut": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field lines_cut"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "too_large": {
+            "type": "boolean",
+            "description": "Field too_large"
+          }
+        },
+        "required": [
+          "path",
+          "patch"
+        ]
+      },
       "FlagOption": {
         "type": "object",
         "properties": {
@@ -13951,6 +15546,15 @@
           "category"
         ]
       },
+      "ForkProjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        }
+      },
       "GenerateTokenRequest": {
         "type": "object",
         "properties": {
@@ -13967,6 +15571,10 @@
       "Group": {
         "type": "object",
         "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Field alias"
+          },
           "blocked": {
             "type": "boolean",
             "description": "Field blocked"
@@ -14646,6 +16254,48 @@
           "message"
         ]
       },
+      "InspectDirectoryResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "dirty": {
+            "type": "boolean",
+            "description": "Field dirty"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "git",
+              "directory"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Field ok"
+          },
+          "root": {
+            "type": "string",
+            "description": "Field root"
+          }
+        },
+        "required": [
+          "ok",
+          "root",
+          "kind",
+          "branch",
+          "dirty",
+          "error"
+        ]
+      },
       "InspectRepoRequest": {
         "type": "object",
         "properties": {
@@ -14768,6 +16418,45 @@
           "success"
         ]
       },
+      "LibraryEntry": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Field origin"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size",
+          "updated_at",
+          "origin"
+        ]
+      },
       "LibraryFile": {
         "type": "object",
         "properties": {
@@ -14815,6 +16504,31 @@
         "required": [
           "dir",
           "files"
+        ]
+      },
+      "LibraryTreeResponse": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "Field dir"
+          },
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/LibraryEntry"
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "dir",
+          "path",
+          "entries"
         ]
       },
       "LightweightProbeRequest": {
@@ -14988,6 +16702,325 @@
         },
         "required": [
           "success"
+        ]
+      },
+      "LimitPoliciesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/LimitPolicy"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "LimitPolicy": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "overflow": {
+            "type": "string",
+            "description": "Field overflow"
+          },
+          "queue_timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field queue_timeout_seconds"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Field ref"
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "limits"
+        ]
+      },
+      "LimitPolicyQuery": {
+        "type": "object",
+        "properties": {
+          "Kind": {
+            "type": "string",
+            "description": "user | team | team_member | model"
+          },
+          "Ref": {
+            "type": "string",
+            "description": "user_id, team id or model name"
+          }
+        },
+        "required": [
+          "Kind",
+          "Ref"
+        ]
+      },
+      "LimitPolicyResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LimitPolicy"
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "false after a delete or when the saved policy held no limit"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "exists"
+        ]
+      },
+      "LimitPolicyUpsertRequest": {
+        "type": "object",
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "overflow": {
+            "type": "string",
+            "description": "user/team/team_member: queue (default) | reject"
+          },
+          "queue_timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field queue_timeout_seconds"
+          }
+        },
+        "required": [
+          "limits"
+        ]
+      },
+      "LimitStatusEntry": {
+        "type": "object",
+        "properties": {
+          "inflight": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field inflight"
+          },
+          "inherited_from": {
+            "type": "string",
+            "description": "team_member when a per-member template governs this person"
+          },
+          "key": {
+            "type": "string",
+            "description": "Field key"
+          },
+          "label": {
+            "type": "string",
+            "description": "human-readable name (key display name, team name, provider name)"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "overflow": {
+            "type": "string",
+            "description": "actor scopes: queue | reject"
+          },
+          "pressure": {
+            "type": "number",
+            "format": "double",
+            "description": "largest used/limit ratio; 1 = at the hard limit"
+          },
+          "provider_name": {
+            "type": "string",
+            "description": "Field provider_name"
+          },
+          "provider_uuid": {
+            "type": "string",
+            "description": "Field provider_uuid"
+          },
+          "queue_timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field queue_timeout_seconds"
+          },
+          "ref": {
+            "type": "string",
+            "description": "policy ref for user/team/model scopes (user_id, team id, model name)"
+          },
+          "request_model": {
+            "type": "string",
+            "description": "Field request_model"
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "requests admitted in the current usage window"
+          },
+          "rule_uuid": {
+            "type": "string",
+            "description": "Field rule_uuid"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "scope": {
+            "type": "string",
+            "description": "account | service | model | user | team",
+            "example": "account"
+          },
+          "state": {
+            "type": "string",
+            "description": "ok | hot | blocked",
+            "example": "ok"
+          },
+          "team_id": {
+            "type": "string",
+            "description": "Field team_id"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "tokens recorded in the current usage window"
+          }
+        },
+        "required": [
+          "scope",
+          "key",
+          "limits",
+          "inflight",
+          "requests",
+          "tokens",
+          "pressure",
+          "state"
+        ]
+      },
+      "Limits": {
+        "type": "object",
+        "properties": {
+          "max_concurrent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_concurrent"
+          },
+          "max_requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_requests"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_tokens"
+          },
+          "quota_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field quota_percent"
+          },
+          "soft_percent": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field soft_percent"
+          },
+          "window_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field window_seconds"
+          }
+        }
+      },
+      "LimitsStatusResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Field data",
+            "items": {
+              "$ref": "#/components/schemas/LimitStatusEntry"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success",
+            "example": true
+          }
+        },
+        "required": [
+          "success",
+          "data"
+        ]
+      },
+      "LinkCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "LinkChecks": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "array",
+            "description": "Field failed",
+            "items": {
+              "$ref": "#/components/schemas/LinkCheck"
+            }
+          },
+          "failing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failing"
+          },
+          "more": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field more"
+          },
+          "passing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field passing"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field pending"
+          }
+        },
+        "required": [
+          "passing",
+          "failing",
+          "pending"
         ]
       },
       "ListQuotaResponse": {
@@ -15797,21 +17830,32 @@
           "files"
         ]
       },
-      "MergeBlockedResponse": {
+      "MergeRequest": {
         "type": "object",
         "properties": {
-          "command": {
+          "body": {
             "type": "string",
-            "description": "Field command"
+            "description": "Field body"
           },
-          "error": {
+          "message": {
             "type": "string",
-            "description": "Field error"
+            "description": "Field message"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method",
+            "enum": [
+              "squash",
+              "merge_request"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
           }
         },
         "required": [
-          "error",
-          "command"
+          "method"
         ]
       },
       "MetaData": {
@@ -17200,6 +19244,13 @@
             "type": "string",
             "description": "Field inheritedDefaultMode"
           },
+          "overrideKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Field overrideKeys"
+          },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
           },
@@ -17217,6 +19268,7 @@
           "preferences",
           "inheritedDefaultMode",
           "defaultMode",
+          "overrideKeys",
           "hasOverrides",
           "settingsPath",
           "settingsExists"
@@ -17228,6 +19280,13 @@
           "defaultMode": {
             "type": "string",
             "description": "Field defaultMode"
+          },
+          "overrideKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicitly overridden fields. An empty list restores inheritance; omitting the list updates by comparing preferences with the base."
           },
           "preferences": {
             "$ref": "#/components/schemas/ClaudeCodePrefs"
@@ -17269,9 +19328,23 @@
           "name"
         ]
       },
+      "ProfileDuplicateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "work-copy"
+          }
+        }
+      },
       "ProfileRequest": {
         "type": "object",
         "properties": {
+          "inherit": {
+            "type": "boolean",
+            "description": "Field inherit"
+          },
           "profile": {
             "type": "string",
             "description": "Field profile"
@@ -17324,6 +19397,10 @@
       "ProfileUpdateRequest": {
         "type": "object",
         "properties": {
+          "mcp_profile": {
+            "type": "string",
+            "description": "Field mcp_profile"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -17350,10 +19427,18 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
           },
           "goal": {
             "type": "string",
@@ -17371,6 +19456,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -17382,6 +19472,10 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -17398,6 +19492,10 @@
             "type": "string",
             "description": "Field thread_effort"
           },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -17405,6 +19503,10 @@
           "thread_permission_mode": {
             "type": "string",
             "description": "Field thread_permission_mode"
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           },
           "type": {
             "type": "string",
@@ -17423,11 +19525,14 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -17437,9 +19542,21 @@
       "ProjectDetailResponse": {
         "type": "object",
         "properties": {
+          "coordinator": {
+            "$ref": "#/components/schemas/Thread"
+          },
           "coordinator_busy": {
             "type": "boolean",
             "description": "Field coordinator_busy"
+          },
+          "coordinator_queued": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field coordinator_queued"
+          },
+          "coordinator_recovery": {
+            "type": "string",
+            "description": "Field coordinator_recovery"
           },
           "counts": {
             "$ref": "#/components/schemas/ThreadCounts"
@@ -17459,7 +19576,8 @@
           "project",
           "threads",
           "counts",
-          "coordinator_busy"
+          "coordinator_busy",
+          "coordinator_queued"
         ]
       },
       "ProjectListResponse": {
@@ -17506,11 +19624,17 @@
           "cli_path": {
             "type": "string",
             "description": "Field cli_path"
+          },
+          "max_running_threads_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads_limit"
           }
         },
         "required": [
           "cli_path",
-          "base_url"
+          "base_url",
+          "max_running_threads_limit"
         ]
       },
       "ProjectSummary": {
@@ -17529,10 +19653,18 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
           },
           "goal": {
             "type": "string",
@@ -17550,6 +19682,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -17561,6 +19698,10 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -17577,6 +19718,10 @@
             "type": "string",
             "description": "Field thread_effort"
           },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -17584,6 +19729,10 @@
           "thread_permission_mode": {
             "type": "string",
             "description": "Field thread_permission_mode"
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
@@ -17605,11 +19754,14 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -17943,6 +20095,9 @@
             "description": "Field enabled",
             "example": true
           },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
           "name": {
             "type": "string",
             "description": "Field name",
@@ -17995,6 +20150,9 @@
         "properties": {
           "account": {
             "$ref": "#/components/schemas/UsageAccount"
+          },
+          "backoff": {
+            "$ref": "#/components/schemas/UsageBackoff"
           },
           "breakdowns": {
             "type": "array",
@@ -18179,6 +20337,27 @@
           "success"
         ]
       },
+      "RecoverCoordinatorRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action",
+            "enum": [
+              "retry",
+              "skip"
+            ]
+          },
+          "input_id": {
+            "type": "string",
+            "description": "Field input_id"
+          }
+        },
+        "required": [
+          "input_id",
+          "action"
+        ]
+      },
       "RedeemResponse": {
         "type": "object",
         "properties": {
@@ -18195,6 +20374,82 @@
           }
         },
         "required": [
+          "status"
+        ]
+      },
+      "RefreshLinksRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "issue",
+              "pr"
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          }
+        }
+      },
+      "RefreshLinksResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "description": "Field results",
+            "items": {
+              "$ref": "#/components/schemas/RefreshResult"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "RefreshResult": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status",
+            "enum": [
+              "refreshed",
+              "recent",
+              "failed",
+              "limited"
+            ]
+          }
+        },
+        "required": [
+          "repo",
+          "kind",
+          "number",
           "status"
         ]
       },
@@ -18239,6 +20494,27 @@
           "message"
         ]
       },
+      "ReorderRulesRequest": {
+        "type": "object",
+        "properties": {
+          "ordered_uuids": {
+            "type": "array",
+            "description": "Field ordered_uuids",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario",
+            "example": "openai"
+          }
+        },
+        "required": [
+          "scenario",
+          "ordered_uuids"
+        ]
+      },
       "Repo": {
         "type": "object",
         "properties": {
@@ -18246,14 +20522,45 @@
             "type": "string",
             "description": "Field base_branch"
           },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "git",
+              "directory"
+            ]
+          },
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "shared",
+              "worktree"
+            ]
           }
         },
         "required": [
           "path",
           "base_branch"
+        ]
+      },
+      "RequestsResponse": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "description": "Field requests",
+            "items": {
+              "$ref": "#/components/schemas/ThreadEvent"
+            }
+          }
+        },
+        "required": [
+          "requests"
         ]
       },
       "ResourceMatcher": {
@@ -18331,6 +20638,9 @@
           "content": {
             "type": "string",
             "description": "Field content"
+          },
+          "decision_response": {
+            "description": "Field decision_response"
           },
           "direct": {
             "type": "boolean",
@@ -18829,12 +21139,25 @@
             "type": "string",
             "description": "Field custom_user_agent"
           },
+          "disable_thinking_budget": {
+            "type": "boolean",
+            "description": "Field disable_thinking_budget"
+          },
           "extra_headers": {
             "type": "object",
             "description": "Field extra_headers",
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "limit_overflow": {
+            "type": "string",
+            "description": "Field limit_overflow"
+          },
+          "limit_queue_timeout": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field limit_queue_timeout"
           },
           "openai_endpoint_override": {
             "type": "string",
@@ -19309,6 +21632,9 @@
           "active": {
             "type": "boolean",
             "description": "Field active"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
           },
           "model": {
             "type": "string",
@@ -20150,6 +22476,16 @@
           "size"
         ]
       },
+      "TeamDuplicateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "Research copy"
+          }
+        }
+      },
       "TeamInfo": {
         "type": "object",
         "properties": {
@@ -20201,6 +22537,11 @@
             "type": "string",
             "description": "Field agent"
           },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field archived_at"
+          },
           "auto_answer": {
             "type": "string",
             "description": "Field auto_answer"
@@ -20213,10 +22554,30 @@
             "type": "string",
             "description": "Field branch"
           },
+          "cache_read_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_read_tokens"
+          },
+          "cache_write_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_tokens"
+          },
           "commits_ahead": {
             "type": "integer",
             "format": "int64",
             "description": "Field commits_ahead"
+          },
+          "context_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context_tokens"
+          },
+          "context_window": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context_window"
           },
           "created_at": {
             "type": "string",
@@ -20226,6 +22587,10 @@
           "cwd": {
             "type": "string",
             "description": "Field cwd"
+          },
+          "effort_override": {
+            "type": "string",
+            "description": "Field effort_override"
           },
           "files_changed": {
             "type": "integer",
@@ -20248,6 +22613,23 @@
           "last_report": {
             "type": "string",
             "description": "Field last_report"
+          },
+          "last_turn_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_turn_at"
+          },
+          "last_turn_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field last_turn_ms"
+          },
+          "links": {
+            "type": "array",
+            "description": "Field links",
+            "items": {
+              "$ref": "#/components/schemas/ThreadLink"
+            }
           },
           "merged_at": {
             "type": "string",
@@ -20283,18 +22665,35 @@
             "type": "string",
             "description": "Field profile"
           },
+          "profile_override": {
+            "type": "string",
+            "description": "Field profile_override"
+          },
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "queued": {
+            "type": "boolean",
+            "description": "Field queued"
           },
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
           },
+          "reported_model": {
+            "type": "string",
+            "description": "Field reported_model"
+          },
           "resolved_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field resolved_at"
+          },
+          "running_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field running_tasks"
           },
           "seq": {
             "type": "integer",
@@ -20334,6 +22733,11 @@
           "wait_reason": {
             "type": "string",
             "description": "Field wait_reason"
+          },
+          "worktree_freed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field worktree_freed_at"
           }
         },
         "required": [
@@ -20344,14 +22748,21 @@
           "title",
           "task",
           "status",
+          "running_tasks",
           "origin",
           "cwd",
+          "profile_override",
           "commits_ahead",
           "files_changed",
           "uncommitted",
           "turns",
           "input_tokens",
           "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "context_tokens",
+          "context_window",
+          "last_turn_ms",
           "created_at",
           "updated_at"
         ]
@@ -20488,6 +22899,99 @@
           "content",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ThreadLink": {
+        "type": "object",
+        "properties": {
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field attempted_at"
+          },
+          "base": {
+            "type": "string",
+            "description": "Field base"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/LinkChecks"
+          },
+          "ci": {
+            "type": "string",
+            "description": "Field ci"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Field draft"
+          },
+          "failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failures"
+          },
+          "head": {
+            "type": "string",
+            "description": "Field head"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Field last_error"
+          },
+          "merge_state": {
+            "type": "string",
+            "description": "Field merge_state"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "refreshed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field refreshed_at"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "kind",
+          "repo",
+          "number",
+          "url",
+          "title",
+          "role",
+          "state",
+          "refreshed_at",
+          "attempted_at",
+          "created_at"
         ]
       },
       "ThreadRespondRequest": {
@@ -20956,6 +23460,16 @@
             "format": "int64",
             "description": "Field cache_write_tokens"
           },
+          "cache_write_ttl_12h_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_ttl_12h_tokens"
+          },
+          "cache_write_ttl_30m_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_ttl_30m_tokens"
+          },
           "input_tokens": {
             "type": "integer",
             "format": "int64",
@@ -21202,6 +23716,21 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -21210,6 +23739,11 @@
             "type": "string",
             "description": "Field instructions"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -21217,6 +23751,13 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_directory_mode": {
+            "$ref": "#/components/schemas/DirectorySpec"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -21240,6 +23781,14 @@
               "max"
             ]
           },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access",
+            "enum": [
+              "ask",
+              "allow"
+            ]
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -21253,6 +23802,10 @@
               "auto",
               "bypassPermissions"
             ]
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           }
         }
       },
@@ -21285,6 +23838,9 @@
           "enabled": {
             "type": "boolean",
             "description": "New enabled status"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
           },
           "name": {
             "type": "string",
@@ -21525,6 +24081,25 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "UsageBackoff": {
+        "type": "object",
+        "properties": {
+          "failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failures"
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field next_attempt_at"
+          }
+        },
+        "required": [
+          "failures",
+          "next_attempt_at"
         ]
       },
       "UsageBreakdown": {
@@ -22140,6 +24715,10 @@
           "message": {
             "type": "string",
             "description": "Field message"
+          },
+          "response_body": {
+            "type": "string",
+            "description": "Field response_body"
           },
           "type": {
             "type": "string",
@@ -23014,6 +25593,10 @@
     {
       "name": "info",
       "description": "Operations related to info"
+    },
+    {
+      "name": "limits",
+      "description": "Operations related to limits"
     },
     {
       "name": "logs",

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { RepoField, type RepoEntry } from './RepoField';
+import { directoryPayload, RepoField, type DirectoryConfig, type RepoEntry } from './RepoField';
 
 interface Props {
     open: boolean;
     onClose: () => void;
-    onCreate: (v: { name: string; goal: string; repos: string[] }) => Promise<void>;
+    onCreate: (v: { name: string; goal: string; directories: DirectoryConfig[]; primary_repo_path: string }) => Promise<void>;
 }
 
 /** Only the name is required: a project can be created first and filled in
@@ -16,6 +16,7 @@ export function NewProjectDialog({ open, onClose, onCreate }: Props) {
     const [name, setName] = useState('');
     const [goal, setGoal] = useState('');
     const [repos, setRepos] = useState<RepoEntry[]>([]);
+    const [primary, setPrimary] = useState('');
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
@@ -23,6 +24,7 @@ export function NewProjectDialog({ open, onClose, onCreate }: Props) {
             setName('');
             setGoal('');
             setRepos([]);
+            setPrimary('');
         }
     }, [open]);
 
@@ -30,7 +32,7 @@ export function NewProjectDialog({ open, onClose, onCreate }: Props) {
         if (!name.trim()) return;
         setBusy(true);
         try {
-            await onCreate({ name: name.trim(), goal: goal.trim(), repos: repos.map((r) => r.root) });
+            await onCreate({ name: name.trim(), goal: goal.trim(), ...directoryPayload(repos, primary) });
             onClose();
         } catch {
             // the caller already reported it
@@ -65,7 +67,7 @@ export function NewProjectDialog({ open, onClose, onCreate }: Props) {
                     <Box>
                         <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.25 }}>{t('project.repos')}</Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{t('project.reposHelp')}</Typography>
-                        <RepoField value={repos} onChange={setRepos} />
+                        <RepoField value={repos} onChange={setRepos} primary={primary} onPrimaryChange={setPrimary} />
                     </Box>
                 </Stack>
             </DialogContent>

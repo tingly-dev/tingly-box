@@ -1,6 +1,7 @@
 import { Alert, AlertTitle, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Context1MChangeBannerProps {
     enabled: boolean;
@@ -22,7 +23,7 @@ const Context1MChangeBanner: React.FC<Context1MChangeBannerProps> = ({ enabled, 
             severity={enabled ? 'success' : 'warning'}
             sx={{
                 mb: 2,
-                borderRadius: 2,
+                borderRadius: radius.card,
                 '& .MuiAlert-icon': { fontSize: 28 },
             }}
         >

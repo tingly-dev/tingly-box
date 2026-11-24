@@ -22,7 +22,7 @@ import (
 // PermissionModes lists the Claude Code permission modes a session can run in.
 var PermissionModes = []string{"default", "acceptEdits", "auto", "plan", "dontAsk", "bypassPermissions"}
 
-// ValidPermissionMode reports whether m is empty (inherit) or a known mode.
+// ValidPermissionMode reports whether m is empty (reset to the default) or a known mode.
 func ValidPermissionMode(m string) bool {
 	if m == "" {
 		return true
@@ -55,6 +55,7 @@ type FolderThreadSpec struct {
 	Attachments    []Attachment
 	Title          string
 	Model          string
+	Effort         string
 	PermissionMode string
 	// Profile is the host's launch profile (see Launcher); empty for its default.
 	Profile string
@@ -90,6 +91,12 @@ func CleanFolder(raw string) (string, error) {
 // StartFolderThread creates a thread in a folder project and runs its first
 // turn.
 func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
+	return m.startFolderThread(spec, nil)
+}
+
+// startFolderThread calls beforeStart after persistence and before enqueueing the
+// first turn, allowing an IM binding to exist before replies or prompts arrive.
+func (m *Threads) startFolderThread(spec FolderThreadSpec, beforeStart func(*db.Thread) error) (*db.Thread, error) {
 	p, err := m.store.GetProject(spec.ProjectID)
 	if err != nil {
 		return nil, err
@@ -110,6 +117,9 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 	task := strings.TrimSpace(spec.Task)
 	if task == "" && len(spec.Attachments) == 0 {
 		return nil, errors.New("the first message is empty")
+	}
+	if !ValidEffort(spec.Effort) {
+		return nil, errors.New("invalid effort level")
 	}
 	if !ValidPermissionMode(spec.PermissionMode) {
 		return nil, ErrBadPermission
@@ -133,11 +143,20 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 		ProjectID: p.ID, Agent: db.AgentClaudeCode,
 		Title: title, Task: task, Status: db.ThreadWorking, Origin: "user",
 		Cwd: folder, SessionID: uuid.NewString(),
-		Model: model, PermissionMode: spec.PermissionMode, Profile: profile,
+		Model: model, EffortOverride: spec.Effort, PermissionMode: spec.PermissionMode, Profile: profile,
 		HeadBranch: HeadBranch(context.Background(), folder),
+	}
+	if t.PermissionMode == "" {
+		t.PermissionMode = permissionMode(p)
 	}
 	if err := m.store.CreateThread(t); err != nil {
 		return nil, err
+	}
+	if beforeStart != nil {
+		if err := beforeStart(t); err != nil {
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed to start: "+err.Error() })
+			return nil, err
+		}
 	}
 	_ = m.store.TouchProject(p.ID)
 	m.publish(t)
@@ -147,12 +166,22 @@ func (m *Threads) StartFolderThread(spec FolderThreadSpec) (*db.Thread, error) {
 
 // SetPermissionMode saves the mode for the thread's next started turn.
 // The engine applies it live then, or reopens with --resume if that fails.
+// Empty resets the thread to its project's (or folder's) current mode: a
+// copy, not a link.
 func (m *Threads) SetPermissionMode(id, mode string) (*db.Thread, error) {
 	if !ValidPermissionMode(mode) {
 		return nil, ErrBadPermission
 	}
-	if _, err := m.store.GetThread(id); err != nil {
+	t, err := m.store.GetThread(id)
+	if err != nil {
 		return nil, err
+	}
+	if mode == "" && t.Agent != db.AgentLLM {
+		p, err := m.store.GetProject(t.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		mode = permissionMode(p)
 	}
 	out, err := m.update(id, func(t *db.Thread) { t.PermissionMode = mode })
 	if err == nil {

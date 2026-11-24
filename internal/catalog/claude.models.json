@@ -1,5 +1,21 @@
 [
   {
+    "id": "claude-fable-5-2",
+    "reasoning": {
+      "dialects": [
+        "adaptive"
+      ],
+      "mandatory": true,
+      "supported_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  },
+  {
     "id": "claude-haiku-5-5",
     "reasoning": {
       "dialects": [

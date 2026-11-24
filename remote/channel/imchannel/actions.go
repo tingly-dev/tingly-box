@@ -2,22 +2,23 @@ package imchannel
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/remote/channel"
 )
 
-// Button is one control of a message sent with SendActions: what it reads
-// and the payload segments a press delivers to the bot's callback handler.
-type Button struct {
-	Label   string
-	Payload []string
-}
+// Button is one control of a message sent with SendActions (see channel.Button).
+type Button = channel.Button
 
 // ErrNoButtons means the channel's platform cannot show buttons; the caller
 // sends text instead.
-var ErrNoButtons = errors.New("imchannel: the platform has no buttons")
+var ErrNoButtons = channel.ErrNoButtons
+
+var (
+	_ channel.ActionSender = (*Channel)(nil)
+	_ channel.FileSender   = (*Channel)(nil)
+)
 
 // SendActions sends text with one button per row and returns the sent
 // message's id, for Restate. Unlike Prompt it does not wait for a press: the

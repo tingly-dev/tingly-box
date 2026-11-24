@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	"github.com/tingly-dev/tingly-box/internal/routing/routingtest"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -120,7 +121,7 @@ func TestExhaustive_SelectionDegradeInvariant(t *testing.T) {
 
 		baseSvcs := make([]*loadbalance.Service, len(baseStates))
 		for i, st := range baseStates {
-			baseSvcs[i] = routing.ServiceForTest(providers[fmt.Sprintf("base%d", i+1)], fmt.Sprintf("base-model-%d", i+1), st.active)
+			baseSvcs[i] = routingtest.Service(providers[fmt.Sprintf("base%d", i+1)], fmt.Sprintf("base-model-%d", i+1), st.active)
 		}
 		rule := &typ.Rule{
 			Scenario:     typ.ScenarioClaudeCode,
@@ -132,7 +133,7 @@ func TestExhaustive_SelectionDegradeInvariant(t *testing.T) {
 		}
 		var partSvc *loadbalance.Service
 		if partState != nil {
-			partSvc = routing.ServiceForTest(providers["part"], "part-model", partState.active)
+			partSvc = routingtest.Service(providers["part"], "part-model", partState.active)
 			rule.SmartEnabled = true
 			rule.SmartRouting = []smartrouting.SmartRouting{{
 				Description: "always matches",

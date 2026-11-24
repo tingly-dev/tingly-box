@@ -4,7 +4,6 @@ import {
 } from '@/components/icons';
 import {
     Box,
-    IconButton,
     Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -12,7 +11,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip';
 import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, ROUTE_GRAPH_QUIET_CLASS, SMALL_NODE_STYLES, SMART_NODE_STYLES } from './styles';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 const { node } = { node: SMALL_NODE_STYLES };
 
@@ -126,7 +125,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 {label ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.primary' }}>
                         {icon === 'close' ? <CloseIcon sx={{ fontSize: 16 }} /> : <AddIcon sx={{ fontSize: 16 }} />}
-                        <Typography variant="caption" sx={{ color: 'inherit', fontSize: fontSizes.xs, lineHeight: 1 }}>{label}</Typography>
+                        <Typography variant="caption" sx={{ color: 'inherit', fontSize: fontSizes.micro, lineHeight: 1 }}>{label}</Typography>
                     </Box>
                 ) : (<>
                 <AddIcon sx={{ fontSize: 24, color: 'text.primary' }} />

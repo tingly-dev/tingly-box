@@ -1,0 +1,2 @@
+# The repo ignores *.out; the captured server responses are part of the example.
+!*.out

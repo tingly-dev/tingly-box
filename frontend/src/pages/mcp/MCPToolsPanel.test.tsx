@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MCPToolsPanel from './MCPToolsPanel';
-import type { MCPRouteSource, MCPSourceConfig } from './types';
+import type { MCPRouteSource, MCPSourceConfig } from '../../features/mcp/types';
 
 const mocks = vi.hoisted(() => ({ save: vi.fn() }));
 vi.mock('react-i18next', () => ({
@@ -143,16 +143,30 @@ describe('tool list', () => {
         expect(screen.getByText('Output schema')).toBeInTheDocument();
         expect(screen.getAllByText(/"type": "object"/).length).toBeGreaterThan(0);
     });
-    it('turns every tool of a connection on or off in one save', async () => {
-        const two = [tool, { ...tool, name: 'read', normalized_name: 'read' }];
+    it('turns every tool of a connection on or off in one save from the group switch', async () => {
+        const two = [tool, { ...tool, name: 'read', normalized_name: 'read', enabled: false }];
         render(<MCPToolsPanel {...props} routes={[{ ...route, tools: two }]} />);
-        fireEvent.click(screen.getByRole('button', { name: 'All' }));
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Turn off' }));
+        const group = screen.getByRole('switch', { name: 'Remote docs: All tools on' });
+        // Some on: mixed, shown as not checked, and a click turns the whole group on.
+        expect(group.closest('.MuiSwitch-root')).toHaveAttribute('data-state', 'mixed');
+        expect(screen.getByText('1 of 2 tools on')).toBeInTheDocument();
+        fireEvent.click(group);
         await waitFor(() =>
             expect(mocks.save).toHaveBeenCalledWith({
                 id: 'remote',
-                tool_policies: { echo: { enabled: false }, read: { enabled: false }, other: undefined },
+                tool_policies: { echo: { enabled: true }, read: { enabled: true }, other: undefined },
             })
         );
+    });
+    it('has no group switch for a single tool and folds a group to its header', async () => {
+        localStorage.clear();
+        render(<MCPToolsPanel {...props} />);
+        expect(screen.queryByRole('switch', { name: /All tools on/ })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Hide tools' }));
+        await waitFor(() => expect(screen.queryByText('echo')).toBeNull());
+        expect(screen.getByText('1 of 1 tools on')).toBeInTheDocument();
+        expect(localStorage.getItem('mcp-group-folded-tools-remote')).toBe('true');
+        fireEvent.click(screen.getByRole('button', { name: 'Show tools' }));
+        expect(screen.getByText('echo')).toBeInTheDocument();
     });
 });

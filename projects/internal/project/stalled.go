@@ -31,7 +31,7 @@ func (m *Threads) CheckStalled(now time.Time) {
 	}
 	live := map[string]bool{}
 	for _, t := range threads {
-		if !m.Running(t.ID) {
+		if t.Queued || !m.Running(t.ID) {
 			continue
 		}
 		live[t.ID] = true

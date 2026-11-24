@@ -17,6 +17,7 @@ import (
 // runner drives the lifecycle.
 type Transport struct {
 	accumulator *MessageAccumulator
+	compact     compactTracker
 	execCtx     executionContext
 }
 
@@ -76,13 +77,10 @@ func (t *Transport) Classify(ev protocol.Event) (agentboot.EventKind, agentboot.
 // 0+ rich claude.Message values for the runner to wrap as MessageEvents.
 // Implements [agentboot.AgentTransport].
 func (t *Transport) AccumulateMessage(ev protocol.Event) []any {
+	out := t.compact.observe(ev)
 	msgs, _, _ := t.accumulator.AddEvent(ev)
-	if len(msgs) == 0 {
-		return nil
-	}
-	out := make([]any, len(msgs))
-	for i, m := range msgs {
-		out[i] = m
+	for _, m := range msgs {
+		out = append(out, m)
 	}
 	return out
 }
@@ -114,6 +112,12 @@ func (t *Transport) EncodeUserMessage(prompt string) any {
 	}
 }
 
+// EncodeMidTurnMessage is the same user message as a turn's own: Claude Code
+// reads stdin during a turn and adds what it finds to its next model request
+// (observed, agentboot/claude/ref/live-control.md). Implements
+// [agentboot.MidTurnInputEncoder].
+func (t *Transport) EncodeMidTurnMessage(prompt string) any { return t.EncodeUserMessage(prompt) }
+
 // EncodeControlRequest converts a host-initiated request into Claude's
 // control_request wire shape. Implements [agentboot.ControlRequestEncoder].
 // Both requests are acknowledged with a control_response the transport
@@ -134,6 +138,10 @@ func (t *Transport) EncodeControlRequest(reqID string, req agentboot.ControlRequ
 		body = map[string]any{"subtype": ControlRequestSubtypeSetModel, "model": model}
 	case agentboot.SetPermissionModeRequest:
 		body = map[string]any{"subtype": ControlRequestSubtypeSetPermissionMode, "mode": r.Mode}
+	case agentboot.ApplySettingsRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeApplyFlagSettings, "settings": r.Settings}
+	case agentboot.ContextUsageRequest:
+		body = map[string]any{"subtype": ControlRequestSubtypeGetContextUsage}
 	default:
 		return nil
 	}
@@ -221,6 +229,7 @@ func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEven
 			AgentType: agentboot.AgentTypeClaude,
 			ToolName:  toolName,
 			Input:     stamped,
+			Reason:    decisionReason(controlData),
 			SessionID: t.execCtx.sessionID,
 			ChatID:    t.execCtx.chatID,
 			Platform:  t.execCtx.platform,
@@ -230,6 +239,24 @@ func (t *Transport) parseControlRequest(ev protocol.Event) (agentboot.StreamEven
 	default:
 		logrus.Warnf("claude transport: unsupported control subtype %q", subtype)
 		return nil, nil
+	}
+}
+
+// decisionReason is why Claude Code asks about a tool call, as far as it says:
+// the classifier's own words when auto mode gives a call back to the user, or
+// the kind of rule that matched. Empty when it just asks (the mode requires
+// it).
+func decisionReason(req map[string]any) string {
+	if reason, _ := req["decision_reason"].(string); strings.TrimSpace(reason) != "" {
+		return strings.TrimSpace(reason)
+	}
+	switch kind, _ := req["decision_reason_type"].(string); kind {
+	case "":
+		return ""
+	case "rule":
+		return "matched an ask rule in the permission settings"
+	default:
+		return kind
 	}
 }
 

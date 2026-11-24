@@ -202,6 +202,11 @@ return w != nil && !w.Unknown && !w.Unlimited && w.Limit > 0
 **排序**（`NormalizeWindows`）：额度按周期升序 → 资源 → 无数值，取代原先的 tier。
 无周期窗口在排序和平手判定里共用一条规则（`periodRank`），不会"最不紧急却排最前"。
 
+**前端显示顺序固定**（`frontend/src/types/quota.ts` 的 `compareQuotaWindows` / `quotaBreakdowns`）：
+上游 API 返回明细（模型、窗口、重置卡）的顺序在两次请求之间不保证一致，后端对同周期窗口和
+`Breakdowns` 保留上游顺序，因此所有展示面都不按到达顺序渲染。窗口：额度 → 资源 → 无数值，组内周期升序，
+再按 label、key；Breakdowns：group → label → key。不读用量、重置时间或可用量，避免窗口用着用着行就跳位。
+
 ---
 
 ## 5. 实现

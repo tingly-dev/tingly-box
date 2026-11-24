@@ -74,6 +74,22 @@ func NewConductor(session PersistentSession, hooks ConductorHooks) *Conductor {
 // Session returns the conducted session.
 func (c *Conductor) Session() PersistentSession { return c.session }
 
+// turnOutputReporter is implemented by sessions that can say whether the
+// current turn has produced output; sessions that cannot report false.
+type turnOutputReporter interface {
+	TurnOutputSeen() bool
+}
+
+// TurnOutputSeen reports whether the turn in flight — or the turn that was
+// in flight when the session terminated — has produced any output events.
+// See [persistentSession.TurnOutputSeen].
+func (c *Conductor) TurnOutputSeen() bool {
+	if r, ok := c.session.(turnOutputReporter); ok {
+		return r.TurnOutputSeen()
+	}
+	return false
+}
+
 // Done is closed once the process has ended and every hook has run.
 func (c *Conductor) Done() <-chan struct{} { return c.done }
 
@@ -128,6 +144,15 @@ func (c *Conductor) Inject(ctx context.Context, prompt string) error {
 	return c.session.Inject(ctx, prompt)
 }
 
+// CanInject reports whether the session's agent takes a message while a turn
+// runs. A session that does not say is assumed to, and Inject settles it.
+func (c *Conductor) CanInject() bool {
+	if s, ok := c.session.(interface{ CanInject() bool }); ok {
+		return s.CanInject()
+	}
+	return true
+}
+
 // SetModel switches the process's model live; see [PersistentSession.SetModel].
 func (c *Conductor) SetModel(ctx context.Context, model string) error {
 	return c.session.SetModel(ctx, model)
@@ -137,6 +162,22 @@ func (c *Conductor) SetModel(ctx context.Context, model string) error {
 // [PersistentSession.SetPermissionMode].
 func (c *Conductor) SetPermissionMode(ctx context.Context, mode string) error {
 	return c.session.SetPermissionMode(ctx, mode)
+}
+
+// ApplySettings layers settings over the running process; see
+// [PersistentSession.ApplySettings].
+func (c *Conductor) ApplySettings(ctx context.Context, settings map[string]any) error {
+	return c.session.ApplySettings(ctx, settings)
+}
+
+// ContextUsage asks the process for its context size; ErrContextUnsupported
+// when the session cannot say. See [ContextUsageProvider].
+func (c *Conductor) ContextUsage(ctx context.Context) (ContextUsage, error) {
+	p, ok := c.session.(ContextUsageProvider)
+	if !ok {
+		return ContextUsage{}, ErrContextUnsupported
+	}
+	return p.ContextUsage(ctx)
 }
 
 // StopTask stops one background task; see [PersistentSession.StopTask].
@@ -237,7 +278,7 @@ func (c *Conductor) read() {
 			if e.State != SessionStateTerminated {
 				continue
 			}
-			c.finish(nil, errors.New("agentboot: persistent session terminated before this turn completed: "+e.Reason))
+			c.finish(nil, &SessionTerminatedError{Reason: e.Reason, ProcessFailure: e.Reason != sessionReasonClosed})
 			if c.hooks.OnTerminated != nil {
 				c.hooks.OnTerminated(e.Reason)
 			}

@@ -1,6 +1,8 @@
 package db
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -82,9 +84,9 @@ func TestAggregatedStatsDailyMatchesRaw(t *testing.T) {
 			SortOrder: "desc",
 		}
 
-		merged, handled, err := store.aggregatedStatsFromDaily(query)
+		merged, handled, err := store.aggregatedStatsFromRollups(query)
 		if err != nil {
-			t.Fatalf("[%s] aggregatedStatsFromDaily failed: %v", groupBy, err)
+			t.Fatalf("[%s] aggregatedStatsFromRollups failed: %v", groupBy, err)
 		}
 		if !handled {
 			t.Fatalf("[%s] expected daily path to handle a 7-day query", groupBy)
@@ -152,9 +154,9 @@ func TestAggregatedStatsDailyWithFilters(t *testing.T) {
 		SortOrder: "desc",
 	}
 
-	merged, handled, err := store.aggregatedStatsFromDaily(query)
+	merged, handled, err := store.aggregatedStatsFromRollups(query)
 	if err != nil {
-		t.Fatalf("aggregatedStatsFromDaily failed: %v", err)
+		t.Fatalf("aggregatedStatsFromRollups failed: %v", err)
 	}
 	if !handled {
 		t.Fatal("expected daily path to handle filtered query")
@@ -193,9 +195,9 @@ func TestTimeSeriesDailyMatchesRaw(t *testing.T) {
 	now := time.Now()
 	start := now.Add(-7 * 24 * time.Hour)
 
-	merged, handled, err := store.timeSeriesFromDaily("day", start, now, nil)
+	merged, handled, err := store.timeSeriesFromRollups("day", start, now, nil)
 	if err != nil {
-		t.Fatalf("timeSeriesFromDaily failed: %v", err)
+		t.Fatalf("timeSeriesFromRollups failed: %v", err)
 	}
 	if !handled {
 		t.Fatal("expected daily path to handle a 7-day day-interval query")
@@ -291,8 +293,8 @@ func TestDeleteOlderThanPurgesDailyAggregates(t *testing.T) {
 
 	now := time.Now()
 	// Populate the daily table.
-	if _, _, err := store.timeSeriesFromDaily("day", now.Add(-5*24*time.Hour), now, nil); err != nil {
-		t.Fatalf("timeSeriesFromDaily failed: %v", err)
+	if _, _, err := store.timeSeriesFromRollups("day", now.Add(-5*24*time.Hour), now, nil); err != nil {
+		t.Fatalf("timeSeriesFromRollups failed: %v", err)
 	}
 
 	cutoff := now.Add(-3 * 24 * time.Hour)
@@ -311,9 +313,9 @@ func TestDeleteOlderThanPurgesDailyAggregates(t *testing.T) {
 	}
 
 	// Query again after deletion: totals must match a raw scan.
-	mergedSeries, handled, err := store.timeSeriesFromDaily("day", now.Add(-5*24*time.Hour), now, nil)
+	mergedSeries, handled, err := store.timeSeriesFromRollups("day", now.Add(-5*24*time.Hour), now, nil)
 	if err != nil || !handled {
-		t.Fatalf("timeSeriesFromDaily after delete: handled=%v err=%v", handled, err)
+		t.Fatalf("timeSeriesFromRollups after delete: handled=%v err=%v", handled, err)
 	}
 	rawSeries, err := store.rawTimeSeries("day", now.Add(-5*24*time.Hour), now, nil)
 	if err != nil {
@@ -399,6 +401,52 @@ func TestGetPerformanceSummary(t *testing.T) {
 	}
 }
 
+func TestPerformanceSummaryUsesWALSnapshot(t *testing.T) {
+	store := newUsageStoreForTest(t)
+	now := time.Now()
+	if err := store.RecordUsage(&UsageRecord{Timestamp: now, Status: "success", LatencyMs: 550}); err != nil {
+		t.Fatal(err)
+	}
+	// Old records can have NULL streaming fields.
+	if err := store.db.Exec("UPDATE usage_records SET ttft_ms = NULL, streamed = NULL").Error; err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	type result struct {
+		summary PerformanceSummary
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		summary, err := store.GetPerformanceSummaryContext(ctx, now.Add(-time.Hour), now.Add(time.Hour), nil)
+		done <- result{summary: summary, err: err}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil || got.summary.Completion.SampleCount != 1 || got.summary.Completion.P50 != 550 || got.summary.TTFT.SampleCount != 0 {
+			t.Fatalf("summary with store write lock held = %+v", got)
+		}
+	case <-ctx.Done():
+		t.Fatal("performance query blocked on the store write lock")
+	}
+}
+
+func TestPerformanceSummaryCancelsWhileQueued(t *testing.T) {
+	store := newUsageStoreForTest(t)
+	store.performanceQuery <- struct{}{}
+	defer func() { <-store.performanceQuery }()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := store.GetPerformanceSummaryContext(ctx, time.Time{}, time.Time{}, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled request returned %v", err)
+	}
+}
+
 func TestTokensPerSecondRejectsInvalidIntervals(t *testing.T) {
 	// Mirrors the dashboard case: 33 output tokens have 32 decode intervals
 	// between TTFT=1.0s and latency=3.0s, yielding 16 TPS.
@@ -438,8 +486,8 @@ func TestUpgradeAddingSummedColumnKeepsAggregates(t *testing.T) {
 
 	now := time.Now()
 	start := now.Add(-7 * 24 * time.Hour)
-	if _, _, err := store.timeSeriesFromDaily("day", start, now, nil); err != nil {
-		t.Fatalf("timeSeriesFromDaily failed: %v", err)
+	if _, _, err := store.timeSeriesFromRollups("day", start, now, nil); err != nil {
+		t.Fatalf("timeSeriesFromRollups failed: %v", err)
 	}
 	var before int64
 	if err := store.db.Model(&UsageDailyRecord{}).Count(&before).Error; err != nil {
@@ -472,9 +520,9 @@ func TestUpgradeAddingSummedColumnKeepsAggregates(t *testing.T) {
 	}
 
 	// And the zero-filled column agrees with a raw scan of the same days.
-	merged, handled, err := store.timeSeriesFromDaily("day", start, now, nil)
+	merged, handled, err := store.timeSeriesFromRollups("day", start, now, nil)
 	if err != nil || !handled {
-		t.Fatalf("timeSeriesFromDaily after upgrade: handled=%v err=%v", handled, err)
+		t.Fatalf("timeSeriesFromRollups after upgrade: handled=%v err=%v", handled, err)
 	}
 	raw, err := store.rawTimeSeries("day", start, now, nil)
 	if err != nil {

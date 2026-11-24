@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProjectSummary } from '../../client';
+import { isFolder, type ProjectSummary } from '../../client';
 import { useProjectList } from '../../hooks/useProjectList';
 import { bindChannel, listChannelBindings, unbindChannel, type ChannelBinding } from '../../client/channelBindings';
-import { useProjectsHost, type ImBot, type ImChat } from '../../host/ProjectsHost';
+import { useProjectsHost, type ImBot, type ImChat, type ProjectsHost } from '../../host/ProjectsHost';
 
 /** Fired on window when a binding was added, moved or removed, so every view of them refreshes. */
 export const IM_BINDINGS_CHANGED = 'tingly-projects:im-bindings-changed';
@@ -13,8 +13,20 @@ const POLL_MS = 15_000;
 export const chatKey = (platform: string, chatId: string) => `${platform}\u0000${chatId}`;
 
 /**
- * Where a chat is bound: a project (it resolves to the project's main thread;
- * not for a folder) or one thread, which is how a folder is bound.
+ * Where opening a bound chat lands: the bound thread it talks to, or the
+ * place itself for a new session.
+ */
+export function imDestination(b: ChannelBinding | undefined, place: ProjectSummary | undefined, paths: ProjectsHost['paths']): string {
+    // A thread other than the project's main one is opened on its own.
+    const thread = b && place && b.thread_id !== place.main_thread_id ? `?thread=${encodeURIComponent(b.thread_id)}` : '';
+    const folderPath = place && isFolder(place) ? paths.folder(place.path) : '';
+    return folderPath
+        ? `${folderPath}${b?.thread_id && !b.folder ? `${folderPath.includes('?') ? '&' : '?'}session=${encodeURIComponent(b.thread_id)}` : ''}`
+        : `${paths.project(b?.project_id ?? '')}${thread}`;
+}
+
+/**
+ * Where a chat is bound: a project, a folder, or one thread.
  */
 export type BindTarget = { project_id: string } | { thread_id: string };
 
@@ -55,8 +67,9 @@ export function useChannelBindings(enabled: boolean) {
         };
     }, [enabled]);
 
-    const bind = useCallback(async (chat: { platform: string; chatId: string }, target: BindTarget) => {
-        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, ...target });
+    const bind = useCallback(async (chat: { platform: string; chatId: string; botUuid: string; alias?: string }, target: BindTarget) => {
+        // The alias is saved with the binding as the last-known name, for when the chat can no longer be looked up.
+        const b = await bindChannel({ platform: chat.platform, chat_id: chat.chatId, bot_uuid: chat.botUuid, chat_title: chat.alias ?? '', ...target });
         window.dispatchEvent(new Event(IM_BINDINGS_CHANGED));
         return b;
     }, []);

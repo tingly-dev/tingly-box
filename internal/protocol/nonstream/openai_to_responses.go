@@ -1,7 +1,6 @@
 package nonstream
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -164,12 +163,7 @@ func ConvertAnthropicBetaToResponsesWire(resp *anthropic.BetaMessage, responseMo
 		if block.Type != "tool_use" {
 			continue
 		}
-		argsJSON := "{}"
-		if block.Input != nil {
-			if raw, err := json.Marshal(block.Input); err == nil {
-				argsJSON = string(raw)
-			}
-		}
+		argsJSON := protocol.AnthropicToolInputJSON(block.RawJSON(), block.Input)
 		namespace, name := namespaces.Restore(block.Name)
 		output = append(output, wire.ResponsesOutputItemWire{
 			Type:      "function_call",

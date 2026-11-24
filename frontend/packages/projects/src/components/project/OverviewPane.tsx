@@ -1,138 +1,89 @@
-import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Chip, IconButton, LinearProgress, Tab, Tabs, Tooltip, Typography } from '@mui/material';
+import { useMemo, useState } from 'react';
+import { Box, Tab, Tabs } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { CopyIconButton } from '@tingly/ui';
-import { api, apiFetch, unwrap, type LibraryFile, type Thread } from '../../client';
-import { Delete, Description, Download, UploadFile } from '../icons';
+import type { Thread } from '../../client';
+import { ConfirmDialog } from '@tingly/ui';
+import { needsUser } from './threadStatus';
+import { threadOps } from './threadOps';
+import { ThreadsView } from '../workspace/ThreadsView';
+import { Library } from './Library';
+import { collectLinks } from './LinksCard';
+import { isOpenLink, ProjectLinks } from './ProjectLinks';
 import { useNotify } from '../../hooks/useNotify';
-import { formatBytes, timeAgo } from '../../utils/format';
-import { STATUS_ORDER, ThreadBadges, ThreadSubtitle, needsUser } from './threadStatus';
-import { StatusGroups } from '../workspace/StatusGroups';
-import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
 
-const mono = { fontFamily: fontMono } as const;
+export type OverviewTab = 'threads' | 'library' | 'links';
 
-function ThreadGroups({ threads, selectedId, onOpen }: { threads: Thread[]; selectedId?: string; onOpen: (id: string) => void }) {
-    const { t, i18n } = useTranslation('projects');
-    const groups = STATUS_ORDER.map((status) => ({
-        key: status, label: t(`overview.group.${status}`), collapsed: status === 'resolved',
-    }));
-    const rows = threads.map((th) => ({
-        id: th.id, group: th.status, title: th.title, selected: th.id === selectedId,
-        subtitle: <ThreadSubtitle thread={th} />, badges: <ThreadBadges thread={th} />, meta: timeAgo(th.updated_at, i18n.language),
-    }));
-    return <StatusGroups groups={groups} rows={rows} onOpen={onOpen} empty={t('overview.noThreads')} />;
-}
-
-function Library({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
-    const { t, i18n } = useTranslation('projects');
-    const notify = useNotify();
-    const input = useRef<HTMLInputElement>(null);
-    const [files, setFiles] = useState<LibraryFile[] | null>(null);
-    const [dir, setDir] = useState('');
-    const [uploading, setUploading] = useState(false);
-    const [tick, setTick] = useState(0);
-
-    useEffect(() => {
-        unwrap(api.GET('/api/v1/projects/{id}/library', { params: { path: { id: projectId } } }))
-            .then((r) => {
-                setFiles(r.files);
-                setDir(r.dir);
-            })
-            .catch((e: Error) => notify(e.message, 'error'));
-    }, [projectId, refreshKey, tick, notify]);
-
-    const upload = async (list: FileList) => {
-        const form = new FormData();
-        Array.from(list).forEach((f) => form.append('files', f));
-        setUploading(true);
-        try {
-            const res = await apiFetch(`/api/v1/projects/${projectId}/library`, { method: 'POST', body: form });
-            if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? res.statusText);
-            setTick((x) => x + 1);
-        } catch (e) {
-            notify((e as Error).message, 'error');
-        } finally {
-            setUploading(false);
-            if (input.current) input.current.value = '';
-        }
-    };
-
-    // Through apiFetch rather than a plain link, so the host's
-    // authentication applies to downloads too.
-    const download = async (path: string) => {
-        try {
-            const res = await apiFetch(`/api/v1/projects/${projectId}/library/file?path=${encodeURIComponent(path)}`);
-            if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText);
-            const url = URL.createObjectURL(await res.blob());
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = path.split('/').pop() || path;
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 0);
-        } catch (e) {
-            notify((e as Error).message, 'error');
-        }
-    };
-
-    return (
-        <Box sx={{ p: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>{t('library.intro')}</Typography>
-                <Button size="small" startIcon={<UploadFile />} onClick={() => input.current?.click()}>{t('library.add')}</Button>
-            </Box>
-            {dir && (
-                // One line, clipped at the start so the project's own folder stays in view.
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                    <Tooltip title={dir}>
-                        <Typography variant="caption" noWrap sx={{ ...mono, flex: 1, minWidth: 0, color: 'text.disabled', direction: 'rtl', textAlign: 'left' }}>
-                            <bdi>{dir}</bdi>
-                        </Typography>
-                    </Tooltip>
-                    <CopyIconButton value={dir} label={t('library.copyPath')} copiedLabel={t('common.copied')} iconSize={14} />
-                </Box>
-            )}
-            {uploading && <LinearProgress sx={{ mb: 1 }} />}
-            <input ref={input} type="file" multiple hidden onChange={(e) => e.target.files && void upload(e.target.files)} />
-            {files?.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>{t('library.empty')}</Typography>}
-            {files?.map((f) => (
-                <Box key={f.path} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 1, borderRadius: radius.card, '&:hover': { bgcolor: 'action.hover' }, '& .act': { opacity: 0 }, '&:hover .act': { opacity: 1 } }}>
-                    <Description sx={{ fontSize: 18, color: 'text.secondary' }} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography noWrap sx={{ fontSize: fontSizes.base, color: 'text.primary', ...mono }}>{f.path}</Typography>
-                        <Typography variant="caption" color="text.secondary">{formatBytes(f.size)} · {timeAgo(f.updated_at, i18n.language)}</Typography>
-                    </Box>
-                    <Chip size="small" variant="outlined" label={t(`library.origin.${f.origin}`)} sx={{ height: 20, fontSize: fontSizes.xs }} />
-                    <Tooltip title={t('library.download')}>
-                        <IconButton className="act" size="small" onClick={() => void download(f.path)}><Download fontSize="small" /></IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('common.delete')}>
-                        <IconButton className="act" size="small" onClick={() => {
-                            unwrap(api.DELETE('/api/v1/projects/{id}/library/file', { params: { path: { id: projectId }, query: { path: f.path } } }))
-                                .then(() => setTick((x) => x + 1))
-                                .catch((e: Error) => notify(e.message, 'error'));
-                        }}><Delete fontSize="small" /></IconButton>
-                    </Tooltip>
-                </Box>
-            ))}
-        </Box>
-    );
-}
-
-export function OverviewPane({ projectId, threads, onOpen, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; libraryKey: number; selectedId?: string; initialTab?: 'threads' | 'library' }) {
+export function OverviewPane({ projectId, threads, onOpen, onTasks, libraryKey, selectedId, initialTab = 'threads' }: { projectId: string; threads: Thread[]; onOpen: (id: string) => void; /** Opens a thread's running tasks from its card's count pill, or all of them from the toolbar's chip. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void; libraryKey: number; selectedId?: string; initialTab?: OverviewTab }) {
     const { t } = useTranslation('projects');
-    const [tab, setTab] = useState<'threads' | 'library'>(initialTab);
+    const notify = useNotify();
+    const [tab, setTab] = useState<OverviewTab>(initialTab);
+    // The bulk confirm: one dialog for the picked threads, then they are
+    // resolved or archived one by one — each is re-checked server-side, and
+    // one refusal does not stop the others.
+    const [bulk, setBulk] = useState<{ action: 'resolve' | 'archive'; ids: string[] } | null>(null);
+    const [acting, setActing] = useState(false);
     const waiting = threads.filter((th) => needsUser(th.status)).length;
+    const openLinks = useMemo(() => collectLinks(threads).filter(isOpenLink).length, [threads]);
+    const runBulk = async () => {
+        if (!bulk) return;
+        setActing(true);
+        let ok = 0;
+        let failed = 0;
+        for (const id of bulk.ids) {
+            try {
+                await (bulk.action === 'resolve' ? threadOps(id).finish() : threadOps(id).archiveSession());
+                ok += 1;
+            } catch {
+                failed += 1;
+            }
+        }
+        setActing(false);
+        setBulk(null);
+        const key = bulk.action === 'resolve' ? 'overview.bulkResolved' : 'overview.bulkArchived';
+        const failedPart = failed > 0 ? t('overview.bulkFailedSuffix', { count: failed }) : '';
+        notify(t(key, { ok, failed: failedPart }), failed > 0 ? 'warning' : 'success');
+    };
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 1, minHeight: 44, borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { minHeight: 44 } }}>
-                <Tab value="threads" label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : t('overview.threads')} />
-                <Tab value="library" label={t('overview.library')} />
-            </Tabs>
-            <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                {tab === 'threads' ? <ThreadGroups threads={threads} selectedId={selectedId} onOpen={onOpen} /> : <Library projectId={projectId} refreshKey={libraryKey} />}
+            {/* Tabs only: a control of one view does not live in this row, where a narrow pane would squeeze it or a tab out. */}
+            <Box sx={{ borderBottom: tab === 'library' ? 1 : 0, borderColor: 'divider' }}>
+                <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ px: 1, minHeight: 44, '& .MuiTab-root': { minHeight: 44, minWidth: 0 } }}>
+                    <Tab value="threads" aria-label={waiting > 0 ? t('overview.threadsWaiting', { count: waiting }) : undefined}
+                        label={<Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                            {t('overview.threads')}
+                            {waiting > 0 && <Box component="span" aria-hidden sx={{ px: 0.75, minWidth: 18, borderRadius: radius.pill, bgcolor: 'warning.main', color: 'warning.contrastText', fontSize: fontSizes.micro, fontWeight: 600, lineHeight: '18px', textAlign: 'center' }}>{waiting}</Box>}
+                        </Box>} />
+                    <Tab value="library" label={t('overview.library')} />
+                    <Tab value="links" aria-label={openLinks > 0 ? t('links.tabOpen', { count: openLinks }) : undefined}
+                        label={<Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                            {t('links.title')}
+                            {openLinks > 0 && <Box component="span" aria-hidden sx={{ fontSize: fontSizes.sm, color: 'text.secondary' }}>{openLinks}</Box>}
+                        </Box>} />
+                </Tabs>
             </Box>
+            <Box sx={{ flex: 1, minHeight: 0, ...(tab === 'library' && { overflowY: 'auto', overflowX: 'hidden' }) }}>
+                {tab === 'threads' ? (
+                    <ThreadsView scope={projectId} threads={threads} selectedId={selectedId} onOpen={onOpen} onTasks={onTasks}
+                        countLabel={(count) => t('overview.threadCount', { count })} empty={t('overview.noThreads')}
+                        bulk={{
+                            resolve: (ids) => setBulk({ action: 'resolve', ids }),
+                            archive: (ids) => setBulk({ action: 'archive', ids }),
+                        }} />
+                ) : tab === 'links' ? <ProjectLinks projectId={projectId} threads={threads} onOpen={onOpen} />
+                    : <Library key={projectId} projectId={projectId} refreshKey={libraryKey} />}
+            </Box>
+            <ConfirmDialog
+                open={bulk !== null}
+                title={bulk?.action === 'resolve' ? t('overview.bulkResolveConfirm', { count: bulk.ids.length }) : t('overview.bulkArchiveConfirm', { count: bulk?.ids.length ?? 0 })}
+                description={bulk?.action === 'archive' ? t('overview.bulkArchiveBody') : undefined}
+                loading={acting}
+                confirmLabel={bulk?.action === 'resolve' ? t('overview.bulkResolve') : t('overview.bulkArchive')}
+                confirmColor={bulk?.action === 'archive' ? 'warning' : 'primary'}
+                onClose={() => setBulk(null)}
+                onConfirm={() => void runBulk()}
+            />
         </Box>
     );
 }

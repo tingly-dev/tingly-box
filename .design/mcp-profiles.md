@@ -59,15 +59,19 @@ same sidebar. The page where MCPs are connected stays **MCP Tools**.
   set) and flags what is still missing (empty URL, command, env or header value,
   Advisor model) with a chip that opens the connection drawer
   (`?source=<id>`).
+  The connection form starts with a box that reads a pasted command line,
+  registration command, client config or URL into its fields
+  (`mcp-paste-import.md`).
 - **Profile** (`/mcp/profile/:id`, `/mcp/profile/new` creates one), laid out like
   the Claude Code profile page: the header holds the name with rename and delete
   beside it (custom only), a status line, the profile switch, refresh, Verify and
   the filled primary action (Add tools). Directly under it the connection card
   (the shared `AgentAccessSection`: endpoint URL when folded; open it is two rows,
   the endpoint URL and the whole registration command for Claude Code / Codex /
-  OpenCode with the user token already written in: nothing is read from the
+  OpenCode with the MCP token already written in: nothing is read from the
   machine or an environment variable), then the tool list with a switch
-  per tool (custom ones also remove). Tools that are globally off are shown greyed
+  per tool, grouped by connection with a group switch (custom ones also remove
+  a tool or a whole group). Tools that are globally off are shown greyed
   with the reason; both Default and custom profiles carry a one-line explanation of what they contain. The sidebar
   reads the list from `profileStore.ts`, which the page keeps current.
 
@@ -80,9 +84,12 @@ The old Tool / MCP / Server Tool pages and the "client" concept are removed.
 
 ## Tool lists: one row language
 
-MCP Tools, Server Tools and the MCP profile page show tools the same way: one
-bordered card per connection (or per profile) and one 40px row per tool, not a
-card per tool. Rules (visual tokens as in `projects-visual.md`):
+MCP Tools, Server Tools, the connection drawer and the MCP profile page show
+tools the same way: one bordered group card per connection (`MCPToolGroup`,
+also per connection inside a profile) and one 40px row per tool, not a card per
+tool. The group header has "N of M tools on" and a tri-state group switch;
+grouping, folding and what the group switch writes are in `mcp-tool-groups.md`.
+Rules (visual tokens as in `projects-visual.md`):
 
 - One component (`MCPToolRow`) renders every row; callers only decide what the
   switch means (global on MCP Tools, in-profile on a profile) and pass Remove or
@@ -96,9 +103,10 @@ card per tool. Rules (visual tokens as in `projects-visual.md`):
 - Status is a dot and a word. Connected, Off and Checking are neutral; amber is
   "needs you" (missing value, unconfigured), red is failed. The connection's
   Settings button is quiet and becomes the filled primary only for Fix connection.
-- A header bar says "N of M tools on". With more than 8 tools it adds a filter;
-  with more than 5 only the first 5 show until "Show all". All/Matching on/off
-  writes one patch for every tool at once; restricted tools are skipped.
+- The group header says "N of M tools on" and its switch writes one patch for
+  every tool at once; restricted tools are skipped. With more than 8 tools a
+  filter bar appears, and "Matching" switches only the filtered rows; with more
+  than 5 only the first 5 show until "Show all".
 - A built-in connection says "Runs inside Tingly Box" instead of its command
   line (the command stays in the connection drawer).
 
@@ -159,11 +167,24 @@ paths retain native tools.
 The GitHub integration (a fixed subset plus per-profile repository scope) is
 described in `github-mcp.md`.
 
+## Connected MCP is never injected (decided 2026-11-20)
+
+An MCP the user connects reaches agents only as an ordinary MCP server through
+a profile; the agent's own permissions decide its calls. The gateway injects
+Server Tools only; a stored `usage.gateway`, tool usage or `visibility:
+server` on a connected source is ignored. Agents authenticate with the MCP
+token (Access Control), which opens the MCP endpoints and nothing else, and
+see tools as `<source>__<tool>`. Server Tools are unchanged: Advisor is
+injection-only, and Search / Fetch exist both as Server Tools
+(`server-webtools`) and as the ordinary `webtools` source; a `webtools` source
+saved with `visibility: server` is no longer injected. Details:
+`claude-profile-mcp.md` §4.3.
+
 ## Open (carried, not decided here)
 
-- Ordinary connected tools can currently also be injected into model requests
-  (`usage.gateway`). This round keeps that mechanism untouched; whether it stays
-  a per-tool flag or becomes a Default-profile concern is a follow-up.
 - `usage.client` is no longer an input. Availability to MCP clients is derived:
   every ordinary MCP tool, subject to the switches above. Server Tools (Advisor,
   Search and Fetch) are gateway-only and never exposed over an MCP endpoint.
+- Wiring an MCP profile into Claude Code launches automatically (per Claude
+  Code profile, scoped token, permissions) is proposed in
+  `claude-profile-mcp.md`.

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Box, ButtonBase, Typography } from '@mui/material';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Box, ButtonBase, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { apiFetch, type Attachment } from '../client';
 import { Description } from './icons';
 import { radius } from '@tingly/ui/theme/radius';
+import { LibraryPreview, previewKind, saveFile, type PreviewFile } from './project/LibraryPreview';
+import { useNotify } from '../hooks/useNotify';
 
 /** A paste longer than this becomes a file instead of filling the box. */
 export const PASTE_AS_FILE_CHARS = 4000;
@@ -31,10 +33,6 @@ export interface AttachOwner {
 
 const base = (o: AttachOwner) => (o.threadId ? `/api/v1/threads/${o.threadId}` : `/api/v1/projects/${o.projectId ?? o.draftFolderId ?? ''}`);
 
-const fileUrl = (o: AttachOwner, path: string) => (o.threadId
-    ? `${base(o)}/attachments/file?path=${encodeURIComponent(path)}`
-    : `${base(o)}/library/file?path=${encodeURIComponent(path)}`);
-
 /** Stores files for a message and returns what to send with it. */
 export async function uploadAttachments(owner: AttachOwner, files: File[]): Promise<Attachment[]> {
     const form = new FormData();
@@ -45,12 +43,17 @@ export async function uploadAttachments(owner: AttachOwner, files: File[]): Prom
     return body.attachments ?? [];
 }
 
-const isImage = (a: { type: string }) => a.type.startsWith('image/');
+/** Hands a file the preview does not know to the browser, as before: it opens or downloads as the browser decides. */
+const openStored = async (url: string) => {
+    const res = await apiFetch(url).catch(() => null);
+    if (!res?.ok) return;
+    window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
+};
 
 /** Loads a stored file through the host's fetch (so its auth applies); null once it is gone. */
-function useStoredFile(owner: AttachOwner, path: string, enabled: boolean): string | null | undefined {
+function useStoredFile(srcOf: (path: string) => string, path: string, enabled: boolean): string | null | undefined {
     const [url, setUrl] = useState<string | null | undefined>(undefined);
-    const source = fileUrl(owner, path);
+    const source = srcOf(path);
     useEffect(() => {
         if (!enabled) return;
         let made: string | undefined;
@@ -64,42 +67,83 @@ function useStoredFile(owner: AttachOwner, path: string, enabled: boolean): stri
     return url;
 }
 
-function AttachmentChip({ owner, item }: { owner: AttachOwner; item: Attachment }) {
+function AttachmentChip({ srcOf, item, caption, onOpen }: { srcOf: (path: string) => string; item: Attachment; caption?: string; onOpen: (item: Attachment) => void }) {
     const { t } = useTranslation('projects');
-    const image = isImage(item);
-    const src = useStoredFile(owner, item.path, image);
-    const open = async () => {
-        const res = await apiFetch(fileUrl(owner, item.path)).catch(() => null);
-        if (!res?.ok) return;
-        window.open(URL.createObjectURL(await res.blob()), '_blank', 'noopener');
-    };
-    if (image && src) {
-        return (
-            <ButtonBase onClick={() => void open()} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
-                <Box component="img" src={src} alt={item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
-            </ButtonBase>
+    // The same allowlist the library tree goes by, so everything previewable there previews here too.
+    const kind = previewKind(item.name);
+    const src = useStoredFile(srcOf, item.path, kind === 'image');
+    const gone = src === null;
+    // What the file was sent with, while the pointer is on it. The span keeps the tooltip working over a disabled chip.
+    const withCaption = (chip: ReactNode) => (caption ? <Tooltip title={caption}><Box component="span" sx={{ display: 'inline-flex' }}>{chip}</Box></Tooltip> : chip);
+    if (kind === 'image' && src) {
+        return withCaption(
+            <ButtonBase onClick={() => onOpen(item)} aria-label={item.name} sx={{ borderRadius: radius.row, overflow: 'hidden', border: 1, borderColor: 'divider' }}>
+                <Box component="img" src={src} alt={caption || item.name} sx={{ display: 'block', maxHeight: 120, maxWidth: 200, objectFit: 'cover' }} />
+            </ButtonBase>,
         );
     }
-    const gone = src === null;
-    return (
+    return withCaption(
         <ButtonBase
-            onClick={() => void open()}
+            onClick={() => (kind ? onOpen(item) : void openStored(srcOf(item.path)))}
             disabled={gone}
             sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5, borderRadius: radius.row, border: 1, borderColor: 'divider', maxWidth: 240, textAlign: 'left' }}
         >
             <Description fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
             <Typography variant="caption" noWrap sx={{ minWidth: 0 }}>{gone ? t('attachments.removed', { name: item.name }) : item.name}</Typography>
             {!gone && <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>{formatSize(item.size)}</Typography>}
-        </ButtonBase>
+        </ButtonBase>,
     );
 }
 
-/** The files a sent message carries: thumbnails for images, chips for the rest. */
-export function AttachmentChips({ owner, items, align = 'flex-end' }: { owner: AttachOwner; items: Attachment[]; align?: 'flex-start' | 'flex-end' }) {
+/** Where an owner's stored files are read from. */
+const useSrcOf = ({ threadId, projectId, draftFolderId }: AttachOwner) => useCallback((path: string) => (threadId
+    ? `/api/v1/threads/${threadId}/attachments/file?path=${encodeURIComponent(path)}`
+    : `/api/v1/projects/${projectId ?? draftFolderId ?? ''}/library/file?path=${encodeURIComponent(path)}`),
+    [threadId, projectId, draftFolderId]);
+
+/** The previewed file, and the images its next and previous step to; closed when `file` is null. */
+function PreviewDialog({ srcOf, files, file, onOpen, onClose }: { srcOf: (path: string) => string; files: Attachment[]; file: PreviewFile | null; onOpen: (file: PreviewFile) => void; onClose: () => void }) {
+    const notify = useNotify();
+    // The images among the files, in order: the preview steps through them like through a library folder.
+    const images = useMemo(() => files.filter((a) => previewKind(a.name) === 'image').map(({ path, name, size }) => ({ path, name, size })), [files]);
+    const download = (path: string) => {
+        const name = files.find((a) => a.path === path)?.name ?? path.split('/').pop() ?? path;
+        void saveFile(srcOf(path), name, (m) => notify(m, 'error'));
+    };
+    return <LibraryPreview srcOf={srcOf} file={file} siblings={images} onNavigate={onOpen} onClose={onClose} onDownload={download} />;
+}
+
+const GalleryContext = createContext<((file: PreviewFile) => void) | null>(null);
+
+/**
+ * One preview for a whole conversation: every chip below opens it, and its
+ * images are all the images of `files` (the conversation's, however many
+ * messages they came in), so Left/Right step from one message's image to the
+ * next one's. Without it a chip previews alone, among its own message's files.
+ */
+export function AttachmentGallery({ owner, files, children }: { owner: AttachOwner; files: Attachment[]; children: ReactNode }) {
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
+    const srcOf = useSrcOf(owner);
+    const close = useCallback(() => setPreview(null), []);
+    return (
+        <GalleryContext.Provider value={setPreview}>
+            {children}
+            <PreviewDialog srcOf={srcOf} files={files} file={preview} onOpen={setPreview} onClose={close} />
+        </GalleryContext.Provider>
+    );
+}
+
+/** The files a sent message carries: thumbnails for images, a preview chip for the kinds the library previews (Markdown included), a plain download for the rest. */
+export function AttachmentChips({ owner, items, align = 'flex-end', captions }: { owner: AttachOwner; items: Attachment[]; align?: 'flex-start' | 'flex-end'; captions?: Record<string, string> }) {
+    const gallery = useContext(GalleryContext);
+    const [preview, setPreview] = useState<PreviewFile | null>(null);
+    // Stable across renders, so a re-render of the chips does not refetch the open preview.
+    const srcOf = useSrcOf(owner);
     if (items.length === 0) return null;
     return (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, justifyContent: align, mb: 0.75 }}>
-            {items.map((a) => <AttachmentChip key={a.path} owner={owner} item={a} />)}
+            {items.map((a) => <AttachmentChip key={a.path} srcOf={srcOf} item={a} caption={captions?.[a.path]} onOpen={gallery ?? setPreview} />)}
+            {!gallery && <PreviewDialog srcOf={srcOf} files={items} file={preview} onOpen={setPreview} onClose={() => setPreview(null)} />}
         </Box>
     );
 }

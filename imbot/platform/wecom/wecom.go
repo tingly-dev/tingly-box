@@ -4,6 +4,9 @@ package wecom
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,11 +15,19 @@ import (
 	"github.com/tingly-dev/weixin/wecom"
 )
 
+// outbound is the part of wecom.WecomBot used to send; a seam for tests.
+type outbound interface {
+	Send(ctx context.Context, msg *types.OutboundMessage) (*types.OutboundResult, error)
+	SendMedia(ctx context.Context, msg *types.OutboundMessage) (*types.OutboundResult, error)
+	UploadMedia(ctx context.Context, req *types.MediaUploadRequest) (*types.MediaUploadResult, error)
+}
+
 // Bot implements the core.Bot interface for WeCom (Enterprise WeChat AI Bot).
 // It wraps wecom.WecomBot which manages the WebSocket connection.
 type Bot struct {
 	*core.BaseBot
 	sdk     *wecom.WecomBot
+	out     outbound
 	botID   string
 	secret  string
 	adapter *Adapter
@@ -46,6 +57,7 @@ func NewBot(config *core.Config) (*Bot, error) {
 	bot := &Bot{
 		BaseBot: core.NewBaseBot(config),
 		sdk:     sdk,
+		out:     sdk,
 		botID:   botID,
 		secret:  secret,
 		adapter: NewAdapter(config),
@@ -242,7 +254,7 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		ContextToken: contextToken,
 	}
 
-	result, err := b.sdk.Send(ctx, outMsg)
+	result, err := b.out.Send(ctx, outMsg)
 	if err != nil {
 		return nil, core.WrapError(err, core.PlatformWecom, core.ErrPlatformError)
 	}
@@ -257,7 +269,12 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	}, nil
 }
 
-// sendMedia forwards media send to the SDK (requires wecom_media_id in Metadata).
+const wecomMediaIDKey = "wecom_media_id"
+
+// sendMedia delivers a file or image. WeCom sends by media_id, so a local file
+// is first uploaded over the bot's WebSocket (3-step chunked upload); a
+// caller-supplied Metadata["wecom_media_id"] skips the upload. The SDK sends
+// only the attachment, so the caption follows as its own message.
 func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	if len(opts.Media) == 0 {
 		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
@@ -269,20 +286,62 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 		contextToken, _ = opts.Metadata["context_token"].(string)
 	}
 
-	outMsg := &types.OutboundMessage{
-		To:           target,
-		ContentType:  item.Type,
-		FileName:     item.Filename,
-		ContextToken: contextToken,
-		Metadata:     opts.Metadata,
+	metadata := make(map[string]interface{}, len(opts.Metadata)+1)
+	for k, v := range opts.Metadata {
+		metadata[k] = v
+	}
+	contentType := item.Type
+	name := item.Filename
+	if id, _ := metadata[wecomMediaIDKey].(string); id == "" {
+		path, err := core.NormalizeMediaURL(item.URL)
+		if err != nil || path == "" || !filepath.IsAbs(path) {
+			return nil, core.NewBotError(core.ErrMediaNotSupported, "WeCom media requires an absolute local file path or file:// URL", false)
+		}
+		if st, err := os.Stat(path); err != nil || st.IsDir() {
+			return nil, core.NewBotError(core.ErrMediaNotSupported, fmt.Sprintf("media file not readable: %s", path), false)
+		}
+		if name == "" {
+			name = filepath.Base(path)
+		}
+		// Only formats WeCom accepts as images go up as images; the rest are
+		// files, so the message type matches the uploaded media type.
+		uploadType, ct := wecom.MsgTypeFile, "file"
+		if item.Type == "image" && wecomImageExts[strings.ToLower(filepath.Ext(name))] {
+			uploadType, ct = wecom.MsgTypeImage, "image"
+		}
+		contentType = ct
+		up, err := b.out.UploadMedia(ctx, &types.MediaUploadRequest{FilePath: path, FileName: name, MediaType: uploadType})
+		if err != nil {
+			return nil, core.WrapError(fmt.Errorf("wecom upload: %w", err), core.PlatformWecom, core.ErrMediaNotSupported)
+		}
+		if up == nil || up.EncryptQuery == "" {
+			return nil, core.NewBotError(core.ErrMediaNotSupported, "wecom upload returned no media_id", false)
+		}
+		metadata[wecomMediaIDKey] = up.EncryptQuery
 	}
 
-	result, err := b.sdk.SendMedia(ctx, outMsg)
+	outMsg := &types.OutboundMessage{
+		To:           target,
+		ContentType:  contentType,
+		FileName:     name,
+		ContextToken: contextToken,
+		Metadata:     metadata,
+	}
+
+	result, err := b.out.SendMedia(ctx, outMsg)
 	if err != nil {
 		return nil, core.WrapError(err, core.PlatformWecom, core.ErrMediaNotSupported)
 	}
 	if !result.OK {
 		return nil, core.NewBotError(core.ErrPlatformError, result.Error, false)
+	}
+
+	if opts.Text != "" {
+		textOpts := *opts
+		textOpts.Media = nil
+		if _, err := b.sendText(ctx, target, &textOpts); err != nil {
+			return nil, fmt.Errorf("attachment sent but description failed: %w", err)
+		}
 	}
 
 	b.UpdateLastActivity()
@@ -291,3 +350,5 @@ func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessa
 		Timestamp: time.Now().Unix(),
 	}, nil
 }
+
+var wecomImageExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true}

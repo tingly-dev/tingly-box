@@ -1,6 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ThreadTitle } from './ThreadTitle';
+import { ThreadRefButton, ThreadTitle } from './ThreadTitle';
+
+const { writeToClipboard, notify } = vi.hoisted(() => ({ writeToClipboard: vi.fn(async () => {}), notify: vi.fn() }));
+vi.mock('@tingly/ui/utils/clipboard', async (importOriginal) => ({ ...(await importOriginal<object>()), writeToClipboard }));
+vi.mock('../../hooks/useNotify', () => ({ useNotify: () => notify }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -70,5 +74,21 @@ describe('ThreadTitle', () => {
         const { rerender } = title('Fix login', onSave);
         rerender(<ThreadTitle title="Renamed upstream" onSave={onSave} />);
         expect(screen.getByText('Renamed upstream')).toBeTruthy();
+    });
+});
+
+describe('ThreadRefButton', () => {
+    it('copies how the thread is mentioned, "#3 Title", and says so', async () => {
+        writeToClipboard.mockClear();
+        notify.mockClear();
+        render(<ThreadRefButton thread={{ seq: 3, title: 'Fix login' }} />);
+        fireEvent.click(screen.getByText('#3'));
+        await waitFor(() => expect(writeToClipboard).toHaveBeenCalledWith('#3 Fix login'));
+        await waitFor(() => expect(notify).toHaveBeenCalledWith('thread.refCopied', 'success'));
+    });
+
+    it('is nothing for the coordinator, which has no number', () => {
+        const { container } = render(<ThreadRefButton thread={{ seq: 0, title: 'Payments' }} />);
+        expect(container.innerHTML).toBe('');
     });
 });

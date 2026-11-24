@@ -10,6 +10,13 @@ export default {
     "search": "搜索请求",
     "errorsOnly": "只看错误",
     "load": "加载",
+    "customLimit": "自定义…",
+    "customLimitTitle": "加载的行数",
+    "customLimitInput": "行数",
+    "customLimitHelp": "整数，1 到 {{max}}。",
+    "customLimitInvalid": "请输入 1 到 {{max}} 之间的整数。",
+    "customLimitApply": "应用",
+    "customLimitCancel": "取消",
     "latest_other": "最近 {{count}} 条",
     "refreshing": "刷新中…",
     "count_other": "{{count}} 个请求",
@@ -22,6 +29,7 @@ export default {
     "autoRefresh": "自动刷新",
     "refreshNow": "立即刷新",
     "refreshRequests": "刷新请求",
+    "newRequests_other": "{{count}} 个新请求",
     "columns": {
       "time": "时间",
       "agent": "Agent",
@@ -50,6 +58,7 @@ export default {
     "save": "保存",
     "delete": "删除",
     "edit": "编辑",
+    "duplicate": "复制",
     "confirm": "确认",
     "loading": "加载中...",
     "enabled": "已启用",
@@ -81,10 +90,41 @@ export default {
     "clear": "清除选择",
     "dismiss": "忽略",
     "moveDown": "下移",
+    "pinToTop": "置顶",
     "moveUp": "上移",
     "saved": "已保存"
   },
+  "mobile": {
+    "tabBar": "主导航",
+    "shell": {
+      "title": "界面",
+      "desktop": "桌面版",
+      "mobile": "手机版",
+      "auto": "自动",
+      "hint": "手机版在本设备上使用手机布局，桌面版使用完整界面；按浏览器记住。"
+    },
+    "subPages": {
+      "switch": "切换{{title}}的页面"
+    },
+    "modelPicker": {
+      "backToProviders": "返回凭证列表"
+    },
+    "more": {
+      "title": "更多",
+      "tab": "更多",
+      "manage": "管理",
+      "system": "系统",
+      "preferences": "主题、语言与反馈",
+      "interface": "界面",
+      "useDesktop": "使用桌面版界面",
+      "useDesktopHint": "切回完整界面"
+    }
+  },
   "layout": {
+    "workspace": "工作区",
+    "workspaceRail": "工作区",
+    "workspaceTip": { "title": "认识工作区", "text": "在一处管理项目、工作目录和 IM 聊天。" },
+    "workspaceGate": { "title": "开启工作区", "text": "开启工作区扩展功能后，即可使用项目、工作目录和 IM 聊天。", "enable": "开启工作区", "error": "无法开启工作区，请重试。" },
     "projects": "项目",
     "projectsWaiting": "有线程或会话在等你处理",
     "appTitle": "Tingly Box",
@@ -130,6 +170,7 @@ export default {
       "doneEditing": "完成",
       "expand": "展开侧边栏"
     },
+    "featureSwitch": { "disable": "关闭 {{name}}", "disabledTitle": "{{name}} 已关闭", "disabledText": "你可以在偏好设置 → 扩展中重新开启。", "teamTitle": "Team 已开启", "teamText": "Team 默认开启，可以点击此按钮关闭。" },
     "coachMarks": {
       "gotIt": "知道了",
       "agentVisibility": {
@@ -152,7 +193,6 @@ export default {
       "light": "浅色",
       "dark": "深色",
       "system": "跟随系统",
-      "sunlit": "日光",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "点击",
@@ -185,9 +225,11 @@ export default {
     "days": "天",
     "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "远程控制",
     "notify": "IM 通知",
+    "imBots": "IM 机器人",
     "bots": "机器人",
     "overview": "概览",
     "platforms": {
@@ -226,6 +268,7 @@ export default {
     "help": "帮助与技巧",
     "helpShort": "帮助",
     "powerUps": "扩展",
+    "powerUpsRail": "扩展",
     "tools": "工具",
     "servertool": "服务端工具",
     "botsRunning": "{{total}} 个 bot 中 {{active}} 个在运行"

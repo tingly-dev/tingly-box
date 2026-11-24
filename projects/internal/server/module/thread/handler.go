@@ -6,6 +6,7 @@ package thread
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,6 +38,8 @@ type CreateThreadRequest struct {
 	Title       string   `json:"title,omitempty"`
 	// Model is empty for the host's default.
 	Model string `json:"model,omitempty"`
+	// Effort applies to the first turn; empty uses the CLI default.
+	Effort string `json:"effort,omitempty" enum:",low,medium,high,max"`
 	// PermissionMode is empty to inherit the default (acceptEdits).
 	PermissionMode string `json:"permission_mode,omitempty"`
 	// Profile is the host's launch profile; empty for its default. Only
@@ -59,9 +62,25 @@ type EventsResponse struct {
 	More bool `json:"more"`
 }
 
+// RequestsResponse is what a thread is waiting on: its pending approvals and
+// questions as the transcript entries that asked them, oldest first.
+type RequestsResponse struct {
+	Requests []db.ThreadEvent `json:"requests"`
+}
+
 // SubagentsResponse lists a thread's subagents.
 type SubagentsResponse struct {
 	Subagents []db.Subagent `json:"subagents"`
+}
+
+// RefreshLinksRequest picks one of the thread's issues or PRs to read from
+// GitHub again; with no field set, all of them are read.
+type RefreshLinksRequest struct {
+	// Repo is owner/name, as the link says; it goes with Number.
+	Repo string `json:"repo,omitempty"`
+	// Kind is issue or pr; empty matches either.
+	Kind   string `json:"kind,omitempty" enum:",issue,pr"`
+	Number int    `json:"number,omitempty"`
 }
 
 // SendRequest is a message to the thread.
@@ -70,10 +89,12 @@ type SendRequest struct {
 	Content string `json:"content"`
 	// Attachments are paths returned by the thread's attachments upload.
 	Attachments []string `json:"attachments,omitempty"`
-	// Mode is what a message does while a turn runs: "send" (the default)
-	// adds it to the turn, "queue" holds it until the turn ends and
-	// "stop_and_send" stops the turn first.
-	Mode string `json:"mode,omitempty" enums:"send,queue,stop_and_send"`
+	// Mode is what a message does while a turn runs: "insert" (the default)
+	// puts it into the turn at the agent's next step, "next_turn" holds it
+	// until the turn ends. An agent that cannot take input mid-turn holds an
+	// insert like a next_turn. Stopping a turn is its own call. The names
+	// used before (send, queue) are still accepted.
+	Mode string `json:"mode,omitempty" enums:"insert,next_turn"`
 }
 
 // StartSuggestionsRequest starts proposed threads; empty indexes start all.
@@ -101,9 +122,10 @@ type ThreadRespondRequest struct {
 
 // AutoAnswerRequest sets when the thread's questions with a suggested
 // answer are answered without the user; empty is the default (delay for a
-// project thread, off for a folder thread).
+// project thread, off for a folder thread). "delay:<minutes>" (1 to 60)
+// waits that long instead of the default delay.
 type AutoAnswerRequest struct {
-	AutoAnswer string `json:"auto_answer" enum:",off,delay,now"`
+	AutoAnswer string `json:"auto_answer"`
 }
 
 // PermissionModeRequest sets the mode of the thread's next turn.
@@ -114,12 +136,18 @@ type PermissionModeRequest struct {
 // ProfileRequest sets the launch profile of a folder thread's next turn.
 type ProfileRequest struct {
 	Profile string `json:"profile"`
+	Inherit bool   `json:"inherit,omitempty"`
 }
 
 // ModelRequest sets the model of the thread's next turn. Empty restores the
 // project default for a worker, or the host profile's default for a folder.
 type ModelRequest struct {
 	Model string `json:"model"`
+}
+
+// EffortRequest selects the next turn's effort; empty restores inheritance.
+type EffortRequest struct {
+	Effort string `json:"effort" enum:",low,medium,high,max"`
 }
 
 // TitleRequest renames a thread.
@@ -144,11 +172,18 @@ type TaskOutputResponse struct {
 	Size      int64  `json:"size"`
 }
 
-// MergeBlockedResponse explains why a merge was not done.
-type MergeBlockedResponse struct {
-	Error string `json:"error"`
-	// Command does the merge by hand.
-	Command string `json:"command"`
+// MergeRequest says how a thread's branch is merged.
+type MergeRequest struct {
+	// Method is "squash" (squash-merge the thread's PR on GitHub, opening it
+	// first if needed) or "merge_request" (push the branch and open the PR only).
+	Method string `json:"method" binding:"required,oneof=squash merge_request" enums:"squash,merge_request"`
+	// Message is the squash commit's message (first line is the title); empty
+	// is the PR's own title with its number, and its description.
+	Message string `json:"message,omitempty"`
+	// Title and Body describe the PR when one is opened; empty is taken from
+	// the branch's commits, as `gh pr create --fill` does.
+	Title string `json:"title,omitempty"`
+	Body  string `json:"body,omitempty"`
 }
 
 // maxUpload caps one uploaded file.
@@ -194,8 +229,11 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/threads/:id/subagents", h.subagents, tag,
 		swagger.WithDescription("A thread's subagents (its Agent calls), oldest first: to find one in a long transcript without reading it"),
 		swagger.WithResponseModel(SubagentsResponse{}))
+	api.GET("/threads/:id/requests", h.requests, tag,
+		swagger.WithDescription("The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond"),
+		swagger.WithResponseModel(RequestsResponse{}))
 	api.POST("/threads/:id/messages", h.send, tag,
-		swagger.WithDescription("Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream"),
+		swagger.WithDescription("Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream"),
 		swagger.WithRequestModel(SendRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.DELETE("/threads/:id/queue/:qid", h.unqueue, tag,
@@ -216,11 +254,30 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.POST("/threads/:id/stop", h.stop, tag,
 		swagger.WithDescription("Interrupt the running turn; the process and its background tasks survive"),
 		swagger.WithResponseModel(db.Thread{}))
-	api.POST("/threads/:id/archive", h.archive, tag,
-		swagger.WithDescription("Archive (resolve) the thread; it stays readable and can be reopened"),
+	api.POST("/threads/:id/restart", h.restart, tag,
+		swagger.WithDescription("Stop the agent process and its work; the next message resumes the same session in a fresh process"),
 		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/retry", h.retry, tag,
+		swagger.WithDescription("Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again"),
+		swagger.WithErrorResponses(swagger.ErrorResponseConfig{Code: http.StatusConflict, Message: "no failed turn"}))
+	api.POST("/threads/:id/resolve", h.resolve, tag,
+		swagger.WithDescription("Resolve the thread; it stays readable and can be reopened"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/archive", h.archiveSession, tag,
+		swagger.WithDescription("Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.POST("/threads/:id/restore", h.restoreSession, tag,
+		swagger.WithDescription("Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path"),
+		swagger.WithResponseModel(db.Thread{}))
+	api.GET("/threads/:id/cleanup", h.cleanup, tag,
+		swagger.WithDescription("What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept"),
+		swagger.WithResponseModel(CleanupResponse{}))
+	api.DELETE("/threads/:id", h.deleteThread, tag,
+		swagger.WithDescription("Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/<branch>), scratch and settings files, and its rows. The project's library is kept"),
+		swagger.WithRequestModel(DeleteThreadRequest{}),
+		swagger.WithResponseModel(OKResponse{}))
 	api.POST("/threads/:id/reopen", h.reopen, tag,
-		swagger.WithDescription("Reopen an archived thread"),
+		swagger.WithDescription("Reopen a resolved thread"),
 		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/auto-answer", h.setAutoAnswer, tag,
 		swagger.WithDescription("Set when the thread answers a question with its suggested option by itself"),
@@ -237,6 +294,10 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.PUT("/threads/:id/model", h.setModel, tag,
 		swagger.WithDescription("Set the model of the thread's next turn; empty restores its project or host profile default"),
 		swagger.WithRequestModel(ModelRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+	api.PUT("/threads/:id/effort", h.setEffort, tag,
+		swagger.WithDescription("Set the thread's next-turn effort; empty restores its default"),
+		swagger.WithRequestModel(EffortRequest{}),
 		swagger.WithResponseModel(db.Thread{}))
 	api.PUT("/threads/:id/title", h.setTitle, tag,
 		swagger.WithDescription("Rename the thread"),
@@ -257,21 +318,64 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 	api.GET("/threads/:id/attachments/file", h.downloadAttachment, tag,
 		swagger.WithDescription("Download an attachment of the thread"),
 		swagger.WithQuery("path", "string", "Path returned by the upload"))
-	api.GET("/threads/:id/diff", h.diff, tag,
-		swagger.WithDescription("The thread's changes against its base branch"),
+	api.GET("/threads/:id/prs/:number/diff", h.prDiff, tag,
+		swagger.WithDescription("The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)"),
 		swagger.WithResponseModel(rt.Diff{}))
+	api.GET("/threads/:id/merge/draft", h.mergeDraft, tag,
+		swagger.WithDescription("The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them"),
+		swagger.WithResponseModel(rt.MergeDraft{}))
+	api.POST("/threads/:id/links/refresh", h.refreshLinks, tag,
+		swagger.WithDescription("Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link."),
+		swagger.WithRequestModel(RefreshLinksRequest{}),
+		swagger.WithResponseModel(rt.RefreshLinksResponse{}))
+	api.GET("/threads/:id/prs/:number/diff/file", h.prDiffFile, tag,
+		swagger.WithDescription("One file of a PR's changes: its patch, left out when it is binary or too large"),
+		swagger.WithQuery("path", "string", "File path as listed by the diff"),
+		swagger.WithQuery("old_path", "string", "Where a renamed file came from"),
+		swagger.WithResponseModel(rt.FileDiff{}))
 	api.POST("/threads/:id/merge", h.merge, tag,
-		swagger.WithDescription("Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready."),
-		swagger.WithResponseModel(db.Thread{}),
-		swagger.WithErrorResponses(swagger.ErrorResponseConfig{Code: http.StatusConflict, Message: "merge blocked", Model: MergeBlockedResponse{}}))
+		swagger.WithDescription("Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout."),
+		swagger.WithRequestModel(MergeRequest{}),
+		swagger.WithResponseModel(db.Thread{}))
+}
+
+// refreshLinks reads a thread's issues and PRs from GitHub on request.
+func (h *Handler) refreshLinks(c *gin.Context) {
+	t, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	var req RefreshLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.BadRequest(c, err.Error())
+		return
+	}
+	var only *rt.LinkRef
+	if req.Repo != "" || req.Number != 0 {
+		if req.Repo == "" || req.Number <= 0 {
+			apierr.BadRequest(c, "repo and number go together")
+			return
+		}
+		only = &rt.LinkRef{Repo: req.Repo, Kind: req.Kind, Number: req.Number}
+	}
+	results, err := h.svc.Links.RefreshThread(c.Request.Context(), t.ID, only)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			apierr.Message(c, http.StatusNotFound, "this thread has no such issue or PR")
+			return
+		}
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, rt.RefreshLinksResponse{Results: results})
 }
 
 func fail(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		apierr.Store(c, err, "thread")
-	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt),
-		errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy):
+	case errors.Is(err, rt.ErrPaused), errors.Is(err, rt.ErrArchived), errors.Is(err, rt.ErrThreadArchived), errors.Is(err, rt.ErrResolved), errors.Is(err, rt.ErrNoPrompt), errors.Is(err, rt.ErrRestarting),
+		errors.Is(err, rt.ErrTaskNotRunning), errors.Is(err, rt.ErrBusy), errors.Is(err, rt.ErrNoFailedTurn):
 		apierr.Message(c, http.StatusConflict, err.Error())
 	case errors.Is(err, rt.ErrTaskOutputUnset), errors.Is(err, os.ErrNotExist):
 		// The output file may be gone; never echo its path.
@@ -288,6 +392,7 @@ func (h *Handler) thread(c *gin.Context) (*db.Thread, bool) {
 		fail(c, err)
 		return nil, false
 	}
+	h.svc.Threads.AnnotateOne(t)
 	return t, true
 }
 
@@ -330,6 +435,7 @@ func (h *Handler) list(c *gin.Context) {
 	if threads == nil {
 		threads = []db.Thread{}
 	}
+	h.svc.Threads.Annotate(threads)
 	c.JSON(http.StatusOK, ThreadsResponse{Threads: threads})
 }
 
@@ -344,7 +450,7 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 	t, err := h.svc.Threads.StartFolderThread(rt.FolderThreadSpec{
-		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model,
+		ProjectID: c.Param("id"), Task: req.Content, Attachments: atts, Title: req.Title, Model: req.Model, Effort: req.Effort,
 		PermissionMode: req.PermissionMode, Profile: req.Profile,
 	})
 	if err != nil {
@@ -396,6 +502,14 @@ func (h *Handler) events(c *gin.Context) {
 	c.JSON(http.StatusOK, EventsResponse{Events: events, More: more})
 }
 
+func (h *Handler) requests(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, RequestsResponse{Requests: h.svc.Threads.PendingRequests(t.ID)})
+}
+
 func (h *Handler) subagents(c *gin.Context) {
 	t, ok := h.thread(c)
 	if !ok {
@@ -419,7 +533,7 @@ func (h *Handler) send(c *gin.Context) {
 		return
 	}
 	if !rt.SendMode(req.Mode).Valid() {
-		apierr.BadRequest(c, "mode must be send, queue or stop_and_send")
+		apierr.BadRequest(c, "mode must be insert or next_turn")
 		return
 	}
 	cur, ok := h.thread(c)
@@ -437,11 +551,12 @@ func (h *Handler) send(c *gin.Context) {
 			return
 		}
 	}
-	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode))
+	t, err := h.svc.SendWith(c.Request.Context(), cur.ID, req.Content, atts, rt.Source{}, rt.SendMode(req.Mode).Canonical())
 	if err != nil {
 		fail(c, err)
 		return
 	}
+	h.svc.Threads.AnnotateOne(t)
 	c.JSON(http.StatusOK, t)
 }
 
@@ -462,7 +577,7 @@ func (h *Handler) startSuggestions(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	m, err := h.svc.Coordinator.StartSuggestions(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Indexes)
+	m, err := h.svc.Coordinator.StartSuggestions(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Indexes, rt.Source{})
 	if err != nil {
 		fail(c, err)
 		return
@@ -508,8 +623,34 @@ func (h *Handler) stop(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.svc.Threads.Stop(cur.ID)
+	h.svc.Threads.Stop(cur.ID, rt.Source{})
 	h.reply(c, cur.ID)
+}
+
+// retry re-runs a failed turn through the agent's own recovery.
+func (h *Handler) retry(c *gin.Context) {
+	cur, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	if _, err := h.svc.Threads.Retry(c.Request.Context(), cur.ID); err != nil {
+		fail(c, err)
+		return
+	}
+	h.reply(c, cur.ID)
+}
+
+func (h *Handler) restart(c *gin.Context) {
+	cur, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	t, err := h.svc.Threads.Restart(cur.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, t)
 }
 
 // reply answers with the thread as it is now.
@@ -519,10 +660,11 @@ func (h *Handler) reply(c *gin.Context, id string) {
 		fail(c, err)
 		return
 	}
+	h.svc.Threads.AnnotateOne(t)
 	c.JSON(http.StatusOK, t)
 }
 
-func (h *Handler) archive(c *gin.Context) {
+func (h *Handler) resolve(c *gin.Context) {
 	cur, ok := h.worker(c)
 	if !ok {
 		return
@@ -535,12 +677,104 @@ func (h *Handler) archive(c *gin.Context) {
 	c.JSON(http.StatusOK, t)
 }
 
+// folderSession used to limit the archive flag to folder sessions; archive
+// and restore now serve every thread (project threads free their worktree).
+
+// BlockersResponse says why an archive or a delete was refused, item by
+// item, so the dialog can list them instead of one string.
+type BlockersResponse struct {
+	Error    string   `json:"error"`
+	Blockers []string `json:"blockers"`
+}
+
+// OKResponse acknowledges an action.
+type OKResponse struct {
+	OK bool `json:"ok"`
+}
+
+type DeleteThreadRequest struct {
+	// Force deletes a branch that no merged PR proves merged. Its commits
+	// stay under refs/tingly/trash/<branch>.
+	Force bool `json:"force,omitempty"`
+	// ConfirmBranch must repeat the branch name when Force is set.
+	ConfirmBranch string `json:"confirm_branch,omitempty"`
+}
+
+// blocked answers with the blockers of a refused archive or delete.
+func blocked(c *gin.Context, err error) {
+	var b *rt.BlockedArchive
+	if errors.As(err, &b) {
+		c.JSON(http.StatusConflict, BlockersResponse{Error: err.Error(), Blockers: b.Blockers})
+		return
+	}
+	fail(c, err)
+}
+
+func (h *Handler) archiveSession(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.Archive(t.ID)
+	if err != nil {
+		blocked(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) restoreSession(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.Restore(t.ID)
+	if err != nil {
+		blocked(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// CleanupResponse is what archive (or delete) would free right now.
+type CleanupResponse struct {
+	Report rt.CleanupReport `json:"report"`
+}
+
+func (h *Handler) cleanup(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	report, err := h.svc.Threads.Cleanup(t.ID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, CleanupResponse{Report: *report})
+}
+
+func (h *Handler) deleteThread(c *gin.Context) {
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	var req DeleteThreadRequest
+	// A DELETE may carry a body; empty is fine (no force).
+	_ = c.ShouldBindJSON(&req)
+	if err := h.svc.Threads.Delete(t.ID, rt.DeleteSpec{Force: req.Force, ConfirmBranch: req.ConfirmBranch}); err != nil {
+		blocked(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, OKResponse{OK: true})
+}
+
 func (h *Handler) reopen(c *gin.Context) {
 	cur, ok := h.worker(c)
 	if !ok {
 		return
 	}
-	t, err := h.svc.Threads.Reopen(cur.ID)
+	t, err := h.svc.Threads.Reopen(cur.ID, rt.Source{})
 	if err != nil {
 		fail(c, err)
 		return
@@ -548,12 +782,55 @@ func (h *Handler) reopen(c *gin.Context) {
 	c.JSON(http.StatusOK, t)
 }
 
-func (h *Handler) diff(c *gin.Context) {
+func prNumber(c *gin.Context) (int, bool) {
+	n, err := strconv.Atoi(c.Param("number"))
+	if err != nil || n <= 0 {
+		apierr.BadRequest(c, "number must be a PR number")
+		return 0, false
+	}
+	return n, true
+}
+
+func (h *Handler) prDiff(c *gin.Context) {
 	cur, ok := h.thread(c)
 	if !ok {
 		return
 	}
-	d, err := h.svc.Threads.Diff(c.Request.Context(), cur.ID)
+	n, ok := prNumber(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.PRDiff(c.Request.Context(), cur.ID, n)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
+func (h *Handler) prDiffFile(c *gin.Context) {
+	cur, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	n, ok := prNumber(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.PRDiffFile(c.Request.Context(), cur.ID, n, c.Query("path"), c.Query("old_path"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
+func (h *Handler) mergeDraft(c *gin.Context) {
+	cur, ok := h.thread(c)
+	if !ok {
+		return
+	}
+	d, err := h.svc.Threads.MergeDraft(c.Request.Context(), cur.ID)
 	if err != nil {
 		fail(c, err)
 		return
@@ -566,12 +843,11 @@ func (h *Handler) merge(c *gin.Context) {
 	if !ok {
 		return
 	}
-	t, err := h.svc.Threads.Merge(c.Request.Context(), cur.ID)
-	var blocked *rt.MergeBlockedError
-	if errors.As(err, &blocked) {
-		c.AbortWithStatusJSON(http.StatusConflict, MergeBlockedResponse{Error: blocked.Reason, Command: blocked.Command})
+	var req MergeRequest
+	if !apierr.Bind(c, &req) {
 		return
 	}
+	t, err := h.svc.Threads.Merge(c.Request.Context(), cur.ID, rt.MergeSpec{Method: req.Method, Message: req.Message, Title: req.Title, Body: req.Body})
 	if err != nil {
 		fail(c, err)
 		return
@@ -622,7 +898,13 @@ func (h *Handler) setProfile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	out, err := h.svc.Threads.SetProfile(c.Request.Context(), t.ID, req.Profile)
+	var out *db.Thread
+	var err error
+	if p, e := h.svc.Store.GetProject(t.ProjectID); e == nil && p.Type == db.ProjectProject {
+		out, err = h.svc.Threads.SetWorkerProfile(c.Request.Context(), t.ID, req.Profile, req.Inherit)
+	} else {
+		out, err = h.svc.Threads.SetProfile(c.Request.Context(), t.ID, req.Profile)
+	}
 	if err != nil {
 		fail(c, err)
 		return
@@ -640,6 +922,23 @@ func (h *Handler) setModel(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.Threads.SetModel(c.Request.Context(), t.ID, req.Model)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (h *Handler) setEffort(c *gin.Context) {
+	var req EffortRequest
+	if !apierr.Bind(c, &req) {
+		return
+	}
+	t, ok := h.worker(c)
+	if !ok {
+		return
+	}
+	out, err := h.svc.Threads.SetEffort(t.ID, req.Effort)
 	if err != nil {
 		fail(c, err)
 		return
@@ -749,14 +1048,15 @@ func (h *Handler) downloadAttachment(c *gin.Context) {
 		apierr.BadRequest(c, "invalid attachment path")
 		return
 	}
-	path, err := h.svc.Layout.AttachmentPath(p, t, rel)
+	f, info, err := h.svc.Layout.OpenAttachment(p, t, rel)
 	if err != nil {
-		apierr.BadRequest(c, err.Error())
+		if errors.Is(err, rt.ErrInvalidLibraryPath) {
+			apierr.BadRequest(c, err.Error())
+		} else {
+			apierr.Message(c, http.StatusNotFound, "file not found")
+		}
 		return
 	}
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
-		apierr.Message(c, http.StatusNotFound, "file not found")
-		return
-	}
-	c.FileAttachment(path, filepath.Base(path))
+	defer f.Close()
+	module.ServeDownload(c, f, info, rt.DownloadName(rel))
 }

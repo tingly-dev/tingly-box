@@ -88,10 +88,10 @@ func TestSDKStream_ToolUseBlock(t *testing.T) {
 	toolModel := anthropicvm.NewMockModel(&anthropicvm.MockModelConfig{
 		ID:   "sdk-tool-mock",
 		Name: "sdk-tool-mock",
-		ToolCall: &vmodel.ToolCallConfig{
+		ToolCalls: []vmodel.ToolCallConfig{{
 			Name:      "get_weather",
 			Arguments: map[string]interface{}{"city": "Paris"},
-		},
+		}},
 	})
 	client := newSDKClient(t, toolModel)
 	msg := accumulate(t, client, "sdk-tool-mock", "weather in Paris?")

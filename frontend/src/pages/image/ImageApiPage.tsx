@@ -5,8 +5,8 @@ import { Box, Button, Stack } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import { AgentStatusRow, AgentLogButton } from '@/pages/scenario/components/AgentStatusRow';
 import AgentAccessSection, { useAccessExpanded } from '@/pages/scenario/components/AgentAccessSection';
@@ -17,7 +17,7 @@ import ScenarioPageSkeleton from '@/pages/scenario/components/ScenarioPageSkelet
 import TemplatePage from '@/pages/scenario/components/TemplatePage.tsx';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH, ScenarioCardHeader, agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeader';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
+import { ScenarioPageModalProvider } from '@/features/scenario/ScenarioPageContext';
 
 const scenario = "imagegen";
 
@@ -109,6 +109,7 @@ const ImageApiPageContent: React.FC = () => {
                         title={t('scenarioPage.imageGenModelRules')}
                         collapsible={true}
                         allowDeleteRule={true}
+                        allowReorder={true}
                         // The header's Log is the way into this scenario's logs.
                         hideTroubleshoot
                         rules={rules}

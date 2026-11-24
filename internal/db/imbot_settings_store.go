@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +28,10 @@ type Settings struct {
 	// Scenarios is the raw JSON-encoded list of hook scenarios this bot
 	// serves. The notify module parses it into typed bindings; the
 	// settings store keeps it opaque to avoid a cross-package dependency.
-	Scenarios string    `json:"scenarios,omitempty"`
+	Scenarios string `json:"scenarios,omitempty"`
+	// ClearName makes UpdateSettings reset Name to empty (a plain empty Name
+	// means "leave unchanged"). Not part of the wire format.
+	ClearName bool      `json:"-"`
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
@@ -53,6 +57,9 @@ func NewImBotSettingsStore(baseDir string) (*ImBotSettingsStore, error) {
 func newImBotSettingsStore(conn storeConn) (*ImBotSettingsStore, error) {
 	if err := conn.db.AutoMigrate(&ImBotSettingsRecord{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate imbot settings database: %w", err)
+	}
+	if err := migrateBotAccessTables(conn.db); err != nil {
+		return nil, fmt.Errorf("failed to migrate bot access tables: %w", err)
 	}
 	return &ImBotSettingsStore{storeConn: conn}, nil
 }
@@ -139,7 +146,12 @@ func (s *ImBotSettingsStore) CreateSettings(settings Settings) (Settings, error)
 		UpdatedAt:      settings.UpdatedAt,
 	}
 
-	if err := s.db.Create(&record).Error; err != nil {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`INSERT INTO bot_capabilities (bot_uuid, capability, enabled, config, created_at, updated_at) VALUES (?, 'remote_control', TRUE, '{}', ?, ?), (?, 'notify', FALSE, '{}', ?, ?)`, settings.UUID, now, now, settings.UUID, now, now).Error
+	}); err != nil {
 		return Settings{Auth: make(map[string]string)}, fmt.Errorf("failed to create settings: %w", err)
 	}
 
@@ -170,7 +182,9 @@ func (s *ImBotSettingsStore) UpdateSettings(uuid string, settings Settings) erro
 		return fmt.Errorf("failed to load settings for update: %w", err)
 	}
 
-	if settings.Name != "" {
+	if settings.ClearName {
+		record.Name = ""
+	} else if settings.Name != "" {
 		record.Name = settings.Name
 	}
 	if settings.Platform != "" {
@@ -210,6 +224,22 @@ func (s *ImBotSettingsStore) UpdateSettings(uuid string, settings Settings) erro
 	}
 
 	return nil
+}
+
+// SetNameIfEmpty gives an unnamed bot a default name (its platform account
+// name). It never replaces an existing name and reports whether it wrote.
+func (s *ImBotSettingsStore) SetNameIfEmpty(uuid, name string) (bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res := s.db.Model(&ImBotSettingsRecord{}).Where("bot_uuid = ? AND (name IS NULL OR name = '')", uuid).Updates(map[string]any{"name": name, "updated_at": time.Now()})
+	if res.Error != nil {
+		return false, fmt.Errorf("failed to set default bot name: %w", res.Error)
+	}
+	return res.RowsAffected > 0, nil
 }
 
 // DeleteSettings deletes an ImBot configuration.

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -31,15 +32,18 @@ func main() {
 
 func rootCmd() *cobra.Command {
 	cfg := config.Config{Host: "127.0.0.1", Port: config.DefaultPort, DataDir: config.DefaultDataDir()}
+	var sessions project.SessionConfig
 	serve := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the tingly-project server",
-		RunE:  func(*cobra.Command, []string) error { return runServe(cfg) },
+		RunE:  func(*cobra.Command, []string) error { return runServe(cfg, sessions) },
 	}
 	for _, c := range []*cobra.Command{serve} {
 		c.Flags().StringVar(&cfg.Host, "host", cfg.Host, "address to listen on (use 0.0.0.0 to expose on the network; there is no login)")
 		c.Flags().IntVar(&cfg.Port, "port", cfg.Port, "port to listen on")
 		c.Flags().StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "where the database lives ($TINGLY_PROJECT_HOME)")
+		c.Flags().DurationVar(&sessions.ThreadIdleTimeout, "thread-idle-timeout", 0, "close an idle thread's Claude Code process after this long; its next turn resumes the session (0: "+project.DefaultThreadIdleTimeout.String()+", negative: never)")
+		c.Flags().DurationVar(&sessions.CoordinatorIdleTimeout, "coordinator-idle-timeout", 0, "close an idle coordinator's process after this long without any thread working (0: "+project.DefaultCoordinatorIdleTimeout.String()+", negative: never)")
 	}
 
 	out := "openapi.json"
@@ -79,11 +83,16 @@ func rootCmd() *cobra.Command {
 		RunE:          serve.RunE,
 	}
 	root.Flags().AddFlagSet(serve.Flags())
-	root.AddCommand(serve, swaggerCmd, versionCmd)
+	root.AddCommand(serve, swaggerCmd, versionCmd, harnessCmd())
 	return root
 }
 
-func runServe(cfg config.Config) error {
+func runServe(cfg config.Config, sessions project.SessionConfig) error {
+	dataDir, err := filepath.Abs(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	cfg.DataDir = dataDir
 	store, err := db.Open(cfg.DBPath(), db.WithProjectsDir(cfg.ProjectsDir()))
 	if err != nil {
 		return err
@@ -95,7 +104,7 @@ func runServe(cfg config.Config) error {
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(ctx, server.Deps{Store: store, Layout: project.Layout{Root: cfg.ProjectsDir()}}),
+		Handler:           server.New(ctx, server.Deps{Store: store, Layout: project.Layout{Root: cfg.ProjectsDir()}, Sessions: sessions}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	ln, err := net.Listen("tcp", addr)

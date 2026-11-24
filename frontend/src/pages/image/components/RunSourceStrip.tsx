@@ -2,8 +2,9 @@ import { Box, ButtonBase, IconButton, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Edit, ZoomIn } from '@/components/icons';
 import { hoverRevealSx, overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
-import { THUMB_EDGE_BADGE } from './imageThumbnails';
-import ThumbImage from './ThumbImage';
+import { THUMB_EDGE_BADGE } from '../../../features/image/imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface RunSourceStripProps {
     sources: string[];
@@ -52,7 +53,7 @@ const RunSourceStrip: React.FC<RunSourceStripProps> = ({ sources, onOpen, onUseA
                             display: 'block',
                             width: '100%',
                             height: '100%',
-                            borderRadius: 0.5,
+                            borderRadius: radius.chip,
                             overflow: 'hidden',
                             border: '1px solid',
                             borderColor: 'divider',

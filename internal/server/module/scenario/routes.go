@@ -106,6 +106,13 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithRequestModel(ProfileUpdateRequest{}),
 	)
 
+	// POST /scenario/:scenario/profiles/:id/duplicate - Copy a profile
+	router.POST("/scenario/:scenario/profiles/:id/duplicate", h.DuplicateProfile,
+		swagger.WithDescription("Copy a profile (rules, flags and Claude Code overrides) into a new profile"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ProfileDuplicateRequest{}),
+	)
+
 	router.GET("/scenario/:scenario/claude-code/slots", h.GetClaudeCodeSlots,
 		swagger.WithDescription("List the Claude Code model slots that have a rule of their own in unified mode (main routing or a profile)"),
 		swagger.WithTags("scenarios"),
@@ -117,6 +124,13 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 		swagger.WithTags("scenarios"),
 		swagger.WithRequestModel(ClaudeCodeSlotRequest{}),
 		swagger.WithResponseModel(ClaudeCodeSlotsResponse{}),
+	)
+
+	router.POST("/scenario/:scenario/claude-code/use-profile", h.UseClaudeCodeProfile,
+		swagger.WithDescription("Overwrite the default Claude Code routing with a copy of a profile's; the profile is not changed and the default's previous routing is not kept (only the claude_code scenario)"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ClaudeCodeUseProfileRequest{}),
+		swagger.WithResponseModel(ClaudeCodeUseProfileResponse{}),
 	)
 
 	router.GET("/scenario/:scenario/models", h.GetClaudeCodeModels,

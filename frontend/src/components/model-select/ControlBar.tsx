@@ -1,5 +1,6 @@
 import { Box } from '@mui/material';
 import React from 'react';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 interface ControlBarProps {
     children: React.ReactNode;
@@ -10,6 +11,8 @@ interface ControlBarProps {
 // to the card's onClick, which selects the model — every action inside it is
 // a distinct gesture from selecting the card.
 export function ControlBar({ children }: ControlBarProps) {
+    // Phone shell: there is no hover, so the actions are always there, at the row's right end.
+    const phone = usePhoneShell();
     return (
         <Box
             className="control-bar"
@@ -28,6 +31,13 @@ export function ControlBar({ children }: ControlBarProps) {
                 opacity: 0,
                 transition: 'opacity 0.2s',
                 zIndex: 10,
+                ...(phone && {
+                    top: 0,
+                    height: 'auto',
+                    backgroundColor: 'transparent',
+                    border: 0,
+                    opacity: 1,
+                }),
             }}
             onClick={(e) => {
                 e.stopPropagation();

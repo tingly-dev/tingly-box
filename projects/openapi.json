@@ -404,14 +404,14 @@
         "tags": [
           "projects"
         ],
-        "summary": "List the IM chats bound to threads, all of them or one project's or thread's",
-        "description": "List the IM chats bound to threads, all of them or one project's or thread's",
+        "summary": "List IM chats bound to threads, projects, or folders",
+        "description": "List IM chats bound to threads, projects, or folders",
         "operationId": "apiV1ProjectsChannel-bindingsGet",
         "parameters": [
           {
             "name": "project_id",
             "in": "query",
-            "description": "Only chats bound to a thread of this project",
+            "description": "Only chats bound to this project or folder",
             "required": false,
             "schema": {
               "type": "string"
@@ -444,8 +444,8 @@
         "tags": [
           "projects"
         ],
-        "summary": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
-        "description": "Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it",
+        "summary": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
+        "description": "Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it",
         "operationId": "apiV1ProjectsChannel-bindingsPut",
         "requestBody": {
           "description": "Request body",
@@ -498,6 +498,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/directories": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Browse non-hidden directories under the server user home",
+        "description": "Browse non-hidden directories under the server user home",
+        "operationId": "apiV1ProjectsDirectoriesPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowseDirectoriesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseDirectoriesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/directories/inspect": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Inspect a local directory or Git repository",
+        "description": "Inspect a local directory or Git repository",
+        "operationId": "apiV1ProjectsDirectoriesInspectPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRepoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectDirectoryResponse"
                 }
               }
             }
@@ -743,6 +809,83 @@
         }
       }
     },
+    "/api/v1/projects/{id}/coordinator/recover": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "description": "Resolve an interrupted coordinator input; retry may repeat side effects",
+        "operationId": "apiV1ProjectsIdCoordinatorRecoverPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoverCoordinatorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/coordinator/stop": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery",
+        "description": "Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery",
+        "operationId": "apiV1ProjectsIdCoordinatorStopPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/events": {
       "get": {
         "tags": [
@@ -776,13 +919,57 @@
         }
       }
     },
+    "/api/v1/projects/{id}/fork": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked",
+        "description": "Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked",
+        "operationId": "apiV1ProjectsIdForkPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/library": {
       "get": {
         "tags": [
           "projects"
         ],
-        "summary": "List library files (uploads and thread outputs)",
-        "description": "List library files (uploads and thread outputs)",
+        "summary": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
+        "description": "List library files (uploads, thread outputs, and the threads' scratch under .tmp/)",
         "operationId": "apiV1ProjectsIdLibraryGet",
         "parameters": [
           {
@@ -833,6 +1020,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/library/archive": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "description": "Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.",
+        "operationId": "apiV1ProjectsIdLibraryArchiveGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative folder; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -915,6 +1144,81 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/library/tree": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "description": "List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too",
+        "operationId": "apiV1ProjectsIdLibraryTreeGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Library-relative directory; empty is the library root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTreeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "description": "Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.",
+        "operationId": "apiV1ProjectsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
                 }
               }
             }
@@ -1368,6 +1672,48 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
+        "description": "Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/\u003cbranch\u003e), scratch and settings files, and its rows. The project's library is kept",
+        "operationId": "apiV1ThreadsIdDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteThreadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/threads/{id}/archive": {
@@ -1375,8 +1721,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Archive (resolve) the thread; it stays readable and can be reopened",
-        "description": "Archive (resolve) the thread; it stays readable and can be reopened",
+        "summary": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
+        "description": "Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty",
         "operationId": "apiV1ThreadsIdArchivePost",
         "parameters": [
           {
@@ -1522,14 +1868,14 @@
         }
       }
     },
-    "/api/v1/threads/{id}/diff": {
+    "/api/v1/threads/{id}/cleanup": {
       "get": {
         "tags": [
           "threads"
         ],
-        "summary": "The thread's changes against its base branch",
-        "description": "The thread's changes against its base branch",
-        "operationId": "apiV1ThreadsIdDiffGet",
+        "summary": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
+        "description": "What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept",
+        "operationId": "apiV1ThreadsIdCleanupGet",
         "parameters": [
           {
             "name": "id",
@@ -1547,7 +1893,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Diff"
+                  "$ref": "#/components/schemas/CleanupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/effort": {
+      "put": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Set the thread's next-turn effort; empty restores its default",
+        "description": "Set the thread's next-turn effort; empty restores its default",
+        "operationId": "apiV1ThreadsIdEffortPut",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EffortRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
                 }
               }
             }
@@ -1781,14 +2171,102 @@
         }
       }
     },
+    "/api/v1/threads/{id}/links/refresh": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "description": "Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.",
+        "operationId": "apiV1ThreadsIdLinksRefreshPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshLinksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshLinksResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/merge": {
       "post": {
         "tags": [
           "threads"
         ],
-        "summary": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
-        "description": "Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.",
+        "summary": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
+        "description": "Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.",
         "operationId": "apiV1ThreadsIdMergePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/merge/draft": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them",
+        "description": "The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them",
+        "operationId": "apiV1ThreadsIdMergeDraftGet",
         "parameters": [
           {
             "name": "id",
@@ -1806,17 +2284,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Thread"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "merge blocked",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MergeBlockedResponse"
+                  "$ref": "#/components/schemas/MergeDraft"
                 }
               }
             }
@@ -1829,8 +2297,8 @@
         "tags": [
           "threads"
         ],
-        "summary": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
-        "description": "Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "summary": "Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
+        "description": "Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream",
         "operationId": "apiV1ThreadsIdMessagesPost",
         "parameters": [
           {
@@ -2000,6 +2468,110 @@
         }
       }
     },
+    "/api/v1/threads/{id}/prs/{number}/diff": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)",
+        "description": "The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)",
+        "operationId": "apiV1ThreadsIdPrsNumberDiffGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Numeric count",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/prs/{number}/diff/file": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "One file of a PR's changes: its patch, left out when it is binary or too large",
+        "description": "One file of a PR's changes: its patch, left out when it is binary or too large",
+        "operationId": "apiV1ThreadsIdPrsNumberDiffFileGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "description": "Numeric count",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path as listed by the diff",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "old_path",
+            "in": "query",
+            "description": "Where a renamed file came from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/threads/{id}/queue/{qid}": {
       "delete": {
         "tags": [
@@ -2047,9 +2619,75 @@
         "tags": [
           "threads"
         ],
-        "summary": "Reopen an archived thread",
-        "description": "Reopen an archived thread",
+        "summary": "Reopen a resolved thread",
+        "description": "Reopen a resolved thread",
         "operationId": "apiV1ThreadsIdReopenPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/requests": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond",
+        "description": "The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond",
+        "operationId": "apiV1ThreadsIdRequestsGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/resolve": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Resolve the thread; it stays readable and can be reopened",
+        "description": "Resolve the thread; it stays readable and can be reopened",
+        "operationId": "apiV1ThreadsIdResolvePost",
         "parameters": [
           {
             "name": "id",
@@ -2112,6 +2750,115 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/restart": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Stop the agent process and its work; the next message resumes the same session in a fresh process",
+        "description": "Stop the agent process and its work; the next message resumes the same session in a fresh process",
+        "operationId": "apiV1ThreadsIdRestartPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/restore": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
+        "description": "Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path",
+        "operationId": "apiV1ThreadsIdRestorePost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{id}/retry": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again",
+        "description": "Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again",
+        "operationId": "apiV1ThreadsIdRetryPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "no failed turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -2373,13 +3120,7 @@
         "properties": {
           "auto_answer": {
             "type": "string",
-            "description": "Field auto_answer",
-            "enum": [
-              "",
-              "off",
-              "delay",
-              "now"
-            ]
+            "description": "Field auto_answer"
           }
         },
         "required": [
@@ -2411,6 +3152,10 @@
       "BindChannelRequest": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -2452,9 +3197,50 @@
           "bindings"
         ]
       },
+      "BrowseDirectoriesRequest": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "BrowseDirectoriesResponse": {
+        "type": "object",
+        "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "type": "string"
+            }
+          },
+          "home": {
+            "type": "string",
+            "description": "Field home"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "home",
+          "path",
+          "directories"
+        ]
+      },
       "ChannelBinding": {
         "type": "object",
         "properties": {
+          "bot_uuid": {
+            "type": "string",
+            "description": "Field bot_uuid"
+          },
           "chat_id": {
             "type": "string",
             "description": "Field chat_id"
@@ -2468,6 +3254,23 @@
             "format": "date-time",
             "description": "Field created_at"
           },
+          "focus_agent": {
+            "type": "string",
+            "description": "Field focus_agent"
+          },
+          "focus_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field focus_seq"
+          },
+          "focus_title": {
+            "type": "string",
+            "description": "Field focus_title"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Field folder"
+          },
           "id": {
             "type": "string",
             "description": "Field id"
@@ -2479,6 +3282,23 @@
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "target_project_id": {
+            "type": "string",
+            "description": "Field target_project_id"
+          },
+          "target_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field target_seq"
+          },
+          "target_thread_id": {
+            "type": "string",
+            "description": "Field target_thread_id"
+          },
+          "target_title": {
+            "type": "string",
+            "description": "Field target_title"
           },
           "thread_id": {
             "type": "string",
@@ -2517,6 +3337,73 @@
         },
         "required": [
           "index"
+        ]
+      },
+      "CleanupReport": {
+        "type": "object",
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "description": "Field blockers",
+            "items": {
+              "type": "string"
+            }
+          },
+          "can_archive": {
+            "type": "boolean",
+            "description": "Field can_archive"
+          },
+          "can_delete": {
+            "type": "boolean",
+            "description": "Field can_delete"
+          },
+          "kept": {
+            "type": "array",
+            "description": "Field kept",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "Field thread_id"
+          },
+          "tmp_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field tmp_bytes"
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Field warnings",
+            "items": {
+              "type": "string"
+            }
+          },
+          "worktree_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field worktree_bytes"
+          }
+        },
+        "required": [
+          "thread_id",
+          "worktree_bytes",
+          "tmp_bytes",
+          "kept",
+          "can_archive",
+          "can_delete"
+        ]
+      },
+      "CleanupResponse": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/CleanupReport"
+          }
+        },
+        "required": [
+          "report"
         ]
       },
       "ConnectionDraft": {
@@ -2634,6 +3521,17 @@
       "CreateProjectRequest": {
         "type": "object",
         "properties": {
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -2645,6 +3543,10 @@
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -2677,6 +3579,17 @@
             "type": "string",
             "description": "Field content"
           },
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
           "model": {
             "type": "string",
             "description": "Field model"
@@ -2698,41 +3611,160 @@
           "content"
         ]
       },
+      "DeleteThreadRequest": {
+        "type": "object",
+        "properties": {
+          "confirm_branch": {
+            "type": "string",
+            "description": "Field confirm_branch"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Field force"
+          }
+        }
+      },
       "Diff": {
         "type": "object",
         "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
           "base": {
             "type": "string",
             "description": "Field base"
           },
-          "branch": {
-            "type": "string",
-            "description": "Field branch"
-          },
-          "patch": {
-            "type": "string",
-            "description": "Field patch"
-          },
-          "stat": {
-            "type": "string",
-            "description": "Field stat"
-          },
-          "truncated": {
+          "base_stale": {
             "type": "boolean",
-            "description": "Field truncated"
+            "description": "Field base_stale"
           },
-          "uncommitted": {
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
+          },
+          "files": {
+            "type": "array",
+            "description": "Field files",
+            "items": {
+              "$ref": "#/components/schemas/DiffFile"
+            }
+          },
+          "files_omitted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field files_omitted"
+          },
+          "head": {
             "type": "string",
-            "description": "Field uncommitted"
+            "description": "Field head"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          },
+          "unpushed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field unpushed"
           }
         },
         "required": [
+          "number",
           "base",
-          "branch",
-          "stat",
-          "patch",
-          "uncommitted",
-          "truncated"
+          "head",
+          "source",
+          "files",
+          "additions",
+          "deletions"
+        ]
+      },
+      "DiffFile": {
+        "type": "object",
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field additions"
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field deletions"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "Field generated"
+          },
+          "old_path": {
+            "type": "string",
+            "description": "Field old_path"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status"
+          }
+        },
+        "required": [
+          "path",
+          "status",
+          "additions",
+          "deletions"
+        ]
+      },
+      "DirectorySpec": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "",
+              "shared",
+              "worktree"
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "EffortRequest": {
+        "type": "object",
+        "properties": {
+          "effort": {
+            "type": "string",
+            "description": "Field effort",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "required": [
+          "effort"
         ]
       },
       "Event": {
@@ -2779,6 +3811,45 @@
           "more"
         ]
       },
+      "FileDiff": {
+        "type": "object",
+        "properties": {
+          "binary": {
+            "type": "boolean",
+            "description": "Field binary"
+          },
+          "lines_cut": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field lines_cut"
+          },
+          "patch": {
+            "type": "string",
+            "description": "Field patch"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "too_large": {
+            "type": "boolean",
+            "description": "Field too_large"
+          }
+        },
+        "required": [
+          "path",
+          "patch"
+        ]
+      },
+      "ForkProjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          }
+        }
+      },
       "HandoffResponse": {
         "type": "object",
         "properties": {
@@ -2807,6 +3878,48 @@
         "required": [
           "status",
           "version"
+        ]
+      },
+      "InspectDirectoryResponse": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string",
+            "description": "Field branch"
+          },
+          "dirty": {
+            "type": "boolean",
+            "description": "Field dirty"
+          },
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "git",
+              "directory"
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Field ok"
+          },
+          "root": {
+            "type": "string",
+            "description": "Field root"
+          }
+        },
+        "required": [
+          "ok",
+          "root",
+          "kind",
+          "branch",
+          "dirty",
+          "error"
         ]
       },
       "InspectRepoRequest": {
@@ -2847,6 +3960,45 @@
         },
         "required": [
           "ok"
+        ]
+      },
+      "LibraryEntry": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "origin": {
+            "type": "string",
+            "description": "Field origin"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field size"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field updated_at"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size",
+          "updated_at",
+          "origin"
         ]
       },
       "LibraryFile": {
@@ -2896,6 +4048,84 @@
         "required": [
           "dir",
           "files"
+        ]
+      },
+      "LibraryTreeResponse": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "Field dir"
+          },
+          "entries": {
+            "type": "array",
+            "description": "Field entries",
+            "items": {
+              "$ref": "#/components/schemas/LibraryEntry"
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          }
+        },
+        "required": [
+          "dir",
+          "path",
+          "entries"
+        ]
+      },
+      "LinkCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "LinkChecks": {
+        "type": "object",
+        "properties": {
+          "failed": {
+            "type": "array",
+            "description": "Field failed",
+            "items": {
+              "$ref": "#/components/schemas/LinkCheck"
+            }
+          },
+          "failing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failing"
+          },
+          "more": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field more"
+          },
+          "passing": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field passing"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field pending"
+          }
+        },
+        "required": [
+          "passing",
+          "failing",
+          "pending"
         ]
       },
       "MemoryFile": {
@@ -2959,21 +4189,60 @@
           "files"
         ]
       },
-      "MergeBlockedResponse": {
+      "MergeDraft": {
         "type": "object",
         "properties": {
-          "command": {
+          "body": {
             "type": "string",
-            "description": "Field command"
+            "description": "Field body"
           },
-          "error": {
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "source": {
             "type": "string",
-            "description": "Field error"
+            "description": "Field source"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
           }
         },
         "required": [
-          "error",
-          "command"
+          "number",
+          "source",
+          "title",
+          "body"
+        ]
+      },
+      "MergeRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method",
+            "enum": [
+              "squash",
+              "merge_request"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          }
+        },
+        "required": [
+          "method"
         ]
       },
       "Message": {
@@ -3159,6 +4428,10 @@
       "ProfileRequest": {
         "type": "object",
         "properties": {
+          "inherit": {
+            "type": "boolean",
+            "description": "Field inherit"
+          },
           "profile": {
             "type": "string",
             "description": "Field profile"
@@ -3184,10 +4457,25 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
           },
           "goal": {
             "type": "string",
@@ -3205,6 +4493,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -3216,6 +4509,10 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -3232,6 +4529,10 @@
             "type": "string",
             "description": "Field thread_effort"
           },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -3239,6 +4540,10 @@
           "thread_permission_mode": {
             "type": "string",
             "description": "Field thread_permission_mode"
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           },
           "type": {
             "type": "string",
@@ -3257,11 +4562,15 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "github_auto",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
@@ -3271,9 +4580,25 @@
       "ProjectDetailResponse": {
         "type": "object",
         "properties": {
+          "coordinator": {
+            "$ref": "#/components/schemas/Thread"
+          },
           "coordinator_busy": {
             "type": "boolean",
             "description": "Field coordinator_busy"
+          },
+          "coordinator_insertable": {
+            "type": "boolean",
+            "description": "Field coordinator_insertable"
+          },
+          "coordinator_queued": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field coordinator_queued"
+          },
+          "coordinator_recovery": {
+            "type": "string",
+            "description": "Field coordinator_recovery"
           },
           "counts": {
             "$ref": "#/components/schemas/ThreadCounts"
@@ -3293,7 +4618,9 @@
           "project",
           "threads",
           "counts",
-          "coordinator_busy"
+          "coordinator_busy",
+          "coordinator_insertable",
+          "coordinator_queued"
         ]
       },
       "ProjectListResponse": {
@@ -3340,11 +4667,17 @@
           "cli_path": {
             "type": "string",
             "description": "Field cli_path"
+          },
+          "max_running_threads_limit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads_limit"
           }
         },
         "required": [
           "cli_path",
-          "base_url"
+          "base_url",
+          "max_running_threads_limit"
         ]
       },
       "ProjectSummary": {
@@ -3363,10 +4696,25 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field created_at"
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
           },
           "goal": {
             "type": "string",
@@ -3384,6 +4732,11 @@
             "type": "string",
             "description": "Field main_thread_id"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -3395,6 +4748,10 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -3411,6 +4768,10 @@
             "type": "string",
             "description": "Field thread_effort"
           },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access"
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -3418,6 +4779,10 @@
           "thread_permission_mode": {
             "type": "string",
             "description": "Field thread_permission_mode"
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
@@ -3439,16 +4804,117 @@
           "goal",
           "instructions",
           "repos",
+          "coordinator_profile",
+          "thread_profile",
           "coordinator_model",
           "thread_model",
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "github_auto",
+          "max_running_threads",
           "paused",
           "starred",
           "created_at",
           "updated_at",
           "threads"
+        ]
+      },
+      "RecoverCoordinatorRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action",
+            "enum": [
+              "retry",
+              "skip"
+            ]
+          },
+          "input_id": {
+            "type": "string",
+            "description": "Field input_id"
+          }
+        },
+        "required": [
+          "input_id",
+          "action"
+        ]
+      },
+      "RefreshLinksRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "",
+              "issue",
+              "pr"
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          }
+        }
+      },
+      "RefreshLinksResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "description": "Field results",
+            "items": {
+              "$ref": "#/components/schemas/RefreshResult"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "RefreshResult": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Field error"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "status": {
+            "type": "string",
+            "description": "Field status",
+            "enum": [
+              "refreshed",
+              "recent",
+              "failed",
+              "limited"
+            ]
+          }
+        },
+        "required": [
+          "repo",
+          "kind",
+          "number",
+          "status"
         ]
       },
       "RegenerateRequest": {
@@ -3467,14 +4933,45 @@
             "type": "string",
             "description": "Field base_branch"
           },
+          "kind": {
+            "type": "string",
+            "description": "Field kind",
+            "enum": [
+              "git",
+              "directory"
+            ]
+          },
           "path": {
             "type": "string",
             "description": "Field path"
+          },
+          "workspace_mode": {
+            "type": "string",
+            "description": "Field workspace_mode",
+            "enum": [
+              "shared",
+              "worktree"
+            ]
           }
         },
         "required": [
           "path",
           "base_branch"
+        ]
+      },
+      "RequestsResponse": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "description": "Field requests",
+            "items": {
+              "$ref": "#/components/schemas/ThreadEvent"
+            }
+          }
+        },
+        "required": [
+          "requests"
         ]
       },
       "SendMessageRequest": {
@@ -3777,6 +5274,11 @@
             "type": "string",
             "description": "Field agent"
           },
+          "archived_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field archived_at"
+          },
           "auto_answer": {
             "type": "string",
             "description": "Field auto_answer"
@@ -3789,10 +5291,30 @@
             "type": "string",
             "description": "Field branch"
           },
+          "cache_read_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_read_tokens"
+          },
+          "cache_write_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field cache_write_tokens"
+          },
           "commits_ahead": {
             "type": "integer",
             "format": "int64",
             "description": "Field commits_ahead"
+          },
+          "context_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context_tokens"
+          },
+          "context_window": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context_window"
           },
           "created_at": {
             "type": "string",
@@ -3803,10 +5325,21 @@
             "type": "string",
             "description": "Field cwd"
           },
+          "effort_override": {
+            "type": "string",
+            "description": "Field effort_override"
+          },
           "files_changed": {
             "type": "integer",
             "format": "int64",
             "description": "Field files_changed"
+          },
+          "grants": {
+            "type": "array",
+            "description": "Field grants",
+            "items": {
+              "$ref": "#/components/schemas/ThreadGrant"
+            }
           },
           "head_branch": {
             "type": "string",
@@ -3821,9 +5354,30 @@
             "format": "int64",
             "description": "Field input_tokens"
           },
+          "insertable": {
+            "type": "boolean",
+            "description": "Field insertable"
+          },
           "last_report": {
             "type": "string",
             "description": "Field last_report"
+          },
+          "last_turn_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field last_turn_at"
+          },
+          "last_turn_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field last_turn_ms"
+          },
+          "links": {
+            "type": "array",
+            "description": "Field links",
+            "items": {
+              "$ref": "#/components/schemas/ThreadLink"
+            }
           },
           "merged_at": {
             "type": "string",
@@ -3859,18 +5413,35 @@
             "type": "string",
             "description": "Field profile"
           },
+          "profile_override": {
+            "type": "string",
+            "description": "Field profile_override"
+          },
           "project_id": {
             "type": "string",
             "description": "Field project_id"
+          },
+          "queued": {
+            "type": "boolean",
+            "description": "Field queued"
           },
           "repo_path": {
             "type": "string",
             "description": "Field repo_path"
           },
+          "reported_model": {
+            "type": "string",
+            "description": "Field reported_model"
+          },
           "resolved_at": {
             "type": "string",
             "format": "date-time",
             "description": "Field resolved_at"
+          },
+          "running_tasks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field running_tasks"
           },
           "seq": {
             "type": "integer",
@@ -3910,6 +5481,11 @@
           "wait_reason": {
             "type": "string",
             "description": "Field wait_reason"
+          },
+          "worktree_freed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field worktree_freed_at"
           }
         },
         "required": [
@@ -3920,14 +5496,22 @@
           "title",
           "task",
           "status",
+          "running_tasks",
+          "insertable",
           "origin",
           "cwd",
+          "profile_override",
           "commits_ahead",
           "files_changed",
           "uncommitted",
           "turns",
           "input_tokens",
           "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "context_tokens",
+          "context_window",
+          "last_turn_ms",
           "created_at",
           "updated_at"
         ]
@@ -4064,6 +5648,140 @@
           "content",
           "created_at",
           "updated_at"
+        ]
+      },
+      "ThreadGrant": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Field action"
+          },
+          "command": {
+            "type": "string",
+            "description": "Field command"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field expires_at"
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field granted_at"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "rule": {
+            "type": "string",
+            "description": "Field rule"
+          },
+          "scope": {
+            "type": "string",
+            "description": "Field scope"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "scope",
+          "granted_at"
+        ]
+      },
+      "ThreadLink": {
+        "type": "object",
+        "properties": {
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field attempted_at"
+          },
+          "base": {
+            "type": "string",
+            "description": "Field base"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/LinkChecks"
+          },
+          "ci": {
+            "type": "string",
+            "description": "Field ci"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field created_at"
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Field draft"
+          },
+          "failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field failures"
+          },
+          "head": {
+            "type": "string",
+            "description": "Field head"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Field kind"
+          },
+          "last_error": {
+            "type": "string",
+            "description": "Field last_error"
+          },
+          "merge_state": {
+            "type": "string",
+            "description": "Field merge_state"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field number"
+          },
+          "refreshed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Field refreshed_at"
+          },
+          "repo": {
+            "type": "string",
+            "description": "Field repo"
+          },
+          "role": {
+            "type": "string",
+            "description": "Field role"
+          },
+          "state": {
+            "type": "string",
+            "description": "Field state"
+          },
+          "title": {
+            "type": "string",
+            "description": "Field title"
+          },
+          "url": {
+            "type": "string",
+            "description": "Field url"
+          }
+        },
+        "required": [
+          "kind",
+          "repo",
+          "number",
+          "url",
+          "title",
+          "role",
+          "state",
+          "refreshed_at",
+          "attempted_at",
+          "created_at"
         ]
       },
       "ThreadRespondRequest": {
@@ -4225,6 +5943,28 @@
             "type": "string",
             "description": "Field coordinator_model"
           },
+          "coordinator_profile": {
+            "type": "string",
+            "description": "Field coordinator_profile"
+          },
+          "directories": {
+            "type": "array",
+            "description": "Field directories",
+            "items": {
+              "$ref": "#/components/schemas/DirectorySpec"
+            }
+          },
+          "disable_worktree": {
+            "type": "boolean",
+            "description": "Field disable_worktree"
+          },
+          "github_auto": {
+            "type": "array",
+            "description": "Field github_auto",
+            "items": {
+              "type": "string"
+            }
+          },
           "goal": {
             "type": "string",
             "description": "Field goal"
@@ -4233,6 +5973,11 @@
             "type": "string",
             "description": "Field instructions"
           },
+          "max_running_threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_running_threads"
+          },
           "name": {
             "type": "string",
             "description": "Field name"
@@ -4240,6 +5985,13 @@
           "paused": {
             "type": "boolean",
             "description": "Field paused"
+          },
+          "primary_directory_mode": {
+            "$ref": "#/components/schemas/DirectorySpec"
+          },
+          "primary_repo_path": {
+            "type": "string",
+            "description": "Field primary_repo_path"
           },
           "repos": {
             "type": "array",
@@ -4263,6 +6015,14 @@
               "max"
             ]
           },
+          "thread_github_access": {
+            "type": "string",
+            "description": "Field thread_github_access",
+            "enum": [
+              "ask",
+              "allow"
+            ]
+          },
           "thread_model": {
             "type": "string",
             "description": "Field thread_model"
@@ -4276,6 +6036,10 @@
               "auto",
               "bypassPermissions"
             ]
+          },
+          "thread_profile": {
+            "type": "string",
+            "description": "Field thread_profile"
           }
         }
       },

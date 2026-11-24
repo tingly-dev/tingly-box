@@ -1,5 +1,7 @@
 # Projects 接入（宿主侧）
 
+> Coordinator 的持久 Claude Code 会话、共享路径、工具边界与中断恢复设计见 [Projects Coordinator 设计](../projects/.design/coordinator-session.md)。
+
 > 读者：要在 tingly-box 里挂上 Projects 的人。Projects 的代码在本仓库 `projects/`
 > （原 tingly-project 仓库，2026-10-15 带历史搬入），**嵌入契约**（门面与 `Host`
 > 接口、路由/鉴权/存储、前端入口、步骤与风险）写在
@@ -13,7 +15,7 @@
 - `projects/` 是 go.work 里的一个 module（`github.com/tingly-dev/tingly-box/projects`），
   和 `agentboot`、`swagger` 一样用 `replace` 指本地目录，不钉版本。
 - 根 go.mod（和 `gui/wails3/go.mod`）`require github.com/tingly-dev/tingly-box/projects` +
-  `replace` 指本地目录；CI `verify-compile` 的 cli/gui 不再排除 `projects/**`。
+  `replace` 指本地目录；CI 的 `daily.yml` 编译 cli/gui 时包含 `projects/**`。
 - 只 import `projects` 和 `projects/llm`；其余在它的 `internal/` 下，碰不到。
   反方向（projects import 根模块）由 `task projects:boundary` 和 CI 拦住。
 - 前端在 `frontend/packages/projects`（`@tingly/projects`），是 workspace 里的普通包；入口 `src/embed.ts`，

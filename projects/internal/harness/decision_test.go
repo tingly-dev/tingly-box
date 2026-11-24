@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 func decisionEvent(w *World) *db.ThreadEvent {
@@ -24,8 +24,8 @@ func decisionEvent(w *World) *db.ThreadEvent {
 	return nil
 }
 
-func askMerge() llm.Result {
-	return llm.Result{ToolCalls: []llm.ToolCall{Call("d1", "request_decision", map[string]any{
+func askMerge(c *coordtest.Turn) {
+	c.Call("request_decision", map[string]any{
 		"question": "Merge the harness now?",
 		"options": []map[string]string{
 			{"label": "Merge now", "consequence": "main gets the harness."},
@@ -33,7 +33,8 @@ func askMerge() llm.Result {
 		},
 		"recommended": 1,
 		"reason":      "Merging cannot be undone.",
-	})}}
+	})
+	c.Reply("Asked.")
 }
 
 // D1: a choice that cannot be undone is put to the user on a card; the pick
@@ -41,15 +42,13 @@ func askMerge() llm.Result {
 func TestDecisionCardIsAskedAndAnswered(t *testing.T) {
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			switch {
-			case c.AfterTools():
-				return llm.Result{Text: "Asked."}
-			case strings.Contains(c.Last(), "Wait for review"):
-				return llm.Result{Text: "Holding the merge until review."}
-			default:
-				return askMerge()
+		Brain: func(c *coordtest.Turn) error {
+			if strings.Contains(c.Input(), "Wait for review") {
+				c.Reply("Holding the merge until review.")
+				return nil
 			}
+			askMerge(c)
+			return nil
 		},
 	})
 
@@ -80,23 +79,28 @@ func TestDecisionCardIsAskedAndAnswered(t *testing.T) {
 	assert.ErrorIs(t, err, project.ErrDecided, "a second pick is refused")
 }
 
-// D2: a malformed card is refused with a reason and nothing is posted.
+// D2: a malformed card is refused with a reason and nothing is posted. Too
+// few options fail the tool's input schema before the card is built; a
+// recommendation outside the options fails the card's own check.
 func TestDecisionCardRejectsMalformedAsks(t *testing.T) {
 	var refused []string
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			switch {
-			case c.AfterTools():
-				refused = append(refused, c.Req.Messages[len(c.Req.Messages)-1].ToolResults[0].Content)
-				return llm.Result{Text: "Never mind."}
-			case len(refused) == 0 && !strings.Contains(c.Last(), "again"):
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("d", "request_decision", map[string]any{
-					"question": "Merge?", "options": []map[string]string{{"label": "Yes"}}, "recommended": 0})}}
-			default:
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("d", "request_decision", map[string]any{
-					"question": "Merge?", "options": []map[string]string{{"label": "Yes"}, {"label": "No"}}, "recommended": 5})}}
+		Brain: func(c *coordtest.Turn) error {
+			var out string
+			var isErr bool
+			if strings.Contains(c.Input(), "again") {
+				out, isErr = c.Call("request_decision", map[string]any{
+					"question": "Merge?", "options": []map[string]string{{"label": "Yes"}, {"label": "No"}}, "recommended": 5})
+			} else {
+				out, isErr = c.Call("request_decision", map[string]any{
+					"question": "Merge?", "options": []map[string]string{{"label": "Yes"}}, "recommended": 0})
 			}
+			if isErr {
+				refused = append(refused, out)
+			}
+			c.Reply("Never mind.")
+			return nil
 		},
 	})
 
@@ -106,7 +110,7 @@ func TestDecisionCardRejectsMalformedAsks(t *testing.T) {
 	w.Quiet()
 
 	require.Len(t, refused, 2)
-	assert.Contains(t, refused[0], "two to four options")
+	assert.Contains(t, refused[0], "invalid input")
 	assert.Contains(t, refused[1], "recommended must be")
 	assert.Nil(t, decisionEvent(w))
 }
@@ -116,15 +120,13 @@ func TestDecisionCardRejectsMalformedAsks(t *testing.T) {
 func TestDecisionCardIsAnsweredOnce(t *testing.T) {
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			switch {
-			case c.AfterTools():
-				return llm.Result{Text: "Asked."}
-			case strings.Contains(c.Last(), "Wait for review") || strings.Contains(c.Last(), "Merge now"):
-				return llm.Result{Text: "Noted."}
-			default:
-				return askMerge()
+		Brain: func(c *coordtest.Turn) error {
+			if strings.Contains(c.Input(), "Wait for review") || strings.Contains(c.Input(), "Merge now") {
+				c.Reply("Noted.")
+				return nil
 			}
+			askMerge(c)
+			return nil
 		},
 	})
 	w.Say("Should we merge the harness?")

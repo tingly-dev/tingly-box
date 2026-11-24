@@ -31,6 +31,11 @@ var workbuddyNulEscape = regexp.MustCompile(`\\\\|\\0`)
 // octal escape (\01); RE2 has no lookahead to skip it in one pass.
 var workbuddyOctalAfterNul = regexp.MustCompile(`\\u0000([0-9])`)
 
+// These Claude Code system prompt fragments have been reported to trigger
+// WorkBuddy's channel check. Keep the remaining instructions intact.
+var workbuddyClaudeIdentity = regexp.MustCompile(`(?i)You are Claude Code, Anthropic['’]s official CLI for Claude`)
+var workbuddyClaudeBilling = regexp.MustCompile(`(?i)x-anthropic-billing-header:[^\n]*(?:\n|$)`)
+
 const workbuddySchemaDepth = 64
 
 // workbuddyFitChat returns body rewritten for WorkBuddy and the tool names it
@@ -62,6 +67,36 @@ func workbuddyFitChat(body []byte) ([]byte, map[string]string) {
 		if msg, ok := m.(map[string]any); ok && msg["role"] == "developer" {
 			msg["role"] = "system"
 			changed = true
+		}
+	}
+	for _, m := range b["messages"].([]any) {
+		msg, ok := m.(map[string]any)
+		if !ok || msg["role"] != "system" {
+			continue
+		}
+		fitText := func(s string) string {
+			s = workbuddyClaudeBilling.ReplaceAllString(s, "")
+			return workbuddyClaudeIdentity.ReplaceAllString(s, "You are Claude Code, Anthropic's CLI for Claude")
+		}
+		switch content := msg["content"].(type) {
+		case string:
+			if fitted := fitText(content); fitted != content {
+				msg["content"] = fitted
+				changed = true
+			}
+		case []any:
+			for _, part := range content {
+				block, ok := part.(map[string]any)
+				if !ok || block["type"] != "text" {
+					continue
+				}
+				if s, ok := block["text"].(string); ok {
+					if fitted := fitText(s); fitted != s {
+						block["text"] = fitted
+						changed = true
+					}
+				}
+			}
 		}
 	}
 	names, toolsChanged := workbuddyFitTools(b)

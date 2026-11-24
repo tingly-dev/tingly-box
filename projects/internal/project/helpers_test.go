@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,8 +13,22 @@ import (
 // mkProject stores p as a project with its main thread.
 func mkProject(t *testing.T, store *db.Store, p *db.Project) *db.Project {
 	t.Helper()
+	if p.GitHubAuto == nil {
+		// The tests from before the GitHub settings: the tools did these on
+		// their own then (merge asked through a rule outside the tools).
+		p.GitHubAuto = []string{GitHubPublish, GitHubRewrite, GitHubMerge}
+	}
 	require.NoError(t, store.CreateProjectWithMain(p, &db.Thread{Origin: "user"}, ""))
 	return p
+}
+
+// realTempDir is t.TempDir with its symlinks resolved, the way a folder is
+// stored (on macOS /var is a link to /private/var).
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	return dir
 }
 
 // mainThread is the id of a project's main thread.

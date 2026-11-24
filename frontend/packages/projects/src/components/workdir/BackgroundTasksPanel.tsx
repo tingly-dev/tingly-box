@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type components } from '../../client';
-import { Block, Cancel, CheckCircle, ChevronRight, ExpandMore, PlayerStop, Robot, Terminal } from '../icons';
+import { Block, Cancel, CheckCircle, PlayerStop, Robot, Terminal } from '../icons';
+import { DisclosureChevron } from '../common/Disclosure';
 import { useNotify } from '../../hooks/useNotify';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
+import { serverNow } from '../../utils/serverClock';
 import type { BackgroundTaskRow } from './backgroundTasks';
 import { radius } from '@tingly/ui/theme/radius';
 import { ListRow } from '../ListRow';
@@ -16,6 +18,8 @@ type TaskOutput = components['schemas']['TaskOutputResponse'];
 interface Props {
     sessionId: string;
     tasks: BackgroundTaskRow[];
+    /** A task a drill-in asked for: the row starts expanded (alone still opens by itself). */
+    initialOpenId?: string | null;
     /** Called after a task was stopped, to pick up its final state. */
     onChanged: () => void;
     /** Scrolls the conversation to the call that started a task. */
@@ -31,10 +35,10 @@ const OUTPUT_REFRESH_MS = 2000;
  * that started it. Each row opens into what the task is: the command and its
  * live output, or the subagent's brief, what it is doing and what it last said.
  */
-export function BackgroundTasksPanel({ sessionId, tasks, onChanged, onReveal }: Props) {
+export function BackgroundTasksPanel({ sessionId, tasks, initialOpenId, onChanged, onReveal }: Props) {
     const { t } = useTranslation('projects');
     // A lone task opens by itself: the panel was opened to look at it.
-    const [openId, setOpenId] = useState<string | null>(tasks.length === 1 ? tasks[0].taskId : null);
+    const [openId, setOpenId] = useState<string | null>(initialOpenId ?? (tasks.length === 1 ? tasks[0].taskId : null));
     // Finished work stays listed, newest first: its output and report are
     // what people come back to read.
     const running = tasks.filter((task) => task.status === 'running' && !task.ended);
@@ -78,7 +82,7 @@ export function BackgroundTasksPanel({ sessionId, tasks, onChanged, onReveal }: 
 function GroupHeader({ label, count }: { label: string; count: number }) {
     return (
         <Typography variant="caption" component="div"
-            sx={{ px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.xs }}>
+            sx={{ px: 1.5, pt: 1.25, pb: 0.5, color: 'text.secondary', fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase', fontSize: fontSizes.micro }}>
             {label} · {count}
         </Typography>
     );
@@ -93,10 +97,11 @@ export function formatDuration(ms: number): string {
 
 /** The current time, ticking every second while on, so a running task's elapsed time moves. */
 export function useNow(on: boolean): number {
-    const [now, setNow] = useState(() => Date.now());
+    const [now, setNow] = useState(() => serverNow());
     useEffect(() => {
         if (!on) return;
-        const id = setInterval(() => setNow(Date.now()), 1000);
+        setNow(serverNow());
+        const id = setInterval(() => setNow(serverNow()), 1000);
         return () => clearInterval(id);
     }, [on]);
     return now;
@@ -150,7 +155,7 @@ function TaskRow({ sessionId, task, open, onToggle, onChanged, onReveal }: {
                 subtitle={[state, elapsed !== undefined ? formatDuration(elapsed) : ''].filter(Boolean).join(' · ')}
                 end={<>
                     <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }} title={state}>{icon}</Box>
-                    {open ? <ExpandMore sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ChevronRight sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                    <DisclosureChevron open={open} sx={{ color: 'text.secondary' }} />
                 </>} />
             <Collapse in={open} unmountOnExit>
                 <Stack spacing={1.25} sx={{ px: 1.5, pb: 1.5, pl: 4.5 }}>

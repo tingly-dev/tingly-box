@@ -168,13 +168,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the IM chats bound to threads, all of them or one project's or thread's
-         * @description List the IM chats bound to threads, all of them or one project's or thread's
+         * List IM chats bound to threads, projects, or folders
+         * @description List IM chats bound to threads, projects, or folders
          */
         get: operations["apiV1ProjectsChannel-bindingsGet"];
         /**
-         * Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
-         * @description Bind an IM chat to a thread (or to a project, meaning its main thread); binding a bound chat again moves it
+         * Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
+         * @description Bind an IM chat to a thread, project's main thread, or folder for a new session; binding again moves it
          */
         put: operations["apiV1ProjectsChannel-bindingsPut"];
         post?: never;
@@ -199,6 +199,46 @@ export interface paths {
          * @description Unbind an IM chat
          */
         delete: operations["apiV1ProjectsChannel-bindingsIdDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/directories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Browse non-hidden directories under the server user home
+         * @description Browse non-hidden directories under the server user home
+         */
+        post: operations["apiV1ProjectsDirectoriesPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/directories/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect a local directory or Git repository
+         * @description Inspect a local directory or Git repository
+         */
+        post: operations["apiV1ProjectsDirectoriesInspectPost"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -332,6 +372,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/coordinator/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve an interrupted coordinator input; retry may repeat side effects
+         * @description Resolve an interrupted coordinator input; retry may repeat side effects
+         */
+        post: operations["apiV1ProjectsIdCoordinatorRecoverPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/coordinator/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery
+         * @description Interrupt the running coordinator turn the way the user's stop button means it: the message and the reply produced so far stay, nothing needs recovery
+         */
+        post: operations["apiV1ProjectsIdCoordinatorStopPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/events": {
         parameters: {
             query?: never;
@@ -352,6 +432,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked
+         * @description Fork a project into a new one: its settings, library files and memory are copied; its conversation, threads and usage are not (the fork starts like a new project). A folder cannot be forked
+         */
+        post: operations["apiV1ProjectsIdForkPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/library": {
         parameters: {
             query?: never;
@@ -360,8 +460,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List library files (uploads and thread outputs)
-         * @description List library files (uploads and thread outputs)
+         * List library files (uploads, thread outputs, and the threads' scratch under .tmp/)
+         * @description List library files (uploads, thread outputs, and the threads' scratch under .tmp/)
          */
         get: operations["apiV1ProjectsIdLibraryGet"];
         put?: never;
@@ -370,6 +470,26 @@ export interface paths {
          * @description Upload files (multipart field "files") to the library
          */
         post: operations["apiV1ProjectsIdLibraryPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/library/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.
+         * @description Download a library folder as a zip (at most 200 files and 40 MB uncompressed; over that is 413 with the reason). Hidden entries — the scratch subtree excepted — and symlinks are left out.
+         */
+        get: operations["apiV1ProjectsIdLibraryArchiveGet"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -395,6 +515,46 @@ export interface paths {
          * @description Delete a library file
          */
         delete: operations["apiV1ProjectsIdLibraryFileDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/library/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too
+         * @description List one directory level of the library (folders first); expand a folder by asking for its path. The threads' scratch (.tmp/) is listed too
+         */
+        get: operations["apiV1ProjectsIdLibraryTreeGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/links/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         * @description Read the project's open issues and PRs from GitHub again now: the least recently read first, at most 20 per call. An item read under 30 seconds ago answers recent without asking GitHub, and so does every item when the project was refreshed this way under a minute ago; while GitHub's request budget is nearly used up the answer is limited. The readings arrive on the threads' events; the answer only says what happened to each item.
+         */
+        post: operations["apiV1ProjectsIdLinksRefreshPost"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -590,7 +750,11 @@ export interface paths {
         get: operations["apiV1ThreadsIdGet"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/<branch>), scratch and settings files, and its rows. The project's library is kept
+         * @description Delete an archived thread for good: the branch (only with a merged PR, or force with confirm_branch; its commits stay under refs/tingly/trash/<branch>), scratch and settings files, and its rows. The project's library is kept
+         */
+        delete: operations["apiV1ThreadsIdDelete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -606,8 +770,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Archive (resolve) the thread; it stays readable and can be reopened
-         * @description Archive (resolve) the thread; it stays readable and can be reopened
+         * Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty
+         * @description Archive the thread: stop it, free its worktree (its scratch too) and hide it, keeping the branch, the record and the transcript. Restore rebuilds the worktree. Refused with 409 and the blockers when the turn is running or the worktree is dirty
          */
         post: operations["apiV1ThreadsIdArchivePost"];
         delete?: never;
@@ -676,7 +840,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/{id}/diff": {
+    "/api/v1/threads/{id}/cleanup": {
         parameters: {
             query?: never;
             header?: never;
@@ -684,11 +848,31 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The thread's changes against its base branch
-         * @description The thread's changes against its base branch
+         * What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept
+         * @description What archiving (or deleting, once archived) would free right now: sizes, blockers, warnings and what is kept
          */
-        get: operations["apiV1ThreadsIdDiffGet"];
+        get: operations["apiV1ThreadsIdCleanupGet"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/effort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the thread's next-turn effort; empty restores its default
+         * @description Set the thread's next-turn effort; empty restores its default
+         */
+        put: operations["apiV1ThreadsIdEffortPut"];
         post?: never;
         delete?: never;
         options?: never;
@@ -776,6 +960,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/links/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         * @description Read the thread's issues and PRs from GitHub again now (the one named in the body, or all). Finished ones are read too. An item read under 30 seconds ago, or being read, answers recent without asking GitHub; while GitHub's request budget is nearly used up nothing is asked and the answer is limited. The readings arrive on the thread's event, as the background refresh's do; the answer only says what happened to each item. 404 when the thread has no such link.
+         */
+        post: operations["apiV1ThreadsIdLinksRefreshPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/merge": {
         parameters: {
             query?: never;
@@ -786,10 +990,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.
-         * @description Merge the thread's branch into its base branch in the main checkout. 409 with a command to run by hand when the checkout is not ready.
+         * Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.
+         * @description Merge the thread's branch on GitHub: push it and open its PR (or find the open one), then squash-merge that PR, or leave it open as a merge request. The PR is recorded among the thread's links. Nothing changes in the local checkout.
          */
         post: operations["apiV1ThreadsIdMergePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/merge/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them
+         * @description The title and description a merge starts from: the open PR's own, or the branch's commits as `gh pr create --fill` takes them
+         */
+        get: operations["apiV1ThreadsIdMergeDraftGet"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -806,8 +1030,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
-         * @description Send a message to the thread; while a turn runs, mode says whether it joins the turn, waits for it or replaces it. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream
+         * @description Send a message to the thread; while a turn runs, mode says whether it is inserted into the turn or waits for the next one. To a main thread it goes to the coordinator, whose reply arrives on the event stream
          */
         post: operations["apiV1ThreadsIdMessagesPost"];
         delete?: never;
@@ -876,6 +1100,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{id}/prs/{number}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)
+         * @description The changes of one of the thread's open PRs, head against its base: read from this checkout's refs, or from GitHub when they are not here (`source` says which)
+         */
+        get: operations["apiV1ThreadsIdPrsNumberDiffGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/prs/{number}/diff/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file of a PR's changes: its patch, left out when it is binary or too large
+         * @description One file of a PR's changes: its patch, left out when it is binary or too large
+         */
+        get: operations["apiV1ThreadsIdPrsNumberDiffFileGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{id}/queue/{qid}": {
         parameters: {
             query?: never;
@@ -906,10 +1170,50 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reopen an archived thread
-         * @description Reopen an archived thread
+         * Reopen a resolved thread
+         * @description Reopen a resolved thread
          */
         post: operations["apiV1ThreadsIdReopenPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond
+         * @description The approvals and questions the thread is waiting on right now, oldest first (empty once answered, expired or the turn ended): what to show to answer without opening the thread. Answer one with /threads/{id}/respond
+         */
+        get: operations["apiV1ThreadsIdRequestsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve the thread; it stays readable and can be reopened
+         * @description Resolve the thread; it stays readable and can be reopened
+         */
+        post: operations["apiV1ThreadsIdResolvePost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -930,6 +1234,66 @@ export interface paths {
          * @description Answer a permission request or question the thread is waiting on
          */
         post: operations["apiV1ThreadsIdRespondPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop the agent process and its work; the next message resumes the same session in a fresh process
+         * @description Stop the agent process and its work; the next message resumes the same session in a fresh process
+         */
+        post: operations["apiV1ThreadsIdRestartPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path
+         * @description Restore an archived thread: it returns to the list and its worktree is rebuilt from the branch at the same path
+         */
+        post: operations["apiV1ThreadsIdRestorePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again
+         * @description Re-run the failed turn: a crashed turn resumes from the agent's own transcript (the message is not re-sent), a turn that never reached the agent is sent again
+         */
+        post: operations["apiV1ThreadsIdRetryPost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1058,11 +1422,8 @@ export interface components {
             attachments: components["schemas"]["Attachment"][];
         };
         AutoAnswerRequest: {
-            /**
-             * @description Field auto_answer
-             * @enum {string}
-             */
-            auto_answer: "" | "off" | "delay" | "now";
+            /** @description Field auto_answer */
+            auto_answer: string;
         };
         BackgroundTask: {
             /** @description Field description */
@@ -1073,6 +1434,8 @@ export interface components {
             task_type: string;
         };
         BindChannelRequest: {
+            /** @description Field bot_uuid */
+            bot_uuid?: string;
             /** @description Field chat_id */
             chat_id: string;
             /** @description Field chat_title */
@@ -1088,7 +1451,21 @@ export interface components {
             /** @description Field bindings */
             bindings: components["schemas"]["ChannelBinding"][];
         };
+        BrowseDirectoriesRequest: {
+            /** @description Field path */
+            path: string;
+        };
+        BrowseDirectoriesResponse: {
+            /** @description Field directories */
+            directories: string[];
+            /** @description Field home */
+            home: string;
+            /** @description Field path */
+            path: string;
+        };
         ChannelBinding: {
+            /** @description Field bot_uuid */
+            bot_uuid?: string;
             /** @description Field chat_id */
             chat_id: string;
             /** @description Field chat_title */
@@ -1098,12 +1475,34 @@ export interface components {
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field focus_agent */
+            focus_agent?: string;
+            /**
+             * Format: int64
+             * @description Field focus_seq
+             */
+            focus_seq?: number;
+            /** @description Field focus_title */
+            focus_title?: string;
+            /** @description Field folder */
+            folder?: string;
             /** @description Field id */
             id: string;
             /** @description Field platform */
             platform: string;
             /** @description Field project_id */
             project_id: string;
+            /** @description Field target_project_id */
+            target_project_id?: string;
+            /**
+             * Format: int64
+             * @description Field target_seq
+             */
+            target_seq?: number;
+            /** @description Field target_thread_id */
+            target_thread_id?: string;
+            /** @description Field target_title */
+            target_title?: string;
             /** @description Field thread_id */
             thread_id: string;
             /**
@@ -1120,6 +1519,33 @@ export interface components {
              * @description Field index
              */
             index: number;
+        };
+        CleanupReport: {
+            /** @description Field blockers */
+            blockers?: string[];
+            /** @description Field can_archive */
+            can_archive: boolean;
+            /** @description Field can_delete */
+            can_delete: boolean;
+            /** @description Field kept */
+            kept: string[];
+            /** @description Field thread_id */
+            thread_id: string;
+            /**
+             * Format: int64
+             * @description Field tmp_bytes
+             */
+            tmp_bytes: number;
+            /** @description Field warnings */
+            warnings?: string[];
+            /**
+             * Format: int64
+             * @description Field worktree_bytes
+             */
+            worktree_bytes: number;
+        };
+        CleanupResponse: {
+            report: components["schemas"]["CleanupReport"];
         };
         ConnectionDraft: {
             /** @description Field api_key */
@@ -1168,12 +1594,18 @@ export interface components {
             model?: string;
         };
         CreateProjectRequest: {
+            /** @description Field directories */
+            directories?: components["schemas"]["DirectorySpec"][];
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
             /** @description Field goal */
             goal?: string;
             /** @description Field name */
             name?: string;
             /** @description Field path */
             path?: string;
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos?: string[];
             /**
@@ -1187,6 +1619,11 @@ export interface components {
             attachments?: string[];
             /** @description Field content */
             content: string;
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field model */
             model?: string;
             /** @description Field permission_mode */
@@ -1196,19 +1633,86 @@ export interface components {
             /** @description Field title */
             title?: string;
         };
+        DeleteThreadRequest: {
+            /** @description Field confirm_branch */
+            confirm_branch?: string;
+            /** @description Field force */
+            force?: boolean;
+        };
         Diff: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
             /** @description Field base */
             base: string;
-            /** @description Field branch */
-            branch: string;
-            /** @description Field patch */
-            patch: string;
-            /** @description Field stat */
-            stat: string;
-            /** @description Field truncated */
-            truncated: boolean;
-            /** @description Field uncommitted */
-            uncommitted: string;
+            /** @description Field base_stale */
+            base_stale?: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field files */
+            files: components["schemas"]["DiffFile"][];
+            /**
+             * Format: int64
+             * @description Field files_omitted
+             */
+            files_omitted?: number;
+            /** @description Field head */
+            head: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field source */
+            source: string;
+            /**
+             * Format: int64
+             * @description Field unpushed
+             */
+            unpushed?: number;
+        };
+        DiffFile: {
+            /**
+             * Format: int64
+             * @description Field additions
+             */
+            additions: number;
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field deletions
+             */
+            deletions: number;
+            /** @description Field generated */
+            generated?: boolean;
+            /** @description Field old_path */
+            old_path?: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field status */
+            status: string;
+        };
+        DirectorySpec: {
+            /** @description Field path */
+            path: string;
+            /**
+             * @description Field workspace_mode
+             * @enum {string}
+             */
+            workspace_mode?: "" | "shared" | "worktree";
+        };
+        EffortRequest: {
+            /**
+             * @description Field effort
+             * @enum {string}
+             */
+            effort: "" | "low" | "medium" | "high" | "max";
         };
         Event: {
             /** @description Field data */
@@ -1225,6 +1729,25 @@ export interface components {
             /** @description Field more */
             more: boolean;
         };
+        FileDiff: {
+            /** @description Field binary */
+            binary?: boolean;
+            /**
+             * Format: int64
+             * @description Field lines_cut
+             */
+            lines_cut?: number;
+            /** @description Field patch */
+            patch: string;
+            /** @description Field path */
+            path: string;
+            /** @description Field too_large */
+            too_large?: boolean;
+        };
+        ForkProjectRequest: {
+            /** @description Field name */
+            name?: string;
+        };
         HandoffResponse: {
             /** @description Field command */
             command: string;
@@ -1237,6 +1760,23 @@ export interface components {
             status: string;
             /** @description Field version */
             version: string;
+        };
+        InspectDirectoryResponse: {
+            /** @description Field branch */
+            branch: string;
+            /** @description Field dirty */
+            dirty: boolean;
+            /** @description Field error */
+            error: string;
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind: "" | "git" | "directory";
+            /** @description Field ok */
+            ok: boolean;
+            /** @description Field root */
+            root: string;
         };
         InspectRepoRequest: {
             /** @description Field path */
@@ -1253,6 +1793,26 @@ export interface components {
             ok: boolean;
             /** @description Field root */
             root?: string;
+        };
+        LibraryEntry: {
+            /** @description Field kind */
+            kind: string;
+            /** @description Field name */
+            name: string;
+            /** @description Field origin */
+            origin: string;
+            /** @description Field path */
+            path: string;
+            /**
+             * Format: int64
+             * @description Field size
+             */
+            size: number;
+            /**
+             * Format: date-time
+             * @description Field updated_at
+             */
+            updated_at: string;
         };
         LibraryFile: {
             /** @description Field origin */
@@ -1275,6 +1835,44 @@ export interface components {
             dir: string;
             /** @description Field files */
             files: components["schemas"]["LibraryFile"][];
+        };
+        LibraryTreeResponse: {
+            /** @description Field dir */
+            dir: string;
+            /** @description Field entries */
+            entries: components["schemas"]["LibraryEntry"][];
+            /** @description Field path */
+            path: string;
+        };
+        LinkCheck: {
+            /** @description Field name */
+            name: string;
+            /** @description Field url */
+            url?: string;
+        };
+        LinkChecks: {
+            /** @description Field failed */
+            failed?: components["schemas"]["LinkCheck"][];
+            /**
+             * Format: int64
+             * @description Field failing
+             */
+            failing: number;
+            /**
+             * Format: int64
+             * @description Field more
+             */
+            more?: number;
+            /**
+             * Format: int64
+             * @description Field passing
+             */
+            passing: number;
+            /**
+             * Format: int64
+             * @description Field pending
+             */
+            pending: number;
         };
         MemoryFile: {
             /** @description Field name */
@@ -1302,11 +1900,31 @@ export interface components {
             /** @description Field files */
             files: components["schemas"]["MemoryFile"][];
         };
-        MergeBlockedResponse: {
-            /** @description Field command */
-            command: string;
-            /** @description Field error */
-            error: string;
+        MergeDraft: {
+            /** @description Field body */
+            body: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field source */
+            source: string;
+            /** @description Field title */
+            title: string;
+        };
+        MergeRequest: {
+            /** @description Field body */
+            body?: string;
+            /** @description Field message */
+            message?: string;
+            /**
+             * @description Field method
+             * @enum {string}
+             */
+            method: "squash" | "merge_request";
+            /** @description Field title */
+            title?: string;
         };
         Message: {
             /** @description Field content */
@@ -1391,6 +2009,8 @@ export interface components {
             modes: string[];
         };
         ProfileRequest: {
+            /** @description Field inherit */
+            inherit?: boolean;
             /** @description Field profile */
             profile: string;
         };
@@ -1404,11 +2024,17 @@ export interface components {
             coordinator_effort: string;
             /** @description Field coordinator_model */
             coordinator_model: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile: string;
             /**
              * Format: date-time
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
+            /** @description Field github_auto */
+            github_auto: string[];
             /** @description Field goal */
             goal: string;
             /** @description Field id */
@@ -1417,22 +2043,33 @@ export interface components {
             instructions: string;
             /** @description Field main_thread_id */
             main_thread_id?: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads
+             */
+            max_running_threads: number;
             /** @description Field name */
             name: string;
             /** @description Field path */
             path?: string;
             /** @description Field paused */
             paused: boolean;
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos: components["schemas"]["Repo"][];
             /** @description Field starred */
             starred: boolean;
             /** @description Field thread_effort */
             thread_effort: string;
+            /** @description Field thread_github_access */
+            thread_github_access?: string;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
             thread_permission_mode: string;
+            /** @description Field thread_profile */
+            thread_profile: string;
             /** @description Field type */
             type: string;
             /**
@@ -1442,8 +2079,18 @@ export interface components {
             updated_at: string;
         };
         ProjectDetailResponse: {
+            coordinator?: components["schemas"]["Thread"];
             /** @description Field coordinator_busy */
             coordinator_busy: boolean;
+            /** @description Field coordinator_insertable */
+            coordinator_insertable: boolean;
+            /**
+             * Format: int64
+             * @description Field coordinator_queued
+             */
+            coordinator_queued: number;
+            /** @description Field coordinator_recovery */
+            coordinator_recovery?: string;
             counts: components["schemas"]["ThreadCounts"];
             project: components["schemas"]["Project"];
             /** @description Field threads */
@@ -1464,6 +2111,11 @@ export interface components {
             base_url: string;
             /** @description Field cli_path */
             cli_path: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads_limit
+             */
+            max_running_threads_limit: number;
         };
         ProjectSummary: {
             /**
@@ -1475,11 +2127,17 @@ export interface components {
             coordinator_effort: string;
             /** @description Field coordinator_model */
             coordinator_model: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile: string;
             /**
              * Format: date-time
              * @description Field created_at
              */
             created_at: string;
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
+            /** @description Field github_auto */
+            github_auto: string[];
             /** @description Field goal */
             goal: string;
             /** @description Field id */
@@ -1488,22 +2146,33 @@ export interface components {
             instructions: string;
             /** @description Field main_thread_id */
             main_thread_id?: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads
+             */
+            max_running_threads: number;
             /** @description Field name */
             name: string;
             /** @description Field path */
             path?: string;
             /** @description Field paused */
             paused: boolean;
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos: components["schemas"]["Repo"][];
             /** @description Field starred */
             starred: boolean;
             /** @description Field thread_effort */
             thread_effort: string;
+            /** @description Field thread_github_access */
+            thread_github_access?: string;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
             thread_permission_mode: string;
+            /** @description Field thread_profile */
+            thread_profile: string;
             threads: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
@@ -1513,6 +2182,51 @@ export interface components {
              */
             updated_at: string;
         };
+        RecoverCoordinatorRequest: {
+            /**
+             * @description Field action
+             * @enum {string}
+             */
+            action: "retry" | "skip";
+            /** @description Field input_id */
+            input_id: string;
+        };
+        RefreshLinksRequest: {
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind?: "" | "issue" | "pr";
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number?: number;
+            /** @description Field repo */
+            repo?: string;
+        };
+        RefreshLinksResponse: {
+            /** @description Field results */
+            results: components["schemas"]["RefreshResult"][];
+        };
+        RefreshResult: {
+            /** @description Field error */
+            error?: string;
+            /** @description Field kind */
+            kind: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /** @description Field repo */
+            repo: string;
+            /**
+             * @description Field status
+             * @enum {string}
+             */
+            status: "refreshed" | "recent" | "failed" | "limited";
+        };
         RegenerateRequest: {
             /** @description Field model */
             model?: string;
@@ -1520,8 +2234,22 @@ export interface components {
         Repo: {
             /** @description Field base_branch */
             base_branch: string;
+            /**
+             * @description Field kind
+             * @enum {string}
+             */
+            kind?: "git" | "directory";
             /** @description Field path */
             path: string;
+            /**
+             * @description Field workspace_mode
+             * @enum {string}
+             */
+            workspace_mode?: "shared" | "worktree";
+        };
+        RequestsResponse: {
+            /** @description Field requests */
+            requests: components["schemas"]["ThreadEvent"][];
         };
         SendMessageRequest: {
             /** @description Field content */
@@ -1658,6 +2386,11 @@ export interface components {
         Thread: {
             /** @description Field agent */
             agent: string;
+            /**
+             * Format: date-time
+             * @description Field archived_at
+             */
+            archived_at?: string;
             /** @description Field auto_answer */
             auto_answer?: string;
             /** @description Field base_branch */
@@ -1666,9 +2399,29 @@ export interface components {
             branch?: string;
             /**
              * Format: int64
+             * @description Field cache_read_tokens
+             */
+            cache_read_tokens: number;
+            /**
+             * Format: int64
+             * @description Field cache_write_tokens
+             */
+            cache_write_tokens: number;
+            /**
+             * Format: int64
              * @description Field commits_ahead
              */
             commits_ahead: number;
+            /**
+             * Format: int64
+             * @description Field context_tokens
+             */
+            context_tokens: number;
+            /**
+             * Format: int64
+             * @description Field context_window
+             */
+            context_window: number;
             /**
              * Format: date-time
              * @description Field created_at
@@ -1676,11 +2429,15 @@ export interface components {
             created_at: string;
             /** @description Field cwd */
             cwd: string;
+            /** @description Field effort_override */
+            effort_override?: string;
             /**
              * Format: int64
              * @description Field files_changed
              */
             files_changed: number;
+            /** @description Field grants */
+            grants?: components["schemas"]["ThreadGrant"][];
             /** @description Field head_branch */
             head_branch?: string;
             /** @description Field id */
@@ -1690,8 +2447,22 @@ export interface components {
              * @description Field input_tokens
              */
             input_tokens: number;
+            /** @description Field insertable */
+            insertable: boolean;
             /** @description Field last_report */
             last_report?: string;
+            /**
+             * Format: date-time
+             * @description Field last_turn_at
+             */
+            last_turn_at?: string;
+            /**
+             * Format: int64
+             * @description Field last_turn_ms
+             */
+            last_turn_ms: number;
+            /** @description Field links */
+            links?: components["schemas"]["ThreadLink"][];
             /**
              * Format: date-time
              * @description Field merged_at
@@ -1714,15 +2485,26 @@ export interface components {
             permission_mode?: string;
             /** @description Field profile */
             profile?: string;
+            /** @description Field profile_override */
+            profile_override: string;
             /** @description Field project_id */
             project_id: string;
+            /** @description Field queued */
+            queued?: boolean;
             /** @description Field repo_path */
             repo_path?: string;
+            /** @description Field reported_model */
+            reported_model?: string;
             /**
              * Format: date-time
              * @description Field resolved_at
              */
             resolved_at?: string;
+            /**
+             * Format: int64
+             * @description Field running_tasks
+             */
+            running_tasks: number;
             /**
              * Format: int64
              * @description Field seq
@@ -1750,6 +2532,11 @@ export interface components {
             updated_at: string;
             /** @description Field wait_reason */
             wait_reason?: string;
+            /**
+             * Format: date-time
+             * @description Field worktree_freed_at
+             */
+            worktree_freed_at?: string;
         };
         ThreadCounts: {
             /**
@@ -1824,6 +2611,80 @@ export interface components {
              */
             updated_at: string;
         };
+        ThreadGrant: {
+            /** @description Field action */
+            action: string;
+            /** @description Field command */
+            command?: string;
+            /**
+             * Format: date-time
+             * @description Field expires_at
+             */
+            expires_at?: string;
+            /**
+             * Format: date-time
+             * @description Field granted_at
+             */
+            granted_at: string;
+            /** @description Field id */
+            id: string;
+            /** @description Field rule */
+            rule?: string;
+            /** @description Field scope */
+            scope: string;
+        };
+        ThreadLink: {
+            /**
+             * Format: date-time
+             * @description Field attempted_at
+             */
+            attempted_at: string;
+            /** @description Field base */
+            base?: string;
+            checks?: components["schemas"]["LinkChecks"];
+            /** @description Field ci */
+            ci?: string;
+            /**
+             * Format: date-time
+             * @description Field created_at
+             */
+            created_at: string;
+            /** @description Field draft */
+            draft?: boolean;
+            /**
+             * Format: int64
+             * @description Field failures
+             */
+            failures?: number;
+            /** @description Field head */
+            head?: string;
+            /** @description Field kind */
+            kind: string;
+            /** @description Field last_error */
+            last_error?: string;
+            /** @description Field merge_state */
+            merge_state?: string;
+            /**
+             * Format: int64
+             * @description Field number
+             */
+            number: number;
+            /**
+             * Format: date-time
+             * @description Field refreshed_at
+             */
+            refreshed_at: string;
+            /** @description Field repo */
+            repo: string;
+            /** @description Field role */
+            role: string;
+            /** @description Field state */
+            state: string;
+            /** @description Field title */
+            title: string;
+            /** @description Field url */
+            url: string;
+        };
         ThreadRespondRequest: {
             /** @description Field allow */
             allow: boolean;
@@ -1896,14 +2757,30 @@ export interface components {
             coordinator_effort?: "" | "low" | "medium" | "high" | "max";
             /** @description Field coordinator_model */
             coordinator_model?: string;
+            /** @description Field coordinator_profile */
+            coordinator_profile?: string;
+            /** @description Field directories */
+            directories?: components["schemas"]["DirectorySpec"][];
+            /** @description Field disable_worktree */
+            disable_worktree?: boolean;
+            /** @description Field github_auto */
+            github_auto?: string[];
             /** @description Field goal */
             goal?: string;
             /** @description Field instructions */
             instructions?: string;
+            /**
+             * Format: int64
+             * @description Field max_running_threads
+             */
+            max_running_threads?: number;
             /** @description Field name */
             name?: string;
             /** @description Field paused */
             paused?: boolean;
+            primary_directory_mode?: components["schemas"]["DirectorySpec"];
+            /** @description Field primary_repo_path */
+            primary_repo_path?: string;
             /** @description Field repos */
             repos?: string[];
             /** @description Field starred */
@@ -1913,6 +2790,11 @@ export interface components {
              * @enum {string}
              */
             thread_effort?: "" | "low" | "medium" | "high" | "max";
+            /**
+             * @description Field thread_github_access
+             * @enum {string}
+             */
+            thread_github_access?: "ask" | "allow";
             /** @description Field thread_model */
             thread_model?: string;
             /**
@@ -1920,6 +2802,8 @@ export interface components {
              * @enum {string}
              */
             thread_permission_mode?: "default" | "acceptEdits" | "auto" | "bypassPermissions";
+            /** @description Field thread_profile */
+            thread_profile?: string;
         };
         UsageResponse: {
             /** @description Field by_model */
@@ -2215,7 +3099,7 @@ export interface operations {
     "apiV1ProjectsChannel-bindingsGet": {
         parameters: {
             query?: {
-                /** @description Only chats bound to a thread of this project */
+                /** @description Only chats bound to this project or folder */
                 project_id?: string;
                 /** @description Only chats bound to this thread */
                 thread_id?: string;
@@ -2281,6 +3165,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsDirectoriesPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowseDirectoriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowseDirectoriesResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsDirectoriesInspectPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectRepoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectDirectoryResponse"];
                 };
             };
         };
@@ -2467,6 +3401,57 @@ export interface operations {
             };
         };
     };
+    apiV1ProjectsIdCoordinatorRecoverPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoverCoordinatorRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetailResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdCoordinatorStopPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetailResponse"];
+                };
+            };
+        };
+    };
     apiV1ProjectsIdEventsGet: {
         parameters: {
             query?: never;
@@ -2486,6 +3471,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Event"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdForkPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
                 };
             };
         };
@@ -2532,6 +3545,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdLibraryArchiveGet: {
+        parameters: {
+            query?: {
+                /** @description Library-relative folder; empty is the library root */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -2584,6 +3623,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdLibraryTreeGet: {
+        parameters: {
+            query?: {
+                /** @description Library-relative directory; empty is the library root */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryTreeResponse"];
+                };
+            };
+        };
+    };
+    apiV1ProjectsIdLinksRefreshPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshLinksResponse"];
                 };
             };
         };
@@ -2903,6 +3991,34 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdArchivePost: {
         parameters: {
             query?: never;
@@ -3003,7 +4119,7 @@ export interface operations {
             };
         };
     };
-    apiV1ThreadsIdDiffGet: {
+    apiV1ThreadsIdCleanupGet: {
         parameters: {
             query?: never;
             header?: never;
@@ -3021,7 +4137,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Diff"];
+                    "application/json": components["schemas"]["CleanupResponse"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdEffortPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EffortRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
                 };
             };
         };
@@ -3145,7 +4289,63 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdLinksRefreshPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshLinksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshLinksResponse"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdMergePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Request body */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdMergeDraftGet: {
         parameters: {
             query?: never;
             header?: never;
@@ -3163,16 +4363,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Thread"];
-                };
-            };
-            /** @description merge blocked */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MergeBlockedResponse"];
+                    "application/json": components["schemas"]["MergeDraft"];
                 };
             };
         };
@@ -3289,6 +4480,61 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdPrsNumberDiffGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Numeric count */
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Diff"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdPrsNumberDiffFileGet: {
+        parameters: {
+            query?: {
+                /** @description File path as listed by the diff */
+                path?: string;
+                /** @description Where a renamed file came from */
+                old_path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+                /** @description Numeric count */
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDiff"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdQueueQidDelete: {
         parameters: {
             query?: never;
@@ -3337,6 +4583,52 @@ export interface operations {
             };
         };
     };
+    apiV1ThreadsIdRequestsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestsResponse"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdResolvePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
     apiV1ThreadsIdRespondPost: {
         parameters: {
             query?: never;
@@ -3361,6 +4653,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdRestartPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdRestorePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"];
+                };
+            };
+        };
+    };
+    apiV1ThreadsIdRetryPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Resource ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description no failed turn */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };

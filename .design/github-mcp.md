@@ -45,9 +45,8 @@ arguments are missing or outside the list. Every subset tool except `get_me`
 takes both arguments, which is why account-wide search is excluded rather than
 rewritten.
 
-Not covered, on purpose: the model-injection path (`usage.gateway`) has no
-profile, so it is unscoped. A GitHub source is client-only by default and the
-UI never sets gateway usage.
+There is no unscoped path: a connected MCP is never injected into model
+requests (`mcp-profiles.md`), so every GitHub call comes through a profile.
 
 ## UI
 

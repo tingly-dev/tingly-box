@@ -2,7 +2,7 @@ package db
 
 import "time"
 
-// The Chat domain struct lives in remote/control/bot; this package implements
+// The Chat domain struct lives in remote/bot; this package implements
 // bot.ChatStoreInterface against it (converting to/from RemoteChatRecord
 // below), mirroring how remote_session_store.go backs session.SessionStore.
 

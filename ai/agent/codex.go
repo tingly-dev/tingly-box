@@ -25,6 +25,12 @@ type CodexParams struct {
 	// (see CodexPrefs). nil means "use built-in defaults".
 	Prefs *CodexPrefs
 
+	// ContextWindows overrides the catalog's default context window per model
+	// (the rules' 1M flag). nil keeps the default for every model. Pass the
+	// same map the Agent page's apply uses, or the page reads the catalog back
+	// as out of date.
+	ContextWindows map[string]int
+
 	// WriteCatalog controls whether ~/.codex/tingly-model-catalog.json is
 	// written and model_catalog_json is set in config.toml. When true, Codex's
 	// /model picker can list tingly-served models. Defaults to true for the CLI
@@ -57,7 +63,7 @@ func (c *CodexConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult, err
 	// In ChatGPT mode the user is going direct-to-OpenAI; we don't touch
 	// config.toml — their existing model_provider / base_url stay intact.
 	if params.AuthMode != CodexAuthChatGPT {
-		configResult, err := ApplyCodexConfig(params.CodexBaseURL, params.Models, params.Prefs, params.WriteCatalog)
+		configResult, err := ApplyCodexConfigWithContextWindows(params.CodexBaseURL, params.Models, params.Prefs, params.WriteCatalog, params.ContextWindows, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply Codex config: %w", err)
 		}

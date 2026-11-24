@@ -26,8 +26,7 @@ describe('TemplatePageActions', () => {
 });
 
 describe('TitleIconButtons', () => {
-    it('keeps sort, fold and the guide as icon buttons beside the title', () => {
-        const onToggleSort = vi.fn();
+    it('keeps fold and the guide as icon buttons beside the title, with no sort toggle', () => {
         const onShowGuide = vi.fn();
         const onToggleExpandAll = vi.fn();
         render(
@@ -36,12 +35,11 @@ describe('TitleIconButtons', () => {
                 allExpanded
                 onToggleExpandAll={onToggleExpandAll}
                 onShowGuide={onShowGuide}
-                sortMode="original"
-                onToggleSort={onToggleSort}
             />,
         );
-        fireEvent.click(screen.getByRole('button', { name: 'templateActions.sortByName' }));
-        expect(onToggleSort).toHaveBeenCalledOnce();
+        expect(screen.queryByRole('button', { name: /sort/i })).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'templateActions.collapseAllRules' }));
+        expect(onToggleExpandAll).toHaveBeenCalledOnce();
         fireEvent.click(screen.getByRole('button', { name: /howRoutingWorks|How routing works/ }));
         expect(onShowGuide).toHaveBeenCalledOnce();
     });

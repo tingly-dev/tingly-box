@@ -86,9 +86,12 @@ type AnthropicOutputTokensDetails struct {
 type AnthropicStreamEvent struct {
 	Type    string                    `json:"type"`
 	Message *AnthropicMessageResponse `json:"message,omitempty"`
-	Index   int                       `json:"index,omitempty"`
-	Delta   *AnthropicDelta           `json:"delta,omitempty"`
-	Usage   *AnthropicUsage           `json:"usage,omitempty"`
+	// Index is a pointer so block 0 is sent: the real API always carries it on
+	// content_block_* events, and Claude Code rejects a delta without one
+	// (StreamMalformedEventError) and retries without streaming.
+	Index *int            `json:"index,omitempty"`
+	Delta *AnthropicDelta `json:"delta,omitempty"`
+	Usage *AnthropicUsage `json:"usage,omitempty"`
 }
 
 // AnthropicDelta is a delta in an Anthropic streaming response.

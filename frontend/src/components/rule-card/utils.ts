@@ -1,9 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { api } from '@/services/api';
 import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi, FlagSpec } from '@/components/RoutingGraphTypes';
-import { getFlagValue, setFlagValue, flagDefault, isFlagActive, snakeToCamel, apiToFlags } from './flagHelpers';
+import { getFlagValue, flagDefault, isFlagActive, snakeToCamel, apiToFlags } from './flagHelpers';
 import { downloadText } from '@/utils/download';
-import { writeToClipboard } from '@/utils/clipboard';
+import { writeToClipboard } from '@tingly/ui/utils/clipboard';
 
 // ============================================================================
 // Helper Functions
@@ -33,6 +33,7 @@ function serviceToConfigProvider(service: any): ConfigProvider {
         active: service.active !== undefined ? service.active : true,
         time_window: service.time_window || 0,
         tier: service.tier ?? 0,
+        limits: service.limits,
     };
 }
 
@@ -159,6 +160,7 @@ export function cloneSmartRouting(smartRouting: SmartRouting): SmartRouting {
             active: service.active,
             time_window: service.time_window,
             tier: service.tier,
+            limits: service.limits ? { ...service.limits } : undefined,
         })),
     };
 }

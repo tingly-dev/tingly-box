@@ -7,13 +7,15 @@ import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {Provider} from '@/types/provider';
 import ProviderExportButton from '@/components/ProviderExportButton';
-import {CopyIconButton} from '@/components/CopyIconButton';
+import {CopyIconButton} from '@tingly/ui/components/CopyIconButton';
 import {api} from '@/services/api';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from './provider-form-dialog/ProviderFormLayout';
 import ProtocolSlot from './provider-form-dialog/ProtocolSlot';
 import ProxyUrlField from './provider-form-dialog/ProxyUrlField';
+import AccountLimitsSection from './limits/AccountLimitsSection';
+import type {Limits} from './limits/LimitsEditor';
 import {isHttpUrl} from './provider-form-dialog/validation';
-import {fontMono} from '@/theme/fonts';
+import {fontMono} from '@tingly/ui/theme/fonts';
 
 interface OAuthEditFormData {
     name: string;
@@ -22,6 +24,7 @@ interface OAuthEditFormData {
     apiBaseAnthropic?: string;
     enabled: boolean;
     proxyUrl?: string;
+    limits?: Limits;
 }
 interface OAuthDetailDialogProps {
     open: boolean;
@@ -52,7 +55,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
         setFormData({
             name: provider.name, apiBase: provider.api_base,
             apiBaseOpenAI: provider.api_base_openai || '', apiBaseAnthropic: provider.api_base_anthropic || '',
-            enabled: provider.enabled, proxyUrl: provider.proxy_url || '',
+            enabled: provider.enabled, proxyUrl: provider.proxy_url || '', limits: provider.limits,
         });
         setVisibleTokens({});
         setSubmitError(null);
@@ -162,6 +165,7 @@ export default function OAuthDetailDialog({open, provider, onClose, onSubmit, on
             <ProxyUrlField mode="edit" proxyUrl={formData.proxyUrl || ''} onProxyUrlChange={proxyUrl => setFormData(previous => ({...previous, proxyUrl}))}
                 globalProxyUrl={globalProxyUrl} useGlobalProxy={false} onUseGlobalProxyChange={() => {}}/>
         </ProviderFormSection>
+        <AccountLimitsSection providerUuid={provider?.uuid} value={formData.limits} onChange={limits => setFormData(previous => ({...previous, limits}))}/>
         {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}
     </ProviderFormLayout>;
 }

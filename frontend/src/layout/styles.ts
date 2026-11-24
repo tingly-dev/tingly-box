@@ -11,11 +11,13 @@ import {
     activityItemPaddingX,
     activityItemPaddingY,
     activityItemRadius,
+    footerHeight,
     headerHeight,
 } from './constants';
-import { Z_INDEX } from '../constants/zIndex';
+import { Z_INDEX } from '@tingly/ui/theme/zIndex';
 import type { SxProps } from '@mui/material';
-import type { Theme } from '@mui/material/styles';
+import { alpha, type Theme } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ---------------------------------------------------------------------------
 // Layout — main content area
@@ -28,12 +30,13 @@ export const mobileContentSx = {
     pb: 3,
     overflowY: 'auto',
     scrollBehavior: 'smooth',
+    // Theme-aware: a light-grey track read as a bright stripe in dark mode.
     '&::-webkit-scrollbar': { width: 8 },
-    '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
+    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
-        backgroundColor: 'grey.300',
-        borderRadius: 1,
-        '&:hover': { backgroundColor: 'grey.400' },
+        backgroundColor: 'divider',
+        borderRadius: radius.pill,
+        '&:hover': { backgroundColor: 'text.disabled' },
     },
 } as const;
 
@@ -117,7 +120,7 @@ export const activityBottomClusterSx: SxProps<Theme> = {
  *  there is more content beyond it. */
 export const activityIconsScrollSx: SxProps<Theme> = (theme) => {
     const paper = theme.palette.background.paper;
-    const shadow = theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.12)';
+    const shadow = alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.5 : 0.12);
     return {
         flex: 1,
         minHeight: 0,
@@ -144,8 +147,16 @@ export const activityRailSx: SxProps<Theme> = {
     display: 'flex',
     flexDirection: 'column',
     bgcolor: 'background.paper',
-    borderRight: '1px solid',
-    borderColor: 'divider',
+    '&::after': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: footerHeight,
+        borderRight: '1px solid',
+        borderColor: 'divider',
+        pointerEvents: 'none',
+    },
 };
 
 /** Expand handle on the ActivityBar — only shown when the Sidebar is collapsed.
@@ -234,7 +245,7 @@ export const sidebarListScrollSx: SxProps<Theme> = {
     '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
         backgroundColor: 'grey.300',
-        borderRadius: 1,
+        borderRadius: radius.pill,
         '&:hover': { backgroundColor: 'grey.400' },
     },
 };

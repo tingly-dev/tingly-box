@@ -1,8 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// Bundled Latin typeface (see fontSans in @tingly/ui/theme/fonts).
+import '@fontsource-variable/inter/wght.css'
 import './index.css'
 import App from './App.tsx'
-import './i18n' // Initialize i18n
+import { i18nReady } from './i18n' // Initialize i18n
 
 async function enableMocking() {
   if (import.meta.env.VITE_USE_MOCK !== 'true') {
@@ -26,7 +28,7 @@ async function enableMocking() {
   applyMockOnboardingOverride()
 }
 
-enableMocking().then(() => {
+Promise.all([enableMocking(), i18nReady]).then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

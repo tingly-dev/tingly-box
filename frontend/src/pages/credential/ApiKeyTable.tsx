@@ -1,0 +1,585 @@
+import {CredentialCards} from "@/components/credential/CredentialCards";
+import {ProxySwitch, type ProxyControl} from "@/components/credential/ProxySwitch";
+import {ApiStyleBadge} from "@/components/ApiStyleBadge.tsx";
+import ModelListDialog from "@/components/ModelListDialog";
+import {
+    exportProviderAsBase64ToClipboard,
+    exportProviderAsJsonlToClipboard,
+} from "@/components/rule-card/utils";
+import {QuotaCell} from "@/components/credential/QuotaCell";
+import type {RedeemOutcome} from "@/hooks/useProviderQuota";
+import {ProviderLabel} from "@/components/ProviderLogo";
+import {
+    Check,
+    Cancel,
+    ContentCopy,
+    Delete,
+    ListAlt,
+    MoreVert,
+    Visibility,
+} from '@/components/icons';
+import ConfirmPopover from "@tingly/ui/components/ConfirmPopover";
+import {
+    Box,
+    Button,
+    Divider,
+    IconButton,
+    Menu,
+    MenuItem,
+    Modal,
+    Stack,
+    Switch,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Tooltip,
+    Typography,
+} from "@mui/material";
+import type {ProviderQuota} from "@/types/quota";
+import React, {useCallback, useState} from "react";
+import {useCopyFeedback} from "@tingly/ui/hooks/useCopyFeedback";
+import {useDeleteConfirm} from "@/hooks/useDeleteConfirm";
+import {useRowOverflowMenu} from "@/hooks/useRowOverflowMenu";
+import api from "../../services/api";
+import type {Provider} from "../../types/provider";
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
+
+interface ApiKeyTableProps {
+    providers: Provider[];
+    view?: "table" | "list" | "card";
+    onEdit?: (providerUuid: string) => void;
+    onToggle?: (providerUuid: string) => void;
+    proxy?: ProxyControl;
+    onDelete?: (providerUuid: string) => void;
+    onNotification?: (message: string, severity: "success" | "error") => void;
+    providerQuotas?: { [uuid: string]: ProviderQuota };
+    refreshingQuotas?: Set<string>;
+    onQuotaRefresh?: (providerUuid: string) => void;
+    onQuotaRedeem?: (providerUuid: string, rewardId: string) => Promise<RedeemOutcome>;
+}
+
+interface TokenModalState {
+    open: boolean;
+    providerName: string;
+    token: string;
+    loading: boolean;
+}
+
+interface ModelListDialogState {
+    open: boolean;
+    provider: Provider | null;
+}
+
+// Column widths, in one place — tweak here rather than hunting through the
+// TableHead/TableBody JSX. `align`/`sx` are merged onto both the header
+// TableCell's default styling; body cells still render their own content.
+const COLUMNS: { label: string; width: number; align?: "center"; sx?: object }[] = [
+    {label: "Status", width: 72},
+    {label: "Name", width: 140},
+    {label: "Quota", width: 150},
+    {label: "API Style", width: 88, align: "center", sx: {px: 1, whiteSpace: "nowrap"}},
+    {label: "API Base URL", width: 150},
+    {label: "API Key", width: 140},
+    {label: "Proxy", width: 60},
+    {label: "Actions", width: 160},
+];
+const QUOTA_COLUMN = "Quota";
+const columnsFor = (showQuota: boolean) => showQuota ? COLUMNS : COLUMNS.filter((c) => c.label !== QUOTA_COLUMN);
+
+const ApiKeyTable = ({
+                         providers,
+                         view = "table",
+                         onEdit,
+                         onToggle,
+                         proxy,
+                         onDelete,
+                         onNotification,
+                         providerQuotas,
+                         refreshingQuotas,
+                         onQuotaRefresh,
+                         onQuotaRedeem,
+                     }: ApiKeyTableProps) => {
+    const [tokenModal, setTokenModal] = useState<TokenModalState>({
+        open: false,
+        providerName: "",
+        token: "",
+        loading: false,
+    });
+    const {state: deleteModal, open: handleDeleteClick, close: handleCloseDeleteModal, confirm: handleConfirmDelete} =
+        useDeleteConfirm(
+            onDelete,
+            (uuid) => providers.find((p) => p.uuid === uuid)?.name,
+        );
+    const [modelListDialog, setModelListDialog] = useState<ModelListDialogState>({
+        open: false,
+        provider: null,
+    });
+    const {menu: moreMenu, openMenu: handleMoreOpen, closeMenu: handleMoreClose} = useRowOverflowMenu();
+    // The quota column needs a refresh handler to be worth a column at all.
+    const showQuota = Boolean(onQuotaRefresh);
+    const columns = columnsFor(showQuota);
+    const {copied: tokenCopied, copy: copyToken} = useCopyFeedback();
+
+    const fetchFullToken = async (providerUuid: string): Promise<string> => {
+        try {
+            const response = await api.getProvider(providerUuid);
+            if (!response.success) {
+                throw new Error(`Failed to fetch token for provider ${providerUuid}`);
+            }
+            return response.data.token || "";
+        } catch (error) {
+            console.error("Error fetching full token:", error);
+            throw error;
+        }
+    };
+
+    const handleViewToken = async (providerUuid: string) => {
+        setTokenModal({
+            open: true,
+            providerName: "",
+            token: "",
+            loading: true,
+        });
+
+        try {
+            const fullToken = await fetchFullToken(providerUuid);
+            const providerResponse = await api.getProvider(providerUuid);
+            if (providerResponse.success) {
+                setTokenModal({
+                    open: true,
+                    providerName: providerResponse.data.name,
+                    token: fullToken,
+                    loading: false,
+                });
+            }
+        } catch (error) {
+            console.error("Failed to fetch token:", error);
+            setTokenModal({
+                open: true,
+                providerName: "",
+                token: "",
+                loading: false,
+            });
+        }
+    };
+
+    const handleCloseTokenModal = () => {
+        setTokenModal({open: false, providerName: "", token: "", loading: false});
+    };
+
+    const formatTokenDisplay = (provider: Provider) => {
+        if (!provider.token) return "Not set";
+        if (provider.token.length <= 12) return provider.token;
+        const prefix = provider.token.substring(0, 4);
+        const suffix = provider.token.substring(provider.token.length - 4);
+        return `${prefix}${"*".repeat(4)}${suffix}`;
+    };
+
+    const handleModelListClick = (providerUuid: string) => {
+        const provider = providers.find((p) => p.uuid === providerUuid);
+        if (provider) {
+            setModelListDialog({open: true, provider});
+        }
+    };
+
+    const handleCloseModelListDialog = () => {
+        setModelListDialog({open: false, provider: null});
+    };
+
+    const handleCopyProviderBase64 = useCallback(
+        async (provider: Provider) => {
+            await exportProviderAsBase64ToClipboard(provider, (message, severity) => {
+                onNotification?.(message, severity);
+            });
+        },
+        [onNotification],
+    );
+
+    const handleCopyProviderJsonl = useCallback(
+        async (provider: Provider) => {
+            await exportProviderAsJsonlToClipboard(provider, (message, severity) => {
+                onNotification?.(message, severity);
+            });
+        },
+        [onNotification],
+    );
+
+    return (
+        <TableContainer
+            sx={{
+                ...(view === "table" && tableFrameSx),
+                overflowX: "auto",
+            }}
+        >
+            {/* Fixed column widths (see COLUMNS above); the table itself
+                scrolls horizontally below minWidth instead of columns resizing. */}
+            {view !== "table" ? <CredentialCards layout={view} providers={providers} onEdit={onEdit} onToggle={onToggle} proxy={proxy} onModels={handleModelListClick} onMore={handleMoreOpen} providerQuotas={providerQuotas} refreshingQuotas={refreshingQuotas} onQuotaRefresh={onQuotaRefresh} onQuotaRedeem={onQuotaRedeem}/> : <Table sx={{tableLayout: "fixed", width: '100%', minWidth: columns.reduce((sum, c) => sum + c.width, 0)}}>
+                <TableHead>
+                    <TableRow>
+                        {columns.map((col) => (
+                            <TableCell
+                                key={col.label}
+                                align={col.align}
+                                sx={{width: col.width, ...col.sx}}
+                            >
+                                {col.label}
+                            </TableCell>
+                        ))}
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {providers.map((provider) => (
+                        <React.Fragment key={provider.uuid}>
+                            {/* Main provider row */}
+                            <TableRow
+                                hover
+                                className="proxy-row"
+                                sx={{
+                                    "& > .MuiTableCell-root": {
+                                        py: 1.25,
+                                    },
+                                }}
+                            >
+                                {/* Status */}
+                                <TableCell>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "center"
+                                    }}>
+                                        <Switch
+                                            checked={provider.enabled}
+                                            onChange={() => onToggle?.(provider.uuid)}
+                                            size="small"
+                                            color="success"
+                                        />
+                                    </Stack>
+                                </TableCell>
+                                {/* Name */}
+                                <TableCell>
+                                    <ProviderLabel provider={provider}>
+                                        <Tooltip
+                                            arrow
+                                            placement="top"
+                                            title={(
+                                                <Box>
+                                                    <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontWeight: 600}}>
+                                                        {provider.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" sx={{display: 'block', color: 'inherit', fontFamily: fontMono, opacity: 0.8}}>
+                                                        UUID: {provider.uuid}
+                                                    </Typography>
+                                                </Box>
+                                            )}
+                                        >
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    fontWeight: 500,
+                                                    maxWidth: 140,
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {provider.name}
+                                            </Typography>
+                                        </Tooltip>
+                                    </ProviderLabel>
+                                </TableCell>
+                                {/* Quota — the binding window as a ring; hover for the rest, click to refresh */}
+                                {showQuota && (
+                                    <TableCell>
+                                        <QuotaCell
+                                            quota={providerQuotas?.[provider.uuid]}
+                                            refreshing={refreshingQuotas?.has(provider.uuid) ?? false}
+                                            onRefresh={() => onQuotaRefresh?.(provider.uuid)}
+                                                onRedeem={onQuotaRedeem && (rewardId => onQuotaRedeem(provider.uuid, rewardId))}
+                                        />
+                                    </TableCell>
+                                )}
+                                {/* API Style */}
+                                <TableCell align="center" sx={{px: 1}}>
+                                    <Box sx={{display: 'flex', justifyContent: 'center'}}>
+                                        {provider.api_base_openai && provider.api_base_anthropic ? (
+                                            <Stack direction="row" spacing={0.5} sx={{alignItems: "center"}}>
+                                                <ApiStyleBadge
+                                                    apiStyle="openai"
+                                                    minimal
+                                                    minimalSize="medium"
+                                                />
+                                                <ApiStyleBadge
+                                                    apiStyle="anthropic"
+                                                    minimal
+                                                    minimalSize="medium"
+                                                />
+                                            </Stack>
+                                        ) : (
+                                            <ApiStyleBadge
+                                                minimal
+                                                minimalSize="medium"
+                                                apiStyle={provider.api_style}
+                                            />
+                                        )}
+                                    </Box>
+                                </TableCell>
+                                {/* API Base URL */}
+                                <TableCell>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            maxWidth: 150,
+                                            fontFamily: fontMono,
+                                            wordBreak: "break-all",
+                                        }}
+                                    >
+                                        {provider.api_base}
+                                    </Typography>
+                                </TableCell>
+                                {/* API Key */}
+                                <TableCell>
+                                    <Stack direction="row" spacing={1} sx={{
+                                        alignItems: "center"
+                                    }}>
+                                        {provider.token && (
+                                            <Tooltip title="View Token">
+                                                <IconButton
+                                                    aria-label={`View API key for ${provider.name}`}
+                                                    size="small"
+                                                    onClick={() => handleViewToken(provider.uuid)}
+                                                    sx={{p: 0.25}}
+                                                >
+                                                    <Visibility fontSize="small"/>
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
+                                        <Typography
+                                            variant="body2"
+                                            sx={{
+                                                fontFamily: fontMono,
+                                                wordBreak: "break-all",
+                                                flex: 1,
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            {formatTokenDisplay(provider)}
+                                        </Typography>
+                                    </Stack>
+                                </TableCell>
+                                {/* Proxy */}
+                                <TableCell align="center">
+                                    <ProxySwitch provider={provider} proxy={proxy}/>
+                                </TableCell>
+                                {/* Actions */}
+                                <TableCell>
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 0.5,
+                                            border: 1,
+                                            borderColor: "divider",
+                                            borderRadius: radius.card,
+                                            p: 0.5,
+                                            width: "fit-content",
+                                        }}
+                                    >
+                                        {/* Edit, always visible */}
+                                        {onEdit && (
+                                            <Button
+                                                variant="text"
+                                                size="small"
+                                                color="inherit"
+                                                aria-label={`Edit ${provider.name}`}
+                                                onClick={() => onEdit(provider.uuid)}
+                                                sx={{fontSize: fontSizes.sm, minWidth: "auto", px: {xs: 0.75, xl: 1}}}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
+                                        <Divider orientation="vertical" flexItem/>
+                                        {/* Models text button */}
+                                        <Button
+                                            variant="text"
+                                            size="small"
+                                            startIcon={<ListAlt/>}
+                                            color="inherit"
+                                            onClick={() => handleModelListClick(provider.uuid)}
+                                            sx={{
+                                                fontSize: fontSizes.sm,
+                                                minWidth: "auto",
+                                                px: {xs: 0.75, xl: 1},
+                                                '& .MuiButton-startIcon': {display: {xs: 'none', xl: 'inherit'}},
+                                            }}
+                                        >
+                                            Models
+                                        </Button>
+                                        <Divider orientation="vertical" flexItem/>
+                                        {/* Overflow menu for less common actions */}
+                                        <IconButton
+                                            aria-label={`More actions for ${provider.name}`}
+                                            size="small"
+                                            onClick={(e) => handleMoreOpen(e, provider.uuid)}
+                                        >
+                                            <MoreVert fontSize="small"/>
+                                        </IconButton>
+                                    </Box>
+                                </TableCell>
+                            </TableRow>
+
+                        </React.Fragment>
+                    ))}
+                </TableBody>
+            </Table>}
+            {/* Overflow menu (shared, driven by moreMenu state) */}
+            <Menu
+                anchorEl={moreMenu.anchorEl}
+                open={Boolean(moreMenu.anchorEl)}
+                onClose={handleMoreClose}
+                onClick={(e) => e.stopPropagation()}
+                anchorOrigin={{vertical: "bottom", horizontal: "right"}}
+                transformOrigin={{vertical: "top", horizontal: "right"}}
+            >
+                {(() => {
+                    const p = providers.find((p) => p.uuid === moreMenu.rowId);
+                    if (!p) return null;
+                    return [
+                        p.token && (
+                            <MenuItem
+                                key="view-token"
+                                onClick={() => {
+                                    handleMoreClose();
+                                    handleViewToken(p.uuid);
+                                }}
+                            >
+                                <Visibility fontSize="small" sx={{mr: 1}}/> View Token
+                            </MenuItem>
+                        ),
+                        <MenuItem
+                            key="copy-base64"
+                            onClick={() => {
+                                handleMoreClose();
+                                handleCopyProviderBase64(p);
+                            }}
+                        >
+                            <ContentCopy fontSize="small" sx={{mr: 1}}/> Copy Base64
+                        </MenuItem>,
+                        <MenuItem
+                            key="copy-jsonl"
+                            onClick={() => {
+                                handleMoreClose();
+                                handleCopyProviderJsonl(p);
+                            }}
+                        >
+                            <ContentCopy fontSize="small" sx={{mr: 1}}/> Copy JSONL
+                        </MenuItem>,
+                        onDelete && <Divider key="divider"/>,
+                        onDelete && (
+                            <MenuItem
+                                key="delete"
+                                onClick={() => {
+                                    const anchor = moreMenu.anchorEl;
+                                    handleMoreClose();
+                                    handleDeleteClick(p.uuid, anchor);
+                                }}
+                                sx={{color: "error.main"}}
+                            >
+                                <Delete fontSize="small" sx={{mr: 1}}/> Delete
+                            </MenuItem>
+                        ),
+                    ].filter(Boolean);
+                })()}
+            </Menu>
+            {/* Token View Modal */}
+            <Modal open={tokenModal.open} onClose={handleCloseTokenModal}>
+                <Box
+                    sx={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        width: 600,
+                        maxWidth: "80vw",
+                        bgcolor: "background.paper",
+                        boxShadow: 24,
+                        p: 4,
+                        borderRadius: radius.card,
+                    }}
+                >
+                    <Typography variant="h6" sx={{mb: 2}}>
+                        {tokenModal.token
+                            ? `API Key - ${tokenModal.providerName}`
+                            : tokenModal.providerName}
+                    </Typography>
+
+                    {tokenModal.loading ? (
+                        <Box sx={{mb: 3, textAlign: "center", py: 4}}>
+                            <Typography variant="body2" sx={{
+                                color: "text.secondary"
+                            }}>
+                                Loading API key...
+                            </Typography>
+                        </Box>
+                    ) : tokenModal.token ? (
+                        <Box sx={{mb: 3}}>
+                            <Box
+                                sx={{
+                                    p: 2,
+                                    bgcolor: "action.hover",
+                                    borderRadius: radius.row,
+                                    fontFamily: fontMono,
+                                    wordBreak: "break-all",
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                }}
+                            >
+                                {tokenModal.token}
+                            </Box>
+                        </Box>
+                    ) : null}
+
+                    <Stack direction="row" spacing={2} sx={{
+                        justifyContent: "flex-end"
+                    }}>
+                        <Tooltip title={tokenCopied ? "Copied!" : tokenModal.loading ? "Loading..." : "Copy Token"}>
+                            <IconButton
+                                aria-label={`Copy API key for ${tokenModal.providerName || "provider"}`}
+                                color="primary"
+                                disabled={tokenModal.loading || !tokenModal.token}
+                                onClick={() => tokenModal.token && copyToken(tokenModal.token)}
+                            >
+                                {tokenCopied ? <Check/> : <ContentCopy/>}
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Close">
+                            <IconButton aria-label="Close API key dialog" onClick={handleCloseTokenModal}>
+                                <Cancel/>
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
+                </Box>
+            </Modal>
+            {/* Delete Confirmation */}
+            <ConfirmPopover
+                anchorEl={deleteModal.anchorEl}
+                title="Delete Provider"
+                description={`Delete "${deleteModal.rowName}"? This cannot be undone.`}
+                confirmLabel="Delete"
+                confirmColor="error"
+                onClose={handleCloseDeleteModal}
+                onConfirm={handleConfirmDelete}
+            />
+            {/* Model List Dialog */}
+            <ModelListDialog
+                open={modelListDialog.open}
+                onClose={handleCloseModelListDialog}
+                provider={modelListDialog.provider}
+            />
+        </TableContainer>
+    );
+};
+
+export default ApiKeyTable;

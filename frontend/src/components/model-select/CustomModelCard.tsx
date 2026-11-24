@@ -1,5 +1,5 @@
 import { CheckCircle, Delete as DeleteIcon, Edit as EditIcon } from '@/components/icons';
-import { Box, Card, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, alpha } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
@@ -9,9 +9,11 @@ import { ProbeDialog } from '../probe/ProbeDialog';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
-import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
-import ConfirmPopover from '@/components/ConfirmPopover';
-import { fontSizes } from '@/theme/fonts';
+import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition, PHONE_ROW_MIN_HEIGHT, phoneRowCheckSx, phoneRowContentSx } from './cardStyles';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import ConfirmPopover from '@tingly/ui/components/ConfirmPopover';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CustomModelCardProps {
     model: string;
@@ -36,6 +38,7 @@ export default function CustomModelCard({
 }: CustomModelCardProps) {
     const [deleteAnchor, setDeleteAnchor] = useState<HTMLElement | null>(null);
     const probe = useModelTestProbe();
+    const phone = usePhoneShell();
 
     const handleCardClick = () => {
         if (!loading) {
@@ -72,9 +75,9 @@ export default function CustomModelCard({
             <Card
                 sx={(theme: Theme) => ({
                     width: '100%',
-                    height: 60,
+                    ...(phone ? { minHeight: PHONE_ROW_MIN_HEIGHT } : { height: 60 }),
                     border: 1,
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     cursor: loading ? 'wait' : 'pointer',
                     transition: modelCardTransition,
                     position: 'relative',
@@ -91,7 +94,7 @@ export default function CustomModelCard({
                         }
                         : getModelCardStateStyles(theme, isSelected || variant === 'selected')),
                     '& .control-bar': {
-                        opacity: 0,
+                        opacity: phone ? 1 : 0,
                     },
                     '&:hover .control-bar': {
                         opacity: 1,
@@ -110,11 +113,12 @@ export default function CustomModelCard({
                     width: '100%',
                     height: '100%',
                     zIndex: 1,
+                    ...(phone && { ...phoneRowContentSx(4), justifyContent: 'flex-start', alignItems: 'center' }),
                 }}>
                     {loading ? (
                         <CircularProgress size={20} />
                     ) : (
-                        <Tooltip title={model} arrow disableInteractive>
+                        <Tooltip title={phone ? '' : model} arrow disableInteractive>
                             <Typography
                                 variant="body2"
                                 sx={{
@@ -127,7 +131,7 @@ export default function CustomModelCard({
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     wordBreak: 'break-word',
-                                    textAlign: 'center',
+                                    textAlign: phone ? 'left' : 'center',
                                     maxWidth: '100%',
                                 }}
                             >
@@ -147,6 +151,7 @@ export default function CustomModelCard({
                             fontSize: 16,
                             zIndex: 2,
                             color: (theme) => getModelCardActiveColor(theme),
+                            ...(phone && phoneRowCheckSx),
                         }}
                     />
                 )}
@@ -203,7 +208,7 @@ export default function CustomModelCard({
                                 p: 0.3,
                                 color: 'text.secondary',
                                 '&:hover': {
-                                    backgroundColor: 'rgba(211, 47, 47, 0.08)',
+                                    backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
                                     color: 'error.main',
                                 }
                             }}

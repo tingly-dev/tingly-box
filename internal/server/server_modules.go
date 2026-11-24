@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
 	debugmodule "github.com/tingly-dev/tingly-box/internal/server/module/debug"
 	"github.com/tingly-dev/tingly-box/internal/server/module/imbot"
+	limitsmodule "github.com/tingly-dev/tingly-box/internal/server/module/limits"
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	projectsmodule "github.com/tingly-dev/tingly-box/internal/server/module/projects"
@@ -22,7 +23,7 @@ import (
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	"github.com/tingly-dev/tingly-box/remote/access"
 	"github.com/tingly-dev/tingly-box/remote/channel"
-	"github.com/tingly-dev/tingly-box/remote/control/remoteagent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 	"github.com/tingly-dev/tingly-box/remote/scenario/builtin/claudecode"
@@ -101,7 +102,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 	// Chats bound to a Projects project talk to its coordinator instead of
 	// @cc / @tb; the bridge is created now and bound to Projects below.
 	chatBridge := projectsmodule.NewChatBridge()
-	imbotHandler, err := imbot.NewHandler(ctx, s.config, s.channelRegistry, remoteagent.WithProjectRouter(chatBridge))
+	imbotHandler, err := imbot.NewHandler(ctx, s.config, s.channelRegistry, chat.WithProjectRouter(chatBridge))
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create imbotsettings handler, imbot settings APIs will not be available")
 	} else {
@@ -129,7 +130,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// endpoints report unavailable.
 		var chatManager notifymodule.BotChatManager
 		if imbotHandler != nil {
-			chatManager = newBotChatManager(s.channelRegistry, imbotHandler)
+			chatManager = newBotChatManager(s.channelRegistry, imbotHandler, chatBridge.Folder)
 		}
 		mods = append(mods, notifymodule.NewBotAPIHandler(s.channelRegistry, s.interactionRegistry, chatManager, s.config.StoreManager().BotAccess()))
 	}
@@ -145,6 +146,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// their response models always appear in openapi.json regardless of
 		// whether quota tracking happens to be configured on this build.
 		providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger()),
+		limitsmodule.NewHandler(s.config, s.limitsGuard, s.limitsModuleDeps()),
 	)
 
 	// Projects: schema generation mounts an in-memory app that never starts.
@@ -164,6 +166,9 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		if sm != nil && sm.RemoteChats() != nil {
 			chatDisabled = sm.RemoteChats().IsChatDisabled
 		}
+		if sm != nil && sm.BotAccess() != nil {
+			chatBridge.SetTargetBlocked(sm.BotAccess().IsExternalTargetBlocked)
+		}
 		chatBridge.Bind(app, s.channelRegistry, s.projectsEnabled, start, chatDisabled)
 		mods = append(mods, projectsmodule.NewHandler(app, s.projectsEnabled, start))
 		if !schema {
@@ -178,7 +183,7 @@ func (s *Server) apiModules(ctx context.Context, schema bool) []module.Module {
 		// Schema generation only references these handlers, so no live token
 		// store is required. At runtime they are mounted by
 		// UseTokenManagementEndpoints, which does not depend on the UI.
-		mods = append(mods, sharing.NewHandler(nil), team.NewHandler(nil))
+		mods = append(mods, sharing.NewHandler(nil), team.NewHandler(nil, nil))
 	}
 	return mods
 }

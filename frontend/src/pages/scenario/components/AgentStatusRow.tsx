@@ -6,9 +6,9 @@
 import { Box, Button, Tooltip, Typography } from '@mui/material';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ClientConfigStatus } from '@/hooks/useClientConfigStatus';
+import type { ClientConfigStatus } from '@/pages/scenario/hooks/useClientConfigStatus';
 import type { AgentObservation } from '@/pages/scenario/hooks/useAgentObservation';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 
 /** "2 minutes ago" in the UI language; empty for an unparsable timestamp. */
 export const formatRelativeTime = (iso: string, language: string, now: number = Date.now()): string => {

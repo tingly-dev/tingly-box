@@ -5,6 +5,7 @@ import type { AgentApplyResult } from './components/agentSetup';
 import ClaudeCodeConfigModal from './components/ClaudeCodeConfigModal';
 import { type ClaudeCodeDefaultMode, derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
 import { restoreAppliedClaudeCodePrefs } from './components/claudeCodePrefsState';
+import DuplicateMainProfileButton from './components/DuplicateMainProfileButton';
 import { AgentPage, type AgentApplyContext, type AgentPageDescriptor, type AgentPageSlot } from './AgentPage';
 
 // Normalize the backend's ApplyConfigResponse into AgentApplyResult. The
@@ -101,10 +102,12 @@ const claudeCode: AgentPageDescriptor = {
     scenario: 'claude_code',
     title: 'Claude Code',
     tooltipKey: 'scenarioPage.tooltip.claude_code',
+    titleAddon: <DuplicateMainProfileButton />,
     connection: { compact: true, apiKeyRow: true, baseUrlRow: true },
     clientConfigTool: 'claude',
     context1M: true,
     slotRouting: { unifiedRuleUuid: 'builtin:claude_code:cc' },
+    useProfileRow: true,
     setup: {
         kind: 'auto',
         apply: (t, ctx) => applyClaudeConfig(t, derivedPrefs(ctx), false),

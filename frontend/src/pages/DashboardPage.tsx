@@ -20,26 +20,27 @@ import { visuallyHidden } from '@/components/dashboard/visuallyHidden';
 import { useTranslation } from 'react-i18next';
 import { useDashboardData, TIME_RANGE_CONFIG } from '@/hooks/useDashboardData';
 import type { TimeRange } from '@/hooks/useDashboardData';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const DashboardSkeleton = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Grid container spacing={{ xs: 1.5, sm: 2 }}>
             {Array.from({ length: 5 }).map((_, index) => (
                 <Grid key={index} size={{ xs: 6, sm: 4, md: 2.4 }}>
-                    <Skeleton variant="rounded" height={118} sx={{ borderRadius: 2 }} />
+                    <Skeleton variant="rounded" height={118} sx={{ borderRadius: radius.card }} />
                 </Grid>
             ))}
         </Grid>
         <Grid container spacing={2}>
             <Grid size={{ xs: 12, lg: 8 }}>
-                <Skeleton variant="rounded" height={320} sx={{ borderRadius: 2 }} />
+                <Skeleton variant="rounded" height={320} sx={{ borderRadius: radius.card }} />
             </Grid>
             <Grid size={{ xs: 12, lg: 4 }}>
-                <Skeleton variant="rounded" height={320} sx={{ borderRadius: 2 }} />
+                <Skeleton variant="rounded" height={320} sx={{ borderRadius: radius.card }} />
             </Grid>
         </Grid>
-        <Skeleton variant="rounded" height={360} sx={{ borderRadius: 2 }} />
+        <Skeleton variant="rounded" height={360} sx={{ borderRadius: radius.card }} />
     </Box>
 );
 
@@ -76,9 +77,6 @@ export default function DashboardPage() {
         handleRefresh,
         stats,
         timeSeries,
-        records,
-        recordsLoading,
-        recordsTotal,
         recordsParams,
         heatmapRefresh,
         selectedProvider,
@@ -98,8 +96,6 @@ export default function DashboardPage() {
         selectedIdentityLabel,
     } = useDashboardData({
         timeRange,
-        isHourlyRange,
-        viewMode: requestsUnavailable ? 'summary' : viewMode,
         initialScenario,
     });
 
@@ -308,12 +304,7 @@ export default function DashboardPage() {
                                 </Stack>
                             </Stack>
                         ) : (
-                            <RequestsView
-                                records={records}
-                                loading={recordsLoading}
-                                totalCount={recordsTotal}
-                                queryParams={recordsParams}
-                            />
+                            <RequestsView queryParams={recordsParams} />
                         )}
                     </Box>
                 </Box>

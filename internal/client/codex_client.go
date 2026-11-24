@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // guard
@@ -402,6 +403,7 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 	params := responses.ResponseNewParams{
 		Model: strings.TrimSuffix(req.Model, fastModelSuffix),
 	}
+	applyCodexImageReasoning(&params, imagegen.ReasoningEffort(&req))
 
 	// Set default values directly on the struct
 	params.Store = param.NewOpt(false)
@@ -483,10 +485,14 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	var imageCallID string
 	var failure codexImageFailure
 
+streamLoop:
 	for stream.Next() {
 		event := stream.Current()
 
 		switch event.Type {
+		case "response.completed":
+			// The response is complete even if the server leaves the SSE connection open.
+			break streamLoop
 		case "response.image_generation_call.partial_image":
 			partialEvent := event.AsResponseImageGenerationCallPartialImage()
 			if partialEvent.PartialImageB64 != "" {

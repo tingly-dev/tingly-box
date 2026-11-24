@@ -1,14 +1,14 @@
 // Scenario control-plane API: per-scenario config + flags + descriptors.
 import {controlApi} from './openapi';
+import {readCached} from './readCache';
 
 export const scenarioApi = {
     // Scenario API
-    getScenarioConfig: async (scenario: string): Promise<any> => {
-        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}', {
+    getScenarioConfig: async (scenario: string): Promise<any> =>
+        readCached(`scenario:${scenario}`, () => controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}', {
             headers,
             params: {path: {scenario}},
-        }));
-    },
+        }))),
 
     setScenarioConfig: async (scenario: string, config: any): Promise<any> => {
         return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}', {
@@ -33,12 +33,11 @@ export const scenarioApi = {
         }));
     },
 
-    getScenarioStringFlag: async (scenario: string, flag: string): Promise<any> => {
-        return controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/string-flag/{flag}', {
+    getScenarioStringFlag: async (scenario: string, flag: string): Promise<any> =>
+        readCached(`string-flag:${scenario}:${flag}`, () => controlApi((client, headers) => client.GET('/api/v1/scenario/{scenario}/string-flag/{flag}', {
             headers,
             params: {path: {scenario, flag}},
-        }));
-    },
+        }))),
 
     setScenarioStringFlag: async (scenario: string, flag: string, value: string): Promise<any> => {
         return controlApi((client, headers) => client.PUT('/api/v1/scenario/{scenario}/string-flag/{flag}', {
@@ -63,6 +62,15 @@ export const scenarioApi = {
             headers,
             params: {path: {scenario, slot}},
             body: {enabled},
+        }));
+    },
+
+    // Overwrite the default Claude Code routing with a copy of a profile's (id or name).
+    copyProfileToClaudeCodeDefault: async (profile: string): Promise<any> => {
+        return controlApi((client, headers) => client.POST('/api/v1/scenario/{scenario}/claude-code/use-profile', {
+            headers,
+            params: {path: {scenario: 'claude_code'}},
+            body: {profile},
         }));
     },
 

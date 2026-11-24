@@ -9,7 +9,6 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
-    Paper,
     Stack,
     Table,
     TableBody,
@@ -26,12 +25,13 @@ import {
     KeyboardArrowUp,
     Refresh as RefreshIcon,
 } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import { useNotify } from '@/hooks/useNotify';
 import { formatTimestamp } from '@/utils/datetime';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { tableFrameSx } from '@tingly/ui/theme/table';
 
 type GuardrailsHistoryEntry = {
     time: string;
@@ -274,7 +274,7 @@ const GuardrailsHistoryPage = () => {
                             )}
                         </Stack>
 
-                        <TableContainer component={Paper} variant="outlined">
+                        <TableContainer sx={tableFrameSx}>
                             <Table size="small">
                                 <TableHead>
                                     <TableRow>

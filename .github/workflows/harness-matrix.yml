@@ -55,7 +55,7 @@ on:
       # The harness itself
       - 'cli/harness/**'
       - 'tests/clients/**'
-      - 'scripts/harness-baseline.sh'
+      - 'tests/harness-baseline.sh'
       - '.github/workflows/harness-matrix.yml'
       - '.github/workflows/harness-template.yml'
   # Run after every merge to main. We react to PR-close events instead of a
@@ -91,7 +91,7 @@ on:
       # The harness itself
       - 'cli/harness/**'
       - 'tests/clients/**'
-      - 'scripts/harness-baseline.sh'
+      - 'tests/harness-baseline.sh'
       - '.github/workflows/harness-matrix.yml'
       - '.github/workflows/harness-template.yml'
   workflow_dispatch:

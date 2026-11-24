@@ -2,9 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box,
     Button,
-    Dialog,
-    DialogContent,
-    DialogTitle,
     Divider,
     FormControl,
     InputLabel,
@@ -21,6 +18,7 @@ import { api } from '@/services/api';
 import type { Provider } from '@/types/provider';
 import { resolveRuleName } from '@/pages/scenario/hooks/useTemplatePageRules';
 import { findDirectRule, imageModelOptions, type ImageModelOption } from './imageModelRules';
+import { ModelPickerDialog } from '@/components/model-select/ModelPickerDialog';
 
 const CHOOSE_ANOTHER = '__choose_another_model__';
 
@@ -132,25 +130,18 @@ const ImageModelPicker: React.FC<ImageModelPickerProps> = ({
     }, [rules, onChange, onRulesReload, scenario, showNotification, t]);
 
     const chooser = (
-        <Dialog
+        <ModelPickerDialog
             open={chooserOpen}
             onClose={() => setChooserOpen(false)}
-            maxWidth="lg"
-            fullWidth
-            slotProps={{ paper: { sx: { height: '80vh' } } }}
+            title={chooserTitle ?? t('playground.modelPicker.chooserTitle', { defaultValue: 'Choose an image model' })}
         >
-            <DialogTitle sx={{ textAlign: 'center' }}>
-                {chooserTitle ?? t('playground.modelPicker.chooserTitle', { defaultValue: 'Choose an image model' })}
-            </DialogTitle>
-            <DialogContent>
-                {chooserOpen && (
-                    <ModelSelectDialog
-                        providers={providers}
-                        onSelected={(option) => { void handleChosen(option); }}
-                    />
-                )}
-            </DialogContent>
-        </Dialog>
+            {chooserOpen && (
+                <ModelSelectDialog
+                    providers={providers}
+                    onSelected={(option) => { void handleChosen(option); }}
+                />
+            )}
+        </ModelPickerDialog>
     );
 
     if (options.length === 0) {

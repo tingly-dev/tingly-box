@@ -35,6 +35,7 @@ type storeSet struct {
 	modelStore         *ModelStore
 	teamStore          *TeamStore
 	apiTokenStore      *APITokenStore
+	limitPolicyStore   *LimitPolicyStore
 	remoteChatStore    *RemoteChatStore
 	botAccessStore     *BotAccessStore
 }
@@ -52,6 +53,7 @@ func (s *storeSet) initialized() map[string]bool {
 		"model":         s.modelStore != nil,
 		"team":          s.teamStore != nil,
 		"apiToken":      s.apiTokenStore != nil,
+		"limitPolicy":   s.limitPolicyStore != nil,
 		"remoteChats":   s.remoteChatStore != nil,
 		"botAccess":     s.botAccessStore != nil,
 	}
@@ -164,6 +166,9 @@ func (sm *StoreManager) initStores() error {
 	if sm.apiTokenStore, err = newAPITokenStore(conn, sm.teamStore); err != nil {
 		errs = append(errs, fmt.Errorf("api token store: %w", err))
 	}
+	if sm.limitPolicyStore, err = newLimitPolicyStore(conn); err != nil {
+		errs = append(errs, fmt.Errorf("limit policy store: %w", err))
+	}
 	if err = sm.initRemoteStores(); err != nil {
 		errs = append(errs, fmt.Errorf("remote stores: %w", err))
 	}
@@ -186,9 +191,6 @@ func (sm *StoreManager) dropDeprecatedModelCapabilities() error {
 // These replace the JSON files the remote subsystem used to keep beside the
 // database; see .design/remote-storage.md.
 func (sm *StoreManager) initRemoteStores() error {
-	if err := migrateBotAccessTables(sm.db); err != nil {
-		return fmt.Errorf("migrate bot access tables: %w", err)
-	}
 	if err := sm.db.AutoMigrate(
 		&RemoteChatRecord{},
 	); err != nil {
@@ -196,14 +198,6 @@ func (sm *StoreManager) initRemoteStores() error {
 	}
 	sm.remoteChatStore = NewRemoteChatStore(sm.db)
 	sm.botAccessStore = NewBotAccessStore(sm.db)
-
-	// Migrating here, rather than from whichever feature happens to construct
-	// a store first, is what makes every entry point — server, standalone CLI
-	// bot, `bot pair revoke` — see the same migrated data.
-	if err := importLegacyRemoteJSON(sm.baseDir, sm.remoteChatStore); err != nil {
-		// Best effort: the legacy files are left in place for the next start.
-		logrus.WithError(err).Error("Failed to import legacy remote JSON stores; leaving files in place")
-	}
 	return nil
 }
 
@@ -284,6 +278,14 @@ func (sm *StoreManager) APIToken() *APITokenStore {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.apiTokenStore
+}
+
+// LimitPolicy returns the LimitPolicyStore (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) LimitPolicy() *LimitPolicyStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.limitPolicyStore
 }
 
 // BaseDir returns the base directory for this StoreManager.

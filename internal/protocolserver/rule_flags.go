@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	servertransform "github.com/tingly-dev/tingly-box/internal/protocolserver/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocolserver/servertransform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -73,6 +73,9 @@ func RulePreVendorTransforms(flags typ.RuleFlags) []transform.Transform {
 	}
 	if flags.ThinkingEffort != typ.ThinkingEffortDefault {
 		preVendor = append(preVendor, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
+	}
+	if flags.DisableThinkingBudget {
+		preVendor = append(preVendor, transform.NewRemoveThinkingBudgetTransform())
 	}
 	if typ.ClaudeCodeVersionEnabled(flags.ClaudeCodeVersion) {
 		preVendor = append(preVendor, transform.NewClaudeCodeVersionTransform(flags.ClaudeCodeVersion))

@@ -3,7 +3,6 @@ import {
     Box,
     Button,
     Chip,
-    CircularProgress,
     Stack,
     Typography,
 } from '@mui/material';
@@ -16,11 +15,15 @@ import KeyNameField from '@/components/provider-form-dialog/KeyNameField';
 import ProtocolSlot, {type ProtocolSlotData, type ProtocolKind} from '@/components/provider-form-dialog/ProtocolSlot';
 import ProxyUrlField from '@/components/provider-form-dialog/ProxyUrlField';
 import VerificationResultPanel from '@/components/provider-form-dialog/VerificationResultPanel';
-import {type VerificationResult, runProviderProbe} from '@/components/provider-form-dialog/probe';
+import {type VerificationResult, runProviderProbe, beginProbeRun, type ProbeRun} from '@/components/provider-form-dialog/probe';
+import {PlayerStop} from '@/components/icons';
 import ProviderIcon from '@/components/ProviderIcon';
+import AccountLimitsSection from '@/components/limits/AccountLimitsSection';
+import type {Limits} from '@/components/limits/LimitsEditor';
 import {isHttpUrl} from '@/components/provider-form-dialog/validation';
 import ProviderExportButton from '@/components/ProviderExportButton';
 import ProviderFormLayout, {ProviderIdentityFields, ProviderFormSection} from '@/components/provider-form-dialog/ProviderFormLayout';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -40,6 +43,8 @@ export interface EnhancedProviderFormData {
     /** If set, prefer this exact provider ID when resolving the template.
      *  Avoids mismatches when multiple providers share the same base URL. */
     selectedProviderId?: string;
+    /** Account concurrency/usage limits (edit mode). undefined = leave unchanged. */
+    limits?: Limits;
 }
 
 interface PresetProviderFormDialogProps {
@@ -90,6 +95,9 @@ const ProviderFormDialog = ({
     const [submitError, setSubmitError] = useState<string | null>(null);
     // ── Local state ───────────────────────────────────────────────
     const [verifying, setVerifying] = useState(false);
+    // In-flight "Test Connection" run; holds the AbortController the Stop
+    // button (and dialog close) uses to cancel it.
+    const verifyRunRef = useRef<ProbeRun | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
     const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
@@ -168,7 +176,11 @@ const ProviderFormDialog = ({
 
     // ── Init/reset on open ────────────────────────────────────────
     useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            // Closing mid-test cancels the probe instead of leaving it running.
+            verifyRunRef.current?.cancel();
+            return;
+        }
 
         setVerificationResult(null);
         setBaseUrlError(false);
@@ -364,6 +376,8 @@ const ProviderFormDialog = ({
         const probeMessages = {
             failed: t('providerDialog.verification.failed'),
             networkError: t('providerDialog.verification.networkError'),
+            cancelled: t('providerDialog.verification.cancelled'),
+            timedOut: t('providerDialog.verification.timedOut'),
         };
         const effectiveName = ensureName();
         const token = data.token.trim() || existingToken;
@@ -391,39 +405,58 @@ const ProviderFormDialog = ({
         }
 
         setVerifying(true);
+        const run = beginProbeRun();
+        verifyRunRef.current = run;
 
-        if (probes.length === 1) {
-            const p = probes[0];
-            const result = await runProviderProbe(
-                {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
-                probeMessages,
+        try {
+            if (probes.length === 1) {
+                const p = probes[0];
+                const result = await runProviderProbe(
+                    {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
+                    probeMessages,
+                    run,
+                );
+                setVerificationResult(result);
+                return result.success;
+            }
+
+            // Dual-protocol probe: run both, report per-side. One shared run
+            // signal cancels both requests together.
+            const results = await Promise.all(
+                probes.map(p => runProviderProbe(
+                    {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
+                    probeMessages,
+                    run,
+                ))
             );
-            setVerificationResult(result);
+            const success = results.every(r => r.success);
+            const sideLine = (label: string, r: VerificationResult) =>
+                `${r.success ? '✓' : '✗'} ${label}: ${r.message}`;
+            // Stopped/timed-out mid-run: report the cancellation rather than
+            // dressing it up as a failed endpoint verdict.
+            const cancelledSummary = results.find(r => r.cancelled);
+            setVerificationResult({
+                success,
+                cancelled: !!cancelledSummary,
+                message: cancelledSummary
+                    ? cancelledSummary.message
+                    : success
+                        ? 'Both endpoints verified'
+                        : results.every(r => !r.success)
+                            ? 'Both endpoints failed'
+                            : `${results[0].success ? 'Anthropic' : 'OpenAI'} endpoint failed`,
+                details: probes.map((p, i) => sideLine(p.style === 'openai' ? 'OpenAI' : 'Anthropic', results[i])).join(' • '),
+            });
+            return success;
+        } finally {
+            run.dispose();
+            if (verifyRunRef.current === run) verifyRunRef.current = null;
             setVerifying(false);
-            return result.success;
         }
+    };
 
-        // Dual-protocol probe: run both, report per-side
-        const results = await Promise.all(
-            probes.map(p => runProviderProbe(
-                {name: effectiveName, apiStyle: p.style, apiBase: p.url, token, authType: data.authType},
-                probeMessages,
-            ))
-        );
-        const success = results.every(r => r.success);
-        const sideLine = (label: string, r: VerificationResult) =>
-            `${r.success ? '✓' : '✗'} ${label}: ${r.message}`;
-        setVerificationResult({
-            success,
-            message: success
-                ? 'Both endpoints verified'
-                : results.every(r => !r.success)
-                    ? 'Both endpoints failed'
-                    : `${results[0].success ? 'Anthropic' : 'OpenAI'} endpoint failed`,
-            details: probes.map((p, i) => sideLine(p.style === 'openai' ? 'OpenAI' : 'Anthropic', results[i])).join(' • '),
-        });
-        setVerifying(false);
-        return success;
+    const handleCancelVerify = () => {
+        verifyRunRef.current?.cancel();
     };
 
     const allowEmptyKey = optionalEditableToken || (!selectedProvider && !data.selectedProviderId);
@@ -504,9 +537,18 @@ const ProviderFormDialog = ({
             submitText={submitText || defaultSubmitText} showCancel={mode === 'edit'}
             onBack={onBack ? () => {onClose(); onBack();} : undefined}
             exportAction={mode === 'edit' && data.uuid ? <ProviderExportButton providerUuid={data.uuid} onNotification={onNotification}/> : undefined}
-            secondaryAction={<Button type="button" variant="outlined" size="small" disabled={verifying || submitting} onClick={handleVerify}>
-                {verifying ? <CircularProgress size={16} thickness={4}/> : t('providerDialog.editUx.testConnection')}
-            </Button>}
+            secondaryAction={verifying ? (
+                // While the test runs, the slot turns into an actionable Stop
+                // button — no spinning state the user has to wait out.
+                <Button type="button" variant="outlined" size="small" color="warning"
+                    startIcon={<PlayerStop fontSize="small"/>} onClick={handleCancelVerify}>
+                    {t('providerDialog.editUx.stopTest')}
+                </Button>
+            ) : (
+                <Button type="button" variant="outlined" size="small" disabled={submitting} onClick={handleVerify}>
+                    {t('providerDialog.editUx.testConnection')}
+                </Button>
+            )}
         >
             {isFirstProvider && mode === 'add' && (
                 <Alert severity="info" sx={{mb: 1}}>
@@ -561,7 +603,7 @@ const ProviderFormDialog = ({
                         gap: 0.75,
                         px: 1.5,
                         py: 1,
-                        borderRadius: 1,
+                        borderRadius: radius.row,
                         bgcolor: 'action.hover',
                         flexWrap: 'wrap',
                     }}
@@ -631,7 +673,7 @@ const ProviderFormDialog = ({
                     result={verificationResult}
                     onClose={() => setVerificationResult(null)}
                     v1Hint={{
-                        show: !verificationResult.success && slotOpenAI.enabled && !(/\/v1\/?$/.test(slotOpenAI.url)),
+                        show: !verificationResult.success && !verificationResult.cancelled && slotOpenAI.enabled && !(/\/v1\/?$/.test(slotOpenAI.url)),
                         onApply: () => {
                             const base = slotOpenAI.url.replace(/\/+$/, '');
                             const newUrl = `${base}/v1`;
@@ -660,6 +702,13 @@ const ProviderFormDialog = ({
                     onUseGlobalProxyChange={handleUseGlobalProxyChange}
                 />
             </ProviderFormSection>
+            {mode === 'edit' && data.uuid && (
+                <AccountLimitsSection
+                    providerUuid={data.uuid}
+                    value={data.limits}
+                    onChange={(next) => onChange('limits', next)}
+                />
+            )}
             {submitError && <Alert severity="error" onClose={() => setSubmitError(null)}>{submitError}</Alert>}
         </ProviderFormLayout>
     );

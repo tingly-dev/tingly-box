@@ -25,11 +25,15 @@ import { ProviderLabel } from '../ProviderLogo.tsx';
 import { ProbeMenu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
+import LimitsBadge, { LIMITS_QUIET_CLASS } from '../limits/LimitsBadge';
+import LimitsDialog from '../limits/LimitsDialog';
+import type { Limits } from '../limits/LimitsEditor';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
 import ServiceNodeQuota from './ServiceNodeQuota.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 import { useAddModelSpotlight } from './ActionAddNode.tsx';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 const ServiceNodeWrapper = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'forceShowActions',
@@ -39,8 +43,16 @@ const ServiceNodeWrapper = styled(Box, {
     position: 'relative',
     overflow: 'visible', // Allow action buttons to extend beyond boundaries
     '&:hover .action-buttons': { opacity: 1 },
+    // An unset limits control stays out of sight (and out of reach) until the
+    // node is hovered or holds focus; a set one is always shown.
+    [`& .${LIMITS_QUIET_CLASS}`]: { opacity: 0, pointerEvents: 'none', transition: 'opacity 0.16s ease' },
+    [`&:is(:hover, :focus-within) .${LIMITS_QUIET_CLASS}`]: { opacity: 1, pointerEvents: 'auto' },
+    '@media (hover: none)': {
+        [`& .${LIMITS_QUIET_CLASS}`]: { opacity: 1, pointerEvents: 'auto' },
+    },
     ...(forceShowActions && {
         '& .action-buttons': { opacity: 1 },
+        [`& .${LIMITS_QUIET_CLASS}`]: { opacity: 1, pointerEvents: 'auto' },
     }),
 }));
 
@@ -55,7 +67,7 @@ const TierDisk = styled(Box, {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: fontSizes.sm,
-    fontWeight: 700,
+    fontWeight: 600,
     lineHeight: 1,
     userSelect: 'none',
     cursor: active ? 'pointer' : 'not-allowed',
@@ -85,6 +97,10 @@ export interface ServiceNodeProps {
     onMoveTierUp?: () => void;
     onMoveTierDown?: () => void;
     onEditProvider?: (providerUuid: string) => void;
+    /** Save this service's concurrency/usage limits (its share of the account). */
+    onLimitsChange?: (limits: Limits) => void;
+    /** Owning rule, used to find this service's live limit state. */
+    ruleUuid?: string;
     forceShowActions?: boolean;
 }
 
@@ -148,7 +164,7 @@ const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => 
                 onClick={(e) => e.stopPropagation()}
             >
                 <Box sx={{ p: 2, width: 240 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                         {t('rule.tier.editTitle')}
                     </Typography>
                     <Stack direction="row" spacing={1} sx={{
@@ -176,7 +192,7 @@ const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => 
                             {t('common.confirm')}
                         </Button>
                     </Stack>
-                    <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
+                    <Box sx={{ mt: 1.25, p: 1.25, borderRadius: radius.row, bgcolor: 'action.hover' }}>
                         <Typography
                             variant="body2"
                             sx={{
@@ -214,9 +230,12 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     onMoveTierUp,
     onMoveTierDown,
     onEditProvider,
+    onLimitsChange,
+    ruleUuid,
     forceShowActions = false,
 }) => {
     const { t } = useTranslation();
+    const [limitsOpen, setLimitsOpen] = useState(false);
     const theme = useTheme();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -327,6 +346,17 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 }}>
                                     {provider.model || t('rule.service.selectModel')}
                                 </Typography>
+                                {/* Limits control, a sibling of the quota ring: shown when a
+                                    cap is set (rule share and/or account), otherwise only on
+                                    hover. Left side: the action bar is pinned top-right and
+                                    would cover it. Clear of the tier disk. */}
+                                <Box sx={{ position: 'absolute', left: hasTier ? 26 : 0, top: '50%', transform: 'translateY(-50%)', lineHeight: 0 }}>
+                                    <LimitsBadge
+                                        serviceLimits={provider.limits}
+                                        accountLimits={providerInfo.provider?.limits}
+                                        onClick={onLimitsChange ? () => setLimitsOpen(true) : undefined}
+                                    />
+                                </Box>
                             </Box>
                         </NodeTooltip>
 
@@ -356,7 +386,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ maxWidth: '100%' }}
                                 leading={providerWarning ? (
                                     <NodeTooltip title={providerWarning} placement="bottom">
-                                        <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                                        <WarningIcon sx={{ fontSize: 16, color: 'warning.main', flexShrink: 0 }} />
                                     </NodeTooltip>
                                 ) : undefined}
                             >
@@ -369,11 +399,11 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             <Box sx={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', lineHeight: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
-                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: fontSizes.micro, width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: fontSizes.micro, width: 20, height: 20 }} />
                                     </>
                                 ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: fontSizes.xs, width: 20, height: 20 }} />
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: fontSizes.micro, width: 20, height: 20 }} />
                                 )}
                             </Box>
                         </Box>
@@ -389,7 +419,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={(e) => { e.stopPropagation(); onMoveTierUp(); }}
                                 sx={{ p: 0.5 }}
                             >
-                                <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
+                                <KeyboardArrowUp sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -400,7 +430,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={(e) => { e.stopPropagation(); onMoveTierDown(); }}
                                 sx={{ p: 0.5 }}
                             >
-                                <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
+                                <KeyboardArrowDown sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -411,7 +441,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={handleProbeClick}
                                 sx={{ p: 0.5 }}
                             >
-                                <PlayIcon sx={{ fontSize: '1rem' }} />
+                                <PlayIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -422,7 +452,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={(e) => { e.stopPropagation(); handleEditProvider(); }}
                                 sx={{ p: 0.5 }}
                             >
-                                <EditIcon sx={{ fontSize: '1rem' }} />
+                                <EditIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -432,11 +462,20 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             onClick={handleMenuClick}
                             sx={{ p: 0.5 }}
                         >
-                            <DeleteIcon sx={{ fontSize: '1rem' }} />
+                            <DeleteIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                     </NodeTooltip>
                 </ActionButtonsBox>
             </ServiceNodeContainer>
+            {onLimitsChange && (
+                <LimitsDialog
+                    open={limitsOpen}
+                    onClose={() => setLimitsOpen(false)}
+                    value={provider.limits}
+                    onSave={onLimitsChange}
+                    statusKey={ruleUuid ? `svc:${ruleUuid}/${provider.provider}/${provider.model}` : undefined}
+                />
+            )}
         </ServiceNodeWrapper>
     );
 };

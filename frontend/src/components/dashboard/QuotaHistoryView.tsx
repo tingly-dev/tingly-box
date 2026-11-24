@@ -7,6 +7,7 @@ import { fetchUIAPI } from '@/services/api';
 import { ProviderLabel } from '@/components/ProviderLogo';
 import { QuotaRawResponseButton } from '@/components/credential/QuotaRawResponseButton';
 import { formatQuotaRemaining, formatQuotaUsage, isCountable, quotaRemainingPercent, quotaToWindows, type ProviderQuota, type QuotaWindow } from '@/types/quota';
+import { radius, radiusPx } from '@tingly/ui/theme/radius';
 
 interface QuotaHistoryResponse { data?: ProviderQuota[] }
 interface Props { startTime: string; endTime: string; provider: string; daily: boolean; refreshKey?: number }
@@ -63,7 +64,7 @@ function QuotaChart({ series, language, startTime, endTime }: { series: Series; 
     const tickTime = (time: number) => new Date(time).toLocaleString(language, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     return (
-        <Box sx={{ minWidth: 0, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, backgroundColor: 'background.paper' }}>
+        <Box sx={{ minWidth: 0, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: radius.card, backgroundColor: 'background.paper' }}>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 1, mb: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{series.label}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'right' }}>{valueLabel(latest)}</Typography>
@@ -77,7 +78,7 @@ function QuotaChart({ series, language, startTime, endTime }: { series: Series; 
                         <Tooltip
                             labelFormatter={(value) => new Date(Number(value)).toLocaleString(language)}
                             formatter={(_value, _name, item) => [tooltipLabel(item.payload as Sample), series.label]}
-                            contentStyle={{ background: theme.palette.background.paper, borderColor: theme.palette.divider, borderRadius: 8 }}
+                            contentStyle={{ background: theme.palette.background.paper, borderColor: theme.palette.divider, borderRadius: radiusPx.row }}
                         />
                         <Line type="linear" dataKey="value" stroke={theme.palette.primary.main} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} isAnimationActive={false} />
                     </LineChart>

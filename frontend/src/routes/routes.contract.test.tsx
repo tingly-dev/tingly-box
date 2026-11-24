@@ -72,6 +72,13 @@ describe('route contract', () => {
         expect(targets.filter((t) => !resolvesToPage(t))).toEqual([]);
     });
 
+    it('has a Workspace home next to the Projects and Workdir pages', () => {
+        expect(['/workspace', '/projects', '/projects/folder', '/projects/some-id'].filter((p) => !resolvesToPage(p))).toEqual([]);
+        const home = matchRoutes(routes, '/workspace')!.at(-1)!.route;
+        const list = matchRoutes(routes, '/projects')!.at(-1)!.route;
+        expect(home).not.toBe(list);
+    });
+
     it('sends legacy MCP links to the tools or profiles page', () => {
         expect(
             ['/mcp', '/mcp/routes', '/mcp/tools', '/mcp/profiles', '/mcp/profile/default', '/mcp/profile/new', '/mcp/server-tools', '/mcp/sources', '/mcp/clients'].filter(

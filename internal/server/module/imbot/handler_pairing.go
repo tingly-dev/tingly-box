@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/db"
@@ -37,7 +37,7 @@ func logPairAudit(c *gin.Context, action, uuid, message string) {
 }
 
 // GetPairingCode reveals the bot's current TOFU pairing code so the operator
-// can /bind from their DM. The cleartext code is included in the response;
+// can /pair from their DM. The cleartext code is included in the response;
 // every reveal is recorded in the audit log.
 func (h *Handler) GetPairingCode(c *gin.Context) {
 	if h.store == nil {

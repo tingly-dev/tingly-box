@@ -98,7 +98,7 @@ Claude OAuth 链路（`ClientPool.GetAnthropicClient` → `NewClaudeClient`）�
 | **client header** | `User-Agent`、`x-app`、`X-Claude-Code-Session-Id`、`X-Stainless-*`、`anthropic-beta`、`anthropic-version`、`anthropic-dangerous-direct-browser-access`、`accept`、子 agent 头 | `internal/client/claude_client.go`（`applyClaudeCodeHeaders`，Legacy）+ `claude_version.go`（原生覆盖层）、`claude_betas.go` |
 | **system header** | `system[0]` 的 `x-anthropic-billing-header: ...` 文本块；`system[1]` 的身份 preamble | `internal/protocol/ops/request_anthropic_model.go`（`ApplyAnthropic*MetadataTransform`）、`claude_code_billing_header.go` |
 | **meta data** | `metadata.user_id` 的 JSON 串 | Legacy：`internal/protocol/metaid`；原生：`claude_code_billing_header.go::buildNativeMetadataUserID` |
-| **clean header** | 转发到**非** Claude OAuth provider 时剥掉 billing header / 隐写标记 / preamble | `internal/protocolserver/transform/transform_clean_header.go`；flag 解析见 `rule_flags.go`（Claude OAuth provider 上自动关闭） |
+| **clean header** | 转发到**非** Claude OAuth provider 时剥掉 billing header / 隐写标记 / preamble | `internal/protocolserver/servertransform/transform_clean_header.go`；flag 解析见 `rule_flags.go`（Claude OAuth provider 上自动关闭） |
 
 ---
 
@@ -158,6 +158,8 @@ bundle 是 minified 的，符号名每版都变，靠字面量锚定：
 | system preamble | `"You are Claude Code` | 三个变体：CLI / Agent SDK 内的 CLI / 纯 Agent SDK |
 
 ### B2.4 动态抓包（最可信的证据）
+
+> 现在可直接用 `tb vmodel --capture <dir>` 代替下面手写的 `fake_api.py`：记录每条连接的原始字节（header 大小写/顺序、body 逐字节），用法见 `vmodel/README.md` 的 “Capturing what a real client sends” 与 `.design/vmodel-capture.md`。`env -i` / 隔离 HOME / 假 token 的要求不变。
 
 把 `ANTHROPIC_BASE_URL` 指到本地假 API，让**真实二进制**自己发请求，落盘头和 body：
 
@@ -483,7 +485,7 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
 | 入站 hint 采集 | `protocolserver/rule_flags.go::applyClaudeCodeClientHints` | `typ.ClaudeCodeClientHints` |
 | billing header 与 metadata | `internal/protocol/ops/claude_code_billing_header.go`；`request_anthropic_model.go::ApplyAnthropic{V1,Beta}MetadataTransform` 开头分派（Legacy 原样）；调用方 `transform/vendor.go::isClaudeCodeOAuth` | `applyNativeClaudeCodeIdentity{V1,Beta}`、`BuildClaudeCodeBillingHeader`、`billingHeaderPreservedFields`、`computeFingerprintJS`、`extractFirstUserPromptText`、`buildNativeMetadataUserID` |
 | probe | `internal/probe/e2e_probe.go`（`targetIsClaudeCode` → preamble）；版本默认值的解析在 `rule_flags.go` | 见 `.design/probe.md` |
-| clean header | `protocolserver/transform/transform_clean_header.go`（未改） | — |
+| clean header | `protocolserver/servertransform/transform_clean_header.go`（未改） | — |
 
 `typ.DefaultUserAgents` 里的 2.1.86 字面量只是 `custom_user_agent` 的快选建议，与本 flag 无关，未改。
 
@@ -504,8 +506,8 @@ You are a Claude agent, built on Anthropic's Claude Agent SDK.
   ```bash
   export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)   # 或复制 tingly-box 里 Claude Code OAuth provider 的 access_token
   go run ./cli/harness init-config --output providers.yaml
-  go run ./cli/harness replay claude --upstream real --config providers.yaml   # 三个 fixture，200 即通过
-  go run ./cli/harness agent  claude --config providers.yaml                   # 由真实 claude CLI 发请求
+  go run ./cli/harness replay claude --upstream real --providers providers.yaml   # 三个 fixture，200 即通过
+  go run ./cli/harness agent  claude --providers providers.yaml                   # 由真实 claude CLI 发请求
   ```
 
   `TestSetupRealOAuthAgent_ClaudeCode` 是它的封闭版：虚拟上游充当 Anthropic，断言 Bearer 认证、UA、request-class、

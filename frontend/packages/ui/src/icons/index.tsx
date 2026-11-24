@@ -42,9 +42,9 @@ import {
     IconEdit,
     IconFileDescription,
     IconCopy,
+    IconCopyPlus,
     IconClipboard,
     IconKey,
-    IconRestore,
     IconArrowUpRight,
     IconExternalLink,
     IconMapPin,
@@ -99,9 +99,11 @@ import {
     IconShare,
     IconChartDonut,
     IconRoute,
+    IconRouteOff,
     IconSelector,
     IconGauge,
     IconPin,
+    IconGripVertical,
     IconPinFilled,
     IconActivity,
     IconTool,
@@ -199,8 +201,9 @@ export const DeleteSweep = tablerMui(IconTrashX);
 export const Edit = tablerMui(IconEdit);
 export const Search = tablerMui(IconSearch);
 export const Refresh = tablerMui(IconRefresh);
-export const RestartAlt = tablerMui(IconRestore);
+export const RestartAlt = tablerMui(IconReload);
 export const ContentCopy = tablerMui(IconCopy);
+export const Duplicate = tablerMui(IconCopyPlus);
 export const ContentPaste = tablerMui(IconClipboard);
 export const Upload = tablerMui(IconUpload);
 export const Download = tablerMui(IconDownload);
@@ -239,6 +242,7 @@ export const FiberManualRecord = tablerMuiFilled(IconPointFilled);
 
 // --- Visibility / security ---------------------------------------------------
 export const Pin = tablerMui(IconPin);
+export const DragIndicator = tablerMui(IconGripVertical);
 export const PinFilled = tablerMuiFilled(IconPinFilled);
 export const Visibility = tablerMui(IconEye);
 export const VisibilityOutlined = tablerMui(IconEye);
@@ -294,6 +298,7 @@ export const LaptopMac = tablerMui(IconDeviceLaptop);
 // --- Additional aliases pulled in by the broad rollout ----------------------
 export const DataUsage = tablerMui(IconChartDonut);
 export const Route = tablerMui(IconRoute);
+export const RouteOff = tablerMui(IconRouteOff);
 export const Router = tablerMui(IconRouter);
 export const UnfoldMore = tablerMui(IconSelector);
 export const FoldDown = tablerMui(IconFoldDown);

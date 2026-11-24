@@ -11,6 +11,7 @@ import { invalidateModels } from '../hooks/useModels';
 import { useAppData } from '../contexts/AppDataContext';
 import { useThemeMode, type ThemeMode } from '../contexts/ThemeModeContext';
 import { THEME_MODE_VALUES, ThemeModeIcon } from '../theme/modes';
+import { NotificationSettingsCard } from '../notifications/NotificationSettings';
 import { LANGUAGES } from '../i18n';
 import { PageHeader } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -273,6 +274,8 @@ export default function SettingsPage() {
                         </Stack>
                     )}
                 </Card>
+
+                <NotificationSettingsCard />
 
                 <Card title={t('settings.appearanceTitle')}>
                     <Stack spacing={2}>

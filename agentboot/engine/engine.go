@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -50,8 +51,9 @@ const (
 	KindApprovalResponse = "approval_response"
 	KindAskRequest       = "ask_request"
 	KindAskResponse      = "ask_response"
-	KindTask             = "task"  // payload: TaskEvent
-	KindUsage            = "usage" // payload: TurnUsage
+	KindTask             = "task"    // payload: TaskEvent
+	KindUsage            = "usage"   // payload: TurnUsage
+	KindCompact          = "compact" // payload: agentboot.CompactEvent
 	KindSystem           = "system"
 	KindError            = "error"
 )
@@ -104,6 +106,8 @@ type TurnEnd struct {
 	Err error
 	// Stopped: the user stopped it (Stop, Shutdown).
 	Stopped bool
+	// NotStarted means cancellation prevented even the first process launch.
+	NotStarted bool
 	// NotSent: the message never reached Claude, because Claude had just
 	// started a turn of its own (a background task finished). The host
 	// may send it again once that turn ends.
@@ -123,10 +127,16 @@ type Engine struct {
 
 	mu   sync.Mutex
 	runs map[string]*run // session id -> live turn, while one is in flight
+	// settling tracks callbacks after the engine has released the turn claim.
+	settling   map[string]int
+	settled    map[string]chan struct{}
+	restarting map[string]bool
 	// launch records what each resident process was started with (see
 	// launchSignature), so a changed setting restarts it instead of being
 	// silently ignored.
 	launch map[string]launchState
+	// lastTurn remembers each session's latest turn for Retry (turn.go).
+	lastTurn map[string]lastTurn
 	// residents holds the Conductor of each pooled process (resident.go).
 	residents map[string]*resident
 	// live is each session's running background tasks (tasks.go).
@@ -146,6 +156,10 @@ type run struct {
 	// the process directly.
 	unsolicited bool
 	stopped     atomic.Bool // the user stopped it, so its error result is expected
+	// compact collects the compaction events of a turn started by Compact.
+	compact *compactCapture
+	// end is how the turn ended; set before done closes.
+	end TurnEnd
 }
 
 var (
@@ -153,6 +167,10 @@ var (
 	ErrNoTurn = errors.New("no turn in progress")
 	// ErrBusy: the session has a turn in flight.
 	ErrBusy = errors.New("a turn is in progress")
+	// ErrNotSent: Compact's request never reached the agent, because it had
+	// just started a turn of its own. The host's OnTurnEnd already saw this
+	// (TurnEnd.NotSent); a host that re-queues on that must not do so again.
+	ErrNotSent = errors.New("the agent started a turn of its own first")
 	// ErrUnknownRequest: no pending approval or question has that id.
 	ErrUnknownRequest = errors.New("no such pending request")
 	// ErrTaskNotRunning: the session has no live background task by that id.
@@ -169,7 +187,11 @@ func New(cfg Config) *Engine {
 		hostPrompter:   cfg.Prompter,
 		onTurnEnd:      cfg.OnTurnEnd,
 		runs:           map[string]*run{},
+		settling:       map[string]int{},
+		settled:        map[string]chan struct{}{},
+		restarting:     map[string]bool{},
 		launch:         map[string]launchState{},
+		lastTurn:       map[string]lastTurn{},
 		residents:      map[string]*resident{},
 		live:           map[string][]TaskBrief{},
 		stopKeepAlive:  make(chan struct{}),
@@ -185,7 +207,7 @@ func (e *Engine) Busy(id string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	_, ok := e.runs[id]
-	return ok
+	return ok || e.restarting[id]
 }
 
 // AwaitingInput reports whether id's live turn is blocked on the user: an
@@ -237,6 +259,11 @@ func (e *Engine) Stop(id string) (<-chan struct{}, bool) {
 // process), so the message is a new turn for Start.
 var ErrNotInjectable = errors.New("no running turn to add the message to")
 
+// ErrAgentReadsBetweenTurns is ErrNotInjectable for a turn that does run, on
+// an agent that cannot take input while it works: the host can tell its user
+// why the message waits for the next turn.
+var ErrAgentReadsBetweenTurns = fmt.Errorf("%w: the agent reads messages only between turns", ErrNotInjectable)
+
 // Inject adds prompt to the turn id has in flight, without ending it:
 // Claude takes it up at its next step. The message is recorded as the
 // user's. Returns ErrNotInjectable when there is no such turn, for the caller
@@ -244,14 +271,18 @@ var ErrNotInjectable = errors.New("no running turn to add the message to")
 func (e *Engine) Inject(id, prompt string) error {
 	e.mu.Lock()
 	_, running := e.runs[id]
+	restarting := e.restarting[id]
 	e.mu.Unlock()
 	res, ok := e.residentFor(id)
-	if !running || !ok {
+	if !running || restarting || !ok {
 		return ErrNotInjectable
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), liveControlTimeout)
 	defer cancel()
 	if err := res.c.Inject(ctx, prompt); err != nil {
+		if errors.Is(err, agentboot.ErrInjectUnsupported) {
+			return ErrAgentReadsBetweenTurns
+		}
 		if errors.Is(err, agentboot.ErrNoTurnInFlight) || errors.Is(err, agentboot.ErrSessionClosed) {
 			return ErrNotInjectable
 		}
@@ -261,15 +292,28 @@ func (e *Engine) Inject(id, prompt string) error {
 	return nil
 }
 
+// Injectable reports whether a message sent to id now would join the turn in
+// flight: a turn is running on a live process whose agent reads input
+// mid-turn. False means Inject would refuse it with ErrNotInjectable, and the
+// message waits for the next turn.
+func (e *Engine) Injectable(id string) bool {
+	e.mu.Lock()
+	_, running := e.runs[id]
+	restarting := e.restarting[id]
+	e.mu.Unlock()
+	res, ok := e.residentFor(id)
+	return running && !restarting && ok && res.c.CanInject()
+}
+
 // Release closes id's resident process so something else (a terminal) can
 // take the Claude session over: two processes writing one session file
-// corrupt it. A turn in flight is refused with ErrBusy rather than killed,
-// and the session is claimed while the process closes, so no turn can
-// start in between and have its process closed under it.
+// corrupt it. A running turn, background task or unfinished turn callback is
+// refused with ErrBusy rather than killed. The session is claimed while the
+// process closes and its event reader drains, preventing a concurrent Start.
 func (e *Engine) Release(id string) error {
 	done := make(chan struct{})
 	e.mu.Lock()
-	if _, busy := e.runs[id]; busy {
+	if _, busy := e.runs[id]; busy || e.restarting[id] || len(e.live[id]) > 0 || e.settling[id] > 0 {
 		e.mu.Unlock()
 		return ErrBusy
 	}
@@ -281,7 +325,91 @@ func (e *Engine) Release(id string) error {
 		e.mu.Unlock()
 		close(done)
 	}()
-	e.Evict(id)
+	if e.pool == nil {
+		return nil
+	}
+	e.mu.Lock()
+	resident := e.residents[id]
+	e.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	if err := e.pool.CloseAndRemove(ctx, id); err != nil {
+		return err
+	}
+	if resident != nil {
+		select {
+		case <-resident.c.Done():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	e.mu.Lock()
+	delete(e.launch, id)
+	e.mu.Unlock()
+	return nil
+}
+
+// Restart stops the current turn and closes its process. The next Start
+// launches a fresh process and can resume the same conversation.
+func (e *Engine) Restart(id string) error {
+	e.mu.Lock()
+	if e.restarting[id] {
+		e.mu.Unlock()
+		return ErrBusy
+	}
+	e.restarting[id] = true
+	r, res := e.runs[id], e.residents[id]
+	if r != nil {
+		r.stopped.Store(true)
+		r.cancel()
+	}
+	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		delete(e.restarting, id)
+		e.mu.Unlock()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), agentboot.SessionCloseTimeout)
+	defer cancel()
+	wait := func(done <-chan struct{}) error {
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if res != nil {
+		res.cancel()
+		// Close can terminate the process even when the agent is blocked
+		// reading or writing a control message and cannot take an interrupt.
+		if err := res.c.Session().Close(ctx); err != nil {
+			return err
+		}
+		if err := wait(res.c.Done()); err != nil {
+			return err
+		}
+	}
+	if r != nil {
+		if err := wait(r.done); err != nil {
+			return err
+		}
+	}
+	e.mu.Lock()
+	ending := e.settled[id]
+	e.mu.Unlock()
+	if ending != nil {
+		if err := wait(ending); err != nil {
+			return err
+		}
+	}
+	if e.pool != nil {
+		e.pool.Remove(id)
+	}
+	e.mu.Lock()
+	delete(e.launch, id)
+	e.mu.Unlock()
 	return nil
 }
 
@@ -337,6 +465,25 @@ func (e *Engine) prompterFor(id string, wp *webPrompter, mode string) agentboot.
 func (e *Engine) turnEnded(id string, end TurnEnd) {
 	if e.onTurnEnd != nil {
 		e.onTurnEnd(id, end)
+	}
+}
+
+// startSettling records a host callback before releasing the turn claim.
+func (e *Engine) startSettling(id string) {
+	if e.settling[id] == 0 {
+		e.settled[id] = make(chan struct{})
+	}
+	e.settling[id]++
+}
+
+func (e *Engine) finishSettling(id string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.settling[id]--
+	if e.settling[id] == 0 {
+		close(e.settled[id])
+		delete(e.settled, id)
+		delete(e.settling, id)
 	}
 }
 

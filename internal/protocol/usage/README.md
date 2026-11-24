@@ -15,6 +15,8 @@ The one-line version, for orientation:
 InputTokens      = uncached + written   (OpenAI subtracts reads; Anthropic adds creation)
 CacheInputTokens = cache reads
 CacheWriteTokens = cache writes, a SUBSET of InputTokens — never add it on top
+CacheWriteTTL30m/12h = retention-tier split of CacheWriteTokens (OpenAI
+  Responses cache_write_tokens_details, gpt-5.6+ only; zero = tier unknown)
 cache_hit_ratio  = CacheInputTokens / (InputTokens + CacheInputTokens)
 ```
 

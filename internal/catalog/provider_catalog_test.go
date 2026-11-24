@@ -186,7 +186,7 @@ func TestLatestOpenAIAndCodexModels(t *testing.T) {
 	}
 
 	// openai-com carries the API figure; codex carries the Codex default window
-	// from openai/codex models.json (context_window 272000). Users can widen it
+	// from openai/codex models.json (272000 or 500000 by model). Users can widen it
 	// with Codex's 1M switch (max_context_window 872000), so it is not the catalog value.
 	tests := []struct {
 		providerID string
@@ -194,7 +194,8 @@ func TestLatestOpenAIAndCodexModels(t *testing.T) {
 		context    int
 	}{
 		{providerID: "openai-com", modelIDs: []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"}, context: 1050000},
-		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"}, context: 272000},
+		{providerID: "codex", modelIDs: []string{"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}, context: 272000},
+		{providerID: "codex", modelIDs: []string{"gpt-6.1-sol", "gpt-6.1-sol:fast"}, context: 500000},
 	}
 
 	for _, tt := range tests {
@@ -607,6 +608,18 @@ func TestEmbeddedGatewayProtocolEndpoints(t *testing.T) {
 			anthropicBaseURL:       "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic",
 			supportsModelsEndpoint: false,
 		},
+		{
+			id:                     "runcrate-ai",
+			openAIBaseURL:          "https://api.runcrate.ai/v1",
+			anthropicBaseURL:       "https://api.runcrate.ai",
+			supportsModelsEndpoint: true,
+		},
+		{
+			id:                     "cloudgpu-app",
+			openAIBaseURL:          "https://cloudgpu.app/v1",
+			anthropicBaseURL:       "https://cloudgpu.app",
+			supportsModelsEndpoint: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -753,7 +766,7 @@ func TestCloudTemplatesResolveModels(t *testing.T) {
 			apiBase:   "https://us-central1-aiplatform.googleapis.com",
 			apiStyle:  protocol.APIStyleGoogle,
 			authType:  typ.AuthTypeGCPVertex,
-			wantModel: "gemini-2.5-pro",
+			wantModel: "gemini-4-neon",
 		},
 		{
 			// Multi-regional "us"/"eu" hosts don't contain the canonical
@@ -813,10 +826,10 @@ func TestVertexDisambiguationByStyle(t *testing.T) {
 		t.Fatalf("gemini: %v", err)
 	}
 
-	if !slices.Contains(claudeModels, "claude-opus-4-8") || slices.Contains(claudeModels, "gemini-2.5-pro") {
+	if !slices.Contains(claudeModels, "claude-opus-4-8") || slices.Contains(claudeModels, "gemini-4-neon") {
 		t.Errorf("anthropic-style Vertex resolved wrong family: %v", claudeModels)
 	}
-	if !slices.Contains(geminiModels, "gemini-2.5-pro") || slices.Contains(geminiModels, "claude-opus-4-8") {
+	if !slices.Contains(geminiModels, "gemini-4-neon") || slices.Contains(geminiModels, "claude-opus-4-8") {
 		t.Errorf("google-style Vertex resolved wrong family: %v", geminiModels)
 	}
 }

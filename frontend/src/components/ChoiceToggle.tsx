@@ -6,11 +6,14 @@
 // buttons with a green check badge on the active one.
 import { Box, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import React from 'react';
-import { controlHeight } from '@/theme/controls';
-import { fontSizes } from '@/theme/fonts';
+import { controlHeight } from '@tingly/ui/theme/controls';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 // Fits the widest option in use (icon + "Docker") with room to spare.
 const OPTION_WIDTH = 84;
+// The phone shell sets the switch on the label's line, beside the copy button.
+const PHONE_OPTION_WIDTH = 72;
 
 export interface ChoiceOption<T extends string> {
     value: T;
@@ -30,7 +33,9 @@ interface ChoiceToggleProps<T extends string> {
     flush?: boolean;
 }
 
-export function ChoiceToggle<T extends string>({ value, options, onChange, ariaLabel, optionWidth = OPTION_WIDTH, flush = false }: ChoiceToggleProps<T>) {
+export function ChoiceToggle<T extends string>({ value, options, onChange, ariaLabel, optionWidth: optionWidthProp, flush = false }: ChoiceToggleProps<T>) {
+    const phone = usePhoneShell();
+    const optionWidth = optionWidthProp ?? (phone ? PHONE_OPTION_WIDTH : OPTION_WIDTH);
     return (
         <ToggleButtonGroup
             exclusive

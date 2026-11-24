@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -259,6 +260,7 @@ type CCProfileSettingsResolution struct {
 	InheritedDefaultMode string
 	EffectiveDefaultMode string
 	Env                  map[string]string
+	OverrideKeys         []string
 	HasOverrides         bool
 }
 
@@ -278,25 +280,19 @@ func isCCProfileRuleOwnedEnvKey(key string) bool {
 	return slices.Contains(ccProfileRuleOwnedEnvKeys, key)
 }
 
-func hasCCProfileRuntimeOverrides(profileConfig *typ.ClaudeCodeProfileConfig) bool {
-	if profileConfig == nil {
-		return false
-	}
-	if profileConfig.DefaultMode != "" {
-		return true
-	}
-	for key := range profileConfig.Env {
-		if !isCCProfileRuleOwnedEnvKey(key) {
-			return true
+// Read the JSON names once so validation includes typed preferences whose
+// empty values are omitted by ClaudeCodePrefs.Values.
+var ccProfilePreferenceKeys = func() map[string]bool {
+	fields := reflect.TypeFor[ClaudeCodePrefs]()
+	keys := make(map[string]bool, fields.NumField())
+	for i := range fields.NumField() {
+		name, _, _ := strings.Cut(fields.Field(i).Tag.Get("json"), ",")
+		if name != "" && name != "-" {
+			keys[name] = true
 		}
 	}
-	for _, key := range profileConfig.UnsetEnv {
-		if !isCCProfileRuleOwnedEnvKey(key) {
-			return true
-		}
-	}
-	return false
-}
+	return keys
+}()
 
 // ResolveCCProfileSettings composes main settings, rule-derived profile model
 // slots, stored runtime overrides, and protected connection values in that
@@ -333,12 +329,14 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 	}
 
 	effectiveEnv := maps.Clone(baseEnv)
+	overrideKeys := []string{}
 	if profile.ClaudeCode != nil {
 		for key, value := range upgradeLegacyCCEnv(profile.ClaudeCode.Env) {
 			if isCCProfileRuleOwnedEnvKey(key) {
 				continue
 			}
 			effectiveEnv[key] = value
+			overrideKeys = append(overrideKeys, key)
 		}
 		for _, key := range profile.ClaudeCode.UnsetEnv {
 			if current, legacy := legacyCCEnvKeys[key]; legacy {
@@ -348,6 +346,7 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 				continue
 			}
 			delete(effectiveEnv, key)
+			overrideKeys = append(overrideKeys, key)
 		}
 	}
 	effectivePreferences, err := ClaudeCodePrefsFromEnv(effectiveEnv)
@@ -369,8 +368,11 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 	if profile.ClaudeCode != nil && profile.ClaudeCode.DefaultMode != "" {
 		if normalized, valid := NormalizeClaudeCodeDefaultMode(profile.ClaudeCode.DefaultMode); valid {
 			effectiveDefaultMode = normalized
+			overrideKeys = append(overrideKeys, "defaultMode")
 		}
 	}
+	slices.Sort(overrideKeys)
+	overrideKeys = slices.Compact(overrideKeys)
 
 	return CCProfileSettingsResolution{
 		BasePreferences:      basePreferences,
@@ -378,12 +380,44 @@ func ResolveCCProfileSettings(cfg *serverconfig.Config, baseURL, apiKey, scenari
 		InheritedDefaultMode: inheritedDefaultMode,
 		EffectiveDefaultMode: effectiveDefaultMode,
 		Env:                  effectiveEnv,
-		HasOverrides:         hasCCProfileRuntimeOverrides(profile.ClaudeCode),
+		OverrideKeys:         overrideKeys,
+		HasOverrides:         len(overrideKeys) > 0,
 	}, nil
 }
 
-// DiffCCProfileConfig stores a minimal, stable delta between the profile base
-// and the full desired typed configuration submitted by the editor.
+// BuildCCProfileOverrides stores selected values and explicit unsets regardless
+// of the current base settings.
+func BuildCCProfileOverrides(desired ClaudeCodePrefs, defaultMode string, keys []string) (*typ.ClaudeCodeProfileConfig, error) {
+	values, err := desired.Values()
+	if err != nil {
+		return nil, err
+	}
+	overrides := &typ.ClaudeCodeProfileConfig{Env: map[string]string{}}
+	for _, key := range keys {
+		switch {
+		case key == "defaultMode":
+			mode, valid := NormalizeClaudeCodeDefaultMode(defaultMode)
+			if !valid || defaultMode == "" {
+				return nil, fmt.Errorf("invalid defaultMode: %q", defaultMode)
+			}
+			overrides.DefaultMode = mode
+		case isCCProfileRuleOwnedEnvKey(key):
+			return nil, fmt.Errorf("%s is derived from Model Rules and cannot be overridden by a profile", key)
+		case !ccProfilePreferenceKeys[key]:
+			return nil, fmt.Errorf("invalid Claude Code profile override key: %q", key)
+		case values[key] == "":
+			overrides.UnsetEnv = append(overrides.UnsetEnv, key)
+		default:
+			overrides.Env[key] = values[key]
+		}
+	}
+	slices.Sort(overrides.UnsetEnv)
+	overrides.UnsetEnv = slices.Compact(overrides.UnsetEnv)
+	return overrides, nil
+}
+
+// DiffCCProfileConfig keeps the full-configuration update semantics for callers
+// that omit the explicit override selection.
 func DiffCCProfileConfig(base ClaudeCodePrefs, inheritedDefaultMode string, desired ClaudeCodePrefs, desiredDefaultMode string) (*typ.ClaudeCodeProfileConfig, error) {
 	baseValues, err := base.Values()
 	if err != nil {
@@ -596,7 +630,7 @@ func removeCCProfileArtifacts(rootDir, profileID, profileName string) error {
 		} else if statErr != nil && !os.IsNotExist(statErr) {
 			return fmt.Errorf("failed to inspect Claude Code profile directory: %w", statErr)
 		}
-		for _, name := range []string{"settings.json", "statusline.sh"} {
+		for _, name := range []string{"settings.json", "statusline.sh", ccProfileMCPConfigFile} {
 			if removeErr := os.Remove(filepath.Join(artifactDir, name)); removeErr != nil && !os.IsNotExist(removeErr) {
 				return fmt.Errorf("failed to remove Claude Code profile artifact %s: %w", name, removeErr)
 			}

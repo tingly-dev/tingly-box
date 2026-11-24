@@ -1,5 +1,7 @@
 package vmodel
 
+import "encoding/json"
+
 // VirtualModelType represents the type/category of a virtual model.
 type VirtualModelType string
 
@@ -33,8 +35,10 @@ type Model struct {
 
 // ToolCallConfig defines a tool call to be returned by the virtual model.
 type ToolCallConfig struct {
-	Name      string                 `json:"name" yaml:"name"`
-	Arguments map[string]interface{} `json:"arguments" yaml:"arguments"`
+	ID           string                 `json:"id,omitempty" yaml:"id,omitempty"`
+	RawArguments json.RawMessage        `json:"raw_arguments,omitempty" yaml:"raw_arguments,omitempty"`
+	Name         string                 `json:"name" yaml:"name"`
+	Arguments    map[string]interface{} `json:"arguments" yaml:"arguments"`
 }
 
 // ToolCallDisplayContent extracts display text from tool call arguments.
@@ -47,4 +51,17 @@ func ToolCallDisplayContent(args map[string]interface{}) string {
 		return question
 	}
 	return ""
+}
+
+// ToolArguments preserves protocol-native arguments when supplied as raw JSON;
+// definitions may also use a structured arguments object.
+func ToolArguments(tc ToolCallConfig) json.RawMessage {
+	if tc.RawArguments != nil {
+		return append(json.RawMessage(nil), tc.RawArguments...)
+	}
+	raw, _ := json.Marshal(tc.Arguments)
+	if tc.Arguments == nil {
+		return json.RawMessage(`{}`)
+	}
+	return raw
 }

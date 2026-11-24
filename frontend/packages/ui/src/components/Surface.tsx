@@ -1,6 +1,7 @@
 import { Box } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
+import { radius } from '../theme/radius';
 
 interface SurfaceProps {
   children: ReactNode;
@@ -37,7 +38,7 @@ export default function Surface({
     <Box
       sx={[
         {
-          borderRadius: 2,
+          borderRadius: radius.card,
           boxShadow: 'none',
           p: padding as number | string,
         },

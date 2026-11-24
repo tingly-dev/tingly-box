@@ -106,7 +106,7 @@ func (m *Manager) Redeem(ctx context.Context, providerUUID, rewardID string) (*R
 	}
 
 	result := &RedeemResult{Message: message}
-	if usage, err := m.fetchProviderQuota(ctx, provider); err == nil {
+	if usage, err := m.fetchProviderQuota(ctx, provider, false); err == nil {
 		result.Usage = usage
 	}
 	return result, redeemErr
@@ -143,6 +143,12 @@ func (m *Manager) AutoRedeem(ctx context.Context, usages []*ProviderUsage) {
 		return
 	}
 	for _, usage := range usages {
+		// A usage carrying an error is the last good reading kept past a failed
+		// refresh: its rewards may already be gone, and today's try is not for
+		// stale data to spend.
+		if usage.LastError != "" {
+			continue
+		}
 		for _, bd := range usage.Breakdowns {
 			if bd.Redeem == nil || !bd.Redeem.Auto {
 				continue

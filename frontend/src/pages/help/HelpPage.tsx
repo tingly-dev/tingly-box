@@ -1,0 +1,144 @@
+import { useState } from 'react';
+import { Button, Stack } from '@mui/material';
+import { useTranslation } from 'react-i18next';
+import CardGrid from '@/components/CardGrid.tsx';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import { CollapsibleCard } from '@/components/CollapsibleCard.tsx';
+import { ShortcutCard, shouldShowShortcutCard } from '@/pages/help/ShortcutCard.tsx';
+import { ProvidersCard } from '@/pages/help/ProvidersCard.tsx';
+import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
+import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
+import TeamGuideDialog from '@/components/TeamGuideDialog';
+import { FEEDBACK_URL } from '@/layout/links';
+
+// The Shortcut card spans full width like every other card; only its content
+// is capped, matching System settings cards. ProvidersCard is left uncapped —
+// its provider grid wants the room.
+const SHORTCUT_CONTENT_MAX_WIDTH = 720;
+
+// The provider catalog is unbounded (many key + OAuth providers) — cap it so
+// this one section can't push Shortcut/Routing off screen; it scrolls
+// internally past this height instead of growing the page.
+const PROVIDERS_CONTENT_MAX_HEIGHT = 480;
+
+type HelpSectionId = 'feedback' | 'shortcut' | 'providers' | 'routing' | 'team';
+
+/**
+ * HelpPage — the lightbulb entry in the activity bar: a small set of
+ * easy-to-miss useful actions (desktop shortcut, browse & connect providers,
+ * reopen the routing/tier/team guides). It is *not* the first-run landing —
+ * OnboardingGate sends everyone, new installs included, to the agent page,
+ * whose Quick Start walks provider → model → install → apply. Help is where
+ * the same material stays reachable afterwards (ux-principles #10).
+ *
+ * Each section is an accordion (CollapsibleCard): title + one-line summary
+ * always visible, body behind a chevron. Cards here vary wildly in shape —
+ * a two-line shortcut action next to a full provider catalog next to a set
+ * of guide launchers — so keeping them all open at once made the page look
+ * like several unrelated tools glued together. All sections are collapsed
+ * by default. Sections toggle
+ * independently — each is a standalone, re-entrant action, not a step in a
+ * linear tour, so opening one doesn't imply closing another.
+ *
+ * The routing/tier section doesn't redraw anything: it just surfaces the
+ * same EntryGuideDialog / TierGuideDialog already embedded on the routing
+ * and tier pages, so there's one diagram to keep in sync, not two.
+ */
+const HelpPage = () => {
+    const { t } = useTranslation();
+    const showShortcut = shouldShowShortcutCard();
+
+    const [expanded, setExpanded] = useState<Set<HelpSectionId>>(new Set());
+    const toggle = (id: HelpSectionId) => setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+
+    const [entryGuideOpen, setEntryGuideOpen] = useState(false);
+    const [entryGuideMode, setEntryGuideMode] = useState<'direct' | 'smart'>('direct');
+    const [tierGuideOpen, setTierGuideOpen] = useState(false);
+    const [teamGuideOpen, setTeamGuideOpen] = useState(false);
+    const openEntryGuide = (mode: 'direct' | 'smart') => {
+        setEntryGuideMode(mode);
+        setEntryGuideOpen(true);
+    };
+
+    return (
+        <PageLayout loading={false} title={t('help.title')} subtitle={t('help.description')}>
+            <CardGrid>
+                <CollapsibleCard
+                    title={t('layout.activityBar.feedback')}
+                    description={t('help.feedback.description')}
+                    expanded={expanded.has('feedback')}
+                    onToggle={() => toggle('feedback')}
+                    contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                >
+                    <Button variant="outlined" size="small" href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
+                        {t('help.feedback.action')}
+                    </Button>
+                </CollapsibleCard>
+
+                {showShortcut && (
+                    <CollapsibleCard
+                        title={t('help.shortcut.title')}
+                        description={t('help.shortcut.description')}
+                        expanded={expanded.has('shortcut')}
+                        onToggle={() => toggle('shortcut')}
+                        contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                    >
+                        <ShortcutCard />
+                    </CollapsibleCard>
+                )}
+
+                <CollapsibleCard
+                    title={t('help.providers.title')}
+                    description={t('help.providers.description')}
+                    expanded={expanded.has('providers')}
+                    onToggle={() => toggle('providers')}
+                    contentMaxHeight={PROVIDERS_CONTENT_MAX_HEIGHT}
+                >
+                    <ProvidersCard />
+                </CollapsibleCard>
+
+                <CollapsibleCard
+                    title={t('help.routing.title')}
+                    description={t('help.routing.description')}
+                    expanded={expanded.has('routing')}
+                    onToggle={() => toggle('routing')}
+                    contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                >
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                        <Button variant="outlined" size="small" onClick={() => openEntryGuide('direct')}>
+                            {t('help.routing.direct')}
+                        </Button>
+                        <Button variant="outlined" size="small" onClick={() => openEntryGuide('smart')}>
+                            {t('help.routing.smart')}
+                        </Button>
+                        <Button variant="outlined" size="small" onClick={() => setTierGuideOpen(true)}>
+                            {t('help.routing.tier')}
+                        </Button>
+                    </Stack>
+                </CollapsibleCard>
+
+                <CollapsibleCard
+                    title={t('help.team.title')}
+                    description={t('help.team.description')}
+                    expanded={expanded.has('team')}
+                    onToggle={() => toggle('team')}
+                    contentMaxWidth={SHORTCUT_CONTENT_MAX_WIDTH}
+                >
+                    <Button variant="outlined" size="small" onClick={() => setTeamGuideOpen(true)}>
+                        {t('help.team.action')}
+                    </Button>
+                </CollapsibleCard>
+            </CardGrid>
+
+            <EntryGuideDialog open={entryGuideOpen} onClose={() => setEntryGuideOpen(false)} mode={entryGuideMode} />
+            <TierGuideDialog open={tierGuideOpen} onClose={() => setTierGuideOpen(false)} />
+            <TeamGuideDialog open={teamGuideOpen} onClose={() => setTeamGuideOpen(false)} />
+        </PageLayout>
+    );
+};
+
+export default HelpPage;

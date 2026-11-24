@@ -13,6 +13,7 @@ import OpenAISvg from '@lobehub/icons-static-svg/icons/openai.svg?url';
 import OpenCodeSvg from '@lobehub/icons-static-svg/icons/opencode.svg?url';
 import PiSvg from '@lobehub/icons-static-svg/icons/pi.svg?url';
 import QwenSvg from '@lobehub/icons-static-svg/icons/qwen-color.svg?url';
+import QoderSvg from '@lobehub/icons-static-svg/icons/qoder-color.svg?url';
 import DeepSeekSvg from '@lobehub/icons-static-svg/icons/deepseek-color.svg?url';
 import MinimaxSvg from '@lobehub/icons-static-svg/icons/minimax-color.svg?url';
 import ZhipuSvg from '@lobehub/icons-static-svg/icons/zhipu-color.svg?url';
@@ -58,6 +59,7 @@ import CodexMonoSvg from '@lobehub/icons-static-svg/icons/codex.svg?url';
 import GeminiMonoSvg from '@lobehub/icons-static-svg/icons/gemini.svg?url';
 import GoogleMonoSvg from '@lobehub/icons-static-svg/icons/google.svg?url';
 import QwenMonoSvg from '@lobehub/icons-static-svg/icons/qwen.svg?url';
+import QoderMonoSvg from '@lobehub/icons-static-svg/icons/qoder.svg?url';
 import DeepSeekMonoSvg from '@lobehub/icons-static-svg/icons/deepseek.svg?url';
 import MinimaxMonoSvg from '@lobehub/icons-static-svg/icons/minimax.svg?url';
 import ZhipuMonoSvg from '@lobehub/icons-static-svg/icons/zhipu.svg?url';
@@ -111,6 +113,9 @@ import TypeSafePng from '@/assets/icons/typesafe.png?url';
 import LlamaCppSvg from '@/assets/icons/llamacpp.svg?url';
 import OmlxSvg from '@/assets/icons/omlx.svg?url';
 import OmlxDarkSvg from '@/assets/icons/omlx-dark.svg?url';
+import RuncratePng from '@/assets/icons/runcrate.png?url';
+import CloudGPUSvg from '@/assets/icons/cloudgpu.svg?url';
+import { monoArtwork } from '@/theme/brand';
 
 interface BrandIconProps {
     size?: number;
@@ -124,7 +129,7 @@ interface BrandIconProps {
 // Lobehub 的品牌 SVG 用 fill="currentColor" 是单色设计，但 <img> 加载是独立文档，
 // currentColor 没有外部颜色继承，会落到默认黑色，导致暗色主题下黑图不可见。
 // 解决：暗色主题下对单色图标加 invert(1)（黑→白），亮色主题保持原样。
-// 高亮态由 Sidebar 处理（白底 + 强制清零 filter，保持黑图在白底上的效果）。
+// 高亮态由 navRowSelectedSx 处理（白底 + 强制清零 filter，保持黑图在白底上的效果）。
 const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, monochrome = false, monoSrc?: string, darkSrc?: string) => {
     return ({size = 24, sx, style, grayscale = defaultGrayscale, mono = false}: BrandIconProps) => {
         const theme = useTheme();
@@ -139,8 +144,12 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
             // their light shades visible against a light routing-graph node.
             filter = isDark ? 'grayscale(100%) brightness(1.8)' : 'grayscale(100%) brightness(0.55)';
         } else if (grayscale) {
+            // Dark: dim rather than brighten. Brightening a grey logo that has
+            // a filled background (Telegram's disc, Codex's blob, WorkBuddy's
+            // tile) washes the background and the mark into one white block.
+            // A black single-colour mark still needs its invert to show at all.
             filter = isDark
-                ? 'grayscale(100%) brightness(1.6)'
+                ? monochrome ? 'invert(1) opacity(0.7)' : 'grayscale(100%) opacity(0.7)'
                 : 'grayscale(100%) brightness(1.15) contrast(1.1)';
         } else if (monochrome && isDark) {
             filter = 'invert(1)';
@@ -193,6 +202,7 @@ export const Zhipu = createBrandIcon(ZhipuSvg, 'Zhipu', false, false, ZhipuMonoS
 export const Zai = createBrandIcon(ZaiSvg, 'Z.ai', false, true);
 export const ZCode = createBrandIcon(ZCodeSvg, 'ZCode', false, true);
 export const WorkBuddy = createBrandIcon(WorkBuddySvg, 'WorkBuddy');
+export const Qoder = createBrandIcon(QoderSvg, 'Qoder', false, false, QoderMonoSvg);
 export const XAI = createBrandIcon(XAISvg, 'xAI', false, true);
 export const Mistral = createBrandIcon(MistralSvg, 'Mistral', false, false, MistralMonoSvg);
 export const OpenRouter = createBrandIcon(OpenRouterSvg, 'OpenRouter', false, false, OpenRouterMonoSvg);
@@ -252,6 +262,8 @@ export const Lemonade = createBrandIcon(LemonadeSvg, 'Lemonade');
 export const Vercel = createBrandIcon(VercelSvg, 'Vercel', false, true);
 export const Cloudflare = createBrandIcon(CloudflareSvg, 'Cloudflare', false, false, CloudflareMonoSvg);
 export const TypeSafe = createBrandIcon(TypeSafePng, 'TypeSafe AI');
+export const Runcrate = createBrandIcon(RuncratePng, 'Runcrate');
+export const CloudGPU = createBrandIcon(CloudGPUSvg, 'CloudGPU');
 export const LlamaCpp = createBrandIcon(LlamaCppSvg, 'llama.cpp');
 export const Omlx = createBrandIcon(OmlxSvg, 'oMLX', false, false, undefined, OmlxDarkSvg);
 export const Tencent = createBrandIcon(TencentSvg, 'Tencent', false, false, TencentMonoSvg);
@@ -259,8 +271,8 @@ export const IflytekCloud = createBrandIcon(IflytekCloudSvg, 'iFlytek', false, f
 export const Baichuan = createBrandIcon(BaichuanSvg, 'Baichuan', false, false, BaichuanMonoSvg);
 // Resolve Yi's currentColor strokes per theme while preserving its green accent.
 export const Yi = createBrandIcon(
-    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', '#000'))}`,
+    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', monoArtwork.onLight))}`,
     'Lingyi Wanwu', false, false, YiMonoSvg,
-    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', '#fff'))}`,
+    `data:image/svg+xml,${encodeURIComponent(YiSvg.replaceAll('currentColor', monoArtwork.onDark))}`,
 );
 export const Doubao = createBrandIcon(DoubaoSvg, 'Doubao', false, false, DoubaoMonoSvg);

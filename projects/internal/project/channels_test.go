@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,8 +16,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
+	"github.com/tingly-dev/tingly-box/remote/agent"
+	"github.com/tingly-dev/tingly-box/remote/chat"
 )
 
 // sentText is one message the fake sink was asked to deliver.
@@ -30,14 +34,25 @@ type fakeSink struct {
 
 func newFakeSink() *fakeSink { return &fakeSink{ch: make(chan sentText, 32)} }
 
-func (f *fakeSink) SendChannelText(_ context.Context, platform, chatID, text string) error {
-	m := sentText{platform, chatID, text}
+// fakeSink is a bare outbox: it records text and cannot show buttons.
+var _ agent.Outbox = (*fakeSink)(nil)
+
+func (f *fakeSink) Text(_ context.Context, to agent.ChatRef, text string) error {
+	m := sentText{to.Platform, to.ChatID, text}
 	f.mu.Lock()
 	f.sent = append(f.sent, m)
 	f.mu.Unlock()
 	f.ch <- m
 	return f.err
 }
+
+func (f *fakeSink) File(context.Context, agent.ChatRef, agent.OutFile) error { return nil }
+
+func (f *fakeSink) Prompt(context.Context, agent.ChatRef, agent.Prompt) (string, error) {
+	return "", agent.ErrNoButtons
+}
+
+func (f *fakeSink) Restate(context.Context, agent.ChatRef, string, string) error { return nil }
 
 func (f *fakeSink) next(t *testing.T) sentText {
 	t.Helper()
@@ -47,6 +62,24 @@ func (f *fakeSink) next(t *testing.T) sentText {
 	case <-time.After(5 * time.Second):
 		t.Fatal("nothing was sent to the chat")
 		return sentText{}
+	}
+}
+
+// nextContaining skips what else reaches the chat (replies whose number and
+// order vary) until a message containing want arrives.
+func (f *fakeSink) nextContaining(t *testing.T, want string) sentText {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case m := <-f.ch:
+			if strings.Contains(m.text, want) {
+				return m
+			}
+		case <-deadline:
+			t.Fatalf("no message containing %q was sent to the chat", want)
+			return sentText{}
+		}
 	}
 }
 
@@ -83,20 +116,21 @@ func waitQuiet(t *testing.T, f *testFixture, svc *Service, threadID string) {
 
 func channelFixtureWith(t *testing.T, script func(turn *enginetest.Turn) error) (*testFixture, *Service, *fakeSink) {
 	t.Helper()
-	f := newFixture(t, script)
-	src := &fakeLLM{fn: func(req llm.Request) llm.Result {
-		return llm.Result{Text: "Echo: " + lastUserText(req)}
-	}}
-	coord := NewCoordinator(f.store, f.threads.layout, f.threads.hub, f.threads, src)
-	t.Cleanup(func() { settleCoordinator(coord) })
+	return channelFixtureReplying(t, script, func(c *coordtest.Turn) {
+		c.Reply("Echo: " + c.Input())
+	})
+}
+
+// channelFixtureReplying is channelFixtureWith with the coordinator's turns
+// answered by reply.
+func channelFixtureReplying(t *testing.T, script func(turn *enginetest.Turn) error, reply func(*coordtest.Turn)) (*testFixture, *Service, *fakeSink) {
+	t.Helper()
 	sink := newFakeSink()
-	relay := NewRelay(f.store, sink)
-	coord.OnFinal = relay.Message
-	f.threads.OnWait = relay.NeedsUser
-	f.threads.OnSettled = relay.Settled
-	f.threads.OnReply = relay.ThreadReply
-	f.threads.OnStep = relay.Step
-	return f, &Service{Store: f.store, Layout: f.threads.layout, Hub: f.threads.hub, Threads: f.threads, Coordinator: coord, Relay: relay}, sink
+	f, svc := newServiceFixture(t, sinkHost{fakeSink: sink}, script, func(c *coordtest.Turn) error {
+		reply(c)
+		return nil
+	})
+	return f, svc, sink
 }
 
 func TestChannelMessageReachesTheCoordinatorAndTheReplyComesBack(t *testing.T) {
@@ -113,7 +147,7 @@ func TestChannelMessageReachesTheCoordinatorAndTheReplyComesBack(t *testing.T) {
 	got := sink.next(t)
 	assert.Equal(t, "telegram", got.platform)
 	assert.Equal(t, "42", got.chatID)
-	assert.Equal(t, "[Demo] Echo: How is it going?", got.text, "replies carry the project name")
+	assert.Equal(t, "Echo: How is it going?\n\n[Demo]", got.text, "replies carry the project name")
 
 	// The question is a user message of the project conversation, marked as
 	// coming from the chat, and the web sees the reply too.
@@ -128,9 +162,17 @@ func TestChannelMessageReachesTheCoordinatorAndTheReplyComesBack(t *testing.T) {
 	// A message typed on the web is not echoed to the chat.
 	_, err = svc.Coordinator.Post(f.project.ID, "From the web", nil, Source{})
 	require.NoError(t, err)
-	assert.Equal(t, "[Demo] Echo: From the web", sink.next(t).text)
+	assert.Equal(t, "Echo: From the web\n\n[Demo]", sink.next(t).text)
 	waitMessages(t, f.store, f.project.ID, func(m []db.ThreadEvent) bool { return len(m) == 4 })
 	sink.none(t)
+}
+
+func TestFeishuProjectReplyKeepsMarkdownAtStartOfLine(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	_, err := svc.BindChannel("feishu", "42", "Me", "", f.project.ID)
+	require.NoError(t, err)
+	svc.Relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvAssistant, Content: "# Heading\n\n- item"})
+	assert.Equal(t, "# Heading\n\n- item\n\n[Demo]", sink.next(t).text)
 }
 
 func TestUnboundChatIsNotHandled(t *testing.T) {
@@ -180,7 +222,7 @@ func TestMovingAChatChangesWhereRepliesGo(t *testing.T) {
 
 	_, err = svc.PostFromChannel("telegram", "1", "hi", nil)
 	require.NoError(t, err)
-	assert.Equal(t, "[Other] Echo: hi", sink.next(t).text)
+	assert.Equal(t, "Echo: hi\n\n[Other]", sink.next(t).text)
 	none := convo(t, f.store, f.project.ID)
 	assert.Empty(t, none)
 }
@@ -208,14 +250,14 @@ func TestThreadReportsAreFoldedToOneLine(t *testing.T) {
 			Payload: `{"thread_id":"t1","seq":2,"title":"Fix login","kind":"` + kind + `","status":"idle"}`}
 	}
 	svc.Relay.Message(update(ReportFinished, "Fixed the login bug.\n\nDetails:\n- changed a.go\n- changed b.go"))
-	assert.Equal(t, `[#2 Fix login] Finished: Fixed the login bug.`, sink.next(t).text)
+	assert.Equal(t, "Finished: Fixed the login bug.\n\n[#2 Fix login]", sink.next(t).text)
 
 	svc.Relay.Message(update(ReportFailed, "exit status 1"))
-	assert.Equal(t, `[#2 Fix login] Failed: exit status 1`, sink.next(t).text)
+	assert.Equal(t, "Failed: exit status 1\n\n[#2 Fix login]", sink.next(t).text)
 
 	svc.Relay.Message(update(ReportNeedsInput, "Keep the legacy flag?"))
 	got := sink.next(t).text
-	assert.True(t, strings.HasPrefix(got, `[#2 Fix login] Needs you: Keep the legacy flag?`), got)
+	assert.True(t, strings.HasPrefix(got, `Needs you: Keep the legacy flag?`), got)
 	assert.Contains(t, got, "Reply with @2 and your answer.", "a thread waiting on the user is answered with @N")
 
 	long := strings.Repeat("x", 1000)
@@ -229,7 +271,7 @@ func TestThreadReportsAreFoldedToOneLine(t *testing.T) {
 	sink.none(t)
 
 	svc.Relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvError, Content: "coordinator unavailable"})
-	assert.Equal(t, "[Demo] Error: coordinator unavailable", sink.next(t).text)
+	assert.Equal(t, "Error: coordinator unavailable\n\n[Demo]", sink.next(t).text)
 }
 
 func TestEveryApprovalIsAskedInTheChat(t *testing.T) {
@@ -241,10 +283,10 @@ func TestEveryApprovalIsAskedInTheChat(t *testing.T) {
 	require.NoError(t, f.store.CreateThread(worker))
 	th := *worker
 	svc.Relay.NeedsUser(th, approvalEvent("r1"))
-	assert.Equal(t, fmt.Sprintf("[#%d Fix login] Approve: Run `ls`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.", th.Seq), sink.next(t).text)
+	assert.Equal(t, fmt.Sprintf("Approve: Run `ls`\nReply y to allow, always to allow it for this thread, or n to deny. To answer in your own words, start your reply with %s.\n\n[#%d Fix login]", decisionCode("r1"), th.Seq), sink.next(t).text)
 	svc.Relay.NeedsUser(th, approvalEvent("r2")) // each one needs its answer
 	sink.next(t)
-	threadID, requestID, ok := svc.Relay.Awaiting("telegram", "1")
+	threadID, requestID, ok := awaitingOf(svc.Relay, "telegram", "1")
 	require.True(t, ok)
 	assert.Equal(t, [2]string{th.ID, "r1"}, [2]string{threadID, requestID}, "the oldest is answered first")
 
@@ -266,8 +308,8 @@ func TestSinkFailureDoesNotStopLaterMessages(t *testing.T) {
 	sink.err = errors.New("bot offline")
 	svc.Relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvAssistant, Content: "one"})
 	svc.Relay.Message(db.ThreadEvent{ThreadID: f.project.MainThreadID, Kind: db.EvAssistant, Content: "two"})
-	assert.Equal(t, "[Demo] one", sink.next(t).text)
-	assert.Equal(t, "[Demo] two", sink.next(t).text, "delivered in order, after a failure")
+	assert.Equal(t, "one\n\n[Demo]", sink.next(t).text)
+	assert.Equal(t, "two\n\n[Demo]", sink.next(t).text, "delivered in order, after a failure")
 }
 
 func TestWithoutASinkNothingIsRelayed(t *testing.T) {
@@ -296,11 +338,11 @@ func TestWorkerTurnEndReachesChatsBoundToThatThreadOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// The chat on the worker hears its reply once; the chat on the main thread
-	// hears the coordinator (the folded report and its own reply), never the
-	// worker's raw text as well.
+	// hears the coordinator's reply alone, never a folded line of the report
+	// or the worker's raw text as well.
 	byChat := map[string][]string{}
 	deadline := time.After(5 * time.Second)
-	for len(byChat["own"]) < 1 || len(byChat["up"]) < 2 {
+	for len(byChat["own"]) < 1 || len(byChat["up"]) < 1 {
 		select {
 		case m := <-sink.ch:
 			byChat[m.chatID] = append(byChat[m.chatID], m.text)
@@ -309,10 +351,12 @@ func TestWorkerTurnEndReachesChatsBoundToThatThreadOnly(t *testing.T) {
 		}
 	}
 	sink.none(t)
-	tag := fmt.Sprintf("[#%d Worker] ", th.Seq)
-	assert.Equal(t, []string{tag + "ok"}, byChat["own"], "the worker's final text, named by its number and title")
-	assert.NotContains(t, byChat["up"], tag+"ok")
-	assert.Contains(t, byChat["up"], tag+"Finished: ok")
+	tag := fmt.Sprintf("\n\n[#%d Worker]", th.Seq)
+	assert.Equal(t, []string{"ok" + tag}, byChat["own"], "the worker's final text, named by its number and title")
+	assert.NotContains(t, byChat["up"], "ok"+tag)
+	require.Len(t, byChat["up"], 1)
+	assert.Contains(t, byChat["up"][0], "Echo: ok")
+	assert.NotContains(t, byChat["up"][0], "Finished:")
 }
 
 func TestWorkerFailureReachesItsChatAsAnError(t *testing.T) {
@@ -330,7 +374,7 @@ func TestWorkerFailureReachesItsChatAsAnError(t *testing.T) {
 
 	_, err = svc.Send(context.Background(), th.ID, "boom", nil, Source{})
 	require.NoError(t, err)
-	assert.Contains(t, sink.next(t).text, fmt.Sprintf("[#%d Worker] Error: ", th.Seq))
+	assert.Contains(t, sink.next(t).text, "Error: ")
 	sink.none(t)
 }
 
@@ -351,8 +395,8 @@ func TestFolderThreadReplyReachesItsChat(t *testing.T) {
 	cur, err := f.store.GetThread(s.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, cur.Seq)
-	assert.Equal(t, "["+threadTag(cur.Seq, cur.Title)+"] ok", got.text, "a folder thread is named like any other thread")
-	assert.True(t, strings.HasPrefix(got.text, "[#1"), got.text)
+	assert.Equal(t, "ok\n\n["+threadTag(cur.Seq, cur.Title)+"]", got.text, "a folder thread is named like any other thread")
+	assert.Contains(t, got.text, "[#1")
 }
 
 func TestArchivingAProjectUnbindsItsChats(t *testing.T) {
@@ -423,13 +467,13 @@ func TestVerboseChatsSeeEachStepOthersOnlyTheReply(t *testing.T) {
 		}
 	}
 	sink.none(t)
-	tag := fmt.Sprintf("[#%d Worker] ", th.Seq)
+	tag := fmt.Sprintf("\n\n[#%d Worker]", th.Seq)
 	assert.Equal(t, []string{
-		tag + "Looking around.\n→ Run `ls`",
-		tag + "→ Read: go.mod",
-		tag + "done",
+		"Looking around.\n→ Run `ls`" + tag,
+		"→ Read: go.mod" + tag,
+		"done" + tag,
 	}, byChat["loud"], "each tool call with what was said before it, then the reply once")
-	assert.Equal(t, []string{tag + "done"}, byChat["quiet"])
+	assert.Equal(t, []string{"done" + tag}, byChat["quiet"])
 
 	_, reply, err = svc.ChannelCommand("telegram", "loud", ChatVerbose, "")
 	require.NoError(t, err)
@@ -478,6 +522,55 @@ func TestFilesAChatSendsReachTheThreadAsAttachments(t *testing.T) {
 	assert.Equal(t, "not really a photo", string(body), "a copy the thread owns, so the host may remove its own")
 }
 
+func TestChannelFilesPersistForCoordinatorAndFolder(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	folder := t.TempDir()
+	_, err := svc.BindChannel("telegram", "project-files", "", "", f.project.ID)
+	require.NoError(t, err)
+	require.NoError(t, svc.ChannelToFolder("telegram", "folder-files", "", folder, "", true))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("actual file bytes"))
+	}))
+	defer server.Close()
+	for _, chatID := range []string{"project-files", "folder-files"} {
+		t.Run(chatID, func(t *testing.T) {
+			tmp := t.TempDir()
+			download, err := chat.NewFileStore().DownloadFile(context.Background(), tmp, server.URL, "text/plain", "../../report.txt")
+			require.NoError(t, err)
+			handled, err := svc.PostFromChannel("telegram", chatID, "read this", []ChannelFile{{Name: download.Filename, Path: download.Path}})
+			require.NoError(t, err)
+			require.True(t, handled)
+			require.NoError(t, os.Remove(download.Path))
+			sink.next(t)
+			binding, err := f.store.GetChannelBinding("telegram", chatID)
+			require.NoError(t, err)
+			thread, err := f.store.GetThread(binding.ThreadID)
+			require.NoError(t, err)
+			waitQuiet(t, f, svc, thread.ID)
+			events, err := f.store.ListThreadEvents(thread.ID)
+			require.NoError(t, err)
+			var atts []Attachment
+			for _, e := range events {
+				if e.Kind == db.EvUser && e.Content == "read this" {
+					atts = ParseAttachments(e.Payload)
+				}
+			}
+			require.Len(t, atts, 1)
+			assert.Equal(t, "report.txt", atts[0].Name)
+			assert.True(t, strings.HasPrefix(atts[0].Path, "uploads/"))
+			abs, err := f.threads.layout.LibraryPath(thread.ProjectID, atts[0].Path)
+			require.NoError(t, err)
+			body, err := os.ReadFile(abs)
+			require.NoError(t, err)
+			assert.Equal(t, "actual file bytes", string(body))
+			assert.Contains(t, AttachmentNote(f.threads.layout.LibraryDir(thread.ProjectID), atts), abs)
+			_, err = f.threads.layout.ResolveAttachments("unrelated-project", []string{atts[0].Path})
+			assert.Error(t, err)
+		})
+	}
+}
+
 func TestAChatThatNeverTalkedStartsInItsFolder(t *testing.T) {
 	f, svc, sink := channelFixture(t)
 	dir := t.TempDir()
@@ -505,7 +598,7 @@ func TestAChatThatNeverTalkedStartsInItsFolder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.ProjectFolder, p.Type)
 	assert.Equal(t, db.PathKey(dir), db.PathKey(p.Path))
-	assert.Equal(t, "["+threadTag(th.Seq, th.Title)+"] ok", got.text)
+	assert.Equal(t, "ok\n\n["+threadTag(th.Seq, th.Title)+"]", got.text)
 	waitQuiet(t, f, svc, th.ID)
 
 	// Once it has a place, ifNew leaves it there.
@@ -570,7 +663,7 @@ func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
 	assert.ErrorIs(t, svc.ChannelToFolder("telegram", "c", "", filepath.Join(other, "missing"), "", false), ErrNotFolder)
 	_, reply, err := svc.ChannelCommand("telegram", "c", ChatSession, "")
 	require.NoError(t, err)
-	assert.Contains(t, reply, "#1", "other commands still act on the thread it is on")
+	assert.Contains(t, reply, "No sessions in this folder yet", "session selection follows the new folder, not the previous thread")
 
 	_, err = svc.PostFromChannel("telegram", "c", "over here", nil)
 	require.NoError(t, err)
@@ -585,4 +678,54 @@ func TestMovingAChatToAnotherFolderStartsThereNext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, db.PathKey(other), db.PathKey(p.Path))
 	waitQuiet(t, f, svc, th.ID)
+}
+
+type botAwareSink struct {
+	agent.Outbox
+	bots chan string
+}
+
+func (s botAwareSink) Text(_ context.Context, to agent.ChatRef, _ string) error {
+	s.bots <- to.BotUUID
+	return nil
+}
+
+func TestSessionReplyUsesTheBotChosenForTheBinding(t *testing.T) {
+	f, svc, _ := channelFixture(t)
+	thread, err := f.startFolder(t.TempDir(), FolderThreadSpec{Task: "first"})
+	require.NoError(t, err)
+	waitQuiet(t, f, svc, thread.ID)
+	_, err = svc.BindChannel("telegram", "chat", "", thread.ID, "", "selected-bot")
+	require.NoError(t, err)
+	binding, err := f.store.GetChannelBinding("telegram", "chat")
+	require.NoError(t, err)
+	assert.Equal(t, "selected-bot", binding.BotUUID)
+	sink := botAwareSink{bots: make(chan string, 1)}
+	relay := NewRelay(f.store, sink)
+	relay.ThreadReply(Report{Thread: *thread, Kind: ReportFinished, Text: "hello"})
+	select {
+	case got := <-sink.bots:
+		assert.Equal(t, "selected-bot", got)
+	case <-time.After(5 * time.Second):
+		t.Fatal("session reply was not sent")
+	}
+}
+
+func TestFolderBindingExistsBeforeFirstTurn(t *testing.T) {
+	f, svc, sink := channelFixture(t)
+	require.NoError(t, svc.ChannelToFolder("telegram", "new-chat", "", t.TempDir(), "", true))
+	// A synchronous prompt is emitted immediately after the turn starts; it
+	// must be addressed to the new binding just like a very fast final reply.
+	f.threads.OnReply = func(rep Report) {
+		binding, err := f.store.GetChannelBinding("telegram", "new-chat")
+		assert.NoError(t, err)
+		if err == nil {
+			assert.Equal(t, rep.Thread.ID, binding.ThreadID)
+		}
+		svc.Relay.ThreadReply(rep)
+	}
+	handled, err := svc.PostFromChannel("telegram", "new-chat", "hello", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	assert.Equal(t, "new-chat", sink.next(t).chatID)
 }

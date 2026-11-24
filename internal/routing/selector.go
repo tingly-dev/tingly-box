@@ -51,6 +51,8 @@ type ServiceSelector struct {
 	// One pipeline serves every rule — each stage self-guards (see the comment
 	// in NewServiceSelectorWithLogger). Built once at construction.
 	pipeline []SelectionStage
+
+	limits *LimitsGuard
 }
 
 type healthFilterProvider interface {
@@ -161,6 +163,10 @@ func NewServiceSelectorWithLogger(
 	//     let a first-request pin defeat content routing for the whole
 	//     session TTL — and skip processor ops entirely for pinned sessions.
 	//     Passes through when smart routing is off or unmatched.
+	//   - Limits  removes candidates at their account concurrency/usage limit
+	//     (and prefers cool over hot ones); read-only, the permit is taken
+	//     after the terminal pick by SimpleSelector. Pass-through unless
+	//     SetLimits was called.
 	//   - Affinity returns nothing when affinity is disabled or there's no
 	//     session. Pins are scoped per matched partition (AffinitySessionKey),
 	//     so stickiness lives INSIDE the content decision, never above it.
@@ -172,12 +178,31 @@ func NewServiceSelectorWithLogger(
 	s.pipeline = []SelectionStage{
 		NewHealthStage(healthFilter),
 		newSmart(),
+		NewLimitStage(nil),
 		NewAffinityStage(affinity),
 		NewLoadBalancerStage(lb),
 	}
 
 	return s
 }
+
+// SetLimits enables account concurrency/usage limits: it activates the
+// LimitStage and lets SimpleSelector take permits. Optional — unset keeps the
+// stage a pass-through.
+func (s *ServiceSelector) SetLimits(g *LimitsGuard) {
+	s.limits = g
+	for _, stage := range s.pipeline {
+		if ls, ok := stage.(*LimitStage); ok {
+			ls.guard = g
+		}
+		if sm, ok := stage.(*SmartRoutingStage); ok {
+			sm.SetLimits(g)
+		}
+	}
+}
+
+// Limits returns the configured guard (nil when limits are off).
+func (s *ServiceSelector) Limits() *LimitsGuard { return s.limits }
 
 // SetQuotaProvider wires quota lookups into the pipeline's smart
 // routing stage so service_quota ops can compare against provider usage.

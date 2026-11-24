@@ -20,6 +20,16 @@ const (
 	// EnvClaudeEntrypoint names how a Claude Code session was started. It is
 	// written into the transcript, and the /resume picker hides "sdk-*" ones.
 	EnvClaudeEntrypoint = "CLAUDE_CODE_ENTRYPOINT"
+
+	// EnvResumeInterruptedTurn, set to "1", makes `claude --resume` detect a
+	// turn the previous process left unfinished and continue it from the
+	// transcript — the interrupted turn's prompt is replayed by the CLI
+	// itself, so the host never re-sends the user's message. Verified
+	// empirically against CLI 2.1.303 (see .design/claude-code-session.md).
+	// The launch must keep stdin open without injecting a user message
+	// (Prepare handles the empty-prompt case); older CLIs ignore the
+	// variable harmlessly.
+	EnvResumeInterruptedTurn = "CLAUDE_CODE_RESUME_INTERRUPTED_TURN"
 )
 
 // GetCleanEnv returns a clean environment for running Claude CLI.

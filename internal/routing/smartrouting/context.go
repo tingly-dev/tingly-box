@@ -32,6 +32,18 @@ type ServiceQuotaInfo struct {
 	Pct       float64
 }
 
+// ServiceLimitInfo holds the live load of a service against its configured
+// limits (account + rule share), in percent of the hard limit. A Has* flag is
+// false when the dimension is not limited, so ops can ignore unlimited
+// services instead of reading them as idle. See .design/routing-limits.md.
+type ServiceLimitInfo struct {
+	ServiceID      string
+	Concurrency    float64
+	HasConcurrency bool
+	Usage          float64
+	HasUsage       bool
+}
+
 // RequestContext holds extracted request data for evaluation
 type RequestContext struct {
 	Model             string
@@ -63,6 +75,7 @@ type RequestContext struct {
 	ServiceStats    []loadbalance.ServiceStats // TTFT / latency snapshots
 	ServiceCapacity []ServiceCapacityInfo      // seat utilization info
 	ServiceQuota    []ServiceQuotaInfo         // cached upstream-provider quota usage (%)
+	ServiceLimits   []ServiceLimitInfo         // live concurrency / usage-window load against configured limits
 }
 
 // GetLatestUserMessage returns the latest user message

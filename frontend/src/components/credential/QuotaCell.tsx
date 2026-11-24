@@ -12,16 +12,17 @@ import {
     tightestWindow,
 } from '@/types/quota';
 import { useTheme } from '@mui/material/styles';
-import { getStatusColor } from '@/theme/status';
+import { getStatusColor } from '@tingly/ui/theme/status';
 import { formatNumber } from '../dashboard/chartStyles';
 import { QuotaRing, formatQuotaDuration, quotaRingColor, quotaRingSpinSx } from './QuotaRing';
-import { QuotaRawResponseDialog } from './QuotaRawResponseDialog';
+import { QuotaRawResponseDialog } from './LazyQuotaRawResponseDialog';
 import { useQuotaBars } from './useQuotaBars';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import { useNotify } from '@/hooks/useNotify';
 import type { RedeemOutcome } from '@/hooks/useProviderQuota';
 import type { UsageRedeem } from '@/types/quota';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Older than this, the figure is dimmed: the cache is refreshed in the
 // background, so a stale snapshot means the refresher could not reach upstream.
@@ -76,6 +77,15 @@ interface CellLine {
     text: string;
     /** Resource only: nothing left, shown as a muted dot. */
     exhausted?: boolean;
+}
+
+/** A clock time today, or date and time on another day, in the browser's locale. */
+function formatRetryTime(at: number): string {
+    const date = new Date(at);
+    const sameDay = date.toDateString() === new Date().toDateString();
+    return date.toLocaleString([], sameDay
+        ? { hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -178,6 +188,14 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
     const stale = Number.isFinite(fetchedAt) && now - fetchedAt > STALE_AFTER_MS;
     const lastError = quota?.last_error;
     const hasRaw = quota?.raw_response != null;
+    // The server keeps the last good reading past a failed refresh, with its
+    // own fetched_at and the error beside it: the figure is then old, which the
+    // dimming says the same way as a snapshot nobody has refreshed.
+    const dimmed = stale || !!lastError;
+    // While automatic refreshes are held back after repeated failures, say when
+    // the next one comes; clicking the cell still refreshes right now.
+    const retryAt = quota?.backoff ? new Date(quota.backoff.next_attempt_at).getTime() : NaN;
+    const retryText = Number.isFinite(retryAt) && retryAt > now ? formatRetryTime(retryAt) : undefined;
 
     // A cost that restates a money window (e.g. Kimi's booster wallet) would
     // show the same amount twice; it only earns a row when nothing else does.
@@ -269,6 +287,11 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                 {lastError && (
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', wordBreak: 'break-word' }}>
                         {lastError}
+                    </Typography>
+                )}
+                {lastError && retryText && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                        {t('providerTable.quota.retryAt', { time: retryText })}
                     </Typography>
                 )}
             </Box>
@@ -397,8 +420,8 @@ export function QuotaCell({ quota, refreshing, onRefresh, onRedeem }: QuotaCellP
                     px: 0.75,
                     py: 0.25,
                     mx: -0.75,
-                    borderRadius: 1,
-                    opacity: stale && !refreshing ? 0.5 : 1,
+                    borderRadius: radius.row,
+                    opacity: dimmed && !refreshing ? 0.5 : 1,
                     cursor: refreshing ? 'progress' : 'pointer',
                     '&:hover': { bgcolor: 'action.hover' },
                     '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
@@ -532,7 +555,7 @@ function TooltipRow({ remaining, dot, dotMuted, label, value, detail, indent }: 
                 {value}
             </Typography>
             {detail && (
-                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.xs, lineHeight: 1.3 }}>
+                <Typography variant="caption" sx={{ gridColumn: '2 / 4', color: 'text.disabled', fontSize: fontSizes.micro, lineHeight: 1.3 }}>
                     {detail}
                 </Typography>
             )}

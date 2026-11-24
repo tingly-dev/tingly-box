@@ -7,6 +7,8 @@ export default defineConfig({
     plugins: [react()],
     server: {
         proxy: {
+            // Preserve Host for the directory browser's Origin check in development.
+            '/api/v1/projects/directories': { target: 'http://localhost:12590' },
             '/api/': { target: 'http://localhost:12590', changeOrigin: true },
         },
     },

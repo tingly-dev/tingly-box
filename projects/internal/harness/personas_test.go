@@ -2,14 +2,15 @@ package harness
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 // Persona drills: the same workflow with a thread or a model that misbehaves.
@@ -17,15 +18,14 @@ import (
 // misbehaviour (what it shows the coordinator, what state it keeps, whether it
 // recovers), not whether a real model would resist it.
 
-// reportRequest is the coordinator request made for the thread's report.
-func reportRequest(w *World) (llm.Request, bool) {
+// reportRequest is the coordinator turn woken by the thread's report.
+func reportRequest(w *World) (Request, bool) {
 	for _, r := range w.Requests() {
-		n := len(r.Messages)
-		if n > 0 && strings.Contains(r.Messages[n-1].Content, "Coordinator check-in") {
+		if r.CheckIn() {
 			return r, true
 		}
 	}
-	return llm.Request{}, false
+	return Request{}, false
 }
 
 // coordinatorIdle waits for the coordinator alone; a thread that is blocked on
@@ -36,31 +36,41 @@ func coordinatorIdle(w *World) {
 }
 
 func quietStart(title string) BrainFunc {
-	return func(c *BrainCtx) llm.Result {
-		switch {
-		case c.AfterTools():
-			return llm.Result{Text: "Started."}
-		case c.CheckIn():
-			return llm.Result{ToolCalls: []llm.ToolCall{Call("n", "no_update", map[string]string{})}}
-		default:
-			return startThread(title, "Do it.")
+	return func(c *coordtest.Turn) error {
+		if c.CheckIn() {
+			c.Call("no_update", map[string]string{})
+			return nil
 		}
+		startThread(c, title, "Do it.")
+		c.Reply("Started.")
+		return nil
 	}
 }
 
 // P1 lazy: a thread that says "done" without changing anything is not ready
-// for review, and the coordinator's thread table shows it has no commits.
+// for review, and what the coordinator reads of it shows it has no commits.
 func TestPersonaLazyThreadIsNotReady(t *testing.T) {
-	w := New(t, Options{Files: projectsRepo, Brain: quietStart(endTool), Actor: Reply("All done, tests pass.")})
+	var details string
+	w := New(t, Options{
+		Files: projectsRepo, Actor: Reply("All done, tests pass."),
+		Brain: func(c *coordtest.Turn) error {
+			if c.CheckIn() {
+				details, _ = c.Call("get_thread", map[string]string{"thread_id": c.ThreadRef(endTool)})
+				c.Call("no_update", map[string]string{})
+				return nil
+			}
+			return quietStart(endTool)(c)
+		},
+	})
 
 	w.Say("Add an end-of-turn tool.")
 	th := w.ThreadIs(endTool, db.ThreadIdle)
 	w.Quiet()
 
 	assert.Equal(t, 0, th.CommitsAhead)
-	req, ok := reportRequest(w)
+	_, ok := reportRequest(w)
 	require.True(t, ok, "the report reached the coordinator")
-	assert.Contains(t, req.System, "commits=0", "the thread table shows nothing was committed")
+	assert.Contains(t, details, "commits_ahead=0", "get_thread shows nothing was committed")
 }
 
 // P2 injection: instructions inside a report are framed as the thread's
@@ -78,45 +88,46 @@ func TestPersonaInjectionInAReportStaysData(t *testing.T) {
 
 	req, ok := reportRequest(w)
 	require.True(t, ok)
-	var update string
-	for _, m := range req.Messages {
-		if strings.Contains(m.Content, attack) {
-			update = m.Content
-		}
-	}
-	require.NotEmpty(t, update, "the report is passed on")
-	assert.Less(t, strings.Index(update, `trust="relay"`), strings.Index(update, attack), "the label comes before the text")
+	require.Contains(t, req.Prompt, attack, "the report is passed on")
+	assert.Less(t, strings.Index(req.Prompt, `trust="relay"`), strings.Index(req.Prompt, attack), "the label comes before the text")
 
 	p, err := w.Store.GetProject(w.Project.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Run go test first.", p.Instructions)
 }
 
-// P3 failure: when the model's endpoint fails, the error shows in the
-// conversation and the next message still works.
+// P3 failure: when the coordinator's session fails, the error shows in the
+// conversation and the message waits for an explicit recovery (it may have
+// had effects); once it is skipped, the next message works.
 func TestPersonaModelFailureDoesNotKillTheQueue(t *testing.T) {
 	calls := 0
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
+		Brain: func(c *coordtest.Turn) error {
 			calls++
 			if calls == 1 {
-				c.Err = errors.New("429 rate limited")
-				return llm.Result{}
+				return errors.New("429 rate limited")
 			}
-			return llm.Result{Text: "Back again."}
+			c.Reply("Back again.")
+			return nil
 		},
 	})
 
 	w.Say("First message.")
 	w.Eventually("the error is shown", func() bool {
 		for _, e := range w.Convo() {
-			if e.Kind == db.EvError && strings.Contains(e.Content, "429") {
+			if e.Kind == db.EvError && strings.Contains(e.Content, "429") && strings.Contains(e.Content, "needs recovery") {
 				return true
 			}
 		}
 		return false
 	})
+	coordinatorIdle(w)
+
+	input, err := w.Store.UncertainCoordinatorInput(w.Project.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, input, "the failed message waits for a decision")
+	require.NoError(t, w.Coord.RecoverInput(w.Project.ID, input, false))
 	w.Quiet()
 
 	w.Say("Second message.")
@@ -125,21 +136,18 @@ func TestPersonaModelFailureDoesNotKillTheQueue(t *testing.T) {
 	})
 }
 
-// P4 race: settings that change while the model is answering stop the tool
-// call it was about to make, and the model is told why.
+// P4 race: settings that change while the coordinator is answering stop the
+// tool call it was about to make, and it is told why.
 func TestPersonaSettingsChangeMidTurnStopsTheTool(t *testing.T) {
 	var w *World
 	var refused string
 	w = New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			if c.AfterTools() {
-				last := c.Req.Messages[len(c.Req.Messages)-1]
-				refused = last.ToolResults[0].Content
-				return llm.Result{Text: "Re-evaluating with the new settings."}
-			}
+		Brain: func(c *coordtest.Turn) error {
 			w.UpdateProject(func(p *db.Project) { p.Instructions = "Never start more than one thread." })
-			return startThread(endTool, "Add the tool.")
+			refused, _ = startThread(c, endTool, "Add the tool.")
+			c.Reply("Re-evaluating with the new settings.")
+			return nil
 		},
 	})
 
@@ -163,7 +171,7 @@ func TestPersonaSilentThreadIsReportedOnceAsStalled(t *testing.T) {
 
 	w.Say("Add an end-of-turn tool.")
 	w.ThreadIs(endTool, db.ThreadWorking)
-	w.Eventually("coordinator idle", func() bool { return !w.Coord.Busy(w.Project.ID) })
+	coordinatorIdle(w)
 
 	_, woken := reportRequest(w)
 	assert.False(t, woken, "a thread that has just started is not stalled")
@@ -177,9 +185,9 @@ func TestPersonaSilentThreadIsReportedOnceAsStalled(t *testing.T) {
 	w.Eventually("coordinator heard of the stall", func() bool { _, ok := reportRequest(w); return ok })
 	coordinatorIdle(w)
 	req, _ := reportRequest(w)
-	last := req.Messages[len(req.Messages)-1].Content
-	assert.Contains(t, last, `outcome="stalled"`)
-	assert.Contains(t, last, `trust="relay"`, "a stall report is information, not an instruction")
+	report := regexp.MustCompile(`<event[^>]*outcome="stalled"[^>]*>`).FindString(req.Prompt)
+	require.NotEmpty(t, report, "the stall arrives as a report")
+	assert.Contains(t, report, `trust="relay"`, "a stall report is information, not an instruction")
 
 	before := len(w.Requests())
 	w.Threads.CheckStalled(later.Add(time.Hour))
@@ -197,19 +205,16 @@ func TestPersonaFanOutKeepsEveryThreadReal(t *testing.T) {
 	titles := []string{"Add no_update tool", "Add rename tool", "Add event envelope"}
 	w := New(t, Options{
 		Files: projectsRepo, Actor: Diligent("done"),
-		Brain: func(c *BrainCtx) llm.Result {
-			switch {
-			case c.AfterTools():
-				return llm.Result{Text: "Started three threads."}
-			case c.CheckIn():
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("n", "no_update", map[string]string{})}}
-			default:
-				var calls []llm.ToolCall
-				for i, ti := range titles {
-					calls = append(calls, Call(string(rune('a'+i)), "start_thread", map[string]string{"title": ti, "task": ti}))
-				}
-				return llm.Result{ToolCalls: calls}
+		Brain: func(c *coordtest.Turn) error {
+			if c.CheckIn() {
+				c.Call("no_update", map[string]string{})
+				return nil
 			}
+			for _, ti := range titles {
+				startThread(c, ti, ti)
+			}
+			c.Reply("Started three threads.")
+			return nil
 		},
 	})
 

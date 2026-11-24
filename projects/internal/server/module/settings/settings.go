@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
+	"github.com/tingly-dev/tingly-box/projects/internal/llm"
+	"github.com/tingly-dev/tingly-box/projects/internal/project"
 )
 
 const settingsKey = "connection"
@@ -112,14 +113,23 @@ func (s *Service) ModelsFor(ctx context.Context, conn Connection) ([]llm.Model, 
 	return models, err
 }
 
-// Models lists models for the saved connection. With ClientFor and
-// ThreadEnv it makes the settings service the standalone app's project.Host.
-func (s *Service) Models(ctx context.Context) ([]llm.Model, error) {
+// Models lists models for the saved connection. With ThreadEnv and
+// CoordinatorEnv it makes the settings service the standalone app's
+// project.Host.
+func (s *Service) Models(ctx context.Context) ([]project.Model, error) {
 	conn, err := s.Connection()
 	if err != nil {
 		return nil, err
 	}
-	return s.ModelsFor(ctx, conn)
+	models, err := s.ModelsFor(ctx, conn)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]project.Model, 0, len(models))
+	for _, m := range models {
+		out = append(out, project.Model{ID: m.ID, DisplayName: m.DisplayName})
+	}
+	return out, nil
 }
 
 // ResolveModel picks the model for a request: the explicit one, else the
@@ -141,20 +151,6 @@ func (s *Service) ResolveModel(ctx context.Context, conn Connection, explicit st
 	return models[0].ID, nil
 }
 
-// ClientFor returns a client for the saved connection and the model to use:
-// model if set, else the resolved default.
-func (s *Service) ClientFor(ctx context.Context, model string) (llm.Client, string, error) {
-	client, conn, err := s.Client()
-	if err != nil {
-		return nil, "", err
-	}
-	model, err = s.ResolveModel(ctx, conn, model)
-	if err != nil {
-		return nil, "", err
-	}
-	return client, model, nil
-}
-
 // ThreadEnv points Claude Code threads at the saved connection when it
 // speaks the Anthropic API (the default: a local Tingly Box), so threads go
 // through the same gateway and model routing. Otherwise threads use the
@@ -170,4 +166,18 @@ func (s *Service) ThreadEnv(ctx context.Context) ([]string, string) {
 	}
 	model, _ := s.ResolveModel(ctx, conn, "")
 	return env, model
+}
+
+// CoordinatorEnv requires a Claude-compatible endpoint rather than silently
+// switching a configured OpenAI connection to the CLI's unrelated login.
+func (s *Service) CoordinatorEnv(ctx context.Context) ([]string, string, error) {
+	conn, err := s.Connection()
+	if err != nil {
+		return nil, "", err
+	}
+	if conn.APIStyle != llm.StyleAnthropic || conn.BaseURL == "" {
+		return nil, "", fmt.Errorf("the coordinator requires an Anthropic-compatible connection or a Claude Code profile")
+	}
+	env, model := s.ThreadEnv(ctx)
+	return env, model, nil
 }

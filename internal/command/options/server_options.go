@@ -1,12 +1,11 @@
 package options
 
 import (
-	"path/filepath"
-
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/tingly-dev/tingly-box/internal/appconfig"
+	"github.com/tingly-dev/tingly-box/internal/config"
 )
 
 // StartFlags holds flags for starting the server
@@ -76,7 +75,7 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 			logrus.Warnf("Failed to remember --projects-dir: %v", err)
 		}
 	} else if resolvedProjectsDir = appConfig.GetProjectsDir(); resolvedProjectsDir == "" {
-		resolvedProjectsDir = DefaultProjectsDir(appConfig.ConfigDir())
+		resolvedProjectsDir = config.DefaultProjectsDir(appConfig.ConfigDir())
 	}
 
 	return StartServerOptions{
@@ -90,12 +89,4 @@ func ResolveStartOptions(cmd *cobra.Command, flags StartFlags, appConfig *appcon
 		RecordDir:         appConfig.ConfigDir() + "/record",
 		ProjectsDir:       resolvedProjectsDir,
 	}
-}
-
-// DefaultProjectsDir is the Projects data directory of the instance whose
-// config directory is configDir: a sibling named "<config dir>-project"
-// (~/.tingly-box-project by default), so instances never share a database
-// and a thread's working directory never sits next to the config.
-func DefaultProjectsDir(configDir string) string {
-	return filepath.Clean(configDir) + "-project"
 }

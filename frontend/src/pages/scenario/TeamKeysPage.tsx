@@ -2,17 +2,18 @@ import { Alert, Box, Button, Chip, Divider, Stack, Typography } from '@mui/mater
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import CreateSharingKeyButton from '@/components/CreateSharingKeyButton';
-import PageHeader from '@/components/PageHeader';
-import { PageLayout } from '@/components/PageLayout';
+import CreateSharingKeyButton from '@/pages/scenario/components/CreateSharingKeyButton';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import SharingKeysTable, { type SharingKey } from '@/components/SharingKeysTable';
-import Surface from '@/components/Surface';
+import Surface from '@tingly/ui/components/Surface';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { useNotify } from '@/hooks/useNotify';
-import { useSharingKeyActions } from '@/hooks/useSharingKeyActions';
+import { useSharingKeyActions } from '@/pages/scenario/hooks/useSharingKeyActions';
 import { api } from '@/services/api';
 import { groupByTeam, teamPath } from '@/utils/team';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 /**
  * Every Sharing Key on this instance, grouped by the Team it belongs to.
@@ -22,6 +23,7 @@ import { fontMono, fontSizes } from '@/theme/fonts';
  */
 const TeamKeysPage = () => {
     const { t } = useTranslation();
+    const phone = usePhoneShell();
     const notify = useNotify();
     const { teams, loading: teamsLoading } = useTeamContext();
     const [keys, setKeys] = useState<SharingKey[]>([]);
@@ -81,11 +83,12 @@ const TeamKeysPage = () => {
                                         <Typography variant="caption" sx={{ fontFamily: fontMono, color: 'text.secondary' }}>
                                             {team.slug}
                                         </Typography>
-                                        <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.xs }} />
+                                        <Chip label={teamKeys.length} size="small" color="primary" variant="outlined" sx={{ height: 20, minWidth: 20, fontSize: fontSizes.micro }} />
                                         {!team.enabled && (
-                                            <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: fontSizes.xs }} />
+                                            <Chip label={t('teams.inactive')} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: fontSizes.micro }} />
                                         )}
-                                        <Box sx={{ flex: 1 }} />
+                                        {/* Phone shell: the Team's actions get their own line, the same in every group. */}
+                                        <Box sx={phone ? { flexBasis: '100%', height: 0 } : { flex: 1 }} />
                                         <Button component={Link} to={teamPath(team)} size="small">
                                             {t('sharingKeys.openTeam')}
                                         </Button>

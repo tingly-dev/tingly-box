@@ -487,27 +487,20 @@ jobs:
             printf '%s\n' "$BASE_BODY"
             echo "$START"
             cat << NOTES_EOF
-          ## 📦 NPX Packages - $VERSION
-
-          ### 🚀 Installation
+          ## npm · $VERSION
 
           \`\`\`bash
-          # Use with npx (recommended)
-          npx tingly-box@$VERSION
-
-          # Or install globally
           npm install -g tingly-box@$VERSION
           \`\`\`
 
-          The binary for your platform ships in a companion package
-          (\`@tingly-dev/tingly-box-linux-x64\`, \`@tingly-dev/tingly-box-darwin-arm64\`, …) that npm
-          installs automatically — no GitHub download, npm mirrors work.
-          NOTES_EOF
+          ### CLI
 
-            echo ""
-            echo "### 🔗 NPX Links"
-            echo ""
-            echo "- 📦 [CLI on npm](https://www.npmjs.com/package/tingly-box/v/$VERSION)"
+          \`\`\`bash
+          tb restart
+          \`\`\`
+
+          [CLI on npm](https://www.npmjs.com/package/tingly-box/v/$VERSION)
+          NOTES_EOF
             echo "$END"
           } > npx_release_notes.md
 
@@ -750,6 +743,7 @@ jobs:
     steps:
       - name: Append GUI NPX info to release notes
         env:
+          PUBLISHED_CLI: ${{ needs.setup.outputs.publish_cli }}
           VERSION: ${{ needs.setup.outputs.npx_version }}
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
           PKG_TYPE: ${{ env.PKG_TYPE }}
@@ -767,21 +761,20 @@ jobs:
           {
             printf '%s\n' "$BASE_BODY"
             echo "$START"
+            if [ "$PUBLISHED_CLI" != 'true' ]; then
+              printf '\n## npm · %s\n\n' "$VERSION"
+              printf '```bash\nnpm install -g tingly-box@%s\n```\n\n' "$VERSION"
+            fi
             cat << EOF
-          ## 📦 NPX Package - $VERSION ($PKG_TYPE)
-
-          ### 🚀 Installation
+          ### GUI
 
           \`\`\`bash
-          # Use with npx (recommended)
-          npx $PKG_NAME@$VERSION start
-
-          # Or install globally
-          npm install -g $PKG_NAME@$VERSION
+          tb app
           \`\`\`
 
-          ### 🔗 Links
-          - 📦 [View on npm](https://www.npmjs.com/package/$PKG_NAME/v/$VERSION)
+          Or run without a global install: \`npx $PKG_NAME@$VERSION\`.
+
+          [Desktop app on npm](https://www.npmjs.com/package/$PKG_NAME/v/$VERSION)
           EOF
             echo "$END"
           } > npx_release_notes.md

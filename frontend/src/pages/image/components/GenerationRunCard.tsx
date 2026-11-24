@@ -12,14 +12,15 @@ import {
 } from '@mui/material';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CopyIconButton } from '@/components/CopyIconButton';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
 import { Close, Edit, ErrorOutline, Palette, Refresh, RestartAlt, ZoomIn } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
 import { resultSrc, runGridLayout, runImage, stripCardBasis, STRIP_CARD_HEIGHT, wrapCardSpanSx } from './imageGenSession';
 import RunSourceStrip from './RunSourceStrip';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_CARD } from './imageThumbnails';
-import type { GenerationRun, SelectedImage } from './ImageGenPlayground.types';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_CARD } from '../../../features/image/imageThumbnails';
+import type { GenerationRun, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface GenerationRunCardProps {
     run: GenerationRun;
@@ -61,7 +62,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
     // The request as it went over the wire, so the line doubles as the answer
     // to "what do I send to get this": n only when it was more than one.
     const requested = Math.max(run.count ?? 1, 1);
-    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}`;
+    const runMeta = `${run.model} · ${run.size} · ${run.quality} · images/${run.endpoint}${run.mask ? ' · mask' : ''}${requested > 1 ? ` · n=${requested}` : ''}${run.reasoningEffort && run.reasoningEffort !== 'auto' ? ` · effort=${run.reasoningEffort}` : ''}`;
     // One slot per requested image, from the moment the run starts: the card
     // has its final shape while it is pending, results land in their slots,
     // and a slot that stays empty is a missing image the user can see in
@@ -278,7 +279,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
                                     return (
                                         <Box
                                             key={`${run.id}-${index}`}
-                                            sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, borderRadius: 1, overflow: 'hidden', bgcolor: 'action.hover' }}
+                                            sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, borderRadius: radius.row, overflow: 'hidden', bgcolor: 'action.hover' }}
                                         >
                                             <ButtonBase
                                                 onClick={() => onOpenOutput(runImage(run, 'output', index, src))}
@@ -346,7 +347,7 @@ const GenerationRunCard: React.FC<GenerationRunCardProps> = memo(({
                                         data-testid={pending ? 'imagegen-slot-pending' : 'imagegen-slot-missing'}
                                         sx={{
                                             minHeight: 0,
-                                            borderRadius: 1,
+                                            borderRadius: radius.row,
                                             border: 1,
                                             borderStyle: 'dashed',
                                             borderColor: 'divider',

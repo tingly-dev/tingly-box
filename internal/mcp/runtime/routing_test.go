@@ -92,7 +92,7 @@ func TestRoutingPreservesFailedBranchesInDefault(t *testing.T) {
 	require.Len(t, snapshot.Profiles[0].Sources, 1)
 	require.Equal(t, "error", snapshot.Profiles[0].Sources[0].State)
 	require.Empty(t, snapshot.Profiles[0].Sources[0].Tools)
-	require.Len(t, snapshot.ServerTools, 1)
+	require.Empty(t, snapshot.ServerTools, "a connected MCP is never a model-request route")
 	raw, err := json.Marshal(snapshot)
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "secret-password")

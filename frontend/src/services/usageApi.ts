@@ -92,9 +92,10 @@ export const usageApi = {
         model?: string;
         scenario?: string;
         user_id?: string;
-    } = {}): Promise<any> =>
+    } = {}, signal?: AbortSignal): Promise<any> =>
         controlApi((client, headers) => client.GET('/api/v1/usage/performance', {
             headers,
+            signal,
             params: {
                 query: {
                     start_time: params.start_time,

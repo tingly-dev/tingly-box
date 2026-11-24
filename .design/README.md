@@ -68,6 +68,7 @@
 |---|---|---|
 | [connect-ai-flow.md](./connect-ai-flow.md) | Connect AI Flow | 设计说明；局部实施状态见正文 |
 | [oauth.md](./oauth.md) | OAuth | 设计说明；局部实施状态见正文 |
+| [antigravity.md](./antigravity.md) | Antigravity Code Assist 请求与响应契约、验收及来源边界 | 已实现；独立规格，非严格 clean-room 隔离声明；尚未用真实账号验证 |
 | [third-party-credentials.md](./third-party-credentials.md) | Third-Party Cloud Credentials (AWS Bedrock / GCP Vertex / Azure OpenAI) | 设计说明；局部实施状态见正文 |
 | [kimi-config.md](./kimi-config.md) | Kimi Code OAuth & Client Round Trip: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [zcode-oauth.md](./zcode-oauth.md) | ZCode OAuth (GLM Coding Plan) | 设计说明；局部实施状态见正文 |
@@ -81,11 +82,15 @@
 | [claude-code.md](./claude-code.md) | Claude Code — design index | 入口索引；会话与 OAuth 兼容层独立 |
 | [claude-code-config.md](./claude-code-config.md) | Claude Code Quick Config: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [claude-code-slots.md](./claude-code-slots.md) | Claude Code: per-slot rules (no modes) | 已实现（TEP #2197）；取代 unified/separate 模式 |
+| [claude-code-default-switch.md](./claude-code-default-switch.md) | Claude Code: use a profile as the default | 已实现：显式覆盖，无备份无还原 |
+| [claude-profile-mcp.md](./claude-profile-mcp.md) | Claude Code profile 接入 Tingly Box MCP：MCP token、客户端短工具名、已接入 MCP 不再注入模型请求、profile 选择 MCP Profile 后启动时生成 `--mcp-config` | 部分实现（§4）；Projects 启动与 Default 待做（§5） |
 | [cursor.md](./cursor.md) | Cursor Scenario — the public-URL constraint | 设计说明；局部实施状态见正文 |
 | [opencode-session.md](./opencode-session.md) | OpenCode Zen session header | 设计说明；局部实施状态见正文 |
 | [opencode-quota.md](./opencode-quota.md) | OpenCode（Zen / Go）配额方案 | 设计说明；局部实施状态见正文 |
 | [quota-semantics.md](./quota-semantics.md) | Quota 语义归一 | 设计说明；局部实施状态见正文 |
+| [routing-limits.md](./routing-limits.md) | 路由限额算子：账号/规则/模型并发上限 + 滑动窗口用量/额度，及按人员（Sharing Key）、Team 整体、Team 成员默认的限额（Team 友好） | 已实现；研究见 `.research/routing-concurrency-usage-operators.md` |
 | [quota-relay.md](./quota-relay.md) | Quota 中继：端侧看到中央的 quota | 设计说明；局部实施状态见正文 |
+| [quota-backoff.md](./quota-backoff.md) | Quota 请求失败退避 | 已实现 |
 | [team.md](./team.md) | Team and Sharing Key Authorization | 设计说明；局部实施状态见正文 |
 | [security.md](./security.md) | Security: Design Decisions | 设计说明；局部实施状态见正文 |
 ## Agent、Bot 与会话
@@ -95,9 +100,11 @@
 | [afk.md](./afk.md) | AFK — Agent Framework Kit | 设计说明；局部实施状态见正文 |
 | [agentboot-refactor.md](./agentboot-refactor.md) | Agentboot Refactor | 已完成的重构记录；后续决定见附录 |
 | [agentboot-live-control.md](./agentboot-live-control.md) | AgentBoot 会话中途注入消息与在线改参数 | TEP #2114，已用真实 CLI 验证 |
+| [slash-commands.md](./slash-commands.md) | 会话控制 API（先做 `Compact` / `ContextUsage`）：agentboot 里与后端无关的小接口，Claude 实现映射 `/compact` 与 `get_context_usage`；web/IM 的斜杠命令只是它的前端，`/clear` 等不下发；列出已有同类调用与未来候选 | 设计，未实现；证据见 `.research/slash-commands-claude-code.md` |
 | [claude-code-session.md](./claude-code-session.md) | Claude Code: from one-shot processes to a persistent stream session | 已退役：Remote 的 `@cc` 执行路径已删除，聊天走 Projects（remote-into-projects.md） |
 | [claude-code-oauth-compat.md](./claude-code-oauth-compat.md) | Claude Code OAuth compatibility — wire identity and version profiles | 已实现 profile；限制见 §B7 |
 | [bot-arch.md](./bot-arch.md) | Bot Architecture — resource, channel, consumers (+ naming) | 设计说明；局部实施状态见正文 |
+| [bot-im-alias-display.md](./bot-im-alias-display.md) | Bot / IM 统一展示格式 `平台 · alias · id`（群聊：`平台群 · alias · id`） 与命名模型（平台名即默认别名，不覆盖用户别名） | 已实现；拆出的后续项见正文 §7 |
 | [bot-capability-access-control.md](./bot-capability-access-control.md) | Bot Capability Access Control — Bot、Direct Chat、Group 与 Actor | 资源/授权核心已实现；验收项按正文核对 |
 | [bot-interaction-api.md](./bot-interaction-api.md) | Bot Interaction Interface — auth + open two-kind API (notify / interactive) | 通用 API 已实现；旧 hook HTTP 鉴权待迁移 |
 | [bot-panic-isolation.md](./bot-panic-isolation.md) | Bot Panic Isolation — recover at the trust boundary | 设计说明；局部实施状态见正文 |
@@ -110,8 +117,9 @@
 | [projects-panel.md](./projects-panel.md) | Projects 面板：项目和工作目录共用一个侧边栏（TEP-2063） | 已实现 |
 | [projects-desk-absorption.md](./projects-desk-absorption.md) | Desk 并入 Projects：工作目录会话、宿主能力与插槽、切换 | 已实施 |
 | [projects-im.md](./projects-im.md) | IM 聊天并入 Projects：chat 绑定到线程、IM 里审批、点名线程（TEP-2143；旧路径保留的决定见下一行） | 部分实施 |
-| [remote-into-projects.md](./remote-into-projects.md) | Remote 的聊天控制（`@cc`、`@tb`、`/cd` 等）逐项迁到 Projects 的文件夹或项目，Remote 只留接入层 | 实施中 |
+| [remote-into-projects.md](./remote-into-projects.md) | Remote 的聊天控制（`@cc`、`@tb`、`/cd` 等）逐项迁到 Projects 的文件夹或项目，Remote 只留接入层 | 已实施；`@tb`/`@cc` 已下线 |
 | [projects-sessions.md](./projects-sessions.md) | Projects 的统一模型：一切会话都是 Thread（项目对话、线程、文件夹会话、IM 聊天同构），Claude 调研、命名收拾、迁移与交付 | 提案 |
+| [thread-cleanup.md](./thread-cleanup.md) | Projects 线程清理与 worktree 回收：Archive（释放 worktree、保留分支、可 Restore）、Delete、安全检查、批量清理与自动策略；含本机积压实测 | 提案，等待决定；未实施 |
 | [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；`@tb` 已下线（remote-into-projects.md） |
@@ -149,8 +157,11 @@
 | [harness-remote.md](./harness-remote.md) | Harness Remote — in-process IM chat e2e for remote/control/remoteagent | 设计说明；局部实施状态见正文 |
 | [harness-agent-testing.md](./harness-agent-testing.md) | Runbook — tingly-box 阶段验收基线 | 设计说明；局部实施状态见正文 |
 | [harness-npm.md](./harness-npm.md) | Harness npm — 用本地 registry 和虚拟版本号，从当前源码演练整条 npm 发布与安装链路 | 脚本 `build/npx/harness-npm.sh`；CI 里只有手动触发的 `harness-npm.yml`（Linux、macOS、Windows 三平台） |
+| [cli-harness-refactor.md](./cli-harness-refactor.md) | cli/harness review after the canonical VModel definition change, with a phased refactor plan | 提案；P0 随文档提交，其余阶段待确认 |
 | [rule-flag-testing.md](./rule-flag-testing.md) | Rule-Flag Behavior Testing | 设计说明；局部实施状态见正文 |
 | [vmodel.md](./vmodel.md) | vmodel — design index | 入口索引 |
+| [vmodel-definitions.md](./vmodel-definitions.md) | VModel 统一定义、严格加载与共享运行时 | #2618/#2624 已合并；场景集成在 PR #2621 |
+| [vmodel-scenario.md](./vmodel-scenario.md) | VModel 固定模型入口、页面联动与独立 CLI | #2621 已实现；已变基到包含 #2618/#2624 的 main |
 | [vmodel-benchmark.md](./vmodel-benchmark.md) | vmodel as a shared real-world benchmark | Phase 1–3 已完成 |
 | [vmodel-sequence.md](./vmodel-sequence.md) | Virtual sequence models | 设计说明；局部实施状态见正文 |
 | [vmodel-transport.md](./vmodel-transport.md) | vmodel transport — dispatch virtual providers over HTTP, not in-memory | 内存 listener 已实现；unix socket 未做 |
@@ -165,17 +176,21 @@
 | [ui-redesign.md](./ui-redesign.md) | UI 重设计 — 决策、实施状态与后续 | 部分落地；有撤回及后续项 |
 | [agent-page-redesign.md](./agent-page-redesign.md) | Agent 页重设计 — 模板、配置状态与实施边界 | A–D 落地；E 部分撤回；Profile 暂缓 |
 | [ux-review.md](./ux-review.md) | UX 梳理 — 前端"杂乱"的审计、讨论与决定 | 讨论中；Star 入口、Dashboard 头部、Agent 页 v4 已确定并有 PR |
+| [workspace-layout.md](./workspace-layout.md) | Workspace 布局 — 保留全部摆放、统一内容与交互的一致性契约（方案 C）；备选 A / B；首页部分已批准；与 [projects-placement.md](./projects-placement.md) 相关 | 提案，等待决定；未实施 |
+| [mobile-ui.md](./mobile-ui.md) | Mobile UI — a phone-native shell for Agent and the Projects workspace (TEP-2558); clickable prototype in `mobile-prototype/` | 提案；未实施 |
 | [ui-flow-analysis.md](./ui-flow-analysis.md) | UI 动线分析 — 发现、人工打标反馈与实现结论 | 第 1 轮已落地；其余项见正文 |
 | [refactor-frontend-2026-09.md](./refactor-frontend-2026-09.md) | Frontend Refactor 2026-09 — Plan & Survey Reports (merged) | 已完成的历史审计与交付记录 |
 | [icon-hierarchy.md](./icon-hierarchy.md) | Icon Hierarchy | 设计说明；局部实施状态见正文 |
+| [custom-select.md](./custom-select.md) | 选择项的「自定义…」约定（SelectWithCustom） | 现行契约；已落地场景见正文 |
 | [i18n.md](./i18n.md) | 前端 i18n 文案按功能大类分文件 | 现行契约 |
 | [theme.md](./theme.md) | Theme system notes | 设计说明；局部实施状态见正文 |
+| [visual-system.md](./visual-system.md) | 视觉规范与整体升级 — 审计、目标规范、分步计划 | 第一轮已合并；第二轮进行中 |
 | [gui-host-bridge.md](./gui-host-bridge.md) | Host bridge: one frontend for the browser tab and the desktop window | 设计说明；局部实施状态见正文 |
 | [gui-packaging.md](./gui-packaging.md) | Desktop GUI packaging | 设计说明；局部实施状态见正文 |
 | [host-binding.md](./host-binding.md) | Host Binding: Design and Decision | 设计说明；局部实施状态见正文 |
 | [runtime-port-file.md](./runtime-port-file.md) | Runtime Port File | 设计说明；局部实施状态见正文 |
 | [cli-entry-semantics.md](./cli-entry-semantics.md) | CLI entry semantics: npx vs installed CLI, daemon default | 设计说明；局部实施状态见正文 |
 | [npm.md](./npm.md) | npm distribution | 设计说明；局部实施状态见正文 |
-| [npm-ci.md](./npm-ci.md) | 新增 npm 包：占位发布 → `npm trust` → CI 接手 | 操作流程；命令已按 npm 12 文档核对 |
+| [ci.md](./ci.md) | CI：哪些 workflow 何时跑、为什么、改的规则；附新增 npm 包的发布流程 | 现行；唯一的 CI 文档 |
 | [shortcut.md](./shortcut.md) | Desktop Shortcut: Design and Decisions | 设计说明；局部实施状态见正文 |
 | [tui.md](./tui.md) | Federated TUI: Design and Decisions | 设计说明；局部实施状态见正文 |

@@ -7,21 +7,36 @@
 import {
     IconArchiveOff,
     IconArrowUp,
+    IconBellOff,
+    IconChevronsDown,
+    IconChevronsUp,
     IconCircleDashed,
+    IconCircleDot,
+    IconFileArrowRight,
     IconFileDiff,
+    IconFileMinus,
+    IconFilePencil,
+    IconFilePlus,
     IconFileUpload,
     IconFolder,
     IconFolderOff,
+    IconFolderOpen,
     IconFolderPlus,
     IconFolderShare,
     IconGitBranch,
     IconGitCommit,
     IconGitMerge,
+    IconGitPullRequest,
     IconHandStop,
     IconHistoryToggle,
+    IconChecklist,
+	IconLayoutKanban,
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
     IconLayoutSidebarRight,
+    IconLayoutSidebarRightCollapse,
+    IconLayoutSidebarRightExpand,
+    IconListTree,
     IconLoader2,
     IconMessage,
     IconMessageCircleQuestion,
@@ -31,6 +46,7 @@ import {
     IconPaperclip,
     IconPencil,
     IconPictureInPictureOn,
+    IconRefresh,
     IconPlayerStopFilled,
     IconStack2,
     IconStarFilled,
@@ -44,10 +60,14 @@ export * from '@tingly/ui/icons';
 export const Star = tablerMuiFilled(IconStarFilled);
 
 export const Stack = tablerMui(IconStack2);
+export const ExpandAll = tablerMui(IconChevronsDown);
+export const CollapseAll = tablerMui(IconChevronsUp);
+export const BellOff = tablerMui(IconBellOff);
 export const Unarchive = tablerMui(IconArchiveOff);
 export const Folder = tablerMui(IconFolder);
 export const DriveFileMove = tablerMui(IconFolderShare);
 export const FolderOff = tablerMui(IconFolderOff);
+export const FolderOpen = tablerMui(IconFolderOpen);
 export const ChatBubble = tablerMui(IconMessage);
 export const Forum = tablerMui(IconMessages);
 export const ArrowUpward = tablerMui(IconArrowUp);
@@ -62,13 +82,27 @@ export const MemoryOff = tablerMui(IconHistoryToggle);
 export const Branch = tablerMui(IconGitBranch);
 export const Merge = tablerMui(IconGitMerge);
 export const GitCommit = tablerMui(IconGitCommit);
+export const PullRequest = tablerMui(IconGitPullRequest);
+export const IssueOpened = tablerMui(IconCircleDot);
 export const OverviewPane = tablerMui(IconLayoutSidebarRight);
+export const RailHide = tablerMui(IconLayoutSidebarRightCollapse);
+export const RailShow = tablerMui(IconLayoutSidebarRightExpand);
 export const Question = tablerMui(IconMessageCircleQuestion);
 export const DiffIcon = tablerMui(IconFileDiff);
 export const Spinner = tablerMui(IconLoader2);
+export const Refresh = tablerMui(IconRefresh);
 export const HandStop = tablerMui(IconHandStop);
 export const NewFolder = tablerMui(IconFolderPlus);
 export const CircleDashed = tablerMui(IconCircleDashed);
 export const FloatWindow = tablerMui(IconPictureInPictureOn);
 export const Minimize = tablerMui(IconMinus);
 export const LayoutIcon = tablerMui(IconLayout2);
+export const Kanban = tablerMui(IconLayoutKanban);
+export const Checklist = tablerMui(IconChecklist);
+
+// The tree view of a change, and a changed file by how it changed.
+export const ViewTree = tablerMui(IconListTree);
+export const FileAdded = tablerMui(IconFilePlus);
+export const FileModified = tablerMui(IconFilePencil);
+export const FileDeleted = tablerMui(IconFileMinus);
+export const FileRenamed = tablerMui(IconFileArrowRight);

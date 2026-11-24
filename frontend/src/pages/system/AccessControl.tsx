@@ -18,17 +18,18 @@ import {
     Warning as WarningIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
-    Security as SecurityIcon,
 } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import { useCopyFeedback } from '@tingly/ui/hooks/useCopyFeedback';
 import { api } from '@/services/api.ts';
 import { useAuth } from '@/contexts/AuthContext.tsx';
-import { PageLayout } from '@/components/PageLayout.tsx';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
 import CardGrid from "@/components/CardGrid.tsx";
-import ConfirmDialog from '@/components/ConfirmDialog.tsx';
-import { fontMono } from '@/theme/fonts';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
+import { fontMono } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface TokenInfo {
     token: string;
@@ -60,9 +61,9 @@ const MaskedTokenRow = ({
         sx={{
             p: 2,
             bgcolor: 'action.hover',
-            borderRadius: 1,
+            borderRadius: radius.row,
             fontFamily: fontMono,
-            fontSize: '0.875rem',
+            fontSize: fontSizes.base,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -129,9 +130,9 @@ const TokenResetSuccessAlert = ({
                 mt: 1.5,
                 p: 1,
                 bgcolor: 'action.hover',
-                borderRadius: 1,
+                borderRadius: radius.row,
                 fontFamily: fontMono,
-                fontSize: '0.875rem',
+                fontSize: fontSizes.base,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -170,16 +171,22 @@ const AccessControl = () => {
     const [resetModelDialogOpen, setResetModelDialogOpen] = useState(false);
     const [userSuccessToken, setUserSuccessToken] = useState<string | null>(null);
     const [modelSuccessToken, setModelSuccessToken] = useState<string | null>(null);
+    const [mcpToken, setMCPToken] = useState<string>('');
+    const [resettingMCP, setResettingMCP] = useState(false);
+    const [resetMCPDialogOpen, setResetMCPDialogOpen] = useState(false);
+    const [mcpSuccessToken, setMCPSuccessToken] = useState<string | null>(null);
     // Separate copy-feedback per token so copying the user token doesn't also
     // flash "Copied!" on the model token's button (and vice versa). The row
     // and its own reset-success banner share one flag since they display the
     // same underlying value.
     const { copied: copiedUser, copy: copyUserToken } = useCopyFeedback();
     const { copied: copiedModel, copy: copyModelToken } = useCopyFeedback();
+    const { copied: copiedMCP, copy: copyMCPToken } = useCopyFeedback();
 
     // Visibility states for showing full tokens
     const [showUserToken, setShowUserToken] = useState(false);
     const [showModelToken, setShowModelToken] = useState(false);
+    const [showMCPToken, setShowMCPToken] = useState(false);
 
     const loadTokenInfo = async () => {
         setLoading(true);
@@ -197,9 +204,17 @@ const AccessControl = () => {
         }
     };
 
+    const loadMCPToken = async () => {
+        const result = await api.getMCPToken();
+        if (result?.success && result.data?.token) {
+            setMCPToken(result.data.token);
+        }
+    };
+
     useEffect(() => {
         loadTokenInfo();
         loadModelToken();
+        loadMCPToken();
     }, []);
 
 
@@ -241,6 +256,19 @@ const AccessControl = () => {
         setResettingModel(false);
     };
 
+    const handleMCPResetConfirm = async () => {
+        setResettingMCP(true);
+        setResetMCPDialogOpen(false);
+
+        const result = await api.resetMCPToken();
+        if (result.success && result.data?.token) {
+            setMCPSuccessToken(result.data.token);
+            await loadMCPToken();
+        }
+
+        setResettingMCP(false);
+    };
+
     const handleUserSuccessAcknowledge = () => {
         setUserSuccessToken(null);
     };
@@ -262,6 +290,7 @@ const AccessControl = () => {
     // Get the actual token to display (considering reset success)
     const displayUserToken = userSuccessToken || userTokenInfo?.token || '';
     const displayModelToken = modelSuccessToken || modelToken;
+    const displayMCPToken = mcpSuccessToken || mcpToken;
 
     return (
         <PageLayout loading={loading} notification={{ open: false }}>
@@ -353,10 +382,24 @@ const AccessControl = () => {
                     />
                 )}
 
-                {/* Both tokens are one "Access Tokens" surface — they're the same
+                {mcpSuccessToken && (
+                    <TokenResetSuccessAlert
+                        title={t('accessControl.mcpToken.resetSuccess')}
+                        message={t('accessControl.mcpToken.resetSuccessMessage')}
+                        token={mcpSuccessToken}
+                        copiedTooltip={copiedMCP}
+                        onCopy={() => copyMCPToken(mcpSuccessToken)}
+                        copyLabel={t('accessControl.copy')}
+                        copiedLabel={t('accessControl.copied')}
+                        acknowledgeLabel={t('accessControl.mcpToken.saved')}
+                        onAcknowledge={() => setMCPSuccessToken(null)}
+                    />
+                )}
+
+                {/* All tokens are one "Access Tokens" surface — they're the same
                     kind of thing (a bearer credential you can view/copy/reset),
-                    just scoped to different audiences (control panel vs API
-                    clients), so they share one card instead of two. */}
+                    just scoped to different audiences (control panel, API
+                    clients, MCP agents), so they share one card. */}
                 <UnifiedCard contentMaxWidth={CONTENT_MAX_WIDTH} size="full">
                     <Stack spacing={3}>
                         <Box>
@@ -435,6 +478,38 @@ const AccessControl = () => {
                                 />
                             </Stack>
                         </Box>
+
+                        <Divider />
+
+                        <Box>
+                            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1.5 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 500, flex: 1 }}>
+                                    {t('accessControl.mcpToken.title')}
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    variant="text"
+                                    color="warning"
+                                    onClick={() => setResetMCPDialogOpen(true)}
+                                    disabled={resettingMCP}
+                                    startIcon={resettingMCP ? <CircularProgress size={16} /> : <SyncIcon />}
+                                >
+                                    {resettingMCP ? t('accessControl.resetting') : t('accessControl.mcpToken.resetToken')}
+                                </Button>
+                            </Stack>
+                            <Stack spacing={2}>
+                                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                    {t('accessControl.mcpToken.description')}
+                                </Typography>
+                                <MaskedTokenRow
+                                    displayValue={showMCPToken ? displayMCPToken : maskToken(displayMCPToken)}
+                                    revealed={showMCPToken}
+                                    onToggleReveal={() => setShowMCPToken(!showMCPToken)}
+                                    onCopy={() => copyMCPToken(displayMCPToken)}
+                                    copiedTooltip={copiedMCP}
+                                />
+                            </Stack>
+                        </Box>
                     </Stack>
                 </UnifiedCard>
             </CardGrid>
@@ -508,6 +583,40 @@ const AccessControl = () => {
                         </Stack>
                         <Alert severity="warning" sx={{ mt: 2 }}>
                             {t('accessControl.modelToken.resetWarning')}
+                        </Alert>
+                    </>
+                }
+            />
+            <ConfirmDialog
+                open={resetMCPDialogOpen}
+                onClose={() => setResetMCPDialogOpen(false)}
+                onConfirm={handleMCPResetConfirm}
+                loading={resettingMCP}
+                confirmColor="warning"
+                confirmLabel={t('accessControl.mcpToken.resetConfirmButton')}
+                confirmingLabel={t('accessControl.resetting')}
+                cancelLabel={t('accessControl.mcpToken.resetCancel')}
+                title={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <WarningIcon color="warning" />
+                        <Typography variant="h6">{t('accessControl.mcpToken.resetTitle')}</Typography>
+                    </Box>
+                }
+                description={
+                    <>
+                        <Typography variant="body1" gutterBottom>
+                            {t('accessControl.mcpToken.resetConfirm')}
+                        </Typography>
+                        <Stack sx={{ mt: 2 }} spacing={1}>
+                            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                • {t('accessControl.mcpToken.resetPoints.new')}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                                • {t('accessControl.mcpToken.resetPoints.stop')}
+                            </Typography>
+                        </Stack>
+                        <Alert severity="warning" sx={{ mt: 2 }}>
+                            {t('accessControl.mcpToken.resetWarning')}
                         </Alert>
                     </>
                 }

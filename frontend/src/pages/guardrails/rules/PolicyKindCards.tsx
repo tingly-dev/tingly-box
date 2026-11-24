@@ -1,6 +1,7 @@
 import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { ArticleOutlined, CheckCircleRounded, HelpOutline, Terminal } from '@/components/icons';
 import type { EditorState } from './types';
+import { radius } from '@tingly/ui/theme/radius';
 
 const kindCards: Array<{
     value: 'resource_access' | 'command_execution' | 'content';
@@ -55,7 +56,7 @@ const PolicyKindCards = ({ kind, onSelect }: PolicyKindCardsProps) => (
                         border: '1px solid',
                         borderColor: selected ? 'primary.main' : 'divider',
                         bgcolor: selected ? 'action.selected' : 'background.paper',
-                        borderRadius: 2,
+                        borderRadius: radius.card,
                         p: 2,
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',

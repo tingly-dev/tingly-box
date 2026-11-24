@@ -1,6 +1,7 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
 import React, { useCallback } from 'react';
 import { useModelSelectContext } from '../../contexts/ModelSelectContext';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface CustomModelDialogProps {
     onSave: () => void;
@@ -40,7 +41,7 @@ export function CustomModelDialog({ onSave }: CustomModelDialogProps) {
                     sx={{
                         mt: 1,
                         '& .MuiOutlinedInput-root': {
-                            borderRadius: 1.5,
+                            borderRadius: radius.card,
                         }
                     }}
                 />

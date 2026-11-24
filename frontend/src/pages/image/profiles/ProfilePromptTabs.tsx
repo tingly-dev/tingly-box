@@ -2,7 +2,8 @@ import { memo, useState } from 'react';
 import { Box, ButtonBase, IconButton, InputBase, Stack, Tooltip } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Add, Close } from '@/components/icons';
-import type { ProfilePrompt } from './imageProfileTypes';
+import type { ProfilePrompt } from '../../../features/image/imageProfileTypes';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface Props {
     prompts: ProfilePrompt[];
@@ -91,7 +92,7 @@ const ProfilePromptTabs: React.FC<Props> = ({ prompts, activeId, onSelect, onAdd
                                     fontSize: 13,
                                     fontWeight: active ? 600 : 400,
                                     color: active ? 'text.primary' : 'text.secondary',
-                                    borderRadius: 0.5,
+                                    borderRadius: radius.chip,
                                     '&:hover': { color: 'text.primary' },
                                 }}
                             >

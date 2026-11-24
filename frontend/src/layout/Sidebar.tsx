@@ -11,13 +11,12 @@ import {
     ListItemText,
     Popover,
     Stack,
-    Switch,
     TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
-import {Trans, useTranslation} from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -25,9 +24,11 @@ import { useTeamContext } from '@/contexts/TeamContext';
 import { teamPath } from '@/utils/team';
 import { useNotify } from '@/hooks/useNotify';
 import { useVersion } from '@/contexts/VersionContext';
-import { footerHeight, sidebarWidth } from './constants';
+import { displayVersion } from '@/utils/version';
+import { sidebarWidth } from './constants';
 import {
     NAV_ROW_SX,
+    navRowSelectedSx,
     navRowTextSlotProps,
     sidebarContainerSx,
     sidebarHeaderSx,
@@ -36,6 +37,7 @@ import {
 import type { NavItem } from './types';
 import { VersionDisplay } from '@/components/VersionDisplay';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
+import { overlay } from '@tingly/ui/theme/overlay';
 
 
 // Shared sizing for the sidebar's nav-style rows now lives in ./styles
@@ -209,23 +211,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                     ...NAV_ROW_SX,
                                     color: 'text.secondary',
                                     position: 'relative',
-                                    ...(active && {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                        '& img': { filter: 'none !important' },
-                                        '& .MuiListItemIcon-root > div': {
-                                            bgcolor: 'white',
-                                            borderRadius: 0.5,
-                                            p: 0.25,
-                                        },
-                                        '&:hover': { backgroundColor: 'primary.main' },
-                                        '& .MuiListItemIcon-root': { color: 'primary.contrastText' },
-                                        '& .MuiListItemText-primary': { color: 'primary.contrastText' },
-                                    }),
-                                    '&:hover': {
-                                        backgroundColor: active ? 'primary.main' : 'action.hover',
-                                        color: active ? 'primary.contrastText' : 'text.primary',
-                                    },
+                                    '&:hover': { backgroundColor: 'action.hover', color: 'text.primary' },
+                                    ...(active && navRowSelectedSx),
                                 }}
                             >
                                 {item.icon && (
@@ -248,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                                                 flexShrink: 0,
                                                 ml: 1,
                                                 fontVariantNumeric: 'tabular-nums',
-                                                color: active ? 'rgba(255,255,255,0.75)' : 'text.secondary',
+                                                color: active ? overlay.onDark.textSoft : 'text.secondary',
                                             }}
                                         >
                                             {item.count.value}
@@ -307,24 +294,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                 })}
             </List>
             )}
-            {/* Footer: the running version and its update badge — app state,
-                one row. A dev build's long version ellipsizes, the badge stays.
-                The GitHub star link lives under the slogan below instead:
-                side by side it was pushed out, and stacked here it read as a
-                second status line. */}
-            <Box
-                sx={{
-                    py: 1.5, px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    height: footerHeight,
-                    minWidth: 0,
-                }}
-            >
-                <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
-            </Box>
             {/* Add Profile Popover */}
             <Popover
                 open={Boolean(addProfileAnchorEl)}
@@ -382,24 +351,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, body, activeActi
                     </Button>
                 </Box>
             </Popover>
-            {/* Footer bottom row: the slogan. Still footerHeight tall, so its
-                bottom lines up with the activity bar's footer. The GitHub star
-                lives in the activity bar, under Help. */}
-            <Box
-                sx={{
-                    height: footerHeight, py: 1, px: 2, borderTop: '1px solid', borderColor: 'divider',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-            >
-                <Typography
-                    variant="caption"
-                    component="div"
-                    sx={{ color: 'text.secondary', textAlign: 'center', fontStyle: 'italic' }}
-                >
-                    <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
-                        <Box component="span" sx={{ cursor: 'default' }}>{t('layout.slogan')}</Box>
-                    </Tooltip>
-                </Typography>
+            {/* App information stays at the bottom of the secondary navigation. */}
+            <Box sx={{ px: 2, pb: 2, pt: 1, flexShrink: 0, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5, minWidth: 0 }}>
+                    <VersionDisplay onClick={() => setUpdatePanelOpen(true)}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {displayVersion(currentVersion)}
+                        </Typography>
+                    </VersionDisplay>
+                </Box>
+                <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', textAlign: 'center', cursor: 'default' }}>
+                        {t('layout.slogan')}
+                    </Typography>
+                </Tooltip>
             </Box>
             {/* Update Panel Dialog */}
             <UpdatePanelDialog

@@ -11,8 +11,9 @@ import Transcript from '../../transcript/Transcript';
 import type { TranscriptBlock } from '../../transcript/model';
 import { ConversationPane } from './ConversationPane';
 import { ProjectsHostProvider } from '../../host/ProjectsHost';
+import { writeLocal } from '../../utils/storage';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, options?: Record<string, unknown>) => key === 'im.source' ? `${options?.platform} · ${options?.chat}` : key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 const composer = vi.hoisted(() => vi.fn());
 vi.mock('../ThreadComposer', () => ({ ThreadComposer: (props: unknown) => { composer(props); return <div data-testid="composer" />; } }));
 
@@ -29,7 +30,7 @@ const props = (messages: ThreadEvent[] = []): ComponentProps<typeof Conversation
 const show = (p: ComponentProps<typeof ConversationPane>) => render(<MemoryRouter><ProjectsHostProvider host={{ paths: { list: '/projects', project: (id) => `/projects/${id}`, folder: () => '/folders' } }}><ConversationPane {...p} /></ProjectsHostProvider></MemoryRouter>);
 
 describe('conversation presentation', () => {
-    it.each(['light', 'dark', 'sunlit', 'claude', 'ds'] as const)('matches Thread message and Markdown styles in %s', (mode) => {
+    it.each(['light', 'dark', 'claude', 'ds'] as const)('matches Thread message and Markdown styles in %s', (mode) => {
         const text = '# Heading\n\nParagraph with **emphasis** and `inline`.\n\n> Quote\n\n- List item\n\n| Name | Value |\n| --- | --- |\n| One | Two |';
         const blocks: TranscriptBlock[] = [{ type: 'user', message: { kind: 'user', content: 'Same user message', timestamp: '' } }];
         const view = render(<ThemeProvider theme={createAppTheme(mode)}><MemoryRouter>
@@ -56,6 +57,26 @@ describe('conversation presentation', () => {
         expect(view.container.querySelectorAll('table')).toHaveLength(2);
     });
 
+    it('shows the new-session boundary without hiding earlier messages', () => {
+        show(props([event('user', 'Earlier message'), event('command', 'clear', { payload: JSON.stringify({ name: 'clear', state: 'ok' }) })]));
+        expect(screen.getByText('Earlier message')).toBeInTheDocument();
+        expect(screen.getByText('projects.transcript.newStarted')).toBeInTheDocument();
+    });
+
+    it('offers a way back to the latest messages after scrolling up', () => {
+        show(props([event('assistant', 'A reply')]));
+        const scroller = screen.getByTestId('conversation-scroll');
+        Object.defineProperties(scroller, {
+            scrollHeight: { configurable: true, value: 1000 },
+            clientHeight: { configurable: true, value: 300 },
+            scrollTop: { configurable: true, writable: true, value: 100 },
+        });
+        scroller.scrollTo = vi.fn();
+        fireEvent.scroll(scroller);
+        fireEvent.click(screen.getByRole('button', { name: /conversation.latest/ }));
+        expect(scroller.scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
+    });
+
     it('keeps the existing typography for Markdown outside conversation replies', () => {
         render(<><section data-testid="detail"><Markdown text="# Detail" /></section><section data-testid="reply"><Markdown text="# Reply" conversation /></section></>);
         expect(getComputedStyle(within(screen.getByTestId('detail')).getByRole('heading')).fontSize).toBe('22.4px');
@@ -75,17 +96,18 @@ describe('conversation presentation', () => {
         expect(writeText).toHaveBeenCalledWith('const value = 1;');
     });
 
-    it('preserves attachment-only messages, IM provenance, busy and error actions', () => {
+    it('preserves attachment-only messages, IM provenance and the live-turn line', () => {
         show({ ...props([
             event('user', '', { source: 'im', source_platform: 'telegram', source_chat_id: 'chat', payload: JSON.stringify({ attachments: [{ name: 'log.txt', path: 'uploads/log.txt', type: 'text/plain', size: 32 }] }) }),
             event('error', 'Connection failed'),
-        ]), busy: true, chatTitle: () => 'Team chat' });
+        ]), busy: true });
         expect(screen.getByText('log.txt')).toBeInTheDocument();
-        expect(screen.getByText(/Team chat/)).toBeInTheDocument();
-        expect(screen.getByRole('status')).toHaveTextContent('chat.thinking');
+        expect(screen.getByTestId('entity-label')).toHaveTextContent('Telegram·chat');
+        // The live turn reads through the shared transcript's working line.
+        expect(screen.getByRole('status')).toHaveTextContent('projects.transcript.verb_working');
         expect(within(screen.getByRole('status')).getByRole('progressbar')).toBeInTheDocument();
-        expect(screen.getByRole('alert')).toHaveTextContent('Connection failed');
-        expect(screen.getByRole('link', { name: 'connection.open' })).toHaveAttribute('href', '/settings');
+        // An error reads like a thread's: the same error block, no own actions row.
+        expect(screen.getByText('Connection failed')).toBeInTheDocument();
         expect(composer).toHaveBeenLastCalledWith(expect.objectContaining({ draftKey: 'coordinator', streaming: true, placeholder: 'conversation.queuePlaceholder' }));
     });
 
@@ -130,13 +152,126 @@ describe('conversation presentation', () => {
         expect(screen.getByLabelText('conversation.chosen')).toBeInTheDocument();
     });
 
+    it('says which thread and PR a decision card is about, and opens the thread', () => {
+        const options = [{ label: 'Merge base and push' }, { label: "I'll handle it" }];
+        const card = (extra: object) => event('decision', 'Resolve?', { id: 'dec', payload: JSON.stringify({ question: 'Resolve?', options, recommended: 0, ...extra }) });
+        const p = { ...props([card({ thread_id: 't1', thread_seq: 12, thread_title: 'Old title', number: 2728, link_kind: 'pr' })]), threads: new Map([['t1', { id: 't1', seq: 12, title: 'Fix login' } as Thread]]) };
+        const view = show(p);
+        expect(screen.getByText('conversation.decisionAbout')).toBeInTheDocument();
+        expect(screen.getByText('conversation.decisionPR')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: '#12 Fix login' }));
+        expect(p.onOpenThread).toHaveBeenCalledWith('t1');
+        view.unmount();
+
+        show(props([card({ number: 9 })]));
+        expect(screen.getByText('conversation.decisionNumber')).toBeInTheDocument();
+        cleanup();
+        show(props([card({})]));
+        expect(screen.queryByText('conversation.decisionAbout')).toBeNull();
+    });
+
+    it('puts the card an answer is for in front of the picked option, apart from the user\'s words', () => {
+        const answer = (a: object) => event('user', "I'll handle it", { id: `u-${JSON.stringify(a)}`, payload: JSON.stringify({ answer: { card: 'dec', question: 'Resolve?', ...a } }) });
+        show({ ...props([answer({ thread_id: 't1', thread_seq: 12, thread_title: 'Fix login', number: 2728, link_kind: 'pr' }), answer({})]), threads: new Map([['t1', { id: 't1', seq: 12, title: 'Fix login' } as Thread]]) });
+        const lead = screen.getByText('conversation.decisionAbout #12 Fix login · conversation.decisionPR');
+        const pick = screen.getAllByText("I'll handle it")[0];
+        expect(lead.parentElement).toBe(pick.parentElement);
+        expect(lead.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.getByText('conversation.answerTo')).toBeInTheDocument();
+    });
+
     it('leaves composer configuration, send callbacks and empty-state seeds intact', async () => {
         const p = { ...props(), disabled: true, model: 'chosen-model', onModelChange: vi.fn(), composerContext: <span>Controls</span> };
         show(p);
         fireEvent.click(screen.getByText('conversation.example1'));
         const configured = composer.mock.lastCall![0];
-        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, context: p.composerContext, seed: 'conversation.example1' });
+        expect(configured).toMatchObject({ disabled: true, model: 'chosen-model', onModelChange: p.onModelChange, seed: 'conversation.example1' });
+        const settings = screen.getByRole('button', { name: 'threadSettings.settings' });
+        expect(settings).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Controls')).not.toBeInTheDocument();
+        fireEvent.click(settings);
+        expect(settings).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Controls')).toBeVisible();
+        expect(configured).not.toHaveProperty('allowClear');
+        expect(configured.context).toBeUndefined();
         await configured.onSend('Hello', []);
         expect(p.onSend).toHaveBeenCalledWith('Hello', []);
+    });
+
+    it('offers the coordinator the send modes, and passes on whether its turn takes a message now', async () => {
+        const p = { ...props(), busy: true, insertable: false };
+        show(p);
+        const configured = composer.mock.calls.at(-1)?.[0] as { sendModes?: boolean; insertable?: boolean; onSend: (text: string, attachments: [], mode?: string) => Promise<boolean> };
+        expect(configured).toMatchObject({ sendModes: true, insertable: false });
+        await configured.onSend('later', [], 'next_turn');
+        expect(p.onSend).toHaveBeenCalledWith('later', [], 'next_turn');
+    });
+
+    it('renders the coordinator tool calls as the shared tool rows a thread gets', () => {
+        const messages = [
+            event('user', 'Start work.'),
+            event('tool_use', 'mcp__tingly-projects__start_thread', { request_id: 'call-1', payload: '{"title": "Ship it"}' }),
+            event('tool_result', 'started thread 1234', { request_id: 'call-1' }),
+            event('assistant', 'Started a thread.'),
+        ];
+        show(props(messages));
+        // The call is a row of its own, named like the thread transcript names it.
+        expect(screen.getByText('mcp__tingly-projects__start_thread')).toBeInTheDocument();
+        expect(screen.getByText('Started a thread.')).toBeInTheDocument();
+        // The result stays a click away, not a second row.
+        expect(screen.queryByText('started thread 1234')).not.toBeInTheDocument();
+    });
+
+    it('folds a run of coordinator calls into the shared summary line', () => {
+        const messages = [
+            event('tool_use', 'mcp__tingly-projects__start_thread', { request_id: 'call-1', payload: '{"title": "Ship it"}' }),
+            event('tool_result', 'started thread 1234', { request_id: 'call-1' }),
+            event('tool_use', 'mcp__tingly-projects__list_threads', { request_id: 'call-2', payload: '{"limit": 5}' }),
+            event('tool_result', 'no threads yet', { request_id: 'call-2' }),
+        ];
+        show(props(messages));
+        // One run, folded like a thread's: the summary line stands in for the rows.
+        expect(screen.getByText((content) => typeof content === 'string' && content.toLowerCase().includes('projects.transcript.runother'))).toBeInTheDocument();
+        expect(screen.queryByText('mcp__tingly-projects__start_thread')).not.toBeInTheDocument();
+    });
+
+    it('hides the coordinator tool calls again in concise detail', () => {
+        writeLocal('conversation.messageDetail', 'concise');
+        const messages = [
+            event('tool_use', 'mcp__tingly-projects__start_thread', { request_id: 'call-1', payload: '{"title": "Ship it"}' }),
+            event('tool_result', 'started thread 1234', { request_id: 'call-1' }),
+            event('assistant', 'Started a thread.'),
+        ];
+        show(props(messages));
+        expect(screen.queryByText('mcp__tingly-projects__start_thread')).not.toBeInTheDocument();
+        expect(screen.getByText('Started a thread.')).toBeInTheDocument();
+    });
+
+    it('hands the stop request to the composer while a turn runs', () => {
+        const onStop = vi.fn().mockResolvedValue(undefined);
+        show({ ...props(), busy: true, onStop });
+        const configured = composer.mock.lastCall![0];
+        expect(configured).toMatchObject({ streaming: true, onStop });
+    });
+});
+
+describe('a thread asks to show the coordinator reply', () => {
+    it('brings the input into view, marks it, and says it was shown', () => {
+        const scrolled = vi.fn();
+        Element.prototype.scrollIntoView = scrolled;
+        const onFocused = vi.fn();
+        const input = event('thread_update', 'PR #11 was merged into main.', { payload: JSON.stringify({ thread_id: 't', title: 'Fix login', kind: 'github', status: 'ready' }) });
+        const { container } = show({ ...props([input, event('assistant', 'PR #11 landed.')]), focusEventId: input.id, onFocused });
+        const row = container.querySelector(`[data-event-id="${input.id}"]`);
+        expect(row).not.toBeNull();
+        expect(row!.hasAttribute('data-focused')).toBe(true);
+        expect(scrolled).toHaveBeenCalled();
+        expect(onFocused).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves an input that is not loaded alone', () => {
+        const onFocused = vi.fn();
+        show({ ...props([event('assistant', 'Hi.')]), focusEventId: 'older', onFocused });
+        expect(onFocused).not.toHaveBeenCalled();
     });
 });

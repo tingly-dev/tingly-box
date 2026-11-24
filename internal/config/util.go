@@ -49,6 +49,10 @@ func GenerateModelToken() (string, error) {
 	return GenerateSecureToken("tb-model-")
 }
 
+func GenerateMCPToken() (string, error) {
+	return GenerateSecureToken("tb-mcp-")
+}
+
 // GenerateSecureToken generates a cryptographically random token for user authentication
 // The token is a 256-bit (32 byte) random value, hex-encoded, with a "tingly-box-" prefix
 func GenerateSecureToken(prefix string) (string, error) {

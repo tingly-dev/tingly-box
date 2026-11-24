@@ -1,6 +1,7 @@
 import { Box, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
 import CodeBlock from '@/components/CodeBlock';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface ManualFileTab {
     /** Tab strip label, e.g. "JSON" / "Windows" / "Linux/macOS" / "TOML". */
@@ -54,7 +55,7 @@ export const ManualFileSection: React.FC<ManualFileSectionProps> = ({
                     sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
                 >
                     {tabs.map((tab) => (
-                        <Tab key={tab.value} label={tab.label} value={tab.value} sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                        <Tab key={tab.value} label={tab.label} value={tab.value} sx={{ minHeight: 32, py: 0.5, fontSize: fontSizes.base }} />
                     ))}
                 </Tabs>
             </Box>

@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,22 +25,42 @@ import (
 
 // Errors returned to callers (mapped to HTTP statuses by the module).
 var (
-	ErrPaused   = errors.New("the project is paused; resume it first")
-	ErrArchived = errors.New("the project is archived; unarchive it first")
-	ErrResolved = errors.New("the thread is resolved; reopen it first")
-	ErrNoPrompt = errors.New("no pending request with that id")
+	ErrPaused         = errors.New("the project is paused; resume it first")
+	ErrArchived       = errors.New("the project is archived; unarchive it first")
+	ErrThreadArchived = errors.New("the session is archived; restore it first")
+	ErrResolved       = errors.New("the thread is resolved; reopen it first")
+	ErrNoPrompt       = errors.New("no pending request with that id")
 	// ErrNotProject is for starting a worker in a project that is a folder.
 	ErrNotProject = errors.New("only a project's main thread starts threads in it")
+	// ErrNoOwnBranch is for choosing a base or branch where the thread gets none.
+	ErrNoOwnBranch = errors.New("base and branch need a repository and its own worktree: the thread uses no directory, or its directory is shared by every thread (a plain directory, or a Git one set to share)")
 	// ErrMainThread is for running a main thread as an agent session.
 	ErrMainThread = errors.New("a main thread is the project conversation; send to it through the coordinator")
 	// ErrEmptyTitle is for renaming a thread to nothing.
 	ErrEmptyTitle = errors.New("the title is empty")
+	// ErrNoFailedTurn is for retrying a thread whose latest turn did not fail.
+	ErrNoFailedTurn = errors.New("the thread has no failed turn to retry")
 )
 
-// MaxRunningPerProject caps concurrently running turns in one project. Turns
-// beyond it wait their turn. Preferences such as "at most two at a time"
-// are the coordinator's to follow; this is only the safety net.
-const MaxRunningPerProject = 4
+// MaxRunningThreadsLimit is the largest limit a project can set. There is
+// no unlimited setting.
+const MaxRunningThreadsLimit = 100
+
+// RunningLimit is how many turns may run at once under p. A folder has no
+// setting of its own: all folders share MaxRunningSessions. A project without
+// a valid setting gets the default, never "no limit".
+func RunningLimit(p *db.Project) int {
+	if p.Type == db.ProjectFolder {
+		return MaxRunningSessions
+	}
+	if p.MaxRunningThreads < 1 {
+		return db.DefaultMaxRunningThreads
+	}
+	return p.MaxRunningThreads
+}
+
+// ValidMaxRunningThreads reports whether n is a value a project can be set to.
+func ValidMaxRunningThreads(n int) bool { return n >= 1 && n <= MaxRunningThreadsLimit }
 
 // MaxRunningSessions caps concurrently running folder threads, which share
 // one limit across all folders. It matches the resident process pool.
@@ -45,7 +68,7 @@ const MaxRunningSessions = 10
 
 // Default permission mode threads run in: edits are accepted, anything else
 // that needs approval waits on the user in the thread.
-const DefaultPermissionMode = "acceptEdits"
+const DefaultPermissionMode = db.DefaultThreadPermissionMode
 
 // ThreadEnv supplies what threads need from the global settings: the
 // environment pointing Claude Code at the configured gateway, and the model
@@ -57,9 +80,11 @@ type ThreadEnv interface {
 // Report is what a finished turn tells the coordinator.
 type Report struct {
 	Thread db.Thread
-	// Kind is finished, needs_input, failed or stalled.
+	// Kind is finished, needs_input, failed, stalled or notify.
 	Kind string
 	Text string
+	// Events are the PR changes of a github report (Thread is the first one's).
+	Events []prEvent
 }
 
 // Report kinds.
@@ -74,6 +99,14 @@ const (
 // what makes it a thread: its queue, the per-project limit, approvals in the
 // thread view, and the report to the coordinator after each turn.
 type Threads struct {
+	// remoteDiff lets a PR's diff be read from GitHub when its branches are not in
+	// the checkout. Off: that read costs requests and a token, so for now such a PR
+	// says so and links to GitHub (see "A PR's diff" in github-tools.md).
+	remoteDiff bool
+
+	// links opens a thread's merge request; it is read when needed because the
+	// service may swap its GitHub.
+	links  func() *Links
 	store  *db.Store
 	layout Layout
 	hub    *Hub
@@ -95,14 +128,36 @@ type Threads struct {
 	// OnStep is called with each text and tool call of a thread's own turn
 	// (not a subagent's), as it is recorded. It must not block.
 	OnStep func(t db.Thread, e db.ThreadEvent)
+	// SessionToolsConfig provides the MCP configuration scoped to the current thread.
+	SessionToolsConfig func(threadID string) (string, error)
+	// RevokeTools ends the thread's tool access once its session is closed
+	// (resolve, archive, pause); the next turn gets a fresh one.
+	RevokeTools func(threadID string)
 
 	// StallAfter is how long a running thread may show no activity before
 	// the coordinator is told; zero means DefaultStallAfter.
 	StallAfter time.Duration
+	// HoldGrace is how long a held report waits for the follow-up turn Claude
+	// starts when a background task ends; zero means DefaultHoldGrace.
+	HoldGrace time.Duration
+	// HoldMax is the longest a report is held for background tasks that never
+	// end; zero means DefaultHoldMax.
+	HoldMax time.Duration
+	// backgroundCount replaces the engine's count of a thread's running
+	// background tasks; tests only.
+	backgroundCount func(threadID string) int
+	// coordinatorInsertable says whether a main thread's coordinator would
+	// take a message into its running turn; the service sets it.
+	coordinatorInsertable func(main *db.Thread) bool
 
-	mu sync.Mutex
+	mu         sync.Mutex
+	startMu    sync.Mutex      // serializes a launch with the restart reservation
+	restarting map[string]bool // protected by mu
 	// stalled holds the running threads already reported as quiet.
 	stalled map[string]bool
+	// held holds the finished report of a worker whose turn ended while it
+	// still had background tasks (background.go).
+	held map[string]*heldReport
 	// folders caches which projects are folders (a project's type never changes).
 	folders map[string]bool
 	active  map[string]*activeThread
@@ -111,20 +166,30 @@ type Threads struct {
 	// The engine knows a thread by its Claude Code session id.
 	sessionOfThread map[string]string
 	threadOfSession map[string]string
-	slots           map[string]chan struct{}
+	slots           map[string]*limiter
 	threads         map[string]*sync.Mutex // serializes writes to one thread row
-	// allowed holds tools the user allowed for the rest of a thread.
+	lifecycle       map[string]*sync.Mutex // serializes message admission and session rotation
+	// allowed holds what the user allowed for the rest of a thread (allowKey).
 	allowed map[string]map[string]bool
+	// cards holds each thread's compaction card while one is running, so its
+	// outcome updates it in place.
+	cards map[string]*db.ThreadEvent
 }
 
 // activeThread is a thread with a message in flight: waiting for a slot,
 // or in a turn it started.
 type activeThread struct {
-	cancel  context.CancelFunc // gives up waiting for a slot
-	current *queued            // the message of the turn in flight
-	slot    chan struct{}      // held while current runs
-	queue   []queued
-	stopped bool
+	cancelCurrent bool
+	cancel        context.CancelFunc // gives up waiting for a slot
+	current       *queued            // the message of the turn in flight
+	slot          *limiter           // held while current runs
+	queue         []queued
+	stopped       bool
+	// stoppedBy is who stopped the turn, for the "Stopped" note.
+	stoppedBy Source
+	// ending is a stop on the way to resolving or archiving the thread: that
+	// shows itself, so the stopped turn leaves no "Stopped" note.
+	ending bool
 }
 
 type queued struct {
@@ -138,7 +203,13 @@ type queued struct {
 	// the transcript yet, only the chip event eventID, until its turn comes.
 	held    bool
 	eventID string
+	// compact makes the message a compaction request: its turn asks the agent
+	// to compact instead of sending text (see Threads.Compact).
+	compact *compactRequest
 }
+
+// compactRequest is a /compact waiting for its turn.
+type compactRequest struct{ instructions string }
 
 // Source says where a message to a thread came from. The zero value is the
 // web. It is stored on the user event the message becomes.
@@ -163,11 +234,39 @@ func queuedPrompt(q queued, libraryDir string) string {
 	if q.relayed {
 		text = coordinatorNote + text
 	}
-	return withAttachments(text, libraryDir, q.atts)
+	return withAttachments(literalPrompt(text), libraryDir, q.atts)
+}
+
+func (m *Threads) threadPrompt(q queued, p *db.Project, t *db.Thread) string {
+	text := q.text
+	if q.relayed {
+		text = coordinatorNote + text
+	}
+	text = literalPrompt(text)
+	note := m.layout.threadAttachmentNote(p, t, q.atts)
+	if note == "" {
+		return text
+	}
+	if strings.TrimSpace(text) == "" {
+		return note
+	}
+	return text + "\n\n" + note
 }
 
 // fromThread is the source of a message another thread sent.
 func fromThread(id string) Source { return Source{Kind: db.SourceThread, Ref: id} }
+
+// actor says who acted, for a note in the thread ("Stopped by the
+// coordinator."). The web is the default and says nothing.
+func (s Source) actor() string {
+	switch s.Kind {
+	case db.SourceIM:
+		return " from a chat"
+	case db.SourceThread:
+		return " by the coordinator"
+	}
+	return ""
+}
 
 func (s Source) stamp(e *db.ThreadEvent) {
 	e.Source, e.SourceRef, e.SourcePlatform, e.SourceChatID = s.Kind, s.Ref, s.Platform, s.ChatID
@@ -193,21 +292,42 @@ func (m *Threads) isFolder(projectID string) bool {
 
 // turnTally is what a turn's transcript entries add up to, for its report.
 type turnTally struct {
-	text         string // the main conversation's last text
-	inputTokens  int64
-	outputTokens int64
-	model        string
-	launchModel  string
+	text        string // the main conversation's last text
+	usage       db.Usage
+	model       string
+	launchModel string
+	// compact marks a turn that compacts the conversation: it reports to
+	// the chats that hear the thread, not to the coordinator.
+	compact bool
+	// granted is the Bash calls of the turn that run a command the user
+	// granted, by tool use id, until their results come.
+	granted map[string]db.ThreadGrant
+	// calledGrants is the ids of the grants a call of the turn ran.
+	calledGrants map[string]bool
+}
+
+// addUsage folds a "usage" entry in; main is false for a subagent's.
+func (t *turnTally) addUsage(u engine.TurnUsage, main bool) {
+	t.usage.Input += u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
+	t.usage.Output += u.OutputTokens
+	t.usage.CacheRead += u.CacheReadTokens
+	t.usage.CacheWrite += u.CacheWriteTokens
+	if main {
+		if u.Model != "" {
+			t.model = u.Model
+		}
+		t.usage.ContextTokens, t.usage.ContextWindow, t.usage.DurationMS = u.ContextTokens, u.ContextWindow, u.DurationMS
+	}
 }
 
 // NewThreads builds the thread manager.
 func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env ThreadEnv) *Threads {
 	m := &Threads{
 		store: store, layout: layout, hub: hub, env: env,
-		active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
+		restarting: map[string]bool{}, active: map[string]*activeThread{}, turns: map[string]*turnTally{}, prompts: map[string]*threadPrompter{},
 		sessionOfThread: map[string]string{}, threadOfSession: map[string]string{},
-		slots: map[string]chan struct{}{}, threads: map[string]*sync.Mutex{},
-		allowed: map[string]map[string]bool{}, folders: map[string]bool{},
+		slots: map[string]*limiter{}, threads: map[string]*sync.Mutex{}, lifecycle: map[string]*sync.Mutex{},
+		allowed: map[string]map[string]bool{}, folders: map[string]bool{}, held: map[string]*heldReport{}, cards: map[string]*db.ThreadEvent{},
 	}
 	m.engine = engine.New(engine.Config{
 		Agent:     agents.Service,
@@ -235,6 +355,26 @@ func NewThreads(store *db.Store, layout Layout, hub *Hub, agents Agents, env Thr
 // Shutdown stops every turn and closes every resident process.
 func (m *Threads) Shutdown(ctx context.Context) { m.engine.Shutdown(ctx) }
 
+// waitIdle waits until no thread has a turn in flight or queued, so nothing
+// still writes its events, stats or files, or until ctx ends.
+func (m *Threads) waitIdle(ctx context.Context) {
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		m.mu.Lock()
+		idle := len(m.active) == 0
+		m.mu.Unlock()
+		if idle {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
 // sessionOf is the session id the engine knows threadID by.
 func (m *Threads) sessionOf(threadID string) string {
 	m.mu.Lock()
@@ -245,6 +385,10 @@ func (m *Threads) sessionOf(threadID string) string {
 	}
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
+		return ""
+	}
+	if t.SessionID == "" {
+		// Not started yet: nothing to remember, and "" must not name a thread.
 		return ""
 	}
 	m.mu.Lock()
@@ -272,8 +416,8 @@ func (m *Threads) prompter(threadID string) *threadPrompter {
 	return p
 }
 
-// threadPermissionMode is the mode a thread's turns run in: its own, else
-// its project's.
+// threadPermissionMode is the mode a thread's turns run in: its own, else its
+// project's (a row from before threads pinned their mode).
 func threadPermissionMode(p *db.Project, t *db.Thread) string {
 	if t.PermissionMode != "" {
 		return t.PermissionMode
@@ -282,10 +426,21 @@ func threadPermissionMode(p *db.Project, t *db.Thread) string {
 }
 
 func queuedNote(p *db.Project) string {
+	n := RunningLimit(p)
 	if p.Type == db.ProjectFolder {
-		return fmt.Sprintf("Queued: %d folder threads are already running.", MaxRunningSessions)
+		return fmt.Sprintf("Queued: %d folder threads are already running.", n)
 	}
-	return fmt.Sprintf("Queued: %d threads are already running in this project.", MaxRunningPerProject)
+	return fmt.Sprintf("Queued: %d threads are already running in this project (its limit). It starts when one finishes.", n)
+}
+
+// pinThreadDefaults copies the project's current thread defaults onto t, so
+// the thread keeps them when the project's change.
+func pinThreadDefaults(p *db.Project, t *db.Thread) {
+	profile := p.ThreadProfile
+	t.ProfileOverride = &profile
+	t.ModelOverride = p.ThreadModel
+	t.EffortOverride = p.ThreadEffort
+	t.PermissionMode = permissionMode(p)
 }
 
 func permissionMode(p *db.Project) string {
@@ -295,21 +450,43 @@ func permissionMode(p *db.Project) string {
 	return DefaultPermissionMode
 }
 
-// slot is the running-turn limit of a project, or of all folder threads
-// together (key "").
-func (m *Threads) slot(key string) chan struct{} {
+// slot is the running-turn limiter of p's project, or of all folder threads
+// together (key ""), set to p's current limit.
+func (m *Threads) slot(p *db.Project) *limiter {
+	key := p.ID
+	if p.Type == db.ProjectFolder {
+		key = ""
+	}
+	limit := RunningLimit(p)
+	m.mu.Lock()
+	l, ok := m.slots[key]
+	if !ok {
+		l = newLimiter(limit)
+		m.slots[key] = l
+	}
+	m.mu.Unlock()
+	if ok {
+		l.setLimit(limit)
+	}
+	return l
+}
+
+// ApplyLimit makes a project's running limit take effect now: raising it
+// starts waiting turns, lowering it leaves running turns alone.
+func (m *Threads) ApplyLimit(p *db.Project) { m.slot(p) }
+
+// setQueued marks whether t's next turn waits for a slot.
+func (m *Threads) setQueued(threadID string, queued bool) {
+	_, _ = m.update(threadID, func(t *db.Thread) { t.Queued = queued })
+}
+
+func (m *Threads) lifecycleLock(threadID string) *sync.Mutex {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s, ok := m.slots[key]
-	if !ok {
-		n := MaxRunningPerProject
-		if key == "" {
-			n = MaxRunningSessions
-		}
-		s = make(chan struct{}, n)
-		m.slots[key] = s
+	if m.lifecycle[threadID] == nil {
+		m.lifecycle[threadID] = &sync.Mutex{}
 	}
-	return s
+	return m.lifecycle[threadID]
 }
 
 func (m *Threads) rowLock(threadID string) *sync.Mutex {
@@ -325,6 +502,7 @@ func (m *Threads) rowLock(threadID string) *sync.Mutex {
 
 // publish tells open pages a thread changed, with its project's fresh counts.
 func (m *Threads) publish(t *db.Thread) {
+	m.AnnotateOne(t)
 	ev := Event{Type: EventThread, ProjectID: t.ProjectID, Data: t}
 	if c, err := m.store.ProjectThreadCounts(t.ProjectID); err == nil {
 		ev.Threads = &c
@@ -375,8 +553,12 @@ type StartSpec struct {
 	Task  string
 	// Repo is the path of one of the project's repos; empty picks the first,
 	// "none" works without a repository.
-	Repo   string
-	Origin string
+	Repo string
+	// Base is the local branch the thread's branch starts from; empty uses
+	// the repository's base branch. Branch names the new branch; empty
+	// generates one. Both need a worktree.
+	Base, Branch string
+	Origin       string
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -417,7 +599,28 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 		Origin:    spec.Origin,
 		SessionID: uuid.NewString(),
 	}
+	pinThreadDefaults(p, t)
 	repo, err := pickRepo(p, spec.Repo)
+	if err != nil {
+		return nil, err
+	}
+	if repo != nil {
+		effective := p.EffectiveRepo(*repo)
+		// Reject a directory whose type has changed since configuration rather than
+		// silently running in a different workspace than the user selected.
+		info, err := InspectDirectory(ctx, effective.Path)
+		if err != nil {
+			return nil, err
+		}
+		original, err := filepath.EvalSymlinks(effective.Path)
+		if err != nil {
+			return nil, err
+		}
+		if db.PathKey(info.Root) != db.PathKey(original) || info.Kind != effective.Kind {
+			return nil, fmt.Errorf("directory %q has changed since it was configured", effective.Path)
+		}
+	}
+	base, branch, err := chooseBranch(ctx, p, repo, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -428,24 +631,37 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	var note string
 	if repo != nil {
 		t.RepoPath, t.BaseBranch = repo.Path, repo.BaseBranch
-		t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
-		// In the repository's own .claude/worktrees; if that cannot be used
-		// (read-only repository, ...) fall back to the data directory, where
-		// threads used to live, and say so.
-		inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
-		err := excludeWorktrees(ctx, repo.Path)
-		if err == nil {
-			err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, repo.BaseBranch)
+		if base != "" {
+			t.BaseBranch = base
 		}
-		if err == nil {
-			t.Cwd = inRepo
+		if p.EffectiveRepo(*repo).WorkspaceMode == db.WorkspaceShared {
+			t.Cwd = repo.Path
 		} else {
-			note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
-			if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, repo.BaseBranch); err != nil {
-				t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
-				_ = m.store.SaveThread(t)
-				m.publish(t)
-				return t, nil
+			t.Branch = branch
+			if t.Branch == "" {
+				t.Branch = fmt.Sprintf("tp/%s-%s", slugify(title), t.ID[:6])
+			}
+			// In the repository's own .claude/worktrees; if that cannot be used
+			// (read-only repository, ...) fall back to the data directory, where
+			// threads used to live, and say so.
+			inRepo := RepoWorktreeDir(repo.Path, slugify(title), t.ID)
+			err := excludeWorktrees(ctx, repo.Path)
+			if err == nil {
+				err = AddWorktree(ctx, repo.Path, inRepo, t.Branch, t.BaseBranch)
+			}
+			if err == nil {
+				t.Cwd = inRepo
+			} else {
+				note = fmt.Sprintf("Could not create the worktree in %s (%v); using %s instead.", filepath.Join(repo.Path, ".claude", "worktrees"), err, t.Cwd)
+				// A failed git worktree add can leave its branch behind. Use a
+				// fresh name rather than deleting a branch we may not own.
+				t.Branch += "-fallback-" + t.ID[6:12]
+				if err := AddWorktree(ctx, repo.Path, t.Cwd, t.Branch, t.BaseBranch); err != nil {
+					t.Status, t.WaitReason = db.ThreadWaiting, "Could not create the worktree: "+err.Error()
+					_ = m.store.SaveThread(t)
+					m.publish(t)
+					return t, nil
+				}
 			}
 		}
 	} else if err := os.MkdirAll(t.Cwd, 0o755); err != nil {
@@ -469,58 +685,163 @@ func (m *Threads) Start(ctx context.Context, p *db.Project, spec StartSpec) (*db
 	return t, nil
 }
 
+// chooseBranch checks the base and branch name a caller asked for, before
+// anything is created. Both empty means the defaults.
+func chooseBranch(ctx context.Context, p *db.Project, repo *db.Repo, spec StartSpec) (base, branch string, err error) {
+	base, branch = strings.TrimSpace(spec.Base), strings.TrimSpace(spec.Branch)
+	if base == "" && branch == "" {
+		return "", "", nil
+	}
+	if repo == nil || p.EffectiveRepo(*repo).WorkspaceMode == db.WorkspaceShared {
+		return "", "", ErrNoOwnBranch
+	}
+	if base != "" && !BranchExists(ctx, repo.Path, base) {
+		return "", "", fmt.Errorf("base %q is not a local branch of %s", base, repo.Path)
+	}
+	if branch != "" {
+		if err := checkNewBranch(ctx, repo.Path, branch); err != nil {
+			return "", "", err
+		}
+	}
+	return base, branch, nil
+}
+
+// checkProposals refuses a proposed card Start would refuse later: the user
+// cannot edit a card, so a bad base or a taken branch could never start. Two
+// cards naming the same branch collide too, so the second is refused here.
+func checkProposals(ctx context.Context, p *db.Project, threads []Suggestion) error {
+	taken := map[string]bool{}
+	for i, s := range threads {
+		repo, err := pickRepo(p, s.Repo)
+		if err != nil {
+			return fmt.Errorf("thread %d: %w", i+1, err)
+		}
+		_, branch, err := chooseBranch(ctx, p, repo, StartSpec{Base: s.Base, Branch: s.Branch})
+		if err != nil {
+			return fmt.Errorf("thread %d: %w", i+1, err)
+		}
+		if branch != "" {
+			key := repo.Path + "\x00" + branch
+			if taken[key] {
+				return fmt.Errorf("thread %d: branch %q is used by another proposed thread", i+1, branch)
+			}
+			taken[key] = true
+		}
+	}
+	return nil
+}
+
 func pickRepo(p *db.Project, want string) (*db.Repo, error) {
 	if want == "none" || len(p.Repos) == 0 {
 		return nil, nil
 	}
 	if want == "" {
-		return &p.Repos[0], nil
+		return p.PrimaryRepo(), nil
 	}
 	clean := filepath.Clean(want)
+	var match *db.Repo
 	for i := range p.Repos {
 		r := &p.Repos[i]
-		if filepath.Clean(r.Path) == clean || filepath.Base(r.Path) == want {
+		if filepath.Clean(r.Path) == clean {
 			return r, nil
 		}
+		if filepath.Base(r.Path) == want {
+			if match != nil {
+				return nil, fmt.Errorf("directory name %q is ambiguous; use its full path", want)
+			}
+			match = r
+		}
 	}
-	return nil, fmt.Errorf("repository %q is not part of this project", want)
+	if match != nil {
+		return match, nil
+	}
+	return nil, fmt.Errorf("directory %q is not part of this project", want)
 }
 
 // writeSettings gives the thread's Claude Code session access to the
 // project's library, memory and other repositories.
 func (m *Threads) writeSettings(p *db.Project, t *db.Thread) error {
+	// autoMemoryDirectory points Claude Code's own memory at the project's, so
+	// a project has one memory whatever each thread's cwd is.
+	settings := map[string]any{"autoMemoryDirectory": m.layout.MemoryDir(p.ID)}
+	m.grantProjectAccess(settings, p, t)
+	path := m.layout.SettingsFile(p.ID, t.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return writeFileIfChanged(path, []byte(jsonString(settings)), 0o644)
+}
+
+// writeFileIfChanged replaces path with data only when its content differs,
+// through a rename, so a reader never sees it half written. The resident
+// process reads the file only when it starts; permission rules that changed
+// reach it as a control request instead (agentboot/engine applyLive), and
+// never restart it.
+func writeFileIfChanged(path string, data []byte, perm os.FileMode) error {
+	if old, err := os.ReadFile(path); err == nil && string(old) == string(data) {
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
+	if err != nil {
+		return err
+	}
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp.Name(), perm)
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
+}
+
+// grantProjectAccess adds the directories every project thread works with to
+// doc: the library (the shared upload directory, with rules so it is writable
+// in any permission mode), the memory and the project's other repositories.
+func (m *Threads) grantProjectAccess(doc map[string]any, p *db.Project, t *db.Thread) {
 	dirs := []string{m.layout.LibraryDir(p.ID), m.layout.MemoryDir(p.ID)}
 	for _, r := range p.Repos {
 		if r.Path != t.RepoPath {
 			dirs = append(dirs, r.Path)
 		}
 	}
-	// autoMemoryDirectory points Claude Code's own memory at the project's, so
-	// a project has one memory whatever each thread's cwd is.
-	settings := map[string]any{
-		"autoMemoryDirectory": m.layout.MemoryDir(p.ID),
-		"permissions":         map[string]any{"additionalDirectories": dirs},
-	}
-	path := m.layout.SettingsFile(p.ID, t.ID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(jsonString(settings)), 0o644)
+	addDirectories(doc, dirs...)
+	grantLibrary(doc, m.layout.LibraryDir(p.ID))
+	grantAutoGit(doc, p, t)
+	grantBuiltinTools(doc, p)
+	grantRules(doc, t, time.Now())
 }
 
 // Send gives a Claude Code thread a message; src says who sent it. A busy
 // thread runs it after its current turn. A main thread is not run here: its
 // messages go through Service.Send to the coordinator.
 func (m *Threads) Send(ctx context.Context, threadID, text string, src Source, atts []Attachment) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	if _, err := m.sendable(threadID); err != nil {
 		return nil, err
 	}
-	m.enqueue(threadID, queued{text: text, src: src, atts: atts, relayed: src.Kind == db.SourceThread})
+	if err := m.enqueue(threadID, queued{text: text, src: src, atts: atts, relayed: src.Kind == db.SourceThread}); err != nil {
+		return nil, err
+	}
 	return m.store.GetThread(threadID)
 }
 
 // sendable is the thread if a message may be sent to it now.
 func (m *Threads) sendable(threadID string) (*db.Thread, error) {
+	m.mu.Lock()
+	restarting := m.restarting[threadID]
+	m.mu.Unlock()
+	if restarting {
+		return nil, ErrRestarting
+	}
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return nil, err
@@ -538,6 +859,9 @@ func (m *Threads) sendable(threadID string) (*db.Thread, error) {
 	if p.Paused {
 		return nil, ErrPaused
 	}
+	if t.ArchivedAt != nil {
+		return nil, ErrThreadArchived
+	}
 	if t.Status == db.ThreadResolved {
 		return nil, ErrResolved
 	}
@@ -546,10 +870,18 @@ func (m *Threads) sendable(threadID string) (*db.Thread, error) {
 
 // enqueue records the message and starts a turn unless the thread is busy,
 // in which case it runs after the current one.
-func (m *Threads) enqueue(threadID string, q queued) {
+func (m *Threads) enqueue(threadID string, q queued) error {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+	m.mu.Lock()
+	restarting := m.restarting[threadID]
+	m.mu.Unlock()
+	if restarting {
+		return ErrRestarting
+	}
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
-		return
+		return err
 	}
 	if q.held && m.Running(threadID) {
 		q.eventID = m.holdMessage(t, q)
@@ -578,7 +910,7 @@ func (m *Threads) enqueue(threadID string, q queued) {
 			// nothing left to pick this message up.
 			m.next(threadID)
 		}
-		return
+		return nil
 	}
 	a := &activeThread{current: &q}
 	m.active[threadID] = a
@@ -586,9 +918,72 @@ func (m *Threads) enqueue(threadID string, q queued) {
 	// The turn ended while the message was being held: it goes now.
 	m.releaseHeld(t, &q)
 	go m.begin(threadID, a)
+	return nil
 }
 
 var needsInputRe = regexp.MustCompile(`(?m)^\s*NEEDS_INPUT:\s*(.+)$`)
+
+// turnLaunch builds one turn's launch options: env and settings (worker
+// profile included), model, effort, permission mode and session tools.
+// Shared by begin (a queued user message) and Retry (a failed turn). An
+// error means the turn cannot launch (a worker profile is unavailable); the
+// thread has already been marked failed and noted.
+func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread, p *db.Project, folder bool) (model string, opts agentboot.ExecutionOptions, err error) {
+	env, defModel, settings := m.launchEnv(ctx, t, folder)
+	if !folder {
+		profile := workerProfile(t)
+		if l, ok := m.env.(Launcher); ok && profile != "" {
+			env, settings, err = l.LaunchEnv(ctx, profile)
+			if err == nil {
+				settings, err = m.workerSettings(p, t, settings)
+			}
+			if err != nil {
+				m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("profile %s unavailable: %v", profile, err)})
+				_, _ = m.update(t.ID, func(t *db.Thread) {
+					t.Status, t.WaitReason = db.ThreadFailed, fmt.Sprintf("Failed: profile %s unavailable: %v", profile, err)
+				})
+				return "", opts, fmt.Errorf("profile %s unavailable: %w", profile, err)
+			}
+			defModel = ""
+		} else if profile != "" {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "profile unavailable"})
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed: profile unavailable" })
+			return "", opts, errors.New("profile unavailable")
+		}
+	}
+	// A worker's observed Model is history, not its launch choice: its own
+	// ModelOverride is, and the project's default is not consulted again.
+	model = t.Model
+	if !folder {
+		model = t.ModelOverride
+	}
+	if model == "" {
+		model = defModel
+	}
+	effort := t.EffortOverride
+	env = m.withTmpEnv(env, p, t)
+	opts = agentboot.ExecutionOptions{Model: model, Effort: effort, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
+	if m.SessionToolsConfig != nil {
+		if config, err := m.SessionToolsConfig(threadID); err == nil {
+			opts.MCPConfigPath = config
+		} else {
+			logrus.WithError(err).Warn("projects: cannot start session tools")
+		}
+	}
+	if !folder {
+		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
+		if settings == "" {
+			// The permission mode may have changed since Start wrote the file.
+			if err := m.writeSettings(p, t); err != nil {
+				logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot refresh thread settings")
+			}
+			opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
+		}
+	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
+		opts.SettingsPath = path
+	}
+	return model, opts, nil
+}
 
 // begin waits for a slot in the project, then starts a's current message
 // as a turn.
@@ -610,33 +1005,34 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 	defer cancel()
 	m.mu.Lock()
 	a.cancel = cancel
-	m.mu.Unlock()
-	slotKey := p.ID
-	if folder {
-		slotKey = ""
+	if a.cancelCurrent {
+		cancel()
 	}
-	slot := m.slot(slotKey)
-	select {
-	case slot <- struct{}{}:
-	default:
+	m.mu.Unlock()
+	slot := m.slot(p)
+	waited := false
+	err = slot.acquire(ctx, func() {
+		waited = true
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: queuedNote(p)})
-		select {
-		case slot <- struct{}{}:
-		case <-ctx.Done():
-			m.giveUp(threadID, a)
-			return
-		}
+		m.setQueued(threadID, true)
+	})
+	if waited {
+		m.setQueued(threadID, false)
+	}
+	if err != nil {
+		m.giveUp(threadID, a)
+		return
 	}
 
 	m.mu.Lock()
-	if a.stopped {
+	if a.cancelCurrent {
 		m.mu.Unlock()
-		<-slot
+		slot.release()
 		m.giveUp(threadID, a)
 		return
 	}
 	a.slot = slot
-	prompt := queuedPrompt(*a.current, m.layout.LibraryDir(UploadOwner(p, t)))
+	prompt := m.threadPrompt(*a.current, p, t)
 	m.mu.Unlock()
 	// Waiting for the slot can take a while: launch with what the owner
 	// picked since (profile, model, permission mode).
@@ -647,30 +1043,37 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		p = fresh
 	}
 
-	env, defModel, settings := m.launchEnv(ctx, t, folder)
-	// A worker's observed Model is history, not its launch choice. Only an
-	// explicit override pins it instead of following the project's default.
-	model := t.Model
-	if !folder {
-		model = t.ModelOverride
-		if model == "" {
-			model = p.ThreadModel
-		}
+	model, opts, lerr := m.turnLaunch(ctx, threadID, t, p, folder)
+	if lerr != nil {
+		m.mu.Lock()
+		a.slot = nil
+		m.mu.Unlock()
+		slot.release()
+		m.giveUp(threadID, a)
+		return
 	}
-	if model == "" {
-		model = defModel
+	m.startMu.Lock()
+	if ctx.Err() != nil {
+		m.startMu.Unlock()
+		slot.release()
+		m.giveUp(threadID, a)
+		return
+	}
+	if req := a.current.compact; req != nil {
+		m.startMu.Unlock()
+		m.mu.Lock()
+		m.turns[threadID] = &turnTally{launchModel: model, compact: true}
+		m.mu.Unlock()
+		launch := func(context.Context) agentboot.ExecutionOptions { return opts }
+		res, err := m.engine.Compact(ctx, m.sessionOf(threadID), t.Cwd, req.instructions, launch)
+		m.compactReturned(t, a, slot, res, err)
+		return
 	}
 	m.mu.Lock()
 	m.turns[threadID] = &turnTally{launchModel: model}
 	m.mu.Unlock()
-	opts := agentboot.ExecutionOptions{Model: model, PermissionMode: threadPermissionMode(p, t), Env: env, SettingsPath: settings, Entrypoint: sessionEntrypoint}
-	if !folder {
-		opts.AppendSystemPrompt = threadSystemPrompt(m.layout, p, t)
-		opts.SettingsPath = m.layout.SettingsFile(p.ID, t.ID)
-	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
-		opts.SettingsPath = path
-	}
 	started := m.engine.Start(m.sessionOf(threadID), t.Cwd, prompt, t.Turns > 0, func(context.Context) agentboot.ExecutionOptions { return opts })
+	m.startMu.Unlock()
 	if !started {
 		// Claude started a turn of its own in the meantime: this message
 		// waits for it (turnEnded picks it up).
@@ -678,9 +1081,90 @@ func (m *Threads) begin(threadID string, a *activeThread) {
 		a.queue = append([]queued{*a.current}, a.queue...)
 		a.current, a.slot = nil, nil
 		m.mu.Unlock()
-		<-slot
+		slot.release()
 		m.next(threadID)
+		return
 	}
+	// A Stop that landed while the turn was launching found nothing to
+	// interrupt in the engine, and its cancel does not reach a turn the engine
+	// owns. It left a.stopped for us: stop the turn now that it exists.
+	m.mu.Lock()
+	stopped := a.stopped
+	m.mu.Unlock()
+	if stopped {
+		m.engine.Stop(m.sessionOf(threadID))
+	}
+}
+
+// withTmpEnv points the thread's TMPDIR (and TMP, TEMP) at its scratch
+// directory in the shared library and creates it, whatever the launch mode:
+// project, profile or folder. On error the thread keeps the global temp dir.
+func (m *Threads) withTmpEnv(env []string, p *db.Project, t *db.Thread) []string {
+	dir := m.layout.TmpDir(UploadOwner(p, t), t.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot create the thread's temp dir")
+		return env
+	}
+	return setEnv(env, "TMPDIR", dir, "TMP", dir, "TEMP", dir)
+}
+
+// cleanTmp removes a finished thread's scratch directory. Files it sent with
+// send_file were copied into uploads/ and stay. Tool caches left inside (a
+// Go module cache marks its files read-only) are made writable first; a
+// directory that still cannot be removed is reported, not fatal.
+func (m *Threads) cleanTmp(t *db.Thread) {
+	if t == nil {
+		return
+	}
+	dir := m.layout.TmpDir(t.ProjectID, t.ID)
+	makeWritable(dir)
+	if err := os.RemoveAll(dir); err != nil {
+		logrus.WithError(err).WithField("thread_id", t.ID).Warn("projects: cannot remove the thread's temp dir")
+	}
+}
+
+// makeWritable adds the owner's write bit to everything under dir, so a
+// RemoveAll can take read-only caches (0555 directories, 0444 files) down.
+// A missing dir is fine; anything else is logged by the caller's remove.
+func makeWritable(dir string) {
+	if err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d == nil {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.Mode().Perm()&0o200 == 0 {
+			_ = os.Chmod(p, info.Mode().Perm()|0o200)
+		}
+		return nil
+	}); err != nil {
+		logrus.WithError(err).WithField("dir", dir).Warn("projects: cannot make the temp dir writable")
+	}
+}
+
+// workerSettings combines profile settings with the project's required access.
+func (m *Threads) workerSettings(p *db.Project, t *db.Thread, host string) (string, error) {
+	doc := map[string]any{}
+	b, err := os.ReadFile(host)
+	if err != nil {
+		return "", err
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return "", err
+	}
+	m.grantProjectAccess(doc, p, t)
+	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
+	path := m.layout.SessionSettingsFile(t.ID)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return "", err
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, out, 0600)
 }
 
 // sessionSettings lets a folder thread read the folder's uploads, which live
@@ -698,18 +1182,18 @@ func (m *Threads) sessionSettings(p *db.Project, t *db.Thread, host string) (str
 			return host, err
 		}
 	}
-	perms, _ := doc["permissions"].(map[string]any)
-	if perms == nil {
-		perms = map[string]any{}
-	}
-	dirs, _ := perms["additionalDirectories"].([]any)
-	dirs = append(dirs, m.layout.LibraryDir(UploadOwner(p, t)))
+	library := m.layout.LibraryDir(UploadOwner(p, t))
+	addDirectories(doc, library)
+	grantLibrary(doc, library)
 	// Uploads of a thread from before they were shared per folder.
 	if legacy := m.layout.LibraryDir(SessionOwner(t.ID)); dirExists(legacy) {
-		dirs = append(dirs, legacy)
+		addDirectories(doc, legacy)
 	}
-	perms["additionalDirectories"] = dirs
-	doc["permissions"] = perms
+	// A folder session has the Projects tools too: the permission rules are the
+	// same as a project thread's.
+	grantBuiltinTools(doc, p)
+	// And what the user granted it on a request_permission card.
+	grantRules(doc, t, time.Now())
 	doc["autoMemoryDirectory"] = m.layout.MemoryDir(p.ID)
 	path := m.layout.SessionSettingsFile(t.ID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -754,22 +1238,39 @@ func (m *Threads) drop(threadID string) {
 // and moves on to anything sent since.
 func (m *Threads) giveUp(threadID string, a *activeThread) {
 	m.mu.Lock()
-	a.current = nil
+	a.current, a.slot = nil, nil
+	stopped, by, ending := a.stopped, a.stoppedBy, a.ending
 	m.mu.Unlock()
+	if stopped {
+		m.stoppedBeforeTurn(threadID, by, ending)
+	}
 	m.next(threadID)
+}
+
+// stoppedBeforeTurn settles a thread whose Stop came before its turn did, as
+// settle does a stopped turn: no turn ends to do it, and a new thread has
+// shown working since Start.
+func (m *Threads) stoppedBeforeTurn(threadID string, by Source, ending bool) {
+	t, err := m.update(threadID, func(t *db.Thread) {
+		if t.Status == db.ThreadWorking && !m.hasBackground(threadID) {
+			t.Status, t.WaitReason = db.RestingStatus(t), ""
+		}
+	})
+	if err != nil || ending || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
+		return
+	}
+	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
 }
 
 // turnEnded settles a finished turn: the thread's status and counters, its
 // report to the coordinator, and the next queued message.
 func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
-	m.prompter(threadID).cancelAll()
-
 	m.mu.Lock()
 	a := m.active[threadID]
-	var slot chan struct{}
+	var slot *limiter
 	if a != nil && !end.Unsolicited {
 		slot, a.slot = a.slot, nil
-		if end.NotSent && a.current != nil {
+		if end.NotSent && a.current != nil && !a.cancelCurrent {
 			// Claude took the turn first; the message goes after it.
 			a.queue = append([]queued{*a.current}, a.queue...)
 		}
@@ -779,10 +1280,17 @@ func (m *Threads) turnEnded(threadID string, end engine.TurnEnd) {
 	delete(m.turns, threadID)
 	m.mu.Unlock()
 	if slot != nil {
-		<-slot
+		slot.release()
 	}
 
 	if !end.NotSent {
+		if t, err := m.store.GetThread(threadID); err == nil && len(t.Grants) > 0 {
+			var called map[string]bool
+			if tally != nil {
+				called = tally.calledGrants
+			}
+			m.endTurnGrants(t, called)
+		}
 		m.settle(threadID, end, tally)
 	}
 
@@ -816,6 +1324,7 @@ func (m *Threads) next(threadID string) {
 	q := a.queue[0]
 	a.queue = a.queue[1:]
 	a.current = &q
+	a.cancelCurrent = false
 	m.mu.Unlock()
 	if t, err := m.store.GetThread(threadID); err == nil {
 		m.releaseHeld(t, &q)
@@ -828,12 +1337,13 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 	if tally == nil {
 		tally = &turnTally{}
 	}
+	m.dropHeldReport(threadID)
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return
 	}
 	stats := BranchStats{}
-	if t.RepoPath != "" {
+	if t.Branch != "" {
 		stats = Stats(context.Background(), t.Cwd, t.BaseBranch)
 	}
 	session := m.isFolder(t.ProjectID)
@@ -842,10 +1352,16 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		head = HeadBranch(context.Background(), t.Cwd)
 	}
 	report := Report{Kind: ReportFinished, Text: strings.TrimSpace(tally.text)}
+	held := false
 	t, _ = m.update(threadID, func(t *db.Thread) {
-		t.Turns++
-		t.InputTokens += tally.inputTokens
-		t.OutputTokens += tally.outputTokens
+		// A compaction is not a conversation turn and makes no model call: it
+		// leaves the turn count, the model that answered and the last turn's
+		// figures as they were.
+		if !tally.compact && !end.NotStarted {
+			t.Turns++
+			t.ReportedModel = tally.model
+			t.AddUsage(tally.usage, time.Now().UTC())
+		}
 		// A session's Model is the owner's pick; a project thread shows the
 		// model that answered.
 		switch {
@@ -855,18 +1371,23 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		case t.Model == "":
 			t.Model = tally.launchModel
 		}
+		// Commits made after a merge from the Overview are not merged: the
+		// branch is no longer what was merged.
+		if t.MergedAt != nil && stats.CommitsAhead > t.CommitsAhead {
+			t.MergedAt = nil
+		}
 		t.CommitsAhead, t.FilesChanged, t.Uncommitted = stats.CommitsAhead, stats.FilesChanged, stats.Uncommitted
 		if session {
 			t.HeadBranch = head
 		}
-		if t.Status == db.ThreadResolved {
-			// Resolved while the turn was ending: that decision stands.
+		if t.Status == db.ThreadResolved || t.ArchivedAt != nil {
+			// A finish or archive decision made while the turn ended stands.
 			return
 		}
 		t.WaitReason = ""
 		switch {
 		case end.Stopped:
-			t.Status = db.ThreadIdle
+			t.Status = db.RestingStatus(t)
 			report.Kind = ""
 		case end.Err != nil:
 			t.Status, t.WaitReason = db.ThreadFailed, "Failed: "+end.Err.Error()
@@ -875,33 +1396,49 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
 				t.Status, t.WaitReason = db.ThreadWaiting, strings.TrimSpace(mm[1])
 				report.Kind = ReportNeedsInput
-			} else if session && len(m.engine.BackgroundTasks(m.sessionOf(threadID))) > 0 {
+			} else if m.hasBackground(threadID) {
 				// The turn is over but its process still runs background tasks.
+				// A worker's report waits for the follow-up turn Claude starts
+				// when they end (background.go).
 				t.Status = db.ThreadWorking
-			} else if stats.CommitsAhead > 0 {
-				t.Status = db.ThreadReady
+				held = !session
 			} else {
-				t.Status = db.ThreadIdle
+				t.Status = db.RestingStatus(t)
 			}
 		}
-		if report.Text != "" {
+		if report.Text != "" && !tally.compact {
 			t.LastReport = report.Text
 		}
 	})
-	if t == nil || t.Status == db.ThreadResolved {
+	if t == nil || t.Status == db.ThreadResolved || t.ArchivedAt != nil {
 		return
 	}
 	switch {
 	case report.Kind == "":
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped."})
+		m.mu.Lock()
+		var by Source
+		ending := false
+		if a := m.active[threadID]; a != nil {
+			by, ending = a.stoppedBy, a.ending
+		}
+		m.mu.Unlock()
+		if !ending {
+			m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Stopped" + by.actor() + "."})
+		}
 	case end.Err != nil:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvError, Content: end.Err.Error()})
-	case session:
-		// The report is for the coordinator; a session shows the turn itself.
+	case session, tally.compact:
+		// The report is for the coordinator; a session shows the turn itself,
+		// and a compaction shows its own card.
 	default:
 		m.addEvent(t, &db.ThreadEvent{Kind: db.EvReport, Content: report.Text, Payload: jsonString(map[string]any{
 			"status": t.Status, "commits_ahead": stats.CommitsAhead, "files_changed": stats.FilesChanged, "uncommitted": stats.Uncommitted,
 		})})
+	}
+	if held {
+		report.Thread = *t
+		m.hold(report)
+		return
 	}
 	if report.Kind != "" && m.OnReply != nil {
 		report.Thread = *t
@@ -912,6 +1449,9 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 		return
 	}
 	_ = m.store.TouchProject(t.ProjectID)
+	if tally.compact {
+		return
+	}
 	if report.Kind != "" && m.OnReport != nil {
 		report.Thread = *t
 		m.OnReport(report)
@@ -919,15 +1459,60 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 }
 
 // Stop interrupts a thread's running turn and drops its queued messages.
-// Its resident process, and the background work in it, survive.
-func (m *Threads) Stop(threadID string) { m.stop(threadID) }
+// Its resident process, and the background work in it, survive. by is who
+// asked, for the note in the thread; stopping a thread with nothing running
+// does nothing.
+func (m *Threads) Stop(threadID string, by Source) { m.stop(threadID, by) }
+
+// Retry re-runs a failed turn without adding anything to the transcript.
+// A turn that crashed mid-turn (with staged output) resumes the interrupted
+// turn — the CLI replays it from its own transcript, so the user's message
+// is never re-sent and interrupted tool calls are not re-run; a turn that
+// failed before reaching Claude re-sends its prompt.
+func (m *Threads) Retry(ctx context.Context, threadID string) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Status != db.ThreadFailed {
+		return nil, ErrNoFailedTurn
+	}
+	p, err := m.store.GetProject(t.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	sid := m.sessionOf(threadID)
+	if m.Running(threadID) {
+		return nil, ErrBusy
+	}
+	model, opts, err := m.turnLaunch(ctx, threadID, t, p, p.Type == db.ProjectFolder)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	m.turns[sid] = &turnTally{launchModel: model}
+	m.mu.Unlock()
+	if !m.engine.Retry(sid, t.Cwd, func(context.Context) agentboot.ExecutionOptions { return opts }) {
+		return nil, ErrNoFailedTurn
+	}
+	return m.store.GetThread(threadID)
+}
 
 // stop is Stop, returning a channel closed once the stopped turn has
 // exited (nil when no turn was running).
-func (m *Threads) stop(threadID string) <-chan struct{} {
+func (m *Threads) stop(threadID string, by Source) <-chan struct{} {
+	m.stopQueued(threadID, by)
+	done, _ := m.engine.Stop(m.sessionOf(threadID))
+	return done
+}
+
+func (m *Threads) stopQueued(threadID string, by Source) {
 	m.mu.Lock()
 	if a, ok := m.active[threadID]; ok {
-		a.stopped = true
+		a.stopped, a.stoppedBy, a.cancelCurrent = true, by, true
 		m.dropHeld(threadID, a.queue)
 		a.queue = nil
 		if a.cancel != nil {
@@ -935,16 +1520,27 @@ func (m *Threads) stop(threadID string) <-chan struct{} {
 		}
 	}
 	m.mu.Unlock()
-	done, _ := m.engine.Stop(m.sessionOf(threadID))
-	return done
+}
+
+// stopEnding is stop on the way to resolving or archiving the thread. The
+// stopped turn's bookkeeping runs after done closes and may come before or
+// after the caller saves the end; either way it leaves no "Stopped" note.
+func (m *Threads) stopEnding(threadID string) <-chan struct{} {
+	m.mu.Lock()
+	if a, ok := m.active[threadID]; ok {
+		a.ending = true
+	}
+	m.mu.Unlock()
+	return m.stop(threadID, Source{})
 }
 
 // Running reports whether a thread has a turn in flight or waiting.
 func (m *Threads) Running(threadID string) bool {
 	m.mu.Lock()
 	_, ok := m.active[threadID]
+	restarting := m.restarting[threadID]
 	m.mu.Unlock()
-	return ok || m.engine.Busy(m.sessionOf(threadID))
+	return ok || restarting || m.engine.Busy(m.sessionOf(threadID))
 }
 
 // StopProject interrupts every running thread of a project (pause, archive,
@@ -955,14 +1551,59 @@ func (m *Threads) StopProject(projectID string) {
 		return
 	}
 	for _, t := range threads {
-		m.Stop(t.ID)
+		m.Stop(t.ID, Source{Kind: db.SourceSystem})
 	}
+}
+
+func (m *Threads) revokeTools(threadID string) {
+	if m.RevokeTools != nil {
+		m.RevokeTools(threadID)
+	}
+}
+
+// ReleaseProject ends every worker's and folder session's process and tool
+// access in a project, for a pause or an archive: the threads stay readable,
+// and a thread that runs again after a resume or an unarchive gets a fresh
+// session and fresh tools. The project's main thread is the coordinator's and
+// is left to it (ListThreads does not return it). Call it once the project
+// refuses new messages, so nothing starts a session behind this.
+func (m *Threads) ReleaseProject(projectID string) {
+	threads, err := m.store.ListThreads(projectID)
+	if err != nil {
+		return
+	}
+	var wg sync.WaitGroup
+	for _, t := range threads {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			lock := m.lifecycleLock(id)
+			lock.Lock()
+			defer lock.Unlock()
+			if done := m.stop(id, Source{Kind: db.SourceSystem}); done != nil {
+				select {
+				case <-done:
+				case <-time.After(agentboot.SessionCloseTimeout):
+				}
+			}
+			m.engine.Evict(m.sessionOf(id))
+			m.revokeTools(id)
+		}(t.ID)
+	}
+	wg.Wait()
 }
 
 // PendingRequest returns the transcript event of a request the thread is
 // still waiting on; ok is false once it is answered or given up.
 func (m *Threads) PendingRequest(threadID, requestID string) (db.ThreadEvent, bool) {
 	return m.prompter(threadID).request(requestID)
+}
+
+// PendingRequests returns the transcript events of every approval and
+// question the thread is still waiting on, oldest first: what a card must
+// show to be answered without opening the thread.
+func (m *Threads) PendingRequests(threadID string) []db.ThreadEvent {
+	return m.prompter(threadID).requests()
 }
 
 // Respond answers a pending approval or question in a thread.
@@ -972,23 +1613,83 @@ func (m *Threads) Respond(threadID, requestID string, ans Answer) error {
 
 // Resolve marks a thread done (it stays readable and can be reopened).
 func (m *Threads) Resolve(threadID string) (*db.Thread, error) {
-	if done := m.stop(threadID); done != nil {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
+	m.endProcess(threadID)
+	return m.close(threadID, nil)
+}
+
+// endProcess stops the thread's turn for good and closes its process: what a
+// resolved or archived thread no longer needs. The caller holds the thread's
+// lifecycle lock, so nothing can start a session until it is released.
+func (m *Threads) endProcess(threadID string) {
+	if done := m.stopEnding(threadID); done != nil {
 		// Let the turn take its interrupt before its process is closed.
 		select {
 		case <-done:
 		case <-time.After(agentboot.SessionCloseTimeout):
 		}
 	}
-	// A resolved thread's process has nothing left to do.
 	m.engine.Evict(m.sessionOf(threadID))
+}
+
+// close is the one way a thread becomes resolved (Resolve, Archive): the status and resolved time, whatever mark adds to the
+// same save, then what only an open thread holds — its chats go back to the
+// parent, its scratch directory and its tool URL go. The caller holds the
+// lifecycle lock and has called endProcess. See .design/thread-lifecycle.md.
+func (m *Threads) close(threadID string, mark func(t *db.Thread, now time.Time)) (*db.Thread, error) {
 	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
-		t.Status, t.WaitReason, t.ResolvedAt = db.ThreadResolved, "", &now
+		if t.ResolvedAt == nil {
+			t.ResolvedAt = &now
+		}
+		t.Status, t.WaitReason = db.ThreadResolved, ""
+		if mark != nil {
+			mark(t, now)
+		}
 	})
 	if err == nil {
 		m.releaseChats(t)
+		m.cleanTmp(t)
+		// What the user granted was for this thread while it is open.
+		if _, gerr := m.store.UpdateThreadGrants(threadID, func([]db.ThreadGrant) []db.ThreadGrant { return nil }); gerr != nil {
+			logrus.WithError(gerr).Warn("projects: cannot drop a closed thread's grants")
+		}
+		// After the status is saved, not before: the stopped turn's own
+		// bookkeeping races the save (it writes no "Stopped." once the
+		// thread is resolved).
+		m.revokeTools(threadID)
 	}
 	return t, err
+}
+
+// ArchiveSession stores an independent archive flag. A stopped waiting or
+// working session rests (db.RestingStatus): there is no longer a live request
+// to answer.
+func (m *Threads) ArchiveSession(threadID string) (*db.Thread, error) {
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
+	m.endProcess(threadID)
+	t, err := m.update(threadID, func(t *db.Thread) {
+		if t.ArchivedAt == nil {
+			now := time.Now()
+			t.ArchivedAt = &now
+		}
+		if t.Status == db.ThreadWaiting || t.Status == db.ThreadWorking {
+			t.Status, t.WaitReason = db.RestingStatus(t), ""
+		}
+	})
+	if err == nil {
+		m.revokeTools(threadID) // after the save, as in Resolve
+	}
+	return t, err
+}
+
+// RestoreSession returns an archived session to the list in its stored state.
+func (m *Threads) RestoreSession(threadID string) (*db.Thread, error) {
+	return m.update(threadID, func(t *db.Thread) { t.ArchivedAt = nil })
 }
 
 // releaseChats hands the chats focused on a finished thread back to its
@@ -1003,15 +1704,39 @@ func (m *Threads) releaseChats(t *db.Thread) {
 	}
 }
 
-// Reopen brings a resolved thread back.
-func (m *Threads) Reopen(threadID string) (*db.Thread, error) {
-	return m.update(threadID, func(t *db.Thread) {
-		t.ResolvedAt = nil
-		t.Status = db.ThreadIdle
-		if t.CommitsAhead > 0 && t.MergedAt == nil {
-			t.Status = db.ThreadReady
+// ErrNotWorker is for an action that only makes sense on a worker or session,
+// asked of a project's main thread (its conversation with the coordinator).
+var ErrNotWorker = errors.New("not available on a project's main thread")
+
+// Reopen brings a resolved thread back; by is who asked. A thread that is not
+// resolved is returned as it is: there is nothing to reopen, and its status
+// belongs to the turn that may be running.
+func (m *Threads) Reopen(threadID string, by Source) (*db.Thread, error) {
+	t, err := m.store.GetThread(threadID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Agent == db.AgentLLM {
+		return nil, ErrNotWorker
+	}
+	if t.Status != db.ThreadResolved {
+		return t, nil
+	}
+	// update reads the row again under its lock, so check again there: a
+	// Reopen or Resolve may have got in between.
+	reopened := false
+	t, err = m.update(threadID, func(t *db.Thread) {
+		if t.Status != db.ThreadResolved {
+			return
 		}
+		reopened = true
+		t.ResolvedAt = nil
+		t.Status = db.RestingStatus(t)
 	})
+	if err == nil && reopened {
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: "Reopened" + by.actor() + "."})
+	}
+	return t, err
 }
 
 // MaxTitleLength caps a thread's title, like the column that stores it.
@@ -1042,9 +1767,40 @@ func (m *Threads) SetTitle(threadID, title string) (*db.Thread, error) {
 	return t, nil
 }
 
-// Merge merges a thread's branch into its base in the main checkout and
-// resolves the thread.
-func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error) {
+// How a thread's branch is merged, on GitHub: its PR is squash-merged there, or
+// only opened (a merge request) and left for review. There is no third way, and
+// nothing is merged in the local checkout.
+const (
+	MergeSquash       = "squash"
+	MergeMergeRequest = "merge_request"
+)
+
+// MergeSpec says how and with which words a thread's branch is merged.
+type MergeSpec struct {
+	// Method is MergeSquash or MergeMergeRequest.
+	Method string
+	// Message is the squash commit's message; empty leaves it to GitHub.
+	Message string
+	// Title and Body describe the PR when one is opened; empty means the thread's
+	// title and its last report.
+	Title, Body string
+}
+
+// ErrBadMergeMethod is a merge asked for with a method that is neither of the two.
+var ErrBadMergeMethod = errors.New(`method must be "squash" or "merge_request"`)
+
+// Merge merges a thread's branch on GitHub the way spec says (Links.Merge does
+// the GitHub side; the thread's merge tool calls the same). A squash records
+// the branch merged; a merge request leaves it as it is: the branch is not
+// merged until the PR is. Neither closes the thread: whether anything is left
+// to do is the user's call (.design/thread-lifecycle.md).
+func (m *Threads) Merge(ctx context.Context, threadID string, spec MergeSpec) (*db.Thread, error) {
+	if spec.Method != MergeSquash && spec.Method != MergeMergeRequest {
+		return nil, ErrBadMergeMethod
+	}
+	lock := m.lifecycleLock(threadID)
+	lock.Lock()
+	defer lock.Unlock()
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
 		return nil, err
@@ -1055,31 +1811,92 @@ func (m *Threads) Merge(ctx context.Context, threadID string) (*db.Thread, error
 	if m.Running(threadID) {
 		return nil, errors.New("the thread is still working; wait for it to finish or stop it")
 	}
-	if err := MergeBranch(ctx, t.RepoPath, t.BaseBranch, t.Branch, fmt.Sprintf("Merge %s: %s", t.Branch, t.Title)); err != nil {
+	// A merge tool call may have merged it already: only the record is left.
+	if k := mergedAsPushed(t); k != nil {
+		if spec.Method == MergeMergeRequest {
+			return nil, fmt.Errorf("PR #%d for this branch is already merged", k.Number)
+		}
+		return m.markMerged(threadID, fmt.Sprintf("PR #%d was already squash-merged into %s: %s", k.Number, t.BaseBranch, k.URL))
+	}
+	var links *Links
+	if m.links != nil {
+		links = m.links()
+	}
+	if links == nil {
+		return nil, errors.New("merging is not available here")
+	}
+	// The dialog is the user's own click: no card asks them again.
+	out, err := links.Merge(byUser(ctx), t, MergeInput{Method: spec.Method, Message: spec.Message, Title: spec.Title, Body: spec.Body})
+	if err != nil {
 		return nil, err
 	}
-	t, err = m.update(threadID, func(t *db.Thread) {
+	switch {
+	case out.Merged:
+		return m.markMerged(threadID, fmt.Sprintf("Squash-merged PR #%d into %s on GitHub: %s", out.Item.Number, t.BaseBranch, out.Item.URL))
+	case out.Existed:
+		return m.noteLinks(threadID, fmt.Sprintf("PR #%d is already open for %s; the branch was pushed again: %s", out.Item.Number, t.Branch, out.Item.URL))
+	}
+	return m.noteLinks(threadID, fmt.Sprintf("Opened PR #%d for %s into %s: %s", out.Item.Number, t.Branch, t.BaseBranch, out.Item.URL))
+}
+
+// mergedAsPushed is the thread's merged PR when that merge holds the branch as
+// it stands: a PR of the branch is merged, none is open, and the local branch
+// has nothing origin does not (the merge pushed it). Commits made after the
+// merge make it nil, so they are merged again rather than called merged.
+func mergedAsPushed(t *db.Thread) *db.ThreadLink {
+	var merged *db.ThreadLink
+	for i, k := range t.Links {
+		if k.Kind != db.LinkPR || k.Head != t.Branch {
+			continue
+		}
+		switch k.State {
+		case db.LinkStateOpen:
+			return nil
+		case db.LinkStateMerged:
+			merged = &t.Links[i]
+		}
+	}
+	if merged == nil || !branchPushed(t.RepoPath, t.Branch) {
+		return nil
+	}
+	return merged
+}
+
+// markMerged records the thread's branch merged from the Overview and notes
+// it. The thread stays open: a resting one rests again (merged work is not
+// waiting for review), one that waits on the user still does. Merge holds
+// the lifecycle lock and has checked no turn runs.
+func (m *Threads) markMerged(threadID, note string) (*db.Thread, error) {
+	t, err := m.update(threadID, func(t *db.Thread) {
 		now := time.Now()
-		t.MergedAt, t.ResolvedAt, t.Status, t.WaitReason = &now, &now, db.ThreadResolved, ""
+		t.MergedAt = &now
+		if t.Status == db.ThreadReady || t.Status == db.ThreadIdle {
+			t.Status = db.RestingStatus(t)
+		}
 	})
 	if err == nil {
-		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: fmt.Sprintf("Merged %s into %s.", t.Branch, t.BaseBranch)})
-		m.releaseChats(t)
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
 	}
 	return t, err
 }
 
-// Diff returns a thread's changes for review.
-func (m *Threads) Diff(ctx context.Context, threadID string) (Diff, error) {
+// noteLinks records a note in the thread and returns it as stored now (its
+// links were written by the merge itself).
+func (m *Threads) noteLinks(threadID, note string) (*db.Thread, error) {
 	t, err := m.store.GetThread(threadID)
 	if err != nil {
-		return Diff{}, err
+		return nil, err
 	}
-	if t.RepoPath == "" {
-		return Diff{}, errors.New("this thread works without a repository")
-	}
-	return BranchDiff(ctx, t.Cwd, t.BaseBranch, t.Branch)
+	m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: note})
+	return t, nil
 }
+
+// Why a thread waits after a restart: its turn was cut off, or the question
+// it asked can no longer be answered. Either way a message continues it.
+const (
+	interruptedReason = "Interrupted when tingly-project stopped. Send a message to continue."
+	expiredReason     = "The question expired when tingly-project stopped. Send a message to continue."
+)
 
 // Recover runs at startup: turns that were running when the process stopped
 // are gone, so their threads wait on the user to continue them.
@@ -1090,7 +1907,7 @@ func (m *Threads) Recover() {
 	}
 	for _, t := range threads {
 		_, _ = m.update(t.ID, func(t *db.Thread) {
-			t.Status, t.WaitReason = db.ThreadWaiting, "Interrupted when tingly-project stopped. Send a message to continue."
+			t.Status, t.WaitReason, t.Queued = db.ThreadWaiting, interruptedReason, false
 		})
 	}
 	// Failures were recorded as waiting before failed was a status.
@@ -1100,10 +1917,13 @@ func (m *Threads) Recover() {
 			_, _ = m.update(t.ID, func(t *db.Thread) { t.Status = db.ThreadFailed })
 		}
 	}
-	// Approvals pending at shutdown can no longer be answered.
+	// Approvals pending at shutdown can no longer be answered. The thread
+	// still needs the user, but its reason must not name a question nobody
+	// can answer any more.
 	waiting, _ = m.store.ListThreadsByStatus(db.ThreadWaiting)
 	for _, t := range waiting {
 		events, _ := m.store.ListThreadEvents(t.ID)
+		expired := false
 		for i := range events {
 			e := &events[i]
 			if e.Kind == db.EvQueued && strings.Contains(e.Payload, `"state":"held"`) {
@@ -1113,22 +1933,11 @@ func (m *Threads) Recover() {
 			if (e.Kind == db.EvApproval || e.Kind == db.EvAsk) && strings.Contains(e.Payload, `"state":"pending"`) {
 				e.Payload = strings.Replace(e.Payload, `"state":"pending"`, `"state":"expired"`, 1)
 				_ = m.store.UpdateThreadEvent(e)
+				expired = true
 			}
 		}
-	}
-}
-
-// AutoResolve resolves threads that have been idle for a week, as the
-// official Overview does.
-func (m *Threads) AutoResolve(maxIdle time.Duration) {
-	threads, err := m.store.ListThreadsByStatus(db.ThreadIdle)
-	if err != nil {
-		return
-	}
-	for _, t := range threads {
-		// Folder threads are archived by hand.
-		if !m.isFolder(t.ProjectID) && time.Since(t.UpdatedAt) > maxIdle {
-			_, _ = m.Resolve(t.ID)
+		if expired {
+			_, _ = m.update(t.ID, func(t *db.Thread) { t.WaitReason = expiredReason })
 		}
 	}
 }
@@ -1170,28 +1979,50 @@ const (
 )
 
 // AutoAnswerAfter is how long a question waits under AutoAnswerDelay.
-var AutoAnswerAfter = 10 * time.Minute
+var AutoAnswerAfter = 5 * time.Minute
 
-// ValidAutoAnswer reports whether mode is a setting; empty is the default.
-func ValidAutoAnswer(mode string) bool {
-	switch mode {
-	case "", AutoAnswerOff, AutoAnswerDelay, AutoAnswerNow:
-		return true
+// MaxAutoAnswerMinutes caps a custom delay ("delay:<minutes>"): the answer
+// must come before the idle reclaim (65 minutes) takes the process.
+const MaxAutoAnswerMinutes = 60
+
+// parseAutoAnswer splits a setting into its mode and the delay it waits:
+// "delay" is AutoAnswerAfter, "delay:<minutes>" a custom wait of 1 to
+// MaxAutoAnswerMinutes. ok is false for anything else; empty is the default.
+func parseAutoAnswer(setting string) (mode string, after time.Duration, ok bool) {
+	switch setting {
+	case "", AutoAnswerOff, AutoAnswerNow:
+		return setting, 0, true
+	case AutoAnswerDelay:
+		return setting, AutoAnswerAfter, true
 	}
-	return false
+	n, found := strings.CutPrefix(setting, AutoAnswerDelay+":")
+	if !found {
+		return "", 0, false
+	}
+	m, err := strconv.Atoi(n)
+	if err != nil || m < 1 || m > MaxAutoAnswerMinutes || strconv.Itoa(m) != n {
+		return "", 0, false
+	}
+	return AutoAnswerDelay, time.Duration(m) * time.Minute, true
+}
+
+// ValidAutoAnswer reports whether setting is one; empty is the default.
+func ValidAutoAnswer(setting string) bool {
+	_, _, ok := parseAutoAnswer(setting)
+	return ok
 }
 
 // autoAnswerMode is the setting a thread's questions follow: its own, else
 // delay for a project thread (its owner is usually away) and off for a
 // folder session (its owner is usually watching).
-func autoAnswerMode(t *db.Thread, folder bool) string {
-	if t.AutoAnswer != "" {
-		return t.AutoAnswer
+func autoAnswerMode(t *db.Thread, folder bool) (string, time.Duration) {
+	if mode, after, ok := parseAutoAnswer(t.AutoAnswer); ok && mode != "" {
+		return mode, after
 	}
 	if folder {
-		return AutoAnswerOff
+		return AutoAnswerOff, 0
 	}
-	return AutoAnswerDelay
+	return AutoAnswerDelay, AutoAnswerAfter
 }
 
 var recommendedRe = regexp.MustCompile(`(?i)\s*\((recommended|推荐)\)\s*$`)
@@ -1235,8 +2066,11 @@ type pending struct {
 	event db.ThreadEvent
 	tool  string
 	// retime wakes a waiting question when the auto-answer setting changed.
-	retime chan struct{}
-	ch     chan Answer
+	retime   chan struct{}
+	ch       chan Answer
+	cancel   context.CancelFunc
+	done     chan struct{}
+	answered bool
 }
 
 // threadPrompter routes a turn's approvals and questions to the thread view:
@@ -1249,25 +2083,41 @@ type threadPrompter struct {
 
 	mu      sync.Mutex
 	pending map[string]*pending
+	paused  bool
 }
 
 func newThreadPrompter(m *Threads, threadID string) *threadPrompter {
 	return &threadPrompter{m: m, threadID: threadID, pending: map[string]*pending{}}
 }
 
-func (m *Threads) isAllowed(threadID, tool string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.allowed[threadID][tool]
+// allowKey is what "allow for this thread" remembers about a request: the tool,
+// except for Bash, which is the exact command. Allowing one Bash command must
+// not allow every other the thread runs. False means there is nothing safe to
+// remember (a Bash call without a command), so the answer allows this call only.
+func allowKey(tool string, input map[string]any) (string, bool) {
+	if tool != "Bash" {
+		return tool, true
+	}
+	cmd, _ := input["command"].(string)
+	if cmd = strings.TrimSpace(cmd); cmd == "" {
+		return "", false
+	}
+	return tool + "\x00" + cmd, true
 }
 
-func (m *Threads) allow(threadID, tool string) {
+func (m *Threads) isAllowed(threadID, key string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.allowed[threadID][key]
+}
+
+func (m *Threads) allow(threadID, key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.allowed[threadID] == nil {
 		m.allowed[threadID] = map[string]bool{}
 	}
-	m.allowed[threadID][tool] = true
+	m.allowed[threadID][key] = true
 }
 
 type requestPayload struct {
@@ -1311,11 +2161,12 @@ func (p *threadPrompter) autoDeadline(asked time.Time, suggested bool) *time.Tim
 		return nil
 	}
 	var at time.Time
-	switch autoAnswerMode(t, p.m.isFolder(t.ProjectID)) {
+	mode, after := autoAnswerMode(t, p.m.isFolder(t.ProjectID))
+	switch mode {
 	case AutoAnswerNow:
 		at = time.Now()
 	case AutoAnswerDelay:
-		at = asked.Add(AutoAnswerAfter)
+		at = asked.Add(after)
 	default:
 		return nil
 	}
@@ -1323,6 +2174,9 @@ func (p *threadPrompter) autoDeadline(asked time.Time, suggested bool) *time.Tim
 }
 
 func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, payload requestPayload) (Answer, error) {
+	if err := ctx.Err(); err != nil {
+		return Answer{}, err
+	}
 	t, err := p.m.store.GetThread(p.threadID)
 	if err != nil {
 		return Answer{}, err
@@ -1334,12 +2188,31 @@ func (p *threadPrompter) wait(ctx context.Context, kind, tool, question string, 
 	}
 	asked := time.Now()
 	payload.AutoAt = p.autoDeadline(asked, suggested != nil)
-	ev := &db.ThreadEvent{Kind: kind, Content: question, Payload: jsonString(payload)}
-	p.m.addEvent(t, ev)
-	pd := &pending{event: *ev, tool: tool, ch: make(chan Answer, 1), retime: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ev := &db.ThreadEvent{ThreadID: t.ID, Kind: kind, Content: question, Payload: jsonString(payload)}
 	p.mu.Lock()
+	if p.paused {
+		p.mu.Unlock()
+		return Answer{}, ErrRestarting
+	}
+	// A reply must find the request even if it arrives via a transcript read.
+	if err := p.m.store.AddThreadEvent(ev); err != nil {
+		p.mu.Unlock()
+		return Answer{}, err
+	}
+	pd := &pending{event: *ev, tool: tool, ch: make(chan Answer, 1), retime: make(chan struct{}, 1), cancel: cancel, done: make(chan struct{})}
 	p.pending[payload.RequestID] = pd
 	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if p.pending[payload.RequestID] == pd {
+			delete(p.pending, payload.RequestID)
+		}
+		close(pd.done)
+	}()
+	p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
 	reason := question
 	if kind == db.EvApproval {
 		reason = "Approve: " + question
@@ -1388,8 +2261,10 @@ wait:
 			fire = arm()
 		case <-fire:
 			p.mu.Lock()
-			_, still := p.pending[payload.RequestID]
-			delete(p.pending, payload.RequestID)
+			still := !p.paused && !pd.answered && p.pending[payload.RequestID] == pd
+			if still {
+				pd.answered = true
+			}
 			p.mu.Unlock()
 			if !still {
 				// Answered at the same moment (theirs wins), or the turn is
@@ -1401,17 +2276,18 @@ wait:
 			payload.Auto = true
 			break wait
 		case <-ctx.Done():
-			p.mu.Lock()
-			delete(p.pending, payload.RequestID)
-			p.mu.Unlock()
-			payload.State, payload.AutoAt = "expired", nil
-			ev.Payload = jsonString(payload)
-			_ = p.m.store.UpdateThreadEvent(ev)
-			p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
-			settled()
-			return Answer{}, ctx.Err()
+			break wait
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		payload.State, payload.AutoAt = "expired", nil
+		ev.Payload = jsonString(payload)
+		_ = p.m.store.UpdateThreadEvent(ev)
+		p.m.hub.Publish(Event{Type: EventThreadEvent, ProjectID: t.ProjectID, Data: ev})
+		settled()
+		return Answer{}, err
+	}
+
 	payload.AutoAt = nil
 	if kind == db.EvAsk {
 		ans = settleAsk(question, payload.Input, ans)
@@ -1434,7 +2310,17 @@ wait:
 }
 
 func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
-	if p.m.isAllowed(p.threadID, req.ToolName) {
+	if req.ToolName == toolSendMessage {
+		// Decided here, never asked and never remembered: no card, no "allow
+		// for this thread" that could widen it.
+		ok, reason := sendMessageAllowed(req.Input)
+		return agentboot.ApprovalResponse{Approved: ok, Reason: reason}, nil
+	}
+	if p.m.builtinToolAllowed(p.threadID, req.ToolName) {
+		return agentboot.ApprovalResponse{Approved: true}, nil
+	}
+	key, scopable := allowKey(req.ToolName, req.Input)
+	if scopable && p.m.isAllowed(p.threadID, key) {
 		return agentboot.ApprovalResponse{Approved: true}, nil
 	}
 	id := req.ID
@@ -1447,8 +2333,8 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 	if err != nil {
 		return agentboot.ApprovalResponse{Approved: false, Reason: "not answered"}, nil
 	}
-	if ans.Allow && ans.Scope == "thread" {
-		p.m.allow(p.threadID, req.ToolName)
+	if ans.Allow && ans.Scope == "thread" && scopable {
+		p.m.allow(p.threadID, key)
 	}
 	reason := ""
 	if !ans.Allow {
@@ -1458,6 +2344,19 @@ func (p *threadPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalR
 		}
 	}
 	return agentboot.ApprovalResponse{Approved: ans.Allow, Reason: reason}, nil
+}
+
+// builtinToolAllowed is the answer for a Projects tool that reached the
+// approval prompt anyway (a permission mode or a profile rule the settings
+// file does not outrank): the tools are allowed as grantBuiltinTools says. The
+// ones that write to GitHub ask on their own card when the project says so
+// (Links.gate), so answering here never skips the user.
+func (m *Threads) builtinToolAllowed(threadID, tool string) bool {
+	if !strings.HasPrefix(tool, builtinToolsRule+"__") {
+		return false
+	}
+	_, err := m.store.GetThread(threadID)
+	return err == nil
 }
 
 func (p *threadPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
@@ -1545,13 +2444,11 @@ func settleAsk(question string, input map[string]any, ans Answer) Answer {
 func (p *threadPrompter) resolve(requestID string, ans Answer) error {
 	p.mu.Lock()
 	pd, ok := p.pending[requestID]
-	if ok {
-		delete(p.pending, requestID)
-	}
-	p.mu.Unlock()
-	if !ok {
+	defer p.mu.Unlock()
+	if !ok || pd.answered || p.paused {
 		return ErrNoPrompt
 	}
+	pd.answered = true
 	pd.ch <- ans
 	return nil
 }
@@ -1561,18 +2458,24 @@ func (p *threadPrompter) request(requestID string) (db.ThreadEvent, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	pd, ok := p.pending[requestID]
-	if !ok {
+	if !ok || pd.answered || p.paused {
 		return db.ThreadEvent{}, false
 	}
 	return pd.event, true
 }
 
-func (p *threadPrompter) cancelAll() {
+// requests returns the transcript events of every pending request, oldest first.
+func (p *threadPrompter) requests() []db.ThreadEvent {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	for id := range p.pending {
-		delete(p.pending, id)
+	out := make([]db.ThreadEvent, 0, len(p.pending))
+	for _, pd := range p.pending {
+		if !pd.answered && !p.paused {
+			out = append(out, pd.event)
+		}
 	}
+	p.mu.Unlock()
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out
 }
 
 // describeTool renders a permission request as the concrete thing the

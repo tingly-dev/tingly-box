@@ -9,6 +9,7 @@ import { QuotaCell } from '@/components/credential/QuotaCell';
 import { quotaRemainingPercent, quotaToWindows, tightestWindow, type ProviderQuota } from '@/types/quota';
 import { api } from '@/services/api';
 import { SHELL_ROUTES } from '@/routes/shellRoutes';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface HubProvider {
     uuid: string;
@@ -91,9 +92,10 @@ export function ProviderQuotaPanel({ onNavigate }: { onNavigate: (path: string) 
         <Paper
             elevation={0}
             sx={{
-                borderRadius: 2,
+                borderRadius: radius.card,
                 bgcolor: 'background.paper',
                 flex: 1,
+                minWidth: 0,
                 minHeight: 0,
                 display: 'flex',
                 flexDirection: 'column',
@@ -168,14 +170,21 @@ export function ProviderQuotaPanel({ onNavigate }: { onNavigate: (path: string) 
                                 <ButtonBase
                                     onClick={() => onNavigate(SHELL_ROUTES.credentials)}
                                     sx={{
+                                        flex: 1,
                                         minWidth: 0,
                                         justifyContent: 'flex-start',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         '&:hover .hub-provider-name': { color: 'primary.main' },
                                     }}
                                 >
-                                    <ProviderLabel provider={provider} gap={0.75}>
-                                        <Typography className="hub-provider-name" variant="body2" sx={{ fontWeight: 500 }} noWrap>
+                                    <ProviderLabel provider={provider} gap={0.75} sx={{ width: '100%' }}>
+                                        <Typography
+                                            className="hub-provider-name"
+                                            variant="body2"
+                                            title={provider.name || provider.uuid}
+                                            sx={{ minWidth: 0, fontWeight: 500 }}
+                                            noWrap
+                                        >
                                             {provider.name || provider.uuid}
                                         </Typography>
                                     </ProviderLabel>

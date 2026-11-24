@@ -6,6 +6,7 @@ import {
     Edit as EditIcon,
     Extension as PluginsIcon,
     MoreHoriz as MoreIcon,
+    Pin as PinToTopIcon,
     PlayArrow as ProbeIcon,
     Decisions as SmartIcon,
 } from '@/components/icons';
@@ -13,6 +14,7 @@ import { Box, IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProbeMenu } from './probe';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 export interface GraphSettingsMenuProps {
     allowDeleteRule: boolean;
@@ -30,6 +32,8 @@ export interface GraphSettingsMenuProps {
     pluginsCount?: number;
     /** Smart conditions on/off/add item; hidden when omitted. */
     smartCondition?: { state: 'none' | 'on' | 'off'; onToggle: () => void };
+    /** "Pin to top" item (the rest of the ordering is drag and drop); hidden when omitted. */
+    pin?: { onPin: () => void; canPin: boolean };
     // Probe props
     ruleUuid?: string;
     ruleName?: string;
@@ -50,6 +54,7 @@ export const GraphSettingsMenu = ({
     onOpenPlugins,
     pluginsCount = 0,
     smartCondition,
+    pin,
     ruleUuid,
     ruleName,
     scenario,
@@ -85,7 +90,7 @@ export const GraphSettingsMenu = ({
                     <MenuItem onClick={() => { closeMenu(); onOpenPlugins(); }}>
                         <PluginsIcon fontSize="small" sx={{ mr: 1 }} />{t('ruleHeader.plugins')}
                         {pluginsCount > 0 && (
-                            <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: '0.8125rem' }}>{pluginsCount}</Box>
+                            <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: fontSizes.md }}>{pluginsCount}</Box>
                         )}
                     </MenuItem>
                 )}
@@ -140,6 +145,15 @@ export const GraphSettingsMenu = ({
                 {onEditFlags && (
                     <MenuItem onClick={() => { closeMenu(); onEditFlags(); }}>
                         <EditIcon fontSize="small" sx={{ mr: 1 }} />Edit flag
+                    </MenuItem>
+                )}
+
+                {pin && (
+                    <MenuItem
+                        onClick={() => { closeMenu(); pin.onPin(); }}
+                        disabled={!pin.canPin}
+                    >
+                        <PinToTopIcon fontSize="small" sx={{ mr: 1 }} />{t('common.pinToTop')}
                     </MenuItem>
                 )}
 

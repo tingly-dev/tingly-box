@@ -31,6 +31,8 @@ every one with `{"type":"control_response","response":{"subtype":"success"|"erro
 | --- | --- | --- |
 | `set_model` `model` (`"default"` resets) | success | next turn's `system/init` reports the new model |
 | `set_permission_mode` `mode` | success + `{mode}`; also a `system/status` carrying `permissionMode` | immediate |
+| `apply_flag_settings` `settings` | success | layers the keys over the process's start-up settings, effective from the next tool call (see "Settings" below) |
+| `get_settings` | success + `{effective, sources, applied}` | the merged settings the process is running with |
 | `set_max_thinking_tokens` | success | not used by AgentBoot |
 | unknown subtype | `error`: `Unsupported control request subtype: X` | none |
 
@@ -48,3 +50,29 @@ Read of `/x/a.txt` (outside cwd) asks for permission. Allowed **with** the
 update, a later Read of `/x/b.txt` in the next turn runs without asking.
 Allowed **without** it, the later Read asks again. The request's own
 `permission_suggestions` offers an `addRules` rule instead; either works.
+
+## Settings (CLI 2.1.259, `live-settings-spike.py`)
+
+The file given with `--settings` is read **once, when the process starts**.
+Editing it later, in place or by rename, changes nothing in the running
+process (checked for several seconds, idle, with no tool call in between).
+
+`{"subtype":"apply_flag_settings","settings":{...}}` layers settings over what
+the process started with, with no restart:
+
+- It is a per-top-level-key replace of what an earlier request set: sending
+  `{"permissions":{"allow":["A"]}}` and then `{"permissions":{"allow":["B"]}}`
+  leaves only B in the layer; keys the request does not mention
+  (`autoMode`, ...) are untouched; `{"permissions":{}}` clears that key's layer.
+- The layer sits over the start-up settings, and arrays are unioned with the
+  file's. So rules can be added live, but a rule
+  that was in the file at start cannot be taken back before a restart.
+  Start-up rules of kinds the request does not mention (a `permissions.ask`
+  entry beside a pushed `permissions.allow`) stay.
+- `get_settings` shows the result under `effective`.
+- Enforcement follows: with the process in `default` mode and a scripted
+  model calling Bash, a call with no rule raises `can_use_tool`; after an
+  `apply_flag_settings` allow rule for that exact command the same call runs
+  with no prompt, a different command still prompts, and clearing the layer
+  makes it prompt again.
+- An older CLI answers with `error: Unsupported control request subtype`.

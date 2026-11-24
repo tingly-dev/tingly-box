@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/vision/imagegen"
 )
 
 // HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
@@ -67,7 +68,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	}
 
 	var req openai.ImageGenerateParams
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+	if err := parseImageGenerationRequest(bodyBytes, &req); err != nil {
 		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -113,12 +114,7 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	provider, selectedService, err := ph.selectServiceForImageGeneration(c, scenarioType, rule)
 	if err != nil {
-		writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		writeSelectionError(c, err)
 		return
 	}
 
@@ -160,6 +156,22 @@ func (ph *ProtocolHandler) HandleOpenAIImageGeneration(c *gin.Context) {
 	ph.persistImageGeneration(&req, resp)
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// The SDK has no reasoning_effort field on Images params. Decode this gateway
+// extension explicitly and carry it unchanged to the selected backend.
+func parseImageGenerationRequest(body []byte, req *openai.ImageGenerateParams) error {
+	if err := json.Unmarshal(body, req); err != nil {
+		return err
+	}
+	var extension struct {
+		ReasoningEffort string `json:"reasoning_effort"`
+	}
+	if err := json.Unmarshal(body, &extension); err != nil {
+		return err
+	}
+	imagegen.SetReasoningEffort(req, extension.ReasoningEffort)
+	return nil
 }
 
 // persistImageGeneration saves generated images and their prompts under the

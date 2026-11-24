@@ -52,6 +52,15 @@ REST API calls (e.g. reactions) require an access token obtained via
 `/gettoken`. The bot caches the token in memory and refreshes it automatically
 before expiry (`tokenExpiry`). The cache is protected by `tokenMu`.
 
+### Reactions
+
+`React` posts to `/v1.0/robot/emotion/reply` with a DingTalk default emotion
+(`emotions.go`, 199 entries, looked up by Chinese or English name). The
+endpoint needs the conversation and robot code, which `core.Bot.React` does not
+carry, so inbound messages are remembered in a bounded `msgId → conversation`
+table (`msgRefs`); reacting to an unknown message fails. Semantic tokens map to
+emotion names in `core/platforms.go` (`dingtalkReactions`).
+
 ### Webhook map
 
 When a chatbot message arrives, DingTalk includes a per-conversation
@@ -65,7 +74,7 @@ correct conversation without a separate target-resolution call.
 |---|---|
 | Send text | ✅ |
 | Send media | ✅ |
-| Reactions (via REST API) | ✅ |
+| Reactions (default emotions, via REST API) | ✅ (unverified live) |
 | Card buttons | ✅ |
 | Edit message | ✅ |
 | Delete message | ✅ |
@@ -76,4 +85,6 @@ correct conversation without a separate target-resolution call.
 | File | Purpose |
 |---|---|
 | `dingtalk.go` | `Bot` struct, lifecycle, send/react/edit/delete; in-memory access-token cache; per-conversation webhook map |
+| `reaction.go` | `React` (robot emotion reply) and the `msgId → conversation` table |
+| `emotions.go` | DingTalk default emotion list (id, Chinese and English names) |
 | `adapter.go` | Converts `chatbot.BotCallbackDataModel` → `core.Message` |

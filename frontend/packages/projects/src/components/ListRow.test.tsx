@@ -21,4 +21,14 @@ describe('ListRow', () => {
         expect(screen.queryByRole('button')).toBeNull();
         expect(document.querySelector('[data-subagent="c1"]')).toBeTruthy();
     });
+
+    it('puts badges and meta under the text when stacked, so a narrow card keeps its title', () => {
+        render(<ListRow stacked title="Fix the list" subtitle="waiting" badges={<span>1 commit</span>} meta="3m" />);
+        const title = screen.getByText('Fix the list');
+        const meta = screen.getByText('3m');
+        // Same block as the title, after it.
+        expect(title.parentElement!.contains(meta)).toBe(true);
+        expect(title.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(title.parentElement!.contains(screen.getByText('1 commit'))).toBe(true);
+    });
 });

@@ -181,28 +181,28 @@ func RuleFlagRegistry() []FlagSpec {
 		},
 		// ── Reasoning ──────────────────────────────────────────────────────
 		{
+			Key:         "disable_thinking_budget",
+			Label:       "Remove thinking budget",
+			Description: "Remove thinking.budget_tokens from Anthropic-compatible upstream requests while retaining the thinking mode. Use for providers that reject a budget; Anthropic's enabled thinking requires one.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryReasoning,
+		},
+		{
 			Key:             "thinking_effort",
 			Label:           "Thinking",
-			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on at that effort — sent natively as reasoning_effort for OpenAI targets and output_config.effort for Anthropic targets, with a budget_tokens fallback for budget-based models (low 4K / medium 10K / high 20K / max 32K).",
+			Description:     "Thinking effort for this route. By Client inherits the scenario setting when configured. Off requests that the model disable thinking. Levels use the existing provider mappings, and upstreams may reject unsupported settings. On budget-based models, Low through Max target about 4K, 10K, 20K, 24K, and 32K tokens.",
 			Type:            FlagTypeEnum,
 			Category:        FlagCategoryReasoning,
 			Shared:          true,
 			InheritanceMode: "override",
-			// "minimal" and "xhigh" are deliberately not offered here: outside a
-			// handful of the newest OpenAI/Anthropic models they silently
-			// collapse onto "low"/"high"/"max" anyway (see the reasoning-effort
-			// tier maps in internal/protocol/ops and .design/model-data.md), so
-			// exposing them as distinct choices was mostly a false promise of
-			// precision. Both remain valid thinking.Level values — existing
-			// rules already set to "minimal"/"xhigh" keep working, they're just
-			// not offered to new selections.
 			Options: []FlagOption{
-				{Value: "", Label: "By Client"},
-				{Value: "off", Label: "Off"},
-				{Value: "low", Label: "Low (~4K tokens)"},
-				{Value: "medium", Label: "Medium (~10K tokens)"},
-				{Value: "high", Label: "High (~20K tokens)"},
-				{Value: "max", Label: "Max (~32K tokens)"},
+				{Value: ThinkingEffortDefault, Label: "By Client"},
+				{Value: ThinkingEffortOff, Label: "Off"},
+				{Value: ThinkingEffortLow, Label: "Low"},
+				{Value: ThinkingEffortMedium, Label: "Medium"},
+				{Value: ThinkingEffortHigh, Label: "High"},
+				{Value: ThinkingEffortXHigh, Label: "XHigh"},
+				{Value: ThinkingEffortMax, Label: "Max"},
 			},
 		},
 		// ── Vision ─────────────────────────────────────────────────────────
@@ -242,10 +242,30 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "session_affinity",
 			Label:       "Session affinity",
-			Description: "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP. On by default (1800s) for the built-in Claude Code / Claude Desktop / Codex rules.",
+			Description: "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP. On by default (1800s) for the built-in Claude Code / Claude Desktop / Codex rules and for newly created Team rules.",
 			Type:        FlagTypeInt,
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",
+		},
+		{
+			Key:         "limit_overflow",
+			Label:       "When accounts are at their limit",
+			Description: "What to do when every account of this rule is at its concurrency/usage limit (limits are set on providers and on this rule's services). Queue (default) waits briefly for a free slot, then answers 429. Reject answers 429 at once with Retry-After. Ignore routes anyway — limits become advisory and only steer traffic when an alternative exists.",
+			Type:        FlagTypeEnum,
+			Category:    FlagCategoryRouting,
+			Options: []FlagOption{
+				{Value: "queue", Label: "Wait in queue, then 429 (default)"},
+				{Value: "reject", Label: "Reject with 429 immediately"},
+				{Value: "ignore", Label: "Ignore limits and route anyway"},
+			},
+		},
+		{
+			Key:         "limit_queue_timeout",
+			Label:       "Queue wait (seconds)",
+			Description: "How long a request may wait for a free account slot when the overflow policy is Queue. 0 uses the default (15 seconds). Only concurrency limits are waited on; exhausted usage budgets answer 429 immediately.",
+			Type:        FlagTypeInt,
+			Category:    FlagCategoryRouting,
+			Placeholder: "e.g. 15",
 		},
 		// ── App ────────────────────────────────────────────────────────────
 		{

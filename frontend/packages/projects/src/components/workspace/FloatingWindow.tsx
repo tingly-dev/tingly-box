@@ -129,7 +129,7 @@ function Window({ title, storageKey, defaultSize = DEFAULT_SIZE, clearRight = 0,
                 onPointerDown={begin('move')} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
                 sx={{ display: 'flex', alignItems: 'center', gap: 0.5, height: TITLEBAR, flexShrink: 0, pl: 1.5, pr: 0.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider', cursor: active ? 'grabbing' : 'grab', touchAction: 'none' }}
             >
-                <Typography noWrap component="div" sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 650 }}>{title}</Typography>
+                <Typography noWrap component="div" sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 600 }}>{title}</Typography>
                 {onDock && (
                     <Tooltip title={dockLabel ?? t('window.dock')}>
                         <IconButton size="small" onClick={onDock} aria-label={dockLabel ?? t('window.dock')}><DockIcon fontSize="small" /></IconButton>

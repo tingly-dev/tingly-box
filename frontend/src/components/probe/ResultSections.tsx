@@ -11,8 +11,9 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import type { ProbeResult, ProbeProtocol, ProbeTargetType } from '@/types/probe';
-import { CopyIconButton } from '@/components/CopyIconButton';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ResultSections: the probe result vocabulary shared by the probe dialog and
 // the Bench page — one-glance verdict (StatusBar), the request's path
@@ -138,7 +139,7 @@ export const CollapsibleSection = memo(({ title, defaultExpanded = false, childr
             sx={{
                 mt: 2,
                 border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 1.5,
+                borderRadius: radius.card,
                 overflow: 'hidden',
             }}
         >
@@ -186,7 +187,7 @@ export const CopyBlock = memo(({ text, maxHeight, fontSize = '0.78rem' }: { text
                     pr: 5,
                     bgcolor: 'background.default',
                     color: 'text.primary',
-                    borderRadius: 1.5,
+                    borderRadius: radius.card,
                     fontFamily: fontMono,
                     fontSize,
                     whiteSpace: 'pre-wrap',
@@ -209,7 +210,6 @@ export const CopyBlock = memo(({ text, maxHeight, fontSize = '0.78rem' }: { text
 
 // StatusBar: the one-glance verdict — success/failure, latency, tokens.
 export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
-    const theme = useTheme();
     const { t } = useTranslation();
     const ok = result.success;
     const d = result.data;
@@ -219,7 +219,7 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
             variant="outlined"
             sx={{
                 mt: 2,
-                borderRadius: 2,
+                borderRadius: radius.card,
                 borderWidth: 2,
                 '& .MuiAlert-icon': {
                     fontSize: 28,
@@ -231,8 +231,8 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                 <Typography
                     variant="subtitle1"
                     sx={{
-                        fontWeight: 700,
-                        fontSize: '1rem'
+                        fontWeight: 600,
+                        fontSize: fontSizes.title
                     }}>
                     {ok ? t('probe.success') : t('probe.failed')}
                 </Typography>
@@ -279,13 +279,19 @@ export const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                     variant="body2"
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: fontSizes.lg,
+                        fontSize: fontSizes.md,
                         mt: 1,
                         color: 'text.primary',
-                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        whiteSpace: 'pre-wrap',
                     }}
                 >
                     {result.error.message}
+                    {result.error.response_body && (
+                        <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                            {result.error.response_body}
+                        </Box>
+                    )}
                 </Typography>
             )}
         </Alert>

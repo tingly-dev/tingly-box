@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
@@ -142,6 +143,9 @@ func types(events []map[string]any) []string {
 	return out
 }
 
+// newServer runs a server on agents; nil runs every turn on a stand-in that
+// just ends it, so no test starts the real Claude Code CLI (which would reach
+// whatever gateway the default connection points at).
 func newServer(t *testing.T, agents *project.Agents) (*db.Store, client) {
 	return newServerAt(t, agents, t.TempDir())
 }
@@ -149,12 +153,24 @@ func newServer(t *testing.T, agents *project.Agents) (*db.Store, client) {
 // newServerAt is newServer with the data root given, for a test that reads or
 // writes the files under it.
 func newServerAt(t *testing.T, agents *project.Agents, root string) (*db.Store, client) {
+	if agents == nil {
+		idle := &enginetest.Agent{Script: func(*enginetest.Turn) error { return nil }}
+		agents = &project.Agents{Service: idle.Service()}
+	}
 	store, err := db.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	srv := httptest.NewServer(New(ctx, Deps{Store: store, Layout: project.Layout{Root: root}, Agents: agents}))
+	engine, svc := start(ctx, Deps{Store: store, Layout: project.Layout{Root: root}, Agents: agents})
+	// Stop and wait for the runtime before the store closes and the temp
+	// directories go: a turn still finishing would write into both.
+	t.Cleanup(func() {
+		cancel()
+		stop, done := context.WithTimeout(context.Background(), 10*time.Second)
+		defer done()
+		svc.Stop(stop)
+	})
+	srv := httptest.NewServer(engine)
 	t.Cleanup(srv.Close)
 	return store, client{t: t, base: srv.URL + "/api/v1"}
 }
@@ -216,6 +232,39 @@ func TestSendWithoutConnectionKeepsNothing(t *testing.T) {
 // commitAgents run each thread turn by committing one file.
 func commitAgents() *project.Agents {
 	a := &enginetest.Agent{Script: func(turn *enginetest.Turn) error {
+		if turn.Opts.CustomSystemPrompt != "" {
+			if strings.Contains(turn.Prompt, `<event source="thread"`) {
+				turn.Say("The login bug fix is ready for review.", 1, 1)
+				return nil
+			}
+			data, err := os.ReadFile(turn.Opts.MCPConfigPath)
+			if err != nil {
+				return err
+			}
+			var config struct {
+				MCPServers map[string]struct {
+					URL string `json:"url"`
+				} `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(data, &config); err != nil {
+				return err
+			}
+			client := mcp.NewClient(&mcp.Implementation{Name: "fixture", Version: "1"}, nil)
+			session, err := client.Connect(turn.Ctx, &mcp.StreamableClientTransport{Endpoint: config.MCPServers["tingly-projects"].URL}, nil)
+			if err != nil {
+				return err
+			}
+			defer session.Close()
+			result, err := session.CallTool(turn.Ctx, &mcp.CallToolParams{Name: "start_thread", Arguments: map[string]any{"title": "Fix login bug", "task": "Fix the login bug and commit."}})
+			if err != nil {
+				return err
+			}
+			if result.IsError {
+				return fmt.Errorf("start_thread: %v", result.Content)
+			}
+			turn.Say("Started a thread for the login bug.", 1, 1)
+			return nil
+		}
 		dir := turn.Opts.ProjectPath
 		turn.Say("Fixing it.", 60, 10)
 		if err := os.WriteFile(filepath.Join(dir, "fix.txt"), []byte("fixed\n"), 0o644); err != nil {
@@ -239,6 +288,105 @@ func gitRepo(t *testing.T) string {
 		require.NoError(t, err, string(out))
 	}
 	return dir
+}
+
+func TestCoordinatorRecoveryEndpoint(t *testing.T) {
+	store, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Recovery"}, &p))
+	event := &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "interrupted"}
+	require.NoError(t, store.AddCoordinatorInput(p.ID, event))
+	input, err := store.ClaimCoordinatorInput(p.ID)
+	require.NoError(t, err)
+	require.NoError(t, store.FinishCoordinatorInput(input.ID, false))
+	var before struct {
+		Recovery string `json:"coordinator_recovery"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &before))
+	require.Equal(t, input.ID, before.Recovery)
+	require.Equal(t, 400, c.do("POST", "/projects/"+p.ID+"/coordinator/recover", map[string]any{"input_id": input.ID, "action": "invalid"}, nil))
+	require.Equal(t, 200, c.do("POST", "/projects/"+p.ID+"/coordinator/recover", map[string]any{"input_id": input.ID, "action": "skip"}, nil))
+	var after struct {
+		Recovery string `json:"coordinator_recovery"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &after))
+	require.Empty(t, after.Recovery)
+}
+
+// The stop endpoint answers with the refreshed detail: an idle coordinator
+// takes a stop as a no-op rather than an error.
+func TestCoordinatorStopEndpoint(t *testing.T) {
+	_, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Stoppable"}, &p))
+	var got struct {
+		Busy        bool   `json:"coordinator_busy"`
+		Recovery    string `json:"coordinator_recovery"`
+		Coordinator struct {
+			Status string `json:"status"`
+		} `json:"coordinator"`
+	}
+	require.Equal(t, 200, c.do("POST", "/projects/"+p.ID+"/coordinator/stop", nil, &got))
+	require.False(t, got.Busy)
+	require.Empty(t, got.Recovery)
+	require.Equal(t, db.ThreadIdle, got.Coordinator.Status)
+}
+
+func TestProjectDetailCarriesTheCoordinatorStatus(t *testing.T) {
+	store, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "Status"}, &p))
+	main, err := store.GetThread(p.MainThreadID)
+	require.NoError(t, err)
+	main.Turns, main.ReportedModel = 3, "cc-model"
+	main.AddUsage(db.Usage{Input: 900, Output: 50, CacheRead: 700, ContextTokens: 800, ContextWindow: 200000, DurationMS: 2500}, time.Now().UTC())
+	require.NoError(t, store.SaveThread(main))
+	require.NoError(t, store.AddCoordinatorInput(p.ID, &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "one"}))
+	require.NoError(t, store.AddCoordinatorInput(p.ID, &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "two"}))
+	var got struct {
+		Coordinator struct {
+			Turns         int    `json:"turns"`
+			InputTokens   int64  `json:"input_tokens"`
+			CacheRead     int64  `json:"cache_read_tokens"`
+			ContextTokens int64  `json:"context_tokens"`
+			ContextWindow int    `json:"context_window"`
+			LastTurnMS    int64  `json:"last_turn_ms"`
+			ReportedModel string `json:"reported_model"`
+		} `json:"coordinator"`
+		Queued int `json:"coordinator_queued"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &got))
+	require.Equal(t, 3, got.Coordinator.Turns)
+	require.EqualValues(t, 900, got.Coordinator.InputTokens)
+	require.EqualValues(t, 700, got.Coordinator.CacheRead)
+	require.EqualValues(t, 800, got.Coordinator.ContextTokens)
+	require.Equal(t, 200000, got.Coordinator.ContextWindow)
+	require.EqualValues(t, 2500, got.Coordinator.LastTurnMS)
+	require.Equal(t, "cc-model", got.Coordinator.ReportedModel)
+	require.Equal(t, 2, got.Queued)
+}
+
+func TestCoordinatorStatusReadsLikeAThreadsStatus(t *testing.T) {
+	store, c := newServer(t, commitAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "State"}, &p))
+	var detail struct {
+		Coordinator struct {
+			Status     string `json:"status"`
+			WaitReason string `json:"wait_reason"`
+		} `json:"coordinator"`
+	}
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &detail))
+	require.Equal(t, db.ThreadIdle, detail.Coordinator.Status)
+
+	event := &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvUser, Content: "interrupted"}
+	require.NoError(t, store.AddCoordinatorInput(p.ID, event))
+	input, err := store.ClaimCoordinatorInput(p.ID)
+	require.NoError(t, err)
+	require.NoError(t, store.FinishCoordinatorInput(input.ID, false))
+	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID, nil, &detail))
+	require.Equal(t, db.ThreadWaiting, detail.Coordinator.Status, "an interrupted input waits on the user, as a thread's question does")
+	require.NotEmpty(t, detail.Coordinator.WaitReason)
 }
 
 func TestProjectEndToEnd(t *testing.T) {
@@ -360,14 +508,37 @@ func TestProjectEndToEnd(t *testing.T) {
 	require.Equal(t, 200, c.do("GET", "/projects/"+p.ID+"/threads", nil, &listed))
 	require.Len(t, listed.Threads, 1, "the main thread is the conversation, not one of the project's threads")
 
-	var diff map[string]any
-	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/diff", nil, &diff))
-	assert.Contains(t, diff["patch"], "fix.txt")
+	var diff struct {
+		Files []struct {
+			Path      string `json:"path"`
+			Status    string `json:"status"`
+			Additions int    `json:"additions"`
+		} `json:"files"`
+	}
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/prs/12/diff", nil, nil), "a PR the thread does not hold")
+	require.NoError(t, store.UpdateThreadLinks(th.ID, func(l []db.ThreadLink) []db.ThreadLink {
+		return append(l, db.ThreadLink{Kind: db.LinkPR, Repo: "acme/widgets", Number: 12, State: db.LinkStateOpen, Head: th.Branch, Base: th.BaseBranch, Role: db.LinkOpened})
+	}))
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/prs/x/diff", nil, nil))
+	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/prs/12/diff", nil, &diff))
+	require.Len(t, diff.Files, 1)
+	assert.Equal(t, "fix.txt", diff.Files[0].Path)
+	var fileDiff map[string]any
+	require.Equal(t, 200, c.do("GET", "/threads/"+th.ID+"/prs/12/diff/file?path=fix.txt", nil, &fileDiff))
+	assert.Contains(t, fileDiff["patch"], "+")
+	require.Equal(t, 400, c.do("GET", "/threads/"+th.ID+"/prs/12/diff/file?path=", nil, nil))
 
-	var merged db.Thread
-	require.Equal(t, 200, c.do("POST", "/threads/"+th.ID+"/merge", nil, &merged))
-	assert.Equal(t, db.ThreadResolved, merged.Status)
-	assert.FileExists(t, filepath.Join(repo, "fix.txt"))
+	for _, bad := range []any{nil, map[string]any{}, map[string]any{"method": "merge"}, map[string]any{"method": "rebase"}} {
+		require.Equal(t, 400, c.do("POST", "/threads/"+th.ID+"/merge", bad, nil), "%v", bad)
+	}
+	// Merging is done on GitHub; this repository has no origin, so both methods say so
+	// and nothing is merged locally (the GitHub side is tested in the project package).
+	for _, method := range []string{"squash", "merge_request"} {
+		var refused map[string]any
+		require.Equal(t, 400, c.do("POST", "/threads/"+th.ID+"/merge", map[string]any{"method": method}, &refused), method)
+		assert.Contains(t, refused["error"], "no origin remote", method)
+	}
+	assert.NoFileExists(t, filepath.Join(repo, "fix.txt"))
 
 	// Memory and library.
 	require.Equal(t, 200, c.do("PUT", "/projects/"+p.ID+"/memory/auth.md", map[string]any{"content": "Use OAuth."}, nil))
@@ -420,6 +591,24 @@ func TestProjectEffortSettings(t *testing.T) {
 	var f db.Project
 	require.Equal(t, http.StatusOK, c.do("POST", "/projects", map[string]any{"type": "folder", "name": "notes", "path": t.TempDir()}, &f))
 	assert.Equal(t, http.StatusBadRequest, c.do("PATCH", "/projects/"+f.ID, map[string]any{"thread_effort": "high"}, nil))
+}
+
+func TestProjectWorktreeSetting(t *testing.T) {
+	_, c := newServer(t, nil)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "shared"}, &p))
+	assert.False(t, p.DisableWorktree)
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+p.ID, map[string]any{"disable_worktree": true}, &p))
+	assert.True(t, p.DisableWorktree)
+	var detail struct {
+		Project db.Project `json:"project"`
+	}
+	require.Equal(t, http.StatusOK, c.do("GET", "/projects/"+p.ID, nil, &detail))
+	assert.True(t, detail.Project.DisableWorktree)
+	id := p.ID
+	p = db.Project{}
+	require.Equal(t, http.StatusOK, c.do("PATCH", "/projects/"+id, map[string]any{"disable_worktree": false}, &p))
+	assert.False(t, p.DisableWorktree)
 }
 
 // The events stream outlives the server's WriteTimeout: cut at it, every open

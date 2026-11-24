@@ -33,6 +33,34 @@
       "rules": {
         "typescript/no-explicit-any": "off"
       }
+    },
+    {
+      "files": [
+        "src/components/**/*",
+        "src/hooks/**/*",
+        "src/utils/**/*",
+        "src/services/**/*",
+        "src/contexts/**/*",
+        "src/constants/**/*",
+        "src/types/**/*",
+        "src/styles/**/*",
+        "src/features/**/*",
+        "src/layout/**/*",
+        "src/shell/**/*"
+      ],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/pages", "@/pages/**", "**/pages/**"],
+                "message": "Shared code must not import from pages/. Put what several screens (or the nav) need in src/features/<area>/ and import it from there."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

@@ -25,10 +25,13 @@ vmodel/
 ├── defaults_shared.go  // SharedDefaultMocks() + ExtendedErrorSpecs() — shared specs
 ├── error_injection.go  // ErrorInjection, ErrorInjectingModel, EmitGate
 ├── README.md
+├── spec/               // Unified definitions, catalog, loading, serving and test adapters
 ├── anthropic/          // Anthropic-protocol models + Registry alias
 ├── openai/             // OpenAI Chat-protocol models + Registry alias
 ├── decision/           // Decisions-endpoint models (options in, one answer out) + Registry alias
 ├── virtualserver/      // Production Gin HTTP handler + Service wiring
+├── capture/            // `tb vmodel --capture`: raw per-connection request recorder
+├── examples/capture/   // Redacted Claude Code captures showing what it records
 └── benchmark/          // Load-test client + local server factory
     └── examples/       // Runnable server/client examples
 ```
@@ -143,6 +146,144 @@ protocol-version distinction does not leak into the `VirtualModel` interface.
 
 ## Interfaces
 
+### JSON / YAML files
+
+All model kinds use `vmodel/spec.Definition` and `spec.Load`: ordinary mocks,
+recorded responses, sequences, decisions, transforms and named Go behavior.
+The service and matrix commands load the same file:
+
+```sh
+tb vmodel --config vmodel/testdata/unified.yaml
+go run ./cli/harness matrix --mode single --config vmodel/testdata/unified.yaml
+```
+
+The standalone VModel listener picks a free local port by default and reports
+its direct OpenAI/Anthropic/Google URLs. It runs without starting a tb gateway,
+opening its database, or registering providers/rules. Point an SDK directly at
+the printed protocol URL; any required API key can be a nonempty placeholder.
+`--json` emits one readiness record; `GET /healthz` reports service readiness.
+All configured IDs share one listener. OpenAI uses the printed `<url>/v1`
+base; Anthropic uses `<url>` and appends `/v1/messages`. Multiple clients can
+use those same IDs and address. The fixed tb `/tingly/vmodel` endpoint serves
+its builtin catalog directly; CLI definitions remain at the CLI's own address.
+Neither path automatically creates providers or rules.
+
+```yaml
+id: hello
+kind: mock
+mock:
+  content: Hello.
+  delay: 50ms
+expect:
+  http_status: 200
+  content_equals: Hello.
+```
+
+`tb vmodel --export catalog.yaml` exports the complete core inventory,
+including opt-in test fixtures, without starting a service. With `--config`,
+export writes just those definitions. Every input must use explicit `id`,
+`kind` and one behavior block; alternate flat/name-based formats are rejected.
+The harness matrix loads the same files with `--config`.
+
+### Capturing what a real client sends
+
+`tb vmodel --capture <dir>` records the rawest possible request of whatever
+client talks to it (design: [`.design/vmodel-capture.md`](../.design/vmodel-capture.md)).
+`<dir>` must be new or empty.
+
+```
+<dir>/raw/conn-0001.in    verbatim bytes the client sent on TCP connection 1
+<dir>/raw/conn-0001.out   verbatim bytes we answered (--no-capture-out to skip)
+<dir>/index.jsonl         one line per request: seq (arrival order), t, conn,
+                          in/out byte ranges into the raw files, method, target, status
+<dir>/meta.json           argv, URL, model ids
+```
+
+The raw files are the ground truth: header-name casing and order, duplicate
+headers, the request line, chunked framing and the body bytes are exactly as
+sent. Nothing is redacted, so use fake credentials (the command warns about a
+credential without a "fake" marker) and keep the directory out of git.
+`index.jsonl` lines are written when a response completes (completion order);
+`seq` is arrival order. Bytes the HTTP server rejected before any handler ran
+get an `"unparsed":true` entry.
+
+Capturing does not change what vmodel answers; it only watches. Because a
+client's model ids are not known in advance, `--capture` also turns on
+`--fallback` (below) with a built-in `capture-default` mock, so the client gets
+a normal reply instead of a 404 and finishes its round. `--fallback <id>` picks
+another definition. `--capture-request-id` adds a `request-id` response header.
+
+A real, redacted capture of Claude Code 2.1.329 (proxy and direct) is checked in
+under [`examples/capture/`](examples/capture/README.md), with a walk-through of
+what it shows and the script that redacted it.
+
+### Serving unknown model ids
+
+`tb vmodel --fallback <id>` serves every request whose `model` no definition
+names with definition `<id>` instead of a 404 (replies echo the requested
+model; defined models always win; the fallback is not listed by `/models`; a
+protocol the fallback does not support is still a 404). Without the flag
+unknown models stay a 404.
+
+```sh
+tb vmodel --capture ./cap --json            # prints {"url": "...", ...}
+env -i PATH="$PATH" TERM=xterm HOME="$ISO_HOME" \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_TELEMETRY=1 \
+    DISABLE_ERROR_REPORTING=1 DISABLE_AUTOUPDATER=1 \
+    ANTHROPIC_BASE_URL="$URL" CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-fake \
+    claude -p "say hi" --model claude-sonnet-4-6 < /dev/null
+```
+
+`env -i`, an isolated `HOME` (containing `{"hasCompletedOnboarding":true}`)
+and a fake token are mandatory: the host environment would otherwise leak into
+the wire (`CLAUDE_CODE_ENTRYPOINT`, real tokens). Also run the client from a
+directory whose parents hold no `CLAUDE.md` and no `.claude/skills`: Claude Code
+embeds all of them in the first user message, so a capture taken under your home
+directory contains your private instructions. Add
+`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` to see the direct-to-Anthropic
+shape. Plain HTTP only; the OAuth login/refresh endpoints (TLS, fixed hosts)
+cannot be captured this way.
+
+### Scripted conversations (`kind: script`)
+
+A `script` definition is a scene of conversations, not one model: tracks of
+predefined replies that real agent clients (Claude Code, the Projects
+coordinator and its threads, subagents) run against, many at once. A request
+continues the track whose earlier reply it carries (our `tool_use` ids and
+texts come back verbatim), a new conversation binds to a track by selector, and
+anything nothing expects fails the run. Engine: [`script/`](script/); design:
+[`.design/vmodel-script.md`](../.design/vmodel-script.md).
+
+```yaml
+id: scene
+kind: script
+script:
+  tracks:
+    main:
+      bind: {class: [main], last_text_contains: "say hi"}
+      steps:
+        - reply:
+            tool_calls: [{id: echo, name: Bash, arguments: {command: "echo hi"}, expect_result: {contains: hi}}]
+        - reply: {content: "DONE"}
+```
+
+```sh
+tb vmodel --config scene.yaml --fallback scene --json   # readiness lists "scripts"
+curl -X POST $URL/_vmodel/scripts/scene/signals/go       # release after: [signal:go]
+curl "$URL/_vmodel/scripts/scene/served?step=main.1"     # wait for a step
+curl -X POST $URL/_vmodel/scripts/scene/finish           # final report
+```
+
+On shutdown every script is finished, its report printed, and the command
+fails if a script failed; with `--capture` the report and trace are kept as
+`script-<id>.json` beside the capture.
+
+See [the unified definition contract](spec/README.md) for all kinds,
+per-protocol recording payloads, exact `raw_body`/`raw_stream` preservation,
+native endpoint assertions, custom Go factories and migration boundaries.
+`spec.Load` / `spec.Decode` are the only model-file loading APIs. Go callers
+use the shared mock configuration or named runtime factories.
+
 ### Base (`interface.go`)
 
 ```go
@@ -201,16 +342,13 @@ Both the anthropic and openai `DefaultStream` helpers use these.
 
 ### SharedDefaultMocks
 
-`SharedDefaultMocks()` returns the specs for the four mocks that are registered
+`SharedDefaultMocks()` returns the specs for the mocks that are registered
 in **both** default registries. Each protocol's `RegisterDefaults` calls this
 and wraps each spec in its own `MockModel`:
 
 ```go
 for _, spec := range virtualmodel.SharedDefaultMocks() {
-    _ = reg.Register(NewMockModel(&MockModelConfig{
-        ID: spec.ID, Name: spec.Name, Content: spec.Content,
-        ToolCall: spec.ToolCall, Delay: spec.Delay,
-    }))
+    _ = reg.Register(NewMockModel(&spec))
 }
 ```
 
@@ -400,7 +538,7 @@ so static and tool mocks get streaming for free.
 
 A small facility lets a mock simulate an upstream failure without writing a
 custom handler. It is **opt-in per model** — set `MockModelConfig.Error` (or
-`MockScenario.Error`) to an `ErrorInjection`, and the virtual server handler
+`SharedMockSpec.Error`) to an `ErrorInjection`, and the virtual server handler
 honors it. Models with no `Error` field set behave exactly as before.
 
 ```go

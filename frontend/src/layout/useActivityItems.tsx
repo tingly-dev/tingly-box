@@ -1,19 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SCENARIOS, getHiddenScenarios, getPinnedScenarios } from '@/pages/scenario/scenarioRegistry';
+import { SCENARIOS, getHiddenScenarios, getPinnedScenarios } from '@/features/scenario/scenarioRegistry';
 import { OpenAI, Anthropic, Claude, Cursor, DeepSeek, OpenCode, Pi, WorkBuddy, Xcode, VSCode, Codex, ClaudeDesktop } from '../components/BrandIcons';
 import {
     SettingsApplications,
     BarChart as IconChartBar,
-    EventNote as IconCalendarClock,
-    CalendarToday as IconCalendar,
-    Event as IconCalendarEvent,
     Add as IconPlus,
     TextSnippet as IconFileText,
-    RemoteControl as IconRemote,
-    Robot as IconRobot,
     Terminal as IconTerminal,
-    Bell as IconBell,
     Bolt as IconBolt,
     Settings as IconSettings,
     License as IconLicense,
@@ -39,19 +33,21 @@ import {
 import { IconLibraryPhoto as TablerLibraryPhoto, IconPhotoScan as TablerPhotoScan, IconWriting as TablerWriting } from '@tabler/icons-react';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
-import { useMCPProfiles } from '@/pages/mcp/profileStore';
-import { MCP_DEFAULT_PROFILE_ID } from '@/pages/mcp/types';
-import { useImageProfiles } from '@/pages/image/profiles/imageProfileStore';
+import { useMCPProfiles } from '@/features/mcp/profileStore';
+import { MCP_DEFAULT_PROFILE_ID } from '@/features/mcp/types';
+import { useImageProfiles } from '@/features/image/imageProfileStore';
 import { useTeamContext } from '@/contexts/TeamContext';
 import { orderTeams, teamPath } from '@/utils/team';
 import type { ActivityItem, NavItem, NavItemBase } from './types';
-import { useBotPlatformSummary } from './useBotPlatformSummary';
 import { useProjectsWaiting } from './useProjectsWaiting';
-import ThumbImage from '@/pages/image/components/ThumbImage';
-import { THUMB_EDGE_BADGE } from '@/pages/image/components/imageThumbnails';
+import ThumbImage from '@/features/image/ThumbImage';
+import { THUMB_EDGE_BADGE } from '@/features/image/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
 
 // The Projects sidebar body carries @tingly/projects; lazy so the package stays
-// out of the eager bundle until the Projects item is open.
+// out of the eager bundle until the Projects item is open. The one place the
+// nav reaches into pages/, as a lazy widget rather than shared state.
+// oxlint-disable-next-line no-restricted-imports
 const ProjectsNav = lazy(() => import('@/pages/projects/ProjectsNav'));
 
 const IconLibraryPhoto = tablerMui(TablerLibraryPhoto);
@@ -71,7 +67,6 @@ export function useActivityItems(): ActivityItem[] {
     const imageProfiles = useImageProfiles();
     const mcpProfiles = useMCPProfiles();
     const { teams } = useTeamContext();
-    const botSummary = useBotPlatformSummary();
 
     const [hiddenScenarios, setHiddenScenarios] = useState<Set<string>>(() => getHiddenScenarios());
     useEffect(() => {
@@ -93,21 +88,6 @@ export function useActivityItems(): ActivityItem[] {
             window.removeEventListener('storage', sync);
         };
     }, []);
-    // Aggregate across every platform for the Bots row's count — the
-    // per-platform breakdown lives on the Bots page itself, not in the nav
-    // (see .design/bot-arch.md §10). A trailing "2/3" on the label's line
-    // rather than a second line, so the row matches its one-line siblings.
-    const botOverviewCount = useMemo(() => {
-        const totals = Object.values(botSummary).reduce(
-            (acc, s) => ({ active: acc.active + s.active, total: acc.total + s.total }),
-            { active: 0, total: 0 }
-        );
-        return totals.total > 0 ? {
-            value: `${totals.active}/${totals.total}`,
-            title: t('layout.botsRunning', { defaultValue: '{{active}} of {{total}} bots running', active: totals.active, total: totals.total }),
-        } : undefined;
-    }, [botSummary, t]);
-
     const promptMenuItems = useMemo(() => {
         const items: NavItem[] = [];
         if (skillIde) {
@@ -190,12 +170,13 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'dsh', nav: { path: '/agent/dsh', label: t('layout.nav.useDsh', { defaultValue: 'DeepSeek' }), icon: <DeepSeek size={20} /> } },
             { id: 'xcode', nav: { path: '/agent/xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> } },
             { id: 'vscode', nav: { path: '/agent/vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> } },
-            { id: 'cursor', nav: { path: '/agent/cursor', label: t('layout.nav.useCursor', { defaultValue: 'Cursor' }), icon: <Cursor size={20} /> } },
+            { id: 'cursor', nav: { path: '/agent/cursor', label: t('layout.nav.useCursor', { defaultValue: 'Cursor' }), icon: <Cursor size={20} grayscale /> } },
             // "custom" (bring-your-own-request-model) closes out the coding
             // tools group, right after the named integrations it's a fallback for.
             { id: 'custom', nav: { path: '/agent/custom', label: t('layout.nav.useCustom', { defaultValue: 'Custom' }), icon: <IconCustom sx={{ fontSize: 20 }} /> } },
         ]);
         const sdkTools = flagged([
+            { id: 'vmodel', nav: { path: '/agent/vmodel', label: t('layout.virtualModelsNavLabel', { defaultValue: 'VModel' }), icon: <IconFlask sx={{ fontSize: 20 }} /> } },
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconEmbedding sx={{ fontSize: 20 }} /> } },
@@ -309,14 +290,17 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'image',
                 icon: <IconPhoto sx={{ fontSize: 22 }} />,
                 label: t('layout.image', { defaultValue: 'Image' }),
+                railLabel: t('layout.imageRail', { defaultValue: 'Image' }),
                 defaultPath: '/image/playground',
-                // The work surface first (the same shape as Claude Code's
-                // profiles: the default Playground, one row per profile, "New
-                // profile"), then the occasional tools (Idea to Prompt, the
-                // more common of the two, and Image to Prompt), then
-                // what is shared: the Library and, last, the Image API, which
-                // only someone wiring up a client needs.
+                // The Image API entry leads, set off by a divider; Playground
+                // stays the default landing (defaultPath). Then the work
+                // surface (the same shape as Claude Code's profiles: the
+                // default Playground, one row per profile, "New profile"),
+                // the occasional tools (Idea to Prompt, the more common of
+                // the two, and Image to Prompt) and the shared Library.
                 children: [
+                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
+                    { type: 'divider' },
                     { path: '/image/playground', label: t('layout.imagePlayground', { defaultValue: 'Playground' }), subtitle: t('layout.default'), icon: <IconPalette sx={{ fontSize: 20 }} /> },
                     ...imageProfiles.map((profile): NavItem => ({
                         path: `/image/profile/${profile.id}`,
@@ -324,7 +308,7 @@ export function useActivityItems(): ActivityItem[] {
                         // a repeated "Profile" caption on every row is noise.
                         label: profile.name,
                         icon: profile.refs[0]
-                            ? <ThumbImage src={profile.refs[0].previewUrl} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 20, height: 20, borderRadius: '4px' }} />
+                            ? <ThumbImage src={profile.refs[0].previewUrl} alt="" edge={THUMB_EDGE_BADGE} sx={{ width: 20, height: 20, borderRadius: radius.chip }} />
                             : <IconPalette sx={{ fontSize: 20 }} />,
                     })),
                     { path: '/image/profile/new', label: t('imageProfile.new', { defaultValue: 'New profile' }), icon: <IconPlus sx={{ fontSize: 20 }} /> },
@@ -332,7 +316,6 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/image/idea-to-prompt', label: t('ideaPrompt.title', { defaultValue: 'Idea to Prompt' }), icon: <IconWriting sx={{ fontSize: 20 }} /> },
                     { path: '/image/to-prompt', label: t('imagePrompt.title', { defaultValue: 'Image to Prompt' }), icon: <IconPhotoScan sx={{ fontSize: 20 }} /> },
                     { path: '/image/library', label: t('imageLibrary.title', { defaultValue: 'Library' }), icon: <IconLibraryPhoto sx={{ fontSize: 20 }} /> },
-                    { path: '/image/api', label: t('layout.nav.useImageGen', { defaultValue: 'Image API' }), icon: <IconPlug sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             // Projects — every place Claude Code works from the browser:
@@ -340,44 +323,23 @@ export function useActivityItems(): ActivityItem[] {
             // plain working folders (.design/projects.md). Its sidebar lists
             // the projects and folders themselves (ProjectsNav), not pages.
             // The dot says a thread waits on you.
-            ...(enableProjects ? [{
+            ...([{
                 key: 'projects',
                 icon: <IconFolder sx={{ fontSize: 22 }} />,
-                label: t('layout.projects'),
-                defaultPath: '/projects',
+                label: t('layout.workspace', { defaultValue: 'Workspace' }),
+                railLabel: t('layout.workspaceRail', { defaultValue: 'Workspace' }),
+                defaultPath: '/workspace',
                 attention: projectsWaiting ? t('layout.projectsWaiting') : undefined,
-                sidebar: (onNavigate: () => void) => (
+                sidebar: enableProjects ? (onNavigate: () => void) => (
                     <Suspense fallback={null}>
                         <ProjectsNav onNavigate={onNavigate} />
                     </Suspense>
-                ),
+                ) : undefined,
                 children: [
-                    { path: '/projects', label: t('layout.projects'), match: (p: string) => p === '/projects' || p.startsWith('/projects/') },
+                    { path: '/workspace', label: t('layout.projects'), match: (p: string) => p === '/workspace' || p === '/projects' || p.startsWith('/projects/') || p === '/bots' || p.startsWith('/bots/') || p.startsWith('/remote-agent') || p === '/notify' },
                 ],
-            }] as ActivityItem[] : []),
+            }] as ActivityItem[]),
             // ── Power-ups: what extends an agent beyond plain model routing ──
-            // IM — one rail icon for the whole domain, named after where the
-            // user is (their chats) rather than the implementation ("Bots").
-            // Bot is the front door (every connected bot, every
-            // platform, credentials live there); Remote Control and Notify are
-            // the purposes mounted onto those bots. New purposes append here
-            // as new rows — the rail icon never grows. See bot-arch.md §10.
-            // (key stays 'bots' — internal id, not user-visible.)
-            // Shown with Projects: one switch turns on Projects and chatting
-            // with Claude Code from IM (.design/remote-into-projects.md); bots
-            // keep running and notifying while it is off.
-            ...(enableProjects ? [{
-                key: 'bots' as const,
-                icon: <IconRemote sx={{ fontSize: 22 }} />,
-                label: t('layout.remote'),
-                defaultPath: '/bots/overview',
-                children: [
-                    { path: '/bots/overview', label: t('layout.bots', { defaultValue: 'Bots' }), icon: <IconRobot sx={{ fontSize: 20 }} />, count: botOverviewCount },
-                    { type: 'divider' },
-                    { path: '/remote-agent', label: t('layout.remoteControl', { defaultValue: 'Remote Control' }), icon: <IconTerminal sx={{ fontSize: 20 }} />, match: (p) => p.startsWith('/remote-agent') },
-                    { path: '/notify', label: t('layout.notify', { defaultValue: 'IM Notify' }), icon: <IconBell sx={{ fontSize: 20 }} /> },
-                ] as NavItem[],
-            }] as ActivityItem[] : []),
             // Power-ups — one rail item for the opt-in features that act on
             // requests rather than being somewhere you work: Guardrails, the
             // Prompt pages, Bench, and Tools. Optional features remain controlled by
@@ -386,6 +348,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'powerups' as const,
                 icon: <IconBolt sx={{ fontSize: 22 }} />,
                 label: t('layout.powerUps', { defaultValue: 'Power-ups' }),
+                railLabel: t('layout.powerUpsRail', { defaultValue: 'Power-ups' }),
                 defaultPath: powerUpChildren.find((item): item is NavItemBase => item.type !== 'divider')?.path,
                 children: powerUpChildren,
             }] as ActivityItem[] : []),
@@ -440,5 +403,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, mcpProfiles, teams, botSummary, hiddenScenarios, pinnedScenarios, vmodelOff]);
+    }, [t, promptMenuItems, enableGuardrails, enableBench, enableProjects, projectsWaiting, profiles, imageProfiles, mcpProfiles, teams, hiddenScenarios, pinnedScenarios, vmodelOff]);
 }

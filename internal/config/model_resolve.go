@@ -59,6 +59,9 @@ const (
 //
 //	cache (DB) → VModel (virtual) → upstream API → stale cache → embedded template
 //
+// If the endpoint is explicitly unsupported, its embedded template takes
+// precedence over an old upstream cache when available.
+//
 // When forceRefresh is false, a fresh-enough DB cache short-circuits the
 // chain; when true the cache is bypassed and upstream is re-queried (the
 // manual "refresh models" action). The returned list is canonically sorted.
@@ -119,8 +122,10 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 	// the result; a plain read waits only modelListReadWait and then serves a
 	// stand-in while the fetch finishes in the background.
 	fetching := false
+	var fetchErr error
 	if forceRefresh || forceUpstream {
-		if err := c.fetchAndSaveAPIModels(provider, forceUpstream); err == nil {
+		fetchErr = c.fetchAndSaveAPIModels(provider, forceUpstream)
+		if fetchErr == nil {
 			if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
 				return finalize(fresh, ModelListSourceAPI), nil
 			}
@@ -129,6 +134,7 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		done := c.fetchModelsInBackground(provider)
 		select {
 		case err := <-done:
+			fetchErr = err
 			if err == nil {
 				if fresh := c.modelManager.GetModels(uid); len(fresh) > 0 {
 					return finalize(fresh, ModelListSourceAPI), nil
@@ -143,14 +149,21 @@ func (c *Config) ResolveProviderModels(forceRefresh, forceUpstream bool, uid str
 		return r
 	}
 
-	// Step 3b: the cache only expired and the refetch failed (upstream briefly
-	// unreachable, e.g. another tingly-box restarting). Serve the last real
-	// list rather than dropping to the template or nothing. A manual refresh
-	// skips this so its failure is still reported.
-	if !forceRefresh && !forceUpstream {
-		if stale := c.modelManager.GetStaleModels(uid); len(stale) > 0 {
-			return withFetching(finalize(stale, ModelListSourceCache)), nil
+	// An unsupported endpoint cannot refresh an old API list. Use the same
+	// embedded catalog on reads and manual refreshes when one is available.
+	// Transient failures still prefer the last successful upstream list.
+	var unsupported *client.ErrModelsEndpointNotSupported
+	if errors.As(fetchErr, &unsupported) && c.templateManager != nil {
+		if tmpl, err := c.templateManager.GetEmbeddedModelsForProvider(provider); err == nil && len(tmpl) > 0 {
+			return withFetching(finalize(tmpl, ModelListSourceTemplate)), nil
 		}
+	}
+
+	// Step 3b: on a temporary failure keep the last real list for both reads
+	// and refreshes. Otherwise refresh can show a template that disappears on
+	// the next read. The fetch failure is recorded separately for diagnostics.
+	if stale := c.modelManager.GetStaleModels(uid); len(stale) > 0 {
+		return withFetching(finalize(stale, ModelListSourceCache)), nil
 	}
 
 	// Step 4: Embedded template fallback (live, never persisted). It is a

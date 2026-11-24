@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -30,6 +31,9 @@ func (ph *ProtocolHandler) DispatchChainResult(
 	defer func() {
 		reqCtx.Release()
 	}()
+
+	c.Set(constant.CtxKeyProtocolInbound, string(reqCtx.SourceAPI))
+	c.Set(constant.CtxKeyProtocolUpstream, string(reqCtx.TargetAPI))
 
 	// Bubble up the execution-level routing decision for probes. This is the
 	// single chokepoint where the resolved upstream API + provider + matched

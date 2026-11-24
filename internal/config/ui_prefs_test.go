@@ -2,6 +2,8 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,4 +66,36 @@ func TestPatchUIPrefsRejectsBadInput(t *testing.T) {
 	_, err = cfg.PatchUIPrefs(map[string]json.RawMessage{"k": big})
 	assert.Error(t, err)
 	assert.Empty(t, cfg.GetUIPrefs(), "a rejected patch must not apply partially")
+}
+
+// Concurrent patches and other saves must serialize both the in-memory map
+// and the read/merge/write of the configuration file.
+func TestConcurrentUIPrefsAndSave(t *testing.T) {
+	cfg, err := NewConfigWithDir(t.TempDir(), WithDisableMigration())
+	require.NoError(t, err)
+	const workers = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, workers*2)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := cfg.PatchUIPrefs(map[string]json.RawMessage{fmt.Sprintf("key%d", i): json.RawMessage(`true`)})
+			if err != nil {
+				errs <- err
+			}
+			if err := cfg.Save(); err != nil {
+				errs <- err
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	require.Len(t, cfg.GetUIPrefs(), workers)
+	reloaded, err := NewConfigWithDir(cfg.ConfigDir, WithDisableMigration())
+	require.NoError(t, err)
+	require.Equal(t, cfg.GetUIPrefs(), reloaded.GetUIPrefs())
 }

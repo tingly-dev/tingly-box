@@ -82,7 +82,23 @@ func (c *Config) UpdateClaudeCodeProfileConfig(baseScenario typ.RuleScenario, pr
 			profiles[i].ClaudeCode = cloneClaudeCodeProfileConfig(profileConfig)
 		}
 		c.Profiles[string(baseScenario)] = profiles
-		return c.Save()
+		return c.saveLocked()
+	}
+	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
+}
+
+// SetProfileMCPProfile records which MCP profile a profile's launches connect
+// to; empty means none. Validating the MCP profile is the caller's job.
+func (c *Config) SetProfileMCPProfile(baseScenario typ.RuleScenario, profileID, mcpProfile string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	profiles := c.Profiles[string(baseScenario)]
+	for i := range profiles {
+		if profiles[i].ID == profileID {
+			profiles[i].MCPProfile = mcpProfile
+			return c.saveLocked()
+		}
 	}
 	return fmt.Errorf("profile '%s' not found in scenario '%s'", profileID, baseScenario)
 }
@@ -169,7 +185,7 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string) (typ.
 		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario)...)
 	}
 
-	return meta, c.Save()
+	return meta, c.saveLocked()
 }
 
 // UpdateProfile updates the name of an existing profile.
@@ -221,7 +237,7 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 	// Accepting a unified flag change here would silently diverge the stored
 	// metadata from the actual rules, which are not rebuilt by this function.
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // DeleteProfile removes a profile by ID and cleans up all associated rules.
@@ -268,7 +284,7 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 		return sc.Scenario == profiledScenario
 	})
 
-	return c.Save()
+	return c.saveLocked()
 }
 
 // ResolveProfileNameOrID resolves a profile identifier to a profile ID.

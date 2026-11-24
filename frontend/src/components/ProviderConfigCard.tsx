@@ -1,20 +1,18 @@
 import { ContentCopy as CopyIcon } from '@/components/icons';
-import { Info as InfoIcon } from '@/components/icons';
 import { Visibility as VisibilityIcon } from '@/components/icons';
 import {
     Box,
     type BoxProps,
-    Divider,
     IconButton,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import React, { type ReactNode, useState } from 'react';
 import { ConfigRow } from './ConfigRow';
 import { CompactConfigCard } from './CompactConfigCard';
 import PluginFeatures from './PluginFeatures';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { copyableTextStyle } from '@/styles/textStyles';
 import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 
@@ -88,8 +86,6 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
 }) => {
     // Get modal state from context instead of props
     const { token, setShowTokenModal } = useScenarioPageModal();
-    const showOptionalSections = (showPlugins && scenario) || modeSelection || extraContent;
-    const hasDivider = showApiKeyRow && showOptionalSections;
 
     const [localEnvMode, setLocalEnvMode] = useState<EnvironmentMode>('local');
     const envMode = envModeProp ?? localEnvMode;

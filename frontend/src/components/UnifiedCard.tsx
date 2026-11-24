@@ -3,6 +3,9 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import type { ElementType, ReactNode } from 'react';
 import { forwardRef } from 'react';
 import { EMPTY_SX } from '@/constants/defaults';
+import { radius } from '@tingly/ui/theme/radius';
+import { elevation } from '@tingly/ui/theme/elevation';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
 
 /**
  * Responsive column span for a card placed inside a `CardGrid` (MUI Grid v7).
@@ -129,7 +132,7 @@ const cardVariants = {
     boxShadow: 'none',
   },
   elevated: {
-    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.10)',
+    boxShadow: elevation.lifted,
     border: 'none',
   },
 };
@@ -154,6 +157,9 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
   id,
   grid,
 }, ref) => {
+  // Phone shell: tighter padding, and the header's actions wrap onto their own
+  // line under the title instead of squeezing it to one character per line.
+  const phone = usePhoneShell();
   const card = (
     <Card
       ref={ref}
@@ -161,7 +167,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
       sx={{
         ...getCardDimensions(size, width, height),
         ...cardVariants[variant],
-        borderRadius: 2,
+        borderRadius: radius.card,
         border: '1px solid',
         borderColor: 'divider',
         backgroundColor: 'background.paper',
@@ -179,7 +185,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
         sx={{
           display: 'flex',
           flexDirection: 'column',
-          p: 3,
+          p: phone ? 2 : 3,
           height: '100%',
         }}
       >
@@ -187,6 +193,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
           <Box sx={{ mb: titleMarginBottom, flexShrink: 0 }}>
             <Box sx={[
               { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: subtitle ? 1 : 0 },
+              phone && { flexWrap: 'wrap', rowGap: 1 },
               ...(Array.isArray(headerSx) ? headerSx : [headerSx]),
             ]}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
@@ -213,7 +220,7 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
                 )}
                 {leftAction}
               </Box>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ...(phone && { flexBasis: '100%', flexWrap: 'wrap' }) }}>
                 {rightAction}
               </Box>
             </Box>

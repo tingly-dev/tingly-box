@@ -10,6 +10,13 @@ export default {
     "search": "Search requests",
     "errorsOnly": "Errors only",
     "load": "Load",
+    "customLimit": "Custom…",
+    "customLimitTitle": "Number of rows to load",
+    "customLimitInput": "Rows",
+    "customLimitHelp": "Whole number, 1 to {{max}}.",
+    "customLimitInvalid": "Enter a whole number from 1 to {{max}}.",
+    "customLimitApply": "Apply",
+    "customLimitCancel": "Cancel",
     "latest_one": "Latest {{count}}",
     "latest_other": "Latest {{count}}",
     "refreshing": "Refreshing…",
@@ -25,6 +32,8 @@ export default {
     "autoRefresh": "Auto-refresh",
     "refreshNow": "Refresh now",
     "refreshRequests": "Refresh requests",
+    "newRequests_one": "{{count}} new request",
+    "newRequests_other": "{{count}} new requests",
     "columns": {
       "time": "Time",
       "agent": "Agent",
@@ -53,6 +62,7 @@ export default {
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
+    "duplicate": "Duplicate",
     "confirm": "Confirm",
     "loading": "Loading...",
     "enabled": "Enabled",
@@ -84,10 +94,41 @@ export default {
     "clear": "Clear selection",
     "dismiss": "Dismiss",
     "moveDown": "Move down",
+    "pinToTop": "Pin to top",
     "moveUp": "Move up",
     "saved": "Saved"
   },
+  "mobile": {
+    "tabBar": "Main navigation",
+    "shell": {
+      "title": "Interface",
+      "desktop": "Desktop",
+      "mobile": "Phone",
+      "auto": "Auto",
+      "hint": "Phone shows the phone layout on this device; Desktop shows the full interface. Remembered per browser."
+    },
+    "subPages": {
+      "switch": "Switch page in {{title}}"
+    },
+    "modelPicker": {
+      "backToProviders": "Back to providers"
+    },
+    "more": {
+      "title": "More",
+      "tab": "More",
+      "manage": "Manage",
+      "system": "System",
+      "preferences": "Theme, language and feedback",
+      "interface": "Interface",
+      "useDesktop": "Use the desktop UI",
+      "useDesktopHint": "Switch back to the full interface"
+    }
+  },
   "layout": {
+    "workspace": "Workspace",
+    "workspaceRail": "Workspace",
+    "workspaceTip": { "title": "Meet Workspace", "text": "Organize projects, work in directories and connect IM chats in one place." },
+    "workspaceGate": { "title": "Enable Workspace", "text": "Enable the Workspace power-up to use projects, workdirs and IM chats.", "enable": "Enable Workspace", "error": "Could not enable Workspace. Please try again." },
     "projects": "Projects",
     "projectsWaiting": "Claude is waiting on you",
     "appTitle": "Tingly Box",
@@ -133,6 +174,7 @@ export default {
       "expand": "Expand sidebar"
     },
     // One-time callouts pointing at a control (components/CoachMark).
+    "featureSwitch": { "disable": "Turn off {{name}}", "disabledTitle": "{{name}} is off", "disabledText": "You can turn it back on in Preferences → Power-ups.", "teamTitle": "Team is on", "teamText": "Team is enabled by default. Use this button to turn it off." },
     "coachMarks": {
       "gotIt": "Got it",
       "agentVisibility": {
@@ -155,7 +197,6 @@ export default {
       "light": "Light",
       "dark": "Dark",
       "system": "System",
-      "sunlit": "Sunlit",
       "claude": "Claude",
       "ds": "DeepSeek",
       "click": "Click",
@@ -188,9 +229,11 @@ export default {
     "days": "Days",
     "remote": "IM",
     "image": "Image",
+    "imageRail": "Image",
     "imagePlayground": "Playground",
     "remoteControl": "Remote Control",
     "notify": "IM Notify",
+    "imBots": "IM Bots",
     "bots": "Bots",
     "overview": "Overview",
     "platforms": {
@@ -229,6 +272,7 @@ export default {
     "help": "Tips & Help",
     "helpShort": "Help",
     "powerUps": "Power-ups",
+    "powerUpsRail": "Power-ups",
     "tools": "Tools",
     "servertool": "Servertool",
     "botsRunning": "{{active}} of {{total}} bots running"

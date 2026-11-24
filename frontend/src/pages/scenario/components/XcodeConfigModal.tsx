@@ -1,10 +1,11 @@
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack } from '@mui/material';
 import React from 'react';
 import xcodeImage from '@/assets/images/xcode.png';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { useScenarioPageModal } from '@/features/scenario/ScenarioPageContext';
 import { CopyUrlKeyButtons } from './config/CopyUrlKeyButtons';
 import { InstructionSteps } from './config/InstructionSteps';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface XcodeConfigModalProps {
     open: boolean;
@@ -30,7 +31,7 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
             slotProps={{
                 paper: {
                     sx: {
-                        borderRadius: 3,
+                        borderRadius: radius.card,
                     }
                 }
             }}
@@ -76,7 +77,7 @@ const XcodeConfigModal: React.FC<XcodeConfigModalProps> = ({
                         alt="Xcode Intelligence Settings"
                         sx={{
                             width: '100%',
-                            borderRadius: 6,
+                            borderRadius: radius.card,
                             border: 1,
                             borderColor: 'divider',
                             boxShadow: 3,

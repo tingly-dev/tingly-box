@@ -11,11 +11,6 @@ import (
 	"time"
 )
 
-// DefaultSummaryFile is the path the harness writes per-row results to when
-// --summary is not specified. A fixed name in CWD makes --resume trivial
-// ("just rerun with --resume") and matches the user-requested behavior.
-const DefaultSummaryFile = "harness-summary.csv"
-
 // summaryCSVColumns is the canonical column order of the summary CSV.
 // The CSV contains only metadata; full prompt/output are written to
 // separate markdown files in harness-output/ and referenced by output_id.

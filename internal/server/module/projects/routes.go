@@ -35,6 +35,10 @@ func (h *Handler) RegisterRoutes(rt *module.Routes) {
 	group := rt.Manager.NewGroup("api", "v1", "")
 	if rt.UserAuth != nil {
 		group.Router.Use(rt.UserAuth)
+		group.Router.Use(func(c *gin.Context) {
+			c.Set(projectsapp.DirectoryAuthenticatedKey, true)
+			c.Next()
+		})
 	}
 	group.Router.Use(h.gate)
 	h.app.Register(group)

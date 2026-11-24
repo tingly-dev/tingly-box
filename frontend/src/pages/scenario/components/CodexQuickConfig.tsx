@@ -12,10 +12,11 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { type AppLanguage, resolveLanguage } from '@/i18n';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { type AppLanguage } from '@/i18n';
+import { useAppLanguage } from '@/hooks/useAppLanguage';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { CODEX_COMPACT, planCodexCompact } from '@/components/rule-card/codexCompact';
+import { radius } from '@tingly/ui/theme/radius';
 
 // CodexPrefs mirrors the Go struct in internal/config (CodexPrefs).
 // Keys are the literal Codex config.toml keys so the object round-trips
@@ -233,10 +234,6 @@ const UI_TEXT: Record<AppLanguage, { panelHeader: string; sectionTitle: string; 
     },
 };
 
-function useLang(): AppLanguage {
-    const { i18n } = useTranslation();
-    return resolveLanguage(i18n.language);
-}
 
 // ── Auto-compact warnings ──────────────────────────────────────────────
 // The shared default is judged against the default 200K window; a rule that
@@ -305,7 +302,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
         </Box>
     );
 
-    const lang = useLang();
+    const lang = useAppLanguage();
     const warning = field.key === 'auto_compact_percent' ? compactDefaultWarning(prefs, COMPACT_WARN_TEXT[lang]) : null;
 
     return (
@@ -327,10 +324,10 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                     sx={{
                         px: 0.75,
                         py: 0.25,
-                        borderRadius: 0.75,
+                        borderRadius: radius.chip,
                         bgcolor: 'action.hover',
                         fontFamily: fontMono,
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         color: 'text.secondary',
                         whiteSpace: 'nowrap',
                     }}
@@ -355,7 +352,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         placeholder={String(CONTEXT_PERCENT_DEFAULTS[field.key as keyof typeof CONTEXT_PERCENT_DEFAULTS])}
                         onChange={(e) => setValue(e.target.value)}
                         slotProps={{ htmlInput: { min: CONTEXT_PERCENT_MIN, max: CONTEXT_PERCENT_MAX, step: 1 } }}
-                        sx={{ width: 160, '& input': { fontSize: fontSizes.lg } }}
+                        sx={{ width: 160, '& input': { fontSize: fontSizes.md } }}
                     />
                 )}
                 {field.kind === 'enum' && (
@@ -364,7 +361,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                         value={value}
                         displayEmpty
                         onChange={(e) => setValue(e.target.value)}
-                        sx={{ minWidth: 160, fontSize: fontSizes.lg }}
+                        sx={{ minWidth: 160, fontSize: fontSizes.md }}
                     >
                         <MenuItem value={UNSET}>
                             <Typography variant="body2" sx={{
@@ -372,7 +369,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
                             }}>{unsetLabel}</Typography>
                         </MenuItem>
                         {field.enumValues!.map((v) => (
-                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.lg }}>{v}</MenuItem>
+                            <MenuItem key={v} value={v} sx={{ fontFamily: fontMono, fontSize: fontSizes.md }}>{v}</MenuItem>
                         ))}
                     </Select>
                 )}
@@ -420,7 +417,7 @@ interface CodexQuickConfigProps {
 }
 
 const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, writeCatalog, setWriteCatalog }) => {
-    const lang = useLang();
+    const lang = useAppLanguage();
     const uiText = UI_TEXT[lang];
     const fieldsText = FIELDS_TEXT[lang];
     const catalogText = CATALOG_TEXT[lang];
@@ -457,9 +454,9 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, wr
                         <Box
                             component="span"
                             sx={{
-                                px: 0.75, py: 0.25, borderRadius: 0.75,
+                                px: 0.75, py: 0.25, borderRadius: radius.chip,
                                 bgcolor: 'action.hover', fontFamily: fontMono,
-                                fontSize: fontSizes.xs, color: 'text.secondary', whiteSpace: 'nowrap',
+                                fontSize: fontSizes.micro, color: 'text.secondary', whiteSpace: 'nowrap',
                             }}
                         >
                             ~/.codex/tingly-model-catalog.json

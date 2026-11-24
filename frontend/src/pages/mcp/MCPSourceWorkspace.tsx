@@ -5,7 +5,6 @@ import {
     AccordionDetails,
     AccordionSummary,
     Alert,
-    Box,
     Button,
     CircularProgress,
     Divider,
@@ -16,14 +15,25 @@ import {
     Typography,
 } from '@mui/material';
 import { ExpandMore } from '@/components/icons';
-import MCPToolCard from './MCPToolCard';
+import { triStateOf } from '@tingly/ui/components/TriStateSwitch';
+import MCPToolGroup from './MCPToolGroup';
+import MCPToolList from './MCPToolList';
 import MCPToolTestDialog from './MCPToolTestDialog';
-import { isBuiltinSource, isServerToolSource, isServerWebtoolsSource, toolPolicyPatch, type MCPToolPatch } from './toolPresentation';
+import {
+    isBuiltinSource,
+    isServerToolSource,
+    isServerWebtoolsSource,
+    isToolRestricted,
+    toolPolicyPatch,
+    toolsPolicyPatch,
+    type MCPToolPatch,
+} from './toolPresentation';
 import WebtoolsSettings from './WebtoolsSettings';
 import AdvisorSettings from './AdvisorSettings';
 import MCPSourceEditor from './MCPSourceEditor';
+import MCPPasteImport from './MCPPasteImport';
 import { connectionPatch } from './workspaceState';
-import { sourceToFormValue, type MCPCatalogTool, type MCPRouteSource, type MCPSourceConfig } from './types';
+import { sourceToFormValue, type MCPCatalogTool, type MCPRouteSource, type MCPSourceConfig } from '../../features/mcp/types';
 
 export default function MCPSourceWorkspace({
     source,
@@ -62,6 +72,8 @@ export default function MCPSourceWorkspace({
             setBusy(false);
         }
     };
+    const tools = route?.tools || [];
+    const eligible = tools.filter((tool) => !isToolRestricted(tool, source));
     const updateTool = (tool: MCPCatalogTool, patch: MCPToolPatch) =>
         run(() => saveSource(toolPolicyPatch(source, tool, patch)));
     return (
@@ -133,6 +145,7 @@ export default function MCPSourceWorkspace({
                             <AdvisorSettings advisorSource={source} onSave={(patch) => run(() => saveSource(patch))} />
                         ) : (
                             <Stack spacing={2}>
+                                {!form.preset && <MCPPasteImport value={form} onChange={setForm} />}
                                 <TextField
                                     label={label('connectionName', 'Connection name')}
                                     value={form.name}
@@ -156,25 +169,32 @@ export default function MCPSourceWorkspace({
                     </AccordionDetails>
                 </Accordion>
             )}
-            <Typography variant="h6">{label('assetToolSection', 'Tools')}</Typography>
             {!route && <CircularProgress size={20} />}
             {route?.state === 'connected' && route.tools.length === 0 && (
                 <Alert severity="info">{label('emptyDiscovery', 'The connection returned no tools.')}</Alert>
             )}
-            <Stack spacing={1.5}>
-                {(route?.tools || []).map((tool) => (
-                    <MCPToolCard
-                        key={tool.normalized_name}
-                        tool={tool}
+            {tools.length > 0 && (
+                // The same group as on the MCP Tools page, without the connection chrome the drawer already shows.
+                <MCPToolGroup
+                    title={label('assetToolSection', 'Tools')}
+                    ariaLabel={label('assetToolSection', 'Tools')}
+                    on={eligible.filter((tool) => tool.enabled).length}
+                    total={tools.length}
+                    switchState={tools.length > 1 ? (eligible.length ? triStateOf(eligible.map((tool) => tool.enabled)) : 'off') : undefined}
+                    switchDisabled={busy || eligible.length === 0}
+                    onSwitch={(on) => void run(() => saveSource(toolsPolicyPatch(source, tools, on)))}
+                >
+                    <MCPToolList
+                        tools={tools}
                         source={source}
-                        inWorkspace
                         enabled={enabled}
                         busy={busy}
-                        onChange={(patch) => void updateTool(tool, patch)}
-                        onTest={() => setTesting(tool)}
+                        onChange={(tool, patch) => void updateTool(tool, patch)}
+                        onBulk={(list, on) => void run(() => saveSource(toolsPolicyPatch(source, list, on)))}
+                        onTest={setTesting}
                     />
-                ))}
-            </Stack>
+                </MCPToolGroup>
+            )}
             {testing && (
                 <MCPToolTestDialog
                     key={testing.normalized_name}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Button, Stack, TextField, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import type { MCPSourceConfig } from './types';
+import type { MCPSourceConfig } from '../../features/mcp/types';
 
 export default function WebtoolsSettings({ source, onSave }: {
     source: MCPSourceConfig;

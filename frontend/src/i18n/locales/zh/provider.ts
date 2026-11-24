@@ -7,6 +7,9 @@ export default {
     "useProxy": "使用代理并继续",
     "skip": "不用代理，继续"
   },
+  "qoderConnection": {
+    "scope": "此第三方接入使用 Qoder 客户端接口。可用模型、额度及允许使用的客户端由 Qoder 决定，登录成功不代表所有客户端均可调用。请在账号授权范围及 Qoder 服务条款允许的范围内使用。"
+  },
   "workbuddyConnection": {
     "cardSummary": "日常使用 · 路由与工具扩展",
     "proxyHint": "可选：为此连接设置网络代理。",
@@ -68,7 +71,7 @@ export default {
     "editUx": {
       "proxySettings": "代理",
       "keyOptionalHint": "自部署服务无需认证时，API 密钥可留空。",
-      "keyEditHint": "留空保留当前密钥；服务无需认证时，请勾选「无需 API 密钥」。",
+      "keyEditHint": "当前密钥已掩码显示——点击眼睛图标可查看，输入即替换。服务无需认证时，请勾选「无需 API 密钥」。",
       "oauthStyleLocked": "API 风格由 OAuth 授权决定，此处不可修改。",
       "authentication": "认证",
       "googleCompatible": "Google 兼容",
@@ -94,6 +97,7 @@ export default {
       "saveFailed": "无法保存修改，请重试。",
       "proxyHint": "可选的代理设置",
       "testConnection": "测试连接",
+      "stopTest": "停止测试",
       "saving": "保存中…",
       "noKey": "无需 API 密钥",
       "showKey": "显示密钥",
@@ -135,8 +139,8 @@ export default {
     "apiKey": {
       "label": "API 密钥",
       "placeholderAdd": "您的 API 密钥",
-      "placeholderEdit": "留空以保留当前密钥",
-      "helperEdit": "留空以保留当前密钥"
+      "placeholderEdit": "输入以替换已保存的密钥",
+      "helperEdit": "输入以替换已保存的密钥"
     },
     "enabled": "已启用",
     "export": {
@@ -163,6 +167,8 @@ export default {
       "missingFields": "请填写所有必填字段（API 风格、名称、API 基础 URL、API 密钥）",
       "failed": "连接检查失败",
       "networkError": "无法连接。请检查您的网络和代理设置。",
+      "cancelled": "已取消连接测试",
+      "timedOut": "连接测试超时（30 秒），已自动停止",
       "failureHint": "如果您确定配置正确，仍可以通过'仍要添加'按钮添加此提供商。",
       "responseTime": "响应时间：{{time}}ms",
       "modelsAvailable": "可用 {{count}} 个模型",
@@ -196,6 +202,7 @@ export default {
       "leftOf": "剩余 {{value}} / {{limit}}",
       "cost": "费用",
       "readFailed": "无法读取额度",
+      "retryAt": "下次自动重试：{{time}}",
       "noLimits": "上游未报告额度限制",
       "none": "暂无额度数据",
       "refresh": "刷新",
@@ -251,6 +258,20 @@ export default {
     }
   },
   "credentialPage": {
+    "sortBy": "排序方式",
+    "sortName": "按名称",
+    "sortProvider": "按 Provider",
+    "tableView": "表格视图",
+    "endpoint": "端点",
+    "twoEndpoints": "2 个端点",
+    "viewMode": "显示模式",
+    "listView": "列表视图",
+    "cardView": "卡片视图",
+    "status": "状态",
+    "expiresAt": "到期时间",
+    "baseUrl": "API 地址",
+    "never": "永不过期",
+    "expired": "已过期",
     "empty": "还没有凭证",
     "managing_other": "共 {{count}} 个凭证",
     "emptyTitle": "连接你的第一个 AI",
@@ -266,6 +287,17 @@ export default {
     "deleted": "服务商已删除",
     "deleteFailed": "删除服务商失败：{{error}}",
     "toggleFailed": "切换服务商状态失败：{{error}}",
+    "proxySwitchLabel": "{{name}} 的代理",
+    "proxyOnHint": "代理已开启：{{url}}。点击关闭（会清除该地址）。",
+    "proxyOffHint": "未设置代理。点击开启。",
+    "proxyEnabledToast": "已为 {{name}} 开启代理",
+    "proxyDisabledToast": "已为 {{name}} 关闭代理",
+    "proxyToggleFailed": "无法修改 {{name}} 的代理：{{error}}",
+    "proxyEnableTitle": "为 {{name}} 开启代理",
+    "proxyEnableConfirm": "开启",
+    "proxyUrlInvalid": "请输入类似 http://host:port、https://host:port 或 socks5://host:port 的地址。",
+    "proxyFromGlobal": "已填入系统设置中的常用代理。",
+    "proxyEnterUrl": "此凭证要使用的代理地址。",
     "tokenRefreshed": "令牌已刷新",
     "reauthorized": "服务商已重新授权",
     "reauthorizeUnknownIssuer": "无法重新授权：未知该服务商的签发方",
@@ -281,6 +313,9 @@ export default {
     "copyButton": "复制令牌"
   },
   "sharingKeys": {
+    "phone": {
+      "keyActions": "{{name}} 的操作"
+    },
     "title": "Team 密钥",
     "titleForTeam": "Team 密钥 · {{team}}",
     "createToken": "创建令牌",
@@ -333,6 +368,7 @@ export default {
       "active": "已启用",
       "inactive": "已停用",
       "moveTooltip": "移动到其他 Team",
+      "limitsTooltip": "此人的限额",
       "deleteTooltip": "删除密钥"
     }
   },
@@ -348,7 +384,12 @@ export default {
     "enableTeam": "启用 Team",
     "disableTeam": "停用 Team",
     "deleteTeam": "删除 Team",
-    "deleteConfirm": "删除 {{team}}？请先移动或删除它的全部 Team 密钥。",
+    "duplicateTeam": "复制 Team",
+    "duplicateTitle": "复制 Team",
+    "duplicateDescription": "创建一个新 Team,沿用相同的模型路由。Team 密钥不会被复制,新 Team 没有任何密钥。{{team}} 保持不变。",
+    "duplicated": "Team 已复制",
+    "duplicateFailed": "复制 Team 失败",
+    "deleteConfirm": "删除 {{team}} 及其模型路由？请先移动或删除它的全部 Team 密钥。",
     "loadFailed": "加载 Team 失败",
     "saveFailed": "保存 Team 失败",
     "createSuccess": "Team 已创建",
@@ -433,6 +474,23 @@ export default {
       "resetSuccessMessage": "您的新模型令牌已生成。请确保更新您的 API 客户端。",
       "saved": "我已经更新了我的客户端",
       "pullToken": "从服务器拉取最新令牌"
+    },
+    "mcpToken": {
+      "title": "MCP 令牌（MCP Profile）",
+      "description": "交给连接 MCP Profile的 Agent（Claude Code、Codex、OpenCode）使用。它只能访问 MCP Profile的端点，不能访问其他任何接口。",
+      "resetToken": "重置 MCP 令牌",
+      "resetTitle": "重置 MCP 令牌",
+      "resetConfirm": "您确定要重置 MCP 令牌吗？",
+      "resetPoints": {
+        "new": "将生成一个新的随机令牌",
+        "stop": "旧令牌将立即停止工作 - 用它注册的 Agent 都需要换成新令牌"
+      },
+      "resetWarning": "重置后请在 Agent 中重新注册 MCP Profile。",
+      "resetCancel": "取消",
+      "resetConfirmButton": "重置",
+      "resetSuccess": "MCP 令牌重置成功",
+      "resetSuccessMessage": "新的 MCP 令牌已生成。请到 MCP Profile页面重新复制注册命令。",
+      "saved": "我已经更新了 Agent"
     },
     "securityInfo": {
       "title": "令牌安全",

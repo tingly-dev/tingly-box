@@ -2,6 +2,7 @@
 // commands and subagents started with run_in_background, the work that
 // outlives the turn that started it.
 import type { BackgroundTask as LiveTask } from '../../client';
+import type { ThreadEvent } from '../../client';
 import { foldTasks, toolSummary, type TaskEvent, type TaskState, type TranscriptEntry } from '../../transcript';
 
 /** One row of the background tasks panel. */
@@ -17,6 +18,17 @@ export interface BackgroundTaskRow extends TaskState {
     /** A subagent's latest steps (newest last) and its latest reply. */
     recent?: { name: string; summary: string }[];
     reply?: string;
+}
+
+/** Whether a thread event changes the set of running background tasks (progress does not). */
+export function changesLiveTasks(e: ThreadEvent): boolean {
+    if (e.kind !== 'task') return false;
+    try {
+        const ev = (JSON.parse(e.payload ?? '{}') as { event?: string }).event;
+        return ev === 'background_tasks_changed' || ev === 'task_notification' || ev === 'task_completed';
+    } catch {
+        return false;
+    }
 }
 
 /** How many of a subagent's latest tool calls a row shows. */

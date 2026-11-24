@@ -2,11 +2,9 @@ package projects
 
 import (
 	"context"
-	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -18,7 +16,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	projectsapp "github.com/tingly-dev/tingly-box/projects"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -29,36 +26,13 @@ func newConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
-// The coordinator's requests go to the gateway's claude_code scenario with
-// the model token, and an empty model means the scenario's default tier.
-func TestHostClientForCallsTheGateway(t *testing.T) {
-	var gotPath, gotKey, gotBody string
-	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath, gotKey = r.URL.Path, r.Header.Get("X-Api-Key")
-		b, _ := io.ReadAll(r.Body)
-		gotBody = string(b)
-		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = io.WriteString(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
-	}))
-	defer gw.Close()
-	host, port, err := net.SplitHostPort(strings.TrimPrefix(gw.URL, "http://"))
+// realTempDir is t.TempDir with its symlinks resolved, the way Projects
+// stores a folder (on macOS /var is a link to /private/var).
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
-	p, _ := strconv.Atoi(port)
-
-	cfg := newConfig(t)
-	require.NoError(t, cfg.SetServerHost(host))
-	require.NoError(t, cfg.SetServerPort(p))
-	h := NewHost(cfg)
-
-	client, model, err := h.ClientFor(context.Background(), "")
-	require.NoError(t, err)
-	assert.Equal(t, h.cc.ClaudeCodeDefaultModel(), model)
-	assert.NotEmpty(t, model)
-
-	_, _ = llm.Complete(context.Background(), client, llm.Request{Model: model, Messages: []llm.Message{{Role: "user", Content: "hi"}}})
-	assert.Equal(t, "/tingly/claude_code/v1/messages", gotPath)
-	assert.Equal(t, cfg.GetModelToken(), gotKey)
-	assert.Contains(t, gotBody, `"model":"`+model+`"`)
+	return dir
 }
 
 // Models offers the default tier first, then every other request model the
@@ -96,11 +70,8 @@ func TestHostThreadEnvPointsAtTheGateway(t *testing.T) {
 
 type nopHost struct{}
 
-func (nopHost) ClientFor(context.Context, string) (llm.Client, string, error) {
-	return nil, "", nil
-}
-func (nopHost) Models(context.Context) ([]llm.Model, error)  { return nil, nil }
-func (nopHost) ThreadEnv(context.Context) ([]string, string) { return nil, "" }
+func (nopHost) Models(context.Context) ([]projectsapp.Model, error) { return nil, nil }
+func (nopHost) ThreadEnv(context.Context) ([]string, string)        { return nil, "" }
 
 // While the flag is off every Projects route is a 404 and nothing starts;
 // once it is on, requests go through and start the runtime.
@@ -144,4 +115,41 @@ func TestHostChecksModelTiers(t *testing.T) {
 	require.NoError(t, h.CheckLaunch(ctx, "", ""))
 	assert.Error(t, h.CheckLaunch(ctx, "", "gpt-5"))
 	assert.Error(t, h.CheckLaunch(ctx, "no-such-profile", ""))
+}
+
+// The embedded browser can have a different origin (for example behind a
+// proxy or in the desktop shell), but must pass host authentication first.
+func TestDirectoryBrowserRequiresAuthenticationBehindProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	app, err := projectsapp.New(projectsapp.Options{Host: nopHost{}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = app.Close() })
+	engine := gin.New()
+	mgr := swagger.NewRouteManager(engine)
+	auth := func(c *gin.Context) {
+		if c.GetHeader("Authorization") != "Bearer valid" {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
+	}
+	module.Mount(&module.Routes{Manager: mgr, UserAuth: auth}, NewHandler(app, func() bool { return true }, nil))
+	for _, tc := range []struct {
+		token  string
+		status int
+	}{{"", 401}, {"Bearer valid", 200}} {
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:12580/api/v1/projects/directories", strings.NewReader(`{"path":"."}`))
+		req.Header.Set("Authorization", tc.token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://app.example")
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		require.Equal(t, tc.status, w.Code)
+		if tc.status == 200 {
+			require.Contains(t, w.Body.String(), `"home"`)
+		}
+	}
 }

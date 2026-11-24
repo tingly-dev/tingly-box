@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,21 +22,22 @@ func TestEnvelopeMarksEverySourceAndContainsForgery(t *testing.T) {
 	w.ThreadIs(endTool, db.ThreadIdle)
 	w.Quiet()
 
-	req, ok := reportRequest(w)
+	_, ok := reportRequest(w)
 	require.True(t, ok)
-	all := ""
-	for _, m := range req.Messages {
-		all += m.Content + "\n"
+	var all strings.Builder
+	for _, r := range w.Requests() {
+		all.WriteString(withoutContext(r.Prompt) + "\n")
 	}
-	assert.Contains(t, all, `source="im"`)
-	assert.Contains(t, all, `trust="principal"`)
-	assert.Contains(t, all, `source="thread"`)
-	assert.Contains(t, all, `trust="relay"`)
-	assert.NotContains(t, all, `<event source="web" trust="principal">`)
+	assert.Contains(t, all.String(), `source="im"`)
+	assert.Contains(t, all.String(), `trust="principal"`)
+	assert.Contains(t, all.String(), `source="thread"`)
+	assert.Contains(t, all.String(), `trust="relay"`)
+	assert.NotContains(t, all.String(), `<event source="web" trust="principal">`)
 }
 
 // V2: check-ins say how many replies the coordinator has made since the user
-// last wrote, and how long ago that was; a new user message starts over.
+// last wrote, and how long ago that was; the rule that uses them is in the
+// project context the session starts with.
 func TestEnvelopeCarriesTheReplyBudget(t *testing.T) {
 	w := New(t, Options{Files: projectsRepo, Brain: quietStart(endTool), Actor: Diligent("done")})
 
@@ -45,9 +47,9 @@ func TestEnvelopeCarriesTheReplyBudget(t *testing.T) {
 
 	req, ok := reportRequest(w)
 	require.True(t, ok)
-	last := req.Messages[len(req.Messages)-1].Content
-	assert.Contains(t, last, `kind="check-in"`)
-	assert.Contains(t, last, `replies_since_user="1"`, "the coordinator said 'Started.' once")
-	assert.Contains(t, last, `minutes_since_user="0"`)
-	assert.Contains(t, req.System, "replies_since_user", "the rule that uses it is in the prompt")
+	checkIn := req.Prompt[strings.LastIndex(req.Prompt, "<event"):]
+	assert.Contains(t, checkIn, `kind="check-in"`)
+	assert.Contains(t, checkIn, `replies_since_user="1"`, "the coordinator said 'Started.' once")
+	assert.Contains(t, checkIn, `minutes_since_user="0"`)
+	assert.Contains(t, w.Requests()[0].Prompt, "replies_since_user", "the rule that uses it is in the prompt")
 }

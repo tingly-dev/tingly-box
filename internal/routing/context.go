@@ -2,6 +2,7 @@ package routing
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,13 @@ type SelectionContext struct {
 	// pipeline continue). SmartRoutingStage skips these on re-evaluation so
 	// processors do not loop on residual matchable content.
 	BypassedSmartRules map[int]struct{}
+
+	// LimitExcluded holds services whose permit could not be acquired (lost a
+	// race to the cap) so the retry selects another one. LimitsIgnored is set
+	// by LimitStage when overflow=ignore routed past the limits.
+	LimitExcluded map[string]bool
+	LimitsIgnored bool
+	limitStart    time.Time // first LimitStage evaluation; shared queue-wait budget across retries
 }
 
 // NewSelectionContext creates a new selection context with resolved session ID

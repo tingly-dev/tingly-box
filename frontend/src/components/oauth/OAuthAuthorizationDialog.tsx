@@ -1,6 +1,6 @@
 import {Close, OpenInNew} from '@/components/icons';
 import { host } from '@/host';
-import CopyIconButton from '@/components/CopyIconButton';
+import CopyIconButton from '@tingly/ui/components/CopyIconButton';
 import {
     Alert,
     Box,
@@ -15,8 +15,10 @@ import {
 } from '@mui/material';
 import {useEffect, useState} from 'react';
 import WorkBuddyConnectionNote from './WorkBuddyConnectionNote';
+import QoderConnectionNote from './QoderConnectionNote';
 import api from "@/services/api.ts";
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // Type for timer (browser vs Node.js)
 type TimerId = ReturnType<typeof setTimeout>;
@@ -264,6 +266,7 @@ const OAuthAuthorizationDialog = ({
                 <DialogContent>
                     <Stack spacing={3}>
                         <WorkBuddyConnectionNote providerId={authData?.providerId}/>
+                        <QoderConnectionNote providerId={authData?.providerId}/>
                         {/* Error message */}
                         {errorMessage && (
                             <Alert severity="error" aria-live="polite">
@@ -312,7 +315,7 @@ const OAuthAuthorizationDialog = ({
                                         gap: 2,
                                         p: 2,
                                         bgcolor: 'action.hover',
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         border: '2px dashed',
                                         borderColor: 'primary.main',
                                     }}

@@ -41,8 +41,6 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"version", []string{"version"}},
 		{"matrix-help", []string{"matrix", "--help"}},
 		{"agent-help", []string{"agent", "--help"}},
-		{"provider-list", []string{"provider", "list"}},
-		{"provider-test", []string{"provider", "test"}},
 		{"init-config-help", []string{"init-config", "--help"}},
 	}
 	for _, tc := range cases {
@@ -117,28 +115,6 @@ func TestMatrixCmdNonStreamingFlag(t *testing.T) {
 	}
 }
 
-func TestProviderTestCmdReturnsNotImplemented(t *testing.T) {
-	var p ProviderTestCmd
-	err := p.Run()
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("expected not-implemented error, got: %v", err)
-	}
-}
-
-func TestProviderListCmdReturnsNotImplemented(t *testing.T) {
-	var p ProviderListCmd
-	err := p.Run()
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("expected not-implemented error, got: %v", err)
-	}
-}
-
 func TestVersionCmdPrintsAllFields(t *testing.T) {
 	version = "test-version"
 	gitCommit = "test-commit"
@@ -202,5 +178,15 @@ func TestCatalogCheckRejectsBadFile(t *testing.T) {
 	}
 	if err := (&CatalogCheckCmd{Files: []string{path}}).Run(); err == nil {
 		t.Fatal("expected failure for unknown dialect")
+	}
+}
+
+func TestMatrixResponseRetentionMode(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"matrix", "--mode=response_retention", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	if cli.Matrix.Mode != "response_retention" || !cli.Matrix.JsonOutput {
+		t.Fatalf("unexpected parsed flags: %+v", cli.Matrix)
 	}
 }

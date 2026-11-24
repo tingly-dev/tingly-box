@@ -14,33 +14,41 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/projects/internal/config"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
 	"github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
-	"github.com/tingly-dev/tingly-box/projects/llm"
+	projectmod "github.com/tingly-dev/tingly-box/projects/internal/server/module/project"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
-// Host is what Projects needs from the server embedding it.
+// DirectoryAuthenticatedKey may be set only after the host has authenticated the request.
+const DirectoryAuthenticatedKey = projectmod.DirectoryAuthenticatedKey
+
+// Host is what Projects needs from the server embedding it. The coordinator
+// and threads are Claude Code sessions; the host decides where they reach
+// the model.
 type Host interface {
-	// ClientFor returns the coordinator's model client and the model to
-	// call: model when set, else the host's default.
-	ClientFor(ctx context.Context, model string) (llm.Client, string, error)
 	// Models lists the models project settings offer for the coordinator
 	// and for threads.
-	Models(ctx context.Context) ([]llm.Model, error)
-	// ThreadEnv is the environment threads run Claude Code with (pointing
-	// it at the host's gateway) and the model to use when a project sets
-	// none. Empty values leave Claude Code on its own login and default.
+	Models(ctx context.Context) ([]Model, error)
+	// ThreadEnv is the environment the coordinator and threads run Claude
+	// Code with (pointing it at the host's gateway) and the model to use when
+	// a project sets none. Empty values leave Claude Code on its own login
+	// and default.
 	ThreadEnv(ctx context.Context) (env []string, defaultModel string)
 }
 
 var _ project.Host = Host(nil)
+
+// Model is one model the project settings offer.
+type Model = project.Model
 
 // Optional capabilities a Host can also implement for folder sessions.
 type (
@@ -48,24 +56,14 @@ type (
 	Launcher = project.Launcher
 	// Handoffer names the program that continues a session in a terminal.
 	Handoffer = project.Handoffer
-	// ChannelSink delivers text to an IM chat. Projects sends the
-	// coordinator's replies and thread reports through it to the chats bound
-	// to a project; a host without IM (the standalone binary) has none.
-	ChannelSink = project.ChannelSink
-	// ChannelPrompter is a ChannelSink that can also send a thread's
-	// approvals and questions with buttons and restate them once settled.
-	ChannelPrompter = project.ChannelPrompter
-	// ChannelPrompt is an approval or a question as a chat shows it.
-	ChannelPrompt = project.ChannelPrompt
+	// OutboxHost lets a host that reaches IM (Tingly Box) give Projects the
+	// agent.Outbox it speaks through: the coordinator's replies, thread
+	// reports and approvals go to the chats bound to a project. The
+	// standalone binary has none.
+	OutboxHost = project.OutboxHost
 	// ChannelFile is a file a chat sent with a message.
 	ChannelFile = project.ChannelFile
-	// ChannelChoice is one button of a ChannelPrompt.
-	ChannelChoice = project.ChannelChoice
 )
-
-// ErrNoButtons is what a ChannelPrompter returns for a chat that cannot show
-// buttons; the chat gets a line of text instead.
-var ErrNoButtons = project.ErrNoButtons
 
 // DefaultDataDir is where Projects keeps its data when the host does not say
 // otherwise: $TINGLY_PROJECT_HOME, else ~/.tingly-project. It is deliberately
@@ -79,9 +77,19 @@ type Options struct {
 	// thread worktrees. Empty keeps everything in memory and a temporary
 	// directory, which is what OpenAPI generation needs.
 	DataDir string
-	// Host provides model access. Required.
+	// Host provides the models and the Claude Code environment. Required.
 	Host Host
+	// Agents runs coordinator and thread turns; nil uses the Claude Code
+	// CLI. Tests pass a scripted stand-in (agentboot/engine/enginetest).
+	Agents *agentboot.AgentService
+	// Sessions tunes how long the Claude Code processes stay open between
+	// turns. The zero value takes the defaults.
+	Sessions SessionConfig
 }
+
+// SessionConfig is how long idle coordinator and thread processes stay open;
+// see the field docs.
+type SessionConfig = project.SessionConfig
 
 // App is Projects running inside a host.
 type App struct {
@@ -99,14 +107,22 @@ func New(opts Options) (*App, error) {
 	}
 	dbPath, root := ":memory:", os.TempDir()
 	if opts.DataDir != "" {
-		cfg := config.Config{DataDir: opts.DataDir}
+		dataDir, err := filepath.Abs(opts.DataDir)
+		if err != nil {
+			return nil, err
+		}
+		cfg := config.Config{DataDir: dataDir}
 		dbPath, root = cfg.DBPath(), cfg.ProjectsDir()
 	}
 	store, err := db.Open(dbPath, db.WithProjectsDir(root))
 	if err != nil {
 		return nil, err
 	}
-	mods, svc := server.ProjectModules(server.Deps{Store: store, Layout: project.Layout{Root: root}}, opts.Host)
+	deps := server.Deps{Store: store, Layout: project.Layout{Root: root}, Sessions: opts.Sessions}
+	if opts.Agents != nil {
+		deps.Agents = &project.Agents{Service: opts.Agents}
+	}
+	mods, svc := server.ProjectModules(deps, opts.Host)
 	return &App{store: store, mods: mods, svc: svc}, nil
 }
 
@@ -117,44 +133,15 @@ func (a *App) Register(api *swagger.RouteGroup) {
 	module.Mount(&module.Routes{API: api}, a.mods...)
 }
 
-// PostFromChannel hands a message typed in an IM chat to the thread the chat
-// is bound to (a project's main thread is its coordinator), as Send does (replies come back
-// through the host's ChannelSink). handled is false when the chat is not
-// bound, so the host carries on as it did before. files, which the host
-// saved, go with the message as its attachments; the host may remove them
-// once this returns.
-func (a *App) PostFromChannel(platform, chatID, text string, files []ChannelFile) (handled bool, err error) {
-	return a.svc.PostFromChannel(platform, chatID, text, files)
-}
-
-// ChannelCommand runs a chat command ("new", "stop", "clear", "session",
-// "status", "verbose" or "yolo") for a bound IM chat; handled is false when
-// the chat has no binding or the command is not one of these. reply is what to tell the chat.
-func (a *App) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
-	return a.svc.ChannelCommand(platform, chatID, name, arg)
-}
-
-// AnswerFromChannel answers a thread's approval or question with the button an
-// IM chat pressed (see ChannelPrompter). reply, when set, is what to tell the
-// chat; otherwise the prompt is restated with the outcome.
-func (a *App) AnswerFromChannel(platform, chatID, threadID, requestID, value string) (reply string, err error) {
-	return a.svc.AnswerFromChannel(platform, chatID, threadID, requestID, value)
-}
-
-// ChannelBound reports whether an IM chat has a place in Projects: a thread,
-// or a folder its next message starts one in.
-func (a *App) ChannelBound(platform, chatID string) bool {
-	_, err := a.store.GetChannelBinding(platform, chatID)
-	return err == nil
-}
-
-// ChannelToFolder moves an IM chat to a folder on this machine (an absolute
-// path that exists): its next message starts a new session there, in Projects.
-// With ifNew a chat that already has a place is left alone, which is how a
-// chat gets its first folder. title names the chat, when known; profile is
-// the launch profile the chat's first session runs under ("" the default).
-func (a *App) ChannelToFolder(platform, chatID, title, folder, profile string, ifNew bool) error {
-	return a.svc.ChannelToFolder(platform, chatID, title, folder, profile, ifNew)
+// PublishFile publishes a local output file to a thread's conversation. The
+// caller supplies the trusted thread identity; the file is copied into the
+// project's library and the returned ID identifies the conversation event.
+func (a *App) PublishFile(ctx context.Context, threadID, path, caption string) (string, error) {
+	e, err := a.svc.PublishFile(ctx, threadID, path, caption)
+	if err != nil {
+		return "", err
+	}
+	return e.ID, nil
 }
 
 // Start recovers threads interrupted by a restart and runs housekeeping
@@ -170,5 +157,6 @@ func (a *App) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	a.svc.Threads.Shutdown(ctx)
+	_ = a.svc.CloseTools(ctx)
 	return a.store.Close()
 }

@@ -55,6 +55,7 @@ type RuleScenario string
 const (
 	ScenarioOpenAI    RuleScenario = "openai"
 	ScenarioAnthropic RuleScenario = "anthropic"
+	ScenarioVModel    RuleScenario = "vmodel" // Virtual-model test routes through the normal gateway
 	// ScenarioAgent is deprecated — renamed to ScenarioCustom. Kept only so
 	// legacyScenarioAliases and the config migration can still reference it;
 	// no longer in BuiltinScenarios() and never written by new code.
@@ -83,6 +84,7 @@ func BuiltinScenarios() []RuleScenario {
 	return []RuleScenario{
 		ScenarioOpenAI,
 		ScenarioAnthropic,
+		ScenarioVModel,
 		ScenarioCustom,
 		ScenarioTeam,
 		ScenarioCodex,
@@ -242,6 +244,9 @@ type RuleFlags struct {
 	// budget_tokens for Anthropic (budget as fallback for budget-only models).
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
+	// DisableThinkingBudget removes thinking.budget_tokens on Anthropic-compatible requests.
+	DisableThinkingBudget bool `json:"disable_thinking_budget,omitempty" yaml:"disable_thinking_budget,omitempty"`
+
 	// CleanHeader strips x-anthropic-billing-header blocks from system messages.
 	// Auto-enabled for billing scenarios (claude_code, claude_desktop) during protocol
 	// transformation. Can be manually set to force enable/disable.
@@ -264,6 +269,17 @@ type RuleFlags struct {
 	// Code / Claude Desktop / Codex rules default this to 1800s (30 min) via
 	// init seeds + migration; any other rule is off unless explicitly set.
 	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
+
+	// LimitOverflow decides what happens when every candidate of this rule is
+	// at its concurrency/usage limit (ai.Limits on providers/services):
+	// "queue" (default) waits up to LimitQueueTimeout for a free slot and then
+	// answers 429, "reject" answers 429 at once, "ignore" routes anyway
+	// (limits become advisory). See .design/routing-limits.md.
+	LimitOverflow string `json:"limit_overflow,omitempty" yaml:"limit_overflow,omitempty"`
+
+	// LimitQueueTimeout is the maximum queue wait in seconds for
+	// LimitOverflow == "queue". 0 = default (DefaultLimitQueueTimeout).
+	LimitQueueTimeout int `json:"limit_queue_timeout,omitempty" yaml:"limit_queue_timeout,omitempty"`
 
 	// VisionProxyService enables the rule-scoped vision proxy when set. When a
 	// request matched by this rule carries an image, the configured service
@@ -369,11 +385,15 @@ type ProfileMeta struct {
 	Name       string                   `json:"name" yaml:"name"`                                   // Human-readable name (unique within base scenario)
 	Unified    bool                     `json:"unified" yaml:"unified"`                             // true=unified mode (single model), false=separate mode (individual models, default)
 	ClaudeCode *ClaudeCodeProfileConfig `json:"claude_code,omitempty" yaml:"claude_code,omitempty"` // Persistent overrides for generated Claude Code settings.
+	// MCPProfile is the MCP profile this Claude Code profile's launches
+	// connect to, as an ordinary MCP server; empty means none. Chosen by the
+	// user, never inherited.
+	MCPProfile string `json:"mcp_profile,omitempty" yaml:"mcp_profile,omitempty"`
 }
 
-// ClaudeCodeProfileConfig stores only the delta from a profile's inherited
-// Claude Code configuration. Env contains explicit values, UnsetEnv contains
-// inherited keys the profile removes, and an empty DefaultMode means inherit.
+// ClaudeCodeProfileConfig stores explicit overrides of inherited Claude Code
+// settings. Env contains explicit values, UnsetEnv contains keys the profile
+// removes, and an empty DefaultMode means inherit.
 // Generated settings files remain disposable runtime artifacts.
 type ClaudeCodeProfileConfig struct {
 	Env         map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
@@ -662,6 +682,34 @@ type Rule struct {
 	// Smart Routing Configuration
 	SmartEnabled bool                        `json:"smart_enabled" yaml:"smart_enabled"`
 	SmartRouting []smartrouting.SmartRouting `json:"smart_routing,omitempty" yaml:"smart_routing,omitempty"`
+}
+
+// Overflow policies for Rule.Flags.LimitOverflow.
+const (
+	LimitOverflowQueue  = "queue"
+	LimitOverflowReject = "reject"
+	LimitOverflowIgnore = "ignore"
+
+	// DefaultLimitQueueTimeout is the queue wait when the flag is unset.
+	DefaultLimitQueueTimeout = 15 * time.Second
+)
+
+// LimitOverflowPolicy returns the effective overflow policy (default queue).
+func (r *Rule) LimitOverflowPolicy() string {
+	switch r.Flags.LimitOverflow {
+	case LimitOverflowReject, LimitOverflowIgnore:
+		return r.Flags.LimitOverflow
+	default:
+		return LimitOverflowQueue
+	}
+}
+
+// LimitQueueWait returns the effective maximum queue wait.
+func (r *Rule) LimitQueueWait() time.Duration {
+	if r.Flags.LimitQueueTimeout > 0 {
+		return time.Duration(r.Flags.LimitQueueTimeout) * time.Second
+	}
+	return DefaultLimitQueueTimeout
 }
 
 // AffinityEnabled reports whether session affinity should be applied for this

@@ -4,7 +4,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import { api } from '@/services/api';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 import {
     CODEX_COMPACT,
     compactZones,
@@ -12,6 +12,7 @@ import {
     trackPosition,
     type CodexCompactStatus,
 } from './codexCompact';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface CodexCompactChipProps {
     /** The rule's own percent; 0 = follow the Auto Config default. */
@@ -45,7 +46,7 @@ const stripes = (theme: Theme) => {
     return `repeating-linear-gradient(135deg, ${line} 0 2px, transparent 2px 5px)`;
 };
 
-const swatchSx = { width: 18, height: 8, borderRadius: 4, flexShrink: 0 } as const;
+const swatchSx = { width: 18, height: 8, borderRadius: radius.pill, flexShrink: 0 } as const;
 
 const NOTE_COLOR: Record<Exclude<CodexCompactStatus, 'ok'>, 'warning' | 'info'> = {
     low: 'warning',
@@ -189,12 +190,12 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 onClose={close}
                 onClick={(e) => e.stopPropagation()}
-                slotProps={{ paper: { sx: { width: 340, p: 2, borderRadius: 2 } } }}
+                slotProps={{ paper: { sx: { width: 340, p: 2, borderRadius: radius.card } } }}
             >
                 <Stack spacing={1.5}>
                     <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
                         <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600 }}>{t('ruleHeader.compact.title')}</Typography>
-                        <Typography sx={{ fontSize: fontSizes.lg, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        <Typography sx={{ fontSize: fontSizes.md, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                             {shown}%
                         </Typography>
                     </Stack>
@@ -229,12 +230,12 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
                                 '& .MuiSlider-track': { height: 6, border: 0 },
                             })}
                         />
-                        <Stack direction="row" sx={{ justifyContent: 'space-between', fontSize: fontSizes.xs, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+                        <Stack direction="row" sx={{ justifyContent: 'space-between', fontSize: fontSizes.micro, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
                             <span>{CODEX_COMPACT.min}%</span>
                             <span>100%</span>
                         </Stack>
                         {(zones.low || zones.cappedFrom !== null) && (
-                            <Stack spacing={0.5} sx={{ mt: 1, fontSize: fontSizes.xs, color: 'text.secondary', lineHeight: 1.4 }}>
+                            <Stack spacing={0.5} sx={{ mt: 1, fontSize: fontSizes.micro, color: 'text.secondary', lineHeight: 1.4 }}>
                                 {zones.low && (
                                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                                         <Box sx={{ ...swatchSx, bgcolor: (theme) => alpha(theme.palette.warning.main, 0.55) }} />
@@ -266,7 +267,7 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
 
                     {noteKind && (
                         <Box sx={{
-                            p: 1, borderRadius: 1, fontSize: fontSizes.sm, lineHeight: 1.45,
+                            p: 1, borderRadius: radius.row, fontSize: fontSizes.sm, lineHeight: 1.45,
                             color: (theme) => theme.palette.mode === 'dark' ? theme.palette[noteKind].light : theme.palette[noteKind].dark,
                             bgcolor: (theme) => alpha(theme.palette[noteKind].main, 0.1),
                             border: '1px solid',
@@ -276,7 +277,7 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
                         </Box>
                     )}
 
-                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 1, borderTop: 1, borderColor: 'divider', fontSize: fontSizes.xs, color: 'text.secondary' }}>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', pt: 1, borderTop: 1, borderColor: 'divider', fontSize: fontSizes.micro, color: 'text.secondary' }}>
                         <span>{t('ruleHeader.compact.needsApply')}</span>
                         {overridden && (
                             <Link
@@ -284,7 +285,7 @@ export const CodexCompactChip: React.FC<CodexCompactChipProps> = ({
                                 type="button"
                                 underline="hover"
                                 onClick={() => { if (pending.current) { clearTimeout(pending.current.timer); pending.current = null; } setDraft(null); onChange(0); }}
-                                sx={{ fontSize: fontSizes.xs }}
+                                sx={{ fontSize: fontSizes.micro }}
                             >
                                 {t('ruleHeader.compact.reset', { percent: shared.percent })}
                             </Link>

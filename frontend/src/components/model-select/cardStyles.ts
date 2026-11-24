@@ -1,5 +1,5 @@
 import { alpha, type Theme } from '@mui/material/styles';
-import { routeGraphColors } from '@/theme/routeGraph';
+import { routeGraphColors, routeGraphShadows } from '@/theme/routeGraph';
 
 const routeActive = routeGraphColors.active;
 const routeActiveBg = routeGraphColors.activeBg;
@@ -21,12 +21,12 @@ export const getModelCardStateStyles = (theme: Theme, isSelected: boolean) => {
             backgroundColor: activeBg,
             boxShadow: isDark
                 ? [
-                    '0 14px 30px rgba(0, 0, 0, 0.34)',
+                    routeGraphShadows.cardSelectedDark,
                     `0 0 0 3px ${alpha(activeColor, 0.20)}`,
                 ].join(', ')
                 : [
                     `0 0 0 3px ${alpha(routeActive, 0.16)}`,
-                    '0 8px 24px rgba(31, 41, 55, 0.10)',
+                    routeGraphShadows.cardSelected,
                 ].join(', '),
             transform: 'translateY(-1px)',
             '&:hover': {
@@ -46,14 +46,31 @@ export const getModelCardStateStyles = (theme: Theme, isSelected: boolean) => {
             backgroundColor: activeBg,
             boxShadow: isDark
                 ? [
-                    '0 12px 24px rgba(0, 0, 0, 0.30)',
+                    routeGraphShadows.cardHoverDark,
                     `0 0 0 3px ${alpha(activeColor, 0.14)}`,
                 ].join(', ')
                 : [
                     `0 0 0 3px ${alpha(routeActive, 0.10)}`,
-                    '0 8px 24px rgba(31, 41, 55, 0.08)',
+                    routeGraphShadows.cardHover,
                 ].join(', '),
             transform: 'translateY(-1px)',
         },
     };
+};
+
+// Phone shell: the grid is one column of rows — the name on the left, the
+// selected check before it, the (always visible) actions on the right.
+export const PHONE_ROW_MIN_HEIGHT = 56;
+export const phoneRowContentSx = (actions: number) => ({
+    alignItems: 'flex-start',
+    textAlign: 'left',
+    pl: 5,
+    pr: `${actions * 44 + 8}px`,
+});
+export const phoneRowCheckSx = {
+    top: '50%',
+    right: 'auto',
+    left: 12,
+    fontSize: 20,
+    transform: 'translateY(-50%)',
 };

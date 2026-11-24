@@ -39,6 +39,14 @@ export const rulesApi = {
             params: {path: {uuid}}
         })),
 
+    // Hard ordering: apply a new list order to one scenario's rules. The order
+    // drives /v1/models listing, match priority and client config generation.
+    reorderRules: async (scenario: string, orderedUuids: string[]): Promise<any> =>
+        controlApi((client, headers) => client.POST('/api/v1/rules/reorder', {
+            headers,
+            body: {scenario, ordered_uuids: orderedUuids}
+        })),
+
     getRuleFlagRegistry: async (): Promise<any> => {
         return controlApi((client, headers) => client.GET('/api/v1/rule/flags/registry', {headers}));
     },

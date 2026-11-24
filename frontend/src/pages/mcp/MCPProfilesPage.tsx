@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import {
     Alert,
     Box,
-    Card,
     Button,
     Checkbox,
     Dialog,
@@ -19,15 +18,17 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { Add, Delete, Edit, Refresh } from '@/components/icons';
-import { PageLayout } from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import { Add, Close, Delete, Edit, Refresh } from '@/components/icons';
+import { triStateOf } from '@tingly/ui/components/TriStateSwitch';
+import { PageLayout } from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import AgentAccessSection, { useAccessExpanded } from '@/pages/scenario/components/AgentAccessSection';
 import { agentPageHeaderSx } from '@/pages/scenario/components/ScenarioCardHeader';
 import { getApiBaseUrl } from '@/utils/protocol';
 import { api } from '@/services/api';
 import ProfileConnect from './ProfileConnect';
+import MCPToolGroup from './MCPToolGroup';
 import MCPToolRow from './MCPToolRow';
 import GitHubScope from './GitHubScope';
 import MCPWorkspaceAlerts from './MCPWorkspaceAlerts';
@@ -37,14 +38,17 @@ import {
     defaultProfile,
     isDefaultProfile,
     profileCandidates,
+    profileGroups,
     profileRows,
     profileServerName,
     removeProfileTool,
+    removeProfileTools,
     setProfileToolOn,
+    setProfileToolsOn,
 } from './profileState';
 import { nextMCPId } from './workspaceState';
-import { publishMCPProfiles } from './profileStore';
-import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from './types';
+import { publishMCPProfiles } from '../../features/mcp/profileStore';
+import { MCP_DEFAULT_PROFILE_ID, type MCPProfile } from '../../features/mcp/types';
 
 // Keyed by profile so each one remembers its own folded state.
 function ProfileAccess({ profile, url }: { profile: MCPProfile; url: string }) {
@@ -238,9 +242,19 @@ export default function MCPProfilesPage() {
                     <GitHubScope profile={profile} busy={busy} onSave={(next) => void save(next)} />
                 )}
                 <Box component="section" aria-label={label('profileTools', 'Tools in this profile')}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        {label('profileTools', 'Tools in this profile')}
-                    </Typography>
+                    <Stack direction="row" sx={{ alignItems: 'baseline', gap: 1, mb: 0.5 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {label('profileTools', 'Tools in this profile')}
+                        </Typography>
+                        {rows.length > 0 && (
+                            <Typography variant="caption" color="text.secondary">
+                                {label('toolsOn', '{{on}} of {{total}} tools on', {
+                                    on: rows.filter((row) => row.on && row.tool?.enabled).length,
+                                    total: rows.length,
+                                })}
+                            </Typography>
+                        )}
+                    </Stack>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                         {custom
                             ? label(
@@ -260,42 +274,67 @@ export default function MCPProfilesPage() {
                         </Typography>
                     )}
                     {rows.length > 0 && (
-                        <Card variant="outlined" sx={{ mt: 1, borderRadius: 1.5, overflow: 'hidden' }}>
-                            <Box sx={{ px: 2, py: 1, bgcolor: 'action.hover' }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                    {label('toolsOn', '{{on}} of {{total}} tools on', {
-                                        on: rows.filter((row) => row.on && row.tool?.enabled).length,
-                                        total: rows.length,
-                                    })}
-                                </Typography>
-                            </Box>
-                            {rows.map((row) => {
-                                const globallyOff = row.tool ? !row.tool.enabled : true;
+                        // One group per connection, the same group as on MCP Tools; its switch is this profile's.
+                        <Stack spacing={1.5} sx={{ mt: 1 }}>
+                            {profileGroups(rows).map((group) => {
+                                const name = group.sourceName || label('goneGroup', 'Removed tools');
+                                const names = group.rows.map((row) => row.name);
                                 return (
-                                    <MCPToolRow
-                                        key={row.name}
-                                        name={row.tool?.name || row.name}
-                                        prefix={row.sourceName}
-                                        tool={row.tool}
-                                        checked={row.on}
+                                    <MCPToolGroup
+                                        key={group.sourceName}
+                                        title={name}
+                                        ariaLabel={name}
+                                        on={group.rows.filter((row) => row.on && row.tool?.enabled).length}
+                                        total={group.rows.length}
+                                        switchState={group.rows.length > 1 ? triStateOf(group.rows.map((row) => row.on)) : undefined}
                                         switchDisabled={busy}
-                                        muted={globallyOff}
-                                        caption={
-                                            globallyOff
-                                                ? row.tool
-                                                    ? label('globallyOff', 'Off on the MCP Tools page, so it is unavailable here')
-                                                    : label('toolGone', 'This tool no longer exists')
-                                                : undefined
+                                        switchLabel={`${name}: ${label('groupEnabled', 'All tools on')}`}
+                                        onSwitch={(on) => void save(setProfileToolsOn(profile, names, on))}
+                                        foldKey={`profile-${profile.id}-${group.sourceName}`}
+                                        actions={
+                                            custom && (
+                                                <Tooltip title={label('removeGroupFromProfile', 'Remove these tools from the MCP profile')}>
+                                                    <IconButton
+                                                        size="small"
+                                                        disabled={busy}
+                                                        aria-label={`${name}: ${label('removeGroupFromProfile', 'Remove these tools from the MCP profile')}`}
+                                                        onClick={() => void save(removeProfileTools(profile, names))}
+                                                    >
+                                                        <Close fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )
                                         }
-                                        groupRole
-                                        ariaLabel={`${row.sourceName} / ${row.tool?.name || row.name}`}
-                                        onToggle={(on) => void save(setProfileToolOn(profile, row.name, on))}
-                                        onRemove={custom ? () => void save(removeProfileTool(profile, row.name)) : undefined}
-                                        removeDisabled={busy}
-                                    />
+                                    >
+                                        {group.rows.map((row) => {
+                                            const globallyOff = row.tool ? !row.tool.enabled : true;
+                                            return (
+                                                <MCPToolRow
+                                                    key={row.name}
+                                                    name={row.tool?.name || row.name}
+                                                    tool={row.tool}
+                                                    checked={row.on}
+                                                    switchDisabled={busy}
+                                                    muted={globallyOff}
+                                                    caption={
+                                                        globallyOff
+                                                            ? row.tool
+                                                                ? label('globallyOff', 'Off on the MCP Tools page, so it is unavailable here')
+                                                                : label('toolGone', 'This tool no longer exists')
+                                                            : undefined
+                                                    }
+                                                    groupRole
+                                                    ariaLabel={`${row.sourceName} / ${row.tool?.name || row.name}`}
+                                                    onToggle={(on) => void save(setProfileToolOn(profile, row.name, on))}
+                                                    onRemove={custom ? () => void save(removeProfileTool(profile, row.name)) : undefined}
+                                                    removeDisabled={busy}
+                                                />
+                                            );
+                                        })}
+                                    </MCPToolGroup>
                                 );
                             })}
-                        </Card>
+                        </Stack>
                     )}
                 </Box>
             </Stack>

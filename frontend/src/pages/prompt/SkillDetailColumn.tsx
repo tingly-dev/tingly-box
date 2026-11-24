@@ -9,10 +9,12 @@ import {
     Typography,
 } from '@mui/material';
 import XMarkdown from '@ant-design/x-markdown';
+import {breaksConfig} from '@tingly/projects/transcript';
 import { type Skill, type SkillLocation } from '@/types/prompt';
-import { formatFileSize, getTwoLevelDisplayName } from '@/components/prompt/skill/skillGrouping';
+import { formatFileSize, getTwoLevelDisplayName } from '@/pages/prompt/skillGrouping';
 import SkillColumnShell from './SkillColumnShell';
-import { fontMono } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface SkillDetailColumnProps {
     selectedSkill: Skill | null;
@@ -181,12 +183,13 @@ const SkillDetailColumn = ({
                                     minHeight: '100%',
                                 },
                                 '& .ant-markdown': {
-                                    fontSize: '0.875rem',
+                                    fontSize: fontSizes.base,
                                     lineHeight: 1.6,
                                 },
                             }}
                         >
                             <XMarkdown
+                                config={breaksConfig}
                                 style={{
                                     height: '100%',
                                 }}
@@ -199,7 +202,7 @@ const SkillDetailColumn = ({
                             sx={{
                                 p: 2,
                                 fontFamily: fontMono,
-                                fontSize: '0.875rem',
+                                fontSize: fontSizes.base,
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',
                                 lineHeight: 1.6,

@@ -73,3 +73,16 @@ func TestLongUploadNameIsCut(t *testing.T) {
 	_, err = l.ResolveAttachments("p1", []string{a.Path})
 	assert.NoError(t, err)
 }
+
+func TestDownloadNameDropsTheUploadIDOnly(t *testing.T) {
+	for rel, want := range map[string]string{
+		"uploads/0123456789ab-report final.pdf": "report final.pdf",
+		"uploads/0123456789ab-a-b.txt":          "a-b.txt",
+		"uploads/notes.md":                      "notes.md",
+		"uploads/sub/0123456789ab-x.txt":        "0123456789ab-x.txt",
+		"0123456789ab-x.txt":                    "0123456789ab-x.txt",
+		"docs/readme.md":                        "readme.md",
+	} {
+		assert.Equal(t, want, DownloadName(rel), rel)
+	}
+}

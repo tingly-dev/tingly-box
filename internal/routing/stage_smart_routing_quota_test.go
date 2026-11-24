@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -81,6 +82,30 @@ func TestSmartRouting_ServiceQuota_IgnoresResourceKindWindows(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, final)
 	require.Equal(t, services, narrowed, "resource-kind usage must not trigger avoidance")
+}
+
+// TestSmartRouting_ServiceQuota_IgnoresReadingKeptPastAFailure: after a failed
+// refresh the store keeps the last good reading next to the error, possibly
+// hours old. It is for people to see, not for routing to act on, so the
+// provider reads as unknown (absent), not as its stale percentage.
+func TestSmartRouting_ServiceQuota_IgnoresReadingKeptPastAFailure(t *testing.T) {
+	services := []*loadbalance.Service{
+		testService("prov-stale", "gpt-4", true),
+		testService("prov-fresh", "gpt-4", true),
+	}
+	rule := testSmartRule("rule-1", "gpt-4", services, testServiceQuotaOp(smartrouting.OpServiceQuotaPctGe, "85"))
+
+	qp := newMockQuotaProvider()
+	qp.setPct("prov-stale", 99)
+	qp.usage["prov-stale"].LastError = "unexpected status code: 403"
+	qp.setPct("prov-fresh", 10)
+
+	stage := NewSmartRoutingStage(newMockAffinityStore())
+	stage.SetQuotaProvider(qp)
+
+	info := stage.collectAllQuotaInfo(context.Background(), rule.SmartRouting)
+	require.Len(t, info, 1, "the stale reading must not be reported")
+	require.Equal(t, 10.0, info[0].Pct)
 }
 
 // TestSmartRouting_ServiceQuota_NoProviderWired_Passes ensures a

@@ -15,6 +15,9 @@ includes:
   projects:
     taskfile: ./projects/Taskfile.yml
     dir: ./projects
+  remote:
+    taskfile: ./remote/Taskfile.yml
+    dir: ./remote
 
 vars:
   VERSION: ""
@@ -27,9 +30,9 @@ vars:
 
   # Submodule versions (format: "name:branch/tag/commit")
   # Example: "openai-go:tingly-dev-v3.32.0"
-  OPENAI_GO_VERSION: "tingly-dev-v3.84.0"
+  OPENAI_GO_VERSION: "tingly-dev-v3.97.0"
   ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.84.0"
-  GO_GENAI_VERSION: "upstream-v1.75.0"
+  GO_GENAI_VERSION: "upstream-v1.77.0"
 
 tasks:
   build:

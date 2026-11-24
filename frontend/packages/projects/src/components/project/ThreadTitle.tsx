@@ -1,8 +1,13 @@
 import { useRef, useState } from 'react';
-import { Box, InputBase, Typography } from '@mui/material';
+import { Box, ButtonBase, InputBase, Tooltip, Typography } from '@mui/material';
+import { useCopyFeedback } from '@tingly/ui';
 import { useTranslation } from 'react-i18next';
 import { fontSizes } from '@tingly/ui/theme/fonts';
 import { Pencil } from '../icons';
+import { radius } from '@tingly/ui/theme/radius';
+import type { Thread } from '../../client';
+import { useNotify } from '../../hooks/useNotify';
+import { threadRef } from './threadStatus';
 
 /**
  * The thread's title in the header, edited in place: click it to edit, Enter
@@ -61,7 +66,7 @@ export function ThreadTitle({ title, onSave }: { title: string; onSave: (title: 
                     }
                 }}
                 inputProps={{ 'aria-label': t('thread.editTitle') }}
-                sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 650, color: 'text.primary', '& .MuiInputBase-input': { p: 0, borderBottom: 1, borderColor: 'divider' } }}
+                sx={{ flex: 1, minWidth: 0, fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary', '& .MuiInputBase-input': { p: 0, borderBottom: 1, borderColor: 'divider' } }}
             />
         );
     }
@@ -78,10 +83,34 @@ export function ThreadTitle({ title, onSave }: { title: string; onSave: (title: 
                     edit();
                 }
             }}
-            sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: 1, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}
+            sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'text', borderRadius: radius.row, px: 0.5, mx: -0.5, '&:hover': { bgcolor: 'action.hover' }, '&:hover .edit-hint': { opacity: 0.7 }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}
         >
-            <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 650, color: 'text.primary' }}>{shown}</Typography>
+            <Typography noWrap sx={{ fontSize: fontSizes.base, fontWeight: 600, color: 'text.primary' }}>{shown}</Typography>
             <Pencil className="edit-hint" sx={{ fontSize: 13, flexShrink: 0, opacity: 0, transition: 'opacity 0.15s', color: 'text.secondary' }} />
         </Box>
+    );
+}
+
+/** Copies how the thread is mentioned ("#3 Title", `threadRef`) and says so. */
+export function useCopyThreadRef(thread: Pick<Thread, 'seq' | 'title'>) {
+    const { t } = useTranslation('projects');
+    const notify = useNotify();
+    const { copy } = useCopyFeedback();
+    const ref = threadRef(thread);
+    return { ref, copy: () => copy(ref, () => notify(t('thread.refCopied', { ref }), 'success')) };
+}
+
+/** The thread's number before its title in the header: a click copies "#3 Title", to mention it in the coordinator chat, IM or a PR. Nothing for the coordinator. */
+export function ThreadRefButton({ thread }: { thread: Pick<Thread, 'seq' | 'title'> }) {
+    const { t } = useTranslation('projects');
+    const { ref, copy } = useCopyThreadRef(thread);
+    if (!(thread.seq > 0)) return null;
+    return (
+        <Tooltip title={t('thread.copyRefOf', { ref })}>
+            <ButtonBase data-thread-number onClick={() => void copy()} aria-label={t('thread.copyRefOf', { ref })}
+                sx={{ flexShrink: 0, px: 0.5, mr: -0.25, borderRadius: radius.row, fontSize: fontSizes.base, fontWeight: 600, color: 'text.disabled', fontVariantNumeric: 'tabular-nums', '&:hover': { bgcolor: 'action.hover', color: 'text.secondary' }, '&:focus-visible': { outline: 1, outlineColor: 'primary.main' } }}>
+                #{thread.seq}
+            </ButtonBase>
+        </Tooltip>
     );
 }

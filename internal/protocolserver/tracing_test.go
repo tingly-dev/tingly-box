@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -73,6 +75,8 @@ func TestTracingMiddleware_RootSpanLifecycle(t *testing.T) {
 		rule := &typ.Rule{UUID: "rule-1"}
 		provider := &typ.Provider{UUID: "prov-1", Name: "acme"}
 		SetTrackingContext(c, rule, provider, "claude-sonnet-4-6", "tingly/cc", true)
+		c.Set(constant.CtxKeyProtocolInbound, string(protocol.TypeOpenAIChat))
+		c.Set(constant.CtxKeyProtocolUpstream, string(protocol.TypeAnthropicV1))
 		traceIDInCtx = c.GetString(constant.CtxKeyTraceID)
 		c.Status(http.StatusOK)
 	})
@@ -101,6 +105,11 @@ func TestTracingMiddleware_RootSpanLifecycle(t *testing.T) {
 		"tingly.scenario":           "claude_code",
 		"tingly.streaming":          true,
 		"http.response.status_code": int64(200),
+		"http.request.method":       "POST",
+		"url.path":                  "/tingly/claude_code/v1/messages",
+		"http.route":                "/tingly/:scenario/v1/messages",
+		"tingly.protocol.inbound":   "openai.chat",
+		"tingly.protocol.upstream":  "anthropic.messages",
 	}
 	for k, want := range checks {
 		if got := attrs[k]; got != want {
@@ -244,7 +253,7 @@ func TestDeclaredOperationDrivesSpanAndMetrics(t *testing.T) {
 	var metricsOperation string
 	engine := gin.New()
 	engine.POST("/tingly/:scenario/v1/embeddings", ph.tracingMiddleware,
-		DeclareOperation("embeddings"),
+		DeclareOperation(OperationEmbeddings),
 		func(c *gin.Context) {
 			rule := &typ.Rule{UUID: "rule-1"}
 			provider := &typ.Provider{UUID: "prov-1", Name: "acme"}
@@ -265,6 +274,11 @@ func TestDeclaredOperationDrivesSpanAndMetrics(t *testing.T) {
 	if spans[0].Name != "embeddings text-embed-3" {
 		t.Errorf("span name = %q, want %q", spans[0].Name, "embeddings text-embed-3")
 	}
+	for _, k := range []string{"tingly.protocol.inbound", "tingly.protocol.upstream"} {
+		if _, ok := attrMap(spans[0])[k]; ok {
+			t.Errorf("attr %s set for a request that never reached a protocol dispatch", k)
+		}
+	}
 	if got := attrMap(spans[0])["gen_ai.operation.name"]; got != "embeddings" {
 		t.Errorf("span operation = %v, want embeddings", got)
 	}
@@ -278,5 +292,70 @@ func TestOperationDefaultsToChat(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	if got := OperationFromContext(c); got != "chat" {
 		t.Errorf("undeclared operation = %q, want chat", got)
+	}
+}
+
+// TestInboundAPIDeclaresOperation drives the real routes: the span (the
+// "stage" row the request journey shows) and the metrics operation must tell
+// Responses from Chat Completions instead of reporting everything as "chat".
+func TestInboundAPIDeclaresOperation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name, method, path, body string
+		want                     string
+	}{
+		{"chat", http.MethodPost, "/tingly/openai/v1/chat/completions", `{"model":"m"}`, "chat"},
+		{"chat streaming", http.MethodPost, "/tingly/openai/v1/chat/completions", `{"model":"m","stream":true}`, "chat"},
+		{"responses", http.MethodPost, "/tingly/openai/v1/responses", `{"model":"m"}`, "responses"},
+		{"responses streaming", http.MethodPost, "/tingly/openai/v1/responses", `{"model":"m","stream":true}`, "responses"},
+		{"responses get", http.MethodGet, "/tingly/openai/v1/responses/resp_1", ``, "responses"},
+		{"messages", http.MethodPost, "/tingly/anthropic/v1/messages", `{"model":"m"}`, "chat"},
+		{"embeddings", http.MethodPost, "/tingly/openai/v1/embeddings", `{"model":"m"}`, "embeddings"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ph, exporter := newTestTracerHandler()
+			engine := gin.New()
+			engine.Use(gin.Recovery())
+			var metricsOperation string
+			ph.RegisterRoutes(engine, func(c *gin.Context) {
+				// Read the operation once the route's own declaration ran.
+				c.Next()
+				metricsOperation = OperationFromContext(c)
+			})
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			engine.ServeHTTP(httptest.NewRecorder(), req)
+
+			spans := exporter.GetSpans()
+			if len(spans) != 1 {
+				t.Fatalf("expected 1 request span, got %d", len(spans))
+			}
+			if got := attrMap(spans[0])["gen_ai.operation.name"]; got != tc.want {
+				t.Errorf("span operation = %v, want %s", got, tc.want)
+			}
+			if metricsOperation != tc.want {
+				t.Errorf("metrics operation = %q, want %s", metricsOperation, tc.want)
+			}
+			if !strings.HasPrefix(spans[0].Name, tc.want) {
+				t.Errorf("span name = %q, want prefix %q", spans[0].Name, tc.want)
+			}
+		})
+	}
+}
+
+func TestProtocolLabel(t *testing.T) {
+	for in, want := range map[string]string{
+		string(protocol.TypeOpenAIChat):      "openai.chat",
+		string(protocol.TypeOpenAIResponses): "openai.responses",
+		string(protocol.TypeAnthropicV1):     "anthropic.messages",
+		string(protocol.TypeAnthropicBeta):   "anthropic.messages.beta",
+		string(protocol.TypeGoogle):          "google.generate_content",
+		"":                                   "",
+		"future_api":                         "future_api",
+	} {
+		if got := protocolLabel(in); got != want {
+			t.Errorf("protocolLabel(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

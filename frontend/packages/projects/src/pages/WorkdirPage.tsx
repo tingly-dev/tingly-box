@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Box, Button, IconButton, Menu, MenuItem, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
@@ -7,22 +7,26 @@ import { api, unwrap, type Attachment, type BackgroundTask, type Project, type T
 import { AddWorkdirDialog } from '../components/workdir/AddWorkdirDialog';
 import { NewSessionView } from '../components/workdir/NewSessionView';
 import { loadPermissionModes } from '../components/workdir/PermissionModeSelect';
+import { changesLiveTasks } from '../components/workdir/backgroundTasks';
 import { ThreadSettingsPickers } from '../components/ThreadSettingsPickers';
+import { EffortPicker } from '../components/EffortPicker';
+import type { components } from '../client';
 import { mergeThreadSettings, useThreadSettings } from '../hooks/useThreadSettings';
 import { uploadAttachments } from '../components/attachments';
 import { ProjectImTags, useProjectIm } from '../components/im/ProjectImBindings';
 import { IM_BINDINGS_CHANGED } from '../components/im/useImBindings';
 import { ThreadPanel } from '../components/project/ThreadPanel';
-import { StatusGroups, type StatusGroup } from '../components/workspace/StatusGroups';
+import type { StatusGroup } from '../components/workspace/StatusGroups';
+import { ThreadsView } from '../components/workspace/ThreadsView';
 import { WorkspaceLayout, useWorkspacePane } from '../components/workspace/WorkspaceLayout';
-import { Add, Close } from '../components/icons';
+import { MoreVert } from '../components/icons';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useNotify } from '../hooks/useNotify';
 import { useProjectEvents, type ProjectEvent } from '../hooks/useProjectEvents';
 import { useProjectList } from '../hooks/useProjectList';
 import { useTranscript } from '../hooks/useTranscript';
 import { useProjectsHost, type SessionLaunch } from '../host/ProjectsHost';
-import { folderName, timeAgo } from '../utils/format';
+import { folderName } from '../utils/format';
 import { needsUser } from '../components/project/threadStatus';
 
 /** Replace the session with the same id, else add it first (newest first). */
@@ -34,22 +38,13 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
     return next;
 }
 
-/** Whether a task event changes the set of running background tasks (progress does not). */
-function changesLiveTasks(e: ThreadEvent): boolean {
-    try {
-        const ev = (JSON.parse(e.payload ?? '{}') as { event?: string }).event;
-        return ev === 'background_tasks_changed' || ev === 'task_notification' || ev === 'task_completed';
-    } catch {
-        return false;
-    }
-}
-
 const GROUPS: { key: string; collapsed?: boolean }[] = [
     { key: 'waiting' },
     { key: 'failed' },
     { key: 'working' },
     { key: 'idle' },
     { key: 'resolved', collapsed: true },
+    { key: 'archived', collapsed: true },
 ];
 
 /**
@@ -60,7 +55,7 @@ const GROUPS: { key: string; collapsed?: boolean }[] = [
  * them all. A folder has no goal, memory, library or review: only threads.
  */
 export default function WorkdirPage() {
-    const { t, i18n } = useTranslation('projects');
+    const { t } = useTranslation('projects');
     const notify = useNotify();
     const { onProjectsChanged: refresh, embedded, session: slots } = useProjectsHost();
     const [params, setParams] = useSearchParams();
@@ -76,10 +71,10 @@ export default function WorkdirPage() {
     const onThreadEvent = useRef<(ev: ProjectEvent) => void>(() => undefined);
     const { folders, reload: reloadList } = useProjectList(true, (ev) => onEvent.current(ev), () => onOpen.current());
     const folder = scope ? folders?.find((f) => f.path === scope) : undefined;
-    // Which folders' threads this page lists, as a stable key: the open folder, or every folder with threads.
+    // Which folders' threads this page lists, including folders with only archived sessions.
     const listed = !folders ? null
         : scope ? (folder ? [folder.id] : [])
-            : folders.filter((f) => f.threads.waiting + f.threads.working + f.threads.ready + f.threads.idle + f.threads.resolved > 0).map((f) => f.id);
+            : folders.map((f) => f.id);
     const listedKey = listed?.join(',') ?? null;
 
     const [sessions, setSessions] = useState<Thread[] | null>(null);
@@ -179,7 +174,7 @@ export default function WorkdirPage() {
                 // The list stream already refreshes the folder list for this event.
                 if (mine) setSessions((list) => upsert(list ?? [], th));
                 // A turn starting or ending moves the status; read whether one is in flight.
-                if (th.id === sessionId && th.status !== openStatus.current) void loadSession(th.id);
+                if (th.id === sessionId && `${th.status}:${!!th.archived_at}` !== openStatus.current) void loadSession(th.id);
             }
         };
         onThreadEvent.current = (ev: ProjectEvent) => {
@@ -187,7 +182,7 @@ export default function WorkdirPage() {
             const e = ev.data as ThreadEvent;
             if (e.thread_id !== sessionId) return;
             transcript.apply(e);
-            if (e.kind === 'task' && changesLiveTasks(e)) void loadTasks(sessionId);
+            if (changesLiveTasks(e)) void loadTasks(sessionId);
         };
         onOpen.current = () => {
             void loadSessions();
@@ -201,7 +196,7 @@ export default function WorkdirPage() {
     const selected = sessions?.find((s) => s.id === sessionId);
     const selectedFolder = folders?.find((f) => f.id === selected?.project_id);
     const settings = useThreadSettings(selected, true, (saved) => setSessions((list) => list?.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, true) : th) ?? null));
-    const threadBlocked = !!selectedFolder && (selectedFolder.paused || !!selectedFolder.archived_at);
+    const threadBlocked = !!selected?.archived_at || (!!selectedFolder && (selectedFolder.paused || !!selectedFolder.archived_at));
     // The open thread's project stream (the all-projects one never carries thread_event). It reconnects on its own;
     // on a reconnect the thread is re-read for anything missed.
     useProjectEvents(sessionId ? (selected?.project_id ?? folder?.id ?? '') : '', (ev) => onThreadEvent.current(ev), () => {
@@ -211,13 +206,13 @@ export default function WorkdirPage() {
         }
     });
     useEffect(() => {
-        openStatus.current = selected?.status;
+        openStatus.current = selected ? `${selected.status}:${!!selected.archived_at}` : undefined;
     });
     const running = (selected?.status === 'working' && turnRunning)
         || (selected?.status === 'waiting' && !!events?.some((e) => (e.kind === 'approval' || e.kind === 'ask') && e.payload?.includes('"state":"pending"')));
 
-    // IM chats bound to the open thread: a folder is bound by one of its threads, never as a project.
-    const im = useProjectIm(selected ? { threadId: selected.id, name: selected.title } : null);
+    // Bind an open session directly, or the folder when no session is selected.
+    const im = useProjectIm(selected ? { threadId: selected.id, name: selected.title } : folder ? { projectId: folder.id, name: folderName(folder.path ?? ''), folder: true } : null);
 
     const go = (next: Record<string, string>) => setParams(next);
     const openSession = (id: string) => {
@@ -249,12 +244,12 @@ export default function WorkdirPage() {
         return uploadAttachments({ draftFolderId: f.id }, files);
     };
 
-    const create = async (path: string, content: string, permission_mode: string, launch: SessionLaunch, attachments: Attachment[]): Promise<boolean> => {
+    const create = async (path: string, content: string, permission_mode: string, launch: SessionLaunch, attachments: Attachment[], effort: components['schemas']['EffortRequest']['effort']): Promise<boolean> => {
         try {
             const f = await openFolder(path);
             const s = await unwrap(api.POST('/api/v1/projects/{id}/threads', {
                 params: { path: { id: f.id } },
-                body: { content, attachments: attachments.map((a) => a.path), permission_mode: permission_mode || undefined, profile: launch.profile || undefined, model: launch.model || undefined },
+                body: { content, attachments: attachments.map((a) => a.path), permission_mode: permission_mode || undefined, profile: launch.profile || undefined, model: launch.model || undefined, effort: effort || undefined },
             }));
             // Picked another folder than the one open: go to that folder.
             if (scope && s.cwd !== scope) {
@@ -275,6 +270,7 @@ export default function WorkdirPage() {
     // Threads a removal would stop: the ones working or waiting on a request.
     const stopCount = folder ? folder.threads.working + folder.threads.waiting : 0;
     const [confirmRemove, setConfirmRemove] = useState(false);
+    const [folderMenu, setFolderMenu] = useState<HTMLElement | null>(null);
 
     const removeFolder = async () => {
         try {
@@ -291,20 +287,16 @@ export default function WorkdirPage() {
     };
 
     const groups: StatusGroup[] = GROUPS.map((g) => ({ key: g.key, label: t(`session.group.${g.key}`), collapsed: g.collapsed }));
-    const rows = useMemo(() => (sessions ?? []).map((s) => ({
-        id: s.id,
-        group: s.status === 'ready' ? 'idle' : s.status,
-        title: s.title,
-        subtitle: [scope ? '' : folderName(s.cwd), needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined,
-        meta: timeAgo(s.updated_at, i18n.language),
-        selected: s.id === sessionId,
-    })), [sessions, scope, sessionId, i18n.language]);
-    const waitingHere = (sessions ?? []).some((s) => needsUser(s.status));
-    // With a session open on a wide screen the list becomes the first card of the thread's info rail, so the page has one right column.
-    const merged = !!sessionId && !pane.narrow;
+    const waitingHere = (sessions ?? []).some((s) => !s.archived_at && needsUser(s.status));
+    const sessionGroup = (s: Thread) => (s.archived_at ? 'archived' : s.status === 'ready' ? 'idle' : s.status);
+    const sessionSubtitle = (s: Thread) =>
+        [scope ? '' : folderName(s.cwd), !s.archived_at && needsUser(s.status) ? s.wait_reason : ''].filter(Boolean).join(' · ') || undefined;
+    // The same threads view a project's Overview draws; the list stays in the side pane whether or not a session is open.
     const sessionList = sessions === null
         ? <Box sx={{ p: 2 }}><Skeleton height={36} /><Skeleton height={36} /></Box>
-        : <StatusGroups groups={groups} rows={rows} onOpen={openSession} empty={t('session.none')} />;
+        : <ThreadsView scope={folder?.id ?? 'folders'} threads={sessions} selectedId={sessionId} onOpen={openSession}
+            groups={groups} groupOf={sessionGroup} subtitle={sessionSubtitle}
+            countLabel={(count) => t('session.count', { count })} empty={t('session.none')} />;
 
     return (
         <>
@@ -322,12 +314,11 @@ export default function WorkdirPage() {
                 actions={(
                     <>
                         {im && <Box sx={{ display: { xs: 'none', md: 'flex' }, minWidth: 0, flexShrink: 1 }}><ProjectImTags im={im} /></Box>}
-                        {removable && (
-                            <Tooltip title={t('workdir.remove')}>
-                                <IconButton size="small" aria-label={t('workdir.remove')} onClick={() => (stopCount > 0 ? setConfirmRemove(true) : void removeFolder())}><Close fontSize="small" /></IconButton>
-                            </Tooltip>
-                        )}
-                        <Button size="small" startIcon={<Add />} onClick={() => openNew()}>{t('session.new')}</Button>
+                        <Tooltip title={t('workdir.actions')}><IconButton size="small" aria-label={t('workdir.actions')} aria-haspopup="menu" onClick={(e) => setFolderMenu(e.currentTarget)}><MoreVert fontSize="small" /></IconButton></Tooltip>
+                        <Menu anchorEl={folderMenu} open={!!folderMenu} onClose={() => setFolderMenu(null)}>
+                            <MenuItem onClick={() => { setFolderMenu(null); openNew(); }}>{t('session.new')}</MenuItem>
+                            {removable && <MenuItem onClick={() => { setFolderMenu(null); if (stopCount > 0) setConfirmRemove(true); else void removeFolder(); }}>{t('workdir.remove')}</MenuItem>}
+                        </Menu>
                     </>
                 )}
                 notice={(error || im) && (
@@ -345,13 +336,12 @@ export default function WorkdirPage() {
                         )}
                     </>
                 )}
-                hidePaneToggle={merged}
-                side={merged ? undefined : (
+                side={(
                     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', px: 2, minHeight: 44, borderBottom: 1, borderColor: 'divider' }}>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('session.sessions')}</Typography>
                         </Box>
-                        <Box sx={{ flex: 1, overflowY: 'auto', px: 0.5 }}>
+                        <Box sx={{ flex: 1, minHeight: 0 }}>
                             {sessionList}
                         </Box>
                     </Box>
@@ -370,9 +360,9 @@ export default function WorkdirPage() {
                         canSend={settings.canSend}
                         permissionLabel={selected?.permission_mode ? t(`session.mode.${selected.permission_mode}`, { defaultValue: selected.permission_mode }) : `${t('threadSettings.defaultPermissions')} · ${t(`session.mode.${selectedFolder?.thread_permission_mode || 'acceptEdits'}`)}`}
                         onBack={() => openNew()}
+                        backLabel={t('session.new')}
                         liveTasks={liveTasks}
-                        railTop={merged ? sessionList : undefined}
-                        railMinPanel={merged ? 640 : undefined}
+                        railExtra={selected && slots?.railCards?.({ thread: selected, launch: { profile: selected.profile ?? '', model: selected.model ?? '' } })}
                         more={transcript.more}
                         onLoadEarlier={transcript.loadEarlier}
                         subagents={transcript.subagents}
@@ -380,13 +370,27 @@ export default function WorkdirPage() {
                             void loadSession(sessionId);
                             transcript.catchUp().catch(() => undefined);
                         }}
-                        composerContext={selected && (
-                            <ThreadSettingsPickers folder value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
+                        modelControl={selected && (
+                            <ThreadSettingsPickers folder show="model" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
                                 permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
                                 disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
                                 onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
                         )}
-                        belowComposer={selected && events && slots?.statusLine?.({ session: selected, events })}
+                        effortControl={selected && (
+                            <EffortPicker value={selected.effort_override || ''}
+                                disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
+                                onChange={(value) => void settings.setEffort(value as components['schemas']['EffortRequest']['effort'])} />
+                        )}
+                        composerContext={selected && (
+                            <ThreadSettingsPickers folder show="permission" value={{ profile: selected.profile ?? '', model: selected.model ?? '' }}
+                                permissionMode={selected.permission_mode ?? ''} modes={modes} defaultPermissionMode={selectedFolder?.thread_permission_mode || 'acceptEdits'}
+                                disabled={threadBlocked || selected.status === 'resolved' || settings.saving}
+                                onLaunchChange={(next) => void settings.setLaunch(next)} onPermissionChange={(mode) => void settings.setPermission(mode)} />
+                        )}
+                        belowComposer={selected && <>
+                            {!slots?.launchPickers && selected.profile && <Alert severity="warning" action={<Button color="inherit" size="small" disabled={settings.saving} onClick={() => void settings.setLaunch({ profile: '', model: '' })}>{t('threadSettings.useConnection')}</Button>}>{t('threadSettings.threadProfileUnavailable')}</Alert>}
+                            {events && slots?.statusLine?.({ session: selected, events })}
+                        </>}
                     />
                 ) : (
                     <NewSessionView

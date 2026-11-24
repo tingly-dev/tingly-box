@@ -1,8 +1,10 @@
 import { Box, Chip, Collapse, Stack, Typography } from '@mui/material';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ModelRequestEvent } from '@/components/AILogViewer';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha } from '@mui/material/styles';
+import { radius } from '@tingly/ui/theme/radius';
+import { DisclosureChevron } from '@tingly/projects/disclosure';
 
 // RequestJourney is the single answer to "how did this request go".
 //
@@ -20,6 +22,12 @@ import { alpha } from '@mui/material/styles';
 // under it. One shape means one way to read the list and one way to open a
 // detail, instead of the four the page used to mix (table row, stage row,
 // annotation sub-line, attribute dump).
+//
+// Stage rows open by default — their timings and attributes are the point of
+// opening a request, and a second click to reach them was easy to miss. Log
+// rows stay folded (there can be many). Every expandable row carries the shared
+// disclosure chevron, and a row the reader toggled keeps that choice across
+// refreshes (keyed by span id / event content, so refreshed data never resets it).
 //
 // It degrades on purpose: with tracing off (or the trace evicted from the
 // in-memory ring) the log rows stand alone — same shape, minus the timings.
@@ -49,9 +57,11 @@ type RowTone = 'ok' | 'error' | 'warning' | 'plain';
 // duration; `log` rows come from the pipeline's log lines and do not.
 interface JourneyRow {
     key: string;
-    kind: 'stage' | 'log';
+    kind: 'request' | 'stage' | 'log';
     name: string;
     detail: string;
+    // The request row's detail is the protocol and model route: it wraps instead of truncating.
+    wrapDetail?: boolean;
     result?: string;
     tone: RowTone;
     start: number;
@@ -104,9 +114,33 @@ const timed = (span: TraceSpan): TimedSpan => ({
 
 // Presentation for the span names the gateway emits. Anything unrecognized
 // falls through to its raw span name rather than being hidden.
-const describeSpan = (span: TimedSpan): { name: string; detail: string } => {
+// "Who to whom" in one line: the client's protocol and requested model, then the
+// protocol and model the provider served it with. The provider's name stays out
+// of the row (it can be long) and is in the opened details. Attributes the
+// backend did not record are skipped, down to the bare model route.
+const describeRoute = (attrs: Record<string, string>): string => {
+    const requested = attrs['gen_ai.request.model'];
+    const served = attrs['gen_ai.response.model'];
+    const inbound = attrs['tingly.protocol.inbound'];
+    const upstream = attrs['tingly.protocol.upstream'];
+    const join = (parts: (string | undefined)[]) => parts.filter(Boolean).join(' · ');
+    if (!inbound && !upstream) {
+        return requested && served && served !== requested ? `${requested} → ${served}` : requested || served || '';
+    }
+    return [join([inbound, requested]), join([upstream, served])].filter(Boolean).join('  →  ');
+};
+
+const describeSpan = (span: TimedSpan): { kind?: 'request'; name: string; detail: string; wrapDetail?: boolean } => {
     const attrs = span.attributes || {};
     const service = attrs['tingly.lb.service_id'];
+    // The root span is named "{operation} {request model}" (the OTel GenAI
+    // convention, which exporters rely on) — too long for the name column. Read
+    // the attributes instead: the operation is the name, and the protocols and
+    // models go to the detail column, where they have room.
+    const operation = attrs['gen_ai.operation.name'];
+    if (operation) {
+        return { kind: 'request', name: operation, detail: describeRoute(attrs), wrapDetail: true };
+    }
     switch (span.name) {
         case 'routing':
             return { name: 'routing', detail: [service, attrs['tingly.lb.tactic']].filter(Boolean).join('  ·  ') };
@@ -119,13 +153,14 @@ const describeSpan = (span: TimedSpan): { name: string; detail: string } => {
 
 const buildRows = (events: ModelRequestEvent[], spans: TraceSpan[]): JourneyRow[] => {
     const rows: JourneyRow[] = spans.map(timed).map((span) => {
-        const { name, detail } = describeSpan(span);
+        const { kind, name, detail, wrapDetail } = describeSpan(span);
         const attrs = span.attributes || {};
         return {
             key: span.span_id,
-            kind: 'stage',
+            kind: kind ?? 'stage',
             name,
             detail,
+            wrapDetail,
             result: attrs['http.response.status_code'] || span.status_message,
             tone: span.status_code === 'Error' ? 'error' : span.status_code === 'Ok' ? 'ok' : 'plain',
             start: span.start,
@@ -177,17 +212,17 @@ const KindBadge = ({ kind, tone }: { kind: JourneyRow['kind']; tone: RowTone }) 
         size="small"
         label={kind}
         sx={{
-            width: 58,
+            width: 64,
             height: 17,
             fontSize: fontSizes.micro,
-            fontWeight: 700,
+            fontWeight: 600,
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
-            borderRadius: 0.5,
-            color: tone === 'error' ? 'error.main' : kind === 'stage' ? 'primary.main' : 'text.disabled',
+            borderRadius: radius.chip,
+            color: tone === 'error' ? 'error.main' : kind !== 'log' ? 'primary.main' : 'text.disabled',
             backgroundColor: (theme) => tone === 'error'
                 ? alpha(theme.palette.error.main, 0.1)
-                : kind === 'stage'
+                : kind !== 'log'
                     ? alpha(theme.palette.primary.main, 0.1)
                     : theme.palette.action.hover,
             '& .MuiChip-label': { px: 0 },
@@ -204,7 +239,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 <Typography
                     sx={{
                         fontFamily: fontMono,
-                        fontSize: fontSizes.xs,
+                        fontSize: fontSizes.micro,
                         color: matched === rule.rule_index ? 'success.main' : 'text.disabled',
                     }}
                 >
@@ -213,7 +248,7 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
                 {rule.ops?.map((op, i) => (
                     <Typography
                         key={i}
-                        sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', pl: 2 }}
+                        sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled', pl: 2 }}
                     >
                         {op.position}.{op.operation} — {op.reason}
                     </Typography>
@@ -224,28 +259,30 @@ const RoutingRules = ({ rules, matched }: { rules: RoutingRule[]; matched: numbe
 );
 
 const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
-    // Associate each response with the log snapshot that requested it, so
-    // auto-refresh can fetch spans completed since the previous snapshot.
+    // Re-fetched whenever the log snapshot changes, so spans completed since
+    // the previous snapshot show up.
     const [traceState, setTraceState] = useState<{
         id?: string;
-        events?: ModelRequestEvent[];
         detail?: TraceDetail | null;
         error?: string;
     }>({});
-    const current = traceState.id === traceId && traceState.events === events;
+    // A refresh keeps showing the previous timings of the same trace until the
+    // new ones land; dropping them meanwhile made every stage row vanish and
+    // reappear, shifting everything below it.
+    const current = traceState.id === traceId;
     const trace = current ? traceState.detail : undefined;
     const traceError = current ? traceState.error : undefined;
-    const [openRow, setOpenRow] = useState<string | null>(null);
+    const [toggled, setToggled] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         if (!traceId) return;
         let cancelled = false;
         getTrace(traceId)
             .then((detail) => {
-                if (!cancelled) setTraceState({ id: traceId, events, detail });
+                if (!cancelled) setTraceState({ id: traceId, detail });
             })
             .catch((error: unknown) => {
-                if (!cancelled) setTraceState({ id: traceId, events, error: error instanceof Error ? error.message : 'Failed to load trace' });
+                if (!cancelled) setTraceState({ id: traceId, error: error instanceof Error ? error.message : 'Failed to load trace' });
             });
         return () => {
             cancelled = true;
@@ -266,24 +303,24 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
         <Box
             sx={{
                 display: 'grid',
-                // kind · name · detail · result · duration — one grid for the
+                // kind · name · detail · result · duration · chevron — one grid for the
                 // whole journey so every row, and every opened panel, lines up
                 // on the same edges.
-                gridTemplateColumns: 'auto 92px 1fr auto 64px',
+                gridTemplateColumns: 'auto 92px 1fr auto 64px 16px',
                 columnGap: 1,
                 rowGap: 0.1,
                 alignItems: 'center',
             }}
         >
             {rows.map((row) => {
-                const open = openRow === row.key;
                 const expandable = row.payload.length > 0 || !!row.rules;
+                const open = expandable && (toggled[row.key] ?? row.kind !== 'log');
                 const cellSx = {
                     py: 0.32,
                     cursor: expandable ? 'pointer' : 'default',
                     backgroundColor: open ? 'action.hover' : 'transparent',
                 };
-                const onClick = () => expandable && setOpenRow(open ? null : row.key);
+                const onClick = () => expandable && setToggled((prev) => ({ ...prev, [row.key]: !open }));
                 const cell = { onClick, sx: cellSx };
 
                 return (
@@ -291,13 +328,24 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         <Box {...cell} sx={{ ...cellSx, display: 'flex' }}>
                             <KindBadge kind={row.kind} tone={row.tone} />
                         </Box>
-                        <Box {...cell}>
+                        <Box
+                            {...cell}
+                            role={expandable ? 'button' : undefined}
+                            tabIndex={expandable ? 0 : undefined}
+                            aria-expanded={expandable ? open : undefined}
+                            onKeyDown={expandable ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    onClick();
+                                }
+                            } : undefined}
+                        >
                             <Typography
                                 sx={{
                                     fontFamily: fontMono,
                                     fontSize: fontSizes.sm,
                                     fontWeight: 500,
-                                    color: row.kind === 'stage' ? 'text.primary' : 'text.secondary',
+                                    color: row.kind !== 'log' ? 'text.primary' : 'text.secondary',
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -308,13 +356,14 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell} sx={{ ...cellSx, minWidth: 0 }}>
                             <Typography
+                                title={row.detail}
                                 sx={{
                                     fontFamily: fontMono,
-                                    fontSize: fontSizes.xs,
+                                    fontSize: fontSizes.micro,
                                     color: toneColor(row.tone),
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
+                                    ...(row.wrapDetail
+                                        ? { whiteSpace: 'normal', overflowWrap: 'anywhere' }
+                                        : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
                                 }}
                             >
                                 {row.detail}
@@ -325,7 +374,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                 <Typography
                                     sx={{
                                         fontFamily: fontMono,
-                                        fontSize: fontSizes.xs,
+                                        fontSize: fontSizes.micro,
                                         color: row.tone === 'error' ? 'error.main' : 'text.secondary',
                                         whiteSpace: 'nowrap',
                                     }}
@@ -336,10 +385,13 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                         </Box>
                         <Box {...cell}>
                             <Typography
-                                sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.disabled', textAlign: 'right' }}
+                                sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.disabled', textAlign: 'right' }}
                             >
                                 {row.durationMs != null ? formatDuration(row.durationMs) : ''}
                             </Typography>
+                        </Box>
+                        <Box {...cell} sx={{ ...cellSx, display: 'flex', color: 'text.disabled' }}>
+                            {expandable && <DisclosureChevron open={open} fontSize={14} />}
                         </Box>
 
                         {/* One detail panel shape for every row, aligned under
@@ -351,7 +403,7 @@ const RequestJourney = ({ events, traceId, getTrace }: RequestJourneyProps) => {
                                     {row.payload.map(([k, v], i) => (
                                         <Typography
                                             key={`${k}:${i}`}
-                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: k === 'error' ? 'error.main' : 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: k === 'error' ? 'error.main' : 'text.secondary', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                                         >
                                             {k}={v}
                                         </Typography>

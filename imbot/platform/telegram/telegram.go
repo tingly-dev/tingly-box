@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +34,8 @@ type Bot struct {
 	// callbacks encodes outbound action payloads into callback_data and
 	// resolves them again on the way back. See callback_codec.go.
 	callbacks *callbackVault
+	// username is the bot's own @name, read when it connects; empty until then.
+	username string
 }
 
 type MenuButtonType string
@@ -136,7 +140,13 @@ func (b *Bot) Connect(ctx context.Context) error {
 	if err != nil {
 		b.Logger().Error("Failed to get bot info: %v", err)
 	} else {
+		b.mu.Lock()
+		b.username = me.Username
+		b.mu.Unlock()
 		b.Logger().Info("Telegram bot connected: @%s", me.Username)
+		if me.Username != "" {
+			b.SetAccountName("@" + me.Username)
+		}
 	}
 
 	b.MarkReady()
@@ -170,7 +180,27 @@ func (b *Bot) handleMessageUpdate(ctx context.Context, api *tgbot.Bot, update *m
 		return
 	}
 
+	// With several bots in one group a command is addressed by name
+	// ("/new@otherbot"); it is not this bot's to run or answer.
+	b.mu.RLock()
+	own := b.username
+	b.mu.RUnlock()
+	if coreMessage.IsGroupMessage() && addressedToOtherBot(coreMessage.GetText(), own) {
+		return
+	}
+
 	b.EmitMessage(*coreMessage)
+}
+
+// addressedToOtherBot reports whether text is a command with another bot's
+// name on it. own is this bot's @name; while it is unknown nothing is filtered.
+func addressedToOtherBot(text, own string) bool {
+	head, _, _ := strings.Cut(strings.TrimSpace(text), " ")
+	if own == "" || !strings.HasPrefix(head, "/") {
+		return false
+	}
+	_, target, found := strings.Cut(head, "@")
+	return found && target != "" && !strings.EqualFold(target, own)
 }
 
 // handleCallbackQueryUpdate handles incoming callback query updates
@@ -426,8 +456,8 @@ func (b *Bot) PlatformInfo() *core.PlatformInfo {
 	return core.NewPlatformInfoFor(core.PlatformTelegram)
 }
 
-// sendText sends a text message
-func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
+// telegramFormattedText applies the same formatting to messages and captions.
+func telegramFormattedText(opts *core.SendMessageOptions) (string, models.ParseMode, []models.MessageEntity) {
 	var parseMode models.ParseMode
 	var text string = opts.Text
 	var entities []models.MessageEntity
@@ -458,6 +488,13 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessage
 			parseMode = models.ParseModeHTML
 		}
 	}
+
+	return text, parseMode, entities
+}
+
+// sendText sends a text message.
+func (b *Bot) sendText(ctx context.Context, chatID int64, opts *core.SendMessageOptions) (*core.SendResult, error) {
+	text, parseMode, entities := telegramFormattedText(opts)
 
 	// Chunk text first (handles long messages)
 	chunks := b.ChunkText(text)
@@ -528,29 +565,46 @@ func (b *Bot) sendMedia(ctx context.Context, chatID int64, opts *core.SendMessag
 	}
 
 	media := opts.Media[0]
+	var input models.InputFile = &models.InputFileString{Data: media.URL}
+	if parsed, parseErr := url.Parse(media.URL); parseErr == nil && parsed.Scheme == "file" {
+		if parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") {
+			return nil, fmt.Errorf("invalid local file URL")
+		}
+		file, openErr := os.Open(parsed.Path)
+		if openErr != nil {
+			return nil, openErr
+		}
+		defer file.Close()
+		name := media.Filename
+		if name == "" {
+			name = filepath.Base(parsed.Path)
+		}
+		input = &models.InputFileUpload{Filename: name, Data: file}
+	}
 
 	var sentMsg *models.Message
 	var err error
+	caption, parseMode, entities := telegramFormattedText(opts)
 
 	if media.Type == "image" || media.Type == "sticker" {
 		// Send as photo
 		params := &tgbot.SendPhotoParams{
 			ChatID: chatID,
-			Photo:  &models.InputFileString{Data: media.URL},
+			Photo:  input,
 		}
-		if opts.Text != "" {
-			params.Caption = opts.Text
-		}
+		params.Caption = caption
+		params.ParseMode = parseMode
+		params.CaptionEntities = entities
 		sentMsg, err = b.api.SendPhoto(b.ctx, params)
 	} else {
 		// Send as document
 		params := &tgbot.SendDocumentParams{
 			ChatID:   chatID,
-			Document: &models.InputFileString{Data: media.URL},
+			Document: input,
 		}
-		if opts.Text != "" {
-			params.Caption = opts.Text
-		}
+		params.Caption = caption
+		params.ParseMode = parseMode
+		params.CaptionEntities = entities
 		sentMsg, err = b.api.SendDocument(b.ctx, params)
 	}
 

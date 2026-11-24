@@ -4,25 +4,30 @@ import {
     ContentCopy as IconCopy,
     DeleteOutline as IconDeleteOutline,
     ExpandMore as ExpandMoreIcon,
+    Speed as IconLimits,
     Visibility as IconEye,
     VisibilityOff as IconEyeOff,
 } from '@/components/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfigRow from '@/components/ConfigRow';
-import CreateSharingKeyButton from '@/components/CreateSharingKeyButton';
+import CreateSharingKeyButton from '@/pages/scenario/components/CreateSharingKeyButton';
 import type { SharingKey } from '@/components/SharingKeysTable';
-import type { SharingKeyTableActions } from '@/hooks/useSharingKeyActions';
+import type { SharingKeyTableActions } from '@/pages/scenario/hooks/useSharingKeyActions';
 import type { Team } from '@/types/team';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
 import { SCENARIO_HEADER_CONTENT_MAX_WIDTH } from './ScenarioCardHeader';
+import { radius } from '@tingly/ui/theme/radius';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import SharingKeysList from '@/components/SharingKeysList';
 
 const PREF_KEY = 'team-keys-overview-expanded';
 
 // Same right-edge room for the fold chevron as the connection card below
 // (AgentAccessSection), so the two cards' rows and chevrons line up.
 const CHEVRON_GUTTER = 6;
+const PHONE_CHEVRON_GUTTER = 4;
 
 /**
  * Whether the Team page's key card is open. Folded by default; once the
@@ -55,7 +60,7 @@ export interface TeamKeysOverviewProps {
     loading: boolean;
     expanded: boolean;
     onToggle: () => void;
-    /** From `useSharingKeyActions` — reveal / copy / enable / move / delete. */
+    /** From `useSharingKeyActions` — reveal / copy / enable / limits / move / delete. */
     actions: SharingKeyTableActions;
     onCreate: () => void;
 }
@@ -76,6 +81,9 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
     team, keys, loading, expanded, onToggle, actions, onCreate,
 }) => {
     const { t } = useTranslation();
+    // Phone shell: the keys are a grouped list (SharingKeysList), not grid rows.
+    const phone = usePhoneShell();
+    const gutter = phone ? PHONE_CHEVRON_GUTTER : CHEVRON_GUTTER;
     const label = t(expanded ? 'sharingKeys.overview.collapse' : 'sharingKeys.overview.expand');
     const iconButtonSx = { p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } };
 
@@ -100,7 +108,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
             sx={{
                 transition: 'transform 0.2s',
                 transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                fontSize: '1.1rem',
+                fontSize: 18,
                 color: 'text.secondary',
                 flexShrink: 0,
             }}
@@ -108,7 +116,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
     );
 
     const summaryRow = (
-        <Box sx={{ pt: 1, pb: 1, pr: CHEVRON_GUTTER }}>
+        <Box sx={{ pt: 1, pb: 1, pr: gutter }}>
             <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH }}>
                 <Box sx={{ px: 2, py: 0.5 }}>
                     <ConfigRow
@@ -138,7 +146,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
         <Card
             sx={{
                 position: 'relative',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 boxShadow: 'none',
@@ -156,7 +164,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                             onClick={handleToggle}
                             aria-expanded
                             aria-label={label}
-                            sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: 1 }}
+                            sx={{ position: 'absolute', top: 12, right: 22, zIndex: 1, p: 0.25, borderRadius: radius.row }}
                         >
                             {chevron}
                         </ButtonBase>
@@ -179,12 +187,14 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                 </ButtonBase>
             )}
             <Collapse in={expanded} timeout={0} unmountOnExit>
-                <Box sx={{ pb: 1, pr: CHEVRON_GUTTER }}>
+                <Box sx={{ pb: 1, pr: gutter }}>
                     <Box sx={{ maxWidth: SCENARIO_HEADER_CONTENT_MAX_WIDTH, px: 2 }}>
                         {!loading && keys.length === 0 ? (
                             <Typography variant="body2" sx={{ color: 'text.secondary', px: 1.5, pb: 0.5 }}>
                                 {t('sharingKeys.overview.empty')}
                             </Typography>
+                        ) : phone ? (
+                            <SharingKeysList tokens={keys} {...actions} />
                         ) : (
                             // Capped so a Team with many keys scrolls inside the card
                             // instead of pushing the rules below off the page.
@@ -207,7 +217,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                 columnGap: { xs: 1, sm: 3 },
                                                 gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: '168px minmax(0, 1fr) auto' },
                                                 py: 0.25,
-                                                borderRadius: 1,
+                                                borderRadius: radius.row,
                                                 '&:hover': { backgroundColor: 'action.hover' },
                                             }}
                                         >
@@ -216,7 +226,7 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                     {key.display_name}
                                                 </Typography>
                                                 {!key.enabled && (
-                                                    <Chip label={t('sharingKeys.table.inactive')} size="small" variant="outlined" sx={{ height: 18, fontSize: fontSizes.xs }} />
+                                                    <Chip label={t('sharingKeys.table.inactive')} size="small" variant="outlined" sx={{ height: 18, fontSize: fontSizes.micro }} />
                                                 )}
                                             </Stack>
                                             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0, opacity: key.enabled ? 1 : 0.55 }}>
@@ -255,6 +265,19 @@ export const TeamKeysOverview: React.FC<TeamKeysOverviewProps> = ({
                                                         slotProps={{ input: { 'aria-label': `${key.display_name} ${t('sharingKeys.table.status')}` } }}
                                                     />
                                                 </Tooltip>
+                                                {actions.onLimits && (
+                                                    // Same control as the all-keys table: blue once this person has a limit.
+                                                    <Tooltip title={t('sharingKeys.table.limitsTooltip')}>
+                                                        <IconButton
+                                                            size="small"
+                                                            aria-label={t('sharingKeys.table.limitsTooltip')}
+                                                            color={actions.limitedUserIds?.has(key.user_id) ? 'primary' : 'default'}
+                                                            onClick={() => actions.onLimits?.(key)}
+                                                        >
+                                                            <IconLimits sx={{ fontSize: 16 }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
                                                 <Tooltip title={t('sharingKeys.table.moveTooltip')}>
                                                     <IconButton size="small" aria-label={t('sharingKeys.table.moveTooltip')} onClick={() => actions.onMove(key)}>
                                                         <IconMove sx={{ fontSize: 16 }} />

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["vitest/globals"],
+    "types": ["vitest/globals", "node"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",

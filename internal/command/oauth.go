@@ -359,6 +359,8 @@ func createProviderFromToken(appConfig *appconfig.AppConfig, config *ProviderOAu
 	var apiStyle protocol.APIStyle = protocol.APIStyleOpenAI
 	if config.APIStyle == "anthropic" {
 		apiStyle = protocol.APIStyleAnthropic
+	} else if config.APIStyle == "google" {
+		apiStyle = protocol.APIStyleGoogle
 	}
 
 	// Create OAuth detail with correct fields
@@ -573,8 +575,8 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 		apiBase = "https://api.openai.com/v1"
 		apiStyle = "openai"
 	case ai.IssuerAntigravity:
-		apiBase = "https://api.antigravity.com/v1"
-		apiStyle = "openai"
+		apiBase = "https://cloudcode-pa.googleapis.com"
+		apiStyle = "google"
 	case ai.IssuerXAI:
 		// xAI's OAuth token is only accepted by the Grok CLI proxy, not the
 		// public api.x.ai (which expects a plain API key).
@@ -589,6 +591,9 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 		// attached as the dual URL in createProviderFromToken.
 		apiBase, _ = ai.ZCodeEndpoints(ai.Issuer(issuer))
 		apiStyle = "anthropic"
+	case ai.IssuerQoder, ai.IssuerQoderCN:
+		apiBase = ai.QoderInferenceBase(ai.Issuer(issuer))
+		apiStyle = "openai"
 	case ai.IssuerWorkBuddy, ai.IssuerWorkBuddyCN:
 		site, _ := ai.WorkBuddySiteFor(ai.Issuer(issuer))
 		apiBase = site.APIBase()

@@ -60,6 +60,7 @@ func maskForResponse(p *typ.Provider) ProviderResponse {
 		ProxyURL:         p.ProxyURL,
 		AuthType:         string(p.AuthType),
 		Source:           string(p.Source),
+		Limits:           p.Limits.Normalize(),
 	}
 	// Only surface vmodel_detail on vmodel providers so a stale blob on a
 	// flipped-auth row can never leak via the masked response.
@@ -363,6 +364,9 @@ func (h *Handler) UpdateProvider(c *gin.Context) {
 	}
 	if req.ProxyURL != nil {
 		p.ProxyURL = *req.ProxyURL
+	}
+	if req.Limits != nil {
+		p.Limits = req.Limits.Normalize()
 	}
 
 	// Dual-mode constraints: validate post-merge so we catch combinations

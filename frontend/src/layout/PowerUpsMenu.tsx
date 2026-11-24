@@ -26,9 +26,11 @@ import type { ExperimentalFeature } from '@/components/ExperimentalFeatureGate';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { api } from '@/services/api';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
-import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/scenarioRegistry';
-import { Z_INDEX } from '../constants/zIndex';
-import { fontSizes } from '@/theme/fonts';
+import { SCENARIOS, useHiddenScenarios } from '@/features/scenario/scenarioRegistry';
+import { Z_INDEX } from '@tingly/ui/theme/zIndex';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { announceFeatureDisabled } from './featureNotice';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface PowerUp {
     key: string;
@@ -99,8 +101,8 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             }] : [];
         }),
         // VModel — the built-in synthetic providers (onboarding, demos,
-        // dry-runs). Off by default: it only hides/shows the Credentials
-        // sidebar row, the providers themselves keep working.
+        // dry-runs). The same switch shows the VModel scenario and Credentials
+        // sidebar row; existing providers and running services keep working.
         {
             key: 'vmodel',
             icon: <IconFlask sx={iconSx} />,
@@ -124,9 +126,9 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
             key: 'projects',
             feature: 'projects' as const,
             icon: <IconFolder sx={iconSx} />,
-            name: t('system.experimentalFeatures.projects'),
+            name: t('layout.workspace', { defaultValue: 'Workspace' }),
             description: t('system.experimentalFeatures.enableProjects'),
-            path: '/projects',
+            path: '/workspace',
             stage: 'beta' as const,
             enabled: enableProjects,
             enabledNotice: t('system.experimentalFeatures.projectsEnabledInfo'),
@@ -167,13 +169,26 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
     ];
 
     const toggle = async (p: PowerUp) => {
-        if (p.onToggle) return p.onToggle();
+        if (p.onToggle) {
+            p.onToggle();
+            if (p.enabled && (p.key === 'team' || p.key === 'imagegen')) {
+                onClose();
+                onNavigate?.();
+                announceFeatureDisabled(p.name);
+            }
+            return;
+        }
         if (!p.feature) return;
         setFailed(false);
         setUpdating(p.feature);
         try {
             const result = await api.setScenarioFlag('_global', p.feature, !p.enabled);
             if (!result.success) throw new Error('Feature update was rejected');
+            if (p.feature === 'projects' && p.enabled) {
+                onClose();
+                onNavigate?.();
+                announceFeatureDisabled(p.name);
+            }
         } catch (error) {
             console.error(`Failed to set ${p.feature}:`, error);
             setFailed(true);
@@ -197,7 +212,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                 elevation={8}
                 onMouseEnter={onMouseEnter}
                 onMouseLeave={onMouseLeave}
-                sx={{ width: 380, maxHeight: '80vh', overflowY: 'auto', borderRadius: 2 }}
+                sx={{ width: 380, maxHeight: '80vh', overflowY: 'auto', borderRadius: radius.card }}
             >
             <Box sx={{ px: 2, pt: 1.5, pb: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -242,7 +257,7 @@ export const PowerUpsMenu: React.FC<PowerUpsMenuProps> = ({ anchorEl, onClose, o
                                                 label={p.stage === 'exp'
                                                     ? t('scenarioOverview.powerUps.experimental')
                                                     : t('scenarioOverview.powerUps.beta')}
-                                                sx={{ height: 18, fontSize: fontSizes.xs }}
+                                                sx={{ height: 18, fontSize: fontSizes.micro }}
                                             />
                                         </Tooltip>
                                     )}

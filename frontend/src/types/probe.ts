@@ -8,10 +8,8 @@ export type ProbeTargetType = 'rule' | 'provider' | 'provider_config';
 // speaks a concrete protocol, defaulting to the target's primary one.
 export type ProbeProtocol = 'openai_chat' | 'openai_responses' | 'anthropic_v1';
 
-// Extended-thinking effort ladder (subset of the backend protocol thinking
-// ladder, mirroring the rule flag's thinking_effort options — see
-// .design/rule-flags.md). Orthogonal to the stream/tool axes — composes with
-// all four combinations. '' (absent) == 'none' == no thinking param sent.
+// Effort levels for the probe's generated client request. An absent value or
+// 'none' leaves the client thinking parameter unset.
 export type ProbeThinking = 'none' | 'low' | 'medium' | 'high' | 'max';
 
 // Vision channel: attach the canonical probe image (backend
@@ -23,6 +21,8 @@ export type ProbeVision = 'none' | 'user' | 'tool';
 
 export interface ProbeRequest {
     target_type: ProbeTargetType;
+    operation?: 'decisions';
+    decision_request?: Record<string, unknown>;
 
     // Rule test (required)
     scenario?: string;
@@ -97,6 +97,7 @@ export interface ProbeTokenUsage {
 
 export interface ProbeResultData {
     content?: string;
+    decision_response?: Record<string, unknown>;
     latency_ms: number;
     request_url?: string;
     stream?: boolean;
@@ -132,7 +133,7 @@ export interface ProbeResultData {
 // Envelope of POST /api/v2/probe.
 export interface ProbeResult {
     success: boolean;
-    error?: { message: string; type: string };
+    error?: { message: string; type: string; response_body?: string };
     data?: ProbeResultData;
 }
 

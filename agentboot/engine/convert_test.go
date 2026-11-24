@@ -3,11 +3,13 @@ package engine
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
@@ -194,5 +196,90 @@ func TestConverter_RecordsWhereABackgroundTaskWritesItsOutput(t *testing.T) {
 		if !ok || ev.TaskID != id || filepath.Base(ev.OutputFile) != id+".output" {
 			t.Fatalf("output of %s = %+v, want task %s's .output file", call, ev, id)
 		}
+	}
+}
+
+func TestConverter_ResultUsageIsTheTurnsTotalAndEachTurnCountsFromZero(t *testing.T) {
+	c := newConverter()
+	c.messages(assistantCall("m1", nil, 100, 1000, 1)) // message_start snapshot: output not final
+	first := usageOf(t, c.messages(&claude.ResultMessage{Usage: claude.UsageInfo{InputTokens: 100, CacheReadInputTokens: 1000, OutputTokens: 55}}))
+	if first.OutputTokens != 55 || first.InputTokens != 100 || first.CacheReadTokens != 1000 {
+		t.Fatalf("first turn = %+v, want the result's own totals", first)
+	}
+	// The next turn of the same process: nothing of the first may carry over.
+	c.messages(assistantCall("m2", nil, 10, 2000, 1))
+	second := usageOf(t, c.messages(&claude.ResultMessage{Usage: claude.UsageInfo{InputTokens: 10, CacheReadInputTokens: 2000, OutputTokens: 7}}))
+	if second.InputTokens != 10 || second.OutputTokens != 7 || second.CacheReadTokens != 2000 || second.ContextTokens != 2010 {
+		t.Fatalf("second turn = %+v, want its own numbers only", second)
+	}
+}
+
+func TestConverter_ResultWithUsageButNoCallsKeepsNoContext(t *testing.T) {
+	// A turn Claude ran on its own may report spending with no main-thread call seen.
+	c := newConverter()
+	u := usageOf(t, c.messages(&claude.ResultMessage{Usage: claude.UsageInfo{InputTokens: 5, OutputTokens: 2}}))
+	if u.InputTokens != 5 || u.ContextTokens != 0 {
+		t.Fatalf("usage = %+v", u)
+	}
+}
+
+// After a compaction Claude Code emits the messages it kept again, with the
+// same uuid; the transcript must not repeat them.
+func TestConverter_DropsReplayedAssistantMessages(t *testing.T) {
+	c := newConverter()
+	reply := func(uuid, text string) *claude.AssistantMessage {
+		return &claude.AssistantMessage{UUID: uuid, Message: anthropic.Message{ID: "m-" + uuid, Content: []anthropic.ContentBlockUnion{{Type: "text", Text: text}}}}
+	}
+	if got := c.messages(reply("u1", "first")); len(got) != 1 {
+		t.Fatalf("first emission = %+v", got)
+	}
+	if got := c.messages(reply("u1", "first")); len(got) != 0 {
+		t.Errorf("replay recorded again: %+v", got)
+	}
+	if got := c.messages(reply("u2", "second")); len(got) != 1 {
+		t.Errorf("a new uuid was dropped: %+v", got)
+	}
+	if got := c.messages(reply("", "no uuid")); len(got) != 1 {
+		t.Errorf("a message without a uuid was dropped: %+v", got)
+	}
+	if got := c.messages(reply("", "no uuid")); len(got) != 1 {
+		t.Errorf("messages without a uuid are never duplicates: %+v", got)
+	}
+}
+
+// A synthetic message (an API error notice) in an ordinary turn is kept, even
+// after an automatic compaction; only a compaction the host asked for hides
+// the text Claude Code writes for it.
+func TestConverter_SyntheticTextOnlyHiddenForARequestedCompaction(t *testing.T) {
+	notice := func() *claude.AssistantMessage {
+		return &claude.AssistantMessage{UUID: "n", Message: anthropic.Message{ID: "m", Model: "<synthetic>", Content: []anthropic.ContentBlockUnion{{Type: "text", Text: "API Error: 529"}}}}
+	}
+	c := newConverter()
+	c.messages(agentboot.CompactEvent{Phase: agentboot.CompactStarted})
+	c.messages(agentboot.CompactEvent{Phase: agentboot.CompactDone})
+	if got := c.messages(notice()); len(got) != 1 {
+		t.Errorf("an error notice after an automatic compaction was dropped: %+v", got)
+	}
+
+	c = newConverter()
+	c.localText = true
+	if got := c.messages(notice()); len(got) != 0 {
+		t.Errorf("the text of a requested compaction became a reply: %+v", got)
+	}
+}
+
+func TestConverter_ReplayCheckIsBounded(t *testing.T) {
+	c := newConverter()
+	reply := func(uuid string) *claude.AssistantMessage {
+		return &claude.AssistantMessage{UUID: uuid, Message: anthropic.Message{ID: "m-" + uuid, Content: []anthropic.ContentBlockUnion{{Type: "text", Text: uuid}}}}
+	}
+	for i := 0; i < maxSeenAssistant+50; i++ {
+		c.messages(reply(fmt.Sprint("u", i)))
+	}
+	if len(c.seenAssistant) != maxSeenAssistant || len(c.seenOrder) != maxSeenAssistant {
+		t.Fatalf("remembers %d/%d uuids, want %d", len(c.seenAssistant), len(c.seenOrder), maxSeenAssistant)
+	}
+	if got := c.messages(reply(fmt.Sprint("u", maxSeenAssistant+49))); len(got) != 0 {
+		t.Error("a recent replay was not dropped")
 	}
 }

@@ -32,7 +32,9 @@ import {
     type MaskLayers,
     type Stroke,
 } from '@tingly/vision';
-import type { ReferenceMask } from './ImageGenPlayground.types';
+import type { ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
+import { radius } from '@tingly/ui/theme/radius';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 interface MaskEditorDialogProps {
     open: boolean;
@@ -294,7 +296,7 @@ const MaskEditorDialog: React.FC<MaskEditorDialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 1 }}>
                 <Brush fontSize="small" />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: '1.05rem' }}>
+                    <Typography variant="h6" component="span" sx={{ display: 'block', fontSize: fontSizes.title }}>
                         {t('playground.mask.title', { defaultValue: 'Mask' })}
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
@@ -396,7 +398,7 @@ const MaskEditorDialog: React.FC<MaskEditorDialogProps> = ({
                             justifyContent: 'center',
                             height: { xs: '55vh', sm: '60vh' },
                             minHeight: 240,
-                            borderRadius: 2,
+                            borderRadius: radius.card,
                             bgcolor: 'action.hover',
                             overflow: 'hidden',
                         }}
@@ -411,7 +413,7 @@ const MaskEditorDialog: React.FC<MaskEditorDialogProps> = ({
                                     src={imageUrl}
                                     alt={imageName ?? t('playground.mask.imageAlt', { defaultValue: 'Image being masked' })}
                                     style={{ width: cssSize.width, height: cssSize.height }}
-                                    sx={{ display: 'block', borderRadius: 1, boxShadow: 1, userSelect: 'none' }}
+                                    sx={{ display: 'block', borderRadius: radius.row, boxShadow: 1, userSelect: 'none' }}
                                 />
                             ) : null}
                             {/* The tint is element opacity rather than a
@@ -434,7 +436,7 @@ const MaskEditorDialog: React.FC<MaskEditorDialogProps> = ({
                                     top: 0,
                                     left: 0,
                                     display: 'block',
-                                    borderRadius: 1,
+                                    borderRadius: radius.row,
                                     touchAction: 'none',
                                     cursor: 'crosshair',
                                     userSelect: 'none',

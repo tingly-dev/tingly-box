@@ -419,8 +419,9 @@ func RenderCodexConfigTOML(baseURL string, models []string, prefs *CodexPrefs, w
 // preserving everything else. See ApplyCodexConfig for the contract.
 //
 // catalogPath is the absolute path to write into `model_catalog_json`. Pass
-// "" to leave that key untouched (e.g. when no models are configured — we
-// don't want to point Codex at a file we never wrote).
+// "" to not write one (e.g. when no models are configured — we don't want to
+// point Codex at a file we never wrote); a pointer to tingly's own catalog
+// left by an earlier apply is then dropped, any other path is left alone.
 //
 // bearerToken, when non-empty, is written into the tingly-box provider stanza
 // as `experimental_bearer_token` (with `requires_openai_auth = true`). This is
@@ -444,6 +445,11 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	cfg["model_provider"] = codexGatewayProviderName
 	if catalogPath != "" {
 		cfg["model_catalog_json"] = catalogPath
+	} else if cur, _ := cfg["model_catalog_json"].(string); filepath.Base(cur) == codexModelCatalogFile {
+		// Not writing the catalog now: stop pointing at the one an earlier
+		// apply left, which would go stale as the rules change. A catalog the
+		// user set up themselves is not ours to remove.
+		delete(cfg, "model_catalog_json")
 	}
 
 	providers, _ := cfg["model_providers"].(map[string]interface{})

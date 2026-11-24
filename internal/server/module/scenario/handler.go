@@ -2,6 +2,9 @@ package scenario
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -380,15 +383,49 @@ func (h *Handler) CreateProfile(c *gin.Context) {
 		return
 	}
 
-	// Auto-generate the Claude Code settings file for the new profile so it is
-	// immediately usable without manual configuration.
+	h.materializeNewProfileSettings(c, scenario, meta)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
+}
+
+// materializeNewProfileSettings writes a new profile's Claude Code settings
+// file so it is usable right away without manual configuration; a failure is
+// only logged.
+func (h *Handler) materializeNewProfileSettings(c *gin.Context, scenario typ.RuleScenario, meta typ.ProfileMeta) {
 	profiledScenario := string(typ.ProfiledScenarioName(scenario, meta.ID))
 	baseURL := middleware.BaseURLFromRequest(c, h.config.GetServerPort())
 	apiKey := h.config.GetModelToken()
-	if _, settingsErr := agent.MaterializeCCProfileSettings(h.config, baseURL, apiKey, profiledScenario, meta); settingsErr != nil {
-		logrus.WithError(settingsErr).Warn("failed to create Claude Code settings for new profile")
+	if _, err := agent.MaterializeCCProfileSettings(h.config, baseURL, apiKey, profiledScenario, meta); err != nil {
+		logrus.WithError(err).Warn("failed to create Claude Code settings for new profile")
+	}
+}
+
+// DuplicateProfile copies a profile (":id" = "default" is the main
+// configuration) into a new one; the source is untouched.
+func (h *Handler) DuplicateProfile(c *gin.Context) {
+	if h.config == nil {
+		apierr.Failure(c, http.StatusInternalServerError, "config not available")
+		return
 	}
 
+	// The name is optional, so an empty body is fine.
+	var req ProfileDuplicateRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.Failure(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	meta, err := h.config.DuplicateProfile(scenario, c.Param("id"), req.Name)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, config.ErrProfileNotFound) {
+			status = http.StatusNotFound
+		}
+		apierr.Failure(c, status, err.Error())
+		return
+	}
+
+	h.materializeNewProfileSettings(c, scenario, meta)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": meta})
 }
 
@@ -425,9 +462,21 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		req.Name = existing.Name
 	}
 
+	if req.MCPProfile != nil && *req.MCPProfile != existing.MCPProfile {
+		if err := h.validateMCPProfileChoice(scenario, *req.MCPProfile); err != nil {
+			apierr.Failure(c, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	if err := h.config.UpdateProfile(scenario, profileID, req.Name, req.Unified); err != nil {
 		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return
+	}
+	if req.MCPProfile != nil && *req.MCPProfile != existing.MCPProfile {
+		if err := h.config.SetProfileMCPProfile(scenario, profileID, *req.MCPProfile); err != nil {
+			apierr.Failure(c, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	updated, _ := h.config.GetProfile(scenario, profileID)
@@ -445,6 +494,28 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated", "data": updated})
+}
+
+// validateMCPProfileChoice accepts "" (none) or an existing MCP profile, and
+// only for Claude Code, whose launches are the ones that connect to it.
+func (h *Handler) validateMCPProfileChoice(scenario typ.RuleScenario, id string) error {
+	if id == "" {
+		return nil
+	}
+	if scenario != typ.ScenarioClaudeCode {
+		return fmt.Errorf("an MCP profile can only be chosen for Claude Code profiles")
+	}
+	if id == typ.MCPDefaultProfileID {
+		return nil
+	}
+	if runtime := h.config.GetMCPRuntimeConfig(); runtime != nil {
+		for _, p := range runtime.Profiles {
+			if p.ID == id {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("unknown MCP profile %q", id)
 }
 
 func (h *Handler) resolveProfileClaudeConfig(c *gin.Context) (typ.ProfileMeta, string, agent.CCProfileSettingsResolution, bool) {
@@ -485,6 +556,7 @@ func profileClaudeConfigResponse(profile typ.ProfileMeta, resolved agent.CCProfi
 			Preferences:          resolved.EffectivePreferences,
 			InheritedDefaultMode: resolved.InheritedDefaultMode,
 			DefaultMode:          resolved.EffectiveDefaultMode,
+			OverrideKeys:         resolved.OverrideKeys,
 			HasOverrides:         resolved.HasOverrides,
 			SettingsPath:         settingsPath,
 			SettingsExists:       settingsExists,
@@ -536,7 +608,7 @@ func (h *Handler) GetProfileClaudeConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// UpdateProfileClaudeConfig persists a minimal delta and materializes it
+// UpdateProfileClaudeConfig persists profile overrides and materializes them
 // immediately. CLI launch uses the same resolver and will reproduce the file.
 func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 	profile, profiledScenario, resolved, ok := h.resolveProfileClaudeConfig(c)
@@ -552,15 +624,21 @@ func (h *Handler) UpdateProfileClaudeConfig(c *gin.Context) {
 		apierr.Failure(c, http.StatusBadRequest, message)
 		return
 	}
-	desiredDefaultMode := req.DefaultMode
-	if desiredDefaultMode == "" {
-		desiredDefaultMode = resolved.InheritedDefaultMode
+	var overrides *typ.ClaudeCodeProfileConfig
+	var err error
+	if req.OverrideKeys != nil {
+		overrides, err = agent.BuildCCProfileOverrides(*req.Preferences, req.DefaultMode, *req.OverrideKeys)
+	} else {
+		desiredDefaultMode := req.DefaultMode
+		if desiredDefaultMode == "" {
+			desiredDefaultMode = resolved.InheritedDefaultMode
+		}
+		if _, valid := agent.NormalizeClaudeCodeDefaultMode(desiredDefaultMode); !valid {
+			apierr.Failure(c, http.StatusBadRequest, "invalid defaultMode: "+desiredDefaultMode)
+			return
+		}
+		overrides, err = agent.DiffCCProfileConfig(resolved.BasePreferences, resolved.InheritedDefaultMode, *req.Preferences, desiredDefaultMode)
 	}
-	if _, valid := agent.NormalizeClaudeCodeDefaultMode(desiredDefaultMode); !valid {
-		apierr.Failure(c, http.StatusBadRequest, "invalid defaultMode: "+desiredDefaultMode)
-		return
-	}
-	overrides, err := agent.DiffCCProfileConfig(resolved.BasePreferences, resolved.InheritedDefaultMode, *req.Preferences, desiredDefaultMode)
 	if err != nil {
 		apierr.Failure(c, http.StatusBadRequest, err.Error())
 		return

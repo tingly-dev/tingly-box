@@ -2,20 +2,26 @@ package team
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/db"
 	"github.com/tingly-dev/tingly-box/internal/server/module/apierr"
 )
 
 type Handler struct {
 	store *db.TeamStore
+	// config owns a team's routing ("team:<id>" rules): Delete removes it
+	// with the team, Duplicate copies it. Nil only for schema generation and
+	// tests of the store-only endpoints.
+	config *config.Config
 }
 
-func NewHandler(store *db.TeamStore) *Handler {
-	return &Handler{store: store}
+func NewHandler(store *db.TeamStore, cfg *config.Config) *Handler {
+	return &Handler{store: store, config: cfg}
 }
 
 // sendStoreError maps a TeamStore error to an HTTP response. All four
@@ -64,6 +70,26 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, recordToInfo(record))
 }
 
+// Duplicate creates a team as a copy of :team_id: same routing, no sharing
+// keys. The name is optional.
+func (h *Handler) Duplicate(c *gin.Context) {
+	if h.config == nil {
+		apierr.Send(c, http.StatusInternalServerError, errors.New("config not available"), "api_error")
+		return
+	}
+	var req TeamDuplicateRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		apierr.Send(c, http.StatusBadRequest, err, "invalid_request_error")
+		return
+	}
+	record, err := h.config.DuplicateTeam(c.Param("team_id"), req.Name)
+	if err != nil {
+		sendStoreError(c, err, http.StatusBadRequest, "invalid_request_error")
+		return
+	}
+	c.JSON(http.StatusCreated, recordToInfo(record))
+}
+
 func (h *Handler) Update(c *gin.Context) {
 	id := c.Param("team_id")
 	if id == "" {
@@ -98,7 +124,11 @@ func (h *Handler) setEnabled(c *gin.Context, enabled bool) {
 
 func (h *Handler) Delete(c *gin.Context) {
 	id := c.Param("team_id")
-	if err := h.store.Delete(id); err != nil {
+	deleteTeam := h.store.Delete
+	if h.config != nil {
+		deleteTeam = h.config.DeleteTeam
+	}
+	if err := deleteTeam(id); err != nil {
 		sendStoreError(c, err, http.StatusConflict, "conflict_error")
 		return
 	}

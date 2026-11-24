@@ -1,36 +1,42 @@
 package project
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
-// The commands a chat has (.design/remote-into-projects.md, "命令精简"): what
-// is not here is not a command. /cd and /dir (which folder) are the host's,
+// The commands a chat has (.design/remote-into-projects.md, "命令精简"): the
+// set, with usage and help, is Remote's (agent.Commands); what is not there is
+// not a command. /cd and /dir (which folder) are the host's,
 // which moves the chat with ChannelToFolder.
 const (
 	// ChatNew starts a new session in the chat's folder: now with a task,
 	// else with the next message. What is running keeps running.
-	ChatNew = "new"
+	ChatNew = agent.CommandNew
 	// ChatStop interrupts the turn of the chat's thread, or of "#N".
-	ChatStop = "stop"
+	ChatStop = agent.CommandStop
 	// ChatClear stops the chat's session, and its next message starts a new
 	// one.
-	ChatClear = "clear"
+	ChatClear = agent.CommandClear
 	// ChatSession lists the sessions of the chat's folder or project, or
 	// with "N" moves the chat to #N (#0 is a project's conversation).
-	ChatSession = "session"
+	ChatSession = agent.CommandSession
 	// ChatStatus says where the chat is and how its session runs.
-	ChatStatus = "status"
+	ChatStatus = agent.CommandStatus
 	// ChatVerbose turns on ("on") or off ("off") hearing each step of the
 	// thread's turns; with no arg it says which.
-	ChatVerbose = "verbose"
+	ChatVerbose = agent.CommandVerbose
 	// ChatYolo switches the chat's session between running every tool
 	// without asking and its usual permission mode.
-	ChatYolo = "yolo"
+	ChatYolo = agent.CommandYolo
+	// ChatCompact compacts the conversation of the chat's session; the result
+	// comes back as the session's next reply.
+	ChatCompact = agent.CommandCompact
 )
 
 // yoloMode is the permission mode /yolo turns on.
@@ -41,9 +47,7 @@ const yoloMode = "bypassPermissions"
 // binding or the command is not one of these, and the caller carries on as
 // before. reply is what to tell the chat.
 func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bool, reply string, err error) {
-	switch name {
-	case ChatNew, ChatStop, ChatClear, ChatSession, ChatStatus, ChatVerbose, ChatYolo:
-	default:
+	if !agent.IsCommand(name) {
 		return false, "", nil
 	}
 	b, err := s.Store.GetChannelBinding(platform, chatID)
@@ -88,6 +92,13 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			t = target
 		}
 	}
+	if name == ChatCompact {
+		if b.NewThread {
+			return true, "Nothing to compact: your next message starts a new session.", nil
+		}
+		reply, err := s.compact(b, t, arg)
+		return true, reply, err
+	}
 	tag := threadTag(t.Seq, t.Title)
 	if t.Agent == db.AgentLLM {
 		switch name {
@@ -118,7 +129,7 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 			return true, fmt.Sprintf("/clear works in a chat bound to a folder; this chat is on [%s] of %s. Use /stop to stop it.", tag, p.Name), nil
 		}
 		stopped := s.Threads.Running(t.ID)
-		s.Threads.Stop(t.ID)
+		s.Threads.Stop(t.ID, Source{Kind: db.SourceIM})
 		if err := s.Store.SetChannelBindingNewThread(b.ID, true); err != nil {
 			return true, "", err
 		}
@@ -133,7 +144,7 @@ func (s *Service) ChannelCommand(platform, chatID, name, arg string) (handled bo
 		if !s.Threads.Running(t.ID) {
 			return true, fmt.Sprintf("[%s] is not running.", tag), nil
 		}
-		s.Threads.Stop(t.ID)
+		s.Threads.Stop(t.ID, Source{Kind: db.SourceIM})
 		return true, fmt.Sprintf("Stopped [%s].", tag), nil
 	}
 }
@@ -146,6 +157,23 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 	where := db.FolderName(b.Folder)
 	next := fmt.Sprintf("Your next message starts a new session in %s.", where)
 	switch name {
+	case ChatSession:
+		p, err := s.Store.FindFolder(b.Folder)
+		if errors.Is(err, db.ErrNotFound) {
+			return true, "No sessions in this folder yet. " + next, nil
+		}
+		if err != nil {
+			return true, "", err
+		}
+		if p.ArchivedAt != nil {
+			return true, "", ErrArchived
+		}
+		if arg == "" {
+			reply, err := s.threadList(&db.Thread{}, p)
+			return true, reply, err
+		}
+		reply, err := s.focus(b, p, arg)
+		return true, reply, err
 	case ChatNew:
 		if arg == "" {
 			return true, next, nil
@@ -159,9 +187,11 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 			return true, "", err
 		}
 		return true, fmt.Sprintf("Started [%s] in %s.", threadTag(t.Seq, t.Title), where), nil
+	case ChatCompact:
+		return true, "Nothing to compact yet. " + next, nil
 	case ChatStop, ChatClear:
 		if b.ThreadID != "" && arg == "" && s.Threads.Running(b.ThreadID) {
-			s.Threads.Stop(b.ThreadID)
+			s.Threads.Stop(b.ThreadID, Source{Kind: db.SourceIM})
 			if t, err := s.Store.GetThread(b.ThreadID); err == nil {
 				return true, fmt.Sprintf("Stopped [%s]. %s", threadTag(t.Seq, t.Title), next), nil
 			}
@@ -180,7 +210,7 @@ func (s *Service) folderCommand(b *db.ChannelBinding, name, arg string) (handled
 // that runs, and whether the chat hears each step.
 func (s *Service) status(b *db.ChannelBinding) (string, error) {
 	var lines []string
-	if b.ThreadID != "" {
+	if b.ThreadID != "" && b.Folder == "" {
 		t, p, err := s.boundThread(b)
 		if err != nil {
 			return "", err
@@ -200,6 +230,7 @@ func (s *Service) status(b *db.ChannelBinding) (string, error) {
 		}
 	}
 	if b.Folder != "" {
+		lines = append(lines, "Folder: "+b.Folder)
 		lines = append(lines, "Next message: a new session in "+b.Folder)
 	}
 	verbose := "off"
@@ -246,4 +277,17 @@ func (s *Service) verbose(b *db.ChannelBinding, arg string) (string, error) {
 		return "Verbose is on: this chat sees each step a session takes, not only its reply. /verbose off to stop.", nil
 	}
 	return "Verbose is off: this chat sees each reply. /verbose on to also see each step.", nil
+}
+
+// compact is /compact in a chat: the same request the web sends as
+// "/compact", for the chat's session or the project conversation.
+func (s *Service) compact(b *db.ChannelBinding, t *db.Thread, instructions string) (string, error) {
+	src := Source{Kind: db.SourceIM, Platform: b.Platform, ChatID: b.ChatID}
+	if _, err := s.Send(context.Background(), t.ID, compactText(instructions), nil, src); err != nil {
+		return "", err
+	}
+	if t.Agent == db.AgentLLM {
+		return "Compacting the project conversation…", nil
+	}
+	return fmt.Sprintf("Compacting [%s]… I will tell you when it is done.", threadTag(t.Seq, t.Title)), nil
 }

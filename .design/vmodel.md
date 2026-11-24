@@ -14,9 +14,13 @@ interfaces, registration discipline, how to add a model).
 
 | Document | What it covers |
 | -------- | -------------- |
+| [`vmodel-definitions.md`](./vmodel-definitions.md) | Common id/kind JSON/YAML contract, strict loading, named Go behaviors, standalone `tb vmodel`, and shared harness execution. |
+| [`vmodel-scenario.md`](./vmodel-scenario.md) | Fixed builtin-model address, scene visibility and independent CLI instances without automatic registration. |
 | [`vmodel-sequence.md`](./vmodel-sequence.md) | The `sequence` virtual model — a configurable program of per-request outcomes (e.g. `200, 200, 429`) that simulates a flaky upstream. Covers the per-request resolver pattern and why the cursor is a shared atomic. |
 | [`vmodel-benchmark.md`](./vmodel-benchmark.md) | Elevating `vmodel` into the single shared real-world test-bench for `*test` packages, plus the reusable preset check-logic layer. |
 | [`vmodel-transport.md`](./vmodel-transport.md) | Dispatching `vmodel` providers over real HTTP (private in-memory listener, optional unix socket) through the standard SDK + transport chain, instead of the in-memory `vmodel/client` short-circuit. Covers listener choice, the `vmodel://openai|anthropic` base-URL scheme, and the migration plan. |
+| [`vmodel-capture.md`](./vmodel-capture.md) | **Proposal.** `tb vmodel --capture <dir>`: record the rawest possible request a real client (e.g. Claude Code) sends — verbatim TCP bytes per connection plus a small index — and answer any model id so the client finishes a round. |
+| [`vmodel-script.md`](./vmodel-script.md) | **Proposal.** `kind: script`: predefined per-conversation tracks (matched by the ids we emitted, not arrival order) that drive real agent CLIs and the real Projects process through whole journeys, with request assertions, sync points and a trace. |
 
 | [`decision-protocol.md`](./decision-protocol.md) | Decisions as an OpenAI-native endpoint (`{APIBase}/decisions`), and the `decision-*` virtual models that serve it. |
 

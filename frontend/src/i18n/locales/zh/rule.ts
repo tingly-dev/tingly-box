@@ -225,6 +225,10 @@ export default {
       "loadBalance": "负载均衡",
       "fallbackTier": "兜底层"
     },
+    "phone": {
+      "conditionsOnDesktop": "添加和编辑条件请在桌面版进行。",
+      "targetActions": "模型操作"
+    },
     "guideDiagrams": {
       "empty": { "description": "示例规则" },
       "single-provider": { "description": "单提供商规则" },
@@ -353,12 +357,21 @@ export default {
     "clearSelection": "清除",
     "addModels_other": "添加 {{count}} 个模型",
     "howRoutingWorks": "路由原理",
-    "sortOriginal": "原始顺序",
-    "sortByName": "按名称（A→Z）",
-    "sortTooltipToName": "当前按原始顺序显示 — 点击按名称排序",
-    "sortTooltipToOriginal": "当前按名称排序 — 点击恢复原始顺序"
   },
   "templatePage": {
+    "reorder": {
+      "saved": "已将 {{name}} 移到第 {{position}} / {{total}} 位",
+      "savedPlain": "规则顺序已保存",
+      "handle": "拖动以调整 {{name}} 的顺序",
+      "instructions": "调整顺序：按空格键拿起规则，用方向键移动，再按空格键放下，或按 Esc 取消。",
+      "saveFailed": "新顺序保存失败：{{message}}",
+      "announce": {
+        "start": "已拿起 {{name}}，当前位置 {{position}} / {{total}}。",
+        "over": "{{name}} 移到了第 {{position}} / {{total}} 位。",
+        "end": "已将 {{name}} 放在第 {{position}} / {{total}} 位。",
+        "cancel": "已取消排序，{{name}} 保持原位。"
+      }
+    },
     "noProviders": {
       "title": "尚未配置提供商",
       "description": "添加一个 API Key 提供商以开始路由请求",
@@ -367,6 +380,45 @@ export default {
     "noRules": "还没有规则。点击「新建模型」添加。",
     "noRulesFixed": "还没有模型规则。",
     "copiedToClipboard": "{{label}} 已复制到剪贴板！"
+  },
+  "decisionTry": {
+    "title": "体验 Decisions",
+    "subtitle": "通过已配置的规则，尝试一个结构化问题。",
+    "noRules": "请先在下方添加并启用 Decisions 规则。",
+    "rule": "规则",
+    "model": "请求模型",
+    "concreteModel": "通配符规则需要填写具体模型名称。",
+    "input": "输入内容",
+    "type": "问题类型",
+    "choice": "选择一个选项",
+    "predicate": "是 / 否概率",
+    "score": "等级评分",
+    "question": "问题",
+    "options": "选项",
+    "levels": "等级，从低到高",
+    "onePerLine": "每行一个。",
+    "invalidOptions": "请输入 2–{{max}} 个不重复的值，每行一个。",
+    "run": "开始测试",
+    "running": "测试中…",
+    "failed": "决策请求失败。",
+    "missingAnswer": "响应未包含所请求的答案。",
+    "result": "结果",
+    "confidence": "置信度",
+    "differentRule": "请求匹配了其他规则，请检查路由配置。",
+    "raw": "原始响应",
+    "exampleInput": "我的账单中有一笔不明费用。",
+    "exampleQuestion": "应该由哪个团队处理？",
+    "exampleOptions": "账单\n技术",
+    "examplePredicate": "客户是否提到不明费用？",
+    "exampleScore": "这个请求有多紧急？",
+    "exampleLevels": "低\n中\n高",
+    "tokens": "Token：输入 {{input}} · 输出 {{output}}",
+    "runningHint": "正在等待模型返回决策…",
+    "emptyTitle": "结果将显示在这里",
+    "emptyBody": "可以直接运行示例，也可以修改输入和问题后再测试。",
+    "answer": "模型回答",
+    "probabilities": "各选项概率",
+    "stale": "输入已更改，当前显示的是上次结果。重新运行可更新。"
   },
   "decisionsGuide": {
     "title": "Decisions API 快速开始",

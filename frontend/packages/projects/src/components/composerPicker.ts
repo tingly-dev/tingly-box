@@ -1,4 +1,11 @@
 import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
+
+/** Composer menus open above their trigger to leave room at the bottom of the page. */
+export const composerPickerMenuProps = {
+    anchorOrigin: { vertical: 'top', horizontal: 'right' },
+    transformOrigin: { vertical: 'bottom', horizontal: 'right' },
+} as const;
 
 /**
  * The look of a picker that sits in the message box (a model, a profile, a
@@ -8,7 +15,7 @@ import { fontSizes } from '@tingly/ui/theme/fonts';
  */
 export const composerPickerSx = {
     px: 0.75,
-    borderRadius: 1,
+    borderRadius: radius.row,
     maxWidth: '100%',
     minWidth: 0,
     color: 'text.secondary',

@@ -1,17 +1,20 @@
 import CardGrid from '@/components/CardGrid.tsx';
 import ProviderConfigCard from '@/components/ProviderConfigCard.tsx';
-import ConfirmDialog from '@/components/ConfirmDialog.tsx';
+import ConfirmDialog from '@tingly/ui/components/ConfirmDialog';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogActions,
     DialogContent, DialogTitle, FormControlLabel, IconButton, Stack, Switch,
     TextField, Tooltip,
 } from '@mui/material';
-import {Delete, Edit, HelpOutline, Info as IconInfo} from '@/components/icons';
+import {Delete, Duplicate, Edit, HelpOutline, Info as IconInfo, Speed as IconLimits} from '@/components/icons';
+import DuplicateDialog from '@/pages/scenario/components/DuplicateDialog';
+import TeamLimitsDialog from '@/components/limits/TeamLimitsDialog';
+import {suggestTeamCopyName} from '@/pages/scenario/utils/copyName';
 import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useNavigate, useParams} from 'react-router-dom';
-import PageLayout from '@/components/PageLayout';
-import PageHeader from '@/components/PageHeader';
+import PageLayout from '@tingly/ui/components/PageLayout';
+import PageHeader from '@tingly/ui/components/PageHeader';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import AgentAccessSection, {useAccessExpanded} from './components/AgentAccessSection';
 import AgentStatusRow, {AgentLogButton} from './components/AgentStatusRow';
@@ -22,18 +25,20 @@ import { usePluginsActive } from '@/hooks/usePluginsActive';
 import PluginFeatures from '@/components/PluginFeatures';
 import TemplatePage from './components/TemplatePage.tsx';
 import TeamKeysOverview, {useTeamKeysOverviewExpanded} from './components/TeamKeysOverview';
-import {useSharingKeyActions} from '@/hooks/useSharingKeyActions';
-import {useTeamSharingKeys} from '@/hooks/useTeamSharingKeys';
+import {useSharingKeyActions} from '@/pages/scenario/hooks/useSharingKeyActions';
+import {useTeamSharingKeys} from '@/pages/scenario/hooks/useTeamSharingKeys';
 import TeamGuideDialog from '@/components/TeamGuideDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
-import {ScenarioPageModalProvider} from '@/pages/scenario/context/ScenarioPageContext';
+import {ScenarioPageModalProvider} from '@/features/scenario/ScenarioPageContext';
 import {api} from '@/services/api';
 import {useNotify} from '@/hooks/useNotify';
 import {useTeamContext} from '@/contexts/TeamContext';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import {usePhoneShell} from '@tingly/ui/hooks/usePhoneShell';
 
 const UseTeamPageContent: React.FC = () => {
     const {t} = useTranslation();
+    const phone = usePhoneShell();
     const notify = useNotify();
     const navigate = useNavigate();
     const {teamSlug} = useParams<{teamSlug: string}>();
@@ -57,6 +62,7 @@ const UseTeamPageContent: React.FC = () => {
     const keyActions = useSharingKeyActions({teams, onChanged: teamKeys.reload});
     const keysOverview = useTeamKeysOverviewExpanded();
     const [teamGuideOpen, setTeamGuideOpen] = useState(false);
+    const [teamLimitsOpen, setTeamLimitsOpen] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [teamName, setTeamName] = useState('');
@@ -116,6 +122,22 @@ const UseTeamPageContent: React.FC = () => {
         notify.success(wasEnabled ? t('teams.disabled') : t('teams.enabled'));
     };
 
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
+    // Copies the Team's routing into a new Team (its keys stay behind) and lands on it;
+    // the dialog stays open on failure so the name can be fixed.
+    const duplicateTeam = async (name: string): Promise<boolean> => {
+        if (!currentTeam) return false;
+        const result = await api.duplicateTeam(currentTeam.id, name);
+        if (!result.success) {
+            notify.error(result.error?.message || t('teams.duplicateFailed'));
+            return false;
+        }
+        await refresh();
+        navigate(`/agent/team/${result.data.slug}`);
+        notify.success(t('teams.duplicated'));
+        return true;
+    };
+
     const deleteTeam = async () => {
         if (!currentTeam) return;
         const ok = await runTeamAction(
@@ -141,8 +163,8 @@ const UseTeamPageContent: React.FC = () => {
                         // the switch and looks-in sit on the right; status text wraps under
                         // the title. The Team's keys are managed in the card right below.
                         title={(
-                            <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 0}}>
-                                <Box component="span" sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                            <Box sx={{display: 'flex', alignItems: 'center', gap: phone ? 0 : 1, minWidth: 0, ...(phone && {flexWrap: 'wrap'})}}>
+                                <Box component="span" sx={{minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', ...(phone && {mr: 0.5})}}>
                                     {t('layout.nav.useTeam', {defaultValue: 'Team'})} - {currentTeam.name}
                                 </Box>
                                 <Tooltip
@@ -172,9 +194,21 @@ const UseTeamPageContent: React.FC = () => {
                                         <HelpOutline fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
+                                <Tooltip title={t('limits.team.buttonTooltip')}>
+                                    <IconButton size="small" aria-label={t('limits.team.button')}
+                                                onClick={() => setTeamLimitsOpen(true)}>
+                                        <IconLimits fontSize="small" sx={{color: 'text.secondary'}} />
+                                    </IconButton>
+                                </Tooltip>
                                 <Tooltip title={t('teams.editTeam')}>
                                     <IconButton size="small" aria-label={t('teams.editTeam')} onClick={openEditor}>
                                         <Edit fontSize="small" sx={{color: 'text.secondary'}} />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={t('teams.duplicateTeam')}>
+                                    <IconButton size="small" aria-label={t('teams.duplicateTeam')}
+                                                onClick={() => setDuplicateOpen(true)}>
+                                        <Duplicate fontSize="small" sx={{color: 'text.secondary'}} />
                                     </IconButton>
                                 </Tooltip>
                                 {!currentTeam.is_default && (
@@ -257,7 +291,7 @@ const UseTeamPageContent: React.FC = () => {
                     </AgentAccessSection>
 
                     <CardGrid>
-                    <TemplatePage key={scenario} scenario={scenario} collapsible allowDeleteRule hideTroubleshoot />
+                    <TemplatePage key={scenario} scenario={scenario} collapsible allowDeleteRule allowReorder hideTroubleshoot />
                     </CardGrid>
                 </Stack>
             )}
@@ -266,6 +300,10 @@ const UseTeamPageContent: React.FC = () => {
 
             <ScenarioLogDialog open={logOpen} onClose={() => setLogOpen(false)} scenario={scenario} title={t('agentStatus.log')} />
             <TeamGuideDialog open={teamGuideOpen} onClose={() => setTeamGuideOpen(false)} />
+            {currentTeam && (
+                <TeamLimitsDialog open={teamLimitsOpen} onClose={() => setTeamLimitsOpen(false)}
+                                  teamId={currentTeam.id} teamName={currentTeam.name} />
+            )}
 
             <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{t('teams.editTeam')}</DialogTitle>
@@ -284,6 +322,16 @@ const UseTeamPageContent: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <DuplicateDialog
+                open={duplicateOpen}
+                onClose={() => setDuplicateOpen(false)}
+                title={t('teams.duplicateTitle')}
+                description={t('teams.duplicateDescription', {team: currentTeam?.name, interpolation: {escapeValue: false}})}
+                label={t('teams.name')}
+                initialName={suggestTeamCopyName(currentTeam?.name ?? '', teams.map(team => team.name))}
+                onSubmit={duplicateTeam}
+            />
 
             <ConfirmDialog
                 open={deleteOpen}

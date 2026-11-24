@@ -1,4 +1,5 @@
 import {Box, Card, CardContent, Collapse, Stack,} from '@mui/material';
+import type { Limits } from './limits/LimitsEditor';
 import {alpha, styled} from '@mui/material/styles';
 import React, {useEffect, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -20,12 +21,14 @@ import {
     SmartOpNode,
     TierNode,
 } from '@/components/nodes';
-import NodeTooltip from '@/components/nodes/NodeTooltip';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
 import type {Provider} from '../types/provider';
 import type {ConfigRecord} from './RoutingGraphTypes';
 import {useResponsesToggle} from '@/hooks/useResponsesToggle';
+import { overlay } from '@tingly/ui/theme/overlay';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import { PhoneRuleTargets } from '@/components/rule-card/PhoneRuleTargets';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -89,6 +92,7 @@ export interface UnifiedRoutingGraphProps {
     onServiceNodeClick?: (serviceUuid: string) => void;
     onEditProvider?: (providerUuid: string) => void;
     onTierChange?: (serviceUuid: string, tier: number) => void;
+    onLimitsChange?: (serviceUuid: string, limits: Limits) => void;
     onDeleteService?: (serviceUuid: string) => void;
     onAddService?: (tier?: number) => void;
     onToggleExpanded?: () => void;
@@ -139,7 +143,7 @@ const StyledCard = styled(Card, {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
+            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, ${overlay.hatch} 10px, ${overlay.hatch} 20px)`,
             pointerEvents: 'none',
             borderRadius: theme.shape.borderRadius,
         },
@@ -184,6 +188,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             onServiceNodeClick,
                                                                             onEditProvider,
                                                                             onTierChange,
+                                                                            onLimitsChange,
                                                                             onDeleteService,
                                                                             onAddService,
                                                                             onToggleExpanded,
@@ -203,6 +208,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                         }) => {
     const {t} = useTranslation();
     const isExpanded = !collapsible || expanded;
+    // Phone shell: no room for the graph — the rule's targets are a list.
+    const phone = usePhoneShell();
 
     // Ref for the scrollable container
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -383,6 +390,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 onDelete={() => onDeleteService?.(p.uuid)}
                                 onNodeClick={() => onServiceNodeClick?.(p.uuid)}
                                 onEditProvider={onEditProvider}
+                                ruleUuid={record.uuid}
+                                onLimitsChange={onLimitsChange ? (limits) => onLimitsChange(p.uuid, limits) : undefined}
                                 showTier={false}
                                 forceShowActions={shouldShowActions ?? (hoveredTier === group.tier)}
                                 onMoveTierUp={group.tier > 0 && onTierChange ? () => onTierChange(p.uuid, group.tier - 1) : undefined}
@@ -410,7 +419,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 })}
             </Box>
         );
-    }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
+    }, [pendingTier, t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteService, onServiceNodeClick, onEditProvider, onTierChange, onLimitsChange, record.uuid, onAddService, hoveredTier, guideMode, handleShowGuide]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -619,6 +628,22 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
             {/* Graph Content */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                {phone ? (
+                    <PhoneRuleTargets
+                        record={record}
+                        providers={providers}
+                        active={active}
+                        saving={saving}
+                        onServiceNodeClick={onServiceNodeClick}
+                        onEditProvider={onEditProvider}
+                        onTierChange={onTierChange}
+                        onLimitsChange={onLimitsChange}
+                        onDeleteService={onDeleteService}
+                        onAddService={onAddService}
+                        onAddServiceToSmartRule={onAddServiceToSmartRule}
+                        onDeleteServiceFromSmartRule={onDeleteServiceFromSmartRule}
+                    />
+                ) : (
                 <CardContent sx={{pt: 0, pb: 0.25, '&:last-child': {pb: 0.25}}}>
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph row: scrollable graph + pinned extensions card */}
@@ -657,6 +682,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         </Box>
                     </Stack>
                 </CardContent>
+                )}
             </Collapse>
         </StyledCard>
     );

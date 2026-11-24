@@ -2,8 +2,8 @@ package project
 
 import (
 	"context"
+	"errors"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/remote/agent"
 )
 
 // promptSink is a fakeSink that can also show buttons, except in the chats
@@ -19,33 +20,32 @@ type promptSink struct {
 	*fakeSink
 	plain map[string]bool
 
-	mu       sync.Mutex
 	prompts  chan sentPromptMsg
 	restated chan sentText
 }
 
 type sentPromptMsg struct {
 	chatID string
-	p      ChannelPrompt
+	p      agent.Prompt
 }
 
 func newPromptSink() *promptSink {
 	return &promptSink{fakeSink: newFakeSink(), plain: map[string]bool{}, prompts: make(chan sentPromptMsg, 32), restated: make(chan sentText, 32)}
 }
 
-func (f *promptSink) SendChannelPrompt(_ context.Context, platform, chatID string, p ChannelPrompt) (string, error) {
-	if f.plain[chatID] {
-		return "", ErrNoButtons
+func (f *promptSink) Prompt(_ context.Context, to agent.ChatRef, p agent.Prompt) (string, error) {
+	if f.plain[to.ChatID] {
+		return "", agent.ErrNoButtons
 	}
-	f.prompts <- sentPromptMsg{chatID, p}
-	return "msg-" + chatID, nil
+	f.prompts <- sentPromptMsg{to.ChatID, p}
+	return "msg-" + to.ChatID, nil
 }
 
-func (f *promptSink) RestateChannelPrompt(_ context.Context, platform, chatID, ref, text string) error {
-	if ref != "msg-"+chatID {
+func (f *promptSink) Restate(_ context.Context, to agent.ChatRef, ref, text string) error {
+	if ref != "msg-"+to.ChatID {
 		return nil
 	}
-	f.restated <- sentText{platform, chatID, text}
+	f.restated <- sentText{to.Platform, to.ChatID, text}
 	return nil
 }
 
@@ -78,6 +78,8 @@ func promptFixture(t *testing.T, script func(turn *enginetest.Turn) error) (*tes
 	sink := newPromptSink()
 	relay := NewRelay(f.store, sink)
 	svc.Coordinator.OnFinal = relay.Message
+	svc.Coordinator.OnDecided = relay.Decided
+	svc.Coordinator.OnSuggested = relay.Suggested
 	f.threads.OnWait = relay.NeedsUser
 	f.threads.OnSettled = relay.Settled
 	f.threads.OnReply = relay.ThreadReply
@@ -99,23 +101,83 @@ func approveScript(turn *enginetest.Turn) error {
 }
 
 // startDeploy starts a worker that asks to run `make deploy`, with chat "up"
-// on the project and chat "own" on the worker.
+// on the project and chat "own" on the worker. "own" can only be bound once the
+// worker exists, so the approval is held back from the relay until it is:
+// otherwise a fast turn asks before "own" listens and it never hears it.
 func startDeploy(t *testing.T, f *testFixture, svc *Service) *db.Thread {
 	t.Helper()
 	_, err := svc.BindChannel("telegram", "up", "", "", f.project.ID)
 	require.NoError(t, err)
+	bound := make(chan struct{})
+	needsUser := f.threads.OnWait
+	f.threads.OnWait = func(th db.Thread, request db.ThreadEvent) {
+		<-bound
+		needsUser(th, request)
+	}
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Ship", Task: "deploy", Repo: "none", Origin: "coordinator"})
-	require.NoError(t, err)
+	if err != nil {
+		close(bound)
+		require.NoError(t, err)
+	}
 	_, err = svc.BindChannel("telegram", "own", "", th.ID, "")
+	close(bound)
 	require.NoError(t, err)
 	return th
+}
+
+func TestFailedPromptDeliveryDoesNotAwaitText(t *testing.T) {
+	f, svc, sink := channelFixtureWith(t, approveScript)
+	sink.err = errors.New("delivery failed")
+	_, err := svc.BindChannel("dingtalk", "up", "", "", f.project.ID)
+	require.NoError(t, err)
+	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Ship", Task: "deploy", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	found := false
+	for range 5 {
+		if strings.Contains(sink.next(t).text, "make deploy") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+	require.Eventually(t, func() bool {
+		return len(svc.Relay.awaitingAll("dingtalk", "up")) == 0
+	}, time.Second, time.Millisecond)
+	_, ok := f.threads.PendingRequest(th.ID, "req-1")
+	require.True(t, ok)
+	require.NoError(t, f.threads.Respond(th.ID, "req-1", Answer{Allow: false}))
+}
+
+func TestAmbiguousTextDoesNotApproveAnotherThread(t *testing.T) {
+	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
+		_, err := turn.Approve(turn.Prompt, "Bash", map[string]any{"command": turn.Prompt})
+		return err
+	})
+	_, err := svc.BindChannel("telegram", "up", "", "", f.project.ID)
+	require.NoError(t, err)
+	first, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "One", Task: "first", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	sink.nextPrompt(t)
+	second, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Two", Task: "second", Repo: "none", Origin: "coordinator"})
+	require.NoError(t, err)
+	sink.nextPrompt(t)
+	handled, err := svc.PostFromChannel("telegram", "up", "y", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	require.Contains(t, sink.next(t).text, "More than one request")
+	_, ok := f.threads.PendingRequest(first.ID, "first")
+	require.True(t, ok)
+	_, ok = f.threads.PendingRequest(second.ID, "second")
+	require.True(t, ok)
+	require.NoError(t, f.threads.Respond(first.ID, "first", Answer{Allow: false}))
+	require.NoError(t, f.threads.Respond(second.ID, "second", Answer{Allow: false}))
 }
 
 func TestApprovalIsAnsweredFromAChat(t *testing.T) {
 	f, svc, sink := promptFixture(t, approveScript)
 	th := startDeploy(t, f, svc)
 
-	got := map[string]ChannelPrompt{}
+	got := map[string]agent.Prompt{}
 	for range 2 {
 		m := sink.nextPrompt(t)
 		got[m.chatID] = m.p
@@ -210,14 +272,14 @@ func TestAQuestionIsAnsweredByReplying(t *testing.T) {
 	require.NoError(t, err)
 
 	asked := sink.next(t)
-	assert.Equal(t, "[#1 DB] Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number or your own answer.", asked.text,
+	assert.Equal(t, "Which database?\n  1. Postgres: for production\n  2. SQLite\nReply with a number. To answer in your own words, start your reply with "+decisionCode("q-1")+".\n\n[#1 DB]", asked.text,
 		"a question has no buttons, even where the chat could show them")
 
 	handled, err := svc.PostFromChannel("telegram", "own", "2", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
-	assert.Equal(t, "[#1 DB] chose SQLite", sink.next(t).text)
-	_, _, waiting := svc.Relay.Awaiting("telegram", "own")
+	assert.Equal(t, "chose SQLite\n\n[#1 DB]", sink.next(t).text)
+	_, _, waiting := awaitingOf(svc.Relay, "telegram", "own")
 	assert.False(t, waiting, "answered: the next message is a message again")
 }
 
@@ -228,16 +290,16 @@ func TestAChatWithoutButtonsAnswersAnApprovalByReplying(t *testing.T) {
 	assert.Equal(t, "up", sink.nextPrompt(t).chatID)
 	asked := sink.next(t)
 	assert.Equal(t, "own", asked.chatID)
-	assert.Equal(t, "[#1 Ship] Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, n to deny, or say what to do instead.", asked.text)
+	assert.Equal(t, "Approve: Run `make deploy`\nReply y to allow, always to allow it for this thread, or n to deny. To answer in your own words, start your reply with "+decisionCode("req-1")+".\n\n[#1 Ship]", asked.text)
 
 	handled, err := svc.PostFromChannel("telegram", "own", "y", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	assert.Equal(t, "up", sink.nextRestate(t).chatID, "only prompts with buttons are restated")
-	assert.Equal(t, "[#1 Ship] deployed", sink.next(t).text)
+	assert.Equal(t, "deployed\n\n[#1 Ship]", sink.next(t).text)
 }
 
-func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
+func TestWordsAfterTheCodeDenyAnApprovalAndSayWhy(t *testing.T) {
 	var reason string
 	f, svc, sink := promptFixture(t, func(turn *enginetest.Turn) error {
 		if !strings.Contains(turn.Prompt, "deploy") {
@@ -255,10 +317,10 @@ func TestOtherWordsDenyAnApprovalAndSayWhy(t *testing.T) {
 	startDeploy(t, f, svc)
 	sink.nextPrompt(t)
 	sink.nextPrompt(t)
-	handled, err := svc.PostFromChannel("telegram", "own", "not on a Friday", nil)
+	handled, err := svc.PostFromChannel("telegram", "own", decisionCode("req-1")+" not on a Friday", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
-	assert.Equal(t, "[#1 Ship] stopped", sink.next(t).text)
+	assert.Equal(t, "stopped\n\n[#1 Ship]", sink.next(t).text)
 	assert.Contains(t, reason, "not on a Friday")
 }
 
@@ -287,7 +349,7 @@ func TestAStoppedTurnRestatesItsPrompts(t *testing.T) {
 	th := startDeploy(t, f, svc)
 	sink.nextPrompt(t)
 	sink.nextPrompt(t)
-	f.threads.Stop(th.ID)
+	f.threads.Stop(th.ID, Source{})
 	for range 2 {
 		assert.True(t, strings.HasSuffix(sink.nextRestate(t).text, "No longer waiting: the turn ended."))
 	}

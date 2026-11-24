@@ -1,4 +1,4 @@
-import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove } from '@/components/icons';
+import { Key as IconKey, DeleteOutline as IconDeleteOutline, ContentCopy as IconCopy, AccessTime as IconClock, Person as IconUser, Visibility as IconEye, VisibilityOff as IconEyeOff, CompareArrows as IconMove, Speed as IconLimits } from '@/components/icons';
 import {
     Box,
     Stack,
@@ -15,8 +15,12 @@ import {
     CircularProgress,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import { maskToken } from '@/utils/sharingKey';
+import { radius } from '@tingly/ui/theme/radius';
+import { tableFrameSx } from '@tingly/ui/theme/table';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import SharingKeysList from './SharingKeysList';
 
 export interface SharingKey {
     token_id: string;
@@ -43,6 +47,10 @@ interface SharingKeysTableProps {
     onToggleEnabled: (token: SharingKey) => void;
     onDelete: (token: SharingKey) => void;
     onMove: (token: SharingKey) => void;
+    /** Opens this person's limits (concurrency / usage). Hidden when omitted. */
+    onLimits?: (token: SharingKey) => void;
+    /** user_ids that currently have a limit policy (icon turns primary). */
+    limitedUserIds?: ReadonlySet<string>;
 }
 
 const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
@@ -54,12 +62,31 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
     onToggleEnabled,
     onDelete,
     onMove,
+    onLimits,
+    limitedUserIds,
 }) => {
     const { t } = useTranslation();
     const colSpan = 7;
+    // Phone shell: a grouped list instead of a table wider than the screen.
+    const phone = usePhoneShell();
+    if (phone && !loading) {
+        return (
+            <SharingKeysList
+                tokens={tokens}
+                visibleTokens={visibleTokens}
+                onToggleVisibility={onToggleVisibility}
+                onCopy={onCopy}
+                onToggleEnabled={onToggleEnabled}
+                onDelete={onDelete}
+                onMove={onMove}
+                onLimits={onLimits}
+                limitedUserIds={limitedUserIds}
+            />
+        );
+    }
 
     return (
-        <TableContainer>
+        <TableContainer sx={tableFrameSx}>
             {/* Fixed layout + explicit widths so several tables stacked on one
                 page (one per Team) line their columns up; minWidth keeps the
                 columns readable and lets narrow screens scroll the table
@@ -72,24 +99,10 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                     <col style={{ width: 88 }} />
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '18%' }} />
-                    <col style={{ width: 96 }} />
+                    <col style={{ width: onLimits ? 128 : 96 }} />
                 </colgroup>
                 <TableHead>
-                    <TableRow
-                        sx={{
-                            bgcolor: 'action.hover',
-                            '& th': {
-                                fontWeight: 700,
-                                fontSize: fontSizes.sm,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em',
-                                color: 'text.secondary',
-                                borderBottom: '2px solid',
-                                borderColor: 'divider',
-                                py: 1.5,
-                            },
-                        }}
-                    >
+                    <TableRow>
                         <TableCell>{t('sharingKeys.table.name')}</TableCell>
                         <TableCell>{t('sharingKeys.table.user')}</TableCell>
                         <TableCell>{t('sharingKeys.table.token')}</TableCell>
@@ -187,7 +200,7 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                         sx={{
                                             px: 1, py: 0.5,
                                             bgcolor: 'action.selected',
-                                            borderRadius: 1,
+                                            borderRadius: radius.row,
                                             border: '1px solid',
                                             borderColor: 'divider',
                                             display: 'flex',
@@ -259,6 +272,18 @@ const SharingKeysTable: React.FC<SharingKeysTableProps> = ({
                                 </TableCell>
                                 <TableCell align="right">
                                     <Stack direction="row" spacing={0.5} sx={{justifyContent: 'flex-end'}}>
+                                        {onLimits && (
+                                            <Tooltip title={t('sharingKeys.table.limitsTooltip')}>
+                                                <IconButton
+                                                    size="small"
+                                                    aria-label={t('sharingKeys.table.limitsTooltip')}
+                                                    color={limitedUserIds?.has(key.user_id) ? 'primary' : 'default'}
+                                                    onClick={() => onLimits(key)}
+                                                >
+                                                    <IconLimits sx={{ fontSize: 16 }} />
+                                                </IconButton>
+                                            </Tooltip>
+                                        )}
                                         <Tooltip title={t('sharingKeys.table.moveTooltip')}>
                                             <IconButton size="small" onClick={() => onMove(key)}>
                                                 <IconMove sx={{ fontSize: 16 }} />

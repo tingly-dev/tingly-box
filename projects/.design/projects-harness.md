@@ -4,15 +4,19 @@
 
 ## 0. 已实施的部分（阶段 0）
 
-- `projects/internal/harness`：`World` 用真实的协调者、线程管理、存储、事件流和临时 git 仓库，只有两个"脑子"是脚本：协调者的模型是 `Brain`，线程里的 Claude Code 是 `Actor`（`Diligent`、`Reply`、`ByPrompt`）。
+- `projects/internal/harness`：`World` 用真实的协调者、线程管理、存储、事件流和临时 git 仓库，只有两个"脑子"是脚本：协调者的 Claude Code session 是 `Brain`，线程里的 Claude Code 是 `Actor`（`Diligent`、`Reply`、`ByPrompt`）。两者都跑在 `agentboot/engine/enginetest` 上；`Brain` 通过 `internal/coordtest` 每回合拿到 session 的输入（事件信封），用 session 的 Projects MCP 服务真实调用工具，再给出回复。工具结果在同一回合内同步返回，所以一个回合就是一次脚本调用，不再按模型请求轮次拆分。
 - 场景用 Tingly Projects 自己的工作当内容（给协调者加显式收尾工具、线程改名工具等），不依赖外部真实数据。
 - 基线旅程（`journeys_test.go`）：新工作变成线程并汇报；跟进交给已有线程且带来源标注；需要输入时等待再继续；偏好写进记忆并传给下一个线程；越权的汇报被标成汇报。
 - 每个场景结束时自动检查三条不变量：`trust.report-labelled`、`wait.has-reason`、`memory.index-resolves`。
 - 随 `go test ./...`（`task projects:test`）运行，不需要额外配置。
 - 基线记录的是现在的行为。改变行为的 PR 必须在 diff 里改对应旅程。
-- 显式收尾工具是第一个在 harness 保护下做的改动：先写了静默、兼容旧哨兵、空回复被提醒一次三类场景，再改代码，原有五个旅程不变。
+- 显式收尾工具是第一个在 harness 保护下做的改动：先写了静默、兼容旧哨兵、空回复被提醒一次三类场景，再改代码，原有五个旅程不变。改为 session 后，"空回复被提醒一次"属于旧的自驱循环，已随之删除；对用户消息调用 `no_update` 由 MCP 拒绝，旧哨兵文本不会作为回复发布。空回复不追问是有意的：不额外投递提醒，回合以空文本结束就不发布任何内容。
+- 模型失败（画像演练）在 session 下表现为回合失败：错误显示在对话里，该输入标为待恢复，跳过后下一条消息正常处理。
 - 阶段 2 的第一批画像演练：偷懒（说完成但没提交）、注入（汇报里夹带指令）、模型失败（报错后队列继续）、竞态（回答中途设置变化）、沉默（线程不报，记录为已知缺口）、一条消息多任务。新增不变量 `status.ready-has-commits`。`Quiet()` 要求空闲持续 150ms，因为线程变空闲到汇报送达协调者之间有一个空隙。
 - 事件信封与回复预算：场景检查信封的来源和信任标记、伪造信封被转义、`replies_since_user` 与 `minutes_since_user` 的数值；新增不变量 `trust.envelope-intact`。模型是否真的遵守这些规则，要等阶段 4 的真模型评测才能验证。
+- 线程到协调者的通道（`thread_request_test.go`、`notify_test.go`，设计见 `thread-coordinator-channel.md`，已实现）：线程自己的 session 有 `notify_coordinator`，没有 start_thread、propose_threads、message_thread；线程发的通知以 trust="relay" 的 kind="notify" 事件到协调者（伪造的信封被转义），协调者用 `propose_threads` 出卡，用户点开始前什么都没启动，启动后的线程来源是 suggestion；所有 session（协调者和线程）都带 crossSessionInbound=refuse、禁用 ListAgents，线程的 SendMessage 只能发给子 agent id，协调者没有 SendMessage。这些场景变异检查过。
+- MCP 工具表（`.design/mcp-tools.md`）的守护（`mcp_tools_test.go`）：线程从选定的 base 和分支名起步（worktree 里有 base 的工作，合并目标是 base，项目自己的 base 分支不变）；被拒的 base、分支名或提议不留线程、分支和建议卡，协调者能收到原因并改正；Stop 记录是谁停的，Reopen 对运行中的线程不动、对已解决的线程恢复并记录；协调者的 session 拿到整张工具表（16 个，加工具要有意改这里）。新增不变量 `status.resolved-consistent`：线程是 resolved 当且仅当有解决时间。每个场景都做过变异检查：去掉 `propose_threads` 的校验、去掉 Reopen 的状态判断、让 `base` 不生效，对应场景都会失败。
+- 线程的 issue/PR 工具（`github_tools_test.go`，设计见 `github-tools.md`）：线程通过 `create_pr` 工具开 PR（GitHub 是替身，origin 经 `insteadOf` 指向本地裸仓库），只有它自己的分支被推送、main 不动，记录落库，协调者的 `get_thread` 看得到 PR；没有 GitHub origin 时工具拒绝且不留记录。堆叠场景（G3）：线程在同一工作区切换分支，用 `create_pr(head, base)` 依次为两个分支开 PR（上层 base 指向下层），再用 `update` 把上层 base 改回 main；两条记录都带 `head`/`base`，协调者的 `get_thread` 能看到，默认分支和不存在的分支不能当 head。`ActorCtx` 的线程回合可经 `coordtest.ToolSession` 调用自己的 MCP 工具。
 - 下文 §1 起是完整设计，未标注"已实施"的都是后续阶段。
 
 ## 1. 要验证的对象
@@ -102,6 +106,8 @@ vmodel 不再用来测协议。它只在一处有价值：作为**可编程的�
 
 - 第一阶段不用 vmodel，行为画像直接做成进程内的假模型，因为 `projects` 模块不能 import 根模块，进程内最快。
 - 之后想验证"真实 HTTP 下同样的画像也守规矩"，再在根模块里用 vmodel 的序列模型加一个"带工具调用的步骤"来复现同一批画像。这是可选项，不阻塞主线。
+- **提案（2026-11-21）**：上一条由根目录 [`.design/vmodel-script.md`](../../.design/vmodel-script.md) 取代——不用全局顺序的序列模型（并发下错配），而是按对话分轨道的 `kind: script`，驱动真实 Projects 进程和真实 `claude` CLI 跑旅程。它补充本 harness，不替代；两边对齐旅程名。
+- **已实施（真实档）**：`internal/harness/live` + `tingly-project harness run <旅程|文件>` / `harness list`。一份旅程 YAML 写项目、模型一端的脚本（原样交给 `tingly-box vmodel`）、用户动作（`say`、`message`、`approve`/`deny`、`wait`、`served`、`signal`）和结束时对 Projects 的断言；runner 拉起这个二进制当服务器、拉起 `tingly-box vmodel`，环境从零开始（独立 HOME 和 Claude Code 配置，不碰 `~/.tingly-box`、`~/.claude`），失败时保留工作目录（模型 trace 和原始字节在 `capture/`）。内置旅程 `one-thread` 对应 J1。需要本机 `claude`，不进默认 CI。
 
 ## 5. 门禁规则（先约束，再改动）
 

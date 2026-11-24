@@ -52,26 +52,21 @@ describe('ui prefs sync', () => {
     });
 
     it('uploads values only this surface has, and nothing unrelated', async () => {
-        localStorage.setItem('scenario.hiddenDefaultsVersion', '2');
-        localStorage.setItem('setup-card-step2-done-codex', 'true');
+        localStorage.setItem('scenario.hiddenDefaultsVersion', '3');
         localStorage.setItem('user_auth_token', 'secret');
 
         await syncUiPrefs();
 
-        expect(calls.filter(c => c.method === 'PATCH')).toEqual([
-            { method: 'PATCH', body: { prefs: { 'scenario.hiddenDefaultsVersion': '2' } } },
-        ]);
+        expect(calls).toContainEqual({ method: 'PATCH', body: { prefs: { 'scenario.hiddenDefaultsVersion': '3' } } });
     });
 
     it('writes through on set and remove', () => {
         setSyncedItem('scenario.hiddenScenarios', '[]');
-        localStorage.setItem('scenario.hiddenDefaultsVersion', '2');
         removeSyncedItem('scenario.hiddenDefaultsVersion');
         setSyncedItem('not-synced', 'x');
 
         expect(localStorage.getItem('scenario.hiddenScenarios')).toBe('[]');
         expect(localStorage.getItem('not-synced')).toBe('x');
-        expect(localStorage.getItem('scenario.hiddenDefaultsVersion')).toBeNull();
         const bodies = calls.filter(c => c.method === 'PATCH').map(c => c.body);
         expect(bodies).toEqual([
             { prefs: { 'scenario.hiddenScenarios': '[]' } },

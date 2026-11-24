@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer';
+import { en } from '../i18n/en';
+import { zh } from '../i18n/zh';
 
 const { mobile } = vi.hoisted(() => ({ mobile: { value: false } }));
 vi.mock('@mui/material', async (original) => ({ ...await original<typeof import('@mui/material')>(), useMediaQuery: () => mobile.value }));
@@ -9,6 +11,16 @@ beforeEach(() => { mobile.value = false; });
 afterEach(cleanup);
 
 describe('Composer', () => {
+    it('keeps secondary settings available without crowding the composer', () => {
+        render(<Composer onSend={vi.fn()} contextCollapsible context={<span>Permission options</span>} />);
+        const toggle = screen.getByRole('button', { name: 'composer.settings' });
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByText('Permission options')).not.toBeInTheDocument();
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('Permission options')).toBeVisible();
+    });
+
     it('clears at once and puts a refused message back while the box is still empty', async () => {
         const send = vi.fn().mockResolvedValueOnce(false);
         render(<Composer placeholder="Reply" onSend={send} />);
@@ -98,18 +110,32 @@ describe('Composer send modes', () => {
         expect(send).toHaveBeenCalledExactlyOnceWith('change course', []);
     });
 
-    it('sends after the turn on Alt+Enter, and offers both choices in the menu', async () => {
+    it('sends for the next turn on Alt+Enter', async () => {
         const send = running();
         await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter', altKey: true }));
-        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'queue');
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'next_turn');
     });
 
-    it('stops and sends from the menu', async () => {
+    it('offers exactly insert and next turn in the menu, and no way to stop-and-send', async () => {
         const send = running();
         fireEvent.click(screen.getByRole('button', { name: 'composer.sendOptions' }));
-        expect(screen.getByText('composer.sendQueue')).toBeInTheDocument();
-        await act(async () => fireEvent.click(screen.getByText('composer.sendStop')));
-        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'stop_and_send');
+        expect(screen.getByText('composer.sendInsert')).toBeInTheDocument();
+        expect(screen.getByText('composer.sendNextTurnLabel')).toBeInTheDocument();
+        expect(screen.queryByText('composer.sendStop')).not.toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getByText('composer.sendInsert')));
+        expect(send).toHaveBeenCalledExactlyOnceWith('change course', [], 'insert');
+    });
+
+    it('falls back to the next turn, and says so, when the running turn cannot take input', async () => {
+        const send = vi.fn().mockResolvedValue(true);
+        render(<Composer placeholder="Reply" streaming sendWhileStreaming sendModes insertable={false} onStop={vi.fn()} onSend={send} />);
+        fireEvent.change(screen.getByPlaceholderText('Reply'), { target: { value: 'later' } });
+        await act(async () => fireEvent.keyDown(screen.getByPlaceholderText('Reply'), { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('later', [], 'next_turn');
+        fireEvent.change(screen.getByPlaceholderText('Reply'), { target: { value: 'again' } });
+        fireEvent.click(screen.getByRole('button', { name: 'composer.sendOptions' }));
+        expect(screen.getByRole('menuitem', { name: /composer.sendInsert/ })).toHaveAttribute('aria-disabled', 'true');
+        expect(screen.getByText('composer.sendInsertUnavailable')).toBeInTheDocument();
     });
 
     it('shows no menu, and ignores Alt+Enter, when no turn runs or the host did not opt in', async () => {
@@ -174,5 +200,77 @@ describe('Composer attachments', () => {
         expect(screen.getByRole('button', { name: 'composer.attach' })).toBeDisabled();
         fireEvent.change(screen.getByTestId('composer-file-input'), { target: { files: [new File(['x'], 'a.txt')] } });
         expect(attach).not.toHaveBeenCalled();
+    });
+});
+
+describe('Composer slash menu', () => {
+    const setup = (props: Partial<Parameters<typeof Composer>[0]> = {}) => {
+        const send = vi.fn().mockResolvedValue(true);
+        render(<Composer placeholder="Reply" slashCommands onSend={send} {...props} />);
+        return { send, input: screen.getByPlaceholderText('Reply') };
+    };
+
+    it('offers /compact when the message starts with a slash, and inserts it on Enter instead of sending', () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/' } });
+        expect(screen.getByRole('option', { name: /compact/ })).toBeInTheDocument();
+        fireEvent.keyDown(input, { key: 'Enter' });
+        expect(input).toHaveValue('/compact ');
+        expect(send).not.toHaveBeenCalled();
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    });
+
+    it('explains that old messages remain viewable without automatically inheriting their context', () => {
+        expect(en.composer.clearDescription).toBe('Start a new session without automatically inheriting previous conversation context; previous messages remain viewable');
+        expect(zh.composer.clearDescription).toBe('开始新会话，不自动继承之前的对话上下文；仍可查看之前的消息');
+    });
+
+    it('offers and sends /clear through the normal composer path', async () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/cl' } });
+        expect(screen.getByRole('option', { name: /clear/ })).toHaveTextContent('composer.clearDescription');
+        fireEvent.keyDown(input, { key: 'Tab' });
+        expect(input).toHaveValue('/clear ');
+        await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('/clear', []);
+    });
+
+    it('narrows as the name is typed, completes with Tab and with a click', () => {
+        const { input } = setup();
+        fireEvent.change(input, { target: { value: '/co' } });
+        fireEvent.keyDown(input, { key: 'Tab' });
+        expect(input).toHaveValue('/compact ');
+
+        fireEvent.change(input, { target: { value: '/x' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '/' } });
+        fireEvent.mouseDown(screen.getByRole('option', { name: /compact/ }));
+        expect(input).toHaveValue('/compact ');
+    });
+
+    it('sends a complete command on Enter, and closes with Escape', async () => {
+        const { send, input } = setup();
+        fireEvent.change(input, { target: { value: '/compact' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        await act(async () => fireEvent.keyDown(input, { key: 'Enter' }));
+        expect(send).toHaveBeenCalledExactlyOnceWith('/compact', []);
+
+        fireEvent.change(input, { target: { value: '/com' } });
+        fireEvent.keyDown(input, { key: 'Escape' });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '/comp' } });
+        expect(screen.getByRole('option')).toBeInTheDocument();
+    });
+
+    it('stays out of the way of ordinary text and when not enabled', () => {
+        const { input } = setup();
+        fireEvent.change(input, { target: { value: 'compare /etc/hosts' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        fireEvent.change(input, { target: { value: '/etc/hosts is broken' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
+        cleanup();
+        const off = setup({ slashCommands: false });
+        fireEvent.change(off.input, { target: { value: '/' } });
+        expect(screen.queryByRole('option')).not.toBeInTheDocument();
     });
 });

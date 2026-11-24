@@ -1,7 +1,10 @@
 import { Box } from '@mui/material';
 import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
-import { fontSizes } from '@/theme/fonts';
-import { routeGraphColors } from '@/theme/routeGraph';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { nodeScrollbar, routeGraphColors, routeGraphShadows } from '@/theme/routeGraph';
+
+const scrollbarOf = (theme: Theme) => nodeScrollbar[theme.palette.mode === 'dark' ? 'dark' : 'light'];
+import { radius } from '@tingly/ui/theme/radius';
 
 export const routeGraphActive = routeGraphColors.active;
 export const routeGraphActiveBg = routeGraphColors.activeBg;
@@ -88,8 +91,8 @@ export const ConnectionLine = styled(Box)(() => ({
     display: 'flex',
     alignItems: 'center',
     color: 'text.secondary',
-    fontSize: '1.5rem',
-    '& svg': { fontSize: '2rem' },
+    fontSize: fontSizes.display,
+    '& svg': { fontSize: 32 },
 }));
 
 export const graphNodeHoverStyles = (theme: Theme) => {
@@ -109,12 +112,11 @@ export const graphNodeHoverStyles = (theme: Theme) => {
             ? [
                 `0 0 0 1px ${alpha(emphasisColor, 0.92)}`,
                 `0 0 0 5px ${alpha(emphasisColor, 0.34)}`,
-                '0 18px 38px rgba(0, 0, 0, 0.50)',
+                routeGraphShadows.nodeLiftDark,
             ].join(', ')
             : [
                 `0 0 0 4px ${alpha(routeGraphActive, 0.18)}`,
-                '0 14px 34px rgba(31, 41, 55, 0.14)',
-                '0 3px 10px rgba(31, 41, 55, 0.08)',
+                ...routeGraphShadows.nodeLift,
             ].join(', '),
         transform: 'translateY(-2px)',
     };
@@ -178,14 +180,14 @@ export const graphRowStyles = (theme: Theme) => ({
     paddingBottom: theme.spacing(0.5),
     scrollbarWidth: 'thin' as const,
     scrollbarColor:
-        (theme.palette.mode === 'dark' ? '#555' : '#ccc') + ' transparent',
+        `${scrollbarOf(theme).thumb} transparent`,
     '&::-webkit-scrollbar': { height: 6 },
     '&::-webkit-scrollbar-track': { background: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
-        backgroundColor: theme.palette.mode === 'dark' ? '#555' : '#ccc',
-        borderRadius: 3,
+        backgroundColor: scrollbarOf(theme).thumb,
+        borderRadius: radius.pill,
         '&:hover': {
-            backgroundColor: theme.palette.mode === 'dark' ? '#777' : '#999',
+            backgroundColor: scrollbarOf(theme).thumbHover,
         },
     },
 });
@@ -383,7 +385,7 @@ export const NODE_LAYER_STYLES = {
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',
-        borderRadius: 1.25,
+        borderRadius: radius.row,
         lineHeight: 1,
     } as const,
 };

@@ -21,7 +21,7 @@ func TestBuildActionCardRendersButtons(t *testing.T) {
 		).
 		AddRow(core.Action{ID: "project", Label: "🔧 Project", CallbackData: "action:project"})
 
-	out, err := buildActionCard("Task done.", set).String()
+	out, err := buildActionCard("Task done.", set, "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestBuildActionCardRendersButtons(t *testing.T) {
 }
 
 func TestBuildActionCardWithoutActions(t *testing.T) {
-	out, err := buildActionCard("just text", core.NewActionSet()).String()
+	out, err := buildActionCard("just text", core.NewActionSet(), "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
@@ -56,6 +56,25 @@ func TestBuildActionCardWithoutActions(t *testing.T) {
 	}
 	if !strings.Contains(out, "just text") {
 		t.Errorf("expected the text to survive\n%s", out)
+	}
+}
+
+func TestBuildActionCardUsesMarkdownElement(t *testing.T) {
+	out, err := buildActionCard("# Heading\n\n- item", core.NewActionSet(), "oc_chat").String()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var card struct {
+		Elements []struct {
+			Tag     string `json:"tag"`
+			Content string `json:"content"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal([]byte(out), &card); err != nil {
+		t.Fatal(err)
+	}
+	if len(card.Elements) != 1 || card.Elements[0].Tag != "markdown" || card.Elements[0].Content != "# Heading\n\n- item" {
+		t.Fatalf("unexpected card elements: %s", out)
 	}
 }
 
@@ -71,7 +90,7 @@ func TestBuildActionCardTier3Fallback(t *testing.T) {
 		Fallback: core.FallbackAsURL,
 		Ext:      map[core.Platform]any{core.PlatformTelegram: struct{ x int }{1}},
 	}
-	out, err := buildActionCard("hi", core.NewActionSet().AddRow(asURL)).String()
+	out, err := buildActionCard("hi", core.NewActionSet().AddRow(asURL), "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}
@@ -87,7 +106,7 @@ func TestBuildActionCardTier3Fallback(t *testing.T) {
 		Fallback: core.FallbackDrop,
 		Ext:      map[core.Platform]any{core.PlatformTelegram: struct{ x int }{1}},
 	}
-	out, err = buildActionCard("hi", core.NewActionSet().AddRow(dropped)).String()
+	out, err = buildActionCard("hi", core.NewActionSet().AddRow(dropped), "oc_chat").String()
 	if err != nil {
 		t.Fatalf("card serialize: %v", err)
 	}

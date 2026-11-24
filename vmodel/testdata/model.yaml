@@ -1,0 +1,12 @@
+id: file-hello
+name: File Hello
+kind: mock
+mock:
+  content: Hello from a file.
+  delay: 0ms
+  usage:
+    prompt_tokens: 10
+    completion_tokens: 8
+expect:
+  http_status: 200
+  content_equals: Hello from a file.

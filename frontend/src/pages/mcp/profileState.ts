@@ -1,4 +1,4 @@
-import { MCP_DEFAULT_PROFILE_ID, type MCPCatalogTool, type MCPProfile, type MCPRoutingSnapshot } from './types';
+import { MCP_DEFAULT_PROFILE_ID, type MCPCatalogTool, type MCPProfile, type MCPRoutingSnapshot } from '../../features/mcp/types';
 
 export interface ProfileToolRow {
     name: string; // normalized
@@ -56,6 +56,22 @@ export function setProfileToolOn(profile: MCPProfile, name: string, on: boolean)
     };
 }
 
+// Several rows at once (a group switch): one saved profile, same rules as one row.
+export const setProfileToolsOn = (profile: MCPProfile, names: string[], on: boolean): MCPProfile =>
+    names.reduce((next, name) => setProfileToolOn(next, name, on), profile);
+
+export interface ProfileToolGroup {
+    sourceName: string; // '' for tools that no longer exist
+    rows: ProfileToolRow[];
+}
+
+// Rows grouped by their connection, in the order the connections first appear.
+export function profileGroups(rows: ProfileToolRow[]): ProfileToolGroup[] {
+    const groups = new Map<string, ProfileToolRow[]>();
+    for (const row of rows) groups.set(row.sourceName, [...(groups.get(row.sourceName) || []), row]);
+    return [...groups].map(([sourceName, list]) => ({ sourceName, rows: list }));
+}
+
 export const addProfileTools = (profile: MCPProfile, names: string[]): MCPProfile => ({
     ...profile,
     tools: [
@@ -64,9 +80,11 @@ export const addProfileTools = (profile: MCPProfile, names: string[]): MCPProfil
     ],
 });
 
-export const removeProfileTool = (profile: MCPProfile, name: string): MCPProfile => ({
+export const removeProfileTool = (profile: MCPProfile, name: string): MCPProfile => removeProfileTools(profile, [name]);
+
+export const removeProfileTools = (profile: MCPProfile, names: string[]): MCPProfile => ({
     ...profile,
-    tools: (profile.tools || []).filter((tool) => tool.name !== name),
+    tools: (profile.tools || []).filter((tool) => !names.includes(tool.name)),
 });
 
 // The name a client registers this profile under on the user's machine. Display

@@ -8,6 +8,7 @@ import { figureCenter, figureVisualBounds, translateFigure } from './transform';
 import { figureSolids } from './body';
 import { add3, cross3, dist3, dot3, len3, mul3, norm3, rotateAxis, sub3, zOf, type Vec3 } from './vec3';
 import type { Point, Size } from './types';
+import { HANDLE_FILL, HANDLE_STROKE } from './colors';
 
 export interface SwingOptions {
     // Send the bone behind the body instead of in front of it. A pointer on
@@ -361,8 +362,6 @@ export const nextFigureAt = (
 };
 
 
-const HANDLE_FILL = '#2563eb';
-const HANDLE_STROKE = '#ffffff';
 
 // Handles are overlay-only: they are drawn on the interaction layer, never on
 // the surface that is exported, so the model never sees the blue dots.

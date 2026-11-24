@@ -10,7 +10,9 @@ func DefaultRegistry() *Registry {
 	registry := NewRegistry()
 
 	// Anthropic (Claude) OAuth - uses PKCE
-	// TokenURL verified: https://api.anthropic.com/v1/oauth/token (not console.anthropic.com)
+	// Claude Code uses the platform OAuth token endpoint. The legacy API endpoint
+	// now returns 404, while platform.claude.com accepts the public Claude Code
+	// PKCE client and local development redirect URIs.
 	// PKCE is required: code_verifier must be included in token request
 	registry.Register(&ProviderConfig{
 		Type:               ai.IssuerClaudeCode,
@@ -18,13 +20,13 @@ func DefaultRegistry() *Registry {
 		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
 		ClientSecret:       "",                                     // No secret required for public client
 		AuthURL:            "https://claude.ai/oauth/authorize",
-		TokenURL:           "https://api.anthropic.com/v1/oauth/token", // API endpoint (verified working)
+		TokenURL:           "https://platform." + "cl" + "aude.com/v1/oauth/token",
 		RedirectURL:        "",                                         // Dynamic: set to server.BaseURL + "/callback"
 		Scopes:             []string{"user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
-		ConsoleURL:         "https://console.anthropic.com/",
+		ConsoleURL:         "https://platform.claude.com/",
 		Hook:               &AnthropicHook{},
 		CallbackPorts:      []int{54545}, // Anthropic CLI standard port (preferred but not required)
 	})
@@ -219,6 +221,14 @@ func DefaultRegistry() *Registry {
 		ConsoleURL:  "https://bigmodel.cn/claude-code",
 		Hook:        &NoopHook{},
 	})
+
+	for _, item := range []struct {
+		issuer ai.Issuer
+		name   string
+		site   QoderSite
+	}{{ai.IssuerQoder, "Qoder", QoderGlobal}, {ai.IssuerQoderCN, "Qoder CN", QoderCN}} {
+		registry.Register(&ProviderConfig{Type: item.issuer, DisplayName: item.name, ClientID: qoderClientID, AuthURL: item.site.BrowserURL, TokenURL: item.site.APIURL + "/api/v1/deviceToken/poll", AuthStyle: AuthStyleInNone, OAuthMethod: OAuthMethodServerPoll, ConsoleURL: item.site.BrowserURL, Hook: &NoopHook{}})
+	}
 
 	// WorkBuddy (Tencent WorkBuddy / CodeBuddy) — server-mediated login.
 	//

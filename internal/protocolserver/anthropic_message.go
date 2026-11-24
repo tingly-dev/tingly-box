@@ -125,12 +125,8 @@ func (ph *ProtocolHandler) HandleAnthropicMessages(c *gin.Context) {
 	provider, selectedService, err = ph.selectService(c, scenarioType, rule, reqParams)
 	if err != nil {
 		logrus.WithError(err).Errorf("Select service error")
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+		writeSelectionError(c, err)
+		c.Abort()
 		return
 	}
 
@@ -195,7 +191,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1(c *gin.Context, req *protocol.Ant
 	if multi {
 		bs, err := req.MarshalJSON()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error(), "type": "api_error"}})
 			return
 		}
 		template = bs
@@ -294,7 +290,7 @@ func (ph *ProtocolHandler) AnthropicMessagesV1Beta(c *gin.Context, req *protocol
 	if multi {
 		bs, err := req.MarshalJSON()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error(), "type": "api_error"}})
 			return
 		}
 		template = bs

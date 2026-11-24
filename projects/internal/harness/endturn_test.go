@@ -1,13 +1,13 @@
 package harness
 
 import (
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/projects/internal/coordtest"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 func assistantTexts(w *World) []string {
@@ -21,21 +21,25 @@ func assistantTexts(w *World) []string {
 }
 
 // E1: when a report needs no message to the user, the coordinator ends the
-// turn with the no_update tool: nothing is posted and no second model round
-// is spent.
+// turn with the no_update tool: nothing is posted, and the session was
+// offered the tool.
 func TestEndTurnNoUpdateToolStaysSilent(t *testing.T) {
+	var offered []string
 	w := New(t, Options{
 		Files: projectsRepo,
 		Actor: Diligent("done"),
-		Brain: func(c *BrainCtx) llm.Result {
+		Brain: func(c *coordtest.Turn) error {
 			switch {
-			case c.AfterTools():
-				return llm.Result{Text: "Started."}
 			case c.CheckIn():
-				return llm.Result{ToolCalls: []llm.ToolCall{Call("n1", "no_update", map[string]string{"reason": "routine report"})}}
+				offered = c.Tools()
+				c.Call("no_update", map[string]string{"reason": "routine report"})
+				// Text after no_update is not posted: the turn already ended.
+				c.Reply("ignored")
 			default:
-				return startThread(endTool, "Add the no_update tool.")
+				startThread(c, endTool, "Add the no_update tool.")
+				c.Reply("Started.")
 			}
+			return nil
 		},
 	})
 
@@ -44,9 +48,8 @@ func TestEndTurnNoUpdateToolStaysSilent(t *testing.T) {
 	w.Quiet()
 
 	assert.Equal(t, []string{"Started."}, assistantTexts(w), "the report turn posted nothing")
-	reqs := w.Requests()
-	require.Len(t, reqs, 3, "start, start's tool round, and exactly one request for the report turn")
-	assert.Contains(t, toolNames(reqs[2]), "no_update", "the model is offered the tool")
+	require.Len(t, w.Requests(), 2, "the user's turn and one turn for the report")
+	assert.True(t, slices.Contains(offered, "no_update"), "the session is offered the tool")
 }
 
 // E2: a model that still answers with the old NO_UPDATE text stays silent.
@@ -54,15 +57,15 @@ func TestEndTurnLegacySentinelStaysSilent(t *testing.T) {
 	w := New(t, Options{
 		Files: projectsRepo,
 		Actor: Diligent("done"),
-		Brain: func(c *BrainCtx) llm.Result {
+		Brain: func(c *coordtest.Turn) error {
 			switch {
-			case c.AfterTools():
-				return llm.Result{Text: "Started."}
 			case c.CheckIn():
-				return llm.Result{Text: NoUpdate}
+				c.Reply(NoUpdate)
 			default:
-				return startThread(endTool, "Add the no_update tool.")
+				startThread(c, endTool, "Add the no_update tool.")
+				c.Reply("Started.")
 			}
+			return nil
 		},
 	})
 
@@ -73,63 +76,25 @@ func TestEndTurnLegacySentinelStaysSilent(t *testing.T) {
 	assert.Equal(t, []string{"Started."}, assistantTexts(w))
 }
 
-// E3: a turn that answers the user with nothing is asked once to reply, so
-// a message never goes unanswered.
-func TestEndTurnEmptyReplyToUserIsAskedAgain(t *testing.T) {
-	w := New(t, Options{
-		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			if strings.Contains(c.Last(), "ended your turn without replying") {
-				return llm.Result{Text: "Sorry, here is the answer."}
-			}
-			return llm.Result{}
-		},
-	})
-
-	w.Say("What are you working on?")
-	w.Quiet()
-
-	assert.Equal(t, []string{"Sorry, here is the answer."}, assistantTexts(w))
-	assert.Len(t, w.Requests(), 2)
-}
-
-// E4: asked twice, an empty answer ends the turn: the loop is bounded.
-func TestEndTurnEmptyReplyIsAskedOnlyOnce(t *testing.T) {
-	w := New(t, Options{
-		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result { return llm.Result{} },
-	})
-
-	w.Say("Hello?")
-	w.Quiet()
-
-	assert.Empty(t, assistantTexts(w))
-	assert.Len(t, w.Requests(), 2)
-}
-
-// E5: a user's message answered with the old NO_UPDATE text or a rejected
-// no_update call is never posted as a reply; the model is asked to answer.
+// E3: a user's message cannot be answered with no_update (the tool refuses
+// it), and the old NO_UPDATE text is never posted as a reply.
 func TestEndTurnNoUpdateOnUserMessageIsNotAReply(t *testing.T) {
+	var refused string
 	w := New(t, Options{
 		Files: projectsRepo,
-		Brain: func(c *BrainCtx) llm.Result {
-			if strings.Contains(c.Last(), "ended your turn without replying") {
-				return llm.Result{Text: "Here is the answer."}
+		Brain: func(c *coordtest.Turn) error {
+			out, isErr := c.Call("no_update", map[string]string{})
+			if isErr {
+				refused = out
 			}
-			return llm.Result{Text: "NO_UPDATE"}
+			c.Reply(NoUpdate)
+			return nil
 		},
 	})
 
 	w.Say("What are you working on?")
 	w.Quiet()
 
-	assert.Equal(t, []string{"Here is the answer."}, assistantTexts(w))
-}
-
-func toolNames(r llm.Request) []string {
-	var out []string
-	for _, tl := range r.Tools {
-		out = append(out, tl.Name)
-	}
-	return out
+	assert.Contains(t, refused, "needs a reply")
+	assert.Empty(t, assistantTexts(w))
 }

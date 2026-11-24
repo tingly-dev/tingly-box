@@ -9,8 +9,10 @@ import { ProbeDialog } from '../probe/ProbeDialog';
 import { useModelTestProbe } from '../probe/useModelTestProbe';
 import { ControlBar } from './ControlBar';
 import { ModelCopyButton } from './ModelCopyButton';
-import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
-import { fontSizes } from '@/theme/fonts';
+import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition, PHONE_ROW_MIN_HEIGHT, phoneRowCheckSx, phoneRowContentSx } from './cardStyles';
+import { usePhoneShell } from '@tingly/ui/hooks/usePhoneShell';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface ModelCardProps {
     model: string;
@@ -37,20 +39,21 @@ export default function ModelCard({
     description,
 }: ModelCardProps) {
     const probe = useModelTestProbe();
+    const phone = usePhoneShell();
 
     const getCardStyles = () => {
         const baseStyles = {
             width: '100%',
-            height: 60,
+            ...(phone ? { minHeight: PHONE_ROW_MIN_HEIGHT } : { height: 60 }),
             border: 1,
-            borderRadius: 1,
+            borderRadius: radius.row,
             cursor: loading ? 'wait' : 'pointer',
             transition: modelCardTransition,
             position: 'relative' as const,
             outline: 'none',
             overflow: 'visible',
             '& .control-bar': {
-                opacity: 0,
+                opacity: phone ? 1 : 0,
             },
             '&:hover .control-bar': {
                 opacity: loading ? 0 : 1,
@@ -109,13 +112,14 @@ export default function ModelCard({
                 gap: 0.5,
                 '&:last-child': {
                     pb: 1,
-                }
+                },
+                ...(phone && phoneRowContentSx(2)),
             }}>
                 {loading ? (
                     <CircularProgress size={20} />
                 ) : (
                     <>
-                        <Tooltip title={model} arrow disableInteractive>
+                        <Tooltip title={phone ? '' : model} arrow disableInteractive>
                             <Typography
                                 variant="body2"
                                 sx={{
@@ -128,7 +132,7 @@ export default function ModelCard({
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     wordBreak: 'break-word',
-                                    textAlign: 'center',
+                                    textAlign: phone ? 'left' : 'center',
                                     width: '100%',
                                 }}
                             >
@@ -142,7 +146,7 @@ export default function ModelCard({
                                     fontSize: fontSizes.micro,
                                     lineHeight: 1.1,
                                     color: 'text.secondary',
-                                    textAlign: 'center',
+                                    textAlign: phone ? 'left' : 'center',
                                     display: '-webkit-box',
                                     WebkitLineClamp: 2,
                                     WebkitBoxOrient: 'vertical',
@@ -164,6 +168,7 @@ export default function ModelCard({
                             right: 4,
                             fontSize: 16,
                             color: (theme) => getModelCardActiveColor(theme),
+                            ...(phone && phoneRowCheckSx),
                         }}
                     />
                 )}
@@ -178,8 +183,8 @@ export default function ModelCard({
                             fontSize: fontSizes.micro,
                             px: 0.5,
                             py: 0.2,
-                            borderRadius: 1,
-                            fontWeight: 'bold',
+                            borderRadius: radius.row,
+                            fontWeight: 600,
                         }}
                     >
                         NEW

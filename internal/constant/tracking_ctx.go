@@ -20,20 +20,24 @@ const (
 	CtxKeyRecoveredErrorCount       = "recovered_error_count"       // int: errors from attempts superseded by a successful failover
 
 	// Request tracking metadata.
-	CtxKeyRule           = "tracking_rule"             // *typ.Rule
-	CtxKeyProvider       = "tracking_provider"         // *typ.Provider
-	CtxKeyModel          = "tracking_model"            // string (actual model used)
-	CtxKeyRequestModel   = "tracking_request_model"    // string (model requested by user)
-	CtxKeyScenario       = "tracking_scenario"         // string (extracted from request path)
-	CtxKeyStreamed       = "tracking_streamed"         // bool
-	CtxKeyStartTime      = "tracking_start_time"       // time.Time
-	CtxKeyFirstTokenTime = "tracking_first_token_time" // time.Time (for TTFT calculation)
-	CtxKeyCacheHit       = "tracking_cache_hit"        // bool (cache hit status)
-	CtxKeySessionID      = "tracking_session_id"       // string (resolved session ID for affinity)
-	CtxKeyAffinityKey    = "tracking_affinity_key"     // string (scoped affinity store key: session + matched smart partition)
-	CtxKeyLBServiceID    = "tracking_lb_service_id"    // string (selected upstream, e.g. "provider-uuid:model")
-	CtxKeyLBTactic       = "tracking_lb_tactic"        // string (tactic name, e.g. "random")
-	CtxKeyTraceID        = "tracking_trace_id"         // string (OTel trace id, set only when the request span is sampled)
+	CtxKeyRule             = "tracking_rule"              // *typ.Rule
+	CtxKeyProvider         = "tracking_provider"          // *typ.Provider
+	CtxKeyModel            = "tracking_model"             // string (actual model used)
+	CtxKeyRequestModel     = "tracking_request_model"     // string (model requested by user)
+	CtxKeyScenario         = "tracking_scenario"          // string (extracted from request path)
+	CtxKeyStreamed         = "tracking_streamed"          // bool
+	CtxKeyStartTime        = "tracking_start_time"        // time.Time
+	CtxKeyFirstTokenTime   = "tracking_first_token_time"  // time.Time (for TTFT calculation)
+	CtxKeyCacheHit         = "tracking_cache_hit"         // bool (cache hit status)
+	CtxKeyProtocolInbound  = "tracking_protocol_inbound"  // string (protocol.APIType the client spoke)
+	CtxKeyProtocolUpstream = "tracking_protocol_upstream" // string (protocol.APIType sent to the provider)
+	CtxKeySessionID        = "tracking_session_id"        // string (resolved session ID for affinity)
+	CtxKeyAffinityKey      = "tracking_affinity_key"      // string (scoped affinity store key: session + matched smart partition)
+	CtxKeyLBServiceID      = "tracking_lb_service_id"     // string (selected upstream, e.g. "provider-uuid:model")
+	CtxKeyLBTactic         = "tracking_lb_tactic"         // string (tactic name, e.g. "random")
+	CtxKeyLimitLease       = "tracking_limit_lease"       // *limits.Lease (per-request account permits)
+	CtxKeyLimitActorDone   = "tracking_limit_actor_done"  // bool: the person/team gate already ran (or must be skipped) for this request
+	CtxKeyTraceID          = "tracking_trace_id"          // string (OTel trace id, set only when the request span is sampled)
 	// CtxKeyOperation is the gen_ai.operation.name for the endpoint, declared
 	// once where the route is registered so the metrics and trace pipelines
 	// report the same operation instead of each deriving its own. Unset means

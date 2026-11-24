@@ -15,12 +15,14 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
-import { AdvancedSection } from './config/AdvancedSection';
+import { AdvancedSection } from '@/components/AdvancedSection';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AppLanguage, resolveLanguage } from '@/i18n';
+import { type AppLanguage } from '@/i18n';
+import { useAppLanguage } from '@/hooks/useAppLanguage';
 import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
+import { radius } from '@tingly/ui/theme/radius';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -92,10 +94,10 @@ export const CLAUDE_CONFIG_KEY_SX = {
     maxWidth: '100%',
     px: 0.75,
     py: 0.25,
-    borderRadius: 0.75,
+    borderRadius: radius.chip,
     bgcolor: 'action.hover',
     fontFamily: fontMono,
-    fontSize: fontSizes.xs,
+    fontSize: fontSizes.micro,
     lineHeight: 1.5,
     color: 'text.secondary',
     whiteSpace: 'nowrap',
@@ -854,11 +856,6 @@ export const CLAUDE_CODE_FIELDS_TEXT: Record<AppLanguage, FieldTextMap> = { zh: 
 const SECTION_TEXT: Record<AppLanguage, SectionTextMap> = { zh: SECTION_TEXT_ZH, en: SECTION_TEXT_EN, ru: SECTION_TEXT_RU };
 const UI_TEXT: Record<AppLanguage, UIText> = { zh: UI_TEXT_ZH, en: UI_TEXT_EN, ru: UI_TEXT_RU };
 
-const useLang = (): AppLanguage => {
-    const { i18n } = useTranslation();
-    return resolveLanguage(i18n.language);
-};
-
 // ── Default prefs derivation ───────────────────────────────────────────
 // Build initial prefs from the active routing rules, mirroring how the
 // legacy modal picks models per slot. Anything not derivable falls back
@@ -1031,7 +1028,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                                     color: "text.disabled"
                                 }}>{field.unit}</Typography></InputAdornment>
                                     : undefined,
-                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.lg },
+                                sx: { fontFamily: field.kind === 'model' ? fontMono : undefined, fontSize: fontSizes.md },
                             }
                         }}
                     />
@@ -1081,7 +1078,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
     const toggleExpanded = () => setExpanded(!expanded);
 
     return (
-        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden' }}>
             <Box
                 onClick={hasAdvancedFields ? toggleExpanded : undefined}
                 sx={{
@@ -1095,7 +1092,7 @@ const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
                 }}
             >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.35 }}>{meta.title}</Typography>
                     <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{meta.hint}</Typography>
                 </Box>
                 {hasAdvancedFields && (
@@ -1156,9 +1153,9 @@ const SettingsRowSection: React.FC<{
     settingsKey: string;
     control: React.ReactNode;
 }> = ({ title, hint, label, tooltip, settingsKey, control }) => (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, overflow: 'hidden' }}>
         <Box sx={{ px: 1.5, py: 1.15, bgcolor: 'action.hover' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.35 }}>{title}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.35 }}>{title}</Typography>
             <Typography variant="body2" sx={{ mt: 0.25, color: 'text.secondary', lineHeight: 1.45 }}>{hint}</Typography>
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: CLAUDE_CONFIG_ROW_COLUMNS, alignItems: 'center', columnGap: 2, rowGap: 1, px: 1.5, py: 1.1, minHeight: 56, borderTop: '1px solid', borderColor: 'divider' }}>
@@ -1326,7 +1323,7 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelWithBehaviorProps> = ({
     coAuthoredBy,
     setCoAuthoredBy,
 }) => {
-    const lang = useLang();
+    const lang = useAppLanguage();
     // Model slots are derived from routing rules, so only the settings a user
     // typed in by hand count as "customised".
     const customizedCount = CLAUDE_CODE_FIELD_STRUCT.filter(f =>

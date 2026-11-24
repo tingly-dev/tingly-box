@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import { cacheDir } from "../shared/cachedir.js";
 import { cleanupRetiredInstallDirs, cleanupStaleBinaryCaches } from "../shared/cleanup.js";
 import { downloadAndExtractZip, extractZipFile } from "../shared/download.js";
-import { DEFAULT_ARGS, downloadFailureHints, sourceArgs } from "../shared/entry.js";
+import { DEFAULT_ARGS, IS_NPX, downloadFailureHints, sourceArgs } from "../shared/entry.js";
 import { execBinary } from "../shared/exec.js";
 import { launchGui } from "../shared/gui.js";
 import { findPlatformPackage, platformPackageName } from "../shared/platform.js";
@@ -39,13 +39,10 @@ function resolveBinarySource() {
 		if (local && local.version === OWN_VERSION) {
 			return { kind: "package", tag: `v${local.version}`, local };
 		}
-		if (local) {
-			console.warn(`⚠️  ${local.name}@${local.version} does not match tingly-box@${OWN_VERSION}, downloading the release instead`);
-		}
 		// A default launch only reaches the download when the platform
 		// package is missing or mismatched; say which if that download fails.
 		const hints = downloadFailureHints(platformPackageName(), OWN_VERSION, local?.version);
-		return { kind: "download", tag: BINARY_RELEASE_BRANCH, hints };
+		return { kind: "download", tag: BINARY_RELEASE_BRANCH, hints, local };
 	}
 	// An explicit --transport-version asked for the download; no hints needed.
 	return { kind: "download", tag: VERSION, hints: [] };
@@ -59,8 +56,8 @@ function resolveBinarySource() {
 // remove a locked exe), and the stale-cache sweep, shortcut relaunch and
 // `--transport-version` all keep one layout.
 async function installFromPackage(local, extractDir) {
-	console.log(`📦 Installing binary from ${local.name}@${local.version}...`);
-	await extractZipFile(local.zipPath, extractDir);
+	console.log(`📦 First run: preparing Tingly Box from ${local.name}@${local.version} for future launches...`);
+	await extractZipFile(local.zipPath, extractDir, { quiet: true });
 }
 
 async function getPlatformArchAndBinary() {
@@ -152,21 +149,36 @@ async function getPlatformArchAndBinary() {
 				console.error(`❌ ${source.local.name} did not contain ${binaryPath}`);
 				process.exit(1);
 			}
-			console.log(`✅ Installed to ${binaryPath}`);
 		} else {
-			await downloadAndExtractZip(downloadUrl, tinglyBinDir, { hints: source.hints });
-			console.log(`✅ Downloaded and extracted to ${binaryPath}`);
+			if (VERSION === "latest") {
+				if (source.local) {
+					console.warn(`⚠️  ${source.local.name}@${source.local.version} does not match tingly-box@${OWN_VERSION}, downloading the release instead`);
+				} else {
+					console.log(`ℹ️  The npm platform package is unavailable; the binary must be downloaded from GitHub.`);
+				}
+			}
+			await downloadAndExtractZip(downloadUrl, tinglyBinDir, { hints: source.hints, quietExtraction: true });
+			if (!existsSync(binaryPath)) {
+				console.error(`❌ The release ZIP did not contain the expected binary: ${binaryPath}`);
+				process.exit(1);
+			}
 		}
+		console.log(`✅ Installed to ${binaryPath}`);
+	} else {
+		console.log(`✅ Already installed at ${binaryPath}`);
 	}
 
 	// The binary for this tag is in place — old tag dirs are now safe to GC.
 	cleanupStaleBinaryCaches(cacheRoot, branchName);
 
-	console.log(`🔍 Executing binary: ${binaryPath}`);
-
 	// Use default args if no arguments provided; always prepend the source
 	// flag so any npx invocation records its launch source.
 	const baseArgs = remainingArgs.length > 0 ? remainingArgs : DEFAULT_ARGS;
+	if (remainingArgs.length === 0) {
+		console.log(IS_NPX
+			? "🚀 Starting Tingly Box in the background; waiting for startup status..."
+			: "ℹ️  No command provided; showing Tingly Box help.");
+	}
 	execBinary(binaryPath, [...SOURCE_ARGS, ...baseArgs], {
 		retryCmd: `npx tingly-box ${remainingArgs.join(' ')}`,
 		cacheRoot,

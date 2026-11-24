@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { IconLibraryPhoto } from '@tabler/icons-react';
 import { Brush, Close, ContentPaste, Create, FileUpload, ZoomIn, tablerMui } from '@/components/icons';
 import { overlayActionSx, zoomScrimSx } from './ImageGenPlayground.chrome';
-import type { ReferenceMask } from './ImageGenPlayground.types';
+import type { ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 import type { SketchLayers } from './SketchCanvasDialog';
-import ThumbImage from './ThumbImage';
-import { THUMB_EDGE_BADGE } from './imageThumbnails';
+import ThumbImage from '../../../features/image/ThumbImage';
+import { THUMB_EDGE_BADGE } from '../../../features/image/imageThumbnails';
+import { radius } from '@tingly/ui/theme/radius';
+import { PHONE_COMPACT_CLASS } from '@tingly/ui/theme/phone';
 
 const LibraryPhoto = tablerMui(IconLibraryPhoto);
 
@@ -120,7 +122,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 position: 'relative',
                 width: 56,
                 height: 56,
-                borderRadius: 1,
+                borderRadius: radius.row,
                 flexShrink: 0,
                 cursor: 'grab',
                 opacity: dragging ? 0.4 : 1,
@@ -143,7 +145,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                     width: '100%',
                     height: '100%',
                     display: 'block',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     overflow: 'hidden',
                     '&:hover .reference-zoom, &:focus-visible .reference-zoom': { opacity: 1 },
                 }}
@@ -191,6 +193,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 >
                     <IconButton
                         size="small"
+                        className={PHONE_COMPACT_CLASS}
                         onClick={(event) => { event.stopPropagation(); onEditMask(); }}
                         aria-label={image.mask
                             ? t('playground.mask.editAction', { defaultValue: 'Edit mask' })
@@ -213,6 +216,7 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
                 <Tooltip title={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}>
                     <IconButton
                         size="small"
+                        className={PHONE_COMPACT_CLASS}
                         onClick={(event) => { event.stopPropagation(); onEditSketch(); }}
                         aria-label={t('playground.sketch.editAction', { defaultValue: 'Edit sketch' })}
                         sx={{ ...overlayActionSx(20), position: 'absolute', bottom: 2, right: 2 }}
@@ -223,6 +227,8 @@ const ReferenceThumb: React.FC<ReferenceThumbProps> = ({
             )}
             <IconButton
                 size="small"
+                // Drawn over the thumbnail: a 44px phone target would cover it.
+                className={PHONE_COMPACT_CLASS}
                 onClick={(event) => { event.stopPropagation(); onRemove(); }}
                 aria-label={t('playground.removeReferenceImage', { defaultValue: 'Remove reference image {{number}}', number: index + 1 })}
                 sx={{ ...overlayActionSx(20), position: 'absolute', top: -6, right: -6 }}
@@ -338,7 +344,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                     p: 1,
                     border: '1px dashed',
                     borderColor: 'divider',
-                    borderRadius: 1.5,
+                    borderRadius: radius.card,
                     bgcolor: 'action.hover',
                     minHeight: referenceImages.length === 0 ? 44 : 64,
                     alignItems: 'center',
@@ -397,7 +403,7 @@ export const ReferenceImagesRow: React.FC<ReferenceImagesRowProps> = ({
                                         // so the strip stays one row.
                                         width: referenceSources.length > 3 ? 40 : 56,
                                         height: 56,
-                                        borderRadius: 1,
+                                        borderRadius: radius.row,
                                         color: 'text.secondary',
                                         border: '1px solid',
                                         borderColor: 'divider',

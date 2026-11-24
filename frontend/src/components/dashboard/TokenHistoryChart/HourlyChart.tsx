@@ -9,6 +9,7 @@ import {getThemeChartStyles} from '../chartStyles';
 import {ChartWrapper, CustomTooltip, LegendItem} from './components';
 import {calculateLabelInterval, formatChartData, formatYAxis, aggregateTo5MinBuckets} from './utils';
 import type {SeriesKey, SeriesVisibility, TimeSeriesData} from './types';
+import { chartCursorFill } from '@/theme/dataviz';
 
 interface HourlyTokenHistoryChartProps {
     data: TimeSeriesData[];
@@ -99,7 +100,7 @@ export function HourlyTokenHistoryChart({data}: HourlyTokenHistoryChartProps) {
                             />
                             <Tooltip
                                 content={<CustomTooltip/>}
-                                cursor={{fill: 'rgba(0, 0, 0, 0.05)'}}
+                                cursor={{ fill: chartCursorFill }}
                             />
                             <Area
                                 type="monotone"

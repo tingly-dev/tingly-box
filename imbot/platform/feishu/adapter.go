@@ -68,9 +68,10 @@ func (a *Adapter) AdaptMessage(ctx context.Context, event MessageEventDetail) (*
 // extractSender extracts sender info from Feishu SenderDetail
 func (a *Adapter) extractSender(detail SenderDetail) core.Sender {
 	return core.Sender{
-		ID:          detail.SenderID,
-		DisplayName: detail.SenderID, // In production, fetch user info
-		Raw:         make(map[string]interface{}),
+		ID: detail.SenderID,
+		// The event carries only an open_id. Leave the name empty rather than
+		// echoing the id: callers treat "" as "no name" and fall back to the id.
+		Raw: make(map[string]interface{}),
 	}
 }
 
@@ -152,10 +153,13 @@ func (a *Adapter) extractContent(event MessageEventDetail) core.Content {
 
 		if fileContent, ok := e.Content.(map[string]interface{}); ok {
 			if fileKey, ok := fileContent["file_key"].(string); ok {
+				name, _ := fileContent["file_name"].(string)
 				return []core.MediaAttachment{{
-					Type: "document",
-					URL:  fileKey,
-					Raw:  make(map[string]interface{}),
+					Type:     "document",
+					URL:      fileKey,
+					Filename: name,
+					MimeType: core.MimeTypeByFilename(name),
+					Raw:      map[string]interface{}{"file_key": fileKey},
 				}}, "", true
 			}
 		}

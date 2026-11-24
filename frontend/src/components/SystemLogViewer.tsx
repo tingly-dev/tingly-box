@@ -1,3 +1,4 @@
+import LogLimitSelect from './LogLimitSelect';
 import {
     Alert,
     Box,
@@ -17,7 +18,6 @@ import {
     TableSortLabel,
     Tooltip,
     TextField,
-    MenuItem,
 } from '@mui/material';
 import { Fragment, useMemo, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,9 +27,10 @@ import { Refresh as RefreshIcon } from '@/components/icons';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useTableSort } from '@/hooks/useTableSort';
 import { formatLogTime } from '@/utils/datetime';
-import { fontMono, fontSizes } from '@/theme/fonts';
+import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { alpha, useTheme } from '@mui/material/styles';
-import { getStatusColor, logLevelTone, httpStatusTone } from '@/theme/status';
+import { getStatusColor, logLevelTone, httpStatusTone } from '@tingly/ui/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 export interface SystemLogEntry {
     time: string;
@@ -162,15 +163,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     slotProps={{ htmlInput: { 'aria-label': t('logViewer.searchLogs', { defaultValue: 'Search logs' }) } }}
                     sx={{ width: 240 }}
                 />
-                <TextField
-                        select
-                        size="small"
-                        value={limit}
-                        onChange={event => setLimit(Number(event.target.value))}
-                        slotProps={{ htmlInput: { 'aria-label': t('logViewer.load', { defaultValue: 'Load' }) } }}
-                    >
-                        {[200, 500, 1000].map(value => <MenuItem key={value} value={value}>{t('logViewer.latest', { count: value, defaultValue: 'Latest {{count}}' })}</MenuItem>)}
-                </TextField>
+                <LogLimitSelect value={limit} onChange={setLimit} />
                 <Stack
                     direction="row"
                     spacing={0.5}
@@ -191,7 +184,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                         onClick={() => setSelectedLevels(new Set())}
                         sx={{
                             fontWeight: 600,
-                            fontSize: fontSizes.xs,
+                            fontSize: fontSizes.micro,
                             height: 24,
                         }}
                     />
@@ -209,8 +202,8 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     color: active ? 'white' : 'text.secondary',
                                     border: active ? `1px solid ${getLevelColor(level)}` : '1px solid',
                                     borderColor: active ? getLevelColor(level) : 'divider',
-                                    fontWeight: 'bold',
-                                    fontSize: fontSizes.xs,
+                                    fontWeight: 600,
+                                    fontSize: fontSizes.micro,
                                     height: 24,
                                     '&:hover': {
                                         backgroundColor: active
@@ -259,7 +252,7 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                     overflow: 'auto',
                     minHeight: 0,
                     backgroundColor: 'background.paper',
-                    borderRadius: 1,
+                    borderRadius: radius.row,
                     border: 1,
                     borderColor: 'divider',
                 }}
@@ -347,9 +340,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                 sx={{
                                                     backgroundColor: getLevelColor(log.level),
                                                     color: 'white',
-                                                    fontSize: fontSizes.xs,
+                                                    fontSize: fontSizes.micro,
                                                     height: 20,
-                                                    fontWeight: 'bold',
+                                                    fontWeight: 600,
                                                 }}
                                             />
                                         </TableCell>
@@ -361,9 +354,9 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                                     sx={{
                                                         backgroundColor: getStatusCodeColor(log.fields.status as number),
                                                         color: 'white',
-                                                        fontSize: fontSizes.xs,
+                                                        fontSize: fontSizes.micro,
                                                         height: 20,
-                                                        fontWeight: 'bold',
+                                                        fontWeight: 600,
                                                     }}
                                                 />
                                             ) : (
@@ -377,22 +370,22 @@ const SystemLogViewer = ({ getLogs }: SystemLogViewerProps) => {
                                     <TableRow>
                                         <TableCell colSpan={5} sx={{ pb: 0, pt: 0, border: 'none' }}>
                                             <Collapse in={expandedRows.has(key)} timeout="auto" unmountOnExit>
-                                                <Box sx={{ p: 2, backgroundColor: 'rgba(0,0,0,0.03)' }}>
+                                                <Box sx={{ p: 2, backgroundColor: 'action.hover' }}>
                                                     <Typography component="pre" sx={{ m: 0, mb: 1, fontFamily: fontMono, fontSize: fontSizes.sm, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{log.message}</Typography>
                                                     {log.fields && Object.keys(log.fields).length > 0 ? (
                                                         <Stack spacing={1}>
                                                             {log.fields.error && (
-                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: 1 }}>
+                                                                <Box sx={{ p: 1, backgroundColor: 'error.dark', borderRadius: radius.row }}>
                                                                     <Typography
                                                                         variant="body2"
-                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 'bold', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+                                                                        sx={{ fontFamily: fontMono, fontSize: fontSizes.sm, color: 'error.contrastText', fontWeight: 600, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                                                                     >
                                                                         ERROR: {typeof log.fields.error === 'object' && log.fields.error !== null ? JSON.stringify(log.fields.error) : String(log.fields.error)}
                                                                     </Typography>
                                                                     {log.fields.error_type && (
                                                                         <Typography
                                                                             variant="caption"
-                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'error.contrastText', opacity: 0.8 }}
+                                                                            sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'error.contrastText', opacity: 0.8 }}
                                                                         >
                                                                             Type: {typeof log.fields.error_type === 'object' && log.fields.error_type !== null ? JSON.stringify(log.fields.error_type) : String(log.fields.error_type)}
                                                                         </Typography>

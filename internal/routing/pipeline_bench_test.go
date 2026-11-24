@@ -20,20 +20,21 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocolserver"
 	"github.com/tingly-dev/tingly-box/internal/routing"
+	"github.com/tingly-dev/tingly-box/internal/routing/routingtest"
 	"github.com/tingly-dev/tingly-box/internal/routing/smartrouting"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// benchService and benchRequest are thin aliases over routing's exported
-// test fixtures (ServiceForTest/OpenAIRequestForTest) — kept as local
+// benchService and benchRequest are thin aliases over the exported
+// shared fixtures (routingtest.Service/OpenAIRequest) — kept as local
 // wrappers only to fix the benchmark's request model/weight/active shape
 // once, not to reimplement the fixtures themselves.
 func benchService(provider, model string) *loadbalance.Service {
-	return routing.ServiceForTest(provider, model, true)
+	return routingtest.Service(provider, model, true)
 }
 
 func benchRequest() *openai.ChatCompletionNewParams {
-	return routing.OpenAIRequestForTest("bench-model")
+	return routingtest.OpenAIRequest("bench-model")
 }
 
 // benchSelector wires the real production pipeline. cfg's rule list is left

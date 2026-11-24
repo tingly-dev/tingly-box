@@ -1,0 +1,72 @@
+name: notify-coordinator
+description: >
+  A thread finds work outside its task and tells the coordinator with
+  notify_coordinator; the coordinator offers it to the user as a proposal
+  card, and the thread finishes its own task.
+project:
+  name: Demo
+  goal: Ship the demo app
+  files:
+    README.md: "demo\n"
+model:
+  id: notify-coordinator
+  kind: script
+  protocols: [anthropic]
+  script:
+    tracks:
+      coordinator:
+        bind: {tools_include: ["__start_thread"], system_contains: "You are the project coordinator"}
+        steps:
+          - id: plan
+            reply:
+              tool_calls:
+                - {id: start, name: mcp__tingly-projects__start_thread, arguments: {title: Add CHANGELOG, task: "Create CHANGELOG.md and commit it."}, spawns: thread, expect_result: {contains: "started thread"}}
+          - id: started
+            reply: {content: "Started Add CHANGELOG."}
+          - id: notified
+            # A thread's notification arrives as relayed information.
+            expect: {last_text_contains: 'kind="notify"', all: [{last_text_contains: "install steps"}]}
+            reply:
+              tool_calls:
+                - id: propose
+                  name: mcp__tingly-projects__propose_threads
+                  arguments: {threads: [{title: Add install steps, task: "Add install steps to README.md."}]}
+                  expect_result: {contains: "proposed 1 threads"}
+          - id: proposed
+            reply: {content: "Add CHANGELOG noticed the README has no install steps; I put a thread for it on a card."}
+          - id: report
+            expect: {last_text_contains: 'kind="check-in"'}
+            reply: {content: "Add CHANGELOG is committed and waits for review."}
+      thread:
+        bind: {system_contains: "Your task: Add CHANGELOG"}
+        capture:
+          cwd: {from: system, regex: "in your own worktree \\(([^)]+)\\)"}
+        steps:
+          - id: notify
+            reply:
+              tool_calls:
+                - id: notify
+                  name: mcp__tingly-projects__notify_coordinator
+                  arguments: {message: "README.md has no install steps; that is worth its own thread."}
+                  expect_result: {contains: "sent", is_error: false}
+          - id: write
+            reply:
+              tool_calls:
+                - {id: write, name: Write, arguments: {file_path: "{{cwd}}/CHANGELOG.md", content: "# Changelog\n"}, expect_result: {is_error: false}}
+          - id: commit
+            after: [coordinator.proposed]
+            reply:
+              tool_calls:
+                - {id: commit, name: Bash, arguments: {command: "git add CHANGELOG.md && git commit -qm 'Add CHANGELOG'", description: Commit}, expect_result: {is_error: false}}
+          - id: done
+            reply: {content: "Added CHANGELOG.md and committed it. I told the coordinator about the missing install steps."}
+steps:
+  - say: Add a CHANGELOG please.
+  - approve: {thread: Add CHANGELOG}
+  - served: coordinator.report
+expect:
+  threads: 1
+  thread:
+    Add CHANGELOG: {status: ready, commits_ahead: 1}
+  conversation_events: {suggestions: 1}
+  conversation_contains: ["no install steps"]

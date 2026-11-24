@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -12,21 +13,27 @@ import (
 	"gorm.io/gorm"
 )
 
-// UsageRecord is the GORM model for persisting individual usage records
+// UsageRecord is the GORM model for persisting individual usage records.
+//
+// Indexes: every aggregate read is a timestamp range (idx_timestamp) narrowed
+// by filters that withPinnedRangeFilters keeps off the index, so scenario,
+// status and total_tokens carry none, and timestamp has no composite twin:
+// each extra index is paid on every proxied request's INSERT (see
+// droppedUsageIndexes for the ones removed from existing databases).
 type UsageRecord struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement;column:id"`
 	ProviderUUID string    `gorm:"column:provider_uuid;index:idx_provider_model;not null"`
 	ProviderName string    `gorm:"column:provider_name;not null"`
 	Model        string    `gorm:"column:model;index:idx_provider_model;not null"`
-	Scenario     string    `gorm:"column:scenario;index:idx_scenario;not null"`
+	Scenario     string    `gorm:"column:scenario;not null"`
 	RuleUUID     string    `gorm:"column:rule_uuid;index:idx_rule"`
 	UserID       string    `gorm:"column:user_id;index:idx_user;not null;default:''"`
 	TeamID       string    `gorm:"column:team_id;index:idx_team;not null;default:''"`
 	RequestModel string    `gorm:"column:request_model"`
-	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;index:idx_timestamp_scenario;not null"`
+	Timestamp    time.Time `gorm:"column:timestamp;index:idx_timestamp;not null"`
 	InputTokens  int       `gorm:"column:input_tokens;not null"`
 	OutputTokens int       `gorm:"column:output_tokens;not null"`
-	TotalTokens  int       `gorm:"column:total_tokens;index;not null"`
+	TotalTokens  int       `gorm:"column:total_tokens;not null"`
 	// CacheReadTokens counts cache-READ hits only. Cache writes are billed
 	// separately (Anthropic cache_creation, OpenAI cache_write_tokens since
 	// gpt-5.6) and are counted in CacheWriteTokens — which is a SUBSET of
@@ -44,7 +51,7 @@ type UsageRecord struct {
 	ReasoningTokens int `gorm:"column:reasoning_tokens;default:0"`
 	// System tokens (framework overhead, templates, etc.)
 	SystemTokens int    `gorm:"column:system_tokens;default:0"`
-	Status       string `gorm:"column:status;index;not null"` // success, error, partial
+	Status       string `gorm:"column:status;not null"` // success, error, partial
 	ErrorCode    string `gorm:"column:error_code"`
 	LatencyMs    int    `gorm:"column:latency_ms"`
 	TTFTMs       int    `gorm:"column:ttft_ms;default:0"`
@@ -66,21 +73,14 @@ func (UsageRecord) TableName() string {
 	return "usage_records"
 }
 
-// UsageDailyRecord is the GORM model for daily aggregated usage statistics.
-// One row per (UTC day, provider, model, user). Date uses the same day
-// boundary as SQLite's date(timestamp) so daily rows can substitute raw
-// usage_records scans for completed days.
-type UsageDailyRecord struct {
-	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Date         string `gorm:"column:date;index:idx_date;uniqueIndex:uq_daily_dim,priority:1;not null"` // YYYY-MM-DD (UTC)
-	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_daily_dim,priority:2;not null"`
-	ProviderName string `gorm:"column:provider_name;not null"`
-	Model        string `gorm:"column:model;uniqueIndex:uq_daily_dim,priority:3;not null"`
-	UserID       string `gorm:"column:user_id;uniqueIndex:uq_daily_dim,priority:4;not null;default:''"`
-	RequestCount int64  `gorm:"column:request_count;not null"`
-	TotalTokens  int64  `gorm:"column:total_tokens;not null"`
-	InputTokens  int64  `gorm:"column:input_tokens;not null"`
-	OutputTokens int64  `gorm:"column:output_tokens;not null"`
+// RollupSums are the additive measures every usage rollup row carries, so
+// results from different rollup tiers and from raw scans can be merged before
+// derived rates (error rate, average latency) are computed.
+type RollupSums struct {
+	RequestCount int64 `gorm:"column:request_count;not null"`
+	TotalTokens  int64 `gorm:"column:total_tokens;not null"`
+	InputTokens  int64 `gorm:"column:input_tokens;not null"`
+	OutputTokens int64 `gorm:"column:output_tokens;not null"`
 	// Cache tokens: reads, then writes (a subset of InputTokens)
 	CacheReadTokens  int64 `gorm:"column:cache_input_tokens;default:0"`
 	CacheWriteTokens int64 `gorm:"column:cache_write_tokens;default:0"`
@@ -90,8 +90,61 @@ type UsageDailyRecord struct {
 	SystemTokens  int64 `gorm:"column:system_tokens;default:0"`
 	ErrorCount    int64 `gorm:"column:error_count;default:0"`
 	StreamedCount int64 `gorm:"column:streamed_count;default:0"`
-	// Sum of latency_ms across the day, so merged averages stay weighted
+	// Sum of latency_ms over the bucket, so merged averages stay weighted
 	LatencySumMs int64 `gorm:"column:latency_sum_ms;default:0"`
+}
+
+// UsageHourlyRecord is the finest usage rollup: one row per (UTC hour,
+// provider, model, user) that had traffic, plus a zero-count marker row for a
+// completed hour with none (see rollup.go). Hour is SQLite's
+// strftime('%Y-%m-%d %H', timestamp), so hour rows can substitute raw
+// usage_records scans for completed hours. UsageDailyRecord is derived from
+// these rows, never from raw records.
+type UsageHourlyRecord struct {
+	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Hour         string `gorm:"column:hour;index:idx_hourly_hour;uniqueIndex:uq_hourly_dim,priority:1;not null"` // YYYY-MM-DD HH (UTC)
+	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_hourly_dim,priority:2;not null"`
+	ProviderName string `gorm:"column:provider_name;not null"`
+	Model        string `gorm:"column:model;uniqueIndex:uq_hourly_dim,priority:3;not null"`
+	UserID       string `gorm:"column:user_id;uniqueIndex:uq_hourly_dim,priority:4;not null;default:''"`
+	RollupSums   `gorm:"embedded"`
+}
+
+// TableName specifies the table name for GORM
+func (UsageHourlyRecord) TableName() string {
+	return "usage_hourly"
+}
+
+// UsageHourlyScenarioRecord is the per-agent (scenario) companion of
+// UsageHourlyRecord: one row per (UTC hour, scenario). See
+// UsageDailyScenarioRecord for why scenario is not a dimension of the main
+// table.
+type UsageHourlyScenarioRecord struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Hour       string `gorm:"column:hour;index:idx_hourly_scenario_hour;uniqueIndex:uq_hourly_scenario,priority:1;not null"` // YYYY-MM-DD HH (UTC)
+	Scenario   string `gorm:"column:scenario;uniqueIndex:uq_hourly_scenario,priority:2;not null;default:''"`
+	RollupSums `gorm:"embedded"`
+}
+
+// TableName specifies the table name for GORM
+func (UsageHourlyScenarioRecord) TableName() string {
+	return "usage_hourly_scenario"
+}
+
+// UsageDailyRecord is the GORM model for daily aggregated usage statistics.
+// One row per (UTC day, provider, model, user) that had traffic, plus a
+// zero-count marker row for a completed day with none (see rollup.go). Date
+// uses the same day boundary as SQLite's date(timestamp) so daily rows can
+// substitute raw usage_records scans for completed days. Rows are the sum of
+// the day's UsageHourlyRecord rows.
+type UsageDailyRecord struct {
+	ID           uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Date         string `gorm:"column:date;index:idx_date;uniqueIndex:uq_daily_dim,priority:1;not null"` // YYYY-MM-DD (UTC)
+	ProviderUUID string `gorm:"column:provider_uuid;uniqueIndex:uq_daily_dim,priority:2;not null"`
+	ProviderName string `gorm:"column:provider_name;not null"`
+	Model        string `gorm:"column:model;uniqueIndex:uq_daily_dim,priority:3;not null"`
+	UserID       string `gorm:"column:user_id;uniqueIndex:uq_daily_dim,priority:4;not null;default:''"`
+	RollupSums   `gorm:"embedded"`
 }
 
 // TableName specifies the table name for GORM
@@ -99,13 +152,42 @@ func (UsageDailyRecord) TableName() string {
 	return "usage_daily"
 }
 
+// UsageDailyScenarioRecord is the per-agent (scenario) companion of
+// UsageDailyRecord: one row per (UTC day, scenario). It is a separate table,
+// not another dimension on usage_daily, because crossing scenario with
+// provider x model x user multiplied that table's rows several-fold and made
+// every model/provider/user query slower to serve the one query (the agent
+// filter options) that only needs scenario. It carries no provider/model/user,
+// so it serves only queries that do not filter on them.
+//
+// Always written in the same transaction as the usage_daily rows of the same
+// days, so a day is present in both or neither.
+type UsageDailyScenarioRecord struct {
+	ID         uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Date       string `gorm:"column:date;index:idx_daily_scenario_date;uniqueIndex:uq_daily_scenario,priority:1;not null"` // YYYY-MM-DD (UTC)
+	Scenario   string `gorm:"column:scenario;uniqueIndex:uq_daily_scenario,priority:2;not null;default:''"`
+	RollupSums `gorm:"embedded"`
+}
+
+// TableName specifies the table name for GORM
+func (UsageDailyScenarioRecord) TableName() string {
+	return "usage_daily_scenario"
+}
+
 // UsageStore persists usage records in SQLite using GORM.
 type UsageStore struct {
 	storeConn
-	// mu guards the database: writes take the write lock, queries the read
-	// lock (WAL mode supports concurrent readers), so dashboard queries do
-	// not serialize behind proxy usage writes or each other.
+	// mu coordinates writes and rollup operations. Single-statement raw
+	// dashboard reads can use SQLite's WAL snapshots directly.
 	mu sync.RWMutex
+
+	// perf caches GetPerformanceSummary for perfCacheTTL (see
+	// defaultPerfCacheTTL); anything that deletes or re-attributes records
+	// resets it.
+	perf         perfCache
+	perfCacheTTL time.Duration
+	// Bound concurrent full-range percentile scans and sorts.
+	performanceQuery chan struct{}
 }
 
 // PerformanceMetricSummary describes the typical and tail values for one
@@ -144,24 +226,64 @@ func newUsageStore(conn storeConn) (*UsageStore, error) {
 	if err := migrateUsageTables(conn.db); err != nil {
 		return nil, err
 	}
-	return &UsageStore{storeConn: conn}, nil
+	return &UsageStore{storeConn: conn, perfCacheTTL: defaultPerfCacheTTL, performanceQuery: make(chan struct{}, 1)}, nil
 }
 
-// migrateUsageTables aligns and auto-migrates usage_records and usage_daily.
+// migrateUsageTables aligns and auto-migrates usage_records, usage_daily and
+// usage_daily_scenario.
 // Shared by NewUsageStore and StoreManager.initUsageStore so the two
 // initialization paths can't drift apart.
 func migrateUsageTables(db *gorm.DB) error {
 	if err := ensureUsageDailySchema(db); err != nil {
 		return fmt.Errorf("failed to align usage daily schema: %w", err)
 	}
-	if err := db.AutoMigrate(&UsageRecord{}, &UsageDailyRecord{}); err != nil {
+	if err := dropUnusedUsageIndexes(db); err != nil {
+		return fmt.Errorf("failed to drop unused usage indexes: %w", err)
+	}
+	if err := db.AutoMigrate(&UsageRecord{}, &UsageHourlyRecord{}, &UsageHourlyScenarioRecord{}, &UsageDailyRecord{}, &UsageDailyScenarioRecord{}); err != nil {
 		return fmt.Errorf("failed to migrate usage database: %w", err)
 	}
 	return nil
 }
 
+// droppedUsageIndexes are usage_records indexes that earlier versions created
+// and no query uses. AutoMigrate only ever adds indexes, so removing a tag
+// from UsageRecord leaves the index on existing databases unless it is dropped
+// here.
+//
+//   - idx_timestamp_scenario: a composite whose leading column is already
+//     idx_timestamp's; the scenario half was never usable for the equality
+//     filter that follows a range scan.
+//   - idx_scenario, idx_usage_records_status: single low-cardinality columns
+//     that the planner (no sqlite_stat1) wrongly preferred over the timestamp
+//     range -- see withPinnedRangeFilters.
+//   - idx_usage_records_total_tokens: nothing filters or sorts raw rows by it.
+var droppedUsageIndexes = []string{
+	"idx_timestamp_scenario",
+	"idx_scenario",
+	"idx_usage_records_status",
+	"idx_usage_records_total_tokens",
+}
+
+func dropUnusedUsageIndexes(db *gorm.DB) error {
+	m := db.Migrator()
+	if !m.HasTable(&UsageRecord{}) {
+		return nil
+	}
+	for _, name := range droppedUsageIndexes {
+		if m.HasIndex(&UsageRecord{}, name) {
+			if err := m.DropIndex(&UsageRecord{}, name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ensureUsageDailySchema rebuilds the usage_daily table when it predates the
-// v2 layout (user_id dimension + streamed/latency sums). The table holds only
+// v2 layout (user_id dimension + streamed/latency sums), or when it predates
+// usage_daily_scenario (the two are filled together, so days aggregated before
+// the companion table existed would never reach it). The table holds only
 // derived data and is repopulated lazily, so dropping it is safe.
 //
 // A newly summed column does NOT belong in that condition. usage_daily and
@@ -173,7 +295,8 @@ func migrateUsageTables(db *gorm.DB) error {
 // split or backfill of an existing measure — needs the rebuild.
 func ensureUsageDailySchema(db *gorm.DB) error {
 	m := db.Migrator()
-	if m.HasTable(&UsageDailyRecord{}) && !m.HasColumn(&UsageDailyRecord{}, "user_id") {
+	if m.HasTable(&UsageDailyRecord{}) &&
+		(!m.HasColumn(&UsageDailyRecord{}, "user_id") || !m.HasTable(&UsageDailyScenarioRecord{})) {
 		if err := m.DropTable(&UsageDailyRecord{}); err != nil {
 			return err
 		}
@@ -214,6 +337,7 @@ func prepareUsageRecord(record *UsageRecord) {
 func (us *UsageStore) RenameRuleUUID(oldUUID, newUUID string) error {
 	us.mu.Lock()
 	defer us.mu.Unlock()
+	us.perf.reset()
 
 	return us.db.Model(&UsageRecord{}).
 		Where("rule_uuid = ?", oldUUID).
@@ -320,21 +444,46 @@ func validateFilterColumns(filters map[string]string) error {
 // withColumnFilters applies equality filters keyed by column name. Callers
 // must have run validateFilterColumns first; keys are sorted so the generated
 // SQL is stable (Go randomizes map iteration, which otherwise produces a
-// different statement per call).
+// different statement per call). The filters stay eligible for their own
+// indexes: right for a paged, newest-first listing (GetRecords) where a rare
+// filter should find its rows through idx_provider_model/idx_user/... rather
+// than walking the time index.
 func withColumnFilters(filters map[string]string) func(*gorm.DB) *gorm.DB {
+	return columnFilters(filters, false)
+}
+
+// withPinnedRangeFilters is withColumnFilters for queries that must read
+// every row of a timestamp range anyway (aggregates, time series, percentiles).
+// The column is written "+col": SQLite's unary plus makes the term ineligible
+// for an index, so the range index decides. Without sqlite_stat1 (nothing here
+// runs ANALYZE) the planner treats any equality term as more selective than a
+// range and walks e.g. the status index (95% of rows are "success") or the
+// scenario index across ALL history, then filters by timestamp row by row -- a
+// 30-day performance query read the whole table. Pinning the range index is
+// deterministic where ANALYZE would be a guess that goes stale as the table
+// grows.
+func withPinnedRangeFilters(filters map[string]string) func(*gorm.DB) *gorm.DB {
+	return columnFilters(filters, true)
+}
+
+func columnFilters(filters map[string]string, pinned bool) func(*gorm.DB) *gorm.DB {
+	prefix := ""
+	if pinned {
+		prefix = "+"
+	}
 	return func(db *gorm.DB) *gorm.DB {
 		for _, key := range slices.Sorted(maps.Keys(filters)) {
-			db = db.Where(key+" = ?", filters[key])
+			db = db.Where(prefix+key+" = ?", filters[key])
 		}
 		return db
 	}
 }
 
-// withStatsFilters is the UsageStatsQuery equivalent of withColumnFilters:
-// same columns, taken from typed fields instead of a map, so no validation is
-// needed.
+// withStatsFilters is the UsageStatsQuery equivalent of
+// withPinnedRangeFilters: same columns, taken from typed fields instead of a
+// map, so no validation is needed.
 func withStatsFilters(q UsageStatsQuery) func(*gorm.DB) *gorm.DB {
-	return withColumnFilters(q.filterMap())
+	return withPinnedRangeFilters(q.filterMap())
 }
 
 // filterMap renders the query's set dimension fields as a column filter map.
@@ -361,7 +510,7 @@ func (q UsageStatsQuery) filterMap() map[string]string {
 // with a raw scan of only the partial edge days (see usage_daily.go), so
 // dashboard loads stay fast regardless of how many raw records accumulate.
 func (us *UsageStore) GetAggregatedStats(query UsageStatsQuery) ([]AggregatedStat, error) {
-	if stats, ok, err := us.aggregatedStatsFromDaily(query); ok {
+	if stats, ok, err := us.aggregatedStatsFromRollups(query); ok {
 		return stats, err
 	}
 
@@ -428,9 +577,6 @@ func (b aggBucket) toAggregatedStat() AggregatedStat {
 // false, sorting/limiting is left to the caller (used for edge-day scans that
 // are merged with usage_daily results afterwards).
 func (us *UsageStore) rawAggBuckets(query UsageStatsQuery, applyLimit bool) ([]aggBucket, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-
 	db := us.db.Model(&UsageRecord{}).Scopes(
 		withinTimeRange(query.StartTime, query.EndTime),
 		withStatsFilters(query),
@@ -514,7 +660,7 @@ type TimeSeriesData struct {
 // spanning several completed days are served from usage_daily with raw scans
 // only for the partial edge days (see usage_daily.go).
 func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
-	if data, ok, err := us.timeSeriesFromDaily(interval, startTime, endTime, filters); ok {
+	if data, ok, err := us.timeSeriesFromRollups(interval, startTime, endTime, filters); ok {
 		return data, err
 	}
 	return us.rawTimeSeries(interval, startTime, endTime, filters)
@@ -522,9 +668,20 @@ func (us *UsageStore) GetTimeSeries(interval string, startTime, endTime time.Tim
 
 // rawTimeSeries aggregates time buckets directly over usage_records.
 func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Time, filters map[string]string) ([]TimeSeriesData, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
+	buckets, err := us.rawSeriesBuckets(interval, startTime, endTime, filters)
+	if err != nil {
+		return nil, err
+	}
+	merged := make(map[string]*aggBucket, len(buckets))
+	for _, b := range buckets {
+		mergeBucket(merged, b.Key, b)
+	}
+	return seriesFromBuckets(merged), nil
+}
 
+// rawSeriesBuckets groups usage_records into time buckets keyed by the Unix
+// seconds of the bucket start.
+func (us *UsageStore) rawSeriesBuckets(interval string, startTime, endTime time.Time, filters map[string]string) ([]aggBucket, error) {
 	var timeFormat string
 	switch interval {
 	case "minute":
@@ -544,27 +701,13 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 	}
 	db := us.db.Model(&UsageRecord{}).Scopes(
 		withinTimeRange(startTime, endTime),
-		withColumnFilters(filters),
+		withPinnedRangeFilters(filters),
 	)
 
-	type result struct {
-		Timestamp        string
-		RequestCount     int64
-		TotalTokens      int64
-		InputTokens      int64
-		OutputTokens     int64
-		CacheReadTokens  int64
-		CacheWriteTokens int64
-		ReasoningTokens  int64
-		SystemTokens     int64
-		ErrorCount       int64
-		AvgLatency       float64
-	}
-
-	var results []result
-	// Select the Unix timestamp of the time bucket (the grouped time), not the original timestamp
+	// The key is the Unix timestamp of the time bucket (the grouped time), not
+	// the original timestamp.
 	selectClause := fmt.Sprintf(`
-		strftime('%%s', strftime('%s', timestamp)) as timestamp,
+		strftime('%%s', strftime('%s', timestamp)) as key,
 		COUNT(*) as request_count,
 		COALESCE(SUM(total_tokens), 0) as total_tokens,
 		COALESCE(SUM(input_tokens), 0) as input_tokens,
@@ -574,36 +717,17 @@ func (us *UsageStore) rawTimeSeries(interval string, startTime, endTime time.Tim
 		COALESCE(SUM(reasoning_tokens), 0) as reasoning_tokens,
 		COALESCE(SUM(system_tokens), 0) as system_tokens,
 		COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count,
-		COALESCE(AVG(latency_ms), 0) as avg_latency
+		COALESCE(SUM(latency_ms), 0) as latency_sum
 	`, timeFormat)
 
+	var buckets []aggBucket
 	if err := db.
 		Select(selectClause).
 		Group(fmt.Sprintf("strftime('%s', timestamp)", timeFormat)).
-		Order("timestamp ASC").
-		Scan(&results).Error; err != nil {
+		Scan(&buckets).Error; err != nil {
 		return nil, err
 	}
-
-	// Convert to TimeSeriesData
-	data := make([]TimeSeriesData, len(results))
-	for i, r := range results {
-		data[i] = TimeSeriesData{
-			Timestamp:        r.Timestamp,
-			RequestCount:     r.RequestCount,
-			TotalTokens:      r.TotalTokens,
-			InputTokens:      r.InputTokens,
-			OutputTokens:     r.OutputTokens,
-			CacheReadTokens:  r.CacheReadTokens,
-			CacheWriteTokens: r.CacheWriteTokens,
-			ReasoningTokens:  r.ReasoningTokens,
-			SystemTokens:     r.SystemTokens,
-			ErrorCount:       r.ErrorCount,
-			AvgLatencyMs:     r.AvgLatency,
-		}
-	}
-
-	return data, nil
+	return buckets, nil
 }
 
 // GetRecords returns individual usage records (for debugging/audit)
@@ -664,41 +788,85 @@ func TokensPerSecond(outputTokens, latencyMs, ttftMs int) float64 {
 // range. Only successful requests participate: failures and cancellations have
 // different completion semantics and would distort the user-experience view.
 func (us *UsageStore) GetPerformanceSummary(startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
+	return us.GetPerformanceSummaryContext(context.Background(), startTime, endTime, filters)
+}
 
+// GetPerformanceSummaryContext cancels waiting and reading when the caller leaves.
+func (us *UsageStore) GetPerformanceSummaryContext(ctx context.Context, startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
 	if err := validateFilterColumns(filters); err != nil {
 		return PerformanceSummary{}, err
 	}
-	query := us.db.Model(&UsageRecord{}).
-		Select("latency_ms", "ttft_ms", "output_tokens", "streamed").
-		Where("status = ?", "success").
-		Scopes(
-			withinTimeRange(startTime, endTime),
-			withColumnFilters(filters),
-		)
-
-	var records []UsageRecord
-	if err := query.Find(&records).Error; err != nil {
+	key := perfCacheKey(startTime, endTime, filters, us.perfCacheTTL)
+	if cached, ok := us.perf.get(key, us.perfCacheTTL); ok {
+		return cached, nil
+	}
+	select {
+	case us.performanceQuery <- struct{}{}:
+		defer func() { <-us.performanceQuery }()
+	case <-ctx.Done():
+		return PerformanceSummary{}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
 		return PerformanceSummary{}, err
 	}
+	// A request that owned the scan slot may have just filled this entry.
+	if cached, ok := us.perf.get(key, us.perfCacheTTL); ok {
+		return cached, nil
+	}
+	gen := us.perf.generation()
+	summary, err := us.queryPerformanceSummary(ctx, startTime, endTime, filters)
+	if err != nil {
+		return PerformanceSummary{}, err
+	}
+	us.perf.put(key, summary, us.perfCacheTTL, gen)
+	return summary, nil
+}
 
-	completion := make([]float64, 0, len(records))
-	ttft := make([]float64, 0, len(records))
-	tps := make([]float64, 0, len(records))
-	for _, record := range records {
-		if record.LatencyMs > 0 {
-			completion = append(completion, float64(record.LatencyMs))
+func (us *UsageStore) queryPerformanceSummary(ctx context.Context, startTime, endTime time.Time, filters map[string]string) (PerformanceSummary, error) {
+	// A single SELECT reads a consistent WAL snapshot while proxy writes
+	// proceed. Exhausting the rows releases the snapshot before sorting.
+	// Check cancellation between rows. Passing a cancellable context to the
+	// SQLite driver would start a goroutine for each row in this scan.
+	rows, err := us.db.WithContext(context.WithoutCancel(ctx)).Model(&UsageRecord{}).
+		Select("COALESCE(latency_ms, 0), COALESCE(ttft_ms, 0), output_tokens, COALESCE(streamed, false)").
+		Where("+status = ?", "success").
+		Scopes(
+			withinTimeRange(startTime, endTime),
+			withPinnedRangeFilters(filters),
+		).Rows()
+	if err != nil {
+		return PerformanceSummary{}, err
+	}
+	defer rows.Close()
+
+	var completion, ttft, tps []float64
+	var latencyMs, ttftMs, outputTokens int
+	var streamed bool
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return PerformanceSummary{}, err
 		}
-		if !record.Streamed {
+		if err := rows.Scan(&latencyMs, &ttftMs, &outputTokens, &streamed); err != nil {
+			return PerformanceSummary{}, err
+		}
+		if latencyMs > 0 {
+			completion = append(completion, float64(latencyMs))
+		}
+		if !streamed {
 			continue
 		}
-		if record.TTFTMs > 0 {
-			ttft = append(ttft, float64(record.TTFTMs))
+		if ttftMs > 0 {
+			ttft = append(ttft, float64(ttftMs))
 		}
-		if speed := TokensPerSecond(record.OutputTokens, record.LatencyMs, record.TTFTMs); speed > 0 {
+		if speed := TokensPerSecond(outputTokens, latencyMs, ttftMs); speed > 0 {
 			tps = append(tps, speed)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return PerformanceSummary{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return PerformanceSummary{}, err
 	}
 
 	return PerformanceSummary{
@@ -748,22 +916,43 @@ func percentileFloat(sorted []float64, p float64) float64 {
 func (us *UsageStore) DeleteOlderThan(cutoffDate time.Time) (int64, error) {
 	us.mu.Lock()
 	defer us.mu.Unlock()
+	us.perf.reset()
 
-	result := us.db.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
-	if result.Error == nil {
-		// Include the boundary day: its aggregate now over-counts deleted
-		// records and will be rebuilt from the remaining raw rows on the
-		// next query.
-		us.db.Where("date <= ?", cutoffDate.UTC().Format(dailyDateLayout)).Delete(&UsageDailyRecord{})
+	var deleted int64
+	// One transaction: every rollup table must lose the same buckets, or the
+	// one that kept them would never rebuild them.
+	err := us.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("timestamp < ?", cutoffDate).Delete(&UsageRecord{})
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected
+		return clearRollupsThrough(tx, cutoffDate)
+	})
+	if err != nil {
+		return 0, err
 	}
-	return result.RowsAffected, result.Error
+	return deleted, nil
 }
 
-// AggregateToDaily (re)builds the usage_daily rows for the UTC day containing
-// the given time. It returns the number of aggregate rows written.
+// AggregateToDaily rebuilds the usage_hourly and usage_daily rows for the UTC
+// day containing the given time from the raw records, whether or not they
+// existed. It returns the number of usage_daily rows the day now has.
 func (us *UsageStore) AggregateToDaily(date time.Time) (int64, error) {
 	day := utcDayStart(date)
-	return us.aggregateDay(day.Format(dailyDateLayout), day)
+	us.mu.Lock()
+	defer us.mu.Unlock()
+	var n int64
+	err := us.db.Transaction(func(tx *gorm.DB) error {
+		if err := buildHours(tx, day, day.Add(24*time.Hour)); err != nil {
+			return err
+		}
+		if err := deriveDays(tx, day, day.Add(24*time.Hour)); err != nil {
+			return err
+		}
+		return tx.Model(&UsageDailyRecord{}).Where("date = ?", dayTier.key(day)).Count(&n).Error
+	})
+	return n, err
 }
 
 // Helper functions
@@ -794,4 +983,94 @@ func rateFloat(numerator, denominator int64) float64 {
 		return 0
 	}
 	return float64(numerator) / float64(denominator)
+}
+
+// UsageMinute is usage aggregated to one UTC minute.
+type UsageMinute struct {
+	At       time.Time
+	Requests int64
+	Tokens   int64
+}
+
+// UsageMinutesSince aggregates usage_records since a point in time to
+// one-minute buckets, for warm-starting routing-limit windows after a restart.
+// providerUUID is required; model and ruleUUID narrow it when non-empty
+// (service-level limits are scoped to rule+provider+model).
+func (us *UsageStore) UsageMinutesSince(providerUUID, model, ruleUUID string, since time.Time) ([]UsageMinute, error) {
+	filters := map[string]string{"provider_uuid": providerUUID}
+	if model != "" {
+		filters["model"] = model
+	}
+	if ruleUUID != "" {
+		filters["rule_uuid"] = ruleUUID
+	}
+	return us.UsageMinutesWhere(filters, since)
+}
+
+// UsageMinutesWhere is UsageMinutesSince over any whitelisted column filters
+// (user_id, team_id, model, provider_uuid, rule_uuid, ...): the warm start of
+// person / team / model limits.
+func (us *UsageStore) UsageMinutesWhere(filters map[string]string, since time.Time) ([]UsageMinute, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+	if err := validateFilterColumns(filters); err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Minute   string
+		Requests int64
+		Tokens   int64
+	}
+	err := us.db.Model(&UsageRecord{}).
+		Select(minuteSelect).
+		Scopes(withinTimeRange(since, time.Time{}), withColumnFilters(filters)).
+		Group("minute").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]UsageMinute, 0, len(rows))
+	for _, r := range rows {
+		if m, ok := minuteBucket(r.Minute, r.Requests, r.Tokens); ok {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+
+// UsageMinutesByUser is UsageMinutesWhere grouped per user_id for one team:
+// the warm start of a per-member limit template, whose counters are per person.
+func (us *UsageStore) UsageMinutesByUser(teamID string, since time.Time) (map[string][]UsageMinute, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+	var rows []struct {
+		UserID   string
+		Minute   string
+		Requests int64
+		Tokens   int64
+	}
+	err := us.db.Model(&UsageRecord{}).
+		Select("user_id, "+minuteSelect).
+		Where("team_id = ? AND user_id <> ''", teamID).
+		Scopes(withinTimeRange(since, time.Time{})).
+		Group("user_id, minute").Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]UsageMinute{}
+	for _, r := range rows {
+		if m, ok := minuteBucket(r.Minute, r.Requests, r.Tokens); ok {
+			out[r.UserID] = append(out[r.UserID], m)
+		}
+	}
+	return out, nil
+}
+
+const minuteSelect = "strftime('%Y-%m-%d %H:%M:00', timestamp) AS minute, COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0) AS tokens"
+
+func minuteBucket(minute string, requests, tokens int64) (UsageMinute, bool) {
+	at, err := time.Parse("2006-01-02 15:04:05", minute)
+	if err != nil {
+		return UsageMinute{}, false
+	}
+	return UsageMinute{At: at.UTC().Add(30 * time.Second), Requests: requests, Tokens: tokens}, true
 }

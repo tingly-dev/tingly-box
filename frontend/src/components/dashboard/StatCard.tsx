@@ -1,7 +1,8 @@
 import { Box, Paper, Typography, alpha, useTheme } from '@mui/material';
 import type { ReactNode } from 'react';
-import { fontSizes } from '@/theme/fonts';
-import { getReadableAccent } from '@/theme/status';
+import { fontSizes } from '@tingly/ui/theme/fonts';
+import { getReadableAccent } from '@tingly/ui/theme/status';
+import { radius } from '@tingly/ui/theme/radius';
 
 interface StatCardProps {
     title: string;
@@ -30,7 +31,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
             sx={{
                 p: 1.5,
                 px: 2,
-                borderRadius: 2,
+                borderRadius: radius.card,
                 border: '1px solid',
                 borderColor: 'divider',
                 height: '100%',
@@ -74,7 +75,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                             sx={{
                                 width: 28,
                                 height: 28,
-                                borderRadius: 1.5,
+                                borderRadius: radius.card,
                                 backgroundColor: alpha(colors.text, iconBgAlpha),
                                 color: colors.text,
                                 display: 'flex',
@@ -85,7 +86,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                                 transition: 'background-color 0.18s ease-out, color 0.18s ease-out, opacity 0.18s ease-out',
                                 '.MuiPaper-root:hover &': {
                                     backgroundColor: colors.text,
-                                    color: '#fff',
+                                    color: 'common.white',
                                     opacity: 1,
                                 },
                                 '& svg': {
@@ -106,7 +107,7 @@ export default function StatCard({ title, value, subtitle, icon, statusDot, colo
                 <Typography
                     variant="h4"
                     sx={{
-                        fontWeight: 700,
+                        fontWeight: 600,
                         fontSize: { xs: '1.375rem', sm: '1.5rem' },
                         lineHeight: 1.2,
                         color: judged ? colors.text : 'text.primary',

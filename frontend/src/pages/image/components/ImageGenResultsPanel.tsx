@@ -2,13 +2,14 @@ import { Box, Button, ButtonBase, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useMemo, useRef } from 'react';
 import { ContentPaste, FileUpload, Photo, ViewGallery } from '@/components/icons';
-import { CopyIconButton } from '@/components/CopyIconButton';
-import { fontMono } from '@/theme/fonts';
+import { CopyIconButton } from '@tingly/ui/components/CopyIconButton';
+import { fontMono } from '@tingly/ui/theme/fonts';
 import GenerationRunCard from './GenerationRunCard';
 import ImportedImageCard from './ImportedImageCard';
 import PanelAction from './PanelAction';
 import { STRIP_CARD_HEIGHT, WRAP_GRID_COLUMNS, WRAP_GRID_GAP } from './imageGenSession';
-import type { GenerationRun, ImportedImage, SelectedImage } from './ImageGenPlayground.types';
+import type { GenerationRun, ImportedImage, SelectedImage } from '../../../features/image/ImageGenPlayground.types';
+import { radius } from '@tingly/ui/theme/radius';
 
 // One timeline for the results panel: images brought in to work on and
 // images the model produced, in the order they arrived. Two lists would
@@ -138,7 +139,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                 height: { xs: 320, lg: desktopPanelHeight },
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 2,
+                borderRadius: radius.card,
                 bgcolor: 'action.hover',
                 p: 2,
                 display: 'flex',
@@ -279,7 +280,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                             overflowAnchor: 'none',
                             scrollbarWidth: 'thin',
                             '&::-webkit-scrollbar': { height: 6 },
-                            '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: 3 },
+                            '&::-webkit-scrollbar-thumb': { bgcolor: 'action.selected', borderRadius: radius.pill },
                         }}
                     >
                         {olderTimelineCount > 0 && (
@@ -304,7 +305,7 @@ const ImageGenResultsPanel: React.FC<ImageGenResultsPanelProps> = ({
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     gap: { xs: 0.5, lg: 1 },
-                                    borderRadius: 1.5,
+                                    borderRadius: radius.card,
                                     border: '1px dashed',
                                     borderColor: 'divider',
                                     bgcolor: 'background.paper',

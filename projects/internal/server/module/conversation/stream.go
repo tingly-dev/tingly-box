@@ -12,8 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/projects/internal/db"
+	"github.com/tingly-dev/tingly-box/projects/internal/llm"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
-	"github.com/tingly-dev/tingly-box/projects/llm"
 )
 
 // SendMessageRequest sends one user message.

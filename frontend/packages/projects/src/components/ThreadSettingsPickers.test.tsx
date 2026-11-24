@@ -19,7 +19,7 @@ it('shows worker inheritance and never uses folder profile slots for a project w
     expect(model).toHaveAttribute('data-source', 'projects');
     fireEvent.click(model);
     expect(launch).toHaveBeenCalledWith({ profile: '', model: 'custom' });
-    expect(screen.getByRole('combobox')).toHaveTextContent('threadSettings.projectDefault · session.mode.auto');
+    expect(screen.getByRole('combobox')).toHaveTextContent('session.mode.auto');
 });
 
 it('uses host slots only for folders and passes their disabled state', () => {

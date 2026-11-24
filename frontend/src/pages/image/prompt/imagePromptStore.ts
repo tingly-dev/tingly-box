@@ -1,4 +1,4 @@
-import { USE_MOCK } from '../imageWorkspaceDb';
+import { USE_MOCK } from '../../../features/image/imageWorkspaceDb';
 import { USER_REQUEST } from './imagePromptTemplates';
 import { createPromptRunStore, type PromptRunBase } from './promptRunStore';
 
@@ -12,7 +12,7 @@ export interface ImagePromptRun extends PromptRunBase {
 // Browser-local like the rest of the image workspace (imageWorkspaceDb.ts).
 const store = createPromptRunStore<ImagePromptRun>(
     'imagePrompts',
-    USE_MOCK ? () => import('./mockImagePrompts').then((module) => module.mockImagePromptRuns) : null,
+    USE_MOCK ? () => import('@/mocks/image/prompts').then((module) => module.mockImagePromptRuns) : null,
     (run) => [
         { type: 'image_url', image_url: { url: run.image } },
         { type: 'text', text: USER_REQUEST },

@@ -2,8 +2,9 @@ import React, { memo } from 'react';
 import { Box, Typography, Tooltip, ToggleButton, ToggleButtonGroup, Slider } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
+import type { Theme } from '@mui/material/styles';
 import type { ProbeThinking, ProbeProtocol } from '@/types/probe';
-import { fontSizes } from '@/theme/fonts';
+import { fontSizes } from '@tingly/ui/theme/fonts';
 
 // AxisPrimitives: the instrument-panel vocabulary shared by the probe dialog's
 // control rail and the Bench page's compose column — one axis logic, two
@@ -18,10 +19,7 @@ export const PROTOCOL_META: Partial<Record<ProbeProtocol | '', { short: string; 
     anthropic_v1: { short: 'A', full: 'Anthropic Messages' },
 };
 
-// THINKING_LADDER orders the effort steps for the slider control bar. Mirrors
-// the rule flag's thinking_effort options (.design/rule-flags.md) minus the
-// "By Client"/"Off" states, which don't apply to a probe that always builds
-// its own request.
+// This ladder controls the probe's generated client request.
 export const THINKING_LADDER: ProbeThinking[] = ['none', 'low', 'medium', 'high', 'max'];
 
 // Full-width group with equal-width options — the alignment primitive of the
@@ -37,10 +35,16 @@ export const railGroupStyle = {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
     },
+    '& .MuiToggleButton-root.Mui-selected:not(.Mui-disabled)': {
+        bgcolor: (theme: Theme) => theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.primary.main,
+    },
     // A disabled axis must still read: MUI's disabled tint vanishes on the
     // rail background, so keep the labels visible but muted.
-    '& .MuiToggleButton-root.Mui-disabled:not(.Mui-selected)': {
-        color: 'text.disabled',
+    '& .MuiToggleButton-root.Mui-disabled, & .MuiToggleButton-root.Mui-disabled.Mui-selected': {
+        color: 'text.secondary',
+        bgcolor: 'transparent',
+        border: '1px solid',
+        borderColor: 'divider',
     },
 };
 
@@ -146,7 +150,7 @@ export const ThinkingSlider: React.FC<{ value: ProbeThinking; onChange: (v: Prob
                 }))}
                 onChange={(_, v) => onChange(THINKING_LADDER[v as number])}
                 sx={{
-                    '& .MuiSlider-markLabel': { fontSize: fontSizes.xs },
+                    '& .MuiSlider-markLabel': { fontSize: fontSizes.micro },
                     '& .MuiSlider-markLabel[data-index="0"]': { transform: 'translateX(0%)' },
                     [`& .MuiSlider-markLabel[data-index="${THINKING_LADDER.length - 1}"]`]: { transform: 'translateX(-100%)' },
                 }}

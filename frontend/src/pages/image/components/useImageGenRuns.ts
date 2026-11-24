@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchBlob } from '@tingly/vision';
 import { getOpenAIClient } from '@/services/modelApi';
-import { loadPlaygroundSession, savePlaygroundSession } from '@/utils/playgroundSession';
+import { loadPlaygroundSession, savePlaygroundSession } from '@/pages/image/utils/playgroundSession';
 import { reviveSessionBlobs, toSessionImage } from './imageGenSession';
 import { readImageSize } from './useImageGenRefs';
 import type { ReferenceImage } from './ImageGenReferenceImages';
-import type { Endpoint, GenerationRun, ImportedImage, Quality, ReferenceMask } from './ImageGenPlayground.types';
+import type { Endpoint, GenerationRun, ImageReasoningEffort, ImportedImage, Quality, ReferenceMask } from '../../../features/image/ImageGenPlayground.types';
 
 const IMAGE_SCENARIO = 'imagegen';
 
@@ -37,6 +37,7 @@ export interface GenerationRequest {
     model: string;
     size: string;
     quality: Quality;
+    reasoningEffort?: ImageReasoningEffort;
     count: number;
     sources: { file: File; previewUrl: string; mask?: ReferenceMask }[];
     // Set when re-running a failed run: its card flips back to pending
@@ -143,6 +144,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             model: request.model,
             size: request.size,
             quality: request.quality,
+            reasoningEffort: request.reasoningEffort ?? 'auto',
             count: request.count,
             images: [],
             sourceImages: endpoint === 'edits' ? request.sources.map((ref) => ref.previewUrl) : undefined,
@@ -161,8 +163,12 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
             // The mask belongs to the first reference because that is the one
             // the API applies it to; nothing here chooses which image it is.
             const mask = request.sources[0]?.mask?.file;
+            // Images SDK types do not declare this gateway extension. Spread
+            // it into either encoding; the serving backend owns its meaning.
+            const effortParams = { reasoning_effort: request.reasoningEffort ?? 'auto' };
             const response = endpoint === 'edits'
                 ? await client.images.edit({
+                    ...effortParams,
                     image: editFiles.length === 1 ? editFiles[0] : editFiles,
                     ...(mask ? { mask } : {}),
                     model: request.model,
@@ -172,6 +178,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                     quality: request.quality as any,
                 }, { signal: controller.signal })
                 : await client.images.generate({
+                    ...effortParams,
                     model: request.model,
                     prompt: request.prompt,
                     n: request.count,
@@ -239,6 +246,7 @@ export const useImageGenRuns = (showNotification: UseImageGenRunsNotification, p
                 model: run.model,
                 size: run.size,
                 quality: run.quality,
+                reasoningEffort: run.reasoningEffort ?? 'auto',
                 count: run.count ?? 1,
                 sources,
                 runId: run.id,

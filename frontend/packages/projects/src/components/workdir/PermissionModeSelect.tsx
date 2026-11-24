@@ -2,7 +2,7 @@ import { MenuItem, Select, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { api, unwrap } from '../../client';
 import { ExpandMore, Lock } from '../icons';
-import { composerPickerLabelSx, composerPickerSx } from '../composerPicker';
+import { composerPickerLabelSx, composerPickerMenuProps, composerPickerSx } from '../composerPicker';
 
 interface Props {
     value: string;
@@ -11,6 +11,7 @@ interface Props {
     disabled?: boolean;
     allowInherit?: boolean;
     defaultLabel?: string;
+    defaultDisplayLabel?: string;
     label?: string;
 }
 
@@ -18,7 +19,7 @@ interface Props {
  * The permission mode of a session, as a quiet picker in the message box's
  * strip. Empty means the default (edits run, anything else asks).
  */
-export function PermissionModeSelect({ value, modes, onChange, disabled, allowInherit = true, defaultLabel, label }: Props) {
+export function PermissionModeSelect({ value, modes, onChange, disabled, allowInherit = true, defaultLabel, defaultDisplayLabel, label }: Props) {
     const { t } = useTranslation('projects');
     const inherit = defaultLabel || t('session.permissionDefault');
     return (
@@ -35,10 +36,11 @@ export function PermissionModeSelect({ value, modes, onChange, disabled, allowIn
             renderValue={(v) => (
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                     <Lock />
-                    <Typography noWrap sx={composerPickerLabelSx}>{v ? t(`session.mode.${v}`, { defaultValue: v }) : inherit}</Typography>
+                    <Typography noWrap sx={composerPickerLabelSx}>{v ? t(`session.mode.${v}`, { defaultValue: v }) : (defaultDisplayLabel || inherit)}</Typography>
                 </Stack>
             )}
             sx={composerPickerSx}
+            MenuProps={composerPickerMenuProps}
         >
             {allowInherit && <MenuItem value="">{inherit}</MenuItem>}
             {modes.map((m) => <MenuItem key={m} value={m}>{t(`session.mode.${m}`, { defaultValue: m })}</MenuItem>)}

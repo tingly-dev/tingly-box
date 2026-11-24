@@ -1,4 +1,4 @@
-import {Block, Build, Cancel, Check, CheckCircle, ChevronRight, Close, ErrorOutline, ExpandMore, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
+import {Block, Build, Cancel, Check, CheckCircle, Close, ErrorOutline, Help, Info, OpenInFull, Psychology, Robot, Terminal} from '@tingly/ui/icons';
 import {Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material';
 import type {Theme} from '@mui/material/styles';
 import {getReadableAccent} from '@tingly/ui/theme/status';
@@ -9,13 +9,16 @@ import {Fragment, useCallback, useEffect, useMemo, useRef, useState} from 'react
 import {useTranslation} from 'react-i18next';
 import type {AttachmentsComponent, CodeBlockComponent, DraftStorage, SubagentSteps} from './context';
 import {TranscriptHostProvider, useDraft, useTranscriptHost} from './context';
-import type {ActivityStep, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
-import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, firstNewBlock, formatTokens, latestTodos, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
+import type {ActivityStep, CommandPayload, RequestBlock, RequestOutcome, TaskState, ThinkingStep, Todo, TodoGroup, ToolStep, TranscriptBlock, TranscriptEntry, WorkingVerb} from './model';
+import {CHECKLIST_TOOL, FOLD_MIN_CALLS, agentReport, agentStatus, approvalSubject, askQuestions, blockTime, firstNewBlock, formatTokens, hasFiles, uniqueFiles, todoGroups, requestOutcome, summarizeRun, toolSummary, workingState} from './model';
 import Markdown from './Markdown';
 import QuestionCard from './QuestionCard';
+import {serverNow} from '../utils/serverClock';
+import {DisclosureChevron, DisclosureRow} from '../components/common/Disclosure';
 import { radius } from '@tingly/ui/theme/radius';
 import { conversationText, messageSpacing, userBubble, userMessageWidth } from './conversationStyles';
 import {conciseBlock, type MessageDetail} from './messageDetail';
+import {exactLabel, fullLabel, markLabel, nextMidnight, timeMarks, type TimeMark} from './timeMarks';
 
 // Respond answers a request. remember asks to allow the tool from now on
 // without asking (offered only when the host passes rememberLabel); answers
@@ -44,9 +47,15 @@ interface TranscriptProps {
     // The label of a second "allow" on an approval card that also allows the
     // tool from now on ("Allow Bash in this thread"); none unless passed.
     rememberLabel?: (tool: string) => string;
+    responseRecovery?: ReactNode;
     // When the reader last saw this transcript: a "New" divider marks what
     // arrived since. None on a first visit.
     newSince?: string;
+    hideChecklist?: boolean;
+    messageSource?: (message: TranscriptEntry) => ReactNode;
+    // Renders the host's own entries the transcript doesn't model (its
+    // conversation cards); without one they show as quiet text.
+    renderCustom?: (message: TranscriptEntry) => ReactNode;
 }
 
 const mono = {fontFamily: fontMono, fontSize: fontSizes.sm};
@@ -58,7 +67,7 @@ const preBox = {
 
 const UserBubble = ({message}: {message: TranscriptEntry}) => {
     const {t} = useTranslation();
-    const {attachments: Attachments} = useTranscriptHost();
+    const {attachments: Attachments, messageSource} = useTranscriptHost();
     const files = message.attachments ?? [];
     return (
         <Box sx={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
@@ -68,9 +77,11 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
                 : <Typography variant="caption" sx={{color: 'text.secondary', mb: 0.5}}>{files.map((f) => f.name).join(', ')}</Typography>)}
             {message.content.trim() !== '' && (
                 <Box sx={userBubble}>
+                    {message.context && <Typography variant="caption" sx={{display: 'block', color: 'text.secondary', mb: 0.25}}>{message.context}</Typography>}
                     <Typography variant="body1" sx={conversationText}>{message.content}</Typography>
                 </Box>
             )}
+            {messageSource?.(message)}
             {message.pending && (
                 <Typography sx={{color: 'text.secondary', fontSize: fontSizes.sm, mt: 0.25}}>
                     {t('projects.transcript.readsNext', {defaultValue: 'Claude will read this at its next step'})}
@@ -80,7 +91,35 @@ const UserBubble = ({message}: {message: TranscriptEntry}) => {
     );
 };
 
-const AssistantText = ({message}: {message: TranscriptEntry}) => <Markdown content={message.content}/>;
+// A message that carries files is a file the agent sent (send_file): what it
+// was sent with is the file's own hover text and alt, never a message of its own.
+const sentCaptions = (messages: TranscriptEntry[]): Record<string, string> => Object.fromEntries(
+    messages.flatMap((m) => (m.content.trim() ? (m.attachments ?? []).map((f) => [f.path, m.content.trim()]) : [])),
+);
+
+const AssistantText = ({message}: {message: TranscriptEntry}) => {
+    const {attachments: Attachments} = useTranscriptHost();
+    if (hasFiles(message)) {
+        const files = message.attachments ?? [];
+        return Attachments ? <Attachments items={files} align="flex-start" captions={sentCaptions([message])}/> : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>;
+    }
+    return message.content ? <Markdown content={message.content}/> : null;
+};
+
+// FilesGroup is the files sent one after another, as one row of thumbnails
+// instead of a message each. What each was sent with is on the file itself.
+const FilesGroup = ({messages}: {messages: TranscriptEntry[]}) => {
+    const {t} = useTranslation();
+    const {attachments: Attachments} = useTranscriptHost();
+    const files = uniqueFiles(messages);
+    return (
+        <Box role="group" aria-label={t('projects.transcript.filesSent', {defaultValue: '{{count}} files sent', count: files.length})}>
+            {Attachments
+                ? <Attachments items={files} align="flex-start" captions={sentCaptions(messages)}/>
+                : <Typography variant="caption">{files.map((f) => f.name).join(', ')}</Typography>}
+        </Box>
+    );
+};
 
 const formatDuration = (ms: number): string => {
     const sec = Math.round(ms / 1000);
@@ -115,7 +154,7 @@ const TaskTag = ({task}: {task: TaskState}) => {
             variant="outlined"
             icon={task.status === 'running' ? <CircularProgress size={10} sx={{ml: '6px !important'}}/> : undefined}
             label={`${t('projects.transcript.background', {defaultValue: 'background'})} · ${statusLabel(t, task.status)}`}
-            sx={{height: 20, flexShrink: 0, color: 'text.secondary', '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}
+            sx={{height: 20, flexShrink: 0, color: 'text.secondary', '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.micro}}}
         />
     );
 };
@@ -161,27 +200,15 @@ const OutcomeTag = ({outcome}: {outcome: RequestOutcome}) => {
 // A quiet, clickable line: what a tool call or a thought is, one click away
 // from its detail. The reply stays the visual anchor.
 const RowLine = ({open, onToggle, children, error = false}: {open: boolean; onToggle: () => void; children: ReactNode; error?: boolean}) => (
-    <Box
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onClick={onToggle}
-        onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onToggle();
-            }
-        }}
-        sx={{
-            display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, py: 0.25, px: 0.5, mx: -0.5, borderRadius: radius.row,
-            cursor: 'default', userSelect: 'none',
-            color: (theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.secondary,
-            '&:hover': {bgcolor: 'action.hover', color: (theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.primary},
-        }}
+    <DisclosureRow
+        variant="inline"
+        open={open}
+        onToggle={onToggle}
+        color={(theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.secondary}
+        hoverColor={(theme) => error ? getReadableAccent(theme, 'error') : theme.palette.text.primary}
     >
         {children}
-        {open ? <ExpandMore sx={{fontSize: 16, flexShrink: 0}}/> : <ChevronRight sx={{fontSize: 16, flexShrink: 0}}/>}
-    </Box>
+    </DisclosureRow>
 );
 
 const Section = ({label, children}: {label: string; children: string}) => (
@@ -397,7 +424,7 @@ const RequestCard = ({block, onRespond}: {
     onRespond: (approved: boolean, answer: string, remember?: boolean) => Promise<boolean>;
 }) => {
     const {t} = useTranslation();
-    const {rememberLabel} = useTranscriptHost();
+    const {rememberLabel, responseRecovery} = useTranscriptHost();
     const {message} = block;
     const [request, setRequest, latestRequest] = useDraft(`requestDraft:${message.request_id ?? ''}`, decodeApproval);
     const [details, setDetails] = useState(false);
@@ -433,26 +460,16 @@ const RequestCard = ({block, onRespond}: {
                 <Subject tool={message.content} input={message.payload}/>
                 {input && (
                     <>
-                        <Box
-                            component="button"
-                            type="button"
-                            aria-expanded={details}
-                            onClick={() => setDetails((v) => !v)}
-                            sx={{
-                                display: 'inline-flex', alignItems: 'center', gap: 0.25, mt: 0.5, p: 0, border: 0, bgcolor: 'transparent',
-                                font: 'inherit', fontSize: fontSizes.sm, color: 'text.secondary', cursor: 'pointer', '&:hover': {color: 'text.primary'},
-                            }}
-                        >
+                        <DisclosureRow variant="inline" open={details} onToggle={() => setDetails((v) => !v)} sx={{mt: 0.5, fontSize: fontSizes.sm}}>
                             {t('projects.transcript.details', {defaultValue: 'Details'})}
-                            {details ? <ExpandMore sx={{fontSize: 14}}/> : <ChevronRight sx={{fontSize: 14}}/>}
-                        </Box>
+                        </DisclosureRow>
                         <Collapse in={details} unmountOnExit>
                             <Box component="pre" sx={{...preBox, mt: 0.5}}>{input}</Box>
                         </Collapse>
                     </>
                 )}
             </Box>
-            {failed && <Alert severity="error" sx={{mb: 1}}>{t('projects.transcript.responseRetry', {defaultValue: 'Response was not accepted. Your answer is kept; try again.'})}</Alert>}
+            {failed && <Alert severity="error" action={responseRecovery} sx={{mb: 1}}>{t('projects.transcript.responseRetry', {defaultValue: 'Response was not accepted. Your answer is kept; try again.'})}</Alert>}
             {submitted && <Typography role="status" variant="caption">{t('projects.transcript.responseSubmitted', {defaultValue: 'Response sent — waiting for the agent…'})}</Typography>}
             <Stack direction="row" spacing={1}>
                 <Button size="small" variant="contained" startIcon={<Check/>} disabled={busy || submitted} onClick={() => respond(true)}>
@@ -471,6 +488,25 @@ const RequestCard = ({block, onRespond}: {
     );
 };
 
+// PendingRequestCard is the card of whatever the live turn waits on, an
+// approval or a question; the thread page and a thread's card on the board
+// answer with the same one.
+export const PendingRequestCard = ({block, onRespond}: {block: RequestBlock; onRespond: Respond}) => {
+    const {message} = block;
+    const requestId = message.request_id ?? '';
+    return message.kind === 'ask_request'
+        ? (
+            <QuestionCard
+                requestId={requestId}
+                title={message.content}
+                questions={askQuestions(message.payload)}
+                autoAt={message.autoAt}
+                onRespond={(...args) => onRespond(requestId, ...args)}
+            />
+        )
+        : <RequestCard block={block} onRespond={(...args) => onRespond(requestId, ...args)}/>;
+};
+
 interface BlockListProps {
     blocks: TranscriptBlock[];
     pendingRequestId?: string;
@@ -483,14 +519,37 @@ interface BlockListProps {
     // The block index where what is new since the last visit begins; a
     // divider marks it. -1 for none.
     newFrom?: number;
+    // Marks where time passed (a new day, a long silence) between blocks.
+    // Only the conversation itself has them, not a subagent's own work.
+    timeMarked?: boolean;
+}
+
+// A file sent into the conversation (send_file) is an assistant message that
+// carries files.
+const isSentFile = (block: TranscriptBlock): block is Extract<TranscriptBlock, {type: 'assistant'}> =>
+    block.type === 'assistant' && hasFiles(block.message);
+
+// The call that sends a file; its card is the file itself, so a run of such
+// calls between files is not worth a row of its own.
+const isSendFileCall = (name: string) => /(^|__)send_file$/.test(name);
+const isSendFileRun = (block: TranscriptBlock): boolean =>
+    block.type === 'activity' && block.steps.length > 0 && block.steps.every((s) => s.type === 'tool' && isSendFileCall(s.name));
+
+interface ShownBlock {
+    block: TranscriptBlock;
+    index: number;
+    last: boolean;
+    // Files sent one after another, drawn together as one row; block is the first of them.
+    files?: TranscriptEntry[];
 }
 
 // shownBlocks is what a list renders: a settled approval that its call's row
 // already reports is left out, and the calls on either side of it read as
-// one run again. Each block keeps its index (the trajectory's anchor) and
-// whether it ends the list (the live one).
-const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): {block: TranscriptBlock; index: number; last: boolean}[] => {
-    const out: {block: TranscriptBlock; index: number; last: boolean}[] = [];
+// one run again. Files sent one after another (with only their own send calls
+// between) become one entry. Each block keeps its index (the trajectory's
+// anchor) and whether it ends the list (the live one).
+const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detail: MessageDetail = 'detailed'): ShownBlock[] => {
+    const out: ShownBlock[] = [];
     blocks.forEach((original, index) => {
         const block = detail === 'concise' ? conciseBlock(original) : original;
         if (!block) return;
@@ -498,6 +557,17 @@ const shownBlocks = (blocks: TranscriptBlock[], pendingRequestId?: string, detai
         if (detail === 'detailed' && block.type === 'request' && block.toolId && block.message.request_id !== pendingRequestId) {
             if (last && out.length > 0) out[out.length - 1].last = true;
             return;
+        }
+        if (isSentFile(block)) {
+            // Look past the send calls between two files.
+            let at = out.length - 1;
+            if (at > 0 && isSendFileRun(out[at].block) && isSentFile(out[at - 1].block)) at--;
+            const previous = out[at];
+            if (previous && isSentFile(previous.block)) {
+                out.splice(at + 1, out.length - at - 1);
+                out[at] = {...previous, files: [...(previous.files ?? [previous.block.message]), block.message], last};
+                return;
+            }
         }
         const previous = out[out.length - 1];
         if (block.type === 'activity' && previous?.block.type === 'activity') {
@@ -516,43 +586,28 @@ const holdsPending = (block: TranscriptBlock | undefined, pendingRequestId?: str
 
 // BlockList renders a run of blocks: the conversation, or a subagent's own
 // work inside its card.
-const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1}: BlockListProps) => {
-    const {detail} = useTranscriptHost();
+const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anchored = false, newFrom = -1, timeMarked = false}: BlockListProps) => {
+    const {detail, renderCustom: renderHostCustom} = useTranscriptHost();
+    useDayRollover(timeMarked);
     const items = shownBlocks(blocks, pendingRequestId, detail);
     // A merged run of calls keeps its first index, so the divider goes
     // before the first item at or past newFrom.
     const dividerAt = newFrom >= 0 ? items.find((x) => x.index >= newFrom)?.index : undefined;
-    const render = ({block: b, index: i, last}: (typeof items)[number], at: number) => {
+    const render = ({block: b, index: i, last, files}: ShownBlock, at: number) => {
             const anchor = anchored ? {'data-block': i} : {};
             switch (b.type) {
                 case 'user':
-                    return <Box key={i} {...anchor}><UserBubble message={b.message}/></Box>;
+                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><UserBubble message={b.message}/></Box>;
                 case 'assistant':
-                    return <Box key={i} {...anchor}><AssistantText message={b.message}/></Box>;
+                    if (files) return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><FilesGroup messages={files}/></Box>;
+                    return <Box key={i} {...anchor} sx={stampHost}><MessageStamp at={b.message.timestamp}/><AssistantText message={b.message}/></Box>;
                 case 'activity':
                     return <ActivityRun key={i} steps={b.steps} live={working && last} hold={holdsPending(items[at + 1]?.block, pendingRequestId)} expandAll={expandAll} pendingRequestId={pendingRequestId}/>;
                 case 'agent':
                     return <AgentCard key={i} block={b} turnLive={working} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>;
                 case 'request':
                     if (!b.message.request_id || b.message.request_id !== pendingRequestId) return <SettledRequest key={b.message.request_id ?? i} block={b}/>;
-                    return b.message.kind === 'ask_request'
-                        ? (
-                            <QuestionCard
-                                key={b.message.request_id}
-                                requestId={b.message.request_id}
-                                title={b.message.content}
-                                questions={askQuestions(b.message.payload)}
-                                autoAt={b.message.autoAt}
-                                onRespond={(...args) => onRespond(b.message.request_id ?? '', ...args)}
-                            />
-                        )
-                        : (
-                            <RequestCard
-                                key={b.message.request_id}
-                                block={b}
-                                onRespond={(...args) => onRespond(b.message.request_id ?? '', ...args)}
-                            />
-                        );
+                    return <PendingRequestCard key={b.message.request_id} block={b} onRespond={onRespond}/>;
                 case 'error':
                     return (
                         <Stack key={i} {...anchor} direction="row" spacing={0.75} sx={{alignItems: 'flex-start', color: (theme) => getReadableAccent(theme, 'error')}}>
@@ -560,20 +615,146 @@ const BlockList = ({blocks, pendingRequestId, working, expandAll, onRespond, anc
                             <Typography variant="body2" sx={{color: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{b.message.content}</Typography>
                         </Stack>
                     );
-                case 'system':
+                case 'command':
+                    return <Box key={i} {...anchor}><CommandCard message={b.message}/></Box>;
+                case 'system': {
+                    // A host's lifecycle notes are often its own words; give
+                    // its renderer the first look, then show the text quietly.
+                    const custom = renderHostCustom?.(b.message);
+                    if (custom) return <Box key={i} {...anchor}>{custom}</Box>;
                     return (
                         <Typography key={i} {...anchor} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
                             {b.message.content}
                         </Typography>
                     );
+                }
+                case 'custom': {
+                    if (renderHostCustom) {
+                        const custom = renderHostCustom(b.message);
+                        if (custom != null) return <Box key={i} {...anchor}>{custom}</Box>;
+                        return null;
+                    }
+                    return (
+                        <Typography key={i} {...anchor} variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
+                            {b.message.content}
+                        </Typography>
+                    );
+                }
             }
     };
+    // A block a host chose not to draw takes no part in telling when time
+    // passed, or its marker would stand over nothing.
+    const nodes = items.map((item, at) => render(item, at));
+    const marks = timeMarked ? timeMarks(items.map((item, at) => (nodes[at] == null ? undefined : blockTime(item.block)))) : undefined;
     return (
         <>
-            {items.map((item, at) => item.index === dividerAt
-                ? <Fragment key={`new-${item.index}`}><NewDivider/>{render(item, at)}</Fragment>
-                : render(item, at))}
+            {items.map((item, at) => {
+                const mark = marks?.get(at);
+                if (!mark && item.index !== dividerAt) return nodes[at];
+                return (
+                    <Fragment key={`mark-${item.index}`}>
+                        {mark && <TimeDivider mark={mark}/>}
+                        {item.index === dividerAt && <NewDivider/>}
+                        {nodes[at]}
+                    </Fragment>
+                );
+            })}
         </>
+    );
+};
+
+// useDayRollover re-renders at local midnight, so a "Today" marker turns
+// into "Yesterday" while the page stays open.
+const useDayRollover = (on: boolean) => {
+    const [, tick] = useState(0);
+    useEffect(() => {
+        if (!on) return;
+        const timer = setTimeout(() => tick((n) => n + 1), Math.max(1000, nextMidnight(serverNow()) - serverNow() + 1000));
+        return () => clearTimeout(timer);
+    });
+};
+
+// TimeDivider says when, between two blocks: quiet, centred, and named for
+// a screen reader by the full date and time rather than by its colour.
+const TimeDivider = ({mark}: {mark: TimeMark}) => {
+    const {i18n} = useTranslation();
+    const full = fullLabel(mark.at, i18n.language);
+    const line = <Box sx={{flex: 1, borderTop: 1, borderColor: 'divider'}}/>;
+    return (
+        <Stack role="separator" aria-label={full} title={full} data-time-divider={mark.day ? 'day' : 'hour'} direction="row" spacing={1.5} sx={{alignItems: 'center', color: 'text.secondary'}}>
+            {line}
+            <Typography component="time" dateTime={mark.at} variant="caption" sx={{color: 'inherit', fontWeight: mark.day ? 600 : 400, whiteSpace: 'nowrap'}}>
+                {markLabel(mark, i18n.language)}
+            </Typography>
+            {line}
+        </Stack>
+    );
+};
+
+// stampHost / MessageStamp: the exact time of one message, shown above its
+// corner while the pointer is on it. It sits in the gap between messages, so
+// it never moves anything; touch screens (no hover) rely on the dividers.
+const stampHost = {
+    position: 'relative',
+    '@media (hover: hover)': {'&:hover > .message-stamp': {opacity: 1}},
+} as const;
+
+const MessageStamp = ({at}: {at?: string}) => {
+    const {i18n} = useTranslation();
+    if (!at) return null;
+    const exact = exactLabel(at, i18n.language);
+    if (!exact) return null;
+    return (
+        <Typography className="message-stamp" component="time" dateTime={at} aria-hidden variant="caption"
+            sx={{position: 'absolute', right: 0, bottom: '100%', mb: 0.25, pointerEvents: 'none', color: 'text.secondary', fontSize: fontSizes.micro, whiteSpace: 'nowrap', opacity: 0, display: 'none', '@media (hover: hover)': {display: 'block'}, transition: 'opacity 120ms'}}>
+            {exact}
+        </Typography>
+    );
+};
+
+// CommandCard is a slash command's outcome as one line that settles in
+// place: working, done with the figures the agent reported, or why it could not.
+// A compaction's summary opens under it.
+export const CommandCard = ({message}: {message: TranscriptEntry}) => {
+    const {t} = useTranslation();
+    const pl = (message.payload ?? {}) as CommandPayload;
+    const [open, setOpen] = useState(false);
+    const running = pl.state === 'running';
+    const failed = pl.state === 'failed';
+    const isNew = pl.name === 'clear' || pl.name === 'new'; // Older session boundaries used /new.
+    const parts: string[] = [];
+    if (!isNew && pl.state === 'ok') {
+        if (pl.tokens_reported) {
+            parts.push(t('projects.transcript.compactTokens', {defaultValue: '{{before}} → {{after}} tokens', before: formatTokens(pl.tokens_before ?? 0), after: formatTokens(pl.tokens_after ?? 0)}));
+        }
+        if (pl.trigger === 'auto') parts.push(t('projects.transcript.compactAuto', {defaultValue: 'automatic'}));
+        if (pl.duration_ms) parts.push(formatDuration(pl.duration_ms));
+    }
+    const title = isNew
+        ? running
+            ? t('projects.transcript.newStarting', {defaultValue: 'Starting a new session…'})
+            : failed
+                ? t('projects.transcript.newFailed', {defaultValue: 'Could not start a new session: {{reason}}', reason: (pl.reason || t('projects.transcript.newNoReason', {defaultValue: 'unknown error'})).replace(/\.$/, '')})
+                : t('projects.transcript.newStarted', {defaultValue: 'New session started'})
+        : running
+            ? t('projects.transcript.compacting', {defaultValue: 'Compacting conversation…'})
+            : failed
+                ? t('projects.transcript.compactFailed', {defaultValue: 'Could not compact: {{reason}}', reason: (pl.reason || t('projects.transcript.compactNoReason', {defaultValue: 'the agent declined'})).replace(/\.$/, '')})
+                : t('projects.transcript.compacted', {defaultValue: 'Conversation compacted'});
+    return (
+        <Box role="status" data-command={pl.name} sx={{border: 1, borderColor: 'divider', borderRadius: radius.row, px: 1.25, py: 0.75}}>
+            <Stack direction="row" spacing={0.75} sx={{alignItems: 'center', color: failed ? (theme) => getReadableAccent(theme, 'warning') : 'text.secondary'}}>
+                {running ? <CircularProgress size={14}/> : failed ? <ErrorOutline sx={{fontSize: 16}}/> : <CheckCircle sx={{fontSize: 16}}/>}
+                <Typography variant="body2" sx={{color: 'inherit', fontWeight: 500}}>{title}</Typography>
+                {parts.length > 0 && <Typography variant="caption" sx={{color: 'text.secondary'}}>{parts.join(' · ')}</Typography>}
+                {!isNew && pl.summary && (
+                    <Button size="small" onClick={() => setOpen(!open)} endIcon={<DisclosureChevron open={open}/>} sx={{ml: 'auto !important', minWidth: 0, textTransform: 'none'}} aria-expanded={open}>
+                        {t('projects.transcript.compactSummary', {defaultValue: 'Summary'})}
+                    </Button>
+                )}
+            </Stack>
+            {!isNew && pl.summary && <Collapse in={open} unmountOnExit><Box component="pre" sx={{...preBox, mt: 1}}>{pl.summary}</Box></Collapse>}
+        </Box>
     );
 };
 
@@ -628,12 +809,8 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
 
     return (
         <Paper variant="outlined" data-call-ids={block.call.id} sx={{borderRadius: radius.card, overflow: 'hidden'}}>
-            <Box
-                role="button"
-                aria-expanded={open}
-                onClick={toggle}
-                sx={{px: 1.5, py: 1, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
-            >
+            <DisclosureRow open={open} onToggle={toggle} chevron={false} sx={{py: 1, '& > .MuiBox-root, & > .MuiStack-root': {flex: 1, minWidth: 0}}}>
+                <Box>
                 <Stack direction="row" spacing={1} sx={{alignItems: 'center', minWidth: 0}}>
                     <Robot sx={{fontSize: 18, color: 'text.secondary', flexShrink: 0}}/>
                     <Typography variant="body2" noWrap sx={{fontWeight: 600, color: 'text.primary', minWidth: 0}}>
@@ -645,7 +822,7 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                         </Typography>
                     )}
                     {task?.background && (
-                        <Chip size="small" variant="outlined" label={t('projects.transcript.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.xs}}}/>
+                        <Chip size="small" variant="outlined" label={t('projects.transcript.background', {defaultValue: 'background'})} sx={{height: 18, '& .MuiChip-label': {px: 0.75, fontSize: fontSizes.micro}}}/>
                     )}
                     <Box sx={{flex: 1}}/>
                     <Stack direction="row" spacing={0.5} sx={{alignItems: 'center', flexShrink: 0}} title={statusLabel(t, status)}>
@@ -663,14 +840,15 @@ const AgentCard = ({block, turnLive, expandAll, pendingRequestId, onRespond}: {
                             </IconButton>
                         </Tooltip>
                     )}
-                    {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
+                    <DisclosureChevron open={open}/>
                 </Stack>
                 {(running && task?.activity) || meta ? (
                     <Typography variant="caption" noWrap component="div" sx={{color: 'text.secondary', pl: 3.25, mt: 0.25}}>
                         {[running ? task?.activity : statusLabel(t, status), meta].filter(Boolean).join(' · ')}
                     </Typography>
                 ) : null}
-            </Box>
+                </Box>
+            </DisclosureRow>
             <Collapse in={open} unmountOnExit>
                 <Stack spacing={1.5} sx={{px: 1.5, pb: 1.5, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
                     <AgentBody block={block} running={running} report={report} steps={steps} expandAll={expandAll} pendingRequestId={pendingRequestId} onRespond={onRespond}/>
@@ -761,9 +939,9 @@ const useSubagentSteps = (call: string, open: boolean) => {
 const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
     const {t} = useTranslation();
     const {verb, since} = workingState(blocks);
-    const [now, setNow] = useState(() => Date.now());
+    const [now, setNow] = useState(() => serverNow());
     useEffect(() => {
-        const timer = setInterval(() => setNow(Date.now()), 1000);
+        const timer = setInterval(() => setNow(serverNow()), 1000);
         return () => clearInterval(timer);
     }, []);
     const start = since ? Date.parse(since) : NaN;
@@ -780,29 +958,26 @@ const WorkingLine = ({blocks}: {blocks: TranscriptBlock[]}) => {
 // ChecklistCard shows the agent's own progress list (its last TodoWrite),
 // pinned above the conversation: what is done, what runs now, what is left.
 // It starts open while work remains and folded once everything is done.
-const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
+export const ChecklistCard = ({todos, working, history = []}: {todos: Todo[]; working: boolean; history?: TodoGroup[]}) => {
     const {t} = useTranslation();
     const done = todos.filter((x) => x.status === 'completed').length;
     const finished = done === todos.length;
     const [choice, setChoice] = useState<boolean | undefined>();
+    const [historyOpen, setHistoryOpen] = useState(false);
     const open = choice ?? !finished;
     const current = todos.find((x) => x.status === 'in_progress');
     return (
         <Paper variant="outlined" data-checklist sx={{borderRadius: radius.card, overflow: 'hidden', bgcolor: 'background.paper'}}>
-            <Stack
-                direction="row" spacing={1} role="button" aria-expanded={open} onClick={() => setChoice(!open)}
-                sx={{alignItems: 'center', px: 1.5, py: 0.75, cursor: 'default', userSelect: 'none', '&:hover': {bgcolor: 'action.hover'}}}
-            >
+            <DisclosureRow open={open} onToggle={() => setChoice(!open)} sx={{gap: 1}}>
                 <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary', flexShrink: 0}}>{t('projects.transcript.checklist', {defaultValue: 'Progress'})}</Typography>
                 <Typography variant="body2" sx={{color: 'text.secondary', flexShrink: 0, fontVariantNumeric: 'tabular-nums'}}>
-                    {t('projects.transcript.checklistCount', {defaultValue: '{{done}} of {{total}} done', done, total: todos.length})}
+                    {todos.length ? t('projects.transcript.checklistCount', {defaultValue: '{{done}} of {{total}} done', done, total: todos.length}) : t('projects.transcript.checklistEmpty', {defaultValue: 'No current tasks'})}
                 </Typography>
                 {!open && current && <Typography variant="body2" noWrap sx={{color: 'text.secondary', minWidth: 0}}>· {current.activeForm || current.content}</Typography>}
                 <Box sx={{flex: 1}}/>
-                {open ? <ExpandMore sx={{fontSize: 16, color: 'text.secondary'}}/> : <ChevronRight sx={{fontSize: 16, color: 'text.secondary'}}/>}
-            </Stack>
+            </DisclosureRow>
             <Collapse in={open} unmountOnExit>
-                <Stack component="ul" spacing={0.5} sx={{m: 0, listStyle: 'none', px: 1.5, pb: 1, pt: 0.5, borderTop: 1, borderColor: 'divider'}}>
+                <Stack component="ul" spacing={0.5} sx={{m: 0, listStyle: 'none', px: 1.5, pb: 1, pt: 0.5, borderTop: 1, borderColor: 'divider', maxHeight: 220, overflowY: 'auto'}}>
                     {todos.map((x, i) => (
                         <Stack component="li" key={i} direction="row" spacing={1} sx={{alignItems: 'flex-start'}}>
                             <Box sx={{width: 16, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
@@ -825,6 +1000,19 @@ const ChecklistCard = ({todos, working}: {todos: Todo[]; working: boolean}) => {
                     ))}
                 </Stack>
             </Collapse>
+            {history.length > 0 && <>
+                <DisclosureRow open={historyOpen} onToggle={() => setHistoryOpen(!historyOpen)} sx={{borderTop: 1, borderColor: 'divider'}}>
+                    <Typography variant="body2" sx={{fontWeight: 600, color: 'text.primary'}}>
+                        {t('projects.transcript.checklistHistory', {defaultValue: 'Previous task groups ({{count}})', count: history.length})}
+                    </Typography>
+                    <Box sx={{flex: 1}}/>
+                </DisclosureRow>
+                <Collapse in={historyOpen} unmountOnExit>
+                    <Stack spacing={1} sx={{maxHeight: 240, overflowY: 'auto', px: 1.5, pb: 1}}>
+                        {[...history].reverse().map((group) => <ChecklistCard key={group.id} todos={group.todos} working={false}/>)}
+                    </Stack>
+                </Collapse>
+            </>}
         </Paper>
     );
 };
@@ -838,7 +1026,7 @@ const VERB_DEFAULTS: Record<WorkingVerb, string> = {
 // shows, with the room of the whole pane. The host shows older steps above
 // it (SubagentSteps.load with earlier) and says where it sits in the
 // conversation.
-export const SubagentFocus = ({block, working, detail = 'detailed', expandAll = false, onRespond, pendingRequestId, drafts, subagents, codeBlock, attachments, rememberLabel}: {
+export const SubagentFocus = ({block, working, detail = 'detailed', expandAll = false, onRespond, pendingRequestId, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery}: {
     detail?: MessageDetail;
     block: Extract<TranscriptBlock, {type: 'agent'}>;
     // The thread's turn runs (a foreground subagent left running without it was cut off).
@@ -851,8 +1039,9 @@ export const SubagentFocus = ({block, working, detail = 'detailed', expandAll = 
     codeBlock?: CodeBlockComponent;
     attachments?: AttachmentsComponent;
     rememberLabel?: (tool: string) => string;
+    responseRecovery?: ReactNode;
 }) => (
-    <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+    <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery}>
         <FocusBody block={block} working={working} expandAll={expandAll} onRespond={onRespond} pendingRequestId={pendingRequestId}/>
     </TranscriptHostProvider>
 );
@@ -874,17 +1063,18 @@ const FocusBody = ({block, working, expandAll, onRespond, pendingRequestId}: {
     );
 };
 
-const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, newSince}: TranscriptProps) => {
+const Transcript = ({blocks, pendingRequestId, working, detail = 'detailed', expandAll = false, onRespond, drafts, subagents, codeBlock, attachments, rememberLabel, responseRecovery, newSince, hideChecklist = false, messageSource, renderCustom}: TranscriptProps) => {
     // While a request waits, its card is the live part; otherwise the turn
     // gets a line saying what it does and for how long.
     const showWorking = working && !pendingRequestId;
-    const todos = latestTodos(blocks);
+    const groups = useMemo(() => todoGroups(blocks), [blocks]);
+    const currentGroup = groups.at(-1);
 
     return (
-        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel}>
+        <TranscriptHostProvider detail={detail} drafts={drafts} subagents={subagents} codeBlock={codeBlock} attachments={attachments} rememberLabel={rememberLabel} responseRecovery={responseRecovery} messageSource={messageSource} renderCustom={renderCustom}>
             <Stack spacing={messageSpacing}>
-                {todos && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard todos={todos} working={working}/></Box>}
-                <BlockList anchored blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
+                {!hideChecklist && currentGroup && <Box sx={{position: 'sticky', top: 0, zIndex: 1}}><ChecklistCard key={currentGroup.id} todos={currentGroup.todos} history={groups.slice(0, -1)} working={working}/></Box>}
+                <BlockList anchored timeMarked blocks={blocks} pendingRequestId={pendingRequestId} working={working} expandAll={expandAll} onRespond={onRespond} newFrom={firstNewBlock(blocks, newSince)}/>
                 {showWorking && <WorkingLine blocks={blocks}/>}
             </Stack>
         </TranscriptHostProvider>

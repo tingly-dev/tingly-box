@@ -1,6 +1,7 @@
 import { Box, Skeleton } from '@mui/material';
+import { radius } from '@tingly/ui/theme/radius';
 
-const ROUNDED_SX = { borderRadius: 2 } as const;
+const ROUNDED_SX = { borderRadius: radius.card } as const;
 
 /**
  * Shape-matching placeholder for the "Use <Agent>" scenario pages (config
@@ -14,7 +15,7 @@ const ROUNDED_SX = { borderRadius: 2 } as const;
  */
 export const ScenarioPageSkeleton: React.FC<{ ruleRows?: number }> = ({ ruleRows = 2 }) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 3 }}>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Skeleton variant="text" width={160} height={32} />
                 <Skeleton variant="rounded" width={100} height={32} sx={ROUNDED_SX} />
@@ -23,7 +24,7 @@ export const ScenarioPageSkeleton: React.FC<{ ruleRows?: number }> = ({ ruleRows
             <Skeleton variant="rounded" height={44} sx={ROUNDED_SX} />
         </Box>
 
-        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 3 }}>
+        <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: radius.card, p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Skeleton variant="text" width={140} height={32} />
                 <Box sx={{ display: 'flex', gap: 1 }}>

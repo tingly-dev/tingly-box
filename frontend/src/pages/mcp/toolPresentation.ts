@@ -1,4 +1,4 @@
-import { BUILTIN_IDS, BUILTIN_SERVER_WEBTOOLS_ID, type MCPCatalogTool, type MCPSourceConfig } from './types';
+import { BUILTIN_IDS, BUILTIN_SERVER_WEBTOOLS_ID, type MCPCatalogTool, type MCPSourceConfig } from '../../features/mcp/types';
 
 export type MCPToolPatch = { enabled?: boolean };
 

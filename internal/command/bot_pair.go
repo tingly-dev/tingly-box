@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/remote/control/bot"
+	"github.com/tingly-dev/tingly-box/remote/bot"
 
 	"github.com/tingly-dev/tingly-box/internal/app"
 	"github.com/tingly-dev/tingly-box/internal/db"

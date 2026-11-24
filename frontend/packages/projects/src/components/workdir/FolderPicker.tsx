@@ -63,7 +63,7 @@ export function FolderPicker({ value, onChange, folders, onAddFolder, disabled }
                     <MenuItem key={path} selected={path === value} onClick={() => pick(path)}>
                         <Box sx={{ minWidth: 0 }}>
                             <Typography variant="body2" noWrap sx={{ color: 'text.primary' }}>{folderName(path)}</Typography>
-                            <Typography noWrap sx={{ fontFamily: fontMono, fontSize: fontSizes.xs, color: 'text.secondary' }}>{path}</Typography>
+                            <Typography noWrap sx={{ fontFamily: fontMono, fontSize: fontSizes.micro, color: 'text.secondary' }}>{path}</Typography>
                         </Box>
                     </MenuItem>
                 ))}

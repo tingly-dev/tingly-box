@@ -1,14 +1,17 @@
+import type { ReactNode } from 'react';
 import { Box } from '@mui/material';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { getReadableAccent } from '@tingly/ui/theme/status';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner } from '../icons';
+import { CheckCircle, CircleDashed, GitCommit, Merge, Spinner, Star, Stream } from '../icons';
 import type { Thread } from '../../client';
 import { radius } from '@tingly/ui/theme/radius';
+import { ThreadLinkPills } from './ThreadLinkPills';
+import { stripLinks } from './linkView';
 
-/** Overview groups, in the order the Overview shows them: what needs the
- * user first. */
-export const STATUS_ORDER = ['waiting', 'failed', 'ready', 'working', 'idle', 'resolved'] as const;
+/** Overview groups, in the order the Overview shows them: what runs first,
+ * then what needs the user, then what waits for review. */
+export const STATUS_ORDER = ['working', 'waiting', 'ready', 'failed', 'idle', 'resolved'] as const;
 export type ThreadStatus = (typeof STATUS_ORDER)[number];
 
 /** How a state reads: amber when it needs the user, red when it failed,
@@ -33,18 +36,22 @@ const dot = { width: 8, height: 8, borderRadius: '50%', boxSizing: 'border-box' 
 /** The mark of a state, in a 14px slot: a filled dot for what needs the user
  * (amber) or failed (red), a spinner for work, a ring for ready, a check for
  * done. */
-export function ThreadStateMark({ status }: { status: string }) {
+export function ThreadStateMark({ status, queued }: { status: string; queued?: boolean }) {
     const sx = { fontSize: 14 };
     let mark;
     switch (status) {
         case 'working':
-            mark = <Spinner sx={{ ...sx, animation: 'spin 1s linear infinite' }} />;
+            // A queued turn has not started: a still dashed ring, not the spinner.
+            mark = queued ? <CircleDashed sx={sx} /> : <Spinner sx={{ ...sx, animation: 'spin 1s linear infinite' }} />;
             break;
         case 'ready':
             mark = <Box component="span" sx={{ ...dot, border: '1.5px solid currentColor' }} />;
             break;
         case 'resolved':
             mark = <CheckCircle sx={sx} />;
+            break;
+        case 'pinned':
+            mark = <Star sx={sx} />;
             break;
         case 'waiting':
         case 'failed':
@@ -63,20 +70,38 @@ export function ThreadStateMark({ status }: { status: string }) {
 /** One state, one look, wherever a thread's status shows: its mark (the only
  * coloured part) and its word unless `compact` (the word then sits in the
  * title attribute). */
-export function ThreadState({ status, compact }: { status: string; compact?: boolean }) {
+export function ThreadState({ status, compact, queued }: { status: string; compact?: boolean; queued?: boolean }) {
     const { t } = useTranslation('projects');
-    const word = t(`thread.status.${status}`);
+    const isQueued = status === 'working' && !!queued;
+    const word = t(`thread.status.${isQueued ? 'queued' : status}`);
     return (
         <Box
             component="span"
-            data-status={status}
+            data-status={isQueued ? 'queued' : status}
             title={compact ? word : undefined}
             sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, flexShrink: 0, fontSize: fontSizes.sm, fontWeight: 500, whiteSpace: 'nowrap', color: status === 'waiting' ? 'text.primary' : 'text.secondary' }}
         >
-            <ThreadStateMark status={status} />
+            <ThreadStateMark status={status} queued={isQueued} />
             {!compact && word}
         </Box>
     );
+}
+
+/** How a thread is mentioned: "#3 Title", the tag IM chats already use; a
+ * thread without a number (the coordinator) is its title. */
+export const threadRef = (thread: Pick<Thread, 'seq' | 'title'>) => (thread.seq > 0 ? `#${thread.seq} ${thread.title}` : thread.title);
+
+/** The thread's number in the project, muted before its title: the `#3` that
+ * `@3` in IM and the coordinator's thread tools take. Nothing for the
+ * coordinator (0). */
+export function ThreadNumber({ seq }: { seq: number }) {
+    if (!(seq > 0)) return null;
+    return <Box component="span" data-thread-number sx={{ mr: 0.75, color: 'text.disabled', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>#{seq}</Box>;
+}
+
+/** A thread's title as rows and cards show it: its number, then the title. */
+export function NumberedTitle({ thread }: { thread: Pick<Thread, 'seq' | 'title'> }) {
+    return <><ThreadNumber seq={thread.seq} />{thread.title}</>;
 }
 
 const mono = { fontFamily: fontMono } as const;
@@ -88,7 +113,7 @@ export function InlineCode({ text }: { text: string }) {
     return (
         <>
             {parts.map((p, i) => (i % 2 === 1
-                ? <Box key={i} component="code" sx={{ ...mono, fontSize: '0.95em', px: 0.5, borderRadius: radius.chip, bgcolor: 'action.hover', color: 'text.primary' }}>{p}</Box>
+                ? <Box key={i} component="code" sx={{ ...mono, fontSize: fontSizes.inlineCode, px: 0.5, borderRadius: radius.chip, bgcolor: 'action.hover', color: 'text.primary' }}>{p}</Box>
                 : p))}
         </>
     );
@@ -99,6 +124,9 @@ export function InlineCode({ text }: { text: string }) {
 export function ThreadSubtitle({ thread }: { thread: Thread }) {
     const { t } = useTranslation('projects');
     if (needsUser(thread.status) && thread.wait_reason) return <InlineCode text={thread.wait_reason} />;
+    if (thread.status === 'working' && thread.queued) return <>{t('thread.queuedSubtitle')}</>;
+    // A report from an earlier turn would read as the news; what it runs now is.
+    if (thread.status === 'working' && thread.running_tasks > 0) return <>{t('thread.tasksSubtitle', { count: thread.running_tasks })}</>;
     const report = (thread.last_report || '').split('\n').find((l) => l.trim() !== '');
     if (report) return <InlineCode text={report.replace(/^#+\s*/, '')} />;
     if (thread.branch) return <>{thread.branch}</>;
@@ -111,25 +139,51 @@ const pill = {
     '& svg': { fontSize: 13 },
 } as const;
 
-/** A thread's work at a glance, as small pills: its commits, or that it was
- * merged. Nothing for a thread without a branch; the details sit in the
- * tooltip, so the pill stays one icon and one word wherever it shows. */
-export function ThreadBadges({ thread }: { thread: Thread }) {
+/** A thread at a glance, as small pills: on a card its issues and PRs
+ * (`ThreadLinkPills`, `links`), that its work was merged, and the background
+ * tasks it runs. Its commits show only where the thread is read in detail
+ * (the open thread's header, `work`): in a list or on a board a count of
+ * commits says nothing about what to do next. On a card whose leading pill is
+ * the merged PR of the thread's own branch, that pill already says merged. The details sit in the
+ * tooltip, so a pill stays one icon and one word. The running-tasks pill is a
+ * count of what is running elsewhere: given `onTasks` it opens what the count
+ * counts, instead of only explaining itself. */
+export function ThreadBadges({ thread, tasks: showTasks = true, links: showLinks = false, work: showWork = false, onTasks }: { thread: Thread; /** False where the tasks already have their own control (the open thread's header). */ tasks?: boolean; /** True on a card: its issues and PRs as pills (the list unfolds them under the row instead). */ links?: boolean; /** True in the open thread's header: its commits. */ work?: boolean; /** Opens the thread's task list from the pill; without it the pill stays a plain count. */ onTasks?: (threads: Thread[], anchor: HTMLElement) => void }) {
     const { t } = useTranslation('projects');
-    if (thread.merged_at) {
-        return (
-            <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })}
-                sx={pill}>
+    const open = (e: { stopPropagation(): void; currentTarget: HTMLElement }) => {
+        e.stopPropagation();
+        onTasks?.([thread], e.currentTarget);
+    };
+    const canOpen = !!onTasks && thread.running_tasks > 0;
+    const tasks = showTasks && thread.running_tasks > 0 && (
+        <Box component="span" title={t('thread.tasksSubtitle', { count: thread.running_tasks })}
+            role={canOpen ? 'button' : undefined} tabIndex={canOpen ? 0 : undefined}
+            aria-label={canOpen ? t('thread.tasksSubtitle', { count: thread.running_tasks }) : undefined}
+            onClick={canOpen ? open : undefined}
+            onKeyDown={canOpen ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(e); } } : undefined}
+            sx={canOpen ? { ...pill, cursor: 'pointer', '&:hover': { borderColor: 'text.disabled', color: 'text.primary' } } : pill}>
+            <Stream />{t('thread.tasksBadge', { count: thread.running_tasks })}
+        </Box>
+    );
+    const links = showLinks && <ThreadLinkPills links={thread.links} />;
+    const lead = showLinks ? stripLinks(thread.links)[0] : undefined;
+    const mergedPr = lead?.kind === 'pr' && lead.state === 'merged' && !!thread.branch && lead.head === thread.branch;
+    let work: ReactNode = null;
+    if (thread.merged_at && !mergedPr) {
+        work = (
+            <Box component="span" title={t('thread.mergedInto', { base: thread.base_branch })} sx={pill}>
                 <Merge />{t('thread.mergedBadge')}
             </Box>
         );
+    } else if (showWork && !thread.merged_at && thread.branch && thread.commits_ahead > 0) {
+        work = (
+            <Box component="span"
+                title={[thread.branch, t('thread.commits', { count: thread.commits_ahead }), t('thread.files', { count: thread.files_changed })].filter(Boolean).join(' · ')}
+                sx={pill}>
+                <GitCommit />{t('thread.commits', { count: thread.commits_ahead })}
+            </Box>
+        );
     }
-    if (!thread.branch || thread.commits_ahead === 0) return null;
-    return (
-        <Box component="span"
-            title={[thread.branch, t('thread.commits', { count: thread.commits_ahead }), t('thread.files', { count: thread.files_changed })].filter(Boolean).join(' · ')}
-            sx={pill}>
-            <GitCommit />{t('thread.commits', { count: thread.commits_ahead })}
-        </Box>
-    );
+    if (!links && !work && !tasks) return null;
+    return <>{links}{work}{tasks}</>;
 }
