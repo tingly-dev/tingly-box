@@ -59,6 +59,21 @@ describe('useTranscript', () => {
         await act(async () => land(answer([ev('a', 1)])));
         expect(result.current.events?.map((e) => e.id)).toEqual(['a', 'live']);
     });
+    it('keeps the current thread’s live entries when an earlier thread read finishes late', async () => {
+        let finishFirst: (v: unknown) => void = () => undefined;
+        let finishSecond: (v: unknown) => void = () => undefined;
+        m.get.mockReturnValueOnce(new Promise((resolve) => { finishFirst = resolve; }));
+        m.get.mockReturnValueOnce(new Promise((resolve) => { finishSecond = resolve; }));
+        const { result, rerender } = renderHook(({ id }) => useTranscript(id), { initialProps: { id: 't1' } });
+
+        rerender({ id: 't2' });
+        act(() => result.current.apply(ev('live', 5, 't2')));
+        await act(async () => finishFirst(answer([ev('old', 1)])));
+        await act(async () => finishSecond(answer([ev('new', 1, 't2')])));
+
+        expect(result.current.events?.map((event) => event.id)).toEqual(['new', 'live']);
+    });
+
     it('pages the conversation from its own first event, not a usage event before it, and reads a subagent\'s steps on request', async () => {
         const usage = { ...ev('u0', 0), kind: 'usage' };
         m.get.mockResolvedValueOnce(answer([usage, ev('c', 3), { ...ev('call', 4), kind: 'tool_use', request_id: 'a1' }], true));

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { apiFetch, type ThreadCounts } from '../client';
 
 export interface ProjectEvent {
@@ -80,13 +80,11 @@ export function openEventStream(url: string, onEvent: (ev: ProjectEvent) => void
 }
 
 function useEventStream(url: string, onEvent: (ev: ProjectEvent) => void, onOpen?: () => void) {
-    const handler = useRef(onEvent);
-    const opened = useRef(onOpen);
-    handler.current = onEvent;
-    opened.current = onOpen;
+    const handleEvent = useEffectEvent(onEvent);
+    const handleOpen = useEffectEvent(() => onOpen?.());
 
     useEffect(() => {
         if (!url) return;
-        return openEventStream(url, (ev) => handler.current(ev), () => opened.current?.());
+        return openEventStream(url, (ev) => handleEvent(ev), () => handleOpen());
     }, [url]);
 }
