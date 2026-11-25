@@ -2070,6 +2070,8 @@ export interface components {
             thread_permission_mode: string;
             /** @description Field thread_profile */
             thread_profile: string;
+            /** @description Field thread_sandbox */
+            thread_sandbox: string;
             /** @description Field type */
             type: string;
             /**
@@ -2173,6 +2175,8 @@ export interface components {
             thread_permission_mode: string;
             /** @description Field thread_profile */
             thread_profile: string;
+            /** @description Field thread_sandbox */
+            thread_sandbox: string;
             threads: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
@@ -2804,6 +2808,11 @@ export interface components {
             thread_permission_mode?: "default" | "acceptEdits" | "auto" | "bypassPermissions";
             /** @description Field thread_profile */
             thread_profile?: string;
+            /**
+             * @description Field thread_sandbox
+             * @enum {string}
+             */
+            thread_sandbox?: "" | "bwrap";
         };
         UsageResponse: {
             /** @description Field by_model */

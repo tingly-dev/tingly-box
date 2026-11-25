@@ -4545,6 +4545,10 @@
             "type": "string",
             "description": "Field thread_profile"
           },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
           "type": {
             "type": "string",
             "description": "Field type"
@@ -4569,6 +4573,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "thread_sandbox",
           "github_auto",
           "max_running_threads",
           "paused",
@@ -4784,6 +4789,10 @@
             "type": "string",
             "description": "Field thread_profile"
           },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -4811,6 +4820,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "thread_sandbox",
           "github_auto",
           "max_running_threads",
           "paused",
@@ -6040,6 +6050,14 @@
           "thread_profile": {
             "type": "string",
             "description": "Field thread_profile"
+          },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox",
+            "enum": [
+              "",
+              "bwrap"
+            ]
           }
         }
       },

@@ -181,6 +181,11 @@ export const project: Dict<typeof projectEn> = {
         threadModel: '线程默认模型', threadModelHelp: '新线程创建时复制此值（Claude Code --model），已有线程保持各自的模型不受影响。留空使用宿主默认模型。',
         modelDefault: '连接默认',
         permissionMode: '线程权限',
+        sandbox: '线程运行环境',
+        sandboxes: {
+            host: '本机', hostHelp: '线程以你的用户身份运行，你能访问的它都能访问。',
+            bwrap: '沙箱（bubblewrap）', bwrapHelp: '线程只看得到自己的目录、仓库、资料库和记忆，家目录的其余内容都被隐藏。网络不限制。仅限 Linux，需要安装 bwrap，否则线程无法启动。从每个线程的下一回合起生效。',
+        },
         githubAuto: 'GitHub：自动放行',
         githubAutoFoot: '关闭时每次弹卡询问；推送到默认分支或受保护分支、强推别人的分支总是询问。',
         githubGroups: {

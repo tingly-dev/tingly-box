@@ -178,6 +178,11 @@ export const project = {
         threadModel: 'Default thread model', threadModelHelp: 'Copied to each new thread when it starts (Claude Code --model); threads already started keep their own. Empty uses the host default.',
         modelDefault: 'Connection default',
         permissionMode: 'Thread permissions',
+        sandbox: 'Where threads run',
+        sandboxes: {
+            host: 'This machine', hostHelp: 'Threads run as your user and can reach everything you can.',
+            bwrap: 'Sandbox (bubblewrap)', bwrapHelp: 'Threads see only their directory, the repository, the Library and memory; the rest of your home stays hidden. The network is open. Linux only; needs bwrap installed, or threads fail to start. Applies from each thread\'s next turn.',
+        },
         githubAuto: 'GitHub: auto-approve',
         githubAutoFoot: 'Off: the thread asks on a card each time. Pushing to the default or a protected branch, and force-pushing someone else\'s branch, always ask.',
         githubGroups: {
