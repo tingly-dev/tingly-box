@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/sandbox"
 	// The runtimes this build ships: a new one is one more import here.
 	_ "github.com/tingly-dev/tingly-box/sandbox/bwrap"
+	_ "github.com/tingly-dev/tingly-box/sandbox/microvm"
 )
 
 // db.Project.ThreadSandbox names the sandbox runtime a project's threads run

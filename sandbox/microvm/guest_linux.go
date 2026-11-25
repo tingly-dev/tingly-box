@@ -79,6 +79,12 @@ func guest() error {
 			return err
 		}
 	}
+	if s.Net != nil {
+		if err := setUpNet(s.Net); err != nil {
+			report(result{Error: "network: " + err.Error()})
+			return err
+		}
+	}
 	env := s.Env
 	if pl := (netproxy.Plan{Proxy: s.Proxy, Expose: s.Expose}); !pl.Empty() {
 		ports := vsockPorts(pl)
@@ -149,7 +155,9 @@ func oomKills() int {
 // dialHost connects to the host (CID 2) on a vsock port.
 func dialHost(port uint32) (*os.File, error) {
 	const afVsock = 40
-	fd, err := syscall.Socket(afVsock, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	// Non-blocking, then waited for: a blocking connect is interrupted by the
+	// Go runtime's signals (EINTR), and cannot be retried.
+	fd, err := syscall.Socket(afVsock, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC|syscall.SOCK_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +169,35 @@ func dialHost(port uint32) (*os.File, error) {
 		flags     uint8
 		zero      [3]uint8
 	}{family: afVsock, port: port, cid: 2}
-	if _, _, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(&sa)), unsafe.Sizeof(sa)); e != 0 {
+	fail := func(e error) (*os.File, error) {
 		_ = syscall.Close(fd)
 		return nil, fmt.Errorf("vsock port %d: %w", port, e)
+	}
+	if _, _, e := syscall.Syscall(syscall.SYS_CONNECT, uintptr(fd), uintptr(unsafe.Pointer(&sa)), unsafe.Sizeof(sa)); e != 0 && e != syscall.EINPROGRESS && e != syscall.EINTR {
+		return fail(e)
+	}
+	for {
+		pfd := [1]struct {
+			fd             int32
+			events, revent int16
+		}{{fd: int32(fd), events: 0x4 /* POLLOUT */}}
+		_, _, e := syscall.Syscall6(syscall.SYS_PPOLL, uintptr(unsafe.Pointer(&pfd[0])), 1, 0, 0, 0, 0)
+		if e == syscall.EINTR {
+			continue
+		}
+		if e != 0 {
+			return fail(e)
+		}
+		break
+	}
+	if soErr, err := syscall.GetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_ERROR); err != nil || soErr != 0 {
+		if err == nil {
+			err = syscall.Errno(soErr)
+		}
+		return fail(err)
+	}
+	if err := syscall.SetNonblock(fd, false); err != nil {
+		return fail(err)
 	}
 	return os.NewFile(uintptr(fd), fmt.Sprintf("vsock:%d", port)), nil
 }
@@ -180,6 +214,32 @@ func loopbackUp() error {
 	*(*uint16)(unsafe.Pointer(&ifr[16])) = syscall.IFF_UP | syscall.IFF_RUNNING
 	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), syscall.SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifr[0]))); e != 0 {
 		return e
+	}
+	return nil
+}
+
+// setUpNet brings up the card and routes through it, with the host's ip (the
+// guest sees /usr). The filter is outside the guest, in the namespace the
+// card's tap is in.
+func setUpNet(n *guestNet) error {
+	ip := ""
+	for _, p := range []string{"/usr/sbin/ip", "/usr/bin/ip", "/sbin/ip", "/bin/ip"} {
+		if _, err := os.Stat(p); err == nil {
+			ip = p
+			break
+		}
+	}
+	if ip == "" {
+		return errors.New("ip is not installed on the host")
+	}
+	for _, args := range [][]string{
+		{"link", "set", "eth0", "up"},
+		{"addr", "add", n.Addr, "dev", "eth0"},
+		{"route", "add", "default", "via", n.Gateway},
+	} {
+		if out, err := exec.Command(ip, args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("ip %s: %v: %s", strings.Join(args, " "), err, out)
+		}
 	}
 	return nil
 }

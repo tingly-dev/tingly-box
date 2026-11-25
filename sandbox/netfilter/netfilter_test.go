@@ -40,3 +40,27 @@ func TestRulesRefuseTheHostBeforeAnyGrant(t *testing.T) {
 		}
 	}
 }
+
+func TestRouterFiltersOnlyWhatTheVMSends(t *testing.T) {
+	grants, _ := Grants([]string{"10.1.0.0/16"})
+	r := Router(netip.MustParseAddr("169.254.1.53"), grants, "tbtap0", netip.MustParsePrefix("10.0.2.0/24"))
+	fwd := strings.Index(r, "hook forward")
+	others := strings.Index(r, `iifname != "tbtap0" accept`)
+	host := strings.Index(r, "ip daddr 127.0.0.0/8")
+	private := strings.Index(r, "ip daddr 10.0.0.0/8")
+	if !(0 < fwd && fwd < others && others < host && host < private) {
+		t.Errorf("order: forward %d, replies %d, host %d, private %d:\n%s", fwd, others, host, private, r)
+	}
+	for _, want := range []string{`iifname "tbtap0" reject`, "type nat hook prerouting", "ip saddr 10.0.2.0/24 masquerade"} {
+		if !strings.Contains(r, want) {
+			t.Errorf("missing %q:\n%s", want, r)
+		}
+	}
+	if nft, err := exec.LookPath("nft"); err == nil {
+		cmd := exec.Command(nft, "-c", "-f", "-")
+		cmd.Stdin = strings.NewReader(r)
+		if out, err := cmd.CombinedOutput(); err != nil && !strings.Contains(string(out), "Operation not permitted") {
+			t.Errorf("nft -c: %v: %s", err, out)
+		}
+	}
+}

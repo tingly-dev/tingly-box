@@ -574,7 +574,7 @@ export const projectsHandlers = [
         sandboxes: [
             { name: 'host', isolation: 'none', available: true, levels: { storage: 'host', network: 'open', exec: 'host', credentials: 'inherit', resources: 'unlimited' } },
             { name: 'bwrap', isolation: 'process', available: true, levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
-            { name: 'libkrun', isolation: 'vm', available: false, reason: '/dev/kvm is not accessible: add your user to the kvm group', levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'microvm', isolation: 'vm', available: false, reason: 'no access to /dev/kvm (permission denied): add the user to the kvm group and log in again', levels: { storage: 'confined', network: 'internet', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
         ],
     })),
     http.get('/api/v1/projects/:id', ({ params }) => {

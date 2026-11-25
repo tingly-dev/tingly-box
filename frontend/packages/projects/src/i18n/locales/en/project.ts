@@ -189,7 +189,7 @@ export const project = {
             hostHelp: 'Limits need a sandbox: pick one above. Empty means no limit.',
             memoryMin: 'At least 512 MiB', processesMin: 'At least 64', cpuMin: 'At least 0.1',
         },
-        sandboxes: { host: 'This machine (no isolation)', bwrap: 'Sandbox (bubblewrap)' },
+        sandboxes: { host: 'This machine (no isolation)', bwrap: 'Sandbox (bubblewrap)', microvm: 'Virtual machine (microVM)' },
         axes: { storage: 'Files', network: 'Network', exec: 'Processes', credentials: 'Secrets', resources: 'Resources' },
         levels: {
             storage: { host: 'everything you can read', confined: 'only its directory, repository, Library and memory' },

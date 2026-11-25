@@ -9,8 +9,9 @@
 // guest's kernel cannot change that. The guest's init is this same binary
 // (see guest_linux.go); it talks to the host over vsock: a control
 // connection for the command and its exit, and one each for stdin, stdout
-// and stderr. The guest has no network device: network none is the default,
-// and allowlist reaches the host's proxy (sandbox/netproxy) over vsock too.
+// and stderr. Under network none and allowlist the guest has no network
+// device (allowlist reaches the host's proxy, sandbox/netproxy, over vsock
+// too); under internet it has one (internet.go).
 package microvm
 
 import (
@@ -24,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +35,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/sandbox"
 	"github.com/tingly-dev/tingly-box/sandbox/bwrap"
+	"github.com/tingly-dev/tingly-box/sandbox/netfilter"
 	"github.com/tingly-dev/tingly-box/sandbox/netproxy"
 )
 
@@ -68,6 +71,8 @@ type spec struct {
 	GID    int      `json:"gid"`
 	Proxy  bool     `json:"proxy,omitempty"`
 	Expose []int    `json:"expose,omitempty"`
+	// Net sets up the guest's network card (internet).
+	Net *guestNet `json:"net,omitempty"`
 }
 
 // result is what the guest sends back when the command has ended, or could
@@ -79,12 +84,30 @@ type result struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// Guest size. The memory is the guest's RAM, allocated as it is touched.
-// Variables for tests.
+// Guest size: the host's CPUs (an idle vCPU costs nothing), and memory up to
+// maxGuestMemoryMB of the host's. The memory is the guest's RAM, allocated
+// as it is touched; but the guest's kernel touches about 1.6% of it for its
+// page tables at boot, so the whole of a large host's would cost each VM
+// gigabytes and seconds (.design/sandbox.md §9). Variables for tests.
 var (
-	guestCPUs     = 2
-	guestMemoryMB = 2048
+	guestCPUs     = runtime.NumCPU()
+	guestMemoryMB = min(hostMemoryMB(), maxGuestMemoryMB)
 )
+
+const maxGuestMemoryMB = 8192
+
+// hostMemoryMB is the host's RAM, or maxGuestMemoryMB when it cannot be read.
+func hostMemoryMB() int {
+	b, _ := os.ReadFile("/proc/meminfo")
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "MemTotal:"); ok {
+			if kb, err := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(v), " kB")); err == nil {
+				return kb / 1024
+			}
+		}
+	}
+	return maxGuestMemoryMB
+}
 
 // What the runtime needs, found by an environment variable, on PATH, or
 // where Kata Containers installs it. Variables for tests.
@@ -104,7 +127,7 @@ var (
 func (Runtime) Info() sandbox.Info {
 	return sandbox.Info{Name: Name, Isolation: sandbox.IsolationVM, Supports: map[sandbox.Axis][]sandbox.Level{
 		sandbox.AxisStorage:     {sandbox.StorageConfined},
-		sandbox.AxisNetwork:     {sandbox.NetworkNone, sandbox.NetworkAllowlist},
+		sandbox.AxisNetwork:     {sandbox.NetworkNone, sandbox.NetworkAllowlist, sandbox.NetworkInternet},
 		sandbox.AxisExec:        {sandbox.ExecConfined},
 		sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
 		sandbox.AxisResources:   {sandbox.ResourcesUnlimited},
@@ -162,6 +185,7 @@ type machine struct {
 	fs, vmm   *exec.Cmd
 	listeners []net.Listener
 	net       *netproxy.Host
+	inet      *internet
 	stdin     net.Conn
 	stdout    net.Conn
 
@@ -181,6 +205,12 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 	storage, err := bwrap.StorageArgs(p, view)
 	if err != nil {
 		return err
+	}
+	if p.Network.Level == sandbox.NetworkInternet {
+		if m.inet, err = newInternet(ctx, m.dir, p.Network); err != nil {
+			return err
+		}
+		storage = append(storage, "--ro-bind", m.inet.conf, view+netfilter.ResolvConfTarget())
 	}
 	args := []string{"--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-net",
 		"--die-with-parent", "--new-session", "--proc", "/proc", "--dev", "/dev"}
@@ -232,13 +262,21 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 	}
 
 	cmdline := "console=ttyS0 quiet panic=-1 root=root rootfstype=virtiofs rw init=" + exe + " " + guestEnv + "=1"
-	m.vmm = exec.Command(vmm, "--kernel", kernel,
-		"--cpus", "boot="+strconv.Itoa(guestCPUs),
-		"--memory", "size="+strconv.Itoa(guestMemoryMB)+"M,shared=on",
-		"--fs", "tag=root,socket="+sock,
-		"--vsock", "cid=3,socket="+vsock,
-		"--serial", "file="+filepath.Join(m.dir, "console.log"), "--console", "off",
-		"--cmdline", cmdline)
+	vmmArgs := []string{"--kernel", kernel,
+		"--cpus", "boot=" + strconv.Itoa(guestCPUs),
+		"--memory", "size=" + strconv.Itoa(guestMemoryMB) + "M,shared=on",
+		"--fs", "tag=root,socket=" + sock,
+		"--vsock", "cid=3,socket=" + vsock,
+		"--serial", "file=" + filepath.Join(m.dir, "console.log"), "--console", "off",
+		"--cmdline", cmdline}
+	vmmArgs = append([]string{vmm}, vmmArgs...)
+	if m.inet != nil {
+		vmmArgs = append(append(m.inet.via, vmmArgs...), m.inet.vmmArgs()...)
+	}
+	m.vmm = exec.Command(vmmArgs[0], vmmArgs[1:]...)
+	// Its own process group: with pasta, the VMM is pasta's child, and
+	// stopping the VM kills the group.
+	m.vmm.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	m.vmm.Stdout = m.logFile("vmm.log")
 	m.vmm.Stderr = m.vmm.Stdout
 	if err := m.vmm.Start(); err != nil {
@@ -254,7 +292,7 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 		case <-vmmExited:
 			return nil, fmt.Errorf("%w: the microVM stopped while booting%s", sandbox.ErrUnavailable, m.tail("vmm.log", "console.log"))
 		case <-time.After(30 * time.Second):
-			return nil, fmt.Errorf("%w: the microVM did not boot in 30s%s", sandbox.ErrUnavailable, m.tail("console.log"))
+			return nil, fmt.Errorf("%w: the microVM did not boot in 30s%s", sandbox.ErrUnavailable, m.tail("vmm.log", "console.log"))
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -264,6 +302,9 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 		return err
 	}
 	s := spec{Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir, UID: os.Getuid(), GID: os.Getgid(), Proxy: pl.Proxy, Expose: pl.Expose}
+	if m.inet != nil {
+		s.Net = &m.inet.guest
+	}
 	if err := json.NewEncoder(ctl).Encode(s); err != nil {
 		return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 	}
@@ -329,10 +370,11 @@ func vsockPorts(pl netproxy.Plan) map[string]int {
 // stop kills the VM and virtiofsd and removes the sockets; it is idempotent.
 func (m *machine) stop() {
 	m.stopOnce.Do(func() {
-		for _, c := range []*exec.Cmd{m.vmm, m.fs} {
-			if c != nil && c.Process != nil {
-				_ = c.Process.Kill()
-			}
+		if m.vmm != nil && m.vmm.Process != nil {
+			_ = syscall.Kill(-m.vmm.Process.Pid, syscall.SIGKILL)
+		}
+		if m.fs != nil && m.fs.Process != nil {
+			_ = m.fs.Process.Kill()
 		}
 		if m.fs != nil && m.fs.Process != nil {
 			_ = m.fs.Wait()
@@ -365,7 +407,7 @@ func (m *machine) Kill() error {
 	}
 	if m.vmm != nil && m.vmm.Process != nil {
 		m.killed.Store(true)
-		return m.vmm.Process.Kill()
+		return syscall.Kill(-m.vmm.Process.Pid, syscall.SIGKILL)
 	}
 	return nil
 }

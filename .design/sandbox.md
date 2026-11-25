@@ -223,7 +223,7 @@ type Usage interface {
 | storage | host | confined：空根 + 系统目录只读 + `--tmpfs HOME` + 同路径 bind | confined：同一份 `bwrap.StorageArgs` 搭在 `/view`，virtiofsd（自身在 bwrap 里）作为 guest 根 |
 | network none | — | `--unshare-net` | guest 无网卡 |
 | network allowlist | — | `--unshare-net` + 宿主代理（unix socket）+ 沙箱内桥（本程序） | 宿主代理经 vsock + guest 内桥 |
-| network internet | — | pasta（passt 包）给沙箱自己的网络命名空间并经宿主出网：`--no-map-gw`，关掉全部端口转发（`-t/-u/-T/-U none`），DNS 由 `--dns-forward 169.254.1.53 --dns-host <宿主解析器>` 转发，沙箱的 `resolv.conf` 指向它；pasta 起 `/usr/bin/sh`，先用 `nft` 在该命名空间装 `sandbox/netfilter` 的规则（自身回环与 DNS 放行 → 宿主回环与宿主全部地址拒绝 → 按地址授予的 P 放行 → P 拒绝），再 exec bwrap（`--uid/--gid` 映射回宿主用户） | **待实现**：passt vhost-user 网卡 + guest 内 nftables（guest init 以 root 设置，agent 无权改） |
+| network internet | — | pasta（passt 包）给沙箱自己的网络命名空间并经宿主出网：`--no-map-gw`，关掉全部端口转发（`-t/-u/-T/-U none`），DNS 由 `--dns-forward 169.254.1.53 --dns-host <宿主解析器>` 转发，沙箱的 `resolv.conf` 指向它；pasta 起 `/usr/bin/sh`，先用 `nft` 在该命名空间装 `sandbox/netfilter` 的规则（自身回环与 DNS 放行 → 宿主回环与宿主全部地址拒绝 → 按地址授予的 P 放行 → P 拒绝），再 exec bwrap（`--uid/--gid` 映射回宿主用户） | VMM 在 pasta 给的网络命名空间里运行（pasta 参数与 DNS 转发同 bwrap）；guest 网卡是该命名空间里的 tap（`10.0.2.0/24`，网关 `10.0.2.1`），命名空间开转发并 masquerade；`netfilter.Router` 在 forward 链只过滤 guest 发出的包（顺序同上），input 链拒绝 guest 访问命名空间本身。规则在 VM 之外，guest 内核里的 root 也改不了 |
 | network open | ✓ | 共用宿主网络 | 不支持（非特权给 VM 接宿主网络要 tap，正是要避开的） |
 | Expose | — | 桥（本程序）在沙箱 `127.0.0.1`/`::1` 的同号端口监听 → unix socket → 宿主 `127.0.0.1:端口` | 同上，guest 内桥经 vsock（端口 1100+i） |
 | exec confined | — | user/pid/ipc/uts 命名空间、`--disable-userns`、`--cap-drop ALL`、`--new-session`、`--die-with-parent` | 独立内核；guest init 关 user namespace、设 NoNewPrivs、以宿主 uid/gid 运行 |
@@ -232,6 +232,8 @@ type Usage interface {
 | 记账 | — | 有 systemd 用户会话时一律进 scope（`--unit=tb-sandbox-<随机>.scope`，失败的 scope 不回收，读完 `Result` 再 `reset-failed`）；`Usage` 读 scope 的 cgroup | guest 的 `/proc/vmstat` `oom_kill` 计数；`Usage` 未实现 |
 
 **`internet` 的实测（2026-11-25）**：非特权 user namespace 里直接跑 `nft` 被 AppArmor 拒（`kernel.apparmor_restrict_unprivileged_userns=1`）；在 pasta 建的命名空间里可以（pasta 有自己的 AppArmor 配置，只允许执行 `/usr/bin` 下的命令，所以由 `/usr/bin/sh` 装规则再 exec bwrap）。pasta 默认把宿主正在监听的端口（含宿主回环上的）转发进命名空间，等于把宿主回环暴露给沙箱——一致性测试抓到了（`LEAK-host[127.0.0.1]`），必须显式关掉全部转发。变异检查：不装规则时，宿主其它网卡地址（`192.168.122.1`、容器网桥 `10.200.x`）可达。
+
+microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 接不上（passt 报 `Failed to add fd to epoll: Bad file descriptor`，CH 报 `VhostUserGetFeatures ConnectionReset`），所以改为让 VMM 进 pasta 的命名空间、用 tap。forward 链若对回包也做 P 拒绝，回到 `10.0.2.15` 的 SYN-ACK 会被拒（guest 回 ICMP 不可达），所以只过滤从 tap 进来的包。变异检查同上：去掉 forward 规则，宿主各网卡地址可达。
 
 ## 5 Projects 的默认值
 
@@ -243,7 +245,7 @@ type Usage interface {
 | credentials | explicit | 白名单 `sandboxEnv` + 启动自己设的变量 |
 | resources | unlimited（记账开） | 项目设置可选填每线程配额（内存、进程数、CPU 核数），**不预设**；任一项填了则为 `limited` |
 
-- **运行时选择**：项目设置"线程运行环境"列出运行时；某运行时是否可用，按线程策略在本机实际起一次 `true` 判定（`CheckThreadSandbox`，结果缓存一分钟），所以缺 pasta 之类某一级别的工具时，设置里就显示不可用及原因，而不是等线程失败。现为本机 / bwrap；microvm 在它支持 `internet` 后加入。
+- **运行时选择**：项目设置"线程运行环境"列出运行时；某运行时是否可用，按线程策略在本机实际起一次 `true` 判定（`CheckThreadSandbox`，结果缓存一分钟），所以缺 pasta 之类某一级别的工具时，设置里就显示不可用及原因，而不是等线程失败。现为本机 / bwrap / microvm（microvm 要求运行 Tingly Box 的用户能访问 `/dev/kvm`）。
 - **配额（决定）**：写在项目上、按线程生效；可另设项目总额（项目一个 systemd slice，线程是其下的 scope；VM 运行时按线程）。界面上留空即不限，填了做下限校验（内存至少 512 MiB，进程数至少 64，CPU 至少 0.1 核；前后端同一套），宿主运行时下禁用。已做：`Project.ThreadMemoryBytes/ThreadTasks/ThreadCPU`、更新接口校验、复制与变更摘要、codegen、设置界面；当前用量显示与项目总额未做。
 - **网络级别**：`internet` 为默认；`allowlist`（附名单编辑）给敏感项目；`open` 不作为普通选项，若保留则明确标为危险（包含宿主回环与内网）。
 - **可见性**：线程因 OOM、配额或沙箱失败结束时，写成线程事件并显示原因与用量。 OOM 已做：沙箱以 `EndOOM` 结束的线程，失败原因写明“沙箱内存不足（限额 …）”。
@@ -256,10 +258,10 @@ type Usage interface {
 |---|---|---|
 | S1 | **原语与校验（已完成）**：`Endpoint`/`Expose`、`ExitError{Reason}`、`Resources.CPU`、`Usage` 接口、`NetworkInternet` 常量（运行时尚不声明）；§2.6 的结构校验（`WellFormed`）；地址分面（`Classify`）与授予（`ParseGrant`/`Permits`）；代理按 §2.2 的授予规则改；bwrap 与 microvm 实现 Expose；bwrap 的 CPU 配额；结束原因除 `oom` 外统一；一致性测试：allowlist 重写、expose、cpu | 无 |
 | S2 | **记账与 OOM（已完成）**：bwrap 有 systemd 用户会话时一律进 scope，按 systemd 记录的 scope 结果（`oom-kill`）判定 `oom`，并实现 `Usage`（读 scope 的 cgroup）；microvm 按 guest 的 `oom_kill` 计数判定 `oom` | S1 |
-| S3 | **`internet`（bwrap 已完成）**：pasta + 命名空间内 nftables，通过 `network/internet`（上界：宿主回环与全部宿主地址不可达；下限：公网按名可达）；microvm 的 `internet` 待做 | S1 |
+| S3 | **`internet`（已完成）**：pasta + 命名空间内 nftables，通过 `network/internet`（上界：宿主回环与全部宿主地址不可达；下限：公网按名可达）；microvm 见 S6 | S1 |
 | S4 | **Projects 默认切换（已完成）**：线程策略改为 `internet` + 自动 Expose；设置里的可用性按线程策略实测；live 测试：真实 CLI 在 internet 下完成回合，模型经 Expose，公网 200 | S2、S3 |
 | S5 | **配额（已完成）**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
-| S6 | **microvm 进 Projects**：VM `unlimited` 改为宿主规格；加入运行时列表 | S3、S4 |
+| S6 | **microvm 进 Projects（已完成，内存待定）**：microvm 的 `internet`（VMM 进 pasta 命名空间 + tap + `netfilter.Router`）；vCPU 改为宿主核数，内存见 §9；加入运行时列表；live 测试：真实 CLI 在 microvm 的 internet 下完成回合，公网 200，模型经 Expose | S3、S4 |
 | S7 | 项目总额（slice）；已知缺口：运行中审批新增的目录挂进沙箱、`library/.cache` 线程间共享、主仓库 git 引用可写 | 按需 |
 
 ## 7 决定记录
@@ -275,7 +277,7 @@ type Usage interface {
 
 ## 8 待定与已知缺口
 
-- microvm 的 `internet`（passt vhost-user + guest 内 nftables）待实现。
+- microvm 的 `unlimited` 内存：见 §9，需要决定。
 - 被允许的网络面上的外泄无法由沙箱防止；敏感项目用 `allowlist`。
 - 存储容量不限；工作区写入不受配额约束。
 - `Expose` 只支持 TCP、宿主回环；Unix socket 形式的宿主服务（如 Docker）不在范围内。
@@ -299,11 +301,11 @@ type Usage interface {
 - `Fresh` 中的目录是沙箱私有的 tmpfs，计入沙箱的内存。
 
 **microvm**
-- `Sup(network) = {none, allowlist}`：guest 没有网卡；`internet` 待 passt 接入，`open` 不提供。
+- `Sup(network) = {none, allowlist, internet}`：none 与 allowlist 下 guest 没有网卡；`internet` 的授予与 bwrap 一样只支持按地址；`open` 不提供。需要 passt 与 nftables。
 - 文件经 virtiofsd 提供：宿主上属于 root 的文件在 guest 里显示为 `nobody`（65534）；setuid 不生效。只读由宿主侧（virtiofsd 所在的 bwrap 视图）强制。
 - `/tmp`、`/run` 是宿主侧 virtiofsd 进程里的 tmpfs，计入宿主内存而不是 guest 内存。
 - guest 里能看到 guest 自己的内核线程（`/proc` 里数十个进程），但看不到宿主进程。
-- `unlimited` 现为 2 vCPU、2 GiB，**待修**为宿主规格（§2.5 的 unlimited 不设比宿主更小的上限）；注意 guest 内核为全部内存建页表结构（约 1.5%），按宿主内存全量给会占实际内存，需配合内存热插拔或气球，S6 定。
+- `unlimited`：vCPU 为宿主核数（空闲 vCPU 不占资源；80 核时 guest 里有约 700 个内核线程，启动约 1 s）。**偏差（待定）**：内存为 min(宿主内存, 8 GiB)，而 §2.5 的 unlimited 不设比宿主小的上限。原因是 guest 内核在启动时为全部内存建页结构（约 1.6%，立即占用宿主内存）。实测（宿主 247 GiB）：2 GiB 的 guest 常驻约 0.16 GB，32 GiB 约 0.79 GB，宿主全量约 4.4 GB 且启动 11 s。要符合模型，可以 (a) 接受全量的代价，(b) 用 virtio-mem 小起步、由宿主按 guest 压力热插拔（要一个宿主侧的调节器），(c) 把这一上限写进模型，作为 VM 运行时的 `unlimited`。
 - 不实现 `Usage`（可选能力）。
 - 命令以宿主 uid/gid 运行，无附加组。
 
