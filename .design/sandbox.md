@@ -261,7 +261,7 @@ microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 �
 | S3 | **`internet`（已完成）**：pasta + 命名空间内 nftables，通过 `network/internet`（上界：宿主回环与全部宿主地址不可达；下限：公网按名可达）；microvm 见 S6 | S1 |
 | S4 | **Projects 默认切换（已完成）**：线程策略改为 `internet` + 自动 Expose；设置里的可用性按线程策略实测；live 测试：真实 CLI 在 internet 下完成回合，模型经 Expose，公网 200 | S2、S3 |
 | S5 | **配额（已完成）**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
-| S6 | **microvm 进 Projects（已完成，内存待定）**：microvm 的 `internet`（VMM 进 pasta 命名空间 + tap + `netfilter.Router`）；vCPU 改为宿主核数，内存见 §9；加入运行时列表；live 测试：真实 CLI 在 microvm 的 internet 下完成回合，公网 200，模型经 Expose | S3、S4 |
+| S6 | **microvm 进 Projects（已完成）**：microvm 的 `internet`（VMM 进 pasta 命名空间 + tap + `netfilter.Router`）；vCPU 与内存改为宿主规格（代价见 §9）；加入运行时列表；live 测试：真实 CLI 在 microvm 的 internet 下完成回合，公网 200，模型经 Expose | S3、S4 |
 | S7 | 项目总额（slice）；已知缺口：运行中审批新增的目录挂进沙箱、`library/.cache` 线程间共享、主仓库 git 引用可写 | 按需 |
 
 ## 7 决定记录
@@ -274,10 +274,11 @@ microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 �
 | 2026-11-25 | 网络默认放外网、沙箱内 localhost 放通、宿主 localhost 不放；补充：P 内网一并拒绝、网关与 MCP 经 Expose 暴露、提供 DNS、按解析后地址判定 | 用户提出，补充项经讨论 lgtm |
 | 2026-11-25 | 模型与原语必须正确；机制做不到可以再讨论（不为迁就机制改模型）；模型用形式化定义，实现差异单列（§9），不冗长 | 用户 |
 | 2026-11-25 | 接受 passt 依赖；配额按线程生效，可选项目总额；`open` 不作默认、标为危险；confined 运行时永远记账（能判定 OOM）；结束原因进 `Proc` | 讨论后 lgtm |
+| 2026-11-25 | microvm 的 `unlimited` 按宿主全量给内存，不设上限；启动开销（约 1.6% 内存）暂时接受，待底层支持（virtio-mem 等）再做按需增长 | 用户 |
 
 ## 8 待定与已知缺口
 
-- microvm 的 `unlimited` 内存：见 §9，需要决定。
+- microvm 的 `unlimited` 每台 VM 启动即占约 1.6% 宿主内存、启动较慢（§9）；待底层支持 virtio-mem 后改为按需增长。
 - 被允许的网络面上的外泄无法由沙箱防止；敏感项目用 `allowlist`。
 - 存储容量不限；工作区写入不受配额约束。
 - `Expose` 只支持 TCP、宿主回环；Unix socket 形式的宿主服务（如 Docker）不在范围内。
@@ -305,7 +306,7 @@ microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 �
 - 文件经 virtiofsd 提供：宿主上属于 root 的文件在 guest 里显示为 `nobody`（65534）；setuid 不生效。只读由宿主侧（virtiofsd 所在的 bwrap 视图）强制。
 - `/tmp`、`/run` 是宿主侧 virtiofsd 进程里的 tmpfs，计入宿主内存而不是 guest 内存。
 - guest 里能看到 guest 自己的内核线程（`/proc` 里数十个进程），但看不到宿主进程。
-- `unlimited`：vCPU 为宿主核数（空闲 vCPU 不占资源；80 核时 guest 里有约 700 个内核线程，启动约 1 s）。**偏差（待定）**：内存为 min(宿主内存, 8 GiB)，而 §2.5 的 unlimited 不设比宿主小的上限。原因是 guest 内核在启动时为全部内存建页结构（约 1.6%，立即占用宿主内存）。实测（宿主 247 GiB）：2 GiB 的 guest 常驻约 0.16 GB，32 GiB 约 0.79 GB，宿主全量约 4.4 GB 且启动 11 s。要符合模型，可以 (a) 接受全量的代价，(b) 用 virtio-mem 小起步、由宿主按 guest 压力热插拔（要一个宿主侧的调节器），(c) 把这一上限写进模型，作为 VM 运行时的 `unlimited`。
+- `unlimited`：vCPU 与内存都按宿主规格给（空闲 vCPU 不占资源；guest 内存按触及分配）。代价：guest 内核启动时为全部内存建页结构（约 1.6%，立即占用宿主内存），和本机开机时一样是全量初始化。实测（宿主 247 GiB、80 核）：每台 VM 常驻约 4.4 GB、启动约 11 s（2 GiB 的 guest 约 0.16 GB、1 s）；guest 里约 700 个内核线程。以后在底层支持时（virtio-mem 热插拔与宿主侧调节器，依赖相应组件的安装）改为小起步、按需增长，不改模型。
 - `limited` 由 guest 内的 cgroup 给出，结束原因 `oom` 按 guest 的 `oom_kill` 计数判定（cgroup 内与整机 OOM 都计）。限额在 guest 内核里执行：guest 自己的内核与 init 不计入限额，`/tmp`、`/run` 在宿主侧也不计入。
 - 不实现 `Usage`（可选能力）。
 - 命令以宿主 uid/gid 运行，无附加组。

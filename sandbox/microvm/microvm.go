@@ -86,17 +86,27 @@ type result struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// Guest size: the host's CPUs (an idle vCPU costs nothing), and memory up to
-// maxGuestMemoryMB of the host's. The memory is the guest's RAM, allocated
-// as it is touched; but the guest's kernel touches about 1.6% of it for its
-// page tables at boot, so the whole of a large host's would cost each VM
-// gigabytes and seconds (.design/sandbox.md §9). Variables for tests.
+// Guest size: the host's CPUs and memory, as unlimited means (an idle vCPU
+// costs nothing, and the guest's RAM is allocated as it is touched; but the
+// guest's kernel touches about 1.6% of it for its page structures at boot,
+// as any machine does: .design/sandbox.md §9). Variables for tests.
 var (
 	guestCPUs     = runtime.NumCPU()
-	guestMemoryMB = min(hostMemoryMB(), maxGuestMemoryMB)
+	guestMemoryMB = hostMemoryMB()
 )
 
-const maxGuestMemoryMB = 8192
+// hostMemoryMB is the host's RAM, or 2 GiB when it cannot be read.
+func hostMemoryMB() int {
+	b, _ := os.ReadFile("/proc/meminfo")
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "MemTotal:"); ok {
+			if kb, err := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(v), " kB")); err == nil {
+				return kb / 1024
+			}
+		}
+	}
+	return 2048
+}
 
 // guestOverheadMB is what a limited guest has beyond its memory limit: its
 // kernel and init.
@@ -116,19 +126,6 @@ func guestSize(r sandbox.Resources) (cpus, memoryMB int) {
 		memoryMB = int((r.MemoryBytes+(1<<20)-1)>>20) + guestOverheadMB
 	}
 	return cpus, memoryMB
-}
-
-// hostMemoryMB is the host's RAM, or maxGuestMemoryMB when it cannot be read.
-func hostMemoryMB() int {
-	b, _ := os.ReadFile("/proc/meminfo")
-	for _, line := range strings.Split(string(b), "\n") {
-		if v, ok := strings.CutPrefix(line, "MemTotal:"); ok {
-			if kb, err := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(v), " kB")); err == nil {
-				return kb / 1024
-			}
-		}
-	}
-	return maxGuestMemoryMB
 }
 
 // What the runtime needs, found by an environment variable, on PATH, or
