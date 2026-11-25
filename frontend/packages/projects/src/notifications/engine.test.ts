@@ -127,10 +127,10 @@ describe('thread notifications', () => {
         expect(n.options.body).toBe('Approve: rm -rf');
         expect(n.options.tag).toBe('tb-thread-t1');
         n.onclick?.();
-        expect(navigate).toHaveBeenCalledWith('/p/p1?review=t1');
+        expect(navigate).toHaveBeenCalledWith('/p/p1?thread=t1');
     });
 
-    it('a failed thread opens as a page: there is nothing to answer on its card', () => {
+    it('a failed thread opens as a page', () => {
         emit({ type: 'thread', project_id: 'p1', data: thread({}) });
         visible('hidden');
         emit({ type: 'thread', project_id: 'p1', data: thread({ status: 'failed', wait_reason: 'Failed: no' }) });
@@ -286,7 +286,6 @@ describe('the default', () => {
     });
 
     it('places a thread where its notification would open it', () => {
-        expect(threadLocation(paths, project('p1', 'm1'), thread({ id: 't9' }), true)).toBe('/p/p1?review=t9');
         expect(threadLocation(paths, project('p1', 'm1'), thread({ id: 't9' }))).toBe('/p/p1?thread=t9');
         expect(threadLocation(paths, project('p1', 'm1'), thread({ id: 'm1' }))).toBe('/p/p1');
         expect(threadLocation(paths, folder('f1', '/tmp/w'), thread({ id: 's1' }))).toBe('/f?path=/tmp/w&session=s1');

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, IconButton, Menu, MenuItem, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useDocumentTitle } from '@tingly/ui';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { api, unwrap, type Attachment, type BackgroundTask, type Project, type Thread, type ThreadEvent } from '../client';
 import { AddWorkdirDialog } from '../components/workdir/AddWorkdirDialog';
@@ -194,6 +195,7 @@ export default function WorkdirPage() {
     });
 
     const selected = sessions?.find((s) => s.id === sessionId);
+    useDocumentTitle([scope ? folderName(scope) : t('workdir.title')]);
     const selectedFolder = folders?.find((f) => f.id === selected?.project_id);
     const settings = useThreadSettings(selected, true, (saved) => setSessions((list) => list?.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, true) : th) ?? null));
     const threadBlocked = !!selected?.archived_at || (!!selectedFolder && (selectedFolder.paused || !!selectedFolder.archived_at));

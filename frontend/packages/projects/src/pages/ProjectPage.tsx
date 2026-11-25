@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDocumentTitle } from '@tingly/ui';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Link, MenuItem, Popover, Radio, RadioGroup, Select, Skeleton, Stack, Tooltip, Typography } from '@mui/material';
 import { Link as RouterLink, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -63,7 +64,7 @@ export default function ProjectPage() {
     const [threads, setThreads] = useState<Thread[]>([]);
     // What the threads wait on, answered from their cards.
     const requests = useThreadRequestsStore(threads);
-    const { observe: observeRequest, refresh: refreshRequests, hydrated: requestsRead, review: reviewRequests } = requests;
+    const { observe: observeRequest, refresh: refreshRequests } = requests;
     // The project conversation: the main thread's events.
     const [busy, setBusy] = useState(false);
     // Whether a message sent now joins the coordinator's running turn.
@@ -252,6 +253,7 @@ export default function ProjectPage() {
     });
 
     const selected = threads.find((th) => th.id === threadId);
+    useDocumentTitle([project?.name]);
     const settings = useThreadSettings(selected, false, (saved) => setThreads((list) => list.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, false) : th)));
     // A turn is in flight while the thread works or waits on a request it
     // raised (approvals only exist inside a running turn).
@@ -265,7 +267,6 @@ export default function ProjectPage() {
         // A drill-in names the one subagent (focus) or background task (task) to open with the thread.
         setParams((p) => {
             p.set('thread', tid);
-            p.delete('review');
             if (drill?.focus) p.set('focus', drill.focus); else p.delete('focus');
             if (drill?.task) p.set('task', drill.task); else p.delete('task');
             return p;
@@ -273,25 +274,6 @@ export default function ProjectPage() {
         if (threadAt === 'side') pane.reveal();
         else if (pane.narrow) pane.setDrawerOpen(false);
     };
-    // A notification's deep link (?review=<thread>): the card opens what the thread
-    // waits on; a thread that waits on nothing answerable opens as a page instead.
-    const review = params.get('review');
-    useEffect(() => {
-        if (!review) return;
-        const th = threads.find((x) => x.id === review);
-        if (!th || (th.status === 'waiting' && !requestsRead(review))) return;
-        if ((requests.byThread[review]?.length ?? 0) > 0) {
-            setParams((p) => {
-                p.delete('review');
-                return p;
-            }, { replace: true });
-            reviewRequests(review);
-        } else {
-            openThread(review);
-        }
-        // openThread only reads state the effect's inputs already cover.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [review, threads, requests.byThread, requestsRead, reviewRequests]);
     // The status area's counts, opened into their lists (the band's pill, the
     // coordinator's fact): what they count, one click from each entry.
     const [activity, setActivity] = useState<{ targets: Thread[]; anchor: HTMLElement } | null>(null);
