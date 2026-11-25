@@ -178,3 +178,72 @@ func TestLimiterCancelledWaiterLeavesTheQueueWithoutASlot(t *testing.T) {
 	assert.Equal(t, 1, running)
 	assert.Zero(t, waiting)
 }
+
+// Changing the limit while turns take and give slots must neither leave a
+// waiter stuck (no lost wake-up) nor let more turns run at once than the
+// highest limit set.
+func TestLimiterChangingTheLimitUnderLoadDrainsEveryWaiter(t *testing.T) {
+	const (
+		workers  = 40
+		maxLimit = 4
+	)
+	l := newLimiter(1)
+	var (
+		mu   sync.Mutex
+		cur  int
+		peak int
+		ran  int
+	)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := l.acquire(context.Background(), nil); err != nil {
+				return
+			}
+			mu.Lock()
+			cur++
+			peak = max(peak, cur)
+			mu.Unlock()
+			time.Sleep(time.Millisecond)
+			mu.Lock()
+			cur--
+			ran++
+			mu.Unlock()
+			l.release()
+		}()
+	}
+	stop := make(chan struct{})
+	var changer sync.WaitGroup
+	changer.Add(1)
+	go func() {
+		defer changer.Done()
+		for n := 1; ; n++ {
+			select {
+			case <-stop:
+				return
+			default:
+				l.setLimit(1 + n%maxLimit)
+				time.Sleep(100 * time.Microsecond)
+			}
+		}
+	}()
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		close(stop)
+		changer.Wait()
+		l.setLimit(workers)
+		<-done
+		t.Fatal("turns were still waiting after the limit was raised")
+	}
+	close(stop)
+	changer.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, workers, ran)
+	assert.LessOrEqual(t, peak, maxLimit, "more turns ran at once than the highest limit")
+}

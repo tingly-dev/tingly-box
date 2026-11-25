@@ -201,6 +201,65 @@ func TestRaisingTheLimitStartsQueuedThreadsWithoutWaiting(t *testing.T) {
 	}
 }
 
+func TestRaisingTheLimitStartsQueuedThreadsUpToTheNewLimit(t *testing.T) {
+	g := newGatedFixture(t)
+	g.setLimit(t, 2)
+	tasks := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+	var threads []*db.Thread
+	for _, task := range tasks {
+		threads = append(threads, g.start(t, task))
+	}
+	g.expectStarted(t, "a", "b")
+	g.waitQueued(t, threads[2], true)
+	g.waitQueued(t, threads[7], true)
+
+	g.setLimit(t, 5)
+	g.expectStarted(t, "c", "d", "e")
+	g.waitQueued(t, threads[4], false)
+	g.waitQueued(t, threads[5], true)
+	g.waitQueued(t, threads[7], true)
+	g.expectNoStart(t) // f, g and h still wait: 5 is the new limit
+	for _, task := range tasks {
+		g.finish(task)
+	}
+}
+
+// A turn resolves its project's limiter when it begins, from the project row
+// it read at that moment. A settings save can land between that read and the
+// resolution, so the row can be older than the limit the save applied. The
+// older row must not put the older limit back: the turn that did so then
+// waited on the old number, while the project, and the save's wake-up, said
+// the new one.
+func TestResolvingALimiterFromAnOlderProjectDoesNotUndoARaisedLimit(t *testing.T) {
+	g := newGatedFixture(t)
+	g.setLimit(t, 1)
+	g.start(t, "a")
+	g.expectStarted(t, "a")
+	b := g.start(t, "b")
+	g.waitQueued(t, b, true)
+
+	// The row a turn that is beginning now would have read before the save.
+	older, err := g.store.GetProject(g.project.ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, older.MaxRunningThreads)
+
+	g.setLimit(t, 3) // applies the raise and wakes b
+	g.expectStarted(t, "b")
+
+	// That turn resolves its limiter now, after the save; its own acquire is
+	// what begin does next.
+	slot := g.threads.slot(older)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, slot.acquire(ctx, nil), "the stale snapshot lowered the limit again")
+	running, _ := slot.counts()
+	assert.Equal(t, 3, running)
+	slot.release()
+
+	g.finish("a")
+	g.finish("b")
+}
+
 func TestLoweringTheLimitLeavesRunningThreadsAndHoldsNewOnes(t *testing.T) {
 	g := newGatedFixture(t)
 	g.setLimit(t, 3)

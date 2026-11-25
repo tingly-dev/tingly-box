@@ -443,29 +443,47 @@ func permissionMode(p *db.Project) string {
 }
 
 // slot is the running-turn limiter of p's project, or of all folder threads
-// together (key ""), set to p's current limit.
+// together (key ""). An existing limiter keeps whatever limit it has: only
+// ApplyLimit, called with the project as it was just saved, changes that.
+// Resolving it here from a project row must not change the limit, because the
+// row a turn begins with can be older than a save that landed while the turn
+// started: applying it would undo the save's raise after its wake-up, and the
+// turn would then wait on the old number.
 func (m *Threads) slot(p *db.Project) *limiter {
-	key := p.ID
-	if p.Type == db.ProjectFolder {
-		key = ""
-	}
-	limit := RunningLimit(p)
+	key := slotKey(p)
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	l, ok := m.slots[key]
 	if !ok {
-		l = newLimiter(limit)
+		l = newLimiter(RunningLimit(p))
 		m.slots[key] = l
-	}
-	m.mu.Unlock()
-	if ok {
-		l.setLimit(limit)
 	}
 	return l
 }
 
+func slotKey(p *db.Project) string {
+	if p.Type == db.ProjectFolder {
+		return ""
+	}
+	return p.ID
+}
+
 // ApplyLimit makes a project's running limit take effect now: raising it
-// starts waiting turns, lowering it leaves running turns alone.
-func (m *Threads) ApplyLimit(p *db.Project) { m.slot(p) }
+// starts waiting turns, lowering it leaves running turns alone. It is the
+// only writer of an existing limiter's limit.
+func (m *Threads) ApplyLimit(p *db.Project) {
+	key := slotKey(p)
+	limit := RunningLimit(p)
+	m.mu.Lock()
+	l, ok := m.slots[key]
+	if !ok {
+		m.slots[key] = newLimiter(limit)
+		m.mu.Unlock()
+		return
+	}
+	m.mu.Unlock()
+	l.setLimit(limit)
+}
 
 // setQueued marks whether t's next turn waits for a slot.
 func (m *Threads) setQueued(threadID string, queued bool) {
