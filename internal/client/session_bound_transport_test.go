@@ -480,6 +480,23 @@ func TestSessionBoundTransport_OAuthProviderTypes(t *testing.T) {
 	}
 }
 
+// innerSessionBound unwraps the read-only record tap that
+// createSessionBoundTransport adds and returns the underlying
+// *SessionBoundTransport. The tap is not a vendor envelope, so the invariant
+// these tests guard (createSessionBoundTransport adds no vendor-specific
+// wrapper) still holds.
+func innerSessionBound(t *testing.T, tr http.RoundTripper) *SessionBoundTransport {
+	t.Helper()
+	if rt, ok := tr.(*recordTransport); ok {
+		return innerSessionBound(t, rt.inner)
+	}
+	sbt, ok := tr.(*SessionBoundTransport)
+	if !ok {
+		t.Fatalf("expected a SessionBoundTransport beneath the record tap, got %T", tr)
+	}
+	return sbt
+}
+
 // TestCreateSessionBoundTransport tests the helper function that creates
 // layered transport chains (SessionBoundTransport + provider-specific wrappers).
 func TestCreateSessionBoundTransport(t *testing.T) {
@@ -507,10 +524,8 @@ func TestCreateSessionBoundTransport(t *testing.T) {
 	// createSessionBoundTransport returns a generic SessionBoundTransport for
 	// every OAuth provider — Claude Code OAuth transformations (headers, tool
 	// rename, thinking) live in ClaudeClient via SDK options/middleware, not
-	// in the transport.
-	if _, ok := transport.(*SessionBoundTransport); !ok {
-		t.Errorf("Expected SessionBoundTransport for Claude Code OAuth provider (SDK middleware handles transformations), got %T", transport)
-	}
+	// in the transport. The read-only record tap may wrap it.
+	_ = innerSessionBound(t, transport)
 
 	// Create an HTTP client and verify it works
 	client := &http.Client{Transport: transport}
@@ -542,9 +557,7 @@ func TestCreateSessionBoundTransport_Antigravity(t *testing.T) {
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-	if _, ok := transport.(*SessionBoundTransport); !ok {
-		t.Errorf("Expected bare SessionBoundTransport (Code Assist envelope is applied by AntigravityClient), got %T", transport)
-	}
+	_ = innerSessionBound(t, transport)
 }
 
 // TestCreateSessionBoundTransport_Gemini is the symmetric check for Gemini.
@@ -568,9 +581,7 @@ func TestCreateSessionBoundTransport_Gemini(t *testing.T) {
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-	if _, ok := transport.(*SessionBoundTransport); !ok {
-		t.Errorf("Expected bare SessionBoundTransport (Code Assist envelope is applied by GeminiClient), got %T", transport)
-	}
+	_ = innerSessionBound(t, transport)
 }
 
 // TestCreateSessionBoundTransport_Codex verifies that the transport layer
@@ -593,9 +604,7 @@ func TestCreateSessionBoundTransport_Codex(t *testing.T) {
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-	if _, ok := transport.(*SessionBoundTransport); !ok {
-		t.Errorf("Expected bare SessionBoundTransport (codex envelope is applied by CodexClient), got %T", transport)
-	}
+	_ = innerSessionBound(t, transport)
 }
 
 // TestCreateSessionBoundTransport_NonOAuth tests that non-OAuth providers
@@ -617,10 +626,9 @@ func TestCreateSessionBoundTransport_NonOAuth(t *testing.T) {
 		t.Fatal("Expected non-nil transport")
 	}
 
-	// Should be SessionBoundTransport directly (no provider wrapper)
-	if _, ok := transport.(*SessionBoundTransport); !ok {
-		t.Error("Expected SessionBoundTransport for non-OAuth provider")
-	}
+	// Should be SessionBoundTransport directly (no provider wrapper), possibly
+	// wrapped by the read-only record tap.
+	_ = innerSessionBound(t, transport)
 }
 
 // TestTransportPoolWithSessionBound tests integration between
