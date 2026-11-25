@@ -25,15 +25,16 @@ interface Props {
 export function TextEditDialog({ open, title, intro, initialText, nameField, placeholder, submitLabel, readOnly, onClose, onSubmit }: Props) {
     const { t } = useTranslation('projects');
     const [text, setText] = useState(initialText);
-    const [name, setName] = useState(nameField?.initial ?? '');
+    const initialName = nameField?.initial ?? '';
+    const [name, setName] = useState(initialName);
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
         if (open) {
             setText(initialText);
-            setName(nameField?.initial ?? '');
+            setName(initialName);
         }
-    }, [open, initialText]);
+    }, [open, initialText, initialName]);
 
     const submit = async () => {
         if (!onSubmit) return;

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 
 /**
  * Calls `onVisible` when the page becomes visible after being hidden,
@@ -9,25 +9,21 @@ import { useEffect, useRef } from 'react';
  */
 export function usePageVisibility(onVisible: () => void, staleThresholdMs = 30_000) {
   const hiddenAtRef = useRef<number | null>(null);
-  const onVisibleRef = useRef(onVisible);
-  onVisibleRef.current = onVisible;
-  const thresholdRef = useRef(staleThresholdMs);
-  thresholdRef.current = staleThresholdMs;
+  const handleVisibility = useEffectEvent(() => {
+    if (document.hidden) {
+      hiddenAtRef.current = Date.now();
+    } else {
+      const hiddenAt = hiddenAtRef.current;
+      if (hiddenAt !== null && Date.now() - hiddenAt >= staleThresholdMs) {
+        onVisible();
+      }
+      hiddenAtRef.current = null;
+    }
+  });
 
   useEffect(() => {
-    const handleVisibility = () => {
-      if (document.hidden) {
-        hiddenAtRef.current = Date.now();
-      } else {
-        const hiddenAt = hiddenAtRef.current;
-        if (hiddenAt !== null && Date.now() - hiddenAt >= thresholdRef.current) {
-          onVisibleRef.current();
-        }
-        hiddenAtRef.current = null;
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    const listener = () => handleVisibility();
+    document.addEventListener('visibilitychange', listener);
+    return () => document.removeEventListener('visibilitychange', listener);
   }, []);
 }
