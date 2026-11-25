@@ -574,3 +574,23 @@ func TestMigrationCarriesAReleaseDatabaseWithoutSourceColumns(t *testing.T) {
 	assert.EqualValues(t, f.messages, events)
 	assert.EqualValues(t, 0, rawCount(t, s.db, "SELECT COUNT(*) FROM thread_events WHERE source = 'im'"))
 }
+
+func TestMigrationMovesOldDefaultProjectsToAuto(t *testing.T) {
+	f := buildOldDB(t)
+	s, err := Open(f.path, WithProjectsDir("/data"))
+	require.NoError(t, err)
+	p, err := s.GetProject("p1")
+	require.NoError(t, err)
+	assert.Equal(t, "auto", p.ThreadPermissionMode, "the old default moves to auto")
+	assert.EqualValues(t, 0, rawCount(t, s.db, "SELECT COUNT(*) FROM threads WHERE agent <> 'llm' AND COALESCE(permission_mode,'') = 'auto' AND project_id = 'p1'"), "threads pinned before the move keep the old mode")
+
+	// An explicit choice made later is not touched by a second start.
+	require.NoError(t, s.db.Exec("UPDATE projects SET thread_permission_mode = 'acceptEdits' WHERE id = 'p1'").Error)
+	require.NoError(t, s.Close())
+	s, err = Open(f.path, WithProjectsDir("/data"))
+	require.NoError(t, err)
+	defer s.Close()
+	p, err = s.GetProject("p1")
+	require.NoError(t, err)
+	assert.Equal(t, "acceptEdits", p.ThreadPermissionMode)
+}
