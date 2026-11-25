@@ -15,6 +15,9 @@ this repository, and agentboot, Projects and Tingly Box use it.
 - **Allowlist network**: `netproxy` is the host proxy and in-sandbox bridge
   any runtime without a network of its own can reuse (see bwrap's `Start`).
 
+- **Runtimes here**: `bwrap` (namespaces) and `microvm` (Cloud Hypervisor +
+  virtiofsd; its guest init is this binary, see `microvm/guest_linux.go`).
+
 Adding a runtime: a package here that implements `Runtime` (wrapping a command?
 use `ExecCommand`), registers itself, and has
 `func TestConformance(t *testing.T) { conformance.Run(t, Runtime{}) }`. Add

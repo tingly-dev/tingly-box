@@ -226,9 +226,12 @@ jobs:
       - name: Test
         run: go test -race -v ./... 2>&1 | tee test.log; test "${PIPESTATUS[0]}" -eq 0
 
-      - name: The conformance suite ran
+      # Only bubblewrap's: the microVM runtime needs KVM, Cloud Hypervisor,
+      # virtiofsd and a guest kernel, which the runner does not set up, and
+      # skips (run it locally; see sandbox/microvm).
+      - name: The bubblewrap conformance suite ran
         run: |
-          if grep -q 'SKIP: TestConformance' test.log; then
+          if go test -count=1 -run TestConformance -v ./bwrap/ | grep -q 'SKIP: TestConformance'; then
             echo "::error::the bubblewrap conformance suite was skipped"
             exit 1
           fi

@@ -185,7 +185,7 @@ func target(r *http.Request) (string, int, bool) {
 
 // splice copies both ways until either side ends, then closes both. a's
 // bytes are read from aIn (a itself, or a reader with some of them buffered).
-func splice(a net.Conn, aIn io.Reader, b net.Conn) {
+func splice(a net.Conn, aIn io.Reader, b io.ReadWriteCloser) {
 	done := make(chan struct{}, 2)
 	go func() { _, _ = io.Copy(b, aIn); done <- struct{}{} }()
 	go func() { _, _ = io.Copy(a, b); done <- struct{}{} }()

@@ -360,3 +360,14 @@ sandbox/
 - **一致性测试** `network/allowlist`：宿主回环上开两个监听，只放行其一。经 `HTTPS_PROXY` 的 CONNECT 对放行的那个必须是 200 并能收到数据，对另一个必须是 403，直连两者都必须失败。变异检查：allowlist 不 unshare 网络时抓到直连；代理不查名单时抓到 403 缺失。
 - **真实 CLI**：`TB_SANDBOX_LIVE=1 TB_SANDBOX_LIVE_ALLOWLIST=1` 只放行模型地址（测试里监听在 `127.0.0.2`，因为 `127.0.0.1` 在 `NO_PROXY` 里）。Claude Code 经代理完成整个回合，Bash 里 `curl https://example.com` 得到 `CONNECT tunnel failed, response 403`。
 - **Projects 线程仍是 `open`**（按决定先放通）；要收紧，在 `threadPolicy` 里把 network 换成 allowlist 并给出名单（网关、模型、包镜像），设置界面再加一个名单编辑项。
+
+**microVM 运行时（`sandbox/microvm`，2026-11-25，已实现，Projects 尚未启用）**：Cloud Hypervisor 起一台小 VM，有自己的内核，隔离等级 `vm`。
+
+- **文件**：guest 的根文件系统由 virtiofsd 从宿主提供。virtiofsd 本身跑在 bubblewrap 里，共享的目录 `/view` 用 `bwrap.StorageArgs(p, "/view")` 搭出，与 bwrap 运行时完全同一份挂载逻辑（系统目录只读、空 HOME、策略挂载、只读覆盖）。只读在宿主侧生效，guest 内核改不了。`/tmp`、`/run` 是宿主侧的空 tmpfs，挂载可以落在它们下面；`/proc`、`/sys`、`/dev` 由 guest 自己挂。
+- **guest init 就是本程序**：内核命令行 `init=<本程序> TB_SANDBOX_GUEST=1`，`init()` 里见到这个变量且 pid 为 1 就当 init。它挂好 proc/sys/dev，关掉 user namespace（`max_user_namespaces=0`，与 bwrap 的 `--disable-userns` 对齐），拉起回环，设 NoNewPrivs，以宿主用户的 uid/gid 运行命令，之后报告退出码并关机。
+- **与宿主通信全走 vsock**：Cloud Hypervisor 的 hybrid vsock，guest 连 CID 2 的端口，宿主侧是 `<dir>/vsock.sock_<端口>` 的 unix socket。1024 是控制连接（命令、环境、退出码；环境不上命令行），1025–1027 是 stdin/stdout/stderr，1028 是 allowlist 时的出口代理（`netproxy.ListenAt`，guest 里用 `netproxy.Bridge` 提供到回环）。
+- **网络**：guest 没有网卡，只支持 `none` 和 `allowlist`，不支持 `open`（非特权下给 VM 接网需要 tap/NAT，正是要避开的）。资源只有 `unlimited`，即 2 vCPU、2 GiB 内存，内存按需分配。
+- **依赖**：需要 KVM（用户在 kvm 组）、`cloud-hypervisor`、`virtiofsd`、一个内置 virtiofs 与 vsock 的 guest 内核，以及 bubblewrap。按 `TB_SANDBOX_VMM` / `TB_SANDBOX_VIRTIOFSD` / `TB_SANDBOX_KERNEL`、PATH、Kata Containers 安装位置（`/opt/kata`）的顺序找。开发机上 Kata 的二进制只有 root 可执行，测试用的是拷到 `library/.cache/vmm` 的副本。`Check` 逐项说明缺什么。
+- **验证**：一致性测试全过（每次起 VM 加跑命令约 0.35–0.5 秒），变异检查：不关 user namespace 时抓到 `LEAK-namespaces`。为此改了两处一致性测试：进程隔离改为“看不到宿主上带标记的进程”，不再数 PID，因为 VM 有自己的内核线程。真实 CLI：`TB_SANDBOX_LIVE=1 TB_SANDBOX_LIVE_ALLOWLIST=1 TB_SANDBOX_LIVE_RUNTIME=microvm`，Claude Code 在 VM 里以 bypassPermissions 跑完一个回合（约 3 秒），探针没有任何泄漏，写入落到宿主，转录在宿主读的位置，外网 403、模型经代理可达。
+- **Projects 尚未启用**：线程策略的网络是 `open`，microVM 给不了，所以没有加进 Projects 的运行时列表（只在 live 测试里引入）。启用前要先决定线程的网络名单（网关、模型、MCP、包镜像）。
+- **CI**：runner 上没有这套环境，microVM 的一致性测试跳过；`test-sandbox` 只要求 bubblewrap 的不被跳过。

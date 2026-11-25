@@ -238,6 +238,10 @@ func sortMounts(ms []sandbox.Mount) []sandbox.Mount {
 
 func depth(p string) int { return strings.Count(filepath.Clean(p), string(filepath.Separator)) }
 
+// SystemArgs are the bubblewrap arguments that put the host's system
+// directories, read-only, under root (see StorageArgs).
+func SystemArgs(root string) []string { return systemMounts(root) }
+
 // systemMounts are, under root, the host's system directories read-only: /usr
 // and /etc, the top-level links or directories a merged /usr leaves (/bin,
 // /lib, …), /opt when present, and the files /etc links to outside these (on

@@ -5,6 +5,7 @@ package netproxy
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -29,7 +30,7 @@ func bridge(sock string, args []string) int {
 		fmt.Fprintln(os.Stderr, "sandbox network bridge: no command")
 		return 127
 	}
-	env, err := Bridge(func() (net.Conn, error) { return net.Dial("unix", sock) }, os.Environ())
+	env, err := Bridge(func() (io.ReadWriteCloser, error) { return net.Dial("unix", sock) }, os.Environ())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sandbox network bridge: %v\n", err)
 		return 127
@@ -66,7 +67,7 @@ func bridge(sock string, args []string) int {
 
 // Bridge offers the proxy that dial reaches on a loopback port, for as long as
 // this process lives, and returns env with the proxy variables pointing there.
-func Bridge(dial func() (net.Conn, error), env []string) ([]string, error) {
+func Bridge(dial func() (io.ReadWriteCloser, error), env []string) ([]string, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
