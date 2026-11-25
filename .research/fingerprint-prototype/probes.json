@@ -1,0 +1,216 @@
+{
+  "id": "tb-core",
+  "version": "0.1.0",
+  "status": "prototype-uncalibrated",
+  "description": "Minimum viable model-fingerprint probe set. Synthetic inputs only; no user data.",
+  "defaults": {
+    "repeats": 3,
+    "temperature": 0,
+    "timeout_seconds": 60
+  },
+  "calibration": {
+    "status": "uncalibrated",
+    "tau_match": 0.90,
+    "tau_mismatch": 0.60,
+    "critical_category_threshold": 0.99,
+    "critical_categories": ["tokenizer", "tool", "stop"],
+    "note": "Placeholder thresholds. See .research/model-fingerprinting.md 7.4; calibrate on baseline collections before trusting MATCH."
+  },
+  "tier0": {
+    "models_path": "/v1/models",
+    "chat_path": {
+      "openai": "/v1/chat/completions",
+      "anthropic": "/v1/messages"
+    },
+    "count_tokens_path": "/v1/messages/count_tokens",
+    "unsupported_param": {
+      "openai": {"seed": 1234, "n": 2},
+      "anthropic": {"top_k": 5}
+    }
+  },
+  "probes": [
+    {
+      "id": "tok.delta.cjk",
+      "category": "tokenizer",
+      "kind": "token_delta",
+      "weight": 2.0,
+      "base": "你好，世界。今天天气很好。",
+      "add": "\n👨‍👩‍👧‍👦",
+      "max_tokens": 1
+    },
+    {
+      "id": "tok.delta.combining",
+      "category": "tokenizer",
+      "kind": "token_delta",
+      "weight": 2.0,
+      "base": "Café and Ångström are composed.",
+      "add": "\n é vs é",
+      "max_tokens": 1
+    },
+    {
+      "id": "tok.delta.rare_unicode",
+      "category": "tokenizer",
+      "kind": "token_delta",
+      "weight": 2.0,
+      "base": "Symbols: ∑ ∞ ≠ √2 ≈ π.",
+      "add": "\nÆgir Þórr — 你好 𠀋 𪚥",
+      "max_tokens": 1
+    },
+    {
+      "id": "tok.delta.code",
+      "category": "tokenizer",
+      "kind": "token_delta",
+      "weight": 2.0,
+      "base": "def foo_barBaz123(x): return x**2",
+      "add": "\nconst snake_case_var = {a:[1,2,3],b:{c:true}};",
+      "max_tokens": 1
+    },
+    {
+      "id": "tok.delta.repeat",
+      "category": "tokenizer",
+      "kind": "token_delta",
+      "weight": 1.5,
+      "base": "Repeat:",
+      "add": "\nabababababababababababababababab",
+      "max_tokens": 1
+    },
+    {
+      "id": "tok.delta.spaces",
+      "category": "tokenizer",
+      "kind": "token_delta",
+      "weight": 1.5,
+      "base": "Spaces follow:",
+      "add": "\n                                ",
+      "max_tokens": 1
+    },
+    {
+      "id": "canon.arithmetic",
+      "category": "canonical",
+      "kind": "text",
+      "weight": 1.0,
+      "prompt": "What is 17*23? Reply with only the number.",
+      "max_tokens": 8,
+      "expected": "391"
+    },
+    {
+      "id": "canon.reverse",
+      "category": "canonical",
+      "kind": "text",
+      "weight": 1.0,
+      "prompt": "Reverse the string 'fingerprint'. Reply with only the reversed string.",
+      "max_tokens": 24,
+      "expected": "tnirpregnif"
+    },
+    {
+      "id": "canon.json",
+      "category": "canonical",
+      "kind": "text",
+      "weight": 1.0,
+      "prompt": "Return exactly this JSON object and nothing else: {\"a\":1,\"b\":[true,null],\"c\":\"x\"}",
+      "max_tokens": 40,
+      "expected": "{\"a\":1,\"b\":[true,null],\"c\":\"x\"}"
+    },
+    {
+      "id": "canon.sort",
+      "category": "canonical",
+      "kind": "text",
+      "weight": 1.0,
+      "prompt": "Sort these words alphabetically and reply with only the words separated by spaces: gamma alpha delta beta",
+      "max_tokens": 24,
+      "expected": "alpha beta delta gamma"
+    },
+    {
+      "id": "tool.weather",
+      "category": "tool",
+      "kind": "tool",
+      "weight": 1.5,
+      "prompt": "Use the get_weather tool for Paris. Do not answer in text.",
+      "tool": {
+        "name": "get_weather",
+        "description": "Get the current weather for a city",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {"type": "string"}
+          },
+          "required": ["city"]
+        }
+      },
+      "max_tokens": 150
+    },
+    {
+      "id": "tool.nested",
+      "category": "tool",
+      "kind": "tool",
+      "weight": 1.5,
+      "prompt": "Call book_flight for Paris to Tokyo on 2026-12-01, one passenger, economy. Do not answer in text.",
+      "tool": {
+        "name": "book_flight",
+        "description": "Book a flight",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "from": {"type": "string"},
+            "to": {"type": "string"},
+            "date": {"type": "string"},
+            "passengers": {"type": "integer"},
+            "cabin": {"type": "string", "enum": ["economy", "business"]}
+          },
+          "required": ["from", "to", "date"]
+        }
+      },
+      "max_tokens": 200
+    },
+    {
+      "id": "stop.newline",
+      "category": "stop",
+      "kind": "stop",
+      "weight": 1.0,
+      "prompt": "Count from 1 to 10, one number per line.",
+      "stop": ["\n"],
+      "max_tokens": 40
+    },
+    {
+      "id": "stop.marker",
+      "category": "stop",
+      "kind": "stop",
+      "weight": 1.0,
+      "prompt": "Write the words alpha beta gamma STOP delta epsilon.",
+      "stop": ["STOP"],
+      "max_tokens": 40
+    },
+    {
+      "id": "truncate.one_token",
+      "category": "stop",
+      "kind": "text",
+      "weight": 1.0,
+      "prompt": "Write a long paragraph about the ocean.",
+      "max_tokens": 1
+    },
+    {
+      "id": "know.rare_fact",
+      "category": "knowledge",
+      "kind": "text",
+      "weight": 0.5,
+      "prompt": "Answer with only the number: how many moons does Uranus have (confirmed, 2025)?",
+      "max_tokens": 8
+    },
+    {
+      "id": "know.version",
+      "category": "knowledge",
+      "kind": "text",
+      "weight": 0.5,
+      "prompt": "What is your knowledge cutoff date? Reply with only YYYY-MM.",
+      "max_tokens": 12
+    },
+    {
+      "id": "lp.capital",
+      "category": "logprobs",
+      "kind": "logprobs",
+      "weight": 2.0,
+      "prompt": "The capital of France is",
+      "max_tokens": 4,
+      "top_logprobs": 5
+    }
+  ]
+}
