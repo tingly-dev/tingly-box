@@ -29,10 +29,9 @@ func TestParseMention(t *testing.T) {
 		"see #3 for details":     {0, "", false},
 		"fix this #3 now":        {0, "", false},
 		"##3 text":               {0, "", false},
-		"@2 add the edge case":   {2, "add the edge case", true},
-		"@#12 go\non":            {12, "go\non", true},
-		"  @3   spaced  ":        {3, "spaced", true},
-		"@2":                     {0, "", false},
+		"@2 add the edge case":   {0, "", false},
+		"@#12 go\non":            {0, "", false},
+		"@bot #3 hi":             {0, "", false},
 		"@opus write the report": {0, "", false},
 		"@0 nothing":             {0, "", false},
 		"email me@2 later":       {0, "", false},
@@ -59,7 +58,7 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
 	require.NoError(t, err)
 
-	handled, err := svc.PostFromChannel("telegram", "1", "@1 add the edge case", nil)
+	handled, err := svc.PostFromChannel("telegram", "1", "#1 add the edge case", nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	evs := userEvents(t, f.store, th.ID)
@@ -71,8 +70,6 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	assert.NotContains(t, got, "Finished:", "no folded line of its own")
 
 	n := len(userEvents(t, f.store, th.ID))
-	_, err = svc.PostFromChannel("telegram", "1", "@9 hello", nil)
-	assert.ErrorIs(t, err, ErrNoSuchThread)
 	_, err = svc.PostFromChannel("telegram", "1", "#9 hello", nil)
 	assert.ErrorIs(t, err, ErrNoSuchThread)
 	assert.ErrorContains(t, err, "#9")
@@ -83,6 +80,21 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	require.True(t, handled)
 	evs = userEvents(t, f.store, th.ID)
 	assert.Equal(t, "and again", evs[len(evs)-1].Content, "#N is the way to address a thread")
+}
+
+func TestOldAtMentionDoesNotRouteToThread(t *testing.T) {
+	f, svc, _ := channelFixture(t)
+	th := startWorker(t, f)
+	waitQuiet(t, f, svc, th.ID)
+	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
+	require.NoError(t, err)
+
+	n := len(userEvents(t, f.store, th.ID))
+	_, err = svc.PostFromChannel("telegram", "1", "@1 add the edge case", nil)
+	require.NoError(t, err)
+	_, err = svc.PostFromChannel("telegram", "1", "@9 hello", nil)
+	require.NoError(t, err, "@9 is plain text, not a missing thread")
+	assert.Len(t, userEvents(t, f.store, th.ID), n, "@N never reaches a thread")
 }
 
 func TestSessionByTitle(t *testing.T) {
