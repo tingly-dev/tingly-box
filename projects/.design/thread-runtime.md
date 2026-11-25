@@ -274,3 +274,24 @@ v1 必须带的参数与注意点：
 | seccomp（可选，后续） | 拦 `keyctl`、`ptrace` 等 | 同用户的内核 keyring 仍可访问（少见但存在） |
 
 **共用网络带来的缺口（先放通的代价）**：文件边界挡不住经网络能拿到的东西。共用网络命名空间时，沙箱能连宿主的回环和 `0.0.0.0` 上的所有服务（开发机上有 Tingly Box 12580、Projects、redis 6379、ollama 11434 等），也能连宿主网络命名空间里的抽象 unix socket。Tingly Box 的管理 API 要求用户认证（`getUserAuthMiddleware`），其认证材料在被隐藏的 `~/.tingly-box` 下；其它服务是否设了认证不由我们控制。收口时的一步低成本改进：`--unshare-net` + 用户态网络（pasta/slirp4netns，开发机尚未安装）放通外网但不给宿主回环，只把网关与 MCP 两个端口转发进去——这比完整出口代理简单，可作为收口的第一步。
+
+### 10.5 yolo（`bypassPermissions`）下要成立还缺什么（2026-11-25 实测）
+
+worker 可能以 yolo 模式跑，此时沙箱是唯一的防线，要按“沙箱里的代码完全恶意”来看。
+
+**bwrap 自身的文件边界成立**（内核强制，对抗性实测，参数：`--unshare-user --disable-userns --unshare-pid --unshare-ipc --unshare-uts --cap-drop ALL --new-session --die-with-parent --clearenv`）：`/proc/1/root`、`/proc/*/root` 都只指向沙箱自己的根；`..` 走不出挂载（只看到挂载路径上的空目录骨架）；`mount`、`unshare -m`、`unshare -Ur` 都被拒；`CapEff=0`、`NoNewPrivs=1`（setuid 无效）；`/dev` 只有最小集合；只继承 stdio。
+
+**逃逸不在 bwrap，而在“宿主之后会执行或解释沙箱写过的东西”**（混淆代理）。实测与代码核对：
+
+| 途径 | 状况 | 必须的处理 |
+|---|---|---|
+| **主仓库 `.git` 可写 → 宿主执行仓库配置里的命令** | **实测可逃逸**：沙箱写 `core.fsmonitor`，宿主下一次 `git status`（`Stats`）就在宿主上执行它。同类：`fetchBase` 的 `git fetch`（`core.sshCommand`、`protocol.*.allow`、`remote.*.uploadpack`）、filter 驱动、hooks；用户自己在主仓库里敲 `git status` 也会中招 | 沙箱里把主仓库的 `.git/config`、`.git/hooks`（及 `.git/modules` 若有）**只读覆盖挂载**（实测：写配置与 hook 被拒，正常 `add`/`commit` 不受影响）；宿主侧 `git()` 再加固：`-c core.fsmonitor=false -c core.hooksPath=/dev/null`，`fetch` 改走推送那样的临时裸仓库（`githubRemote` 已是：`--template=`、`GIT_CONFIG_GLOBAL=/dev/null`、`GIT_CONFIG_NOSYSTEM=1`，只经 alternates 读对象，不读工作区配置——推送路径本身是安全的） |
+| **共用网络 → 宿主本地服务** | 开发机上 `0.0.0.0`/回环有 redis 6379、ollama、Tingly Box 等；无认证的服务（如 redis 可写文件）就是逃逸面；X11 的抽象 socket 也在网络命名空间里 | yolo 下 **`--unshare-net` 必须开**（实测断网生效），只把网关和 MCP 转发进去；要外网就加用户态网络（pasta，需装 `passt`），它不给宿主回环 |
+| 线程设置文件、MCP 配置 | 沙箱若能写，就能改自己的权限规则（非 yolo 时有意义） | 只读挂载 |
+| 宿主读沙箱写的文件 | library 用 `os.Root` + `Lstat`（安全）；`send_file` 先 `EvalSymlinks` 再检查根（安全，有极小的 TOCTOU 窗口） | 保持；新代码读工作区文件一律用 `os.Root` |
+| `library/.cache` 线程间共享可写 | 一个线程可投毒缓存，另一个线程在**它自己的沙箱里**执行（线程间，不是宿主逃逸） | 记为 G5 缺口；需要时按线程分缓存 |
+| 用户在宿主上打开工作区 | IDE 任务、`.envrc`、`.vscode/` 等由人触发执行 | 产品层提示；不属于沙箱 |
+| 共享内核 | 进程级沙箱挡不住内核漏洞 | 多租户或不可信代码量大时用 VM 档位（v3） |
+| 资源 | 没有 cgroup 时 fork 炸弹影响宿主 | `systemd-run --user --scope -p TasksMax= -p MemoryMax=` |
+
+结论：**bwrap 能做到“只有挂载/授权的路径可访问”，但 yolo 下要真正安全，还必须同时做到三件事：主仓库 `.git` 的配置与 hooks 只读、宿主侧 git 加固、断开宿主网络（只转发网关与 MCP）。** 这三条进 §5 的一致性测试（写 `core.fsmonitor` 后宿主 `git status` 不得执行；连宿主回环端口必须失败）。这也修正了 §1.4：同仓库共享 `.git` 不只是线程间可见的问题，可写的配置是宿主逃逸途径，最小修法是只读覆盖，不需要改成独立克隆。
