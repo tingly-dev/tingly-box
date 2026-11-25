@@ -1,6 +1,6 @@
 # 线程隔离：安全模型、最小契约与统一接口
 
-> 状态：**提案**，未实现。调研见 [../.research/agent-sandbox-landscape.md](../.research/agent-sandbox-landscape.md)。
+> 状态：**提案**；Linux 第一版（bubblewrap，网络放通）**已实现**，见 §10.6。调研见 [../.research/agent-sandbox-landscape.md](../.research/agent-sandbox-landscape.md)。
 > 相关：[thread-permissions.md](thread-permissions.md)（权限，与隔离正交）、[github-tools.md](github-tools.md)（宿主代做的 GitHub 动作）、[workspace.md](workspace.md)、[thread-lifecycle.md](thread-lifecycle.md)。
 > 用户原话：“我们现在都是裸机跑 projects，未来希望引入 microvm 或者 sandbox，但不希望绑定，而是有一个标准层”；“我们要设计的其实是安全模型，和统一接口，和保障这些的最小化模型，然后去对接行业里的各种 microvm 或者 sandbox（不是说生搬硬套 docker k8s 等等）”；“仓库共享目前还不是最大问题……可以不过度设计（除非做不到）”。
 
