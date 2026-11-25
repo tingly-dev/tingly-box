@@ -15,7 +15,7 @@ const SEARCH_FROM = 6;
 
 export default function ProjectsPage() {
     const { t } = useTranslation('projects');
-    useDocumentTitle([t('projects.title')]);
+    useDocumentTitle([t('workspace.title')]);
     const navigate = useNavigate();
     const notify = useNotify();
     const { onProjectsChanged: refresh, paths: routes, embedded } = useProjectsHost();

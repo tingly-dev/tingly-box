@@ -26,7 +26,7 @@ function Dot({ color }: { color: string }) {
  */
 export default function ImSettingsPage({ setupPath }: { setupPath?: string } = {}) {
     const { t } = useTranslation('projects');
-    useDocumentTitle([t('im.settings.title')]);
+    useDocumentTitle([t('workspace.title')]);
     const notify = useNotify();
     const { im, paths, embedded } = useProjectsHost();
     const platformLabel = usePlatformLabel();

@@ -145,7 +145,7 @@ function onThread(thread: Thread): void {
             ? firstLine(thread.last_report)
             : t(`notifications.${attention}`);
     engine.finishedAt.set(thread.id, Date.now());
-    notify(thread.title, body, `tb-thread-${thread.id}`, () => threadUrl(thread, attention === 'waiting'));
+    notify(thread.title, body, `tb-thread-${thread.id}`, () => threadUrl(thread));
 }
 
 function onThreadEvent(event: ThreadEvent, projectId: string): void {
@@ -189,22 +189,23 @@ function notify(title: string, body: string, tag: string, url: () => string | un
     return n;
 }
 
-/** Where answering a thread's ping happens: the folder session or the
- * project page with the thread open; the conversation itself is the project page.
- * A thread that waits on the user opens its card's requests on the project page
- * (`review`), where the approval or question is answered in place; the page
- * opens the thread instead when nothing answerable is pending. */
-export function threadUrl(thread: Thread, review = false): string | undefined {
+/** Where a thread's ping leads: the folder session or the project page with
+ * the thread open (its approvals and questions are answered there); the
+ * conversation itself is the project page. A project the list has not loaded
+ * yet is taken for a project, not a folder, so the click still lands somewhere. */
+export function threadUrl(thread: Thread): string | undefined {
     const ui = engine.ui;
+    if (!ui) return undefined;
     const project = listRows()?.find((p) => p.id === thread.project_id);
-    return ui && project ? threadLocation(ui.paths, project, thread, review) : undefined;
+    if (project) return threadLocation(ui.paths, project, thread);
+    return withParams(ui.paths.project(thread.project_id), { thread: thread.id });
 }
 
 /** The place of a thread in the host's router (see threadUrl); the home's "needs you" rows open threads the same way. */
-export function threadLocation(paths: NotificationUi['paths'], project: ProjectSummary, thread: Thread, review = false): string {
+export function threadLocation(paths: NotificationUi['paths'], project: ProjectSummary, thread: Thread): string {
     if (isFolder(project)) return withParams(paths.folder(project.path), { session: thread.id });
     if (thread.id === project.main_thread_id) return paths.project(project.id);
-    return withParams(paths.project(project.id), review ? { review: thread.id } : { thread: thread.id });
+    return withParams(paths.project(project.id), { thread: thread.id });
 }
 
 function projectUrl(projectId: string): string | undefined {

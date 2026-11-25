@@ -28,7 +28,7 @@ import { useProjectList } from '../hooks/useProjectList';
 import { useTranscript } from '../hooks/useTranscript';
 import { useProjectsHost, type SessionLaunch } from '../host/ProjectsHost';
 import { folderName } from '../utils/format';
-import { needsUser, threadRef } from '../components/project/threadStatus';
+import { needsUser } from '../components/project/threadStatus';
 
 /** Replace the session with the same id, else add it first (newest first). */
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -195,7 +195,7 @@ export default function WorkdirPage() {
     });
 
     const selected = sessions?.find((s) => s.id === sessionId);
-    useDocumentTitle([selected && threadRef(selected), scope ? folderName(scope) : t('workdir.title')]);
+    useDocumentTitle([scope ? folderName(scope) : t('workdir.title')]);
     const selectedFolder = folders?.find((f) => f.id === selected?.project_id);
     const settings = useThreadSettings(selected, true, (saved) => setSessions((list) => list?.map((th) => th.id === saved.id ? mergeThreadSettings(th, saved, true) : th) ?? null));
     const threadBlocked = !!selected?.archived_at || (!!selectedFolder && (selectedFolder.paused || !!selectedFolder.archived_at));
