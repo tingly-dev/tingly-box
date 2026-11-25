@@ -12,7 +12,7 @@ import (
 )
 
 // Addressing a thread from an IM chat (.design/projects-im.md, "在 IM 里点名线程"):
-// "#N text" (the old "@N text" still works) sends one message to thread #N,
+// "#N text" sends one message to thread #N,
 // /session N or /session <title> binds the chat to it (#0: the project
 // conversation), /session lists them.
 
@@ -21,11 +21,11 @@ var ErrNoSuchThread = errors.New("no such thread in this project")
 
 // A message addresses a thread only by "#N" at its very start followed by
 // whitespace and then the message; "#N" anywhere else, or glued to other
-// characters ("#3rd", "#3,"), is plain text. "@N" and "@#N" are the older form.
-var mentionRe = regexp.MustCompile(`^(?:#|@#?)(\d+)\s+(?s:(.+))$`)
+// characters ("#3rd", "#3,"), is plain text.
+var mentionRe = regexp.MustCompile(`^#(\d+)\s+(?s:(.+))$`)
 
-// parseMention reads "#2 text" (or the old "@2 text", "@#2 text"): the thread
-// number and the message. ok is false for anything else, "@opus ..." included.
+// parseMention reads "#2 text": the thread number and the message. ok is
+// false for anything else, "@2 text" and "@opus ..." included.
 func parseMention(text string) (n int, rest string, ok bool) {
 	m := mentionRe.FindStringSubmatch(strings.TrimSpace(text))
 	if m == nil {
