@@ -85,6 +85,11 @@ func (u *logprobsUpstream) Calls() int {
 // routes) around one provider and one request-model → upstream-model rule.
 func newLogprobsRouter(t *testing.T, provider *typ.Provider, requestModel, upstreamModel string) *gin.Engine {
 	t.Helper()
+	return newLogprobsRouterForScenario(t, provider, typ.ScenarioOpenAI, requestModel, upstreamModel)
+}
+
+func newLogprobsRouterForScenario(t *testing.T, provider *typ.Provider, scenario typ.RuleScenario, requestModel, upstreamModel string) *gin.Engine {
+	t.Helper()
 	loadbalance.DefaultBreakerStore().Reset()
 
 	cfg, err := config.NewConfig(
@@ -95,7 +100,7 @@ func newLogprobsRouter(t *testing.T, provider *typ.Provider, requestModel, upstr
 	require.NoError(t, err)
 	require.NoError(t, cfg.AddProvider(provider))
 	require.NoError(t, cfg.AddRule(typ.Rule{
-		Scenario: typ.ScenarioOpenAI, RequestModel: requestModel, Active: true,
+		Scenario: scenario, RequestModel: requestModel, Active: true,
 		Services: []*loadbalance.Service{{Provider: provider.UUID, Model: upstreamModel, Active: true}},
 	}))
 
@@ -406,6 +411,90 @@ func TestLogprobsPassthrough_ChatClientToResponsesUpstream_Stream(t *testing.T) 
 	assert.True(t, sawLogprobs, "Responses output_text.delta.logprobs must return as Chat choice.logprobs")
 }
 
+// TestLogprobsPassthrough_ResponsesToResponses_NonStream is the native
+// Responses path: include+top_logprobs go upstream untouched and the
+// output_text logprobs come back verbatim.
+func TestLogprobsPassthrough_ResponsesToResponses_NonStream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	up := newLogprobsUpstream(t, serveJSON(responsesUpstreamResponse))
+	router := newLogprobsRouter(t, logprobsOpenAIProvider("p-resp", up.srv.URL, ai.EndpointModeResponses), "client-model", "upstream-model")
+
+	w := logprobsPost(t, router, "/tingly/openai/v1/responses",
+		`{"model":"client-model","input":"hi","top_logprobs":3,"include":["message.output_text.logprobs"]}`)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "/v1/responses", up.Path())
+	assert.Contains(t, up.Body(), `"message.output_text.logprobs"`)
+	assert.Contains(t, up.Body(), `"top_logprobs":3`)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	item := resp["output"].([]any)[0].(map[string]any)
+	part := item["content"].([]any)[0].(map[string]any)
+	contentLogprobs := part["logprobs"].([]any)
+	require.NotEmpty(t, contentLogprobs)
+	assert.Equal(t, "hi", contentLogprobs[0].(map[string]any)["token"])
+}
+
+// responsesSSE mirrors what a Responses upstream emits for a logprobs
+// request: the include entry produces logprobs on the text delta events.
+const responsesSSE = `event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_up","object":"response","created_at":1700000000,"status":"in_progress","model":"upstream-model","output":[]}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":1,"item_id":"msg_up","output_index":0,"content_index":0,"delta":"hi","logprobs":[{"token":"hi","logprob":-0.1,"bytes":[104,105],"top_logprobs":[{"token":"hi","logprob":-0.1,"bytes":[104,105]}]}]}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":2,"response":{"id":"resp_up","object":"response","created_at":1700000000,"status":"completed","model":"upstream-model","output":[{"id":"msg_up","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"hi","annotations":[]}]}],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}}}
+
+`
+
+func TestLogprobsPassthrough_ResponsesToResponses_Stream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	up := newLogprobsUpstream(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, responsesSSE)
+	})
+	router := newLogprobsRouter(t, logprobsOpenAIProvider("p-resp-stream", up.srv.URL, ai.EndpointModeResponses), "client-model", "upstream-model")
+
+	w := logprobsPost(t, router, "/tingly/openai/v1/responses",
+		`{"model":"client-model","input":"hi","stream":true,"top_logprobs":3,"include":["message.output_text.logprobs"]}`)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, up.Body(), `"message.output_text.logprobs"`)
+	assert.Contains(t, up.Body(), `"top_logprobs":3`)
+
+	var sawLogprobs bool
+	for _, evt := range ssePayloads(t, w.Body.String()) {
+		if evt["type"] != "response.output_text.delta" {
+			continue
+		}
+		if logprobs, ok := evt["logprobs"].([]any); ok && len(logprobs) > 0 {
+			if logprobs[0].(map[string]any)["token"] == "hi" {
+				sawLogprobs = true
+			}
+		}
+	}
+	assert.True(t, sawLogprobs, "native Responses stream must keep output_text.delta.logprobs")
+}
+
+// TestLogprobsPassthrough_AnthropicClientToChatUpstream pins the N/A row: an
+// Anthropic Messages request cannot express logprobs, so the gateway forwards
+// the converted Chat request without inventing the parameters.
+func TestLogprobsPassthrough_AnthropicClientToChatUpstream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	up := newLogprobsUpstream(t, serveJSON(chatUpstreamResponse))
+	router := newLogprobsRouterForScenario(t, logprobsOpenAIProvider("p-anthropic-client", up.srv.URL, ai.EndpointModeChat), typ.ScenarioAnthropic, "client-model", "upstream-model")
+
+	w := logprobsPost(t, router, "/tingly/anthropic/v1/messages",
+		`{"model":"client-model","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "/v1/chat/completions", up.Path())
+	assert.NotContains(t, up.Body(), "logprobs")
+	assert.NotContains(t, up.Body(), "top_logprobs")
+}
+
 // TestLogprobsPassthrough_RejectsAnthropicTarget: the Anthropic Messages
 // protocol has no logprobs field. A Chat request that asks for them must fail
 // with an explicit 400 rather than reaching Anthropic without the parameter.
@@ -419,6 +508,7 @@ func TestLogprobsPassthrough_RejectsAnthropicTarget(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "logprobs_unsupported")
+	assert.Contains(t, w.Body.String(), "Anthropic Messages", "the error must name the protocol the client can act on")
 	assert.Equal(t, 0, up.Calls(), "a rejected logprobs request must not reach the upstream")
 
 	// A request that does not ask for logprobs still goes through.

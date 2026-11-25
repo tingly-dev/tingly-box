@@ -48,6 +48,20 @@ func targetCarriesLogprobs(target protocol.APIType) bool {
 	return target == protocol.TypeOpenAIChat || target == protocol.TypeOpenAIResponses
 }
 
+// targetDisplayName is the client-facing name of an upstream protocol in the
+// logprobs error, so the message says "Anthropic Messages" rather than the
+// internal "anthropic_beta".
+func targetDisplayName(target protocol.APIType) string {
+	switch target {
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		return "Anthropic Messages"
+	case protocol.TypeGoogle:
+		return "Google Gemini"
+	default:
+		return string(target)
+	}
+}
+
 // rejectUnsupportedLogprobs writes an explicit 400 when a client asked for
 // logprobs but the resolved provider protocol cannot carry them. It returns
 // true when it handled (rejected) the request.
@@ -58,8 +72,8 @@ func rejectUnsupportedLogprobs(c *gin.Context, target protocol.APIType, enabled 
 	writeErrorResponse(c, http.StatusBadRequest, ErrorResponse{
 		Error: ErrorDetail{
 			Message: fmt.Sprintf(
-				"logprobs/top_logprobs is not supported by this provider: %s has no logprobs field, and the gateway will not forward the request without it. Remove logprobs and top_logprobs, or route to an OpenAI Chat/Responses provider.",
-				target,
+				"logprobs and top_logprobs are not supported by %s, which has no logprobs field. Remove them, or route this model to an OpenAI Chat or Responses provider.",
+				targetDisplayName(target),
 			),
 			Type: "invalid_request_error",
 			Code: "logprobs_unsupported",
