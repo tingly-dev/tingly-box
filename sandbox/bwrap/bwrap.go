@@ -1,6 +1,7 @@
 // Package bwrap isolates a process with bubblewrap on Linux: storage and exec
-// confined, the network open or none, and, through a transient systemd user
-// scope, memory and task limits. Importing it registers the runtime.
+// confined, the network open, none, or an allowlist through a proxy on the
+// host (sandbox/netproxy), and, through a transient systemd user scope,
+// memory and task limits. Importing it registers the runtime.
 package bwrap
 
 import (
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/tingly-dev/tingly-box/sandbox"
+	"github.com/tingly-dev/tingly-box/sandbox/netproxy"
 )
 
 // Name is the runtime's name in the registry and in settings.
@@ -34,7 +36,7 @@ var lookSystemdRun = func() (string, error) { return exec.LookPath("systemd-run"
 func (Runtime) Info() sandbox.Info {
 	return sandbox.Info{Name: Name, Isolation: sandbox.IsolationProcess, Supports: map[sandbox.Axis][]sandbox.Level{
 		sandbox.AxisStorage:     {sandbox.StorageConfined},
-		sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone},
+		sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone, sandbox.NetworkAllowlist},
 		sandbox.AxisExec:        {sandbox.ExecConfined},
 		sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
 		sandbox.AxisResources:   {sandbox.ResourcesUnlimited, sandbox.ResourcesLimited},
@@ -72,13 +74,46 @@ func CheckLimited(ctx context.Context) error {
 }
 
 func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sandbox.Proc, error) {
-	args, err := Args(p, cmd.Dir)
-	if err != nil {
-		return nil, err
-	}
 	bin, err := lookPath()
 	if err != nil {
 		return nil, fmt.Errorf("%w: bubblewrap (bwrap) is not installed", sandbox.ErrUnavailable)
+	}
+	var extra []string
+	var proxy *netproxy.Proxy
+	if p.Network.Level == sandbox.NetworkAllowlist {
+		// No network inside; the bridge (this binary) offers the host's
+		// proxy on loopback, through its socket.
+		if proxy, err = netproxy.Listen(p.Network.Allow); err != nil {
+			return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
+		}
+		if cmd, err = netproxy.Wrap(cmd, filepath.Join(proxyDir, netproxy.SocketName)); err != nil {
+			_ = proxy.Close()
+			return nil, err
+		}
+		extra = []string{"--ro-bind", proxy.Dir(), proxyDir, "--ro-bind", cmd.Args[0], cmd.Args[0]}
+	}
+	proc, err := start(ctx, bin, cmd, p, extra)
+	if err != nil {
+		if proxy != nil {
+			_ = proxy.Close()
+		}
+		return nil, err
+	}
+	if proxy != nil {
+		return netproxy.Serve(proxy, proc), nil
+	}
+	return proc, nil
+}
+
+// proxyDir is where the sandbox sees the proxy's socket directory.
+const proxyDir = "/run/tb-sandbox-net"
+
+// start runs cmd in bubblewrap, with extra arguments after the mounts, inside
+// a limited systemd scope when p asks for limits.
+func start(ctx context.Context, bin string, cmd sandbox.Cmd, p sandbox.Policy, extra []string) (sandbox.Proc, error) {
+	args, err := buildArgs(p, cmd.Dir, extra)
+	if err != nil {
+		return nil, err
 	}
 	prefix := []string{bin}
 	if p.Resources.Level == sandbox.ResourcesLimited {
@@ -141,7 +176,11 @@ func scopeArgs(run string, r sandbox.Resources) []string {
 // root with the host's system directories read-only, a private /proc, /dev and
 // /tmp, an empty Home, the mounts, and the process in its own user, PID, IPC
 // and UTS namespaces with no capabilities, ended with its parent.
-func Args(p sandbox.Policy, dir string) ([]string, error) {
+func Args(p sandbox.Policy, dir string) ([]string, error) { return buildArgs(p, dir, nil) }
+
+// buildArgs is Args with extra arguments after the mounts, so they land on
+// top of them.
+func buildArgs(p sandbox.Policy, dir string, extra []string) ([]string, error) {
 	home := p.Storage.Home
 	if home == "" || !filepath.IsAbs(home) {
 		return nil, fmt.Errorf("%w: sandbox home %q is not an absolute path", sandbox.ErrUnavailable, home)
@@ -151,7 +190,7 @@ func Args(p sandbox.Policy, dir string) ([]string, error) {
 		"--cap-drop", "ALL", "--new-session", "--die-with-parent",
 		"--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
 	}
-	if p.Network.Level == sandbox.NetworkNone {
+	if p.Network.Level != sandbox.NetworkOpen {
 		args = append(args, "--unshare-net")
 	}
 	args = append(args, systemMounts()...)
@@ -169,6 +208,7 @@ func Args(p sandbox.Policy, dir string) ([]string, error) {
 		}
 		args = append(args, flag, m.Path, m.Path)
 	}
+	args = append(args, extra...)
 	if dir != "" {
 		args = append(args, "--chdir", dir)
 	}

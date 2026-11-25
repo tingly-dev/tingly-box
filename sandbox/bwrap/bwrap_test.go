@@ -62,6 +62,11 @@ func TestArgsConfineToTheMounts(t *testing.T) {
 	if !strings.Contains(strings.Join(args, " "), "--unshare-net") {
 		t.Error("network=none unshares the network")
 	}
+	p.Network.Level = sandbox.NetworkAllowlist
+	args, _ = Args(p, "")
+	if !strings.Contains(strings.Join(args, " "), "--unshare-net") {
+		t.Error("network=allowlist has no network of its own")
+	}
 }
 
 func TestScopeArgs(t *testing.T) {

@@ -331,7 +331,7 @@ sandbox/
 | 轴 | 级别 | 说明 |
 |---|---|---|
 | storage（文件） | `host` / `confined` | confined：只有声明的挂载（同路径；后挂的盖在先挂的上面，只读文件可以盖住可写目录）、私有 /tmp、空 HOME |
-| network（网络） | `open` / `none`（以后 `allowlist`） | none：连宿主本机的服务也不行 |
+| network（网络） | `open` / `none` / `allowlist` | none：连宿主本机的服务也不行；allowlist：自己没有网络，只经代理连 `Network.Allow` 列出的主机 |
 | exec（进程） | `host` / `confined` | confined：独立命名空间、无特权、不能再建命名空间、看不到别的进程、杀掉即全灭 |
 | credentials（凭据） | `inherit` / `explicit` | explicit：只给点名的环境变量；横跨另外三轴的秘密（文件靠 storage、注入的 token 靠 network）在这里集中声明 |
 | resources（资源） | `unlimited` / `limited` | CPU、内存、进程数 |
@@ -352,3 +352,11 @@ sandbox/
 **resources: limited（bwrap，2026-11-25）**：bwrap 自己不限资源，由 `systemd-run --user --scope --quiet --collect -p MemoryMax=<字节> -p MemorySwapMax=0 -p TasksMax=<n> -- bwrap …` 把整个沙箱放进一个临时的 systemd 用户 scope（值为 0 的限制不写）；scope 里的进程被 cgroup 限住，内存超限时整个 scope 被杀（含 shell）。systemd-run 要靠宿主的 `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` 找到用户会话，这两个变量只给它用：bwrap 用 `--setenv`/`--unsetenv` 按 `Cmd.Env` 原样还原，不进沙箱（不能用 `env -i` 把环境写进命令行，argv 宿主上谁都能读）。**失败即关闭**：`Start` 在 limited 时先跑一次探测 scope（要求 `systemd-run` 存在、用户会话可建 scope、cgroup 里有 `memory.max` 与 `pids.max`，即这两个控制器已委派），任一不满足就返回 `ErrUnavailable` 并写明原因，绝不在没有限制时启动；`Runtime.Check` 不变（不要求 systemd）。一致性测试 `resources/limited` 两组用例（64 MiB 下排序 200 MB 的单行必被杀；Tasks=20 下 fork 60 个必有失败）在 limited 起不来时跳过并带原因。CPU 限制尚未做。CI：GitHub 的 ubuntu runner 一般没有 systemd 用户会话（无 `XDG_RUNTIME_DIR`），这两组用例会跳过，不会失败；要在 CI 里真跑需要 `loginctl enable-linger` 并启动 `user@UID.service`，暂不做。
 
 **CI**：`sandbox/**` 触发 PR 检查；`daily.yml` 新增 `test-sandbox`（边界检查、vet、`-race` 测试，装 bubblewrap 并放开 Ubuntu 的 userns 限制，确认一致性测试没有被跳过）。
+
+**network: allowlist（2026-11-25）**：做在 `sandbox/netproxy`，与运行时无关，microVM 以后同样能用（把 socket 经 vsock 转进去即可）。
+
+- **宿主侧代理**：每次 `Start` 起一个 HTTP 代理（CONNECT 与普通 `http://` 请求），监听在宿主运行时目录（`$XDG_RUNTIME_DIR`，路径过长就退到临时目录）下私有目录里的 unix socket。只连 `Allow` 里的主机，其余返回 403 并写明原因。名单项是主机名或 IP，`*.example.com` 表示其子域名，可带 `:端口`；不带端口时只放 80 与 443。DNS 在宿主解析。进程结束后代理关闭、目录删除。
+- **沙箱内的桥**：沙箱里没有网络（bwrap `--unshare-net`，只有回环），所以由本程序自己当桥（`Wrap` 把可执行文件放到命令前，`init` 见到 `TB_SANDBOX_NET_BRIDGE` 就变成桥）。桥在 `127.0.0.1` 上开端口转到 socket，设置 `HTTP(S)_PROXY`（含小写形式），`NO_PROXY` 只留回环，然后启动真正的命令、转发信号、按它的退出码退出。bwrap 把 socket 目录只读挂到 `/run/tb-sandbox-net`，把可执行文件只读同路径挂入。不认代理变量的工具什么都连不上，这正是失败即关闭。
+- **一致性测试** `network/allowlist`：宿主回环上开两个监听，只放行其一。经 `HTTPS_PROXY` 的 CONNECT 对放行的那个必须是 200 并能收到数据，对另一个必须是 403，直连两者都必须失败。变异检查：allowlist 不 unshare 网络时抓到直连；代理不查名单时抓到 403 缺失。
+- **真实 CLI**：`TB_SANDBOX_LIVE=1 TB_SANDBOX_LIVE_ALLOWLIST=1` 只放行模型地址（测试里监听在 `127.0.0.2`，因为 `127.0.0.1` 在 `NO_PROXY` 里）。Claude Code 经代理完成整个回合，Bash 里 `curl https://example.com` 得到 `CONNECT tunnel failed, response 403`。
+- **Projects 线程仍是 `open`**（按决定先放通）；要收紧，在 `threadPolicy` 里把 network 换成 allowlist 并给出名单（网关、模型、包镜像），设置界面再加一个名单编辑项。
