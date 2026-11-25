@@ -187,7 +187,7 @@ export const project = {
         axes: { storage: 'Files', network: 'Network', exec: 'Processes', credentials: 'Secrets', resources: 'Resources' },
         levels: {
             storage: { host: 'everything you can read', confined: 'only its directory, repository, Library and memory' },
-            network: { open: 'open', none: 'none' },
+            network: { open: 'open (the host too)', none: 'none', allowlist: 'only listed hosts', internet: 'internet, not your machine' },
             exec: { host: 'as your user', confined: 'isolated, no privileges' },
             credentials: { inherit: 'your environment', explicit: 'only what it needs' },
             resources: { unlimited: 'no limits', limited: 'limited' },

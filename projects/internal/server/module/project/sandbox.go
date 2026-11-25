@@ -9,15 +9,15 @@ import (
 )
 
 // sandboxRuntimes lists the runtimes this build ships, the host first, with
-// whether each can run here and what a project's threads get in it.
+// whether a project's threads can run in each here and what they get in it.
 func sandboxRuntimes(ctx context.Context) []SandboxRuntime {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	out := []SandboxRuntime{}
 	for _, r := range sandbox.List() {
 		info := r.Info()
 		s := SandboxRuntime{Name: info.Name, Isolation: string(info.Isolation), Available: true, Levels: map[string]string{}}
-		if err := r.Check(ctx); err != nil {
+		if err := rt.CheckThreadSandbox(ctx, info.Name); err != nil {
 			s.Available, s.Reason = false, err.Error()
 		}
 		for axis, level := range rt.ThreadPolicyLevels(info.Name) {

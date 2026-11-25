@@ -190,7 +190,7 @@ export const project: PluralDict<typeof en> = {
         axes: { storage: 'Файлы', network: 'Сеть', exec: 'Процессы', credentials: 'Секреты', resources: 'Ресурсы' },
         levels: {
             storage: { host: 'всё, что можете читать вы', confined: 'только свой каталог, репозиторий, библиотека и память' },
-            network: { open: 'открыта', none: 'нет' },
+            network: { open: 'открыта (и этот компьютер)', none: 'нет', allowlist: 'только хосты из списка', internet: 'интернет, без этого компьютера' },
             exec: { host: 'от вашего пользователя', confined: 'изолированы, без привилегий' },
             credentials: { inherit: 'ваше окружение', explicit: 'только нужное' },
             resources: { unlimited: 'без ограничений', limited: 'ограничены' },

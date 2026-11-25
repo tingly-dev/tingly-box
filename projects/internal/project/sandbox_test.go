@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
@@ -134,4 +135,17 @@ func TestHostGitDoesNotRunAThreadsFsmonitor(t *testing.T) {
 	_, _ = git(context.Background(), repo, "status", "--porcelain")
 	_, err = os.Stat(marker)
 	assert.True(t, os.IsNotExist(err), "the host ran a command a sandboxed thread could have planted")
+}
+
+func TestHostEndpointsAreThePortsTheLaunchTalksTo(t *testing.T) {
+	mcp := filepath.Join(t.TempDir(), "mcp.json")
+	require.NoError(t, os.WriteFile(mcp, []byte(`{"mcpServers":{"tingly-projects":{"type":"http","url":"http://localhost:9100/mcp/t1"},"web":{"url":"https://example.com/mcp"}}}`), 0o600))
+	opts := &agentboot.ExecutionOptions{
+		Env:                      []string{"ANTHROPIC_BASE_URL=http://127.0.0.1:12580/tingly/claude_code", "PATH=/usr/bin", "OTHER=http://10.0.0.5:8080"},
+		MCPConfigPath:            mcp,
+		AdditionalMCPConfigPaths: []string{`{"mcpServers":{"x":{"url":"http://[::1]:7000/"}}}`},
+	}
+	assert.Equal(t, []sandbox.Endpoint{{Port: 7000}, {Port: 9100}, {Port: 12580}}, hostEndpoints(opts),
+		"the host's loopback ports in the environment and MCP configuration, nothing else")
+	assert.Equal(t, sandbox.NetworkInternet, threadPolicy("/h", nil, nil, hostEndpoints(opts)).Network.Level)
 }
