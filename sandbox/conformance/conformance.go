@@ -57,6 +57,9 @@ func Run(t *testing.T, rt sandbox.Runtime) {
 		t.Run("resources/limited memory", c.memoryLimited)
 		t.Run("resources/limited tasks", c.tasksLimited)
 	}
+	if c.supports(sandbox.AxisNetwork, sandbox.NetworkAllowlist) {
+		t.Run("network/allowlist", c.networkAllowlist)
+	}
 }
 
 type suite struct {
@@ -140,7 +143,7 @@ func (c *suite) refuses(t *testing.T) {
 
 var allLevels = map[sandbox.Axis][]sandbox.Level{
 	sandbox.AxisStorage:     {sandbox.StorageHost, sandbox.StorageConfined},
-	sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone},
+	sandbox.AxisNetwork:     {sandbox.NetworkOpen, sandbox.NetworkNone, sandbox.NetworkAllowlist},
 	sandbox.AxisExec:        {sandbox.ExecHost, sandbox.ExecConfined},
 	sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
 	sandbox.AxisResources:   {sandbox.ResourcesUnlimited, sandbox.ResourcesLimited},
@@ -297,6 +300,62 @@ func (c *suite) tasksLimited(t *testing.T) {
 	_, _ = fmt.Sscanf(out[i:], "STARTED=%d", &started)
 	if started >= 60 {
 		t.Errorf("tasks=20 let 60 processes start")
+	}
+}
+
+// networkAllowlist allows one of two listeners on the host's loopback: the
+// proxy named by HTTPS_PROXY must tunnel to it and refuse the other, and
+// neither may be reached directly.
+func (c *suite) networkAllowlist(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("the probe needs bash (/dev/tcp)")
+	}
+	listen := func() int {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		must(t, err)
+		t.Cleanup(func() { _ = ln.Close() })
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				_, _ = conn.Write([]byte("HELLO\n"))
+				_ = conn.Close()
+			}
+		}()
+		return ln.Addr().(*net.TCPAddr).Port
+	}
+	allowed, denied := listen(), listen()
+	dir := t.TempDir()
+	probe := filepath.Join(dir, "probe.sh")
+	must(t, os.WriteFile(probe, []byte(fmt.Sprintf(`
+[ -n "$HTTPS_PROXY" ] || echo NO-PROXY
+hp=${HTTPS_PROXY#http://}; hp=${hp%%/}
+via() {
+	exec 3<>/dev/tcp/${hp%%:*}/${hp##*:} || return
+	printf 'CONNECT 127.0.0.1:%%s HTTP/1.1\r\nHost: 127.0.0.1:%%s\r\n\r\n' $1 $1 >&3
+	head -c 200 <&3 | tr '\r\n' '  '
+	exec 3<&-
+}
+echo "ALLOWED[$(via %d)]"
+echo "DENIED[$(via %d)]"
+(echo > /dev/tcp/127.0.0.1/%d) 2>/dev/null && echo LEAK-direct
+echo END
+`, allowed, denied, allowed)), 0o644))
+	p := c.policy(t, sandbox.Mount{Path: dir})
+	p.Network = sandbox.Network{Level: sandbox.NetworkAllowlist, Allow: []string{fmt.Sprintf("127.0.0.1:%d", allowed)}}
+	out := c.run(t, p, bash+" "+probe)
+	expect(t, out, "END")
+	if strings.Contains(out, "NO-PROXY") {
+		t.Fatalf("network=allowlist set no HTTPS_PROXY:\n%s", out)
+	}
+	if !strings.Contains(out, "ALLOWED[HTTP/1.1 200") || !strings.Contains(out, "HELLO") {
+		t.Errorf("the proxy did not tunnel to an allowed host:\n%s", out)
+	}
+	if !strings.Contains(out, "DENIED[HTTP/1.1 403") {
+		t.Errorf("the proxy did not refuse a host off the list:\n%s", out)
 	}
 }
 

@@ -12,6 +12,9 @@ this repository, and agentboot, Projects and Tingly Box use it.
 - **Registry**: a runtime package registers itself in `init`; a build ships
   the runtimes it imports (Projects: `projects/internal/project/sandbox.go`).
 
+- **Allowlist network**: `netproxy` is the host proxy and in-sandbox bridge
+  any runtime without a network of its own can reuse (see bwrap's `Start`).
+
 Adding a runtime: a package here that implements `Runtime` (wrapping a command?
 use `ExecCommand`), registers itself, and has
 `func TestConformance(t *testing.T) { conformance.Run(t, Runtime{}) }`. Add

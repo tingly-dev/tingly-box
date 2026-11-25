@@ -50,9 +50,10 @@ const (
 	StorageHost     Level = "host"
 	StorageConfined Level = "confined"
 	// Network: anything the host reaches, or nothing at all (not even the
-	// host's own services).
-	NetworkOpen Level = "open"
-	NetworkNone Level = "none"
+	// host's own services), or only the hosts Network.Allow names.
+	NetworkOpen      Level = "open"
+	NetworkNone      Level = "none"
+	NetworkAllowlist Level = "allowlist"
 	// Exec: as the host user, or in its own namespaces with no privileges,
 	// unable to see, signal or trace other processes, killed as a whole.
 	ExecHost     Level = "host"
@@ -99,9 +100,17 @@ type Mount struct {
 	Optional bool `json:"optional,omitempty"`
 }
 
-// Network is the network axis.
+// Network is the network axis. Allowlist, the process has no network of its
+// own: HTTP_PROXY and HTTPS_PROXY (and their lower-case forms) in its
+// environment name a proxy that connects only to the hosts Allow names, and
+// refuses the rest with 403. A tool that ignores the proxy variables reaches
+// nothing.
 type Network struct {
 	Level Level `json:"level"`
+	// Allow are host names or IP addresses, "*.example.com" for every
+	// subdomain of example.com, each with an optional ":port"; without one,
+	// ports 80 and 443.
+	Allow []string `json:"allow,omitempty"`
 }
 
 // Exec is the execution axis.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
+	"github.com/tingly-dev/tingly-box/sandbox"
 )
 
 // scriptedAnthropic answers Claude Code's requests: the first turn with tools
@@ -122,7 +124,16 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 		"echo PROBE-END",
 	}, "; ")
 	mock := &scriptedAnthropic{command: probe}
-	srv := httptest.NewServer(mock)
+	srv := httptest.NewUnstartedServer(mock)
+	if os.Getenv("TB_SANDBOX_LIVE_ALLOWLIST") == "1" {
+		// Not 127.0.0.1: the bridge leaves that direct (NO_PROXY), and inside
+		// there is no network to reach it on.
+		ln, err := net.Listen("tcp", "127.0.0.2:0")
+		require.NoError(t, err)
+		_ = srv.Listener.Close()
+		srv.Listener = ln
+	}
+	srv.Start()
 	defer srv.Close()
 	require.NoError(t, os.WriteFile(filepath.Join(config, "settings.json"), []byte(`{}`), 0o600))
 
@@ -138,6 +149,12 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	opts.ProjectPath = th.Cwd
 	opts.OutputFormat = agentboot.OutputFormatStreamJSON
 	opts.Timeout = 2 * time.Minute
+	if os.Getenv("TB_SANDBOX_LIVE_ALLOWLIST") == "1" {
+		// Only the model's host: the CLI must reach it through the proxy, and
+		// nothing else.
+		opts.Sandbox.Policy.Network = sandbox.Network{Level: sandbox.NetworkAllowlist, Allow: []string{strings.TrimPrefix(srv.URL, "http://")}}
+		mock.command += "; curl -sS -m 5 https://example.com 2>&1 | head -1; curl -sS -m 5 " + srv.URL + "/v1/models >/dev/null && echo VIA-PROXY"
+	}
 	if os.Getenv("TB_SANDBOX_LIVE_HOST") == "1" {
 		opts.Sandbox = nil // the same launch on the host, to compare
 	}
@@ -159,6 +176,10 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	t.Logf("probe output: %s", out)
 	require.Contains(t, out, "PROBE-END", "the Bash call ran in the sandbox")
 	assert.NotContains(t, out, "LEAK")
+	if os.Getenv("TB_SANDBOX_LIVE_ALLOWLIST") == "1" {
+		assert.Contains(t, out, "403", "a host off the list is refused")
+		assert.Contains(t, out, "VIA-PROXY", "the model's host is reached through the proxy")
+	}
 	assert.Contains(t, out, "WROTE")
 	b, err := os.ReadFile(filepath.Join(th.Cwd, "probe.txt"))
 	require.NoError(t, err)
