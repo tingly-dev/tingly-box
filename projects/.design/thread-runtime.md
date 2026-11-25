@@ -253,3 +253,24 @@ worker 是“另一台机器上的运行时”，不是另一套模型：
 - 这时 MCP 与网关不在 worker 的 `127.0.0.1` 上，所以**worker 模式就需要 §2 的通道**：`tb-sandboxd` 在沙箱里开入口，经那条 stdio 把 MCP、网关的连接带回 Projects 主机（网络可以照样放通，通道只承载这两样）。这是收口之前唯一必须用到通道的场景。
 - 工作区不在 Projects 主机上：worker 本地 `git clone`（凭据由主机经通道按需提供，或只用公开仓库），宿主代做的 git（diff、推送）改经通道在 worker 上执行；library/memory 由 worker 同步一份（只读快照 + 输出回传）。这部分等做 worker 时再细化，不影响 v1。
 - 选择：项目设置“运行环境”多一个 `worker: <名字>`；worker 的注册、配对可复用 `remote/` 的配对思路（⚠ 待设计）。
+
+### 10.4 bubblewrap 的文件边界（2026-11-25 实测）
+
+bwrap 从一个**空的根**（tmpfs）开始，只有显式 `--bind`/`--ro-bind` 的路径存在；不是“隐藏某些目录”，而是“只放进给定的目录”。实测（普通用户，开发机）：
+
+- 根下只有 `bin dev etc home lib lib64 proc tmp usr`；`~/.ssh`、`~/.tingly-box`、`~/.claude`、仓库目录、`/var/run/docker.sock`、`/root`、`/sys` 全部不存在；授权目录里的文件可读；只读挂载写入失败；`--clearenv` 后环境只剩显式设置的 3 个变量；`--unshare-pid` 后 `/proc` 里只有沙箱自己的 5 个进程。
+- 沙箱内指向挂载范围外的符号链接解析到沙箱自己的命名空间里，即“不存在”。
+
+v1 必须带的参数与注意点：
+
+| 项 | 做法 | 不这么做的后果 |
+|---|---|---|
+| `--unshare-pid` + 新 `--proc /proc` | 必带 | 能读同用户宿主进程的 `/proc/<pid>/environ`（里面有 token） |
+| `--clearenv` + 白名单 `--setenv` | 必带 | 宿主环境变量里的秘密进沙箱 |
+| `--new-session` | 必带 | TIOCSTI 向宿主终端注入按键 |
+| `--die-with-parent` | 必带 | Projects 退出后留下孤儿 |
+| `$HOME` 用 `--tmpfs`，需要持久的子目录再单独 bind | 推荐 | 把宿主目录 bind 成 HOME 时，bwrap 会在那个宿主目录里留下挂载点用的**空目录骨架**（实测只有空目录、没有文件） |
+| `--dev /dev`（最小 dev），不挂 `/sys` | 推荐 | 设备与内核信息暴露 |
+| seccomp（可选，后续） | 拦 `keyctl`、`ptrace` 等 | 同用户的内核 keyring 仍可访问（少见但存在） |
+
+**共用网络带来的缺口（先放通的代价）**：文件边界挡不住经网络能拿到的东西。共用网络命名空间时，沙箱能连宿主的回环和 `0.0.0.0` 上的所有服务（开发机上有 Tingly Box 12580、Projects、redis 6379、ollama 11434 等），也能连宿主网络命名空间里的抽象 unix socket。Tingly Box 的管理 API 要求用户认证（`getUserAuthMiddleware`），其认证材料在被隐藏的 `~/.tingly-box` 下；其它服务是否设了认证不由我们控制。收口时的一步低成本改进：`--unshare-net` + 用户态网络（pasta/slirp4netns，开发机尚未安装）放通外网但不给宿主回环，只把网关与 MCP 两个端口转发进去——这比完整出口代理简单，可作为收口的第一步。
