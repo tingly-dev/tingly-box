@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1112,37 +1113,74 @@ type viewed struct {
 	text string
 }
 
-func viewKey(t *db.Thread, number int) string { return t.ID + "#" + strconv.Itoa(number) }
+// viewKey names one of View's answers: the thread, the repository as asked
+// (empty for the thread's own) and the number.
+func viewKey(t *db.Thread, repo string, number int) string {
+	return t.ID + "|" + strings.ToLower(repo) + "#" + strconv.Itoa(number)
+}
 
+// forgetView drops View's answers for the number, whichever way the repository
+// was asked for.
 func (l *Links) forgetView(t *db.Thread, number int) {
 	l.viewMu.Lock()
 	defer l.viewMu.Unlock()
-	delete(l.views, viewKey(t, number))
+	prefix, suffix := t.ID+"|", "#"+strconv.Itoa(number)
+	for k := range l.views {
+		if strings.HasPrefix(k, prefix) && strings.HasSuffix(k, suffix) {
+			delete(l.views, k)
+		}
+	}
 }
 
 // viewBodyMax is how much of an item's description View hands back.
 const viewBodyMax = 2000
 
-// View reads an issue or PR of the thread's repository: where it stands, and
-// for an open PR its checks and mergeability. An item the thread has a link to
-// also has its record brought up to date; any other is only read, never
-// recorded. The text is third-party content and comes wrapped as such.
-func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, error) {
-	if text, ok := l.viewedRecently(t, number); ok {
+// repoShape is owner/name as GitHub allows them.
+var repoShape = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
+
+// parseRepoArg reads a tool's repo argument: owner/name, nothing else.
+func parseRepoArg(repo string) (GitHubRepo, error) {
+	repo = strings.TrimSuffix(strings.TrimSpace(repo), ".git")
+	if !repoShape.MatchString(repo) {
+		return GitHubRepo{}, fmt.Errorf("repo %q is not owner/name (for example tingly-dev/tingly-box)", repo)
+	}
+	owner, name, _ := strings.Cut(repo, "/")
+	return GitHubRepo{Owner: owner, Name: name}, nil
+}
+
+// View reads an issue or PR, of the thread's repository or of repo (owner/name)
+// when given: where it stands, what people said about it and, for a PR, what it
+// changes. An item the thread has a link to also has its record brought up to
+// date; any other is only read, never recorded. The text is third-party
+// content and comes wrapped as such.
+func (l *Links) View(ctx context.Context, t *db.Thread, number int, repo string) (string, error) {
+	repo = strings.TrimSpace(repo)
+	if text, ok := l.viewedRecently(t, repo, number); ok {
 		return text, nil
 	}
-	lc, err := l.resolve(ctx, t)
-	if err != nil {
-		return "", err
+	var target GitHubRepo
+	if repo != "" {
+		r, err := parseRepoArg(repo)
+		if err != nil {
+			return "", err
+		}
+		target = r
+	} else {
+		lc, err := l.resolve(ctx, t)
+		if err != nil {
+			return "", err
+		}
+		target = lc.repo
 	}
-	slug := lc.repo.Slug()
+	slug := target.Slug()
 	var link *db.ThreadLink
+	var err error
 	if number <= 0 {
 		if link, err = l.ownItem(t, slug, 0, false); err != nil {
 			return "", err
 		}
 		number = link.Number
-		if text, ok := l.viewedRecently(t, number); ok {
+		if text, ok := l.viewedRecently(t, repo, number); ok {
 			return text, nil
 		}
 	} else if link, err = l.store.FindThreadLink(t.ID, slug, number); errors.Is(err, db.ErrNotFound) {
@@ -1150,7 +1188,7 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 	} else if err != nil {
 		return "", err
 	}
-	kind, it, err := l.read(ctx, lc.repo, number)
+	kind, it, err := l.read(ctx, target, number)
 	if err != nil {
 		return "", err
 	}
@@ -1166,7 +1204,7 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 	if len(l.views) > 200 {
 		l.views = map[string]viewed{}
 	}
-	l.views[viewKey(t, number)] = viewed{at: l.now(), text: text}
+	l.views[viewKey(t, repo, number)] = viewed{at: l.now(), text: text}
 	l.viewMu.Unlock()
 	return text, nil
 }
@@ -1174,13 +1212,13 @@ func (l *Links) View(ctx context.Context, t *db.Thread, number int) (string, err
 // viewedRecently is View's last answer for the item when it is under linkMinGap
 // old. It is asked before anything is resolved, so a polling model costs no
 // process at all.
-func (l *Links) viewedRecently(t *db.Thread, number int) (string, bool) {
+func (l *Links) viewedRecently(t *db.Thread, repo string, number int) (string, bool) {
 	if number <= 0 {
 		return "", false
 	}
 	l.viewMu.Lock()
 	defer l.viewMu.Unlock()
-	c, ok := l.views[viewKey(t, number)]
+	c, ok := l.views[viewKey(t, repo, number)]
 	return c.text, ok && l.now().Sub(c.at) < linkMinGap
 }
 
@@ -1202,20 +1240,142 @@ func (l *Links) read(ctx context.Context, repo GitHubRepo, number int) (string, 
 	return db.LinkIssue, it, nil
 }
 
-// describeItem is the answer of view.
+// describeItem is the answer of view: where the item stands, then what people
+// said about it and what it changes, so a model needs no gh to read it.
 func describeItem(kind string, it GitHubItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s #%d %q %s\nstate: %s", kind, it.Number, it.Title, it.URL, it.State)
 	if it.Draft {
 		b.WriteString(" (draft)")
 	}
+	if it.Author != "" {
+		fmt.Fprintf(&b, "\nauthor: @%s", it.Author)
+	}
+	if kind == db.LinkPR && it.Head != "" {
+		fmt.Fprintf(&b, "\nbranches: %s → %s", it.Head, it.Base)
+	}
 	if kind == db.LinkPR && it.State == db.LinkStateOpen {
-		fmt.Fprintf(&b, "\nchecks: %s\nmergeable: %s", orUnread(it.CI), orUnread(it.MergeState))
+		fmt.Fprintf(&b, "\nchecks: %s", orUnread(it.CI))
+		describeChecks(&b, it.Checks)
+		fmt.Fprintf(&b, "\nmergeable: %s", orUnread(it.MergeState))
+	}
+	d := it.Detail
+	if kind == db.LinkPR && d != nil {
+		describePRDetail(&b, it, d)
 	}
 	if body := strings.TrimSpace(it.Body); body != "" {
 		b.WriteString("\n\n" + clip(body, viewBodyMax))
 	}
+	if d != nil && d.CommentCount > 0 {
+		fmt.Fprintf(&b, "\n\ncomments: %d", d.CommentCount)
+		if len(d.Comments) < d.CommentCount {
+			fmt.Fprintf(&b, ", the last %d", len(d.Comments))
+		}
+		for _, c := range d.Comments {
+			fmt.Fprintf(&b, "\n- @%s%s: %s", orGhost(c.Author), onDay(c.At), clip(c.Body, viewNoteMax))
+		}
+	}
 	return envelope(trustRelay, b.String(), "source", "github", "kind", "view")
+}
+
+// How much of a comment, review or review thread view hands back, and how many
+// review threads it names.
+const (
+	viewNoteMax    = 600
+	viewThreadsMax = 10
+)
+
+// describeChecks names the failing checks under the checks line.
+func describeChecks(b *strings.Builder, c *db.LinkChecks) {
+	if c == nil {
+		return
+	}
+	fmt.Fprintf(b, " (%d failing, %d pending, %d passing)", c.Failing, c.Pending, c.Passing)
+	for _, f := range c.Failed {
+		fmt.Fprintf(b, "\n- failing: %s %s", f.Name, f.URL)
+	}
+	if c.More > 0 {
+		fmt.Fprintf(b, "\n- and %d more failing", c.More)
+	}
+}
+
+// describePRDetail is a PR's reviews, unresolved review threads, commits and
+// changed files.
+func describePRDetail(b *strings.Builder, it GitHubItem, d *GitHubDetail) {
+	if d.ReviewDecision != "" || len(d.Reviews) > 0 {
+		decision := d.ReviewDecision
+		if decision == "" {
+			decision = "none asked"
+		}
+		fmt.Fprintf(b, "\nreview: %s", decision)
+		for _, r := range d.Reviews {
+			fmt.Fprintf(b, "\n- @%s %s%s", orGhost(r.Author), r.State, onDay(r.At))
+			if body := strings.TrimSpace(r.Body); body != "" {
+				b.WriteString(": " + clip(body, viewNoteMax))
+			}
+		}
+	}
+	if d.ThreadCount > 0 {
+		fmt.Fprintf(b, "\nunresolved review threads: %d", len(d.Threads))
+		if d.ThreadCount > readThreads {
+			fmt.Fprintf(b, " among the first %d of %d", readThreads, d.ThreadCount)
+		} else {
+			fmt.Fprintf(b, " of %d", d.ThreadCount)
+		}
+		for i, th := range d.Threads {
+			if i == viewThreadsMax {
+				fmt.Fprintf(b, "\n- and %d more", len(d.Threads)-i)
+				break
+			}
+			where := th.Path
+			if th.Line > 0 {
+				where += ":" + strconv.Itoa(th.Line)
+			}
+			if th.Outdated {
+				where += " (outdated)"
+			}
+			fmt.Fprintf(b, "\n- %s @%s: %s", where, orGhost(th.Author), clip(th.Body, viewNoteMax))
+		}
+	}
+	if d.Commits > 0 {
+		fmt.Fprintf(b, "\ncommits: %d", d.Commits)
+		if d.HeadSHA != "" {
+			fmt.Fprintf(b, ", head %s %q", shortSHA(d.HeadSHA), d.HeadTitle)
+		}
+	}
+	if d.ChangedFiles > 0 {
+		fmt.Fprintf(b, "\nfiles: %d changed, +%d -%d", d.ChangedFiles, d.Additions, d.Deletions)
+		for _, f := range d.Files {
+			fmt.Fprintf(b, "\n- %s %s (+%d -%d)", f.Status, f.Path, f.Additions, f.Deletions)
+		}
+		if more := d.ChangedFiles - len(d.Files); more > 0 {
+			fmt.Fprintf(b, "\n- and %d more", more)
+		}
+		if it.Head != "" {
+			fmt.Fprintf(b, "\n(the patches: git diff %s...%s in a checkout)", it.Base, it.Head)
+		}
+	}
+}
+
+func orGhost(login string) string {
+	if login == "" {
+		return "ghost" // GitHub's name for a deleted account
+	}
+	return login
+}
+
+func onDay(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return " (" + t.UTC().Format("2006-01-02") + ")"
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // refresh reads one record from GitHub. A failure keeps the last good reading,
