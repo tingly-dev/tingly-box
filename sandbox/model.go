@@ -91,8 +91,22 @@ const (
 	SurfacePublic
 )
 
-// cgnat is the shared address space of RFC 6598.
-var cgnat = netip.MustParsePrefix("100.64.0.0/10")
+// PrivatePrefixes are the private and special ranges (§2.2 P, together with
+// the host's own addresses H): RFC 1918, link-local (the cloud metadata
+// address among them), shared CGNAT, "this network", multicast and reserved,
+// IPv6 unique-local, link-local and multicast. Loopback is the host's.
+var PrivatePrefixes = []netip.Prefix{
+	netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("172.16.0.0/12"), netip.MustParsePrefix("192.168.0.0/16"),
+	netip.MustParsePrefix("169.254.0.0/16"), netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("224.0.0.0/4"), netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("fc00::/7"), netip.MustParsePrefix("fe80::/10"), netip.MustParsePrefix("ff00::/8"),
+}
+
+// LoopbackPrefixes are the loopback ranges, always the host's.
+var LoopbackPrefixes = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128")}
+
+// HostAddrs are the host's own interface addresses.
+func HostAddrs() []netip.Addr { return hostAddrs() }
 
 // hostAddrs are the host's own interface addresses; a variable for tests.
 var hostAddrs = func() []netip.Addr {
@@ -114,8 +128,7 @@ func Classify(ip netip.Addr) Surface {
 	if ip.IsLoopback() || ip.IsUnspecified() || slices.Contains(hostAddrs(), ip) {
 		return SurfaceHost
 	}
-	if ip.IsPrivate() || ip.IsLinkLocalUnicast() || cgnat.Contains(ip) ||
-		ip.IsMulticast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || !ip.IsGlobalUnicast() {
+	if !ip.IsGlobalUnicast() || slices.ContainsFunc(PrivatePrefixes, func(p netip.Prefix) bool { return p.Contains(ip) }) {
 		return SurfacePrivate
 	}
 	return SurfacePublic

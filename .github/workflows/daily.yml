@@ -213,11 +213,12 @@ jobs:
           fi
 
       # The conformance suite runs each runtime for real. bubblewrap needs
-      # unprivileged user namespaces, which Ubuntu's AppArmor restricts.
+      # unprivileged user namespaces, which Ubuntu's AppArmor restricts; the
+      # internet level needs pasta (passt) and nft (nftables).
       - name: Install bubblewrap
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q bubblewrap
+          sudo apt-get install -y -q bubblewrap passt nftables
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       - name: Vet

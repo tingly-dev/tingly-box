@@ -94,13 +94,13 @@ func newScope(ctx context.Context, r sandbox.Resources) (*scope, error) {
 	return sc, nil
 }
 
-// wrap is the command prefix that runs bin in the scope, the bubblewrap
+// wrap is the command prefix that runs what follows in the scope, the bubblewrap
 // arguments that keep the host's session variables out of the sandbox, and
 // the environment systemd-run needs. systemd-run reaches the user manager
 // through the host's session variables and execs bwrap with its own
 // environment; bwrap puts those variables back as env had them (never the
 // environment on a command line: argv is public).
-func (sc *scope) wrap(bin string, env []string) (prefix, restore, newEnv []string) {
+func (sc *scope) wrap(env []string) (prefix, restore, newEnv []string) {
 	newEnv = env
 	for _, k := range []string{"XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"} {
 		if v, ok := envLookup(env, k); ok {
@@ -112,7 +112,7 @@ func (sc *scope) wrap(bin string, env []string) (prefix, restore, newEnv []strin
 			newEnv = append(slices.DeleteFunc(slices.Clone(newEnv), func(kv string) bool { return strings.HasPrefix(kv, k+"=") }), k+"="+v)
 		}
 	}
-	return append(scopeArgs(sc.run, sc.unit, sc.limits), bin), restore, newEnv
+	return scopeArgs(sc.run, sc.unit, sc.limits), restore, newEnv
 }
 
 func envLookup(env []string, name string) (string, bool) {
