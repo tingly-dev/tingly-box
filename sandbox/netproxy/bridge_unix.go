@@ -29,30 +29,14 @@ func bridge(sock string, args []string) int {
 		fmt.Fprintln(os.Stderr, "sandbox network bridge: no command")
 		return 127
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	env, err := Bridge(func() (net.Conn, error) { return net.Dial("unix", sock) }, os.Environ())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "sandbox network bridge: %v\n", err)
 		return 127
 	}
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go func() {
-				up, err := net.Dial("unix", sock)
-				if err != nil {
-					_ = c.Close()
-					return
-				}
-				splice(c, c, up)
-			}()
-		}
-	}()
 
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Env = proxyEnv(os.Environ(), "http://"+ln.Addr().String())
+	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "sandbox network bridge: %v\n", err)
@@ -78,6 +62,32 @@ func bridge(sock string, args []string) int {
 	default:
 		return 127
 	}
+}
+
+// Bridge offers the proxy that dial reaches on a loopback port, for as long as
+// this process lives, and returns env with the proxy variables pointing there.
+func Bridge(dial func() (net.Conn, error), env []string) ([]string, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				up, err := dial()
+				if err != nil {
+					_ = c.Close()
+					return
+				}
+				splice(c, c, up)
+			}()
+		}
+	}()
+	return proxyEnv(env, "http://"+ln.Addr().String()), nil
 }
 
 // proxyEnv is env with every proxy variable replaced by url, and loopback

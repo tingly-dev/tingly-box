@@ -75,12 +75,24 @@ func Listen(allow []string) (*Proxy, error) {
 	if err != nil {
 		return nil, fmt.Errorf("proxy socket directory: %w", err)
 	}
-	ln, err := net.Listen("unix", filepath.Join(dir, SocketName))
+	p, err := ListenAt(allow, filepath.Join(dir, SocketName))
 	if err != nil {
 		_ = os.RemoveAll(dir)
+		return nil, err
+	}
+	p.dir = dir
+	return p, nil
+}
+
+// ListenAt starts a proxy for allow on the socket at path (a runtime that
+// forwards a fixed path into the sandbox: a microVM's vsock port). Close
+// removes the socket.
+func ListenAt(allow []string, path string) (*Proxy, error) {
+	ln, err := net.Listen("unix", path)
+	if err != nil {
 		return nil, fmt.Errorf("proxy socket: %w", err)
 	}
-	p := &Proxy{allow: append([]string(nil), allow...), dir: dir, ln: ln}
+	p := &Proxy{allow: append([]string(nil), allow...), ln: ln}
 	tr := &http.Transport{Proxy: nil, DialContext: dialer.DialContext, ForceAttemptHTTP2: true}
 	p.fwd = &httputil.ReverseProxy{Rewrite: func(*httputil.ProxyRequest) {}, Transport: tr}
 	p.srv = &http.Server{Handler: p, ReadHeaderTimeout: 30 * time.Second}
@@ -110,7 +122,9 @@ func (p *Proxy) Dir() string { return p.dir }
 func (p *Proxy) Close() error {
 	p.once.Do(func() {
 		_ = p.srv.Close()
-		_ = os.RemoveAll(p.dir)
+		if p.dir != "" {
+			_ = os.RemoveAll(p.dir)
+		}
 	})
 	return nil
 }
