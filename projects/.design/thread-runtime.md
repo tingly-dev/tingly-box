@@ -206,12 +206,19 @@ type Policy struct {
 - 选了隔离档位而运行时不可用：线程启动失败，说清哪一步、怎么修；**不退回本机**。
 - 切换只影响之后启动的线程；运行中的不迁移。
 
-## 8 未决（需要用户决定）
+## 8 用户的决定（2026-11-25）与未决
 
-1. **默认白名单**：除网关、MCP 外，是否默认放行常见包源（npm、PyPI、Go proxy、crates.io）？放行方便，但每多一个都是外泄面。建议默认只放网关与 MCP，首次被拦时一键加入。
-2. **GitHub 读**：`api.github.com`、`github.com` 默认不放（G4 靠它）。`git clone` 公开仓库、`go get` 拉 GitHub 上的模块会因此失败；是否单独提供“只读 GitHub”的放行（经出口代理只允许 GET 和 git fetch 协议）？
-3. **本机档位要不要也用线程配置目录和环境白名单**：能减少今天裸机下的暴露，但会改变现有行为（不再继承用户的全局 Claude Code 设置）。
-4. **P2 第一家**：Linux 上 libkrun（microsandbox 同源，启动快）还是 Cloud Hypervisor（更通用）；macOS 上是否直接用 Apple Containerization（需要 macOS 26+ ⚠）。
+已定：
+
+- **网络先全放通，后续再收口。** 在安全与快速上线之间取上线：第一版不做 R2（断网）与出口代理，G3/G7 推迟；沙箱与宿主共用网络，MCP 与网关照旧在 `127.0.0.1`，不需要通道。收口时再加 R2 + `tb-sandboxd` + 出口代理，接口不变。
+- **GitHub 不是顾虑**：GitHub 写走 MCP 工具（宿主执行、按项目设置审批），沙箱里不放 gh 凭据即可（G4 仍成立：没有凭据就写不了）；读、`git clone` 公开仓库靠放通的网络。
+- **共享内容经挂载进入沙箱**：library、memory、`library/.cache`、工作区都同路径挂入（bwrap/gVisor 用 bind，microVM 用 virtiofs）。
+- **先做 Linux**；以后加可选的 **worker 模式**（线程跑在别的机器上），默认仍是本机。
+
+未决：
+
+1. **本机档位**要不要也用线程配置目录和环境白名单（会改变现有行为：不再继承用户的全局 Claude Code 设置）。
+2. 收口时的默认白名单（只放网关与 MCP，还是加常见包源）。
 
 ## 9 不做
 
@@ -219,3 +226,30 @@ type Policy struct {
 - 不照搬 Docker/Kubernetes 的对象模型；接口只有 `Start`、stdio、`Destroy`。
 - 不在沙箱里放 GitHub 或模型的真实凭据。
 - 不迁移运行中的线程。
+
+## 10 Linux 第一版与 worker 模式（推荐）
+
+### 10.1 本机现状（2026-11-25 实测，开发机）
+
+Ubuntu 26.04，x86_64，80 核、247 GB；`/dev/kvm` 存在但当前用户**不在 kvm 组**（不可读写）；已装 `bwrap` 0.11.1、Docker 29.10（runc；注册了 `kata` 但没有 shim，不可用）、QEMU 10.2、containerd；没有 firecracker、cloud-hypervisor、libkrun、gVisor、virtiofsd、podman。`kernel.apparmor_restrict_unprivileged_userns=1`，但 bwrap 以普通用户可用。实测：bwrap 里以假 HOME 运行 `claude --version`（2.1.259）成功；放通网络时沙箱里看不到 `~/.ssh`，`https://api.github.com` 可达。
+
+### 10.2 推荐分三步，每步都能在这台机器上落地
+
+| 步 | 后端 | 隔离 | 这台机器上 | 为什么 |
+|---|---|---|---|---|
+| **v1** | **bubblewrap** | process（共享内核） | 现在就能跑，不要 sudo、不要守护进程，启动毫秒级 | 最快上线：同路径 `--bind` 挂工作区、library、memory、缓存与线程配置目录；`--tmpfs $HOME` 藏掉 `~/.ssh`、`~/.config/gh`、`~/.tingly-box`；共用网络（决定：先放通），MCP/网关不用改；`--die-with-parent` + `--unshare-pid` 保证杀干净；资源上限用 `systemd-run --user --scope -p MemoryMax=… -p TasksMax=…`（cgroup v2 + systemd 已具备）。Claude Code 自己的沙箱和 srt 在 Linux 上也是这条路 |
+| **v2** | **gVisor**（`runsc`） | userkernel | 需要装一个静态二进制；不需要 KVM | 系统调用面比 bwrap 小得多，不需要虚拟化权限；`runsc --rootless --network=host do` 或经 Docker `--runtime=runsc`（⚠ rootless 细节待验证）；挂载同样是 bind |
+| **v3** | **libkrun**（或 Cloud Hypervisor + virtiofsd） | vm | 需要把用户加进 kvm 组（`sudo usermod -aG kvm x0079`，需用户决定）并安装 libkrun/libkrunfw | 真正的 microVM：独立内核、virtiofs 挂载、毫秒到百毫秒级启动、可直接拿进程 stdio；libkrun 默认 TSI 借宿主网络，正好符合“先放通”，收口时再关（§4）。Firecracker 因为没有 virtiofs，不作首选 |
+
+三步共用 §3 的接口与 §5 的一致性测试（v1 先跑文件、凭据、互隔、销毁四类用例；网络用例等收口时打开）。v1 的适配器就是“拼 bwrap 参数 + 起进程”，代码量小，接入点是 agentboot 的 `process.Factory`。
+
+**v1 的挂载清单**（全部同路径）：工作区（读写）与它的主仓库 `.git`（读写，已知缺口见 §1.4）、项目其它仓库（只读）、`library/`（读写，含 `outputs/`、`.cache/`）、`memory/`（读写）、线程 TMPDIR（读写）、线程设置与 MCP 配置文件（只读）、线程 `CLAUDE_CONFIG_DIR`（读写）、`claude` 安装目录（只读）、`/usr`、`/etc` 等系统目录（只读）。不挂：`$HOME` 其余部分、Projects/Tingly Box 数据目录（数据库、token）。
+
+### 10.3 worker 模式（以后，默认仍是本机）
+
+worker 是“另一台机器上的运行时”，不是另一套模型：
+
+- worker 机器上跑一个 `tb-worker` 守护进程，它在本地用 v1–v3 的某个后端起沙箱；Projects 的 `worker` 适配器的 `Start` = 连上 `tb-worker`（WebSocket 或 SSH，带 worker 的凭据），请求起沙箱，拿回那条 stdio。对上层仍是同一个 `Box`。
+- 这时 MCP 与网关不在 worker 的 `127.0.0.1` 上，所以**worker 模式就需要 §2 的通道**：`tb-sandboxd` 在沙箱里开入口，经那条 stdio 把 MCP、网关的连接带回 Projects 主机（网络可以照样放通，通道只承载这两样）。这是收口之前唯一必须用到通道的场景。
+- 工作区不在 Projects 主机上：worker 本地 `git clone`（凭据由主机经通道按需提供，或只用公开仓库），宿主代做的 git（diff、推送）改经通道在 worker 上执行；library/memory 由 worker 同步一份（只读快照 + 输出回传）。这部分等做 worker 时再细化，不影响 v1。
+- 选择：项目设置“运行环境”多一个 `worker: <名字>`；worker 的注册、配对可复用 `remote/` 的配对思路（⚠ 待设计）。
