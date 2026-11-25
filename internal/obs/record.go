@@ -23,6 +23,11 @@ type Record struct {
 	ProviderResponse   *RecordResponse
 	FinalResponse      *RecordResponse
 
+	// Fingerprint is the compact, privacy-safe response summary used for
+	// passive model fingerprinting. Set alongside FinalResponse when the
+	// final_response capture point is selected.
+	Fingerprint *ResponseFingerprint
+
 	Duration time.Duration
 	Err      string
 	Steps    []string

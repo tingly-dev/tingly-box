@@ -217,7 +217,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "recording",
 			Label:           "Recording",
-			Description:     "Record this rule's traffic at the selected capture points, for debugging and replay. Multi-select: \"Client request\" is the inbound request exactly as the client sent it; \"Upstream request\" is the final request dispatched to the provider (after all transforms). Can also be set scenario-wide (Recording in the scenario's plugin panel) — a rule-level selection overrides the scenario default. Records are written under the config directory's record/ folder, grouped by scenario. Response-side capture points are not offered yet.",
+			Description:     "Record this rule's traffic at the selected capture points, for debugging, replay and passive model fingerprinting. Multi-select: \"Client request\" is the inbound request exactly as the client sent it; \"Upstream request\" is the final request dispatched to the provider (after all transforms); \"Final response\" records the response sent back to the client (status, redacted headers, size-capped body) plus a compact fingerprint (usage, finish reason, response-id pattern, system_fingerprint, stream shape/timing). Can also be set scenario-wide (Recording in the scenario's plugin panel) — a rule-level selection overrides the scenario default. Records are written under the config directory's record/ folder, grouped by scenario, and pruned after 7 days or 1 GiB. Response bodies may contain user content: keep this scoped to rules you are debugging.",
 			Type:            FlagTypeMultiEnum,
 			Category:        FlagCategoryObservability,
 			Shared:          true,
@@ -225,16 +225,11 @@ func RuleFlagRegistry() []FlagSpec {
 			Options: []FlagOption{
 				{Value: string(RecordClientRequest), Label: "Client request (inbound)"},
 				{Value: string(RecordUpstreamRequest), Label: "Upstream request (outbound)"},
-				// Response-side points are part of the value domain
-				// (typ.RecordingPoint) but intentionally NOT offered yet — no
-				// dead toggles (.design/recording.md §3.5):
-				//   - final_response (the response sent back to the client):
-				//     capture quality is not good enough (streaming relies on
-				//     assembly/synthesis fallbacks); its emit is paused until
-				//     the response path is reworked (Phase 4 EventTap).
-				//     {Value: string(RecordFinalResponse), Label: "Final response"},
-				//   - upstream_response (provider raw response): nothing
-				//     captures it until the wire-level recorder lands (Phase 3).
+				{Value: string(RecordFinalResponse), Label: "Final response"},
+				// upstream_response (provider raw response) is part of the value
+				// domain (typ.RecordingPoint) but intentionally NOT offered yet —
+				// nothing captures provider raw bytes/headers until the
+				// wire-level recorder lands (.design/recording.md Phase 3):
 				//     {Value: string(RecordUpstreamResponse), Label: "Upstream response (provider)"},
 			},
 		},

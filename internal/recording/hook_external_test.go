@@ -79,26 +79,34 @@ func TestAttachRecorderHooks_HappyPath_V1Beta(t *testing.T) {
 	require.Len(t, records, 1, "exactly one obs.Record should be emitted")
 	rec := records[0]
 
-	// Response-side recording is paused (emit's FinalResponse branch is
-	// commented out — recorder.go / .design/recording.md §3.5). The hooks
-	// still assemble into the recorder internally; restore these assertions
-	// when the emit branch is un-commented (Phase 4):
-	//
-	//	require.NotNil(t, rec.FinalResponse, "FinalResponse must be set after successful stream")
-	//	body := rec.FinalResponse.Body
-	//	require.NotNil(t, body)
-	//	assert.Equal(t, "msg_hp", body["id"])
-	//	assert.Equal(t, "actual-model", body["model"], "AttachRecorderHooks must override model to actualModel")
-	//	usage, ok := body["usage"].(map[string]interface{})
-	//	require.True(t, ok)
-	//	assert.EqualValues(t, 9, usage["output_tokens"])
-	//	content, ok := body["content"].([]interface{})
-	//	require.True(t, ok)
-	//	require.Len(t, content, 1)
-	//	block, ok := content[0].(map[string]interface{})
-	//	require.True(t, ok)
-	//	assert.Equal(t, "hello", block["text"])
-	assert.Nil(t, rec.FinalResponse, "response-side recording is paused — FinalResponse must not be emitted")
+	// Response-side recording resumed: final_response is emitted alongside a
+	// compact fingerprint when the point is selected.
+	require.NotNil(t, rec.FinalResponse, "FinalResponse must be set after successful stream")
+	body := rec.FinalResponse.Body
+	require.NotNil(t, body)
+	assert.Equal(t, "msg_hp", body["id"])
+	assert.Equal(t, "actual-model", body["model"], "AttachRecorderHooks must override model to actualModel")
+	usage, ok := body["usage"].(map[string]interface{})
+	require.True(t, ok)
+	assert.EqualValues(t, 9, usage["output_tokens"])
+	content, ok := body["content"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, content, 1)
+	block, ok := content[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "hello", block["text"])
+
+	// The fingerprint is built from the stream tap: shape + timing + usage +
+	// stop reason, without retaining chunk bodies.
+	require.NotNil(t, rec.Fingerprint)
+	assert.Equal(t, "through_tb", rec.Fingerprint.Channel)
+	assert.Equal(t, []string{"end_turn"}, rec.Fingerprint.FinishReasons)
+	require.NotNil(t, rec.Fingerprint.Usage)
+	assert.Equal(t, 9, rec.Fingerprint.Usage.OutputTokens)
+	require.NotNil(t, rec.Fingerprint.Stream)
+	assert.Equal(t, 6, rec.Fingerprint.Stream.ChunkCount)
+	assert.Contains(t, rec.Fingerprint.Stream.EventTypes, "message_start")
+	assert.True(t, rec.Fingerprint.Stream.DoneMarker)
 }
 
 func TestAttachRecorderHooks_StreamChunksRecorded(t *testing.T) {
@@ -126,15 +134,11 @@ func TestAttachRecorderHooks_StreamChunksRecorded(t *testing.T) {
 
 	records := mem.Snapshot()
 	require.Len(t, records, 1)
-	// Response-side recording is paused — restore when the emit branch is
-	// un-commented (recorder.go / .design/recording.md §3.5):
-	//
-	//	require.NotNil(t, records[0].FinalResponse)
-	//	// All chunks must be captured (synthesizeFinalResponse is the path that
-	//	// writes them; happy path uses SetAssembledResponse which drops chunks,
-	//	// so we assert via the FinalResponse.IsStreaming flag instead).
-	//	assert.True(t, records[0].FinalResponse.IsStreaming, "FinalResponse.IsStreaming must be true for a streamed record")
-	assert.Nil(t, records[0].FinalResponse, "response-side recording is paused — FinalResponse must not be emitted")
+	require.NotNil(t, records[0].FinalResponse)
+	assert.True(t, records[0].FinalResponse.IsStreaming, "FinalResponse.IsStreaming must be true for a streamed record")
+	require.NotNil(t, records[0].Fingerprint)
+	require.NotNil(t, records[0].Fingerprint.Stream)
+	assert.Equal(t, 5, records[0].Fingerprint.Stream.ChunkCount)
 }
 
 func TestAttachRecorderHooks_ModelOverride(t *testing.T) {
@@ -161,13 +165,9 @@ func TestAttachRecorderHooks_ModelOverride(t *testing.T) {
 
 	records := mem.Snapshot()
 	require.Len(t, records, 1)
-	// Response-side recording is paused — restore when the emit branch is
-	// un-commented (recorder.go / .design/recording.md §3.5):
-	//
-	//	require.NotNil(t, records[0].FinalResponse)
-	//	assert.Equal(t, "actual-X", records[0].FinalResponse.Body["model"],
-	//		"AttachRecorderHooks must override msg.Model with the actualModel arg, not hc.ResponseModel")
-	assert.Nil(t, records[0].FinalResponse, "response-side recording is paused — FinalResponse must not be emitted")
+	require.NotNil(t, records[0].FinalResponse)
+	assert.Equal(t, "actual-X", records[0].FinalResponse.Body["model"],
+		"AttachRecorderHooks must override msg.Model with the actualModel arg, not hc.ResponseModel")
 }
 
 func TestAttachRecorderHooks_ErrorPath(t *testing.T) {
