@@ -523,4 +523,11 @@ func TestLogprobsPassthrough_RejectsAnthropicTarget(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "logprobs_unsupported")
 	assert.Equal(t, 1, up.Calls(), "a rejected Responses logprobs request must not reach the upstream")
+
+	// top_logprobs without the boolean is still a logprobs request.
+	w = logprobsPost(t, router, "/tingly/openai/v1/chat/completions",
+		`{"model":"client-model","messages":[{"role":"user","content":"hi"}],"top_logprobs":3}`)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "logprobs_unsupported")
+	assert.Equal(t, 1, up.Calls())
 }
