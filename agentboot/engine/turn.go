@@ -744,5 +744,7 @@ func launchSignature(opts agentboot.ExecutionOptions) string {
 		}
 	}
 	mcpHash := sha256.Sum256(mcpConfig)
-	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00") + "\x00" + hex.EncodeToString(mcpHash[:])
+	// A changed sandbox (turned on or off, other mounts) needs a new process.
+	sandbox, _ := json.Marshal(opts.Sandbox)
+	return opts.Entrypoint + "\x00" + settings + "\x00" + opts.Effort + "\x00" + strings.Join(env, "\x00") + "\x00" + hex.EncodeToString(mcpHash[:]) + "\x00" + string(sandbox)
 }

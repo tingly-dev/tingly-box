@@ -10,6 +10,8 @@ replace github.com/tingly-dev/tingly-box/imbot => ../imbot
 
 replace github.com/tingly-dev/tingly-box/remote => ../remote
 
+replace github.com/tingly-dev/tingly-box/sandbox => ../sandbox
+
 require (
 	github.com/anthropics/anthropic-sdk-go v1.57.0
 	github.com/gin-gonic/gin v1.12.0
@@ -22,6 +24,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/tingly-dev/tingly-box/agentboot v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/remote v0.0.0-00010101000000-000000000000
+	github.com/tingly-dev/tingly-box/sandbox v0.0.0-00010101000000-000000000000
 	github.com/tingly-dev/tingly-box/swagger v0.0.0-00010101000000-000000000000
 	go.yaml.in/yaml/v3 v3.0.5
 	gorm.io/driver/sqlite v1.6.0

@@ -2070,6 +2070,8 @@ export interface components {
             thread_permission_mode: string;
             /** @description Field thread_profile */
             thread_profile: string;
+            /** @description Field thread_sandbox */
+            thread_sandbox: string;
             /** @description Field type */
             type: string;
             /**
@@ -2116,6 +2118,8 @@ export interface components {
              * @description Field max_running_threads_limit
              */
             max_running_threads_limit: number;
+            /** @description Field sandboxes */
+            sandboxes: components["schemas"]["SandboxRuntime"][];
         };
         ProjectSummary: {
             /**
@@ -2173,6 +2177,8 @@ export interface components {
             thread_permission_mode: string;
             /** @description Field thread_profile */
             thread_profile: string;
+            /** @description Field thread_sandbox */
+            thread_sandbox: string;
             threads: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
@@ -2250,6 +2256,20 @@ export interface components {
         RequestsResponse: {
             /** @description Field requests */
             requests: components["schemas"]["ThreadEvent"][];
+        };
+        SandboxRuntime: {
+            /** @description Field available */
+            available: boolean;
+            /** @description Field isolation */
+            isolation: string;
+            /** @description Field levels */
+            levels: {
+                [key: string]: string;
+            };
+            /** @description Field name */
+            name: string;
+            /** @description Field reason */
+            reason?: string;
         };
         SendMessageRequest: {
             /** @description Field content */
@@ -2804,6 +2824,8 @@ export interface components {
             thread_permission_mode?: "default" | "acceptEdits" | "auto" | "bypassPermissions";
             /** @description Field thread_profile */
             thread_profile?: string;
+            /** @description Field thread_sandbox */
+            thread_sandbox?: string;
         };
         UsageResponse: {
             /** @description Field by_model */

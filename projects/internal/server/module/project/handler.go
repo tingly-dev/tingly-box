@@ -22,6 +22,7 @@ import (
 	rt "github.com/tingly-dev/tingly-box/projects/internal/project"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module"
 	"github.com/tingly-dev/tingly-box/projects/internal/server/module/apierr"
+	"github.com/tingly-dev/tingly-box/sandbox"
 	"github.com/tingly-dev/tingly-box/swagger"
 )
 
@@ -95,6 +96,9 @@ type UpdateProjectRequest struct {
 	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
+	// ThreadSandbox is the runtime threads run in: empty on the host, or a name
+	// from /projects/runtime's sandboxes.
+	ThreadSandbox *string `json:"thread_sandbox,omitempty"`
 	// GitHubAuto are the groups of GitHub actions threads' tools may do
 	// without a card (publish, rewrite, others, close, merge); any other call
 	// asks. The whole list is replaced. Only the owner sets it, here.
@@ -204,6 +208,23 @@ type ProjectRuntimeResponse struct {
 	BaseURL string `json:"base_url"`
 	// MaxRunningThreadsLimit is the most threads a project can be limited to.
 	MaxRunningThreadsLimit int `json:"max_running_threads_limit"`
+	// Sandboxes are the runtimes a project's threads can run in, the host
+	// first; thread_sandbox takes a name (empty is the host).
+	Sandboxes []SandboxRuntime `json:"sandboxes"`
+}
+
+// SandboxRuntime is one runtime threads can run in.
+type SandboxRuntime struct {
+	Name string `json:"name"`
+	// Isolation is how strong its boundary is: none, process, userkernel, vm, remote.
+	Isolation string `json:"isolation"`
+	// Available is false when it cannot run on this machine; Reason says why
+	// and how to fix it.
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
+	// Levels are what a project's threads get in it, axis by axis (storage,
+	// network, exec, credentials, resources).
+	Levels map[string]string `json:"levels"`
 }
 
 // OKResponse acknowledges an action.
@@ -437,7 +458,7 @@ func (h *Handler) models(c *gin.Context) {
 
 func (h *Handler) runtime(c *gin.Context) {
 	env, _ := h.svc.Host.ThreadEnv(c.Request.Context())
-	resp := ProjectRuntimeResponse{CLIPath: rt.ClaudeCLIPath(), MaxRunningThreadsLimit: rt.MaxRunningThreadsLimit}
+	resp := ProjectRuntimeResponse{CLIPath: rt.ClaudeCLIPath(), MaxRunningThreadsLimit: rt.MaxRunningThreadsLimit, Sandboxes: sandboxRuntimes(c.Request.Context())}
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "ANTHROPIC_BASE_URL="); ok {
 			resp.BaseURL = v
@@ -727,6 +748,16 @@ func (h *Handler) update(c *gin.Context) {
 		default:
 			apierr.BadRequest(c, "unknown permission mode")
 			return
+		}
+	}
+	if req.ThreadSandbox != nil {
+		if !rt.ValidSandbox(*req.ThreadSandbox) {
+			apierr.BadRequest(c, "unknown thread sandbox")
+			return
+		}
+		p.ThreadSandbox = *req.ThreadSandbox
+		if p.ThreadSandbox == sandbox.HostName {
+			p.ThreadSandbox = "" // one way to say "on the host"
 		}
 	}
 	if req.ThreadGitHubAccess != nil {

@@ -37,6 +37,10 @@ type LaunchSpec struct {
 	// before any protocol output) attached to the execution that produced
 	// them.
 	Stderr io.Writer
+
+	// Sandbox, if non-nil, runs the process isolated by a runtime of the
+	// sandbox module. A factory that cannot isolate it must refuse to start it.
+	Sandbox *Sandbox
 }
 
 // BuildCmd converts the specification into an exec.Cmd.

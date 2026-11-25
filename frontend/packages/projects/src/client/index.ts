@@ -45,6 +45,7 @@ export type ProjectType = NonNullable<S['CreateProjectRequest']['type']>;
 export const isFolder = (p: { type: string }): boolean => p.type === 'folder';
 
 export type ProjectRuntime = S['ProjectRuntimeResponse'];
+export type SandboxRuntime = S['SandboxRuntime'];
 
 export type BackgroundTask = S['BackgroundTask'];
 

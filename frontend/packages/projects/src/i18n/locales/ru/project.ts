@@ -181,6 +181,17 @@ export const project: PluralDict<typeof en> = {
         threadModel: 'Модель потока по умолчанию', threadModelHelp: 'Копируется в каждый новый поток при запуске (Claude Code --model); уже запущенные потоки сохраняют свою. Если пусто — значение хоста по умолчанию.',
         modelDefault: 'По умолчанию подключения',
         permissionMode: 'Разрешения потоков',
+        sandbox: 'Где работают потоки',
+        sandboxUnavailable: 'Недоступно на этом компьютере',
+        sandboxes: { host: 'Этот компьютер (без изоляции)', bwrap: 'Песочница (bubblewrap)' },
+        axes: { storage: 'Файлы', network: 'Сеть', exec: 'Процессы', credentials: 'Секреты', resources: 'Ресурсы' },
+        levels: {
+            storage: { host: 'всё, что можете читать вы', confined: 'только свой каталог, репозиторий, библиотека и память' },
+            network: { open: 'открыта', none: 'нет' },
+            exec: { host: 'от вашего пользователя', confined: 'изолированы, без привилегий' },
+            credentials: { inherit: 'ваше окружение', explicit: 'только нужное' },
+            resources: { unlimited: 'без ограничений', limited: 'ограничены' },
+        },
         githubAuto: 'GitHub: автоматическое разрешение',
         githubAutoFoot: 'Выключено: поток спрашивает карточкой каждый раз. Push в основную или защищённую ветку и force-push в чужую ветку спрашивают всегда.',
         githubGroups: {

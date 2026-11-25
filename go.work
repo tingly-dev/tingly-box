@@ -9,5 +9,6 @@ use (
 	./imbot
 	./projects
 	./remote
+	./sandbox
 	./swagger
 )

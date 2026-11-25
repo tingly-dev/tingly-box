@@ -16,7 +16,9 @@ import (
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	// core.fsmonitor names a command git runs; a repository a sandboxed thread
+	// could write must not get the host to run it (thread-runtime.md §10.5).
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "core.fsmonitor=false", "-C", dir}, args...)...)
 	// Git diagnostics are interpreted by directory inspection; keep them stable
 	// even when the user's shell uses another locale.
 	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")

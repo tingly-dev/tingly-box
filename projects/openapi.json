@@ -4545,6 +4545,10 @@
             "type": "string",
             "description": "Field thread_profile"
           },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
           "type": {
             "type": "string",
             "description": "Field type"
@@ -4569,6 +4573,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "thread_sandbox",
           "github_auto",
           "max_running_threads",
           "paused",
@@ -4672,12 +4677,20 @@
             "type": "integer",
             "format": "int64",
             "description": "Field max_running_threads_limit"
+          },
+          "sandboxes": {
+            "type": "array",
+            "description": "Field sandboxes",
+            "items": {
+              "$ref": "#/components/schemas/SandboxRuntime"
+            }
           }
         },
         "required": [
           "cli_path",
           "base_url",
-          "max_running_threads_limit"
+          "max_running_threads_limit",
+          "sandboxes"
         ]
       },
       "ProjectSummary": {
@@ -4784,6 +4797,10 @@
             "type": "string",
             "description": "Field thread_profile"
           },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
+          },
           "threads": {
             "$ref": "#/components/schemas/ThreadCounts"
           },
@@ -4811,6 +4828,7 @@
           "coordinator_effort",
           "thread_effort",
           "thread_permission_mode",
+          "thread_sandbox",
           "github_auto",
           "max_running_threads",
           "paused",
@@ -4972,6 +4990,40 @@
         },
         "required": [
           "requests"
+        ]
+      },
+      "SandboxRuntime": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Field available"
+          },
+          "isolation": {
+            "type": "string",
+            "description": "Field isolation"
+          },
+          "levels": {
+            "type": "object",
+            "description": "Field levels",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Field reason"
+          }
+        },
+        "required": [
+          "name",
+          "isolation",
+          "available",
+          "levels"
         ]
       },
       "SendMessageRequest": {
@@ -6040,6 +6092,10 @@
           "thread_profile": {
             "type": "string",
             "description": "Field thread_profile"
+          },
+          "thread_sandbox": {
+            "type": "string",
+            "description": "Field thread_sandbox"
           }
         }
       },

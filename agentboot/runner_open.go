@@ -48,6 +48,11 @@ func (r *Runner) Open(ctx context.Context, prompt string, opts ExecutionOptions)
 	if len(spec.Command) == 0 {
 		return nil, errors.New("empty launch command")
 	}
+	if spec.Sandbox == nil {
+		// Every driver's process is confined the same way; the factory
+		// refuses to start one it cannot confine.
+		spec.Sandbox = opts.Sandbox
+	}
 
 	if r.transportFactory == nil {
 		return nil, errors.New("agentboot: transport factory is nil")

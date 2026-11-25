@@ -9,6 +9,8 @@ run-name: 🌙 Daily (${{ github.event_name }}) ${{ github.sha }}
 #   compile-gui       go build/vet of the Wails3 GUI (Linux, GTK4 + WebKitGTK via cgo)
 #   test-projects     boundary check, go vet and go test -race of projects/
 #   test-remote       boundary check, go vet and go test -race of remote/
+#   test-sandbox      boundary check, go vet and go test -race of sandbox/, with
+#                     bubblewrap installed so its conformance suite runs
 #   test-imbot        the Tingly IM and Projects integration harness
 #   catalog-check     offline validity check of the model catalogs
 #   harness           harness-template.yml, the full matrix (same as the release gate)
@@ -182,6 +184,54 @@ jobs:
 
       - name: Test
         run: go test -race ./...
+
+  test-sandbox:
+    name: Test sandbox
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./sandbox
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache-dependency-path: '**/go.sum'
+
+      # The sandbox module is the isolation layer every host uses: it imports no
+      # other module of this repository.
+      - name: Boundary
+        run: |
+          if go list -deps -f '{{with .Module}}{{.Path}}{{end}}' ./... | grep -v '^github.com/tingly-dev/tingly-box/sandbox$' | grep -q '^github.com/tingly-dev/tingly-box'; then
+            echo "::error::sandbox imports another module of this repository"
+            exit 1
+          fi
+
+      # The conformance suite runs each runtime for real. bubblewrap needs
+      # unprivileged user namespaces, which Ubuntu's AppArmor restricts.
+      - name: Install bubblewrap
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -v ./... 2>&1 | tee test.log; test "${PIPESTATUS[0]}" -eq 0
+
+      - name: The conformance suite ran
+        run: |
+          if grep -q 'SKIP: TestConformance' test.log; then
+            echo "::error::the bubblewrap conformance suite was skipped"
+            exit 1
+          fi
 
   test-imbot:
     name: Tingly IM and Projects harness

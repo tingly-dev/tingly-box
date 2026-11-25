@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@tingly/ui';
-import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type Usage } from '../../client';
+import { api, unwrap, type MemoryFile, type paths, type Project, type ProjectRuntime, type SandboxRuntime, type Usage } from '../../client';
 import { TextEditDialog } from '../TextEditDialog';
 import { Add, Close, Delete, Description, Duplicate } from '../icons';
 import { ForkProjectDialog } from './ForkProjectDialog';
@@ -31,6 +31,36 @@ const mono = { fontFamily: fontMono } as const;
 
 type Patch = NonNullable<paths['/api/v1/projects/{id}']['patch']['requestBody']>['content']['application/json'];
 type Mode = NonNullable<Patch['thread_permission_mode']>;
+// The isolation axes, in the order the server lists them (sandbox.Axes).
+const AXES = ['storage', 'network', 'exec', 'credentials', 'resources'] as const;
+
+// The runtime threads run in: the ones this server ships, from
+// /projects/runtime. Its level on each axis is shown under it, so what a
+// choice means is spelled out, whatever the runtime.
+function SandboxField({ value, onChange, runtimes }: { value: string; onChange: (v: string) => void; runtimes: SandboxRuntime[] }) {
+    const { t } = useTranslation('projects');
+    const name = (s: SandboxRuntime) => t(`projectSettings.sandboxes.${s.name}`, { defaultValue: s.name });
+    const keyOf = (s: SandboxRuntime) => (s.name === 'host' ? '' : s.name);
+    const current = runtimes.find((s) => keyOf(s) === value);
+    const levels = current
+        ? AXES.map((a) => `${t(`projectSettings.axes.${a}`)}: ${t(`projectSettings.levels.${a}.${current.levels[a]}`, { defaultValue: current.levels[a] ?? '' })}`).join(' · ')
+        : '';
+    return (
+        <TextField select label={t('projectSettings.sandbox')} value={value} onChange={(e) => onChange(e.target.value)}
+            helperText={current && !current.available ? `${t('projectSettings.sandboxUnavailable')}: ${current.reason}` : levels}
+            error={!!current && !current.available}>
+            {runtimes.map((s) => (
+                <MenuItem key={s.name} value={keyOf(s)} disabled={!s.available && keyOf(s) !== value}>
+                    <Box>
+                        <Typography>{name(s)}</Typography>
+                        {!s.available && <Typography variant="body2" color="text.secondary">{s.reason}</Typography>}
+                    </Box>
+                </MenuItem>
+            ))}
+            {!current && <MenuItem value={value}>{value}</MenuItem>}
+        </TextField>
+    );
+}
 
 function ModelField({ label, value, onChange, help }: { label: string; value: string; onChange: (v: string) => void; help: string }) {
     const { models } = useModels('projects');
@@ -70,16 +100,21 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [coord, setCoord] = useState(project.coordinator_model);
     const [threadModel, setThreadModel] = useState(project.thread_model);
     const [mode, setMode] = useState<Mode>((project.thread_permission_mode || 'acceptEdits') as Mode);
+    const [sandbox, setSandbox] = useState<string>(project.thread_sandbox || '');
     const savedGithub = GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g));
     const [github, setGithub] = useState<string[]>(savedGithub);
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
+    const [runtimes, setRuntimes] = useState<SandboxRuntime[]>([]);
     useEffect(() => {
-        unwrap(api.GET('/api/v1/projects/runtime')).then((r) => setMaxLimit(r.max_running_threads_limit)).catch(() => {});
+        unwrap(api.GET('/api/v1/projects/runtime')).then((r) => {
+            setMaxLimit(r.max_running_threads_limit);
+            setRuntimes(r.sandboxes ?? []);
+        }).catch(() => {});
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
     const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || github.join() !== savedGithub.join();
+    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'acceptEdits') || sandbox !== (project.thread_sandbox || '') || github.join() !== savedGithub.join();
 
     return (
         <Stack spacing={2.5}>
@@ -92,6 +127,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                     <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
                 ))}
             </TextField>
+            {runtimes.length > 0 && <SandboxField value={sandbox} onChange={setSandbox} runtimes={runtimes} />}
             <Box role="group" aria-label={t('projectSettings.githubAuto')}>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('projectSettings.githubAuto')}</Typography>
                 <Stack spacing={1.5} sx={{ mt: 1.5 }}>
@@ -112,7 +148,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                 helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
                 slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, github_auto: github, max_running_threads: runningValue })}>{t('common.save')}</Button>
+                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, thread_sandbox: sandbox, github_auto: github, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
             <ActionRow

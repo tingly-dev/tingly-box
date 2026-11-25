@@ -17,7 +17,7 @@ type Proj = {
     name: string; goal: string; instructions: string; paused: boolean; starred: boolean
     repos: { path: string; base_branch: string }[]; coordinator_model: string; thread_model: string
     coordinator_effort: string; thread_effort: string
-    thread_permission_mode: string; github_auto: string[]; max_running_threads: number; created_at: string; updated_at: string; archived_at?: string
+    thread_permission_mode: string; thread_sandbox?: string; github_auto: string[]; max_running_threads: number; created_at: string; updated_at: string; archived_at?: string
 }
 
 const projects: Proj[] = [
@@ -25,7 +25,7 @@ const projects: Proj[] = [
         id: 'p-latency', type: 'project', main_thread_id: 'main-p-latency', name: 'Payments API latency', goal: 'Get p99 of /charge under 300 ms without dropping retries.',
         instructions: 'Keep changes behind the existing feature flags.', paused: false, starred: true,
         repos: [repo('/Users/me/code/payments-api'), repo('/Users/me/code/payments-sdk')],
-        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits', github_auto: ['publish'], max_running_threads: 4,
+        coordinator_model: 'sonnet', thread_model: 'claude-haiku-4-5', coordinator_effort: 'medium', thread_effort: 'high', thread_permission_mode: 'acceptEdits', thread_sandbox: 'bwrap', github_auto: ['publish'], max_running_threads: 4,
         created_at: ago(60 * 26), updated_at: ago(4),
     },
     {
@@ -567,7 +567,14 @@ export const projectsHandlers = [
         { id: 'sonnet', display_name: 'Claude Sonnet 4.5', provider_model: 'claude-sonnet-4-5', provider_name: 'anthropic-primary' },
         { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
     ] })),
-    http.get('/api/v1/projects/runtime', () => HttpResponse.json({ cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100 })),
+    http.get('/api/v1/projects/runtime', () => HttpResponse.json({
+        cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100,
+        sandboxes: [
+            { name: 'host', isolation: 'none', available: true, levels: { storage: 'host', network: 'open', exec: 'host', credentials: 'inherit', resources: 'unlimited' } },
+            { name: 'bwrap', isolation: 'process', available: true, levels: { storage: 'confined', network: 'open', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'libkrun', isolation: 'vm', available: false, reason: '/dev/kvm is not accessible: add your user to the kvm group', levels: { storage: 'confined', network: 'open', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+        ],
+    })),
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()
