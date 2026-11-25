@@ -228,7 +228,7 @@ type Usage interface {
 | Expose | — | 桥（本程序）在沙箱 `127.0.0.1`/`::1` 的同号端口监听 → unix socket → 宿主 `127.0.0.1:端口` | 同上，guest 内桥经 vsock（端口 1100+i） |
 | exec confined | — | user/pid/ipc/uts 命名空间、`--disable-userns`、`--cap-drop ALL`、`--new-session`、`--die-with-parent` | 独立内核；guest init 关 user namespace、设 NoNewPrivs、以宿主 uid/gid 运行 |
 | credentials | inherit/explicit | inherit/explicit | inherit/explicit（环境经 vsock 控制连接传入） |
-| resources limited | — | `systemd-run --user --scope -p MemoryMax -p MemorySwapMax=0 -p TasksMax`，CPU 为 `-p CPUQuota=<u/10>%` | VM 内存与 vCPU 数，Tasks 用 guest 内 cgroup（决定） |
+| resources limited | — | `systemd-run --user --scope -p MemoryMax -p MemorySwapMax=0 -p TasksMax`，CPU 为 `-p CPUQuota=<u/10>%` | guest 内 cgroup（`memory.max`、`memory.swap.max=0`、`pids.max`、`cpu.max`），命令经 `CLONE_INTO_CGROUP` 进入；VM 规格只够给出限额：内存 = 限额 + 256 MiB（guest 内核与 init），vCPU = ⌈CPU/1000⌉ |
 | 记账 | — | 有 systemd 用户会话时一律进 scope（`--unit=tb-sandbox-<随机>.scope`，失败的 scope 不回收，读完 `Result` 再 `reset-failed`）；`Usage` 读 scope 的 cgroup | guest 的 `/proc/vmstat` `oom_kill` 计数；`Usage` 未实现 |
 
 **`internet` 的实测（2026-11-25）**：非特权 user namespace 里直接跑 `nft` 被 AppArmor 拒（`kernel.apparmor_restrict_unprivileged_userns=1`）；在 pasta 建的命名空间里可以（pasta 有自己的 AppArmor 配置，只允许执行 `/usr/bin` 下的命令，所以由 `/usr/bin/sh` 装规则再 exec bwrap）。pasta 默认把宿主正在监听的端口（含宿主回环上的）转发进命名空间，等于把宿主回环暴露给沙箱——一致性测试抓到了（`LEAK-host[127.0.0.1]`），必须显式关掉全部转发。变异检查：不装规则时，宿主其它网卡地址（`192.168.122.1`、容器网桥 `10.200.x`）可达。
@@ -306,6 +306,7 @@ microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 �
 - `/tmp`、`/run` 是宿主侧 virtiofsd 进程里的 tmpfs，计入宿主内存而不是 guest 内存。
 - guest 里能看到 guest 自己的内核线程（`/proc` 里数十个进程），但看不到宿主进程。
 - `unlimited`：vCPU 为宿主核数（空闲 vCPU 不占资源；80 核时 guest 里有约 700 个内核线程，启动约 1 s）。**偏差（待定）**：内存为 min(宿主内存, 8 GiB)，而 §2.5 的 unlimited 不设比宿主小的上限。原因是 guest 内核在启动时为全部内存建页结构（约 1.6%，立即占用宿主内存）。实测（宿主 247 GiB）：2 GiB 的 guest 常驻约 0.16 GB，32 GiB 约 0.79 GB，宿主全量约 4.4 GB 且启动 11 s。要符合模型，可以 (a) 接受全量的代价，(b) 用 virtio-mem 小起步、由宿主按 guest 压力热插拔（要一个宿主侧的调节器），(c) 把这一上限写进模型，作为 VM 运行时的 `unlimited`。
+- `limited` 由 guest 内的 cgroup 给出，结束原因 `oom` 按 guest 的 `oom_kill` 计数判定（cgroup 内与整机 OOM 都计）。限额在 guest 内核里执行：guest 自己的内核与 init 不计入限额，`/tmp`、`/run` 在宿主侧也不计入。
 - 不实现 `Usage`（可选能力）。
 - 命令以宿主 uid/gid 运行，无附加组。
 

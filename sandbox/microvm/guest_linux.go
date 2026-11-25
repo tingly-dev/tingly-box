@@ -16,6 +16,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/tingly-dev/tingly-box/sandbox"
 	"github.com/tingly-dev/tingly-box/sandbox/netproxy"
 )
 
@@ -110,6 +111,15 @@ func guest() error {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdio[0], stdio[1], stdio[2]
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true,
 		Credential: &syscall.Credential{Uid: uint32(s.UID), Gid: uint32(s.GID), Groups: []uint32{}}}
+	if s.Limits != nil {
+		cg, err := limit(s.Limits)
+		if err != nil {
+			report(result{Error: "limits: " + err.Error()})
+			return err
+		}
+		defer cg.Close()
+		cmd.SysProcAttr.UseCgroupFD, cmd.SysProcAttr.CgroupFD = true, int(cg.Fd())
+	}
 	oomBefore := oomKills()
 	if err := cmd.Start(); err != nil {
 		report(result{Error: err.Error()})
@@ -138,6 +148,45 @@ func guest() error {
 		report(result{Error: err.Error()})
 	}
 	return nil
+}
+
+// limit makes the cgroup the command starts in, with r's limits; the guest's
+// memory has room for the limit and the guest's own needs.
+func limit(r *sandbox.Resources) (*os.File, error) {
+	const root, dir = "/sys/fs/cgroup", "/sys/fs/cgroup/sandbox"
+	if err := syscall.Mount("cgroup2", root, "cgroup2", syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_NOEXEC, ""); err != nil {
+		return nil, fmt.Errorf("mount cgroup2: %w", err)
+	}
+	write := func(name, v string) error {
+		if err := os.WriteFile(name, []byte(v), 0); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		return nil
+	}
+	if err := write(root+"/cgroup.subtree_control", "+memory +pids +cpu"); err != nil {
+		return nil, err
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return nil, err
+	}
+	if r.MemoryBytes > 0 {
+		if err := write(dir+"/memory.max", strconv.FormatInt(r.MemoryBytes, 10)); err != nil {
+			return nil, err
+		}
+		_ = write(dir+"/memory.swap.max", "0")
+	}
+	if r.Tasks > 0 {
+		if err := write(dir+"/pids.max", strconv.Itoa(r.Tasks)); err != nil {
+			return nil, err
+		}
+	}
+	if r.CPU > 0 {
+		// Thousandths of a core, in microseconds per 100ms period.
+		if err := write(dir+"/cpu.max", strconv.Itoa(max(1000, r.CPU*100))+" 100000"); err != nil {
+			return nil, err
+		}
+	}
+	return os.Open(dir)
 }
 
 // oomKills is how many processes the guest's OOM killer has killed.

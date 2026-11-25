@@ -73,6 +73,8 @@ type spec struct {
 	Expose []int    `json:"expose,omitempty"`
 	// Net sets up the guest's network card (internet).
 	Net *guestNet `json:"net,omitempty"`
+	// Limits, when set, are the command's cgroup in the guest.
+	Limits *sandbox.Resources `json:"limits,omitempty"`
 }
 
 // result is what the guest sends back when the command has ended, or could
@@ -95,6 +97,26 @@ var (
 )
 
 const maxGuestMemoryMB = 8192
+
+// guestOverheadMB is what a limited guest has beyond its memory limit: its
+// kernel and init.
+const guestOverheadMB = 256
+
+// guestSize is the VM's vCPUs and memory for r: limits are enforced by a
+// cgroup in the guest, and the VM is just big enough to give them.
+func guestSize(r sandbox.Resources) (cpus, memoryMB int) {
+	cpus, memoryMB = guestCPUs, guestMemoryMB
+	if r.Level != sandbox.ResourcesLimited {
+		return cpus, memoryMB
+	}
+	if r.CPU > 0 {
+		cpus = min(cpus, (r.CPU+999)/1000)
+	}
+	if r.MemoryBytes > 0 {
+		memoryMB = int((r.MemoryBytes+(1<<20)-1)>>20) + guestOverheadMB
+	}
+	return cpus, memoryMB
+}
 
 // hostMemoryMB is the host's RAM, or maxGuestMemoryMB when it cannot be read.
 func hostMemoryMB() int {
@@ -130,7 +152,7 @@ func (Runtime) Info() sandbox.Info {
 		sandbox.AxisNetwork:     {sandbox.NetworkNone, sandbox.NetworkAllowlist, sandbox.NetworkInternet},
 		sandbox.AxisExec:        {sandbox.ExecConfined},
 		sandbox.AxisCredentials: {sandbox.CredentialsInherit, sandbox.CredentialsExplicit},
-		sandbox.AxisResources:   {sandbox.ResourcesUnlimited},
+		sandbox.AxisResources:   {sandbox.ResourcesUnlimited, sandbox.ResourcesLimited},
 	}}
 }
 
@@ -261,10 +283,11 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 		}
 	}
 
+	cpus, memoryMB := guestSize(p.Resources)
 	cmdline := "console=ttyS0 quiet panic=-1 root=root rootfstype=virtiofs rw init=" + exe + " " + guestEnv + "=1"
 	vmmArgs := []string{"--kernel", kernel,
-		"--cpus", "boot=" + strconv.Itoa(guestCPUs),
-		"--memory", "size=" + strconv.Itoa(guestMemoryMB) + "M,shared=on",
+		"--cpus", "boot=" + strconv.Itoa(cpus),
+		"--memory", "size=" + strconv.Itoa(memoryMB) + "M,shared=on",
 		"--fs", "tag=root,socket=" + sock,
 		"--vsock", "cid=3,socket=" + vsock,
 		"--serial", "file=" + filepath.Join(m.dir, "console.log"), "--console", "off",
@@ -304,6 +327,9 @@ func (m *machine) start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy, 
 	s := spec{Args: cmd.Args, Env: cmd.Env, Dir: cmd.Dir, UID: os.Getuid(), GID: os.Getgid(), Proxy: pl.Proxy, Expose: pl.Expose}
 	if m.inet != nil {
 		s.Net = &m.inet.guest
+	}
+	if p.Resources.Level == sandbox.ResourcesLimited {
+		s.Limits = &p.Resources
 	}
 	if err := json.NewEncoder(ctl).Encode(s); err != nil {
 		return fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)

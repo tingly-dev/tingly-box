@@ -309,7 +309,9 @@ head -c 200000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^2000' && echo
 // tasksLimited forks past a limit of 20 tasks: some fork must fail.
 func (c *suite) tasksLimited(t *testing.T) {
 	p := c.limited(t, sandbox.Resources{Tasks: 20})
-	out := c.run(t, p, `(n=0; while [ $n -lt 60 ]; do sleep 5 >/dev/null 2>&1 & n=$((n+1)); done) 2>/dev/null; echo STARTED=$(ls /proc | grep -c '^[0-9]'); echo END`)
+	// Each child marks a file, counted with builtins (a VM's /proc also
+	// lists its kernel's threads; and a shell may end at a failed fork).
+	out := c.run(t, p, `f=/tmp/started.$$; (n=0; while [ $n -lt 60 ]; do (echo >> $f; exec sleep 5) >/dev/null 2>&1 & n=$((n+1)); done) 2>/dev/null; sleep 1; c=0; while read -r _; do c=$((c+1)); done < $f; echo STARTED=$c; echo END`)
 	expect(t, out, "END")
 	var started int
 	i := strings.Index(out, "STARTED=")
