@@ -60,6 +60,7 @@ export const project: Dict<typeof projectEn> = {
         example3: '从现在起，先提议线程，等我确认后再启动。',
         suggested: '建议的线程', start: '启动', startAll: '全部启动（{{count}}）',
         decision: '需要你来决定', recommended: '推荐', choose: '选这个', chosen: '已选',
+        customOption: '其他回答…', customPlaceholder: '用你自己的话回答', customSend: '发送', customCancel: '取消', customAnswer: '你的回答',
         decisionAbout: '关于', decisionPR: 'PR #{{number}}', decisionIssue: 'Issue #{{number}}', decisionNumber: '#{{number}}', answerTo: '回复：{{question}}',
     },
     overview: {

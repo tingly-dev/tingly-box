@@ -106,6 +106,9 @@ type StartSuggestionsRequest struct {
 type ChooseRequest struct {
 	// Index is the picked option, counted from 0.
 	Index int `json:"index"`
+	// Custom answers in the user's own words, none of the options; it
+	// replaces Index.
+	Custom string `json:"custom,omitempty"`
 }
 
 // ThreadRespondRequest answers a pending approval or question.
@@ -244,7 +247,7 @@ func (h *Handler) RegisterRoutes(r *module.Routes) {
 		swagger.WithRequestModel(StartSuggestionsRequest{}),
 		swagger.WithResponseModel(db.ThreadEvent{}))
 	api.POST("/threads/:id/events/:eid/choose", h.chooseDecision, tag,
-		swagger.WithDescription("Pick an option of a decision card the coordinator asked in a main thread; the pick reaches the coordinator as the user's message"),
+		swagger.WithDescription("Answer a decision card the coordinator asked in a main thread, by an option or (custom) in the user's own words; the answer reaches the coordinator as the user's message"),
 		swagger.WithRequestModel(ChooseRequest{}),
 		swagger.WithResponseModel(db.ThreadEvent{}))
 	api.POST("/threads/:id/respond", h.respond, tag,
@@ -590,7 +593,13 @@ func (h *Handler) chooseDecision(c *gin.Context) {
 	if !apierr.Bind(c, &req) {
 		return
 	}
-	m, err := h.svc.Coordinator.Choose(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Index, rt.Source{})
+	var m *db.ThreadEvent
+	var err error
+	if req.Custom != "" {
+		m, err = h.svc.Coordinator.ChooseCustom(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Custom, rt.Source{})
+	} else {
+		m, err = h.svc.Coordinator.Choose(c.Request.Context(), c.Param("id"), c.Param("eid"), req.Index, rt.Source{})
+	}
 	if err != nil {
 		if errors.Is(err, rt.ErrDecided) {
 			apierr.Message(c, http.StatusConflict, err.Error())

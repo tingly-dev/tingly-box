@@ -139,7 +139,7 @@ func (r *Relay) Message(e db.ThreadEvent) {
 // any request.
 func (r *Relay) decision(e db.ThreadEvent) {
 	var d Decision
-	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen != nil || len(d.Options) == 0 {
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.answered() || len(d.Options) == 0 {
 		return
 	}
 	choices := make([]agent.Choice, len(d.Options))
@@ -172,7 +172,7 @@ func (r *Relay) Decided(e db.ThreadEvent, src Source) {
 		return
 	}
 	var d Decision
-	if json.Unmarshal([]byte(e.Payload), &d) != nil || d.Chosen == nil || *d.Chosen >= len(d.Options) {
+	if json.Unmarshal([]byte(e.Payload), &d) != nil || !d.answered() || (d.Chosen != nil && *d.Chosen >= len(d.Options)) {
 		return
 	}
 	r.forget(e.ID)
@@ -180,7 +180,10 @@ func (r *Relay) Decided(e db.ThreadEvent, src Source) {
 	if src.Kind == db.SourceIM {
 		where = " in a chat"
 	}
-	pick := d.Options[*d.Chosen].Label
+	pick := d.Custom
+	if d.Chosen != nil {
+		pick = d.Options[*d.Chosen].Label
+	}
 	if a := d.about(); a != "" {
 		pick = a + " — " + pick
 	}

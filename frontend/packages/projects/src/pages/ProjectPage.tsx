@@ -587,9 +587,9 @@ export default function ProjectPage() {
                                 return false;
                             }
                         }}
-                        onChooseDecision={async (mid, index) => {
+                        onChooseDecision={async (mid, index, custom) => {
                             try {
-                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/choose', { params: { path: { id: mainThreadId, eid: mid } }, body: { index } }));
+                                const m = await unwrap(api.POST('/api/v1/threads/{id}/events/{eid}/choose', { params: { path: { id: mainThreadId, eid: mid } }, body: custom ? { index: 0, custom } : { index } }));
                                 conversation.apply(m);
                                 // The pick is the user's next message; the reply streams in after it.
                                 await conversation.catchUp().catch(() => undefined);

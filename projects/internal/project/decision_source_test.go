@@ -249,3 +249,34 @@ func TestTwoCardsInAChatAreToldApartBySource(t *testing.T) {
 	assert.Contains(t, head, `id="`+short(b.ID)+`"`)
 	assert.Contains(t, head, `source="im"`)
 }
+
+// A card answered in the user's own words: their text is the user's message,
+// the coordinator reads which card it answers and that no option was picked,
+// and the card is settled like a picked one.
+func TestCustomAnswerSettlesTheCardInTheUsersWords(t *testing.T) {
+	c, p := citeFixture(t)
+	card := askAbout(t, c, p, `{"question":"Resolve the conflicts?",`+conflictOptions+`}`)
+
+	_, err := c.ChooseCustom(t.Context(), p.MainThreadID, card.ID, "   ", Source{})
+	require.Error(t, err, "an empty answer is refused")
+	_, err = c.ChooseCustom(t.Context(), p.MainThreadID, card.ID, strings.Repeat("x", MaxCustomAnswer+1), Source{})
+	require.Error(t, err, "an over-long answer is refused")
+
+	settled, err := c.ChooseCustom(t.Context(), p.MainThreadID, card.ID, "  Rebase, then ask me before pushing  ", Source{})
+	require.NoError(t, err)
+	var d Decision
+	require.NoError(t, json.Unmarshal([]byte(settled.Payload), &d))
+	assert.Nil(t, d.Chosen)
+	assert.Equal(t, "Rebase, then ask me before pushing", d.Custom)
+	assert.True(t, d.answered())
+
+	ev, got := lastUserEvent(t, c, p)
+	assert.Equal(t, "Rebase, then ask me before pushing", ev.Content)
+	assert.Contains(t, got, "answered in their own words")
+	assert.Contains(t, got, "Rebase, then ask me before pushing")
+
+	_, err = c.Choose(t.Context(), p.MainThreadID, card.ID, 0, Source{})
+	assert.ErrorIs(t, err, ErrDecided, "a card answered in words is decided")
+	_, err = c.ChooseCustom(t.Context(), p.MainThreadID, card.ID, "again", Source{})
+	assert.ErrorIs(t, err, ErrDecided)
+}
