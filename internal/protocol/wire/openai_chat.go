@@ -4,9 +4,10 @@ import "encoding/json"
 
 // Chat Completions stream DTOs preserve the minimal outbound JSON shape emitted by this proxy.
 // Keep these fields checked against openai-go Chat Completions stream types when updating the SDK.
-// Every SDK-required chunk key is present; optional ones (choice logprobs,
-// system_fingerprint, obfuscation) are deliberately omitted. service_tier rides
-// on every chunk as the real API does; moderation only on the final one.
+// Every SDK-required chunk key is present; optional ones (system_fingerprint,
+// obfuscation) are deliberately omitted, while choice logprobs is carried when
+// a converted upstream reported it. service_tier rides on every chunk as the
+// real API does; moderation only on the final one.
 type ChatStreamChunk struct {
 	ID          string             `json:"id"`
 	Object      string             `json:"object"`
@@ -22,6 +23,10 @@ type ChatStreamChoice struct {
 	Index        int             `json:"index"`
 	Delta        ChatStreamDelta `json:"delta"`
 	FinishReason *string         `json:"finish_reason"`
+	// Logprobs carries the token log probabilities for this delta when the
+	// upstream reported them. Omitted otherwise, matching the optional-field
+	// policy at the top of this file.
+	Logprobs interface{} `json:"logprobs,omitempty"`
 }
 
 type ChatStreamDelta struct {
@@ -100,7 +105,8 @@ func (r ChatCompletionWire) ToMap() map[string]any {
 }
 
 // ChatCompletionChoiceWire is a single choice in the OpenAI Chat Completions response.
-// Logprobs is always null: the proxy never requests or translates logprobs.
+// Logprobs is null when the converted source had none (or the client did not
+// ask); a Responses upstream's output-text logprobs are mapped into it.
 type ChatCompletionChoiceWire struct {
 	Index        int                       `json:"index"`
 	Message      ChatCompletionMessageWire `json:"message"`

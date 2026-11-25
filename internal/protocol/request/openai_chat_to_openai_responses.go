@@ -115,6 +115,19 @@ func ConvertChatToOpenAIResponses(params *openai.ChatCompletionNewParams, defaul
 		}
 	}
 
+	// Chat asks for logprobs with a boolean; Responses asks for them through
+	// the include list, with the top-N count on top_logprobs. Passing the
+	// parameter through in the target's own spelling keeps a logprobs request
+	// alive across the conversion instead of silently dropping it.
+	if params.Logprobs.Value || !param.IsOmitted(params.TopLogprobs) {
+		if !slices.Contains(result.Include, responses.ResponseIncludableMessageOutputTextLogprobs) {
+			result.Include = append(result.Include, responses.ResponseIncludableMessageOutputTextLogprobs)
+		}
+	}
+	if !param.IsOmitted(params.TopLogprobs) {
+		result.TopLogprobs = openai.Opt(params.TopLogprobs.Value)
+	}
+
 	result.PromptCacheKey = params.PromptCacheKey
 	result.PromptCacheOptions = responses.ResponseNewParamsPromptCacheOptions{
 		Mode: params.PromptCacheOptions.Mode,

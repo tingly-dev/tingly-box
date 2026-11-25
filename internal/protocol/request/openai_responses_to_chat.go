@@ -2,6 +2,7 @@ package request
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/openai/openai-go/v3"
@@ -55,6 +56,18 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 	// reasoning.effort is Chat's reasoning_effort; the same enum on both APIs.
 	if params.Reasoning.Effort != "" {
 		result.ReasoningEffort = params.Reasoning.Effort
+	}
+
+	// Responses requests logprobs through include + top_logprobs; Chat takes a
+	// boolean logprobs (required before top_logprobs is accepted). Map both so
+	// a logprobs request survives the conversion instead of being dropped.
+	wantsLogprobs := slices.Contains(params.Include, responses.ResponseIncludableMessageOutputTextLogprobs)
+	if !param.IsOmitted(params.TopLogprobs) {
+		wantsLogprobs = true
+		result.TopLogprobs = openai.Opt(params.TopLogprobs.Value)
+	}
+	if wantsLogprobs {
+		result.Logprobs = openai.Opt(true)
 	}
 
 	// Convert tools if present
@@ -240,7 +253,8 @@ func outputMessageText(msg *responses.ResponseOutputMessageParam) (string, bool)
 	return text, text != ""
 }
 
-func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {	var text string
+func createMessageFromResponsesContent(role string, content responses.ResponseInputMessageContentListParam) (openai.ChatCompletionMessageParamUnion, bool) {
+	var text string
 	var hasImage, hasCacheBreakpoint bool
 	for _, item := range content {
 		switch {

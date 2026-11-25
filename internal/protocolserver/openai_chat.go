@@ -196,6 +196,9 @@ func (ph *ProtocolHandler) runOpenAIChatAttempt(c *gin.Context, req *protocol.Op
 		ph.FailAttemptSetup(c, err)
 		return
 	}
+	if rejectUnsupportedLogprobs(c, plan.Target, logprobsRequestedChat(req.ChatCompletionNewParams)) {
+		return
+	}
 	req.Model = actualModel
 
 	transform.AlignToolMessagesForOpenAI(req.ChatCompletionNewParams)
