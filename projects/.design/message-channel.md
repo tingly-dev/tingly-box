@@ -211,7 +211,7 @@ Web 已有卡片的状态和 `LastReport`。增加：
 1. **已实现**：`settle`：工作线程回合结束时有后台任务 → 保持 working、汇报先扣下（`background.go`）。接续回合（Claude 在后台任务结束后自起的回合）的汇报取代它；没有接续回合时，最后一个任务结束 15 秒后放出（`Threads.HoldGrace`），任务一直不结束则 10 分钟后放出（`HoldMax`；原先与常驻进程 10 分钟的空闲回收对齐，现在空闲回收默认 65 分钟，两者不再绑定）。`NEEDS_INPUT` 和失败不扣。
 2. **已实现**：`Coordinator.onReport` 不再先发折叠的 `[#N] Finished: …`：coordinator 在线时，finished 汇报只经 coordinator 的回复进 chat（`no_update` 即不发）。与提案的差别：失败和 `NEEDS_INPUT` 仍先发折叠行（它们需要人处理，且带 `@N` 回复提示）；coordinator 不可用（暂停、归档、出错）时 finished 也回退到折叠行。coordinator 提示加了一句：用户的 chat 不会再收到别的关于完成线程的消息，有结果（PR、文件、答案）就说一两句。
 3. **未做**（不在确认范围）：线程 prompt 改为不要为“稍后汇报”结束回合、回合汇报只写最终结果。
-4. **已实现**：auto 模式线程的 settings（`git_access.go`）：allow `git push [-u|--set-upstream] origin <本线程分支>`；ask `gh pr create|merge`、`gh issue create`、推到 base/main/master、`--force/-f/--force-with-lease`、`--delete`。只在线程的有效权限模式为 auto 时写；settings 文件现在每回合重写，所以事后切到 auto 也生效。其余形状的 push 仍交给分类器（笼统的 push ask 会盖过 allow），要靠 P3 的 hook 接住。分支名含括号、星号、空白时不写 allow 规则。
+4. **已实现**：auto 模式线程的 settings（`git_access.go`）：allow `git push [-u|--set-upstream] origin <本线程分支>`；ask 所有 `gh` 命令（`Bash(gh)`、`Bash(gh *)`；审批提示先按 `classifyGh` 回答：工具能做的拒绝并指向该工具，其余只读命令放行，其余写操作才出卡片，见 `github-tools.md` “gh in a thread”）、推到 base/main/master、`--force/-f/--force-with-lease`、`--delete`。只在线程的有效权限模式为 auto 时写；settings 文件现在每回合重写，所以事后切到 auto 也生效。其余形状的 push 仍交给分类器（笼统的 push ask 会盖过 allow），要靠 P3 的 hook 接住。分支名含括号、星号、空白时不写 allow 规则。
 5. **已实现**：D 的简化版：Bash 的“本线程都允许”只记**那一条命令原文**（去掉首尾空白后逐字匹配），其他工具仍按工具名。没有 `permission_suggestions` 的前缀规则、也没用 `updatedPermissions`（`addRules` 留给以后）。IM 里的按钮对 Bash 改叫“Allow this command for this thread”。**网页端按钮文案仍是 “Always allow {{tool}} here”（`thread.allowThread`），对 Bash 已不准确，需要前端跟进**（本次没改前端）。
 
 **设置怎么应用（常驻进程不重启；用户决定：“不应该重启，应该通过 stream 消息注入或者等待下一轮激活”）**

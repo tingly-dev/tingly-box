@@ -110,7 +110,7 @@ This is the part that must not turn into a way round the rules.
 
 - **The settings file** (`grantBuiltinTools`, for project threads and folder sessions alike) allows `mcp__tingly-projects`: the whole server, so tools added later are covered without touching this code. It is written in every permission mode.
 - **The approval prompt** (`threadPrompter.OnApproval`) approves any `mcp__tingly-projects__*` call that still arrives, the way the coordinator's prompter does. This is what makes it hold against a rule the settings file cannot outrank (see Probe below).
-- **Scope is this server only.** Claude's own tools (Bash, Edit, Write, ...) keep following the permission mode and the profile. `gh pr create` / `gh issue create` / `gh pr merge` stay on the `ask` list of `grantAutoGit`; the tools are the way to publish, the Bash commands are not loosened.
+- **Scope is this server only.** Claude's own tools (Bash, Edit, Write, ...) keep following the permission mode and the profile. Every `gh` command is on the `ask` list of `grantAutoGit` (auto mode), and the approval prompt refuses the ones a tool does with the tool to use (see [gh in a thread](#gh-in-a-thread)); the tools are the way to publish, the Bash commands are not loosened.
 - **Existing projects are included**: the setting below is empty on them, and empty means allow. No migration.
 
 **Superseded (2026-11-22):** whether a GitHub write runs on its own is now the project's GitHub settings, five groups decided by the tool itself on its own card: see [thread-permissions.md](thread-permissions.md). There are no `ask` rules for the Projects tools any more; the server-wide allow and the prompt fallback below stay, so Claude Code never asks about them. `thread_github_access` is read once to migrate a project (`allow` or empty → `publish` on, `ask` → all off) and is still taken by `PATCH`.
@@ -132,7 +132,7 @@ What it shows: the server-wide allow rule alone is enough in all three modes, in
 
 ### The Bash commands
 
-- `gh pr create` / `gh issue create` / `gh pr merge` stay on the `ask` list (`grantAutoGit`); nothing here weakens them. The thread prompt says to use the tools when it has them.
+- Every `gh` command asks in auto mode (`grantAutoGit`), and what a tool does is refused at the prompt with the tool to use; nothing here weakens them. The thread prompt says to use the tools when it has them.
 
 Boundaries the setting cannot move (enforced in code, not in the prompt):
 
@@ -234,6 +234,18 @@ Threads kept reading with `gh pr view` (and `gh api`) because `view` said only w
 - **Patches and CI logs stay out.** Patches are big and the thread has the branches locally; a log needs another request per check and is rarely what decides the next step. The answer points at both (the diff command, the check's link).
 - **`repo`** (`owner/name`, nothing else, `.git` tolerated) reads from another repository; empty is the thread's origin, the same as before. It follows `multi-repo.md` §3 (on branch `tp/git-a5c92d` when this was written) for `view` only: a read writes nothing, so it is not limited to the project's repositories, and a record the thread has in that repository is brought up to date as usual. Without `number`, `repo` means the thread's only PR in that repository, never one of its own. The answer cache is keyed by the repository as asked, and a write that clears an item's answer clears it whichever way it was asked. The write tools still take no `repo` (the tools test keeps that).
 
+### gh in a thread
+
+`view` and the write tools only help if the model uses them, and `gh` was always there: in auto mode only `gh pr create`, `gh pr merge` and `gh issue create` asked, so `gh pr view`, `gh api -X POST …`, `gh pr comment`, `gh pr close` and the rest went to the classifier, which lets reads through and may let writes through, around the tools' gate. Now:
+
+- **Every gh command asks in auto mode**: `Bash(gh)` and `Bash(gh *)` in `grantAutoGit` (replacing the three). Claude Code checks a compound line part by part, so `cd x && gh pr view 5` asks too. Ask comes before allow, so no allow rule can carve a gh command out; that is why the decision is made at the prompt and not in rules.
+- **The prompt answers before a card** (`classifyGh`, called in `threadPrompter.OnApproval` like `SendMessage`), by the line's `gh <group> <verb>` (env assignments and a path to gh are skipped):
+  - **A tool does it → refused with the tool to use.** `pr view`, `issue view`, `pr checks` → `view`; `pr create` → `create_pr`; `pr merge` → `merge`; `pr comment`, `issue comment` → `comment`; `pr close`, `issue close` → `close`; `issue create` → `create_issue`. The model reads the reason and calls the tool, which reads more, records the item and asks the user by the project's settings; the user gets no card for a command a tool covers. This holds in every permission mode.
+  - **Another read → runs, in auto mode only.** `run view/list/watch` (CI logs), `pr list/diff/status`, `issue list/status`, `workflow`, `release`, `repo view/list`, `search`, `status`, `auth status`, …, and `gh api` without a method other than GET and without fields or `--input` (gh posts those). The classifier would have let them through; this keeps that. Piping into a filter (`head`, `tail`, `grep`, `jq`, `wc`, `cut`, `sort`, `uniq`) keeps it a read; any other command in the line makes it a card, since allowing the line allows that command too. Outside auto mode the mode itself asks for every command, so a read is a card as before.
+  - **Anything else → the card**, as every ask was: writes no tool does (`pr review`, `pr edit` with labels, `release create`, `repo delete`, `gh api -X POST …`, `gh api graphql -f …`), and lines it cannot name (`gh -R o/r pr view`, `gh` alone). The user decides; "allow for this thread" is the exact command, as for any Bash call.
+- **Grants are not touched.** `request_permission` already refuses `gh` commands and rules (`githubCommands`), so no grant can allow one past this; its exact-command grants for other lines are allow rules, which the gh ask does not reach.
+- **Not caught**: gh inside `$(…)` or a script, and an alias. The ask rule is Claude Code's matching; what it misses goes to the classifier as before.
+
 ### Cost of a read
 
 GitHub's rate limit is the one shared resource a refresh spends, so a read is built to cost as little as GitHub allows:
@@ -303,7 +315,7 @@ Not done: `gh pr create` also reads the repository's PR template when it is not 
 - Fake `GitHub` for the tools and the refresher; a fake `gh` executable (a shell script on `PATH`) for the real `ghCLI`: arguments, JSON body, `gh api -X PATCH` for updates, the redactor on a token in stderr.
 - Remotes and transport (`remote_test.go`): every form above parses to owner/name or is refused with the host named and no credentials; an SSH alias is resolved with `ssh -G -F <test config>`, an alias for another host and an unreadable config each say so, and a host that would be an ssh option is never passed; a `gh:` shorthand is read through `insteadOf`. The tools' git: `git credential fill` gets the token and `approve` reaches no helper of the user's (global or the checkout's), another host is never offered it, and the token is in no `GIT_CONFIG_*` value; with a test home whose `~/.gitconfig` rewrites https to SSH (insteadOf and pushInsteadOf), sets `core.hooksPath` and `core.sshCommand` and a proxy, and a checkout with its own hook, SSH command and a more specific rewrite (both shown to be live for plain git), a push goes to `https://github.com` through the carried proxy and runs no hook and no SSH; `create_pr` on an SSH origin runs neither origin's SSH command nor the checkout's `pre-push` hook, the branch arrives, `refs/remotes/origin/<head>` moves, origin's URL is unchanged and no file under `.git` or the remote holds the token; a worktree of a shallow clone pushes; no credential pushes nothing; a receiving hook that prints the token comes back `[redacted]`. Mutation-checked: pushing over origin, no `GIT_CONFIG_GLOBAL=/dev/null`, no helper reset, no carried proxy each fail a test. Probed once against github.com: `ls-remote` from an SSH origin went over https with gh's token (read only; no real push in tests).
 - Tools through the in-memory MCP client: scope lists (golden and `TestToolsOfEachScope`), each tool, refusals (no origin, non-GitHub origin, default branch, base equals head, no commits, someone else's PR number), idempotent `create_pr`, a failed push leaves nothing recorded.
-- Settings rules: `ask` default, `allow` when set, `view` always allowed, `gh pr create` still on `ask`.
+- Settings rules: `ask` default, `allow` when set, `view` always allowed, every `gh` command on `ask` in auto mode (`Bash(gh)`, `Bash(gh *)`); `TestClassifyGh` and the prompter tests for what the prompt answers.
 - Refresher with an injected clock: due time, back-off doubling and cap, terminal states skipped, last good state kept, change publishes and no change does not.
 - Harness journey: a thread opens a PR through the tool, the coordinator sees it in `get_thread`; mutation-checked.
 - Frontend: the rail card and the coordinator card.
