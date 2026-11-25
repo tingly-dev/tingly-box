@@ -9,23 +9,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
 	"github.com/tingly-dev/tingly-box/sandbox"
 )
-
-func TestClaudeProjectDirMatchesClaudeCode(t *testing.T) {
-	// As Claude Code names ~/.claude/projects/<dir> (seen on this host).
-	assert.Equal(t, "-home-x0079-tingly-box--claude-worktrees-find-why-threads-still-call-gh-p-294d6c",
-		claudeProjectDir("/home/x0079/tingly-box/.claude/worktrees/find-why-threads-still-call-gh-p-294d6c"))
-	// Over 200 characters Claude Code cuts the name and adds a hash of the
-	// path (checked against the CLI by TestLiveSandboxedClaudeReachesOnlyItsWork).
-	long := "/" + strings.Repeat("a", 250)
-	got := claudeProjectDir(long)
-	assert.Equal(t, "-"+strings.Repeat("a", 199), got[:200])
-	assert.Regexp(t, `^-[0-9a-z]+$`, got[200:])
-	assert.NotEqual(t, got, claudeProjectDir(long+"b"), "the hash tells two long paths apart")
-}
 
 func TestToolchainDirsKeepToolsNotHomes(t *testing.T) {
 	home := "/home/u"
@@ -96,7 +84,7 @@ func TestSandboxedThreadGetsItsWorkAndNothingElseWritable(t *testing.T) {
 	m, ok = mountOf(s, opts.SettingsPath)
 	require.True(t, ok)
 	assert.False(t, m.Writable, "a thread must not rewrite its own permission rules")
-	transcripts := filepath.Join(home, ".claude", "projects", claudeProjectDir(th.Cwd))
+	transcripts := filepath.Join(home, ".claude", "projects", session.ProjectDirName(th.Cwd))
 	m, ok = mountOf(s, transcripts)
 	require.True(t, ok, "its own transcripts, where the host reads them")
 	assert.True(t, m.Writable)

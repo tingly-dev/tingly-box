@@ -2,7 +2,10 @@ package session
 
 import (
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 // resolveProjectPath converts project path to Claude's encoded format
@@ -22,22 +25,35 @@ func (s *Store) resolveProjectPath(projectPath string) string {
 func encodeProjectPath(projectPath string) string {
 	absPath, err := filepath.Abs(projectPath)
 	if err != nil {
-		return projectPath
+		return ProjectDirName(projectPath)
 	}
+	return ProjectDirName(absPath)
+}
 
-	encoded := absPath
-	if strings.HasPrefix(encoded, "/") {
-		// Remove leading / and replace all remaining / with -
-		encoded = "-" + strings.ReplaceAll(strings.TrimPrefix(encoded, "/"), "/", "-")
-	} else if len(encoded) >= 2 && encoded[1] == ':' {
-		// Windows path: C:\path -> -C-path
-		drive := string(encoded[0])
-		rest := strings.ReplaceAll(encoded[2:], "\\", "/")
-		rest = strings.ReplaceAll(rest, "/", "-")
-		encoded = "-" + drive + "-" + rest
+var notAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
+// projectDirMax is the longest name Claude Code keeps whole.
+const projectDirMax = 200
+
+// ProjectDirName is the directory name Claude Code keeps an absolute working
+// directory's transcripts under (<config>/projects/<name>): every character
+// that is not an ASCII letter or digit becomes "-" (/a/.b_c -> -a--b-c), and a
+// name over 200 characters is cut there and given a hash of the path, as
+// Claude Code does (Java's String.hashCode, absolute, base 36).
+func ProjectDirName(absPath string) string {
+	name := notAlnum.ReplaceAllString(absPath, "-")
+	if len(name) <= projectDirMax {
+		return name
 	}
-
-	return encoded
+	var h int32
+	for _, c := range utf16.Encode([]rune(absPath)) {
+		h = h*31 + int32(c)
+	}
+	n := int64(h)
+	if n < 0 {
+		n = -n
+	}
+	return name[:projectDirMax] + "-" + strconv.FormatInt(n, 36)
 }
 
 // DecodeProjectPath decodes an encoded project path back to the original path

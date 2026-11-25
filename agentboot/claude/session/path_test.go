@@ -181,3 +181,24 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectDirNameMatchesClaudeCode(t *testing.T) {
+	// As Claude Code names <config>/projects/<dir>: every non-alphanumeric
+	// character becomes "-" (seen on a real host).
+	if got, want := ProjectDirName("/home/x0079/tingly-box/.claude/worktrees/find-why_threads"), "-home-x0079-tingly-box--claude-worktrees-find-why-threads"; got != want {
+		t.Errorf("ProjectDirName = %q, want %q", got, want)
+	}
+	// Over 200 characters it cuts the name and adds a hash of the path
+	// (checked against the CLI by projects' TestLiveSandboxedClaudeReachesOnlyItsWork).
+	long := "/" + strings.Repeat("a", 250)
+	got := ProjectDirName(long)
+	if got[:200] != "-"+strings.Repeat("a", 199) || len(got) <= 201 || got[200] != '-' {
+		t.Errorf("long ProjectDirName = %q", got)
+	}
+	if got == ProjectDirName(long+"b") {
+		t.Error("the hash should tell two long paths apart")
+	}
+	if got != "-"+strings.Repeat("a", 199)+"-feo44x" {
+		t.Errorf("long ProjectDirName = %q", got)
+	}
+}

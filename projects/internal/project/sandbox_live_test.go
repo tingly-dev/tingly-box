@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 )
 
@@ -162,11 +163,11 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(th.Cwd, "probe.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "hi\n", string(b), "a write in the worktree lands on the host")
-	entries, _ := os.ReadDir(filepath.Join(config, "projects", claudeProjectDir(th.Cwd)))
+	entries, _ := os.ReadDir(filepath.Join(config, "projects", session.ProjectDirName(th.Cwd)))
 	if len(entries) == 0 {
 		all, _ := os.ReadDir(filepath.Join(config, "projects"))
 		for _, e := range all {
-			t.Logf("config/projects has %s (len %d); expected %s (len %d)", e.Name(), len(e.Name()), claudeProjectDir(th.Cwd), len(claudeProjectDir(th.Cwd)))
+			t.Logf("config/projects has %s (len %d); expected %s (len %d)", e.Name(), len(e.Name()), session.ProjectDirName(th.Cwd), len(session.ProjectDirName(th.Cwd)))
 		}
 	}
 	assert.NotEmpty(t, entries, "the transcript is where the host reads it")
