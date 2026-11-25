@@ -198,13 +198,14 @@ export function useProviderQuota(providers: Array<{ uuid: string; name?: string 
     }
   }, [providers, batchFetchQuota, notify]);
 
-  // Lazy load: fetch quotas when hook is initialized with providers
+  // Fetch when membership changes, even when the number of providers stays the
+  // same. Reordering or renaming the same providers does not require another read.
+  const providerUuidsKey = JSON.stringify(providers.map(p => p.uuid).sort());
   useEffect(() => {
-    if (!fetchOnMount || providers.length === 0) return;
-
-    const providerUuids = providers.map(p => p.uuid);
-    batchFetchQuota(providerUuids);
-  }, [providers.length, fetchOnMount, batchFetchQuota]);
+    if (!fetchOnMount) return;
+    const providerUuids: string[] = JSON.parse(providerUuidsKey);
+    if (providerUuids.length > 0) void batchFetchQuota(providerUuids);
+  }, [providerUuidsKey, fetchOnMount, batchFetchQuota]);
 
   return {
     quotaData,

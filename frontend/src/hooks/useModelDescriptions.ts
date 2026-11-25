@@ -19,6 +19,7 @@ export const useModelDescriptions = (providerUuid?: string) => {
   const fetchDescriptions = useCallback(async (force = false) => {
     // Return cached data if available and not forcing refresh
     if (!force && cachedDescriptions !== null) {
+      setDescriptions(cachedDescriptions);
       return cachedDescriptions;
     }
 
@@ -44,15 +45,13 @@ export const useModelDescriptions = (providerUuid?: string) => {
       setLoading(false);
     }
 
-    return cachedDescriptions ?? descriptions;
-  }, [descriptions]);
+    return cachedDescriptions ?? {};
+  }, []);
 
   // Auto-fetch on mount if no cached data
   useEffect(() => {
-    if (Object.keys(descriptions).length === 0) {
-      fetchDescriptions();
-    }
-  }, []);
+    void fetchDescriptions();
+  }, [fetchDescriptions]);
 
   const getDescription = useCallback((modelId: string): string | undefined => {
     return descriptions[modelId];

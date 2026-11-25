@@ -85,21 +85,21 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
     return () => clearTimeout(t);
   }, [loading]);
 
+  const { open: notificationOpen, severity, autoHideDuration, onClose: closeNotification } = notification ?? {};
+
   // Auto-hide notification after specified duration. Errors are exempt: they
   // stay until the user explicitly closes them, so the text is always
   // available to copy for a report.
   useEffect(() => {
     if (
-      notification?.open &&
-      notification.severity !== 'error' &&
-      notification.autoHideDuration &&
-      notification.autoHideDuration > 0
+      notificationOpen &&
+      severity !== 'error' &&
+      autoHideDuration &&
+      autoHideDuration > 0
     ) {
       timeoutRef.current = setTimeout(() => {
-        if (notification.onClose) {
-          notification.onClose();
-        }
-      }, notification.autoHideDuration);
+        closeNotification?.();
+      }, autoHideDuration);
     }
 
     return () => {
@@ -108,14 +108,12 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
         timeoutRef.current = null;
       }
     };
-  }, [notification?.open, notification?.severity, notification?.autoHideDuration, notification?.onClose]);
+  }, [notificationOpen, severity, autoHideDuration, closeNotification]);
 
   // Close notification on page refresh/unload
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (notification?.open && notification.onClose) {
-        notification.onClose();
-      }
+      if (notificationOpen) closeNotification?.();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -123,7 +121,7 @@ export const PageLayout: React.FC<PageLayoutProps> = ({
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [notification?.open, notification?.onClose]);
+  }, [notificationOpen, closeNotification]);
 
   if (loading) {
     if (!showLoading) return null;
