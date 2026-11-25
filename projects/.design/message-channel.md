@@ -36,7 +36,7 @@
 ### 交互（审批、提问、决策）
 
 - 线程审批/提问：`threadPrompter.wait` → `OnWait` → `Relay.NeedsUser`，直接发给绑定在线程**及其祖先**上的 chat，审批带“允许 / 本线程都允许 / 拒绝”按钮，先答为准，`Settled` 把按钮消息改写成结果。这条路径**已经是直达**，没有 coordinator 参与。
-- 但周边仍被转述：`NEEDS_INPUT:` 行结束的回合走普通汇报路径（折叠成 “Needs you … Reply with @N”，再加 coordinator 评论）；审批被回答后，线程继续跑，回合结束又是一条汇报。
+- 但周边仍被转述：`NEEDS_INPUT:` 行结束的回合走普通汇报路径（折叠成 “Needs you … Reply with #N”，再加 coordinator 评论）；审批被回答后，线程继续跑，回合结束又是一条汇报。
 - 决策卡（`request_decision`，`decision.go`）：`ask()` 写 `EvDecision` 并调 `c.final`。**原先 `Relay.Message` 的 switch 只处理 assistant / error / thread_update，`EvDecision` 到不了 IM**（已用测试复现：绑定了项目的 chat 一条消息也收不到，Web 才有卡片）——所以权限请求能到钉钉、决策卡到不了。已修，见“决策卡进 IM（已实现）”。用户在 Web 点选项后，`Choose` 把选项文字作为**用户消息**发给 coordinator，触发完整回合：coordinator 必须回复（用户消息回合不允许 `no_update`），随后 `message_thread(cite)` 通知线程，线程回合结束又是汇报——一次点击产生 3–4 条聊天消息（回声问题仍待“设计二”解决）。
 
 ### 权限与 auto 模式
@@ -123,8 +123,8 @@ Web 已有卡片的状态和 `LastReport`。增加：
 
 - **决策点击**：`Choose` 目前 `Post(label)` 成普通用户消息。改为带标记的“决策回答”输入：coordinator 必须据此行动（`message_thread`、`start_thread`…），但**它的文字回复被抑制**，除非内容是新的（例如发现冲突、需要追问）。卡片改写本身就是对用户的确认。实现上是允许这类回合调用 `no_update`，并在 coordinator 提示里写明。
 - **审批回答之后**：线程继续，用户已经通过卡片改写看到了结果，不再发“已继续”类消息。
-- **coordinator 备注代替转述**：用户直接对线程的回答（按钮、`@N`、TEP #2412 的引用回复）都只给 coordinator 一条 system 备注（#2412 已为引用回复实现“项目对话里加 system 事件、不触发回合”），统一复用这个机制。
-- **回复路由**：保持 #2412 的优先级（行首 `@N` > 引用回复 > 绑定）。交互项消息要在 `channel_messages` 里记平台消息 id，这样对一张提问卡的**引用回复**就是答案，不需要“chat 的下一条消息”这种隐式状态（`Relay.awaiting` 现在靠“oldest unsettled”，多线程并发时容易答错）。可以作为 #2412 之后的第二步。
+- **coordinator 备注代替转述**：用户直接对线程的回答（按钮、`#N`、TEP #2412 的引用回复）都只给 coordinator 一条 system 备注（#2412 已为引用回复实现“项目对话里加 system 事件、不触发回合”），统一复用这个机制。
+- **回复路由**：保持 #2412 的优先级（行首 `#N` > 引用回复 > 绑定）。交互项消息要在 `channel_messages` 里记平台消息 id，这样对一张提问卡的**引用回复**就是答案，不需要“chat 的下一条消息”这种隐式状态（`Relay.awaiting` 现在靠“oldest unsettled”，多线程并发时容易答错）。可以作为 #2412 之后的第二步。
 
 ### 信任
 
@@ -209,7 +209,7 @@ Web 已有卡片的状态和 `LastReport`。增加：
 **P1 快赢（低风险，各自独立可合并）——用户已确认（“p1 小改动可以先做，甚至堆叠”），除第 3 项外已实现，每项一个提交，可单独评审或丢弃**
 
 1. **已实现**：`settle`：工作线程回合结束时有后台任务 → 保持 working、汇报先扣下（`background.go`）。接续回合（Claude 在后台任务结束后自起的回合）的汇报取代它；没有接续回合时，最后一个任务结束 15 秒后放出（`Threads.HoldGrace`），任务一直不结束则 10 分钟后放出（`HoldMax`；原先与常驻进程 10 分钟的空闲回收对齐，现在空闲回收默认 65 分钟，两者不再绑定）。`NEEDS_INPUT` 和失败不扣。
-2. **已实现**：`Coordinator.onReport` 不再先发折叠的 `[#N] Finished: …`：coordinator 在线时，finished 汇报只经 coordinator 的回复进 chat（`no_update` 即不发）。与提案的差别：失败和 `NEEDS_INPUT` 仍先发折叠行（它们需要人处理，且带 `@N` 回复提示）；coordinator 不可用（暂停、归档、出错）时 finished 也回退到折叠行。coordinator 提示加了一句：用户的 chat 不会再收到别的关于完成线程的消息，有结果（PR、文件、答案）就说一两句。
+2. **已实现**：`Coordinator.onReport` 不再先发折叠的 `[#N] Finished: …`：coordinator 在线时，finished 汇报只经 coordinator 的回复进 chat（`no_update` 即不发）。与提案的差别：失败和 `NEEDS_INPUT` 仍先发折叠行（它们需要人处理，且带 `#N` 回复提示）；coordinator 不可用（暂停、归档、出错）时 finished 也回退到折叠行。coordinator 提示加了一句：用户的 chat 不会再收到别的关于完成线程的消息，有结果（PR、文件、答案）就说一两句。
 3. **未做**（不在确认范围）：线程 prompt 改为不要为“稍后汇报”结束回合、回合汇报只写最终结果。
 4. **已实现**：auto 模式线程的 settings（`git_access.go`）：allow `git push [-u|--set-upstream] origin <本线程分支>`；ask `gh pr create|merge`、`gh issue create`、推到 base/main/master、`--force/-f/--force-with-lease`、`--delete`。只在线程的有效权限模式为 auto 时写；settings 文件现在每回合重写，所以事后切到 auto 也生效。其余形状的 push 仍交给分类器（笼统的 push ask 会盖过 allow），要靠 P3 的 hook 接住。分支名含括号、星号、空白时不写 allow 规则。
 5. **已实现**：D 的简化版：Bash 的“本线程都允许”只记**那一条命令原文**（去掉首尾空白后逐字匹配），其他工具仍按工具名。没有 `permission_suggestions` 的前缀规则、也没用 `updatedPermissions`（`addRules` 留给以后）。IM 里的按钮对 Bash 改叫“Allow this command for this thread”。**网页端按钮文案仍是 “Always allow {{tool}} here”（`thread.allowThread`），对 Bash 已不准确，需要前端跟进**（本次没改前端）。
@@ -279,3 +279,10 @@ P1 没有用真实 Claude Code 验证：规则是否真的在 auto 模式下保�
 - **用户怎么确认自己答的是哪一问**：① 按钮卡片的文字本身含问题，点后原地改写为 “Answered in a chat: X”，问题仍在上面；② 纯文字 chat 没有可改写的消息，答完后补一条 `[项目] Re: <问题>\nAnswered in a chat: X`；③ 一个 chat 里同时有多张未答卡片、而回复（如 “1”）同时符合多张时**不猜**，回一条列出这些问题和各自四位代码（卡片 id 前 4 位）的说明；用户以代码开头回复（`a3f9 2`、`7c21 keep`）即可指定哪一张——纯文字平台没有按钮也不会卡死。回复的标签只符合一张时照常作答。标签优先于数字位置（标签本身是数字的选项不会被当成序号）。卡片优先于审批/提问处理，所以裸数字不会被当成审批的拒绝理由。与别处同时作答的竞态会回 “This was already answered.”，不当错误。
 
 测试：`internal/project/decision_im_test.go`（按钮、纯文字、无 prompter 宿主、点按钮答复、越权、文字编号/标签、Web 先答、未答卡片不挡审批）；`internal/server/module/projects/tingly_decision_test.go`（`TestTinglyDecision*`：真实 MCP `request_decision` → bot → Tingly 传输；按钮、用 `buttonless` 包装模拟钉钉式无按钮平台、他人 chat 越权）；`imchannel` 里断言 dingtalk/weixin 的 `SendActions` 为 `ErrNoButtons`。
+
+## IM 点名线程与选项目（2026-11-25）
+
+- **`#N 内容`** 是点名线程的写法：只有消息**最开头**的 `#数字`，后面跟空白或换行再跟正文，才算点名（`parseMention`）。`#3rd`、`#3,`、`# 3`、`#3` 单独一条、中间的 `#3`（“see #3 for…”）、`#0` 都是普通文字。旧的 `@N` / `@#N` 仍然可用（群里 `@` 会触发平台提及，所以改用 `#`），所有提示文案、`/help`、汇报里的回复提示都已写成 `#N`。编号不存在时回 “no such thread in this project: #9”，什么都不发，不会落到别的线程上。`@N` 的兼容先保留；等旧提示文案在用户的聊天记录里淡出后可删（同一条正则，去掉 `@#?` 即可）。
+- **`/session` 按标题选**：参数是数字（或 `#N`）按编号；否则按未归档线程的标题匹配，不分大小写，先全等、再前缀、再包含；多个匹配时列出 `#N 标题` 让用户用 `/session N` 再选，没有匹配时提示 `/session` 列出会话。
+- **`/project`（`/p`）按名字选**：同样不分大小写，先全等、再前缀、再包含。数字照旧指上次列表里的第 N 项；多个匹配时列出候选并把候选记成该 chat 的“上次列表”，所以接着 `/p 2` 选的是候选里的第 2 项；没有匹配时给出提示和完整项目列表。
+- 已知限制：群里 `@bot #3 内容`（先提及机器人）不会被当作点名，与原来 `@bot @3 …` 一样；只有斜杠命令会先去掉机器人提及。

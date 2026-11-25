@@ -181,7 +181,7 @@ close(t, mark)  写 resolved + ResolvedAt（已有则保留）+ mark 的附加�
 
 ### 6.3 重开做什么
 
-`Reopen`：只对 resolved 的线程生效（其他状态原样返回，不写任何东西）；清空 `ResolvedAt`，按 `RestingStatus` 回到 ready 或 idle，记一条 “Reopened.”。进程和工具 URL 在下一轮重新建立；IM 绑定不迁回，`@N` 仍可直达。项目主线程不能重开（`ErrNotWorker`）。
+`Reopen`：只对 resolved 的线程生效（其他状态原样返回，不写任何东西）；清空 `ResolvedAt`，按 `RestingStatus` 回到 ready 或 idle，记一条 “Reopened.”。进程和工具 URL 在下一轮重新建立；IM 绑定不迁回，`#N` 仍可直达。项目主线程不能重开（`ErrNotWorker`）。
 
 ### 6.4 合并做什么（不关闭）
 
@@ -210,7 +210,7 @@ close(t, mark)  写 resolved + ResolvedAt（已有则保留）+ mark 的附加�
 | 转移 | 协调者 | IM 聊天 |
 |---|---|---|
 | 一轮正常结束（T5） | 收到报告 finished | 协调者在线时由它回复；离线时推 “Finished: …” |
-| NEEDS_INPUT（T3） | 收到报告 needs_input | 推 “Needs you … Reply with @N” |
+| NEEDS_INPUT（T3） | 收到报告 needs_input | 推 “Needs you … Reply with #N” |
 | 审批 / 提问（T2） | 不收 | 推审批 / 提问卡 |
 | 出错（T4） | 收到报告 failed | 推 “Failed: …” |
 | 20 分钟无活动 | 收到 stalled | 不推 |

@@ -253,7 +253,7 @@ Thread now: status=ready running=no
 - **线程事件**：一行事实，例如 `PR #34 has merge conflicts with main. Thread: ready, no turn running, 0 unpushed commits, no uncommitted changes.`
 - **回退一行（IM）**：协调者离线、回合失败或被停、或回合结束时既没发卡也没回复，都发一行（`coordinatorSessions.turn` 的 defer）。
 - **协调者输入**：`kind="pr_conflicts" needs_user="true"`（只有这一种带），仍按项目、按一次 Sweep 合并，与 merged / closed 可以在同一条输入里。提示词（`coordinatorSystemPrompt`）要求：用 `request_decision`，选项为“把 base 合进分支并推送（推荐，普通推送不需要强推）/ 我自己处理 / 放弃这个 PR（线程用 `close` 关闭，按项目设置弹卡或自动放行）”；只有用户选了之后才带 `cite` 给线程发消息，不得自行发，不得关闭线程。
-- **IM 兜底**：一行折叠消息 `[#2 标题] PR #34 has merge conflicts with main. Reply with @2 to tell the thread what to do.`（无序号时是 “Open Projects in the web UI to decide.”）。两种情况发：(i) 协调者离线（项目暂停 / 归档）：`onReport` 的离线分支对 `needs_user` 事件发；(ii) 协调者处理了这条输入，但回合结束时既没有发决策卡（回合开始之后主对话里没有新的 `EvDecision`）也没有回复文字（`no_update` 或空）：`coordinatorSessions.turn` 末尾判断。回合出错、被用户停止时不发（走已有的错误 / 恢复路径）。
+- **IM 兜底**：一行折叠消息 `[#2 标题] PR #34 has merge conflicts with main. Reply with #2 to tell the thread what to do.`（无序号时是 “Open Projects in the web UI to decide.”）。两种情况发：(i) 协调者离线（项目暂停 / 归档）：`onReport` 的离线分支对 `needs_user` 事件发；(ii) 协调者处理了这条输入，但回合结束时既没有发决策卡（回合开始之后主对话里没有新的 `EvDecision`）也没有回复文字（`no_update` 或空）：`coordinatorSessions.turn` 末尾判断。回合出错、被用户停止时不发（走已有的错误 / 恢复路径）。
 - **只记录且不兜底**：线程已 resolved / 归档；30 分钟内再次进入；离开。
 
 ### 与设计 / 要求的差别和限制

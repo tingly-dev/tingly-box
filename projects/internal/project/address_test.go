@@ -17,6 +17,18 @@ func TestParseMention(t *testing.T) {
 		rest string
 		ok   bool
 	}{
+		"#2 add the edge case":   {2, "add the edge case", true},
+		"#12 go\non":             {12, "go\non", true},
+		"#3\nnewline body":       {3, "newline body", true},
+		"  #3   spaced  ":        {3, "spaced", true},
+		"#2":                     {0, "", false},
+		"#0 nothing":             {0, "", false},
+		"#3rd place":             {0, "", false},
+		"#3, then":               {0, "", false},
+		"# 3 heading":            {0, "", false},
+		"see #3 for details":     {0, "", false},
+		"fix this #3 now":        {0, "", false},
+		"##3 text":               {0, "", false},
 		"@2 add the edge case":   {2, "add the edge case", true},
 		"@#12 go\non":            {12, "go\non", true},
 		"  @3   spaced  ":        {3, "spaced", true},
@@ -58,7 +70,35 @@ func TestMentionSendsOneMessageToThatThread(t *testing.T) {
 	assert.Contains(t, got, "Echo: ok", "the reply comes back as the coordinator's answer to the thread's report")
 	assert.NotContains(t, got, "Finished:", "no folded line of its own")
 
+	n := len(userEvents(t, f.store, th.ID))
 	_, err = svc.PostFromChannel("telegram", "1", "@9 hello", nil)
+	assert.ErrorIs(t, err, ErrNoSuchThread)
+	_, err = svc.PostFromChannel("telegram", "1", "#9 hello", nil)
+	assert.ErrorIs(t, err, ErrNoSuchThread)
+	assert.ErrorContains(t, err, "#9")
+	assert.Len(t, userEvents(t, f.store, th.ID), n, "a missing number sends nothing to any thread")
+
+	handled, err = svc.PostFromChannel("telegram", "1", "#1 and again", nil)
+	require.NoError(t, err)
+	require.True(t, handled)
+	evs = userEvents(t, f.store, th.ID)
+	assert.Equal(t, "and again", evs[len(evs)-1].Content, "#N is the way to address a thread")
+}
+
+func TestSessionByTitle(t *testing.T) {
+	f, svc, _ := channelFixture(t)
+	th := startWorker(t, f)
+	waitQuiet(t, f, svc, th.ID)
+	_, err := svc.BindChannel("telegram", "1", "", "", f.project.ID)
+	require.NoError(t, err)
+
+	_, reply, err := svc.ChannelCommand("telegram", "1", ChatSession, "work")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "[#1 Worker]", "part of a title, any case")
+	_, reply, err = svc.ChannelCommand("telegram", "1", ChatSession, "WORKER")
+	require.NoError(t, err)
+	assert.Contains(t, reply, "[#1 Worker]")
+	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "nothing like it")
 	assert.ErrorIs(t, err, ErrNoSuchThread)
 }
 
@@ -105,8 +145,8 @@ func TestSessionListsAndSwitches(t *testing.T) {
 
 	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "7")
 	assert.ErrorIs(t, err, ErrNoSuchThread)
-	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "Worker")
-	assert.Error(t, err)
+	_, _, err = svc.ChannelCommand("telegram", "1", ChatSession, "no such title")
+	assert.ErrorIs(t, err, ErrNoSuchThread)
 }
 
 func TestPendingFolderCanSelectAnExistingSession(t *testing.T) {
@@ -177,4 +217,19 @@ func longScript(started chan<- struct{}) func(turn *enginetest.Turn) error {
 		turn.Say("ok", 1, 1)
 		return nil
 	}
+}
+
+func TestMatchThreadTitles(t *testing.T) {
+	ths := []db.Thread{{Seq: 1, Title: "Fix login"}, {Seq: 2, Title: "Fix login page"}, {Seq: 3, Title: "Add login tests"}}
+	seqs := func(q string) []int {
+		var out []int
+		for _, t := range matchThreadTitles(ths, q) {
+			out = append(out, t.Seq)
+		}
+		return out
+	}
+	assert.Equal(t, []int{1}, seqs("fix LOGIN"), "exact beats prefix")
+	assert.Equal(t, []int{1, 2}, seqs("fix"), "prefix, several")
+	assert.Equal(t, []int{1, 2, 3}, seqs("login"), "part of the title")
+	assert.Empty(t, seqs("zebra"))
 }

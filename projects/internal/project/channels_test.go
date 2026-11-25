@@ -258,7 +258,7 @@ func TestThreadReportsAreFoldedToOneLine(t *testing.T) {
 	svc.Relay.Message(update(ReportNeedsInput, "Keep the legacy flag?"))
 	got := sink.next(t).text
 	assert.True(t, strings.HasPrefix(got, `Needs you: Keep the legacy flag?`), got)
-	assert.Contains(t, got, "Reply with @2 and your answer.", "a thread waiting on the user is answered with @N")
+	assert.Contains(t, got, "Reply with #2 and your answer.", "a thread waiting on the user is answered with #N")
 
 	long := strings.Repeat("x", 1000)
 	svc.Relay.Message(update(ReportFinished, long))

@@ -131,7 +131,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 	if err != nil {
 		return true, err
 	}
-	// "@2 ..." talks to thread #2 of the project for this message only.
+	// "#2 ..." talks to thread #2 of the project for this message only.
 	if n, rest, ok := parseMention(text); ok {
 		if !authorizeStart() {
 			return denyStart()
@@ -148,7 +148,7 @@ func (s *Service) PostFromChannel(platform, chatID, text string, files []Channel
 		return true, err
 	}
 	// A chat that was asked something answers it with its next message
-	// (other than an @N one, or one with files).
+	// (other than a #N one, or one with files).
 	if len(files) == 0 {
 		if done, err := s.answerWaiting(b, text, src, policy.Answer); done {
 			return true, err

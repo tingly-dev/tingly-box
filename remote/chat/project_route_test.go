@@ -62,6 +62,9 @@ type fakeRouter struct {
 	// Projects knows (moving a chat to a folder registers it, as OpenFolder does).
 	at         map[string]string
 	registered []string
+	// projects is what /project lists; switched are the ids it switched to.
+	projects []agent.ProjectChoice
+	switched []string
 }
 
 func (f *fakeRouter) Enabled() bool {
@@ -103,9 +106,18 @@ func (f *fakeRouter) Folders() ([]string, error) {
 	return slices.Clone(f.registered), nil
 }
 
-func (f *fakeRouter) Projects() ([]agent.ProjectChoice, error) { return nil, nil }
+func (f *fakeRouter) Projects() ([]agent.ProjectChoice, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.projects), nil
+}
 
-func (f *fakeRouter) ToProject(agent.ChatRef, string) error { return nil }
+func (f *fakeRouter) ToProject(_ agent.ChatRef, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.switched = append(f.switched, id)
+	return nil
+}
 
 func (f *fakeRouter) movedTo() []string {
 	f.mu.Lock()
@@ -292,7 +304,7 @@ func Test_BoundChatCommandsGoToItsProject(t *testing.T) {
 
 	chat.Drain()
 	chat.SendText("/help")
-	help := chat.WaitText(3*time.Second).AssertContains(t, "Your ID:").AssertContains(t, "/session [N]")
+	help := chat.WaitText(3*time.Second).AssertContains(t, "Your ID:").AssertContains(t, "/session [N|title]")
 	assert.NotContains(t, help.Text, "/threads")
 
 	// The old commands are gone, and a bare "stop" is a message.
@@ -404,4 +416,56 @@ func Test_ProjectsOffTurnsChatOff(t *testing.T) {
 	}
 	assert.Empty(t, router.inbound())
 	assert.Empty(t, router.movedTo())
+}
+
+func TestProjectCommandPicksByNumberOrName(t *testing.T) {
+	env, harness, alice := bootHelperNotStarted(t)
+	router := &fakeRouter{bound: map[string]bool{}, projects: []agent.ProjectChoice{
+		{ID: "p1", Name: "Tingly Box"}, {ID: "p2", Name: "Notes App"}, {ID: "p3", Name: "notes-api"}, {ID: "p4", Name: "Blog"},
+	}}
+	harness.Handler.SetProjectRouter(router)
+	require.NoError(t, env.Manager().Start(env.Context()))
+	chat := alice.OpenDM(harness.Setting.UUID)
+	router.bind(chat.ChatID)
+
+	ask := func(text string) string {
+		chat.Drain()
+		chat.SendText(text)
+		return chat.WaitText(3 * time.Second).Text
+	}
+	switchedTo := func() string {
+		router.mu.Lock()
+		defer router.mu.Unlock()
+		if len(router.switched) == 0 {
+			return ""
+		}
+		return router.switched[len(router.switched)-1]
+	}
+
+	assert.Contains(t, ask("/project"), "/project <number or name>")
+	assert.Contains(t, ask("/project 4"), "coordinator of Blog")
+	assert.Equal(t, "p4", switchedTo())
+
+	assert.Contains(t, ask("/p BLOG"), "coordinator of Blog")
+	assert.Contains(t, ask("/p tingly"), "coordinator of Tingly Box")
+	assert.Equal(t, "p1", switchedTo(), "prefix, any case")
+	assert.Contains(t, ask("/p box"), "coordinator of Tingly Box")
+	assert.Equal(t, "p1", switchedTo(), "part of the name")
+	assert.Contains(t, ask("/p notes app"), "coordinator of Notes App")
+	assert.Equal(t, "p2", switchedTo(), "an exact name beats a longer prefix match")
+	n := len(router.switched)
+
+	got := ask("/p notes")
+	assert.Contains(t, got, "More than one project matches")
+	assert.Contains(t, got, "1. Notes App")
+	assert.Contains(t, got, "2. notes-api")
+	assert.NotContains(t, got, "Blog")
+	assert.Len(t, router.switched, n, "an ambiguous name switches nothing")
+	assert.Contains(t, ask("/p 2"), "coordinator of notes-api", "a number then picks from the candidates")
+	assert.Equal(t, "p3", switchedTo())
+
+	got = ask("/p zebra")
+	assert.Contains(t, got, `No project matches "zebra"`)
+	assert.Contains(t, got, "4. Blog")
+	assert.Contains(t, ask("/p 9"), "/project to list projects")
 }

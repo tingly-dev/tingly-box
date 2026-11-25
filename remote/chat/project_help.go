@@ -24,7 +24,7 @@ func helpText(senderID, chatID string, privileged, group bool) string {
 		}
 	}
 	lines = append(lines,
-		"@N <message>: say one thing to session #N",
+		"#N <message>: say one thing to session #N",
 		"",
 		"Your ID: "+senderID,
 	)
