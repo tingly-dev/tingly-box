@@ -29,7 +29,7 @@ func ValidSandbox(s string) bool { return s == SandboxNone || s == SandboxBwrap 
 // its launch sets itself: what tools need to run, nothing that carries a secret.
 var sandboxEnv = []string{"PATH", "LANG", "LANGUAGE", "LC_*", "TERM", "TZ", "USER", "LOGNAME", "SHELL",
 	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
-	"CLAUDE_CODE_*"}
+	"CLAUDE_CODE_*", "CLAUDE_CONFIG_DIR", "DISABLE_*"}
 
 // sandboxFor is the sandbox a thread's launch runs in, or nil when the project
 // runs threads on the host. It confines the process to what the thread works
@@ -81,8 +81,12 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 	}
 	// The transcripts of this directory only, where the host reads them and
 	// --resume finds them; other sessions' stay out of reach.
+	config := envValue(opts.Env, "CLAUDE_CONFIG_DIR")
+	if config == "" {
+		config = filepath.Join(home, ".claude")
+	}
 	if t.Cwd != "" {
-		dir := filepath.Join(home, ".claude", "projects", claudeProjectDir(t.Cwd))
+		dir := filepath.Join(config, "projects", claudeProjectDir(t.Cwd))
 		if err := os.MkdirAll(dir, 0o700); err == nil {
 			rw(dir)
 		}
@@ -90,7 +94,7 @@ func (m *Threads) sandboxFor(ctx context.Context, p *db.Project, t *db.Thread, o
 	// The user's own Claude Code instructions, skills, agents and commands, as
 	// on the host; not settings.json (it may carry an env block with keys).
 	for _, name := range []string{"CLAUDE.md", "skills", "agents", "commands"} {
-		ro(filepath.Join(home, ".claude", name))
+		ro(filepath.Join(config, name))
 	}
 	if gc, err := m.sandboxGitConfig(ctx, p, t); err == nil {
 		ro(gc)
