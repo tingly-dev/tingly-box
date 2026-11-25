@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,45 @@ func TestLibraryTreeListsOneLevelAndRefusesEscapes(t *testing.T) {
 	assert.Equal(t, 404, c.do("GET", "/projects/"+p.ID+"/library/tree?path=nope", nil, nil))
 	assert.Equal(t, 400, c.do("GET", "/projects/"+p.ID+"/library/tree?path=a.md", nil, nil))
 	assert.Equal(t, 404, c.do("GET", "/projects/missing/library/tree", nil, nil))
+}
+
+// The tree shows an upload under the name it was given (not the stored id),
+// orders files newest first by default, and takes sort/order from the query.
+func TestLibraryTreeShowsOriginalNamesAndSorts(t *testing.T) {
+	root := t.TempDir()
+	_, c := newServerAt(t, nil, root)
+	var p db.Project
+	require.Equal(t, http.StatusCreated, c.do("POST", "/projects", map[string]any{"name": "sorted"}, &p))
+	lib := project.Layout{Root: root}.LibraryDir(p.ID)
+	for rel, at := range map[string]time.Time{
+		"uploads/0123456789ab-old.txt": time.Unix(100, 0),
+		"uploads/abcdefabcdef-new.txt": time.Unix(300, 0),
+		"uploads/mid.txt":              time.Unix(200, 0),
+	} {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(lib, rel)), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(lib, rel), []byte("x"), 0o644))
+		require.NoError(t, os.Chtimes(filepath.Join(lib, rel), at, at))
+	}
+	get := func(query string) treeResponse {
+		var got treeResponse
+		require.Equal(t, http.StatusOK, c.do("GET", "/projects/"+p.ID+"/library/tree?path=uploads"+query, nil, &got), query)
+		return got
+	}
+	namesOf := func(r treeResponse) []string {
+		out := []string{}
+		for _, e := range r.Entries {
+			out = append(out, e.Name)
+		}
+		return out
+	}
+
+	assert.Equal(t, []string{"new.txt", "mid.txt", "old.txt"}, namesOf(get("")), "newest first, without the stored ids")
+	assert.Equal(t, []string{"mid.txt", "new.txt", "old.txt"}, namesOf(get("&sort=name&order=asc")))
+	assert.Equal(t, []string{"old.txt", "new.txt", "mid.txt"}, namesOf(get("&sort=name&order=desc")))
+	assert.Equal(t, []string{"old.txt", "mid.txt", "new.txt"}, namesOf(get("&sort=time&order=asc")))
+
+	assert.Equal(t, http.StatusBadRequest, c.do("GET", "/projects/"+p.ID+"/library/tree?sort=size", nil, nil))
+	assert.Equal(t, http.StatusBadRequest, c.do("GET", "/projects/"+p.ID+"/library/tree?order=up", nil, nil))
 }
 
 // A scratch folder is named after its thread; the tree shows the thread's
