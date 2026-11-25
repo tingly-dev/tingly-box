@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/process"
@@ -189,8 +191,25 @@ var notAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
 // claudeProjectDir is the directory name Claude Code keeps a working
 // directory's transcripts under (~/.claude/projects/<name>): every character
-// that is not a letter or digit becomes "-".
-func claudeProjectDir(cwd string) string { return notAlnum.ReplaceAllString(cwd, "-") }
+// that is not a letter or digit becomes "-", and a name over 200 characters is
+// cut there and given a hash of the path, as Claude Code does.
+func claudeProjectDir(cwd string) string {
+	name := notAlnum.ReplaceAllString(cwd, "-")
+	if len(name) <= claudeProjectDirMax {
+		return name
+	}
+	var h int32
+	for _, c := range utf16.Encode([]rune(cwd)) {
+		h = h*31 + int32(c)
+	}
+	n := int64(h)
+	if n < 0 {
+		n = -n
+	}
+	return name[:claudeProjectDirMax] + "-" + strconv.FormatInt(n, 36)
+}
+
+const claudeProjectDirMax = 200
 
 // envValue is name's value in env, falling back to this process's own (a
 // launch env only lists what it changes).
