@@ -53,6 +53,10 @@ func Run(t *testing.T, rt sandbox.Runtime) {
 	if c.supports(sandbox.AxisNetwork, sandbox.NetworkOpen) {
 		t.Run("network/open", func(t *testing.T) { c.network(t, sandbox.NetworkOpen) })
 	}
+	if c.supports(sandbox.AxisResources, sandbox.ResourcesLimited) {
+		t.Run("resources/limited memory", c.memoryLimited)
+		t.Run("resources/limited tasks", c.tasksLimited)
+	}
 }
 
 type suite struct {
@@ -250,6 +254,49 @@ func (c *suite) network(t *testing.T, level sandbox.Level) {
 		t.Error("network=none reached the host's loopback")
 	case level == sandbox.NetworkOpen && !reached:
 		t.Error("network=open could not reach the host")
+	}
+}
+
+// limited is a policy with the resources axis limited, or skips the test where
+// the host cannot give limits (the start is refused as unavailable).
+func (c *suite) limited(t *testing.T, r sandbox.Resources) sandbox.Policy {
+	p := c.policy(t)
+	r.Level = sandbox.ResourcesLimited
+	p.Resources = r
+	proc, err := sandbox.Start(context.Background(), c.info.Name, sandbox.Cmd{Args: []string{"true"}, Env: []string{hostPath}}, p)
+	if errors.Is(err, sandbox.ErrUnavailable) {
+		t.Skipf("resource limits are not available here: %v", err)
+	}
+	must(t, err)
+	_ = proc.Stdin().Close()
+	_ = proc.Wait()
+	return p
+}
+
+// memoryLimited sorts one 200 MB line under a 64 MiB limit: it needs the whole
+// line in memory, so it must be killed (the scope may take the shell with it)
+// before it finishes; a small one must still work.
+func (c *suite) memoryLimited(t *testing.T) {
+	p := c.limited(t, sandbox.Resources{MemoryBytes: 64 << 20})
+	out := c.run(t, p, `[ -z "$XDG_RUNTIME_DIR$DBUS_SESSION_BUS_ADDRESS" ] || echo LEAK-session-env
+head -c 8000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^80000' && echo SMALL-OK
+head -c 200000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^2000' && echo LEAK-allocated`)
+	expect(t, out, "SMALL-OK")
+}
+
+// tasksLimited forks past a limit of 20 tasks: some fork must fail.
+func (c *suite) tasksLimited(t *testing.T) {
+	p := c.limited(t, sandbox.Resources{Tasks: 20})
+	out := c.run(t, p, `(n=0; while [ $n -lt 60 ]; do sleep 5 >/dev/null 2>&1 & n=$((n+1)); done) 2>/dev/null; echo STARTED=$(ls /proc | grep -c '^[0-9]'); echo END`)
+	expect(t, out, "END")
+	var started int
+	i := strings.Index(out, "STARTED=")
+	if i < 0 {
+		t.Fatalf("no count in:\n%s", out)
+	}
+	_, _ = fmt.Sscanf(out[i:], "STARTED=%d", &started)
+	if started >= 60 {
+		t.Errorf("tasks=20 let 60 processes start")
 	}
 }
 

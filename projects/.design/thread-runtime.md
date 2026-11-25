@@ -307,7 +307,7 @@ worker 可能以 yolo 模式跑，此时沙箱是唯一的防线，要按“沙�
 - **宿主 git**：`git()` 一律 `-c core.fsmonitor=false`。
 - **验证**：bwrap 真实运行的单元测试（秘密文件不可见、只读 config 写不进、环境变量被滤、杀掉后无残留进程、无 bwrap 拒绝启动）；挂载计划测试；`TB_SANDBOX_LIVE=1` 的端到端：真实 `claude` 2.1.259 以 `bypassPermissions` 在沙箱里跑，本地脚本模型让它的 Bash 去探家目录、植入的秘密、token 环境变量、仓库 `.git/config` 并在工作区写文件——全部挡住、写入落到宿主、转录在宿主读的位置。`TB_SANDBOX_LIVE_HOST=1` 是对照（不进沙箱），探针此时看到整个家目录，证明探针有效。端到端发现并修了一个问题：长路径的转录目录名被 Claude Code 截断加哈希，原先挂错目录。
 
-未做：资源上限（`systemd-run --user --scope`）；运行中经审批新加的目录（`AddDirectories`）不会自动挂进沙箱；`library/.cache` 线程间共享；网络（按决定后补）。宿主侧 agentboot 的 `SessionReader` 也没按长路径规则找转录（已告知协调者）。
+未做：Projects 线程还没开资源上限（运行时已支持，见 §11）；运行中经审批新加的目录（`AddDirectories`）不会自动挂进沙箱；`library/.cache` 线程间共享；网络（按决定后补）。宿主侧 agentboot 的 `SessionReader` 也没按长路径规则找转录（已告知协调者）。
 
 ## 11 隔离层：独立模块、五轴行为模型（2026-11-25，已实现）
 
@@ -348,5 +348,7 @@ sandbox/
 **加一个 shim 只需**：`sandbox/<名>/` 下实现 `Runtime`、`init` 里注册、一行 `conformance.Run(t, …)` 测试通过；在宿主程序里加一行 import。其它模块不动。
 
 **一致性测试**（每轴每级别一组，按运行时声明的支持项跑）：不支持的级别必须被拒绝；storage/confined：挂载外的文件不可见、只读挂载写不进、可写挂载写入落到宿主、HOME 为空、宿主家目录不可见；exec/confined：无 capability、NoNewPrivs、只看到少量进程、不能再建命名空间、kill 后后台进程不留；credentials/explicit：只剩点名的变量；network/none：连不上宿主回环上的监听；network/open：连得上。变异检查：去掉 bwrap 的 `--unshare-net` 或 `--unshare-pid`，相应用例失败（kill 用例确实抓到了残留进程）。
+
+**resources: limited（bwrap，2026-11-25）**：bwrap 自己不限资源，由 `systemd-run --user --scope --quiet --collect -p MemoryMax=<字节> -p MemorySwapMax=0 -p TasksMax=<n> -- bwrap …` 把整个沙箱放进一个临时的 systemd 用户 scope（值为 0 的限制不写）；scope 里的进程被 cgroup 限住，内存超限时整个 scope 被杀（含 shell）。systemd-run 要靠宿主的 `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` 找到用户会话，这两个变量只给它用：bwrap 用 `--setenv`/`--unsetenv` 按 `Cmd.Env` 原样还原，不进沙箱（不能用 `env -i` 把环境写进命令行，argv 宿主上谁都能读）。**失败即关闭**：`Start` 在 limited 时先跑一次探测 scope（要求 `systemd-run` 存在、用户会话可建 scope、cgroup 里有 `memory.max` 与 `pids.max`，即这两个控制器已委派），任一不满足就返回 `ErrUnavailable` 并写明原因，绝不在没有限制时启动；`Runtime.Check` 不变（不要求 systemd）。一致性测试 `resources/limited` 两组用例（64 MiB 下排序 200 MB 的单行必被杀；Tasks=20 下 fork 60 个必有失败）在 limited 起不来时跳过并带原因。CPU 限制尚未做。CI：GitHub 的 ubuntu runner 一般没有 systemd 用户会话（无 `XDG_RUNTIME_DIR`），这两组用例会跳过，不会失败；要在 CI 里真跑需要 `loginctl enable-linger` 并启动 `user@UID.service`，暂不做。
 
 **CI**：`sandbox/**` 触发 PR 检查；`daily.yml` 新增 `test-sandbox`（边界检查、vet、`-race` 测试，装 bubblewrap 并放开 Ubuntu 的 userns 限制，确认一致性测试没有被跳过）。

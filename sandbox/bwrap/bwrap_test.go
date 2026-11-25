@@ -64,6 +64,33 @@ func TestArgsConfineToTheMounts(t *testing.T) {
 	}
 }
 
+func TestScopeArgs(t *testing.T) {
+	got := strings.Join(scopeArgs("/bin/systemd-run", sandbox.Resources{Level: sandbox.ResourcesLimited, MemoryBytes: 1 << 26, Tasks: 50}), " ")
+	want := "/bin/systemd-run --user --scope --quiet --collect -p MemoryMax=67108864 -p MemorySwapMax=0 -p TasksMax=50 --"
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	got = strings.Join(scopeArgs("sr", sandbox.Resources{Level: sandbox.ResourcesLimited, Tasks: 5}), " ")
+	if strings.Contains(got, "Memory") || !strings.Contains(got, "TasksMax=5") {
+		t.Errorf("a zero limit is left out: %s", got)
+	}
+}
+
+func TestLimitedRefusesWithoutSystemdRun(t *testing.T) {
+	old := lookSystemdRun
+	lookSystemdRun = func() (string, error) { return "", exec.ErrNotFound }
+	defer func() { lookSystemdRun = old }()
+	p := policy()
+	p.Resources = sandbox.Resources{Level: sandbox.ResourcesLimited, MemoryBytes: 1 << 26}
+	_, err := Runtime{}.Start(context.Background(), sandbox.Cmd{Args: []string{"true"}}, p)
+	if !errors.Is(err, sandbox.ErrUnavailable) {
+		t.Fatalf("err = %v, want ErrUnavailable: never run without the limits", err)
+	}
+	if !strings.Contains(err.Error(), "systemd") {
+		t.Errorf("the reason should name systemd: %v", err)
+	}
+}
+
 func TestRefusesToStartWithoutBwrap(t *testing.T) {
 	old := lookPath
 	lookPath = func() (string, error) { return "", exec.ErrNotFound }
