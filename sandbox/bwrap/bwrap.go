@@ -181,10 +181,6 @@ func Args(p sandbox.Policy, dir string) ([]string, error) { return buildArgs(p, 
 // buildArgs is Args with extra arguments after the mounts, so they land on
 // top of them.
 func buildArgs(p sandbox.Policy, dir string, extra []string) ([]string, error) {
-	home := p.Storage.Home
-	if home == "" || !filepath.IsAbs(home) {
-		return nil, fmt.Errorf("%w: sandbox home %q is not an absolute path", sandbox.ErrUnavailable, home)
-	}
 	args := []string{
 		"--unshare-user", "--disable-userns", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--unshare-cgroup-try",
 		"--cap-drop", "ALL", "--new-session", "--die-with-parent",
@@ -193,8 +189,30 @@ func buildArgs(p sandbox.Policy, dir string, extra []string) ([]string, error) {
 	if p.Network.Level != sandbox.NetworkOpen {
 		args = append(args, "--unshare-net")
 	}
-	args = append(args, systemMounts()...)
-	args = append(args, "--tmpfs", home)
+	storage, err := StorageArgs(p, "")
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, storage...)
+	args = append(args, extra...)
+	if dir != "" {
+		args = append(args, "--chdir", dir)
+	}
+	return append(args, "--"), nil
+}
+
+// StorageArgs are the bubblewrap arguments that build p's confined storage
+// under root ("" for the root itself): the host's system directories
+// read-only, an empty Home, and the mounts, each at its own path under root.
+// A runtime that serves the storage from the host (a microVM's shared
+// directory) builds it with these.
+func StorageArgs(p sandbox.Policy, root string) ([]string, error) {
+	home := p.Storage.Home
+	if home == "" || !filepath.IsAbs(home) {
+		return nil, fmt.Errorf("%w: sandbox home %q is not an absolute path", sandbox.ErrUnavailable, home)
+	}
+	args := systemMounts(root)
+	args = append(args, "--tmpfs", root+home)
 	for _, m := range sortMounts(p.Storage.Mounts) {
 		if !filepath.IsAbs(m.Path) {
 			return nil, fmt.Errorf("%w: mount %q is not an absolute path", sandbox.ErrUnavailable, m.Path)
@@ -206,13 +224,9 @@ func buildArgs(p sandbox.Policy, dir string, extra []string) ([]string, error) {
 		if m.Optional {
 			flag += "-try"
 		}
-		args = append(args, flag, m.Path, m.Path)
+		args = append(args, flag, m.Path, root+m.Path)
 	}
-	args = append(args, extra...)
-	if dir != "" {
-		args = append(args, "--chdir", dir)
-	}
-	return append(args, "--"), nil
+	return args, nil
 }
 
 // sortMounts orders mounts so a path comes after every mount that contains it.
@@ -224,26 +238,30 @@ func sortMounts(ms []sandbox.Mount) []sandbox.Mount {
 
 func depth(p string) int { return strings.Count(filepath.Clean(p), string(filepath.Separator)) }
 
-// systemMounts are the host's system directories, read-only: /usr and /etc,
-// the top-level links or directories a merged /usr leaves (/bin, /lib, …),
-// /opt when present, and the files /etc links to outside these (on systemd
-// hosts /etc/resolv.conf points into /run, which is not mounted).
-func systemMounts() []string {
-	args := []string{"--ro-bind", "/usr", "/usr", "--ro-bind", "/etc", "/etc"}
+// SystemArgs are the bubblewrap arguments that put the host's system
+// directories, read-only, under root (see StorageArgs).
+func SystemArgs(root string) []string { return systemMounts(root) }
+
+// systemMounts are, under root, the host's system directories read-only: /usr
+// and /etc, the top-level links or directories a merged /usr leaves (/bin,
+// /lib, …), /opt when present, and the files /etc links to outside these (on
+// systemd hosts /etc/resolv.conf points into /run, which is not mounted).
+func systemMounts(root string) []string {
+	args := []string{"--ro-bind", "/usr", root + "/usr", "--ro-bind", "/etc", root + "/etc"}
 	for _, d := range []string{"/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32"} {
 		fi, err := os.Lstat(d)
 		switch {
 		case err != nil:
 		case fi.Mode()&os.ModeSymlink != 0:
 			if target, err := os.Readlink(d); err == nil {
-				args = append(args, "--symlink", target, d)
+				args = append(args, "--symlink", target, root+d)
 			}
 		case fi.IsDir():
-			args = append(args, "--ro-bind", d, d)
+			args = append(args, "--ro-bind", d, root+d)
 		}
 	}
 	if fi, err := os.Stat("/opt"); err == nil && fi.IsDir() {
-		args = append(args, "--ro-bind", "/opt", "/opt")
+		args = append(args, "--ro-bind", "/opt", root+"/opt")
 	}
 	entries, _ := os.ReadDir("/etc")
 	for _, e := range entries {
@@ -259,7 +277,7 @@ func systemMounts() []string {
 		if fi, err := os.Stat(target); err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
-		args = append(args, "--ro-bind-try", target, target)
+		args = append(args, "--ro-bind-try", target, root+target)
 	}
 	return args
 }

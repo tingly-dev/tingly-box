@@ -23,6 +23,9 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/engine/enginetest"
 	"github.com/tingly-dev/tingly-box/sandbox"
+	// Not shipped yet (Projects threads need network open); here to run the
+	// CLI in a microVM with TB_SANDBOX_LIVE_RUNTIME=microvm.
+	_ "github.com/tingly-dev/tingly-box/sandbox/microvm"
 )
 
 // scriptedAnthropic answers Claude Code's requests: the first turn with tools
@@ -88,6 +91,8 @@ func (s *scriptedAnthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // The real Claude Code CLI, in yolo mode, inside a sandboxed thread's launch:
 // what its Bash tool can and cannot reach. Opt in with TB_SANDBOX_LIVE=1; it
 // needs claude and bwrap, and HOME must be the user's (toolchains live there).
+// TB_SANDBOX_LIVE_RUNTIME names another runtime (microvm needs
+// TB_SANDBOX_LIVE_ALLOWLIST=1: it has no open network).
 func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 	if os.Getenv("TB_SANDBOX_LIVE") != "1" {
 		t.Skip("set TB_SANDBOX_LIVE=1 to run the real CLI in bwrap")
@@ -105,6 +110,9 @@ func TestLiveSandboxedClaudeReachesOnlyItsWork(t *testing.T) {
 
 	f := newFixture(t, func(turn *enginetest.Turn) error { turn.Say("done", 1, 1); return nil })
 	f.project.ThreadSandbox = "bwrap"
+	if rt := os.Getenv("TB_SANDBOX_LIVE_RUNTIME"); rt != "" {
+		f.project.ThreadSandbox = rt
+	}
 	require.NoError(t, f.store.SaveProject(f.project))
 	th, err := f.threads.Start(context.Background(), f.project, StartSpec{Title: "Probe", Task: "probe"})
 	require.NoError(t, err)

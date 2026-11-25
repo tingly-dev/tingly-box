@@ -185,15 +185,22 @@ echo END`, secret, secret, work, ro, p.Storage.Home))
 }
 
 func (c *suite) execConfined(t *testing.T) {
+	// A host process the sandbox must not see; the script names it in two
+	// halves so it does not find itself.
+	mark := fmt.Sprintf("tb-conformance-%d", time.Now().UnixNano())
+	host := exec.Command("sh", "-c", "sleep 60 # "+mark)
+	must(t, host.Start())
+	defer func() { _ = host.Process.Kill(); _ = host.Wait() }()
+	half := len(mark) / 2
 	p := c.policy(t)
 	p.Exec.Level = sandbox.ExecConfined
-	out := c.run(t, p, `
+	out := c.run(t, p, fmt.Sprintf(`
 grep -q '^CapEff:[[:space:]]*0*$' /proc/self/status && echo NO-CAPS
 grep -q '^NoNewPrivs:[[:space:]]*1' /proc/self/status && echo NO-NEW-PRIVS
-n=$(ls /proc | grep -c '^[0-9]'); [ "$n" -lt 20 ] && echo FEW-PIDS
+a=%q; b=%q; grep -qs "$a$b" /proc/[0-9]*/cmdline && echo LEAK-host-process
 (unshare -Ur true || unshare -m true) 2>/dev/null && echo LEAK-namespaces
-echo END`)
-	expect(t, out, "NO-CAPS", "NO-NEW-PRIVS", "FEW-PIDS", "END")
+echo END`, mark[:half], mark[half:]))
+	expect(t, out, "NO-CAPS", "NO-NEW-PRIVS", "END")
 }
 
 func (c *suite) killEndsEverything(t *testing.T) {
