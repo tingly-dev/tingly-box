@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Thread, ThreadLink } from '../../client';
 import { ComposerStrip } from './ComposerStrip';
@@ -27,6 +27,21 @@ describe('ComposerStrip', () => {
             kind: 'pr', repo: 'acme/w', number: 12, url: 'https://github.com/acme/w/pull/12', title: 'Add the tool',
             role: 'opened', state: 'open', refreshed_at: at(1), attempted_at: at(1), created_at: at(60), ...o,
         } as ThreadLink);
+
+        it('folds to one summary row, remembers it, and lists everything again when opened', () => {
+            const th = thread({ links: [link({ ci: 'failing' }), link({ number: 13, kind: 'issue', url: 'https://github.com/acme/w/issues/13' })] });
+            const { unmount } = render(<ComposerStrip thread={th} />);
+            const strip = screen.getByTestId('composer-strip');
+            fireEvent.click(within(strip).getByRole('button', { name: /strip.title/ }));
+            expect(within(strip).queryByRole('link', { name: '#12 Add the tool' })).toBeNull();
+            expect(within(strip).getByText('2')).toBeInTheDocument();
+            expect(within(strip).getByRole('img', { name: 'strip.needsLook' })).toBeInTheDocument();
+            unmount();
+            render(<ComposerStrip thread={th} />);
+            expect(screen.queryByRole('link', { name: '#12 Add the tool' })).toBeNull();
+            fireEvent.click(screen.getByRole('button', { name: /strip.title/ }));
+            expect(screen.getAllByRole('link')).toHaveLength(2);
+        });
 
         it('lists each link under the title with its title, state and the refresh and details buttons', () => {
             const th = thread({ branch: 'tb/fix', links: [link({ ci: 'passing', merge_state: 'ready' })] });

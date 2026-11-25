@@ -151,6 +151,7 @@ export const project: Dict<typeof projectEn> = {
     strip: {
         pr: 'PR', issue: 'Issue',
         title: 'Issue 与 PR',
+        openPrs_one: '{{count}} 个 open PR', openPrs_other: '{{count}} 个 open PR', needsLook: '有失败的检查或冲突',
     },
     autoAnswer: {
         title: '自动回答', menuTitle: '问题带有推荐答案时',
