@@ -43,6 +43,7 @@ func Run(t *testing.T, rt sandbox.Runtime) {
 	if c.supports(sandbox.AxisExec, sandbox.ExecConfined) {
 		t.Run("exec/confined", c.execConfined)
 		t.Run("exec/confined kill ends everything", c.killEndsEverything)
+		t.Run("resources/accounting", c.accounting)
 	}
 	if c.supports(sandbox.AxisCredentials, sandbox.CredentialsExplicit) {
 		t.Run("credentials/explicit", c.credentialsExplicit)
@@ -101,6 +102,13 @@ var hostPath = "PATH=/usr/local/bin:/usr/bin:/bin"
 // run runs script with sh in the sandbox and returns its stdout.
 func (c *suite) run(t *testing.T, p sandbox.Policy, script string, env ...string) string {
 	t.Helper()
+	out, _ := c.runEnd(t, p, script, env...)
+	return out
+}
+
+// runEnd is run, with how the process ended.
+func (c *suite) runEnd(t *testing.T, p sandbox.Policy, script string, env ...string) (string, error) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	proc, err := sandbox.Start(ctx, c.info.Name, sandbox.Cmd{Args: []string{"sh", "-c", script}, Env: append([]string{hostPath}, env...)}, p)
@@ -109,8 +117,7 @@ func (c *suite) run(t *testing.T, p sandbox.Policy, script string, env ...string
 	}
 	_ = proc.Stdin().Close()
 	out, _ := io.ReadAll(proc.Stdout())
-	_ = proc.Wait()
-	return string(out)
+	return string(out), proc.Wait()
 }
 
 func (c *suite) refuses(t *testing.T) {
@@ -286,10 +293,14 @@ func (c *suite) limited(t *testing.T, r sandbox.Resources) sandbox.Policy {
 // before it finishes; a small one must still work.
 func (c *suite) memoryLimited(t *testing.T) {
 	p := c.limited(t, sandbox.Resources{MemoryBytes: 64 << 20})
-	out := c.run(t, p, `[ -z "$XDG_RUNTIME_DIR$DBUS_SESSION_BUS_ADDRESS" ] || echo LEAK-session-env
+	out, err := c.runEnd(t, p, `[ -z "$XDG_RUNTIME_DIR$DBUS_SESSION_BUS_ADDRESS" ] || echo LEAK-session-env
 head -c 8000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^80000' && echo SMALL-OK
 head -c 200000000 /dev/zero | tr '\0' a | sort | wc -c | grep -q '^2000' && echo LEAK-allocated`)
 	expect(t, out, "SMALL-OK")
+	var end *sandbox.ExitError
+	if !errors.As(err, &end) || end.Reason != sandbox.EndOOM {
+		t.Errorf("a sandbox that ran out of memory must end as oom, got %v", err)
+	}
 }
 
 // tasksLimited forks past a limit of 20 tasks: some fork must fail.
@@ -327,6 +338,26 @@ read -r -a f < /proc/$$/stat; echo "TICKS=$(( f[13] + f[14] )) HZ=$(getconf CLK_
 	}
 	if hz == 0 || float64(ticks)/float64(hz) > 0.6 {
 		t.Errorf("cpu=100 (a tenth of a core) spun %d ticks at %d Hz in 2s", ticks, hz)
+	}
+}
+
+// accounting: a Proc that reports usage reports this sandbox's.
+func (c *suite) accounting(t *testing.T) {
+	p := c.policy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	proc, err := sandbox.Start(ctx, c.info.Name, sandbox.Cmd{Args: []string{"sh", "-c", "sleep 1 & sleep 1 & wait"}, Env: []string{hostPath}}, p)
+	must(t, err)
+	defer func() { _ = proc.Kill(); _ = proc.Wait() }()
+	u, ok := proc.(sandbox.Usage)
+	if !ok {
+		t.Skip("the runtime does not report usage")
+	}
+	time.Sleep(300 * time.Millisecond)
+	st, err := u.Usage()
+	must(t, err)
+	if st.MemoryBytes <= 0 || st.Tasks < 3 {
+		t.Errorf("usage of a sandbox running three processes: %+v", st)
 	}
 }
 

@@ -70,16 +70,16 @@ func TestArgsConfineToTheMounts(t *testing.T) {
 }
 
 func TestScopeArgs(t *testing.T) {
-	got := strings.Join(scopeArgs("/bin/systemd-run", sandbox.Resources{Level: sandbox.ResourcesLimited, MemoryBytes: 1 << 26, Tasks: 50}), " ")
-	want := "/bin/systemd-run --user --scope --quiet --collect -p MemoryMax=67108864 -p MemorySwapMax=0 -p TasksMax=50 --"
+	got := strings.Join(scopeArgs("/bin/systemd-run", "u.scope", sandbox.Resources{Level: sandbox.ResourcesLimited, MemoryBytes: 1 << 26, Tasks: 50}), " ")
+	want := "/bin/systemd-run --user --scope --quiet --unit=u.scope -p MemoryMax=67108864 -p MemorySwapMax=0 -p TasksMax=50 --"
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
-	got = strings.Join(scopeArgs("sr", sandbox.Resources{Level: sandbox.ResourcesLimited, Tasks: 5}), " ")
+	got = strings.Join(scopeArgs("sr", "u.scope", sandbox.Resources{Level: sandbox.ResourcesLimited, Tasks: 5}), " ")
 	if strings.Contains(got, "Memory") || strings.Contains(got, "CPU") || !strings.Contains(got, "TasksMax=5") {
 		t.Errorf("a zero limit is left out: %s", got)
 	}
-	got = strings.Join(scopeArgs("sr", sandbox.Resources{Level: sandbox.ResourcesLimited, CPU: 1500}), " ")
+	got = strings.Join(scopeArgs("sr", "u.scope", sandbox.Resources{Level: sandbox.ResourcesLimited, CPU: 1500}), " ")
 	if !strings.Contains(got, "-p CPUQuota=150%") {
 		t.Errorf("cpu is in thousandths of a core, CPUQuota in percent: %s", got)
 	}

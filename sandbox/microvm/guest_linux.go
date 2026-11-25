@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -102,6 +104,7 @@ func guest() error {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdio[0], stdio[1], stdio[2]
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true,
 		Credential: &syscall.Credential{Uid: uint32(s.UID), Gid: uint32(s.GID), Groups: []uint32{}}}
+	oomBefore := oomKills()
 	if err := cmd.Start(); err != nil {
 		report(result{Error: err.Error()})
 		return err
@@ -110,20 +113,37 @@ func guest() error {
 		_ = f.Close()
 	}
 	err = cmd.Wait()
+	// The guest's memory is the sandbox's: any OOM kill in it ends the
+	// sandbox as oom.
+	oom := oomKills() > oomBefore
 	var exit *exec.ExitError
 	switch {
-	case err == nil:
+	case err == nil && !oom:
 		report(result{})
 	case errors.As(err, &exit):
 		if ws, ok := exit.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-			report(result{Signal: int(ws.Signal())})
+			report(result{Signal: int(ws.Signal()), OOM: oom})
 		} else {
-			report(result{Exit: exit.ExitCode()})
+			report(result{Exit: exit.ExitCode(), OOM: oom})
 		}
+	case err == nil:
+		report(result{OOM: true})
 	default:
 		report(result{Error: err.Error()})
 	}
 	return nil
+}
+
+// oomKills is how many processes the guest's OOM killer has killed.
+func oomKills() int {
+	b, _ := os.ReadFile("/proc/vmstat")
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "oom_kill "); ok {
+			n, _ := strconv.Atoi(v)
+			return n
+		}
+	}
+	return 0
 }
 
 // dialHost connects to the host (CID 2) on a vsock port.
