@@ -121,6 +121,7 @@
 | [projects-sessions.md](./projects-sessions.md) | Projects 的统一模型：一切会话都是 Thread（项目对话、线程、文件夹会话、IM 聊天同构），Claude 调研、命名收拾、迁移与交付 | 提案 |
 | [thread-cleanup.md](./thread-cleanup.md) | Projects 线程清理与 worktree 回收：Archive（释放 worktree、保留分支、可 Restore）、Delete、安全检查、批量清理与自动策略；含本机积压实测 | 提案，等待决定；未实施 |
 | [projects-ui.md](./projects-ui.md) | Projects 面板的 UI 对齐：对照 TB 页面和官方 Projects 的审查与分批计划 | 进行中 |
+| [sandbox.md](./sandbox.md) | 沙箱（`sandbox/` 模块）：安全模型 G1–G7、五轴行为模型与级别（含网络四个可达面、Expose）、原语接口、运行时映射、Projects 默认值、推进步骤 | 权威；bwrap/microvm/allowlist/limited 已实施，internet/Expose/记账为决定待实施 |
 | [projects.md](./projects.md) | Projects 接入（宿主侧）：`projects/` 模块、Host 适配器、`projects` 开关、导航与命名；契约见 `projects/.design/projects.md` | 设计说明；代码已搬入，接入未开始 |
 | [smart-guide-on-claude-code.md](./smart-guide-on-claude-code.md) | Smart Guide on Claude Code (retiring tingly-agentscope) | 已废弃方案；`@tb` 已下线（remote-into-projects.md） |
 | [smart-guide-react-anthropic-sdk.md](./smart-guide-react-anthropic-sdk.md) | Smart Guide: in-house ReAct loop on the official Anthropic SDK | 起源记录；`@tb` 已下线（remote-into-projects.md） |
