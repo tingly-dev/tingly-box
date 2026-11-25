@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
@@ -50,7 +50,7 @@ function EdgeResizer({ edge, value, min, clamp, reset, label, onValue, onCommit 
     const start = useRef<{ at: number; value: number } | null>(null);
     const [dragging, setDragging] = useState(false);
     const last = useRef(value);
-    last.current = value;
+    useLayoutEffect(() => { last.current = value; }, [value]);
 
     const el = useRef<HTMLDivElement>(null);
     const set = (v: number) => {

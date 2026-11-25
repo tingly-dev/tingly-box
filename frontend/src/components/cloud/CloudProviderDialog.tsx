@@ -51,11 +51,12 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
     const {t} = useTranslation();
     // Retain the last-opened template so the dialog can animate out after
     // presetId is nulled on close, instead of hard-unmounting mid-transition.
-    const lastTemplateRef = React.useRef<ReturnType<typeof getServiceProvider>>(null);
-    if (presetId) {
-        lastTemplateRef.current = getServiceProvider(presetId);
+    const selectedTemplate = presetId ? getServiceProvider(presetId) : null;
+    const [lastTemplate, setLastTemplate] = useState(selectedTemplate);
+    if (presetId && selectedTemplate !== lastTemplate) {
+        setLastTemplate(selectedTemplate);
     }
-    const template = lastTemplateRef.current;
+    const template = presetId ? selectedTemplate : lastTemplate;
     const authType = template?.auth_type || '';
     const fields = getCloudFields(authType);
 
@@ -80,11 +81,15 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
                 setGlobalProxyUrl(result?.data?.http_transport?.global_proxy_url ?? '');
             });
         }
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [open, globalProxyUrl]);
 
-    // Reset form whenever a new template is opened.
-    useEffect(() => {
-        if (open && template) {
+    // Reset once per opening or template change, while retaining the closing
+    // dialog contents until its transition finishes.
+    const formKey = open && template ? presetId : null;
+    const [previousFormKey, setPreviousFormKey] = useState<string | null>(null);
+    if (formKey !== previousFormKey) {
+        setPreviousFormKey(formKey);
+        if (formKey && template) {
             setName(template.alias || template.name || '');
             setValues({});
             setReveal({});
@@ -93,7 +98,7 @@ const CloudProviderDialog: React.FC<CloudProviderDialogProps> = ({
             setError(null);
             setAdvancedOpen(false);
         }
-    }, [open, presetId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }
 
     if (!template || !authType) return null;
 

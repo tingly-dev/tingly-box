@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, CircularProgress, IconButton, InputBase, ListItemText, Menu, MenuItem, Paper, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { Attachment } from '../client';
@@ -149,7 +149,7 @@ export function Composer({
     const uploading = files.some((f) => !f.done);
     const ready = files.flatMap((f) => (f.done ? [f.done] : []));
     const filesRef = useRef(files);
-    filesRef.current = files;
+    useLayoutEffect(() => { filesRef.current = files; }, [files]);
     useEffect(() => () => filesRef.current.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)), []);
 
     const addFiles = async (list: File[], pastedLines?: number) => {
@@ -194,8 +194,9 @@ export function Composer({
         if (autoFocus) inputRef.current?.focus();
     }, [autoFocus]);
 
+    const applySeed = useEffectEvent(setText);
     useEffect(() => {
-        if (seed) setText(seed);
+        if (seed) applySeed(seed);
         // Only a new seed puts text in the box.
     }, [seed]);
 

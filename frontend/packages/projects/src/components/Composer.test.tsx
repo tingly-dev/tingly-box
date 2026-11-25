@@ -11,6 +11,20 @@ beforeEach(() => { mobile.value = false; });
 afterEach(cleanup);
 
 describe('Composer', () => {
+    it('applies a seed only when it changes, keeping text typed afterward', () => {
+        const onSend = vi.fn();
+        const view = render(<Composer placeholder="Reply" onSend={onSend} seed="first" />);
+        const input = screen.getByPlaceholderText('Reply');
+        expect(input).toHaveValue('first');
+
+        fireEvent.change(input, { target: { value: 'my draft' } });
+        view.rerender(<Composer placeholder="Reply" onSend={vi.fn()} seed="first" />);
+        expect(input).toHaveValue('my draft');
+
+        view.rerender(<Composer placeholder="Reply" onSend={onSend} seed="second" />);
+        expect(input).toHaveValue('second');
+    });
+
     it('keeps secondary settings available without crowding the composer', () => {
         render(<Composer onSend={vi.fn()} contextCollapsible context={<span>Permission options</span>} />);
         const toggle = screen.getByRole('button', { name: 'composer.settings' });
