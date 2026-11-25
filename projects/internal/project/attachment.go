@@ -20,8 +20,10 @@ import (
 )
 
 // UploadsDir is where everything a person attaches lives, inside the
-// project library: one folder per upload, so a file can be listed, opened
-// and cleaned up on its own, and the Library tab shows it.
+// project library: one flat file per upload, stored as
+// `uploads/<12 hex id>-<original name>`. The id keeps stored names unique;
+// the name to show a person is derived by displayLibraryName, so the id does
+// not have to reach the UI.
 const UploadsDir = "uploads"
 
 // SessionOwner is where a folder thread's uploads lived before they were
