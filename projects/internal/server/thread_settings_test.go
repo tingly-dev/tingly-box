@@ -75,6 +75,37 @@ func TestProjectRunningLimitIsValidatedAndStored(t *testing.T) {
 	assert.Equal(t, 100, rtime.Limit)
 }
 
+func TestProjectThreadQuotasAreValidatedAndStored(t *testing.T) {
+	store, c := newServer(t, quietAgents())
+	var p db.Project
+	require.Equal(t, 201, c.do("POST", "/projects", map[string]any{"name": "P"}, &p))
+	assert.Zero(t, p.ThreadMemoryBytes+int64(p.ThreadTasks+p.ThreadCPU), "a new project is not limited")
+
+	var out db.Project
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_memory_bytes": 1 << 30, "thread_tasks": 64, "thread_cpu": 100}, &out))
+	assert.Equal(t, int64(1<<30), out.ThreadMemoryBytes)
+	assert.Equal(t, 64, out.ThreadTasks)
+	assert.Equal(t, 100, out.ThreadCPU)
+
+	for name, body := range map[string]map[string]any{
+		"negative memory": {"thread_memory_bytes": -1},
+		"small memory":    {"thread_memory_bytes": 256 << 20},
+		"negative tasks":  {"thread_tasks": -5},
+		"small tasks":     {"thread_tasks": 10},
+		"negative cpu":    {"thread_cpu": -100},
+		"small cpu":       {"thread_cpu": 50},
+	} {
+		assert.Equal(t, 400, c.do("PATCH", "/projects/"+p.ID, body, nil), name)
+	}
+	saved, err := store.GetProject(p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1<<30), saved.ThreadMemoryBytes, "a rejected value changes nothing")
+
+	require.Equal(t, 200, c.do("PATCH", "/projects/"+p.ID, map[string]any{"thread_tasks": 0}, &out), "zero removes a limit")
+	assert.Zero(t, out.ThreadTasks)
+	assert.Equal(t, 100, out.ThreadCPU, "the other limits stay")
+}
+
 func TestFolderHasNoRunningLimitSetting(t *testing.T) {
 	_, c := newServer(t, quietAgents())
 	var f db.Project

@@ -1424,8 +1424,9 @@ func (m *Threads) settle(threadID string, end engine.TurnEnd, tally *turnTally) 
 			t.Status = db.RestingStatus(t)
 			report.Kind = ""
 		case end.Err != nil:
-			t.Status, t.WaitReason = db.ThreadFailed, "Failed: "+end.Err.Error()
-			report.Kind, report.Text = ReportFailed, end.Err.Error()
+			why := m.failureText(t, end.Err)
+			t.Status, t.WaitReason = db.ThreadFailed, "Failed: "+why
+			report.Kind, report.Text = ReportFailed, why
 		default:
 			if mm := needsInputRe.FindStringSubmatch(report.Text); mm != nil && !session {
 				t.Status, t.WaitReason = db.ThreadWaiting, strings.TrimSpace(mm[1])

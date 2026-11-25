@@ -15,6 +15,7 @@ import { useProjectsHost } from '../../host/ProjectsHost';
 import { formatBytes, formatTokens, timeAgo } from '../../utils/format';
 import { usageEntries } from '../usage/usageData';
 import { UsageCard, UsageHeadCell, UsageRows, UsageStatStrip } from '../usage/UsageViews';
+import { quotaErrors, quotaOf, quotaValues, type MemoryUnit, type Quota } from './quota';
 import { directoryPayload, primaryPath, projectDirectories, RepoField, type RepoEntry } from './RepoField';
 import { fontMono, fontSizes } from '@tingly/ui/theme/fonts';
 import { radius } from '@tingly/ui/theme/radius';
@@ -92,6 +93,41 @@ function ActionRow({ title, help, action }: { title: string; help: string; actio
     );
 }
 
+// The per-thread limits: empty is no limit, no value is suggested. They apply
+// inside a sandbox, so they wait on the runtime being one.
+function QuotaFields({ value, onChange, enabled }: { value: Quota; onChange: (q: Quota) => void; enabled: boolean }) {
+    const { t } = useTranslation('projects');
+    const err = quotaErrors(value);
+    const set = (patch: Partial<Quota>) => onChange({ ...value, ...patch });
+    return (
+        <Box role="group" aria-label={t('projectSettings.sandbox')}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                <TextField label={t('projectSettings.quota.memory')} value={value.memory} onChange={(e) => set({ memory: e.target.value })} disabled={!enabled}
+                    error={err.memory} helperText={err.memory ? t('projectSettings.quota.memoryMin') : undefined} sx={{ flex: 1.4 }}
+                    slotProps={{
+                        htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.memory') },
+                        input: {
+                            endAdornment: (
+                                <TextField select variant="standard" value={value.unit} onChange={(e) => set({ unit: e.target.value as MemoryUnit })} disabled={!enabled}
+                                    sx={{ minWidth: 64 }} slotProps={{ input: { disableUnderline: true } }}>
+                                    <MenuItem value="MiB">MiB</MenuItem>
+                                    <MenuItem value="GiB">GiB</MenuItem>
+                                </TextField>
+                            ),
+                        },
+                    }} />
+                <TextField label={t('projectSettings.quota.processes')} value={value.tasks} onChange={(e) => set({ tasks: e.target.value })} disabled={!enabled}
+                    error={err.tasks} helperText={err.tasks ? t('projectSettings.quota.processesMin') : undefined} sx={{ flex: 1 }}
+                    slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.quota.processes') } }} />
+                <TextField label={t('projectSettings.quota.cpu')} value={value.cores} onChange={(e) => set({ cores: e.target.value })} disabled={!enabled}
+                    error={err.cores} helperText={err.cores ? t('projectSettings.quota.cpuMin') : undefined} sx={{ flex: 1 }}
+                    slotProps={{ htmlInput: { inputMode: 'decimal', 'aria-label': t('projectSettings.quota.cpu') } }} />
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{enabled ? t('projectSettings.quota.help') : t('projectSettings.quota.hostHelp')}</Typography>
+        </Box>
+    );
+}
+
 function General({ project, patch, onFork }: { project: Project; patch: (p: Patch) => Promise<void>; onFork: () => void }) {
     const { t } = useTranslation('projects');
     const { session } = useProjectsHost();
@@ -103,6 +139,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     const [sandbox, setSandbox] = useState<string>(project.thread_sandbox || '');
     const savedGithub = GITHUB_GROUPS.filter((g) => (project.github_auto ?? []).includes(g));
     const [github, setGithub] = useState<string[]>(savedGithub);
+    const [quota, setQuota] = useState<Quota>(quotaOf(project));
     const [maxRunning, setMaxRunning] = useState(String(project.max_running_threads));
     const [maxLimit, setMaxLimit] = useState(MAX_RUNNING_FALLBACK);
     const [runtimes, setRuntimes] = useState<SandboxRuntime[]>([]);
@@ -114,7 +151,10 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
     }, []);
     const runningValue = /^\d+$/.test(maxRunning.trim()) ? Number(maxRunning) : NaN;
     const runningInvalid = !(runningValue >= 1 && runningValue <= maxLimit);
-    const dirty = (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'auto') || sandbox !== (project.thread_sandbox || '') || github.join() !== savedGithub.join();
+    const quotaInvalid = Object.values(quotaErrors(quota)).some(Boolean);
+    const quotaNow = quotaValues(quota);
+    const quotaDirty = quotaNow.thread_memory_bytes !== (project.thread_memory_bytes ?? 0) || quotaNow.thread_tasks !== (project.thread_tasks ?? 0) || quotaNow.thread_cpu !== (project.thread_cpu ?? 0);
+    const dirty = (quotaDirty && !quotaInvalid) || (!runningInvalid && runningValue !== project.max_running_threads) || name !== project.name || goal !== project.goal || coord !== project.coordinator_model || threadModel !== project.thread_model || mode !== (project.thread_permission_mode || 'auto') || sandbox !== (project.thread_sandbox || '') || github.join() !== savedGithub.join();
 
     return (
         <Stack spacing={2.5}>
@@ -128,6 +168,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                 ))}
             </TextField>
             {runtimes.length > 0 && <SandboxField value={sandbox} onChange={setSandbox} runtimes={runtimes} />}
+            {runtimes.length > 0 && <QuotaFields value={quota} onChange={setQuota} enabled={sandbox !== ''} />}
             <Box role="group" aria-label={t('projectSettings.githubAuto')}>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('projectSettings.githubAuto')}</Typography>
                 <Stack spacing={1.5} sx={{ mt: 1.5 }}>
@@ -148,7 +189,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                 helperText={runningInvalid ? t('projectSettings.maxRunningInvalid', { max: maxLimit }) : t('projectSettings.maxRunningHelp')}
                 slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': t('projectSettings.maxRunning') } }} />
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, thread_sandbox: sandbox, github_auto: github, max_running_threads: runningValue })}>{t('common.save')}</Button>
+                <Button variant="contained" disabled={!dirty || !name.trim() || runningInvalid || quotaInvalid} onClick={() => void patch({ name, goal, coordinator_model: coord, thread_model: threadModel, thread_permission_mode: mode, thread_sandbox: sandbox, ...quotaNow, github_auto: github, max_running_threads: runningValue })}>{t('common.save')}</Button>
             </Box>
             <Divider />
             <ActionRow

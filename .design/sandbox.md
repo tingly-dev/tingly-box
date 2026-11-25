@@ -241,12 +241,12 @@ type Usage interface {
 | network | `internet` + Expose（已实施） | Expose 的端口自动算出：启动环境、设置文件与 MCP 配置里所有指向宿主回环的 URL（`http(s)://127.0.0.1|localhost|[::1]:端口`）的端口，即模型网关与 MCP 服务；不让用户填 |
 | exec | confined | |
 | credentials | explicit | 白名单 `sandboxEnv` + 启动自己设的变量 |
-| resources | unlimited（记账开） | 项目设置可选填配额，**不预设** |
+| resources | unlimited（记账开） | 项目设置可选填每线程配额（内存、进程数、CPU 核数），**不预设**；任一项填了则为 `limited` |
 
 - **运行时选择**：项目设置"线程运行环境"列出运行时；某运行时是否可用，按线程策略在本机实际起一次 `true` 判定（`CheckThreadSandbox`，结果缓存一分钟），所以缺 pasta 之类某一级别的工具时，设置里就显示不可用及原因，而不是等线程失败。现为本机 / bwrap；microvm 在它支持 `internet` 后加入。
-- **配额（决定）**：写在项目上、按线程生效；可另设项目总额（项目一个 systemd slice，线程是其下的 scope；VM 运行时按线程）。界面上留空即不限，填了做下限校验（内存过小 Claude Code 起不来），并显示当前用量作参考。前后端都支持，走 codegen。
+- **配额（决定）**：写在项目上、按线程生效；可另设项目总额（项目一个 systemd slice，线程是其下的 scope；VM 运行时按线程）。界面上留空即不限，填了做下限校验（内存至少 512 MiB，进程数至少 64，CPU 至少 0.1 核；前后端同一套），宿主运行时下禁用。已做：`Project.ThreadMemoryBytes/ThreadTasks/ThreadCPU`、更新接口校验、复制与变更摘要、codegen、设置界面；当前用量显示与项目总额未做。
 - **网络级别**：`internet` 为默认；`allowlist`（附名单编辑）给敏感项目；`open` 不作为普通选项，若保留则明确标为危险（包含宿主回环与内网）。
-- **可见性**：线程因 OOM、配额或沙箱失败结束时，写成线程事件并显示原因与用量。
+- **可见性**：线程因 OOM、配额或沙箱失败结束时，写成线程事件并显示原因与用量。 OOM 已做：沙箱以 `EndOOM` 结束的线程，失败原因写明“沙箱内存不足（限额 …）”。
 
 ## 6 推进步骤
 

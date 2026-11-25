@@ -147,5 +147,5 @@ func TestHostEndpointsAreThePortsTheLaunchTalksTo(t *testing.T) {
 	}
 	assert.Equal(t, []sandbox.Endpoint{{Port: 7000}, {Port: 9100}, {Port: 12580}}, hostEndpoints(opts),
 		"the host's loopback ports in the environment and MCP configuration, nothing else")
-	assert.Equal(t, sandbox.NetworkInternet, threadPolicy("/h", nil, nil, hostEndpoints(opts)).Network.Level)
+	assert.Equal(t, sandbox.NetworkInternet, threadPolicy("/h", nil, nil, hostEndpoints(opts), sandbox.Resources{Level: sandbox.ResourcesUnlimited}).Network.Level)
 }

@@ -104,6 +104,11 @@ type Project struct {
 	// ThreadSandbox is the sandbox runtime threads run in (a name in the
 	// sandbox registry); empty runs them on the host.
 	ThreadSandbox string `gorm:"size:20" json:"thread_sandbox"`
+	// ThreadMemoryBytes, ThreadTasks and ThreadCPU (thousandths of a core) are
+	// what one thread may use in a sandbox; zero leaves that one unlimited.
+	ThreadMemoryBytes int64 `json:"thread_memory_bytes"`
+	ThreadTasks       int   `json:"thread_tasks"`
+	ThreadCPU         int   `json:"thread_cpu"`
 	// ThreadGitHubAccess is the setting GitHubAuto replaced (allow, the default
 	// also when empty, or ask); it is read once, to migrate a project to it.
 	ThreadGitHubAccess string `gorm:"size:10" json:"thread_github_access,omitempty"`

@@ -2062,10 +2062,20 @@ export interface components {
             repos: components["schemas"]["Repo"][];
             /** @description Field starred */
             starred: boolean;
+            /**
+             * Format: int64
+             * @description Field thread_cpu
+             */
+            thread_cpu: number;
             /** @description Field thread_effort */
             thread_effort: string;
             /** @description Field thread_github_access */
             thread_github_access?: string;
+            /**
+             * Format: int64
+             * @description Field thread_memory_bytes
+             */
+            thread_memory_bytes: number;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
@@ -2074,6 +2084,11 @@ export interface components {
             thread_profile: string;
             /** @description Field thread_sandbox */
             thread_sandbox: string;
+            /**
+             * Format: int64
+             * @description Field thread_tasks
+             */
+            thread_tasks: number;
             /** @description Field type */
             type: string;
             /**
@@ -2169,10 +2184,20 @@ export interface components {
             repos: components["schemas"]["Repo"][];
             /** @description Field starred */
             starred: boolean;
+            /**
+             * Format: int64
+             * @description Field thread_cpu
+             */
+            thread_cpu: number;
             /** @description Field thread_effort */
             thread_effort: string;
             /** @description Field thread_github_access */
             thread_github_access?: string;
+            /**
+             * Format: int64
+             * @description Field thread_memory_bytes
+             */
+            thread_memory_bytes: number;
             /** @description Field thread_model */
             thread_model: string;
             /** @description Field thread_permission_mode */
@@ -2181,6 +2206,11 @@ export interface components {
             thread_profile: string;
             /** @description Field thread_sandbox */
             thread_sandbox: string;
+            /**
+             * Format: int64
+             * @description Field thread_tasks
+             */
+            thread_tasks: number;
             threads: components["schemas"]["ThreadCounts"];
             /** @description Field type */
             type: string;
@@ -2808,6 +2838,11 @@ export interface components {
             /** @description Field starred */
             starred?: boolean;
             /**
+             * Format: int64
+             * @description Field thread_cpu
+             */
+            thread_cpu?: number;
+            /**
              * @description Field thread_effort
              * @enum {string}
              */
@@ -2817,6 +2852,11 @@ export interface components {
              * @enum {string}
              */
             thread_github_access?: "ask" | "allow";
+            /**
+             * Format: int64
+             * @description Field thread_memory_bytes
+             */
+            thread_memory_bytes?: number;
             /** @description Field thread_model */
             thread_model?: string;
             /**
@@ -2828,6 +2868,11 @@ export interface components {
             thread_profile?: string;
             /** @description Field thread_sandbox */
             thread_sandbox?: string;
+            /**
+             * Format: int64
+             * @description Field thread_tasks
+             */
+            thread_tasks?: number;
         };
         UsageResponse: {
             /** @description Field by_model */
