@@ -179,9 +179,15 @@ export const project = {
         modelDefault: 'Connection default',
         permissionMode: 'Thread permissions',
         sandbox: 'Where threads run',
-        sandboxes: {
-            host: 'This machine', hostHelp: 'Threads run as your user and can reach everything you can.',
-            bwrap: 'Sandbox (bubblewrap)', bwrapHelp: 'Threads see only their directory, the repository, the Library and memory; the rest of your home stays hidden. The network is open. Linux only; needs bwrap installed, or threads fail to start. Applies from each thread\'s next turn.',
+        sandboxUnavailable: 'Not available on this machine',
+        sandboxes: { host: 'This machine (no isolation)', bwrap: 'Sandbox (bubblewrap)' },
+        axes: { storage: 'Files', network: 'Network', exec: 'Processes', credentials: 'Secrets', resources: 'Resources' },
+        levels: {
+            storage: { host: 'everything you can read', confined: 'only its directory, repository, Library and memory' },
+            network: { open: 'open', none: 'none' },
+            exec: { host: 'as your user', confined: 'isolated, no privileges' },
+            credentials: { inherit: 'your environment', explicit: 'only what it needs' },
+            resources: { unlimited: 'no limits', limited: 'limited' },
         },
         githubAuto: 'GitHub: auto-approve',
         githubAutoFoot: 'Off: the thread asks on a card each time. Pushing to the default or a protected branch, and force-pushing someone else\'s branch, always ask.',

@@ -182,9 +182,15 @@ export const project: Dict<typeof projectEn> = {
         modelDefault: '连接默认',
         permissionMode: '线程权限',
         sandbox: '线程运行环境',
-        sandboxes: {
-            host: '本机', hostHelp: '线程以你的用户身份运行，你能访问的它都能访问。',
-            bwrap: '沙箱（bubblewrap）', bwrapHelp: '线程只看得到自己的目录、仓库、资料库和记忆，家目录的其余内容都被隐藏。网络不限制。仅限 Linux，需要安装 bwrap，否则线程无法启动。从每个线程的下一回合起生效。',
+        sandboxUnavailable: '本机不可用',
+        sandboxes: { host: '本机（不隔离）', bwrap: '沙箱（bubblewrap）' },
+        axes: { storage: '文件', network: '网络', exec: '进程', credentials: '凭据', resources: '资源' },
+        levels: {
+            storage: { host: '你能读的都能读', confined: '只有自己的目录、仓库、资料库和记忆' },
+            network: { open: '开放', none: '断开' },
+            exec: { host: '以你的用户身份', confined: '隔离、无特权' },
+            credentials: { inherit: '继承你的环境变量', explicit: '只给需要的' },
+            resources: { unlimited: '不限', limited: '有上限' },
         },
         githubAuto: 'GitHub：自动放行',
         githubAutoFoot: '关闭时每次弹卡询问；推送到默认分支或受保护分支、强推别人的分支总是询问。',

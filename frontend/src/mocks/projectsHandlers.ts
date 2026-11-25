@@ -567,7 +567,14 @@ export const projectsHandlers = [
         { id: 'sonnet', display_name: 'Claude Sonnet 4.5', provider_model: 'claude-sonnet-4-5', provider_name: 'anthropic-primary' },
         { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
     ] })),
-    http.get('/api/v1/projects/runtime', () => HttpResponse.json({ cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100 })),
+    http.get('/api/v1/projects/runtime', () => HttpResponse.json({
+        cli_path: '/usr/local/bin/claude', base_url: 'http://localhost:12580/tingly/claude_code', max_running_threads_limit: 100,
+        sandboxes: [
+            { name: 'host', isolation: 'none', available: true, levels: { storage: 'host', network: 'open', exec: 'host', credentials: 'inherit', resources: 'unlimited' } },
+            { name: 'bwrap', isolation: 'process', available: true, levels: { storage: 'confined', network: 'open', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+            { name: 'libkrun', isolation: 'vm', available: false, reason: '/dev/kvm is not accessible: add your user to the kvm group', levels: { storage: 'confined', network: 'open', exec: 'confined', credentials: 'explicit', resources: 'unlimited' } },
+        ],
+    })),
     http.get('/api/v1/projects/:id', ({ params }) => {
         const p = find(params.id as string)
         if (!p) return notFound()
