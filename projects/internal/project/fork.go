@@ -49,6 +49,7 @@ func (s *Service) Fork(sourceID, name string) (*db.Project, error) {
 		CoordinatorEffort:    src.CoordinatorEffort,
 		ThreadEffort:         src.ThreadEffort,
 		ThreadPermissionMode: src.ThreadPermissionMode,
+		ThreadSandbox:        src.ThreadSandbox,
 		DisableWorktree:      src.DisableWorktree,
 		MaxRunningThreads:    src.MaxRunningThreads,
 	}

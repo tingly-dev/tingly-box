@@ -95,6 +95,9 @@ type UpdateProjectRequest struct {
 	CoordinatorEffort    *string             `json:"coordinator_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadEffort         *string             `json:"thread_effort,omitempty" enum:",low,medium,high,max"`
 	ThreadPermissionMode *string             `json:"thread_permission_mode,omitempty" enum:"default,acceptEdits,auto,bypassPermissions"`
+	// ThreadSandbox is where threads run: "" on the host, "bwrap" confined
+	// with bubblewrap (Linux).
+	ThreadSandbox *string `json:"thread_sandbox,omitempty" enum:",bwrap"`
 	// GitHubAuto are the groups of GitHub actions threads' tools may do
 	// without a card (publish, rewrite, others, close, merge); any other call
 	// asks. The whole list is replaced. Only the owner sets it, here.
@@ -728,6 +731,13 @@ func (h *Handler) update(c *gin.Context) {
 			apierr.BadRequest(c, "unknown permission mode")
 			return
 		}
+	}
+	if req.ThreadSandbox != nil {
+		if !rt.ValidSandbox(*req.ThreadSandbox) {
+			apierr.BadRequest(c, "unknown thread sandbox")
+			return
+		}
+		p.ThreadSandbox = *req.ThreadSandbox
 	}
 	if req.ThreadGitHubAccess != nil {
 		switch *req.ThreadGitHubAccess {

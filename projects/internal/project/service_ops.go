@@ -146,6 +146,7 @@ func configurationChanges(a, b *db.Project) []string {
 		{"coordinator effort", a.CoordinatorEffort, b.CoordinatorEffort},
 		{"thread effort", a.ThreadEffort, b.ThreadEffort},
 		{"thread permission mode", a.ThreadPermissionMode, b.ThreadPermissionMode},
+		{"thread sandbox", a.ThreadSandbox, b.ThreadSandbox},
 		{"thread GitHub access", a.ThreadGitHubAccess, b.ThreadGitHubAccess},
 		{"GitHub auto-approval", strings.Join(a.GitHubAuto, ","), strings.Join(b.GitHubAuto, ",")},
 	} {

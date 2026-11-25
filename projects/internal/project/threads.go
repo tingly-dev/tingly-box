@@ -990,6 +990,14 @@ func (m *Threads) turnLaunch(ctx context.Context, threadID string, t *db.Thread,
 	} else if path, err := m.sessionSettings(p, t, settings); err == nil {
 		opts.SettingsPath = path
 	}
+	sandbox, err := m.sandboxFor(ctx, p, t, &opts)
+	if err != nil {
+		// Never run on the host instead: the project asked for a sandbox.
+		m.addEvent(t, &db.ThreadEvent{Kind: db.EvSystem, Content: err.Error()})
+		_, _ = m.update(t.ID, func(t *db.Thread) { t.Status, t.WaitReason = db.ThreadFailed, "Failed: "+err.Error() })
+		return "", opts, err
+	}
+	opts.Sandbox = sandbox
 	return model, opts, nil
 }
 
