@@ -159,7 +159,7 @@ func TestACoordinatorThatSaysNothingAboutConflictsLeavesALineInTheChat(t *testin
 	refreshConflicts(t, svc, w)
 
 	got := sink.nextContaining(t, "has merge conflicts with main.")
-	assert.Contains(t, got.text, "Reply with @")
+	assert.Contains(t, got.text, "Reply with #")
 	assert.Contains(t, got.text, "to tell the thread what to do.")
 	assert.Contains(t, got.text, "Fix export")
 	waitQuiet(t, f, svc, w.ID)
@@ -203,7 +203,7 @@ func TestACoordinatorThatRepliesAboutConflictsNeedsNoFallback(t *testing.T) {
 	})
 	refreshConflicts(t, svc, w)
 	got := sink.nextContaining(t, "has conflicts with main. What should I do?")
-	assert.NotContains(t, got.text, "Reply with @")
+	assert.NotContains(t, got.text, "Reply with #")
 	waitQuiet(t, f, svc, w.ID)
 	sink.none(t)
 }
@@ -221,7 +221,7 @@ func TestPausedProjectGetsTheConflictLineAndNoInput(t *testing.T) {
 	refreshConflicts(t, svc, w)
 
 	got := sink.nextContaining(t, "has merge conflicts with main.")
-	assert.Contains(t, got.text, "Reply with @")
+	assert.Contains(t, got.text, "Reply with #")
 	n, err := f.store.PendingCoordinatorInputs(f.project.ID)
 	require.NoError(t, err)
 	assert.Equal(t, 0, n)

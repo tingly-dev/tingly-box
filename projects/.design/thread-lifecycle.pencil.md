@@ -237,7 +237,7 @@ service.go 启动
 转移                               协调者（会被唤醒吗）          IM 聊天
 ──────────────────────────────     ─────────────────────────     ───────────────────────────
 W1 提问 / 审批                     否                            推审批 / 提问卡（relay.NeedsUser）
-W2 NEEDS_INPUT                     report needs_input → 唤醒     推 "Needs you … Reply with @N"
+W2 NEEDS_INPUT                     report needs_input → 唤醒     推 "Needs you … Reply with #N"
 W3 failed                          report failed → 唤醒          推 "Failed: …"
 W5 finished                        report finished → 唤醒        协调者在线：由它回复；离线：推 "Finished: …"
 stalled                            report stalled → 唤醒         否

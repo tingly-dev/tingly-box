@@ -41,7 +41,7 @@ type commandSpec struct {
 var ownCommands = []commandSpec{
 	{Name: "cd", Usage: "/cd <path>", Help: "Work in another folder", Order: 90, tier: tierPrivileged},
 	{Name: "dir", Usage: "/dir [N|path]", PickerUsage: "/dir [N]", Help: "List registered folders, or switch to one", Order: 85, tier: tierPicker},
-	{Name: "project", Usage: "/project [N]", Help: "List projects, or switch to a project's coordinator", Order: 84, tier: tierPicker},
+	{Name: "project", Usage: "/project [N|name]", Help: "List projects, or switch to a project's coordinator", Order: 84, tier: tierPicker},
 }
 
 // commandSpecs is every listed command, first listed first.

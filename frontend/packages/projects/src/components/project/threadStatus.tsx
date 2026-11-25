@@ -92,7 +92,7 @@ export function ThreadState({ status, compact, queued }: { status: string; compa
 export const threadRef = (thread: Pick<Thread, 'seq' | 'title'>) => (thread.seq > 0 ? `#${thread.seq} ${thread.title}` : thread.title);
 
 /** The thread's number in the project, muted before its title: the `#3` that
- * `@3` in IM and the coordinator's thread tools take. Nothing for the
+ * `#3` in IM and the coordinator's thread tools take. Nothing for the
  * coordinator (0). */
 export function ThreadNumber({ seq }: { seq: number }) {
     if (!(seq > 0)) return null;

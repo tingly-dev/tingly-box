@@ -110,7 +110,7 @@ const (
 )
 
 var commands = []CommandSpec{
-	{CommandSession, "/session [N]", "List the sessions here, or switch to #N", 80},
+	{CommandSession, "/session [N|title]", "List the sessions here, or switch to #N", 80},
 	{CommandNew, "/new [message]", "Start a new session", 79},
 	{CommandStop, "/stop [#N]", "Stop the running session", 78},
 	{CommandClear, "/clear", "Stop, and start a new session with the next message", 77},

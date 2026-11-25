@@ -15,7 +15,7 @@
    - 只给了编号：如果**恰好一个**线程的 links 里有这个编号，补上该线程；有多个或没有就不补，不猜。
    - PR 还是 issue（`link_kind`）从线程的 links 读取（同一编号既有 PR 又有 issue 时——跨仓库才可能——算 PR）；不知道时显示为 `#N`。线程标题写进来源时压成一行，系统写的说明行经过 `escapeEnvelope`。
    - 线程在项目里的编号 `thread_seq` 和标题 `thread_title` 在发卡时取一份快照。payload 里的这些字段都由系统写入，模型传进来的会被覆盖。
-2. **卡片上显示来源**。给用户看的地方都用项目内的线程编号称呼线程（`#12 Fix login`，与 IM 里 `threadTag`、`@12`、`/session 12` 一致），不用 id。网页卡片在“需要你来决定”下面显示一行“关于 #12 <线程标题> · PR #2728”，可点击打开线程（编号和标题取线程的当前值，快照作为后备）。IM 文字卡在问题下面加一行 `About #12 Fix login · PR #2728`；一个 chat 里有多张未答卡片、回复又不够明确时，列表的每一行也带上来源：`a3f9 · <问题> (#12 Fix login · PR #2728)`（四位代码规则沿用 #2692，未改）。
+2. **卡片上显示来源**。给用户看的地方都用项目内的线程编号称呼线程（`#12 Fix login`，与 IM 里 `threadTag`、`#12`、`/session 12` 一致），不用 id。网页卡片在“需要你来决定”下面显示一行“关于 #12 <线程标题> · PR #2728”，可点击打开线程（编号和标题取线程的当前值，快照作为后备）。IM 文字卡在问题下面加一行 `About #12 Fix login · PR #2728`；一个 chat 里有多张未答卡片、回复又不够明确时，列表的每一行也带上来源：`a3f9 · <问题> (#12 Fix login · PR #2728)`（四位代码规则沿用 #2692，未改）。
 3. **回答带上系统写的来源头**。`Choose`（网页点击、IM 按钮、IM 文字/代码回复都走这里）仍然把**只有选项文字**的用户消息交给协调者，同时在这条消息的 payload 里记录 `answer: {card, question, thread_id, thread_seq, thread_title, number, link_kind, option}`。协调者实际收到的输入（`TestTwoAnswersSayWhichCardAndThreadEachIsFor` 逐字断言；`TestAConflictAnswerReachesItsOwnThread` 从协调者会话真实收到的 prompt 里取出并断言）是：
 
    ```

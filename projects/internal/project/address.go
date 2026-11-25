@@ -12,16 +12,20 @@ import (
 )
 
 // Addressing a thread from an IM chat (.design/projects-im.md, "在 IM 里点名线程"):
-// "@N text" sends one message to thread #N, /session N binds the chat to it
-// (#0: the project conversation), /session lists them.
+// "#N text" (the old "@N text" still works) sends one message to thread #N,
+// /session N or /session <title> binds the chat to it (#0: the project
+// conversation), /session lists them.
 
 // ErrNoSuchThread is for a thread number the project does not have.
 var ErrNoSuchThread = errors.New("no such thread in this project")
 
-var mentionRe = regexp.MustCompile(`^@#?(\d+)\s+(?s:(.+))$`)
+// A message addresses a thread only by "#N" at its very start followed by
+// whitespace and then the message; "#N" anywhere else, or glued to other
+// characters ("#3rd", "#3,"), is plain text. "@N" and "@#N" are the older form.
+var mentionRe = regexp.MustCompile(`^(?:#|@#?)(\d+)\s+(?s:(.+))$`)
 
-// parseMention reads "@2 text" (or "@#2 text"): the thread number and the
-// message. ok is false for anything else, "@opus ..." included.
+// parseMention reads "#2 text" (or the old "@2 text", "@#2 text"): the thread
+// number and the message. ok is false for anything else, "@opus ..." included.
 func parseMention(text string) (n int, rest string, ok bool) {
 	m := mentionRe.FindStringSubmatch(strings.TrimSpace(text))
 	if m == nil {
@@ -45,25 +49,74 @@ func (s *Service) threadBySeq(projectID string, n int) (*db.Thread, error) {
 			return &threads[i], nil
 		}
 	}
-	return nil, fmt.Errorf("%w: #%d", ErrNoSuchThread, n)
+	return nil, fmt.Errorf("%w: #%d (/session lists the sessions here)", ErrNoSuchThread, n)
 }
 
-// threadByRef finds the thread a command argument names: "2" or "#2"; "0"
-// is a project's conversation.
+// threadByRef finds the thread a command argument names: "2" or "#2" by
+// number ("0" is a project's conversation), otherwise by title: exact, then
+// prefix, then part of it, ignoring case, among the sessions that are not
+// archived. Several matches are listed for the user to choose from.
 func (s *Service) threadByRef(projectID, ref string) (*db.Thread, error) {
-	ref = strings.TrimPrefix(strings.TrimSpace(ref), "#")
-	n, err := strconv.Atoi(ref)
-	if err != nil || n < 0 {
-		return nil, fmt.Errorf("name a session by its number, like #2")
-	}
-	if n == 0 {
-		t, err := s.Store.GetMainThread(projectID)
-		if errors.Is(err, db.ErrNotFound) {
-			return nil, fmt.Errorf("%w: #0 (a folder has no project conversation)", ErrNoSuchThread)
+	ref = strings.TrimSpace(ref)
+	num := strings.TrimPrefix(ref, "#")
+	if n, err := strconv.Atoi(num); err == nil && n >= 0 {
+		if n == 0 {
+			t, err := s.Store.GetMainThread(projectID)
+			if errors.Is(err, db.ErrNotFound) {
+				return nil, fmt.Errorf("%w: #0 (a folder has no project conversation)", ErrNoSuchThread)
+			}
+			return t, err
 		}
-		return t, err
+		return s.threadBySeq(projectID, n)
 	}
-	return s.threadBySeq(projectID, n)
+	if ref == "" {
+		return nil, fmt.Errorf("name a session by its number or title, like #2")
+	}
+	threads, err := s.Store.ListThreads(projectID)
+	if err != nil {
+		return nil, err
+	}
+	var open []db.Thread
+	for _, t := range threads {
+		if t.ArchivedAt == nil && t.Seq > 0 {
+			open = append(open, t)
+		}
+	}
+	got := matchThreadTitles(open, strings.TrimPrefix(ref, "#"))
+	switch len(got) {
+	case 0:
+		return nil, fmt.Errorf("%w: %q (/session lists the sessions here)", ErrNoSuchThread, ref)
+	case 1:
+		return &got[0], nil
+	}
+	lines := []string{fmt.Sprintf("More than one session matches %q:", ref)}
+	for _, t := range got {
+		lines = append(lines, fmt.Sprintf("#%d %s", t.Seq, t.Title))
+	}
+	lines = append(lines, "Say which: /session N.")
+	return nil, errors.New(strings.Join(lines, "\n"))
+}
+
+// matchThreadTitles narrows threads to the best kind of title match: exact,
+// else prefix, else substring, ignoring case.
+func matchThreadTitles(threads []db.Thread, q string) []db.Thread {
+	q = strings.ToLower(strings.TrimSpace(q))
+	for _, match := range []func(title string) bool{
+		func(t string) bool { return t == q },
+		func(t string) bool { return strings.HasPrefix(t, q) },
+		func(t string) bool { return strings.Contains(t, q) },
+	} {
+		var got []db.Thread
+		for _, t := range threads {
+			if match(strings.ToLower(t.Title)) {
+				got = append(got, t)
+			}
+		}
+		if len(got) > 0 {
+			return got
+		}
+	}
+	return nil
 }
 
 // placeName is how a reply names what a chat talks to.
@@ -159,7 +212,7 @@ func (s *Service) threadList(cur *db.Thread, p *db.Project) (string, error) {
 	if done > 0 {
 		lines = append(lines, fmt.Sprintf("(%d done)", done))
 	}
-	lines = append(lines, "/session N switches to one; @N <message> talks to it once.")
+	lines = append(lines, "/session N (or part of a title) switches to one; #N <message> talks to it once.")
 	return strings.Join(lines, "\n"), nil
 }
 

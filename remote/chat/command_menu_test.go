@@ -32,19 +32,19 @@ func TestShortcutHelpAndRegistration(t *testing.T) {
 	}
 	group := helpText("u", "c", false, true)
 	assert.NotContains(t, group, "/d ")
-	assert.NotContains(t, group, "/project [N] (/p)")
+	assert.NotContains(t, group, "/project [N|name] (/p)")
 	direct := helpText("u", "c", false, false)
 	assert.Contains(t, direct, "/d")
-	assert.Contains(t, direct, "/project [N] (/p)")
+	assert.Contains(t, direct, "/project [N|name] (/p)")
 }
 
 func TestHelpText(t *testing.T) {
-	const tail = `@N <message>: say one thing to session #N
+	const tail = `#N <message>: say one thing to session #N
 
 Your ID: u1
 Chat ID: c1`
 	session := strings.Join([]string{
-		"/session [N] (/s): List the sessions here, or switch to #N",
+		"/session [N|title] (/s): List the sessions here, or switch to #N",
 		"/new [message] (/n): Start a new session",
 		"/stop [#N]: Stop the running session",
 		"/clear (/cls): Stop, and start a new session with the next message",
@@ -64,16 +64,16 @@ Chat ID: c1`
 		{"privileged direct", true, false, strings.Join([]string{intro,
 			"/cd <path>: Work in another folder",
 			"/dir [N|path] (/d): List registered folders, or switch to one",
-			"/project [N] (/p): List projects, or switch to a project's coordinator",
+			"/project [N|name] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"privileged group", true, true, strings.Join([]string{intro,
 			"/cd <path>: Work in another folder",
 			"/dir [N|path] (/d): List registered folders, or switch to one",
-			"/project [N] (/p): List projects, or switch to a project's coordinator",
+			"/project [N|name] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"direct picker only", false, false, strings.Join([]string{intro,
 			"/dir [N] (/d): List registered folders, or switch to one",
-			"/project [N] (/p): List projects, or switch to a project's coordinator",
+			"/project [N|name] (/p): List projects, or switch to a project's coordinator",
 			session, tail}, "\n")},
 		{"group without permission", false, true, strings.Join([]string{intro, session, tail}, "\n")},
 	}

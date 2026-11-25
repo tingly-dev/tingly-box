@@ -220,33 +220,89 @@ func (h *BotHandler) projectDirectory(hCtx HandlerContext, arg string) {
 			h.SendText(hCtx, "No projects are available.")
 			return
 		}
-		var out strings.Builder
-		out.WriteString("Projects:\n")
-		for i, p := range choices {
-			marker := ""
-			if p.ID == current {
-				marker = " ✓"
-			}
-			fmt.Fprintf(&out, "  %d. %s%s\n", i+1, p.Name, marker)
+		out := projectListText(choices, current) + "\n\n/project <number or name> switches to its coordinator."
+		h.SendText(hCtx, out)
+		return
+	}
+	var list []agent.ProjectChoice
+	if n, valid := bot2.ParseListNumber(arg); valid {
+		h.projectListsMu.Lock()
+		list = append(list, h.projectLists[hCtx.ChatID]...)
+		h.projectListsMu.Unlock()
+		if n < 1 || n > len(list) {
+			h.SendText(hCtx, "Use /project to list projects, then /project <number or name> to switch.")
+			return
 		}
-		out.WriteString("\n/project <number> switches to its coordinator.")
-		h.SendText(hCtx, out.String())
+		h.switchProject(hCtx, ref, list[n-1])
 		return
 	}
-	n, valid := bot2.ParseListNumber(arg)
-	h.projectListsMu.Lock()
-	list := append([]agent.ProjectChoice(nil), h.projectLists[hCtx.ChatID]...)
-	h.projectListsMu.Unlock()
-	if !valid || n > len(list) {
-		h.SendText(hCtx, "Use /project to list projects, then /project <number> to switch.")
+	choices, err := h.projectRouter.Projects()
+	if err != nil {
+		h.SendText(hCtx, "Could not list projects: "+err.Error())
 		return
 	}
-	chosen := list[n-1]
+	got := matchProjects(choices, arg)
+	switch len(got) {
+	case 0:
+		h.SendText(hCtx, fmt.Sprintf("No project matches %q.\n\n%s", arg, projectListText(choices, "")))
+	case 1:
+		h.switchProject(hCtx, ref, got[0])
+	default:
+		h.projectListsMu.Lock()
+		if h.projectLists == nil {
+			h.projectLists = map[string][]agent.ProjectChoice{}
+		}
+		h.projectLists[hCtx.ChatID] = append([]agent.ProjectChoice(nil), got...)
+		h.projectListsMu.Unlock()
+		h.SendText(hCtx, fmt.Sprintf("More than one project matches %q:\n%s\n/project <number> picks one.", arg, projectListText(got, "")))
+	}
+}
+
+func (h *BotHandler) switchProject(hCtx HandlerContext, ref agent.ChatRef, chosen agent.ProjectChoice) {
 	if err := h.projectRouter.ToProject(ref, chosen.ID); err != nil {
 		h.SendText(hCtx, "Could not switch project: "+err.Error())
 		return
 	}
 	h.SendText(hCtx, "This chat now talks to the coordinator of "+chosen.Name+".")
+}
+
+// projectListText numbers the projects, marking the one the chat is on.
+func projectListText(choices []agent.ProjectChoice, current string) string {
+	var out strings.Builder
+	out.WriteString("Projects:\n")
+	for i, p := range choices {
+		marker := ""
+		if p.ID == current {
+			marker = " ✓"
+		}
+		fmt.Fprintf(&out, "  %d. %s%s\n", i+1, p.Name, marker)
+	}
+	return strings.TrimRight(out.String(), "\n")
+}
+
+// matchProjects narrows projects by name, ignoring case, to the best kind of
+// match found: exact, else prefix, else part of the name.
+func matchProjects(choices []agent.ProjectChoice, q string) []agent.ProjectChoice {
+	q = strings.ToLower(strings.TrimSpace(q))
+	if q == "" {
+		return nil
+	}
+	for _, match := range []func(name string) bool{
+		func(n string) bool { return n == q },
+		func(n string) bool { return strings.HasPrefix(n, q) },
+		func(n string) bool { return strings.Contains(n, q) },
+	} {
+		var got []agent.ProjectChoice
+		for _, p := range choices {
+			if match(strings.ToLower(p.Name)) {
+				got = append(got, p)
+			}
+		}
+		if len(got) > 0 {
+			return got
+		}
+	}
+	return nil
 }
 
 // projectCommand reads a chat command that Projects runs (see
