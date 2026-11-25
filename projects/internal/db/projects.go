@@ -136,11 +136,27 @@ func (s *Store) SaveProject(p *Project) error {
 	return s.db.Save(p).Error
 }
 
+// SetProjectInstructions writes only the instructions column. A caller
+// holding an older copy of the project cannot put its other columns back with
+// it: the coordinator's update_instructions tool uses it so that a settings
+// save that lands while the tool runs keeps its limit and other settings.
+func (s *Store) SetProjectInstructions(id, instructions string) error {
+	return s.db.Model(&Project{}).Where("id = ?", id).UpdateColumns(map[string]any{
+		"instructions": instructions, "updated_at": time.Now(),
+	}).Error
+}
+
 // SaveProjectWithEvent keeps a configuration edit and its main-thread notice
 // together: the coordinator must never hear about a change that was not saved.
-func (s *Store) SaveProjectWithEvent(p *Project, e *ThreadEvent) error {
+// keep names fields (Go struct names) to leave as stored: a form that did not
+// edit them must not put a concurrent edit from elsewhere back.
+func (s *Store) SaveProjectWithEvent(p *Project, e *ThreadEvent, keep ...string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(p).Error; err != nil {
+		q := tx
+		if len(keep) > 0 {
+			q = q.Omit(keep...)
+		}
+		if err := q.Save(p).Error; err != nil {
 			return err
 		}
 		if e == nil {

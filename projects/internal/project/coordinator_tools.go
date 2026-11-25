@@ -339,9 +339,18 @@ func (c *Coordinator) updateInstructions(_ context.Context, p *db.Project, in st
 		return "", fmt.Errorf("instructions exceed %d characters", MaxInstructions)
 	}
 	p.Instructions = in.Instructions
-	if err := c.store.SaveProject(p); err != nil {
+	// Only the instructions column: this tool's p was read before the call, and
+	// a settings save that landed meanwhile must keep its own fields (the
+	// running limit included).
+	if err := c.store.SetProjectInstructions(p.ID, in.Instructions); err != nil {
 		return "", err
 	}
-	c.hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: p})
+	// Publish the row as stored: p itself may be older than a settings save
+	// that landed while this call ran.
+	view := p
+	if fresh, err := c.store.GetProject(p.ID); err == nil {
+		view = fresh
+	}
+	c.hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: view})
 	return "instructions updated", nil
 }

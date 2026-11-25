@@ -814,7 +814,15 @@ func (h *Handler) update(c *gin.Context) {
 	case req.Paused != nil && *req.Paused != p.Paused:
 		err = h.svc.SetPaused(p, *req.Paused)
 	default:
-		err = h.svc.Save(p)
+		// The form sends only the fields it edits. A tab other than Memory does
+		// not send instructions, so the stored ones are kept: a coordinator
+		// update_instructions that landed while this request was open must not
+		// be put back by the row loaded here.
+		if req.Instructions == nil {
+			err = h.svc.SaveSettings(p, "Instructions")
+		} else {
+			err = h.svc.Save(p)
+		}
 	}
 	if err != nil {
 		apierr.BadRequest(c, err.Error())

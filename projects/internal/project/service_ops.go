@@ -92,7 +92,14 @@ func (s *Service) validateDirectoryOverlap(p *db.Project) error {
 }
 
 // Save persists a project change and tells open pages and the coordinator.
-func (s *Service) Save(p *db.Project) error {
+func (s *Service) Save(p *db.Project) error { return s.SaveSettings(p) }
+
+// SaveSettings persists a project change from a settings form. keep names the
+// fields the form did not edit (Go struct names: "Instructions"): their stored
+// values are kept, so an edit that landed from elsewhere while the form was
+// open — the coordinator's update_instructions tool — is not put back by the
+// form's older copy. Everything else is written as p says, as before.
+func (s *Service) SaveSettings(p *db.Project, keep ...string) error {
 	if len([]rune(p.Instructions)) > MaxInstructions {
 		return fmt.Errorf("instructions exceed %d characters", MaxInstructions)
 	}
@@ -107,18 +114,24 @@ func (s *Service) Save(p *db.Project) error {
 			return err
 		}
 	}
+	// What this save changes: p, with the kept fields taken from the stored row
+	// so they neither trip the settings notice nor go back over a newer edit.
+	saved := *p
+	if slices.Contains(keep, "Instructions") {
+		saved.Instructions = previous.Instructions
+	}
 	var notice *db.ThreadEvent
-	if fields := configurationChanges(previous, p); len(fields) > 0 && p.Type == db.ProjectProject && p.MainThreadID != "" {
+	if fields := configurationChanges(previous, &saved); len(fields) > 0 && p.Type == db.ProjectProject && p.MainThreadID != "" {
 		notice = &db.ThreadEvent{ThreadID: p.MainThreadID, Kind: db.EvSystem, Source: db.SourceSystem,
 			Content: "Project settings changed: " + strings.Join(fields, ", ") + ". Use the current project settings instead of older values in the conversation. Repository and worktree settings apply to new threads; existing threads keep their working directories.",
 			Payload: jsonString(map[string]bool{"settings_changed": true}),
 		}
 	}
-	if err := s.Store.SaveProjectWithEvent(p, notice); err != nil {
+	if err := s.Store.SaveProjectWithEvent(p, notice, keep...); err != nil {
 		return err
 	}
-	view := *p
-	view.Repos = append([]db.Repo(nil), p.Repos...)
+	view := saved
+	view.Repos = append([]db.Repo(nil), saved.Repos...)
 	view.ApplyDirectoryDefaults()
 	s.Hub.Publish(Event{Type: EventProject, ProjectID: p.ID, Data: &view})
 	if s.Threads != nil {
@@ -173,7 +186,8 @@ func (s *Service) SetPaused(p *db.Project, paused bool) error {
 		s.Threads.StopProject(p.ID)
 		s.Coordinator.stop(p)
 	}
-	if err := s.Save(p); err != nil {
+	// Pausing never edits the instructions: keep a concurrent update_instructions edit.
+	if err := s.SaveSettings(p, "Instructions"); err != nil {
 		return err
 	}
 	if paused {
@@ -202,7 +216,8 @@ func (s *Service) SetArchived(p *db.Project, archived bool) error {
 	} else {
 		p.ArchivedAt = nil
 	}
-	if err := s.Save(p); err != nil {
+	// Archiving never edits the instructions: keep a concurrent update_instructions edit.
+	if err := s.SaveSettings(p, "Instructions"); err != nil {
 		return err
 	}
 	if archived {
