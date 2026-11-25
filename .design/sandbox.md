@@ -233,7 +233,7 @@ type Usage interface {
 
 **`internet` 的实测（2026-11-25）**：非特权 user namespace 里直接跑 `nft` 被 AppArmor 拒（`kernel.apparmor_restrict_unprivileged_userns=1`）；在 pasta 建的命名空间里可以（pasta 有自己的 AppArmor 配置，只允许执行 `/usr/bin` 下的命令，所以由 `/usr/bin/sh` 装规则再 exec bwrap）。pasta 默认把宿主正在监听的端口（含宿主回环上的）转发进命名空间，等于把宿主回环暴露给沙箱——一致性测试抓到了（`LEAK-host[127.0.0.1]`），必须显式关掉全部转发。变异检查：不装规则时，宿主其它网卡地址（`192.168.122.1`、容器网桥 `10.200.x`）可达。
 
-microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 接不上（passt 报 `Failed to add fd to epoll: Bad file descriptor`，CH 报 `VhostUserGetFeatures ConnectionReset`），所以改为让 VMM 进 pasta 的命名空间、用 tap。forward 链若对回包也做 P 拒绝，回到 `10.0.2.15` 的 SYN-ACK 会被拒（guest 回 ICMP 不可达），所以只过滤从 tap 进来的包。变异检查同上：去掉 forward 规则，宿主各网卡地址可达。
+microvm 的 `internet`：passt 的 vhost-user 模式与 Cloud Hypervisor v51.1 接不上（passt 报 `Failed to add fd to epoll: Bad file descriptor`，CH 报 `VhostUserGetFeatures ConnectionReset`），所以改为让 VMM 进 pasta 的命名空间、用 tap。forward 链若对回包也做 P 拒绝，回到 `10.0.2.15` 的 SYN-ACK 会被拒（命名空间回 ICMP 不可达，连接超时），所以只过滤从 tap 进来的包。变异检查同上：去掉 forward 规则，宿主各网卡地址可达。
 
 ## 5 Projects 的默认值
 
