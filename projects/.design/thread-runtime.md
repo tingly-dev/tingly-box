@@ -1,202 +1,221 @@
-# 线程运行时：可插拔的隔离层（Thread Runtime Interface）
+# 线程隔离：安全模型、最小契约与统一接口
 
 > 状态：**提案**，未实现。调研见 [../.research/agent-sandbox-landscape.md](../.research/agent-sandbox-landscape.md)。
-> 相关：[workspace.md](workspace.md)（工作区与 worktree）、[thread-permissions.md](thread-permissions.md)（权限，与隔离正交）、[github-tools.md](github-tools.md)（宿主代做的 GitHub 动作）、[thread-lifecycle.md](thread-lifecycle.md)（线程状态机）、[../../.design/host-binding.md](../../.design/host-binding.md)（本地监听地址）。
-> 用户原话：“我们现在都是裸机跑 projects，未来希望引入 microvm 或者 sandbox，但不希望绑定，而是有一个标准层，就像 k8s CRI CNI 一样。”
+> 相关：[thread-permissions.md](thread-permissions.md)（权限，与隔离正交）、[github-tools.md](github-tools.md)（宿主代做的 GitHub 动作）、[workspace.md](workspace.md)、[thread-lifecycle.md](thread-lifecycle.md)。
+> 用户原话：“我们现在都是裸机跑 projects，未来希望引入 microvm 或者 sandbox，但不希望绑定，而是有一个标准层”；“我们要设计的其实是安全模型，和统一接口，和保障这些的最小化模型，然后去对接行业里的各种 microvm 或者 sandbox（不是说生搬硬套 docker k8s 等等）”；“仓库共享目前还不是最大问题……可以不过度设计（除非做不到）”。
 
 ## 0 结论
 
-- 定义一层薄接口 **TRI（Thread Runtime Interface）**：线程的 Claude Code 进程跑在一个“沙箱”里，沙箱由可替换的**运行时**提供。今天的裸机运行就是其中一个实现（`host`），行为逐字节不变，相当于 k8s 里的 runc。
-- 照 CRI/CNI/CSI 拆成四块正交的职责：**生命周期与进程**（CRI 形）、**连通性**（宿主服务映射进沙箱 + 出口策略 + 凭据代理，CNI 形）、**工作区**（worktree 怎么给到沙箱，CSI 形）、**环境**（镜像或宿主）。运行时上报**能力**，Projects 按能力决定怎么用，不假设。
-- **编排留在 Projects**（线程状态机、队列、审批、报告、GitHub 工具），运行时只给最小动词。**凭据不进沙箱**：GitHub token 留在宿主（工具已经在宿主推送），模型走网关的线程级 token，MCP 走能力 URL。
-- 不发明新词汇：生命周期借 CRI 的结构，沙箱内进程/文件借 E2B envd 的动词，策略借 Docker Sandbox Kit 的 capability 词汇和 srt 的域名白名单模型。
-- 先内置接口（Go），再开放进程外插件协议（gRPC over unix socket，同 CRI），让 Docker/Podman、Docker Sandboxes、microsandbox、E2B、k8s agent-sandbox 等成为外部适配器。
-- 路线：P0 只抽缝不改行为 → P1 进程级（srt）→ P2 容器 → P3 microVM → P4 远程。每一步都可单独交付。
+1. **安全模型**：线程的 agent（Claude Code 进程和它起的一切）是**不可信主体**——它读的仓库、网页、issue 评论都可能带提示注入，它装的依赖可能有恶意脚本。Projects 宿主、网关和用户是可信的。我们给出七条保障（§1.3），核心是：**看不到宿主的东西、手里没有宿主的凭据、出不去没批准的网、有外部副作用的事只能经宿主的工具做**。
+2. **最小契约**：要求运行时做的事压到四条，各家都做得到——**只挂声明的目录、没有网络、跑一个带 stdio 的进程、能整体杀掉销毁**（§2）。其余一切由 Projects 自己做：沙箱里放一个我们的小代理（`tb-sandboxd`），经那条 stdio 多路复用出“到宿主的唯一通道”；宿主侧的**出口代理**负责域名白名单、凭据注入、到网关和 MCP 的路由、拦截记录。安全策略因此集中在我们手里，在所有运行时上一致、可测。
+3. **统一接口**：一个很小的 `Sandbox` 接口（§3）+ 一套**一致性测试**（§5）。测试就是“标准”：适配器通过它，才能被标成相应的隔离等级。
+4. **对接**：Firecracker、Cloud Hypervisor、libkrun/microsandbox、Apple Containerization、Kata、gVisor、bubblewrap/Landlock、Seatbelt、E2B、Docker Sandboxes 等都能满足四条契约，差别只在“怎么跑起第一个进程”和隔离强度（§4）。
+5. **不过度设计**：同仓库线程共享主仓库 `.git`、远程运行时的文件同步、暂停与快照、进程外插件协议，都记为已知缺口或后续，不影响模型成立。
 
-## 1 现状：线程进程从宿主拿了什么
+## 1 安全模型
 
-（代码路径以函数名为准；2026-11 的 main。）
+### 1.1 保护什么
 
-**进程。** 唯一的创建点是 `process.Factory.Start(ctx, LaunchSpec)`（`agentboot/process`），`LaunchSpec{Command, Env, WorkDir, InitialInput, Stderr}`，返回 `Handle{Stdin, Stdout, Wait, Kill, Done}`。链路：`Threads.turnLaunch` → `engine.Start` → `Runner.Open` → `claude.Driver.Prepare`（拼参数、`os.Stat` 检查 cwd、读设置文件内联进 argv）→ `OSExecFactory.Start`。I/O 是 stdin/stdout 的 stream-json，审批（`can_use_tool`）也走 stdio，由 `threadPrompter.OnApproval` 回答。进程常驻在 `pool.Pool`，`launchSignature` 变化则带 `--resume` 重开。`projects/internal/project/agents.go` 目前写死 `claude.NewAgentWithConfig`，没有把 Factory 注入进来。
-
-**文件。**
-
-| 路径 | 谁写 |
+| 资产 | 例子 |
 |---|---|
-| worktree：`<repo>/.claude/worktrees/<slug>`（`git worktree add`，`.git` 文件指回主仓库的 `.git/worktrees/…`） | 宿主建，进程改 |
-| 线程设置 `<root>/<proj>/threads/<id>.settings.json`、MCP 配置临时文件 | 宿主 |
-| memory、library、`library/outputs/<slug>`、`library/.tmp/<thread>`（TMPDIR）、`library/.cache` | 宿主建，进程读写 |
-| 项目其它仓库（`additionalDirectories`） | 进程读 |
-| `~/.claude/projects/…` 转录、`~/.claude.json` | 进程写，宿主 `SessionReader` 读；**没有设 CLAUDE_CONFIG_DIR，用的是宿主用户的 `~/.claude`** |
+| 宿主用户的机器 | 项目以外的文件、`~/.ssh`、云凭据、浏览器数据、其它项目 |
+| Projects/Tingly Box 自己的秘密与数据 | GitHub token（`gh auth token`）、模型 key、网关 token、IM 机器人 token、数据库、其它线程的 MCP 能力 URL |
+| 外部世界里以用户名义的动作 | GitHub 写操作、合并、发消息、花钱（模型额度） |
+| 其它线程 | 它们的工作目录、进程、能力 |
+| 宿主可用性 | CPU、内存、磁盘、进程数 |
 
-**网络。** MCP：`127.0.0.1:<随机端口>/<32 字节能力 token>`（`sessionToolsMCP`）；LLM：`ANTHROPIC_BASE_URL` 指向 Tingly Box 网关 + `ANTHROPIC_AUTH_TOKEN`（`ThreadEnv`）；GitHub：工具在宿主上推送（`githubRemote` 用 `GitHubAuth.Credential` 的 token），`gh api` 也在宿主跑；进程自己的 Bash 能用宿主上的一切凭据（SSH key、gh 登录）和网络。
+### 1.2 信任边界
 
-**宿主代做（直接在 `t.Cwd` 跑 git）。** worktree 增删与清理（`thread_cleanup.go`）、`Stats`、PR diff（`LocalPRDiff`、`fetchBase`）、`MergeDraft`、`originRepo`、推送（`pushBranch` 用 alternates 指向 worktree）、`send_file` 读文件、memory/library 读写。`git()` 直接 `exec`，没有缝。
+- **不可信**：线程沙箱里的一切。威胁来源：提示注入（仓库内容、网页、`view` 返回的他人文本）、恶意依赖、模型自己犯错。不假设攻击者能控制模型以外的宿主进程。
+- **可信**：Projects 服务、网关、用户、宿主侧的工具实现。协调者不在沙箱里（它没有 Bash/Edit，只调 MCP 工具），算可信侧的编排者。
+- 边界上只有一条通道：沙箱 ↔ 宿主的 `tb-sandboxd` 通道。所有进出都经过它，或者被运行时拒绝。
 
-**已有的缝：** `process.Factory`（最贴近 CRI）、`agentboot.AgentDriver.Prepare`、`ThreadEnv`/`Launcher`/`MCPLauncher`（`launch.go`）、`GitHub`/`GitHubAuth`。**缺的缝：** `Layout` 是具体结构体；`git()` 没有抽象；`SessionToolsConfig` 是函数钩子。
+### 1.3 保障
 
-**结论：** 换运行时的难点不在“怎么起进程”（已有 Factory），而在三处**宿主假设**：路径（宿主路径直接进 argv 和设置）、回环地址（MCP、网关在 127.0.0.1）、宿主代做（git 直接在 worktree 里跑）。接口要正面处理这三处。
+| # | 保障 | 由谁保证 |
+|---|---|---|
+| **G1 文件受限** | 沙箱只看见声明的挂载（工作区读写；library/memory 按设置；线程自己的 TMPDIR、Claude Code 配置目录），宿主其余文件一概不可见 | 运行时（R1） |
+| **G2 无环境凭据** | 沙箱的环境变量与文件里没有宿主秘密；只有线程级、可撤销、范围最小的能力：MCP 能力 URL、给网关用的**占位 token**（真 token 由出口代理注入） | Projects（构造环境；今天的 `GetCleanEnv` 是复制 `os.Environ()`，隔离档位改为白名单） |
+| **G3 出口受控** | 默认无网络；能出去的只有经通道到宿主出口代理的连接：网关、MCP、项目白名单域名（CONNECT 隧道）；其余拒绝并记录 | 运行时（R2：没有网络）+ Projects（出口代理） |
+| **G4 副作用经工具** | GitHub 写、合并、关闭等只能经宿主上的 Projects 工具发生，从而受项目设置与审批约束 | G2+G3 的推论（沙箱里没有 GitHub 凭据，`api.github.com` 不在默认白名单）+ 工具 |
+| **G5 线程互隔** | 一个线程看不到、碰不到别的线程的沙箱、进程、能力 | 运行时（每线程一个沙箱）+ Projects（能力 URL 按线程） |
+| **G6 资源有界、可整体终止** | 能限 CPU/内存/磁盘/进程数；杀掉时沙箱里所有进程都结束，不留孤儿 | 运行时（R3、R4） |
+| **G7 可见** | 被拦的出口、失败的启动能显示给用户，并能一键放行（加白名单） | Projects（出口代理的记录） |
 
-## 2 业界怎么做“不绑定”（摘要）
+### 1.4 明确不保障（已知缺口）
 
-详见调研文件。要点：
+- **内核/虚拟化逃逸**：进程级沙箱与宿主共用内核，VM 级不共用；G1–G6 的强度随隔离等级变化（§4 标注），我们只如实标注等级，不承诺挡住逃逸。
+- **同仓库线程共享主仓库 `.git`**：worktree 要读写主仓库的 `.git`，挂进沙箱后同仓库的线程能看到、改到彼此的分支与 refs（G5 的缺口）。现在接受；以后如需要，改成每线程独立克隆即可，不影响接口。
+- **白名单域名内的数据外泄**：允许了 `registry.npmjs.org`，就可能经它的上传接口外泄。白名单是用户的决定，界面要让人看清放了什么。
+- **模型额度滥用**：在额度内的消耗不拦；靠网关的线程级 token 与限额。
+- **侧信道、时间信道**：不处理。
 
-- **CRI**：kubelet ↔ 运行时的 gRPC；两级对象（PodSandbox / Container）；`ListPodSandbox` 按标签找回；`Status` 报告能力；`RuntimeClass` 选实现（runc / gVisor / Kata）。上层不变，换芯。
-- **CNI**：exec 插件 + stdin JSON；与运行时正交；能力声明后才传参（`capabilities`）。
-- **agent 沙箱领域没有统一运行时 API**：k8s Agent Sandbox（`Sandbox` CRD，编排层，隔离靠 RuntimeClass）；Docker Sandbox Kit v3（权限请求打进 OCI 镜像，宿主授予，凭据代理注入，拟捐 CNCF，仅 Docker Sandboxes 一家合规）；E2B envd（VM 内 Process/Filesystem 的 Connect RPC，已有第三方兼容实现，正在变成事实协议）；srt / Claude Code `sandbox` 设置（进程级，域名白名单 + 宿主代理，CC 里只包 Bash）。
+## 2 最小契约：运行时只做四件事
 
-所以：**自己定义薄接口，每一块对齐现成词汇**，让适配器薄；不直接实现 CRI（面向 Pod 与镜像，太重），也不绑定任何一家的 SDK。
+行业里各家能力差别很大（有的有原生 exec 和端口映射，有的只能起一个进程；有的能挂目录，有的不能；网络策略五花八门）。要不绑定，就只要求它们的**交集**，把策略留在我们这边：
 
-## 3 原则
+| # | 运行时必须做到 | 支撑的保障 |
+|---|---|---|
+| **R1 只挂声明的目录** | 沙箱的文件系统 = 环境（镜像或宿主只读系统目录）+ 我们声明的挂载（宿主路径 → 沙箱路径，读写/只读）；别的宿主路径不可达 | G1 |
+| **R2 没有网络** | 沙箱里没有可用的出网接口（只有回环），也连不到宿主的网络服务 | G3、G4 |
+| **R3 起一个进程并给出 stdio** | 以给定的 argv/env/cwd 起**一个**进程（我们的 `tb-sandboxd`），把它的 stdin/stdout 交给我们 | 通道的载体 |
+| **R4 整体杀掉与销毁** | 一次调用结束沙箱里的所有进程并释放沙箱；可选资源上限 | G6、G5 |
 
-1. **编排在上，动词在下。** 线程状态机、队列与并发上限、审批卡、报告、GitHub 工具都留在 Projects；运行时只负责“给我一个隔离环境，在里面跑这个进程，把这些东西接进去”。
-2. **宿主实现是参考实现。** `host` 运行时就是今天的行为；接口落地时 golden/harness 不变是回归证据。
-3. **能力协商，不假设。** 运行时上报能力（隔离等级、工作区方式、出口策略、凭据代理、暂停/快照、宿主服务映射）；Projects 按能力选路径，缺能力时明说，不静默降级。
-4. **凭据不进沙箱。** 能在宿主做的有凭据动作（GitHub 推送与 API）留在宿主，经工具完成；必须在沙箱里用的（LLM）给线程级、可撤销的 token；可选的凭据代理按 Kit 的方式注入（沙箱只见占位符）。
-5. **隔离与权限正交。** 沙箱决定“出了事能坏多少”，权限模式与审批决定“做之前问不问”。两者分开设置、分开显示（UX 原则 4：正交维度分轴）。将来可以让强隔离档位默认更宽的权限模式，但那是项目设置，不是运行时偷偷改。
-6. **失败可见，不回退到裸机。** 选了沙箱而运行时不可用，线程启动失败并说明原因与修法；绝不静默在宿主上跑（安全语义不能被降级）。
+R2 是关键的减法：我们**不要求运行时实现域名白名单、凭据注入、端口映射**——这些各家不一致，有的根本没有。沙箱完全断网，唯一的出口是 R3 那条 stdio，由我们的 `tb-sandboxd` 在里面多路复用：
 
-## 4 分层
+```
+沙箱内                                    宿主
+claude ──stdio──┐                         ┌── Projects 引擎（stream-json，原样）
+                │                         │
+ 127.0.0.1:7000 ┤  tb-sandboxd  ══stdio══ ┤  通道 ─┬─ 网关（注入真 token）
+ (HTTP 入口)    │  （多路复用）           │       ├─ MCP（按线程能力 URL）
+                └─ 信号/退出码            │       └─ 出口代理（白名单 CONNECT，拒绝并记录）
+```
 
-| 层 | 类比 | 管什么 | 谁实现 |
-|---|---|---|---|
-| **Runtime**（生命周期与进程） | CRI RuntimeService | 沙箱的建、查、停、删、（暂停/恢复）；在沙箱里起进程，stdio 流、信号；沙箱内文件读写 | 运行时适配器 |
-| **Connectivity**（连通性） | CNI | 把宿主服务（MCP、网关）映射进沙箱并给出沙箱内地址；出口策略（域名白名单）；可选凭据代理 | 运行时自带，或独立插件（如 srt 代理） |
-| **Workspace**（工作区） | CSI | 线程的工作目录怎么给到沙箱：挂载宿主目录 / 拷入 / 沙箱内克隆；宿主代做的 git 在哪跑 | Projects 内的 provider，按运行时能力选 |
-| **Environment**（环境） | OCI image / RuntimeClass | 沙箱里有什么：宿主本身，或一个 OCI 镜像（含 `claude`、git、工具链） | 项目设置 + 运行时 |
+- `tb-sandboxd` 是我们发的一个静态小二进制（Go），职责只有三样：起 `claude` 并转发它的 stdio；在沙箱回环上开一个 HTTP 入口，把连接经通道送到宿主；转发信号与退出码。它不做任何安全判断——判断全在宿主侧。
+- 沙箱里 `ANTHROPIC_BASE_URL=http://127.0.0.1:7000/gateway`、MCP 地址 `http://127.0.0.1:7000/mcp/<能力>`、`HTTPS_PROXY/HTTP_PROXY=http://127.0.0.1:7000`（npm、pip、go、git 都认）。不认代理的工具连不出去——这是失败即安全（fail closed），被拦的目标进 G7 的记录。
+- 通道协议：stdio 上跑一个成熟的多路复用（如 yamux），流类型只有三种：`proc`（claude 的 stdio）、`connect`（一个出站连接，带目标）、`ctl`（信号、退出、心跳）。宿主把 `proc` 流当作今天的 `process.Handle` 交给 agentboot，引擎和 stream-json 解析不变。
 
-Projects 这边的对象只有一个：**一个线程一个沙箱**（见 §6 D1），线程的常驻 Claude Code 进程是沙箱里的一个进程。协调者不进沙箱（它只用 MCP 工具，没有 Bash/Edit）。
+**为什么这是“最小”**：四条里任意去掉一条，保障就有一条无法成立（没有 R1 就没有 G1；有网络就绕过出口代理，G2–G4 失效；没有 R3 就没有通道；没有 R4 杀不干净）。而再多要求一条（比如原生端口映射、原生 exec、原生白名单），就会把一部分运行时排除在外。
 
-## 5 接口草案
+**宿主运行时（今天的裸机）**不经过这些：它不满足 R1/R2，标为 `isolation: none`，行为与今天完全一样。
 
-Go 接口放在新包 `projects/internal/runtime`（或 agentboot，若 Tingly Box 自身的 @cc 会话也要用；见 §8 未决）。字段名示意，落地时再收敛。
+## 3 统一接口
 
 ```go
-// Runtime gives threads an isolated place to run. host is today's behaviour.
+package sandbox
+
+// Runtime is one way to run a thread's agent in isolation. Adapters implement
+// R1–R4 and nothing else; policy lives on the host side (Broker).
 type Runtime interface {
-    // Info is the runtime's name, version and what it can do.
-    Info(ctx context.Context) (Info, error)
-
-    // Sandbox lifecycle: one per thread, found again by labels after a restart.
-    Create(ctx context.Context, spec SandboxSpec) (Sandbox, error)
-    List(ctx context.Context, labels map[string]string) ([]Sandbox, error)
-    Stop(ctx context.Context, id string) error   // processes end, state kept
-    Remove(ctx context.Context, id string) error // everything goes
-    // Pause / Resume only when Info.Caps.Pause.
-
-    // Exec starts a process in the sandbox: the same Handle agentboot uses today,
-    // so process.Factory becomes a thin wrapper (Start = Exec in the thread's sandbox).
-    Exec(ctx context.Context, id string, p ProcSpec) (process.Handle, error)
-
-    // Files reach the sandbox's own filesystem when the workspace is not a host mount
-    // (Info.Caps.Workspace has no "mount").
-    Files(id string) FS // Stat, ReadFile, WriteFile, ReadDir, Remove (envd's verbs)
+    Info() Info
+    // Start creates the sandbox and starts spec.Entry (tb-sandboxd) in it.
+    Start(ctx context.Context, spec Spec) (Box, error)
 }
 
 type Info struct {
-    Name, Version string
-    Isolation     string   // none | process | container | vm | remote
-    Caps          Caps
+    Name      string
+    Isolation Isolation // none | process | userkernel | vm
+    Platforms []string  // linux/amd64, darwin/arm64, …
 }
 
-type Caps struct {
-    Workspace    []string // mount | copy | clone
-    HostServices bool     // can map a host address into the sandbox
-    Egress       string   // open | allowlist
-    CredProxy    bool     // can inject a credential into requests to named hosts
-    Pause, Snapshot bool
-    Images       bool     // takes an OCI image; false: the host's own environment
+type Spec struct {
+    ThreadID  string
+    Env       Environment // image ref or host root (read-only system dirs)
+    Mounts    []Mount     // HostPath, GuestPath, ReadOnly — nothing else is visible (R1)
+    Entry     []string    // argv of tb-sandboxd inside the sandbox
+    Limits    *Limits     // optional: CPU, memory, disk, pids
 }
 
-type SandboxSpec struct {
-    Labels    map[string]string // project, thread
-    Image     string            // "" = host environment
-    Mounts    []Mount           // HostPath, GuestPath, ReadOnly (workspace, library, memory, config dir)
-    Services  []Service         // Name, HostAddr → Sandbox.Endpoints[Name] is the in-sandbox URL
-    Egress    *Egress           // AllowedDomains, DeniedDomains (Kit network-policy / srt)
-    Creds     []Credential      // Host, Header, SecretRef: injected by the proxy, never in env
-    Env       []string
-    Resources *Resources        // CPU, Memory, Disk
-}
-
-type Sandbox struct {
-    ID        string
-    Labels    map[string]string
-    State     string            // running | stopped | paused
-    Endpoints map[string]string // service name → URL inside the sandbox
-    Paths     map[string]string // host path → guest path, for argv and settings
-}
-
-type ProcSpec struct {
-    Command []string
-    Env     []string
-    WorkDir string // guest path
+type Box interface {
+    Stdio() (io.WriteCloser, io.ReadCloser) // R3: the only channel
+    Destroy(ctx context.Context) error      // R4: kills everything, releases the sandbox
+    Done() <-chan struct{}
 }
 ```
 
-**两个改造点**（P0 要做的“缝”）：
+宿主侧（Projects，所有运行时共用）：
 
-1. **路径翻译。** `Driver.Prepare` 现在把宿主路径写进 argv（`--settings`、`--mcp-config`、cwd）并 `os.Stat`/`ReadFile` 它们。改为：Prepare 产出的 LaunchSpec 里的路径经 `Sandbox.Paths` 翻成沙箱内路径；需要内联的文件内容仍由宿主读（宿主有它）。`host` 运行时的映射是恒等。
-2. **宿主代做的 git 走一个 `Workspace` 接口。** `git()` 的调用点（Stats、diff、MergeDraft、originRepo、推送前的 rev-parse）改成 `ws.Git(ctx, args...)`；挂载模式下仍是宿主 exec（行为不变），沙箱内工作区模式下走 `Runtime.Exec`。推送仍在宿主：`pushBranch` 需要对象库，沙箱内工作区时先由 `Exec` 打包（`git bundle`）取回宿主再推，或在宿主保留一份镜像克隆（§6 D2）。
+```go
+// Broker is the host end of a box's channel: it runs the agent process stream
+// and decides every outbound connection.
+type Broker interface {
+    Attach(box Box, t *db.Thread, policy Policy) (process.Handle, error)
+}
 
-**进程外插件协议（P2 起）。** 把上面的接口原样定义为 protobuf（`projects/api/runtime/v1`），gRPC over unix socket；Projects 启动时按配置连接 `<data>/runtimes/<name>.sock` 或启动插件可执行文件（插件自己监听 socket）。选 gRPC 而不是 CNI 式 exec 插件：要双向流（stdio）和长连接，CRI 也是这么选的。`host` 与 `srt` 两个内置实现不经过 socket。
+type Policy struct {
+    Gateway   GatewayRoute   // where /gateway goes and which token to inject
+    MCP       string         // the thread's capability URL (host side)
+    Allow     []string       // domains for CONNECT; deny by default
+    OnBlocked func(Blocked)  // G7
+}
+```
 
-## 6 关键决策（带推荐）
+接入点只有一个：agentboot 的 `process.Factory`（今天写死在 `projects/internal/project/agents.go` 的 `claude.NewAgentWithConfig`）。隔离档位的 Factory = `Runtime.Start` + `Broker.Attach`，返回的仍是 `process.Handle`；`host` 档位就是今天的 `OSExecFactory`。
 
-**D1 粒度：一个线程一个沙箱。** 线程是工作与权限的单位，有自己的 worktree、设置、TMPDIR、转录；常驻进程（`pool.Pool`）正好映射成“沙箱里的一个长进程”。线程 Stop → `Runtime.Stop`（或 Pause，若支持）；用户关闭线程（resolve）→ `Remove`；Projects 重启后用 `List(labels{thread})` 找回，`--resume` 照旧。备选“一个项目一个沙箱”省资源，但线程之间不再隔离、权限与工作区边界混在一起，不推荐。协调者与 folder 会话（IM）：协调者不进沙箱；folder 会话跟随它的项目设置。
+配套要改的只有三处“宿主假设”：
 
-**D2 工作区：本地运行时挂载，远程运行时沙箱内克隆；不挂整个仓库。**
-- 今天的 worktree 的 `.git` 是指回主仓库的文件，进程要读写主仓库的 `.git`（对象库、其它线程的分支、所有 refs）。把 worktree 挂进沙箱就必须连主仓库 `.git` 一起挂，**隔离被打穿**（能改别的线程的分支、能读 `.git/config` 里的凭据配置）。
-- 推荐：隔离档位（process 以上）给线程一个**独立的克隆**：`git clone --shared`/`--reference <主仓库>`（对象只读借用，refs 自己的），放在宿主的线程目录，整体挂载进沙箱，主仓库的 `objects/` 以只读挂到同一路径（alternates 要能读到）；沙箱里看不到主仓库可写的部分。（新线程的分支从主仓库取；线程推到 origin 后主仓库 `fetch` 即可看到，和今天经 origin 交接一样。）宿主代做的 git（diff、Stats、推送用 alternates）对这个克隆照常工作，改动最小。
-- 远程运行时（P4）宿主不能挂载：沙箱内 `git clone`（凭据：只读的、短期的 token，或经凭据代理），宿主代做的 git 走 `Workspace` → `Runtime.Exec`；推送经 `git bundle` 取回宿主再由工具推。
-- `host` 档位保持 worktree，不变。
+1. **路径**：`Driver.Prepare` 把宿主路径写进 argv/设置文件。挂载时让沙箱路径与宿主路径**相同**（R1 的挂载按同路径挂），就不需要翻译——最省的做法。做不到同路径的运行时（少数）再加映射。
+2. **环境变量**：隔离档位改成白名单构造（PATH、HOME、TMPDIR、LANG、上面的三个地址、占位 token），不再复制宿主环境（G2）。
+3. **Claude Code 配置目录**：隔离档位给每个线程一个 `CLAUDE_CONFIG_DIR`（宿主线程目录下，同路径挂入），不让沙箱看到宿主的 `~/.claude`（里面有登录凭据和别的会话的转录，违反 G1/G2）。宿主读转录的 `SessionReader` 直接读这个目录。
 
-**D3 宿主服务进沙箱：运行时提供映射，地址由运行时回给我们。** MCP 与网关今天都在 127.0.0.1。`SandboxSpec.Services` 声明 `{mcp: 127.0.0.1:p1, gateway: 127.0.0.1:p2}`，运行时负责接通并返回沙箱内 URL：进程级（srt）同一网络命名空间外，用它的 unix socket 代理或直接放行回环；容器用 host-gateway 或 unix socket 挂载；microVM 用 vsock/tap 上的转发；远程用反向隧道。能力 URL 的 token 仍是 MCP 的唯一认证，远程档位必须加 TLS（隧道自带或 mTLS）。`.design/host-binding.md` 的“只听 127.0.0.1”不变：映射是运行时在宿主侧建的转发，不需要把监听改成 0.0.0.0。
+宿主代做的 git（diff、Stats、推送）照旧在宿主的工作区上跑——工作区就是挂载的宿主目录，不需要进沙箱。
 
-**D4 凭据：GitHub 只经工具；模型 token 线程级；其它走凭据代理（可选）。**
-- 沙箱里没有 gh 登录、没有 SSH key：GitHub 写只能经 Projects 工具（在宿主执行、按项目设置审批）。这与 `gh` 引导（PR #2773 的 D）天然一致：沙箱里的 `gh` 没凭据，读走 `view`。
-- `ANTHROPIC_AUTH_TOKEN` 今天是共享的模型 token；进沙箱前应改为**线程级、可撤销**的网关 token（沙箱被攻破时能单独吊销）。网关侧需要支持签发；这是一个独立前置项。
-- 包管理、私有源等需要的凭据：用 Kit 的 `credential@1` 语义，由代理按域名注入，沙箱只见占位符；运行时不支持凭据代理（`Caps.CredProxy=false`）时，项目设置里明确告知“这些凭据会以环境变量进入沙箱”，由用户决定。
+（线程设置文件、MCP 配置文件这类 argv 里出现的宿主文件，以只读同路径挂入；它们不含宿主秘密——MCP 配置里的地址在隔离档位改写为沙箱内入口。）
 
-**D5 Claude Code 状态：每线程一个配置目录，放在宿主、挂进沙箱。** 今天用宿主用户的 `~/.claude`（转录、`.claude.json`、认证、全局设置），进沙箱后既不该共享（隔离、并发写）也不能丢（宿主 `SessionReader` 要读转录，`--resume` 要它）。推荐 `CLAUDE_CONFIG_DIR=<root>/<proj>/threads/<id>/claude`（宿主路径，挂载进沙箱；远程档位由 `Files` 同步回来）。这一条对 `host` 档位也有益（也是 `cc-native-peer-messaging` 记忆里“按配置目录注册对等会话”的问题的根治），但会改变现有行为（全局设置、登录态不再继承），要单独决定，见 §8。
+## 4 对接行业运行时
 
-**D6 镜像与 `claude` 二进制：镜像契约，不注入宿主二进制。** 容器/VM 档位的镜像必须提供：`claude`（PATH 上）、`git`、`sh`、项目需要的工具链。Projects 在建沙箱后 `Exec claude --version` 校验，不满足就失败并说明。注入宿主二进制只在同架构同 libc 时可行，不作为契约。提供一个官方基础镜像（Claude Code + git + 常见工具链），项目可以 `FROM` 它。权限请求将来可以按 Kit 规范写在镜像里（`kit.yaml`），宿主按项目设置授予——这让“沙箱里能连哪些域名”随镜像版本走。
+四条契约在各家怎么满足。“入口”指怎么把 `tb-sandboxd` 跑起来并拿到它的 stdio。标 ⚠ 的是未在本机验证、来自文档或二手资料的判断，适配器落地时由一致性测试确认。
 
-**D7 插件形态：先内置，后开放。** P0–P1 只有进程内 Go 接口与内置 `host`、`srt` 两个实现，先把缝和语义磨稳；P2 起把接口冻结成 `runtime/v1` protobuf，外部适配器通过 unix socket 接入（同 CRI 的 `--container-runtime-endpoint`）。适配器候选：`docker`/`podman`（容器）、Docker Sandboxes（microVM，Kit 合规）、microsandbox（libkrun）、E2B 协议（自托管或云）、k8s agent-sandbox（远程）。版本协商：`Info.Version` + 能力集，Projects 拒绝主版本不符的插件。
+| 运行时 | 隔离 | R1 挂载 | R2 断网 | R3 入口与 stdio | R4 销毁 | 备注 |
+|---|---|---|---|---|---|---|
+| **bubblewrap**（Linux） | process | `--ro-bind` 系统目录 + `--bind` 声明目录，其它不挂 | `--unshare-net` | 直接 exec，stdio 即进程 stdio | 杀进程组；`--die-with-parent` | 无需 root；可叠加 Landlock/seccomp。srt 在 Linux 上就是这条路 |
+| **Seatbelt**（macOS `sandbox-exec`） | process | 生成 profile：只允许声明路径 | profile 拒绝网络 | 直接 exec | 杀进程组 | `sandbox-exec` 被标为已弃用但仍可用 ⚠；srt 在 macOS 上用它 |
+| **gVisor**（`runsc`） | userkernel | OCI bundle 的 mounts | `--network=none` | `runsc run` 的 stdio | `runsc kill/delete` | 需要 OCI bundle（可由宿主根只读 + 挂载拼出） |
+| **Firecracker** | vm | 只读 rootfs 镜像 + virtio-blk；目录共享需另想办法 ⚠ | 不配 tap 即无网 | `tb-sandboxd` 作为 guest 的 init，stdio 走 vsock（或串口） | 杀 VMM 进程 | 原生不支持 virtiofs ⚠：工作区需块设备或经通道同步，是对接成本最高的一家 |
+| **Cloud Hypervisor** | vm | virtiofs（virtiofsd） | 不配网卡 | init + vsock | 杀 VMM | 比 Firecracker 好接：有 virtiofs |
+| **libkrun / microsandbox** | vm | virtiofs | 默认会开 TSI（借宿主网络）！须显式关：`krun_disable_implicit_vsock` 后 `krun_add_vsock(ctx, 0)` ⚠ | `krun` 直接运行一个命令，stdio 可接 | 杀进程 | “默认借宿主网络”是 R2 的陷阱，一致性测试必须覆盖 |
+| **Apple Containerization**（macOS） | vm（每容器一个） | virtiofs 挂载 | `--network none`（只剩回环） | 进程 stdio 经 vminitd/vsock 转发 | `container rm -f` | 已有项目在 `--network none` + vsock 中继下跑通白名单 CONNECT ⚠ |
+| **Kata Containers** | vm | virtiofs | network none | 经 containerd/CRI 的 attach | 删容器 | 要 containerd；适合已有集群的环境 |
+| **Docker/Podman**（runc） | process（共享内核） | `-v` 声明目录 | `--network none` | `run -i` 的 stdio | `rm -f` | 隔离弱于 VM；可换 `--runtime=runsc/kata` 提升 |
+| **Docker Sandboxes**（`sbx`） | vm | 工作区同步/挂载 ⚠ | 自带默认拒绝的防火墙；需确认能否完全断网 ⚠ | exec 的 stdio ⚠ | 删除沙箱 | 它自己有一套 Kit 策略；我们只用它的“断网 + stdio”，策略仍在我们这边 |
+| **E2B**（Firecracker，云或自托管） | vm（远程） | 无宿主挂载：工作区要经通道同步 | `allowInternetAccess:false`（= denyOut 0.0.0.0/0） | envd 的 `Process.Start` 流式 stdio | `kill` | 远程：R1 改为“只有我们同步进去的文件”；第三方兼容后端可能忽略断网标志，必须测 |
+| **Kubernetes agent-sandbox** | 取决于 RuntimeClass | PVC/卷 | NetworkPolicy 拒绝全部出站 | `exec`/attach 的 stdio | 删 Sandbox | 远程；同上 |
 
-**D8 权限模式与审批不动。** 审批仍走 stdio 的 `can_use_tool` → `threadPrompter`，与沙箱无关；`request_permission` 的规则授予照旧写进设置文件。沙箱只是让“万一放行了坏东西”的后果有界。是否在强隔离档位默认 `bypassPermissions`，作为项目设置的一个选项，默认不开。
+**两类分别处理：**
 
-## 7 路线
+- **本地运行时**（bwrap、Seatbelt、gVisor、Cloud Hypervisor、libkrun、Apple、Kata、Docker）：R1 用同路径挂载，工作区就在宿主，宿主代做的 git 不变。镜像只需带 `claude` 与 `tb-sandboxd`；process 档位直接只读挂宿主系统目录，连镜像都不需要。
+- **远程运行时**（E2B、k8s、Docker Sandboxes 若不挂载）：没有宿主挂载。R1 变成“沙箱里只有我们放进去的东西”，工作区需要经通道同步（git bundle 进出，或文件同步流）。这是后续工作（§6），接口不变——`Spec.Mounts` 对它们表示“要同步的目录”。
 
-| 阶段 | 内容 | 隔离 | 行为变化 | 验证 |
-|---|---|---|---|---|
-| **P0 抽缝** | 新包 `runtime` 与 `host` 实现；`agents.go` 注入 `process.Factory`（= `host.Exec`）；`Driver.Prepare` 走路径翻译；`git()` 调用点收进 `Workspace`；`Layout` 不动 | none | 无 | 现有测试、golden、harness 全绿即证据 |
-| **P1 进程级** | 内置 `srt` 运行时：用 sandbox-runtime 包住整个 `claude` 进程（不只 Bash）；独立克隆工作区（D2）；出口白名单（项目设置，默认含网关、MCP、包源）；可选 per-thread 配置目录（D5） | process | 选了才变 | 真实 CLI 跑 harness 旅程；越权写/出网被拦的用例 |
-| **P2 容器** | 冻结 `runtime/v1` 协议；外部适配器 `docker`/`podman`；镜像契约与基础镜像（D6）；服务映射（D3） | container | 同上 | 同一组旅程在容器里跑通 |
-| **P3 microVM** | 适配器：Docker Sandboxes / microsandbox / Firecracker（E2B 协议）/ Kata（经 containerd）；暂停与恢复映射线程空闲 | vm | 同上 | 冷启动、恢复时间进 harness 报告 |
-| **P4 远程** | 适配器：k8s agent-sandbox、E2B 云；沙箱内克隆（D2）、隧道与 TLS（D3）、`Files` 同步转录（D5） | remote | 同上 | 远端集群上的旅程 |
+**`claude` 与 `tb-sandboxd` 怎么进沙箱**：process 档位与宿主共享只读系统目录，二者都在；VM/容器档位由镜像提供（我们发一个最小基础镜像：`claude`、`tb-sandboxd`、git、sh），或在同架构时只读挂入宿主上的二进制。Projects 启动后经通道问一次版本，不对就失败并说明。
 
-P1 也可以先做更轻的一步：只在线程设置里打开 Claude Code 自己的 `sandbox`（只包 Bash，配置 `network.allowedDomains`、`failIfUnavailable`）。它不需要运行时接口，可作为 P0 之前的快速收益，但它不隔离 CC 进程本身（Edit/Write 仍按权限规则），不能代替 P1。
+## 5 一致性测试就是标准
 
-## 8 UX
+接口很小，真正约束适配器的是一套**对抗性一致性测试**（`sandbox/conformance`）：在沙箱里跑一个探针程序，逐条去破保障，全部被挡住才算通过。每个适配器在 CI（能跑的平台）和本地都跑它；没通过的适配器不能在设置里被选成隔离档位。
 
-- **项目设置加一行“运行环境”**：`本机（无隔离）` / `进程沙箱` / `容器` / `虚拟机` / 外部运行时名。显示**具体值**（UX 原则 5）：运行时名、版本、隔离等级、镜像。默认 `本机`，与今天一致（原则 6：合理默认值）。
-- **线程卡片与详情显示它在哪跑**（一个小标签：`本机` / `vm · docker-sandboxes`），与权限模式分开显示（原则 4）。
-- **出口白名单**在同一设置页，带“这次被拦的域名”的一键加入（来自运行时的拦截事件），不让用户去翻日志。
-- **运行时不可用**：线程启动失败，卡片说明哪一步失败（找不到 socket、镜像缺 `claude`、虚拟化不可用）和修法；**不回退到本机**（原则 6 的例外：安全设置不做静默默认）。
-- 切换运行环境只影响新线程和下一次启动的线程；正在跑的线程不迁移（与权限模式“下一回合生效”的做法一致）。
+| 用例 | 期望 | 对应 |
+|---|---|---|
+| 读 `~/.ssh`、宿主的 `~/.claude`、Projects 数据目录、另一个线程的目录 | 不存在或拒绝 | G1、G5 |
+| 写声明挂载以外的路径；在只读挂载上写 | 失败 | G1 |
+| `env` 里出现任何不在白名单里的变量；能找到真实的网关 token | 不出现 | G2 |
+| 直连外网 IP、直连宿主 `127.0.0.1:<Projects 端口>`、连宿主局域网地址、DNS 查询 | 全部失败 | G3（R2） |
+| 经入口 CONNECT 一个不在白名单的域名 | 被拒，且宿主收到拦截记录 | G3、G7 |
+| 经入口访问 `api.github.com`（默认不在白名单） | 被拒 | G4 |
+| 用另一个线程的 MCP 能力 URL | 拒绝 | G5 |
+| fork 炸弹 / 吃满内存（有 Limits 时） | 被限，宿主不受影响 | G6 |
+| 起后台进程后 `Destroy` | 沙箱内无残留进程，宿主无孤儿 | G6 |
+| libkrun 类：不显式关 TSI 时能出网 | 测试必须失败（证明测试有效） | R2 |
 
-## 9 未决（需要用户决定）
+这让“标准”可以被第三方实现：写一个适配器、跑通测试、标出隔离等级即可，不需要了解 Projects 内部。
 
-1. **接口放哪**：`projects/internal/runtime`（只给 Projects），还是 `agentboot`（Tingly Box 的 @cc 远程会话、IM 会话也能用）？推荐 agentboot：进程创建本来就在那里，IM 会话已经是 Projects 线程。
-2. **per-thread 配置目录（D5）在 `host` 档位是否也启用**：好处是隔离与并发安全；代价是线程不再继承用户的全局 Claude Code 设置与登录态（走网关时登录态不需要）。
-3. **模型 token 线程级化（D4）**：需要网关支持签发与吊销，是否作为 P1 的前置。
-4. **首个外部目标**：容器（docker/podman，覆盖面最广）还是直接 microVM（Docker Sandboxes 或 microsandbox，隔离最强）？推荐先容器把协议跑通，再接 microVM。
-5. **Kit 规范**：是否在 P2 就让镜像带 `kit.yaml` 表达权限请求，还是先用项目设置表达、等规范稳定（目前仍标实验性）再对齐。
+## 6 路线
 
-## 10 不做
+| 阶段 | 内容 | 产出 |
+|---|---|---|
+| **P0 接缝** | agentboot 的 `process.Factory` 可注入；`sandbox` 包与 `host` 实现；Broker 与 `tb-sandboxd` 的通道（先在 `host` 下以“无隔离但走通道”的模式自测）；环境白名单与线程配置目录的开关 | 现有测试与 harness 不变 |
+| **P1 进程级** | `bwrap`（Linux）与 `seatbelt`（macOS）适配器；一致性测试；项目设置“运行环境”；出口白名单与拦截提示 | 第一个真正可用的隔离档位，零额外依赖 |
+| **P2 VM 级（本地）** | 先接一家有 virtiofs 的：Linux 选 libkrun 或 Cloud Hypervisor，macOS 选 Apple Containerization；基础镜像 | VM 隔离 |
+| **P3 远程** | 工作区经通道同步；E2B 或 k8s 适配器 | 远程运行 |
+| 以后 | 暂停/快照映射线程空闲；进程外适配器协议（适配器很小，先进程内）；同仓库线程改独立克隆 | 按需 |
 
-- 不实现 CRI 本身、不依赖 Kubernetes（远程档位里 k8s 只是一个适配器后端）。
-- 不让运行时决定权限或审批。
-- 不迁移运行中的线程；不做跨运行时的快照迁移。
-- 不在沙箱里放 GitHub 凭据（工具在宿主做）。
+## 7 UX
+
+- 项目设置加“运行环境”：`本机（不隔离）`、`进程沙箱`、`虚拟机`，显示具体值：适配器名、版本、隔离等级、是否通过一致性测试。默认 `本机`，与今天一致。
+- 线程卡片显示它在哪跑（与权限模式分开显示：隔离与权限是两个轴）。
+- 出口被拦时，线程里出现一条可见事件“拦下了 `pypi.org`”，带“加入白名单”按钮，作用于项目设置，下一次连接生效（出口代理按次判断，不用重启沙箱）。
+- 选了隔离档位而运行时不可用：线程启动失败，说清哪一步、怎么修；**不退回本机**。
+- 切换只影响之后启动的线程；运行中的不迁移。
+
+## 8 未决（需要用户决定）
+
+1. **默认白名单**：除网关、MCP 外，是否默认放行常见包源（npm、PyPI、Go proxy、crates.io）？放行方便，但每多一个都是外泄面。建议默认只放网关与 MCP，首次被拦时一键加入。
+2. **GitHub 读**：`api.github.com`、`github.com` 默认不放（G4 靠它）。`git clone` 公开仓库、`go get` 拉 GitHub 上的模块会因此失败；是否单独提供“只读 GitHub”的放行（经出口代理只允许 GET 和 git fetch 协议）？
+3. **本机档位要不要也用线程配置目录和环境白名单**：能减少今天裸机下的暴露，但会改变现有行为（不再继承用户的全局 Claude Code 设置）。
+4. **P2 第一家**：Linux 上 libkrun（microsandbox 同源，启动快）还是 Cloud Hypervisor（更通用）；macOS 上是否直接用 Apple Containerization（需要 macOS 26+ ⚠）。
+
+## 9 不做
+
+- 不让运行时做策略（白名单、凭据、审批都在宿主）；不依赖任何一家的策略格式。
+- 不照搬 Docker/Kubernetes 的对象模型；接口只有 `Start`、stdio、`Destroy`。
+- 不在沙箱里放 GitHub 或模型的真实凭据。
+- 不迁移运行中的线程。

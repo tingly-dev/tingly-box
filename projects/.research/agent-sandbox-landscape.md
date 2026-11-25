@@ -55,14 +55,20 @@
 - 2026 年的共识（摘要）：跑 AI 生成代码或多租户时，最低一档是 microVM；但 microVM 也有逃逸 CVE（Firecracker 2026 年两起），补丁节奏要看运营方。
 - 来源：[DEV 2026 指南](https://dev.to/aiagentengineering/how-to-sandbox-ai-agents-in-2026-firecracker-gvisor-runtimes-isolation-strategies-14pk)、[Upstash 对比](https://upstash.com/blog/best-sandbox-providers-for-ai-agents)、[沙箱清单 gist](https://gist.github.com/wincent/2752d8d97727577050c043e4ff9e386e)、[arXiv 2606.08433 安全对比](https://arxiv.org/pdf/2606.08433)
 
-## 3 结论：能对齐什么
+## 3 结论：从这些里学到什么
 
-| 我们要的 | 可借的事实标准 | 说明 |
-|---|---|---|
-| 沙箱与进程的生命周期 | **CRI 的形状**（两级对象、List 按标签找回、能力上报、gRPC 进程外插件） | 不直接实现 CRI（太大、面向容器镜像和 Pod），只借结构 |
-| 沙箱里起进程、读写文件 | **envd 的 Process/Filesystem 服务** | 动词集合几乎就是我们要的；远程运行时可直接对接 E2B 协议 |
-| 权限与出口策略、凭据 | **Sandbox Kit 的 capability 词汇** + **srt 的域名白名单/宿主代理模型** | 请求-授予、凭据由代理注入、deny 优先 |
-| 选择隔离强度 | **RuntimeClass** 思路 | 项目设置里选"运行环境"，上层不变 |
-| 集群/远程 | **k8s Sandbox CRD** 作为一个适配器的后端 | 不作为我们的接口本身 |
+没有一个现成标准能直接当我们的接口：k8s Sandbox 在编排层、Kit 在打包层、envd 是单一厂商协议、srt 只管进程级。各家能力也差得很远（端口映射、原生 exec、网络策略、目录挂载都不统一）。
 
-没有一个现成标准能直接当我们的接口：k8s Sandbox 在编排层、Kit 在打包层、envd 是单一厂商协议、srt 只管进程级。所以做法是**定义我们自己的薄接口，但每一块都对齐上面的现成词汇**，让适配器薄。
+能学的是几条共同的做法，而不是对象模型：
+
+- **隔离强度与上层接口分开**（k8s 的 RuntimeClass、containerd shim）：上层不变，换芯。
+- **策略在宿主、沙箱只拿占位符**（Kit 的凭据代理、srt 的宿主侧代理、E2B 的 egressProxy）：真正的安全判断放在沙箱外。
+- **默认断网，出口经一个可控的点**（srt 把网络命名空间拿掉、只留 unix socket 到宿主代理；Apple container 的 `--network none` + vsock 中继）。
+- **一致性测试才是标准**（Kit 带 conformance suite；E2B 兼容后端“声称断网但其实没断”的教训）。
+
+据此的设计见 [thread-runtime.md](../.design/thread-runtime.md)：只要求运行时做“只挂声明目录、断网、起一个带 stdio 的进程、整体销毁”四件事，其余（出口白名单、凭据注入、到网关/MCP 的路由）由我们在宿主侧统一做。
+
+补充（2026-11-25 检索）：
+- E2B 断网：`allowInternetAccess:false` 等价于 `denyOut: ['0.0.0.0/0']`；网络更新会覆盖整份配置，第三方兼容后端可能忽略该标志。来源：[E2B internet access](https://e2b.dev/docs/sandbox/internet-access)、[Sandbawks #25](https://github.com/hypotheosis/Sandbawks/issues/25)。
+- libkrun：不加网卡时默认启用 TSI，借宿主网络；关掉要 `krun_disable_implicit_vsock` + `krun_add_vsock(ctx, 0)`（据 issue 推断）。来源：[libkrun README](https://github.com/libkrun/libkrun)、[libkrun #860](https://github.com/libkrun/libkrun/issues/860)。
+- Apple container：每容器一个轻量 VM，vminitd 经 vsock 转发 stdio；`--network none` 只剩回环，已有项目用 vsock 中继做白名单 CONNECT。来源：[The New Stack](https://thenewstack.io/apple-containers-on-macos-a-technical-comparison-with-docker/)、[apple/container #1037](https://github.com/apple/container/issues/1037)。
