@@ -38,13 +38,15 @@ const AXES = ['storage', 'network', 'exec', 'credentials', 'resources'] as const
 // The runtime threads run in: the ones this server ships, from
 // /projects/runtime. Its level on each axis is shown under it, so what a
 // choice means is spelled out, whatever the runtime.
-function SandboxField({ value, onChange, runtimes }: { value: string; onChange: (v: string) => void; runtimes: SandboxRuntime[] }) {
+function SandboxField({ value, onChange, runtimes, limited }: { value: string; onChange: (v: string) => void; runtimes: SandboxRuntime[]; limited: boolean }) {
     const { t } = useTranslation('projects');
     const name = (s: SandboxRuntime) => t(`projectSettings.sandboxes.${s.name}`, { defaultValue: s.name });
     const keyOf = (s: SandboxRuntime) => (s.name === 'host' ? '' : s.name);
     const current = runtimes.find((s) => keyOf(s) === value);
+    // The project's own quotas, when set, are what its threads run under.
+    const level = (a: (typeof AXES)[number]) => (a === 'resources' && limited && value !== '' ? 'limited' : current?.levels[a]);
     const levels = current
-        ? AXES.map((a) => `${t(`projectSettings.axes.${a}`)}: ${t(`projectSettings.levels.${a}.${current.levels[a]}`, { defaultValue: current.levels[a] ?? '' })}`).join(' · ')
+        ? AXES.map((a) => `${t(`projectSettings.axes.${a}`)}: ${t(`projectSettings.levels.${a}.${level(a)}`, { defaultValue: level(a) ?? '' })}`).join(' · ')
         : '';
     return (
         <TextField select label={t('projectSettings.sandbox')} value={value} onChange={(e) => onChange(e.target.value)}
@@ -167,7 +169,7 @@ function General({ project, patch, onFork }: { project: Project; patch: (p: Patc
                     <MenuItem key={m} value={m}><Box component="span" sx={{ ...mono, fontSize: fontSizes.base, mr: 1 }}>{m}</Box>{t(`projectSettings.mode.${m}`)}</MenuItem>
                 ))}
             </TextField>
-            {runtimes.length > 0 && <SandboxField value={sandbox} onChange={setSandbox} runtimes={runtimes} />}
+            {runtimes.length > 0 && <SandboxField value={sandbox} onChange={setSandbox} runtimes={runtimes} limited={Object.values(quotaNow).some((v) => v > 0)} />}
             {runtimes.length > 0 && <QuotaFields value={quota} onChange={setQuota} enabled={sandbox !== ''} />}
             <Box role="group" aria-label={t('projectSettings.githubAuto')}>
                 <Typography sx={{ fontWeight: 600, color: 'text.primary' }}>{t('projectSettings.githubAuto')}</Typography>
