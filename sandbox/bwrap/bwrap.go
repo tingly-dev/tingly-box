@@ -1,7 +1,7 @@
 // Package bwrap isolates a process with bubblewrap on Linux: storage and exec
 // confined, the network open, none, or an allowlist through a proxy on the
-// host (sandbox/netproxy), and, through a transient systemd user scope,
-// memory and task limits. Importing it registers the runtime.
+// host, with host ports exposed (sandbox/netproxy), and, through a transient
+// systemd user scope, memory, task and CPU limits. Importing it registers the runtime.
 package bwrap
 
 import (
@@ -79,34 +79,35 @@ func (Runtime) Start(ctx context.Context, cmd sandbox.Cmd, p sandbox.Policy) (sa
 		return nil, fmt.Errorf("%w: bubblewrap (bwrap) is not installed", sandbox.ErrUnavailable)
 	}
 	var extra []string
-	var proxy *netproxy.Proxy
-	if p.Network.Level == sandbox.NetworkAllowlist {
-		// No network inside; the bridge (this binary) offers the host's
-		// proxy on loopback, through its socket.
-		if proxy, err = netproxy.Listen(p.Network.Allow); err != nil {
+	var host *netproxy.Host
+	if pl := netproxy.PlanFor(p.Network); !pl.Empty() {
+		// The sandbox's own network reaches the host only through the
+		// bridge (this binary), which offers the host's endpoints on the
+		// sandbox's loopback through their sockets.
+		if host, err = netproxy.ListenDir(p.Network); err != nil {
 			return nil, fmt.Errorf("%w: %v", sandbox.ErrUnavailable, err)
 		}
-		if cmd, err = netproxy.Wrap(cmd, filepath.Join(proxyDir, netproxy.SocketName)); err != nil {
-			_ = proxy.Close()
+		if cmd, err = netproxy.Wrap(cmd, netDir, pl); err != nil {
+			_ = host.Close()
 			return nil, err
 		}
-		extra = []string{"--ro-bind", proxy.Dir(), proxyDir, "--ro-bind", cmd.Args[0], cmd.Args[0]}
+		extra = []string{"--ro-bind", host.Dir(), netDir, "--ro-bind", cmd.Args[0], cmd.Args[0]}
 	}
 	proc, err := start(ctx, bin, cmd, p, extra)
 	if err != nil {
-		if proxy != nil {
-			_ = proxy.Close()
+		if host != nil {
+			_ = host.Close()
 		}
 		return nil, err
 	}
-	if proxy != nil {
-		return netproxy.Serve(proxy, proc), nil
+	if host != nil {
+		return netproxy.Serve(host, proc), nil
 	}
 	return proc, nil
 }
 
-// proxyDir is where the sandbox sees the proxy's socket directory.
-const proxyDir = "/run/tb-sandbox-net"
+// netDir is where the sandbox sees the host's endpoint sockets.
+const netDir = "/run/tb-sandbox-net"
 
 // start runs cmd in bubblewrap, with extra arguments after the mounts, inside
 // a limited systemd scope when p asks for limits.
@@ -168,6 +169,10 @@ func scopeArgs(run string, r sandbox.Resources) []string {
 	}
 	if r.Tasks > 0 {
 		args = append(args, "-p", "TasksMax="+strconv.Itoa(r.Tasks))
+	}
+	if r.CPU > 0 {
+		// CPUQuota is in percent of one core; at least 1%.
+		args = append(args, "-p", "CPUQuota="+strconv.Itoa(max(1, r.CPU/10))+"%")
 	}
 	return append(args, "--")
 }

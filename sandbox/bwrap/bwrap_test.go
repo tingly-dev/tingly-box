@@ -76,8 +76,12 @@ func TestScopeArgs(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 	got = strings.Join(scopeArgs("sr", sandbox.Resources{Level: sandbox.ResourcesLimited, Tasks: 5}), " ")
-	if strings.Contains(got, "Memory") || !strings.Contains(got, "TasksMax=5") {
+	if strings.Contains(got, "Memory") || strings.Contains(got, "CPU") || !strings.Contains(got, "TasksMax=5") {
 		t.Errorf("a zero limit is left out: %s", got)
+	}
+	got = strings.Join(scopeArgs("sr", sandbox.Resources{Level: sandbox.ResourcesLimited, CPU: 1500}), " ")
+	if !strings.Contains(got, "-p CPUQuota=150%") {
+		t.Errorf("cpu is in thousandths of a core, CPUQuota in percent: %s", got)
 	}
 }
 

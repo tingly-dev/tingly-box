@@ -133,12 +133,12 @@ F(env) = {v=x ∈ env | match(K, v)}            (explicit(K))
 ```go
 type Policy struct {
     Storage     Storage     // Level; Mounts []Mount{Path, Writable, Optional}; Home
-    Network     Network     // Level; Allow []string; Expose []Endpoint（决定）
+    Network     Network     // Level; Allow []string; Expose []Endpoint
     Exec        Exec        // Level
     Credentials Credentials // Level; Env []string
-    Resources   Resources   // Level; MemoryBytes int64; Tasks int; CPU int（千分之一核，决定）
+    Resources   Resources   // Level; MemoryBytes int64; Tasks int; CPU int（千分之一核）
 }
-type Endpoint struct{ Port int }  // 决定：宿主回环上的 TCP 端口，沙箱里同端口出现
+type Endpoint struct{ Port int }  // 宿主回环上的 TCP 端口，沙箱里同端口出现
 
 type Cmd struct {
     Args   []string
@@ -225,10 +225,10 @@ type Usage interface {
 | network allowlist | — | `--unshare-net` + 宿主代理（unix socket）+ 沙箱内桥（本程序） | 宿主代理经 vsock + guest 内桥 |
 | network internet | — | **待验证**：pasta（passt 包）给用户态网络，`--no-map-gw` 关掉到宿主回环的映射；宿主网卡地址与 P 的过滤见下 | **待验证**：passt vhost-user 网卡 + guest 内 nftables（guest init 以 root 设置，agent 无权改） |
 | network open | ✓ | 共用宿主网络 | 不支持（非特权给 VM 接宿主网络要 tap，正是要避开的） |
-| Expose | — | **决定**：复用桥，沙箱 `localhost:端口` → unix socket → 宿主 `127.0.0.1:端口` | **决定**：同上，经 vsock |
+| Expose | — | 桥（本程序）在沙箱 `127.0.0.1`/`::1` 的同号端口监听 → unix socket → 宿主 `127.0.0.1:端口` | 同上，guest 内桥经 vsock（端口 1100+i） |
 | exec confined | — | user/pid/ipc/uts 命名空间、`--disable-userns`、`--cap-drop ALL`、`--new-session`、`--die-with-parent` | 独立内核；guest init 关 user namespace、设 NoNewPrivs、以宿主 uid/gid 运行 |
 | credentials | inherit/explicit | inherit/explicit | inherit/explicit（环境经 vsock 控制连接传入） |
-| resources limited | — | `systemd-run --user --scope -p MemoryMax -p MemorySwapMax=0 -p TasksMax`，CPU 加 `-p CPUQuota`（决定） | VM 内存与 vCPU 数，Tasks 用 guest 内 cgroup（决定） |
+| resources limited | — | `systemd-run --user --scope -p MemoryMax -p MemorySwapMax=0 -p TasksMax`，CPU 为 `-p CPUQuota=<u/10>%` | VM 内存与 vCPU 数，Tasks 用 guest 内 cgroup（决定） |
 | 记账（决定） | — | 不限时也进 scope，读 `memory.events` 的 `oom_kill` 判定 OOM | VM 本身；guest 报告用量 |
 
 **`internet` 下对 H（宿主网卡地址）与 P 的过滤（待验证，S3 做）**：
@@ -257,8 +257,8 @@ type Usage interface {
 
 | 步 | 内容 | 依赖 |
 |---|---|---|
-| S1 | **原语与校验**：`Endpoint`/`Expose`、`ExitError{Reason}`、`Resources.CPU`、`Usage` 接口、`NetworkInternet` 常量（运行时先不声明）；§2.6 的结构校验；代理按 §2.2 的授予规则改（永不授予 H、通配符不授予 P）并改一致性测试；新用例的骨架 | 无 |
-| S2 | **Expose + 结束原因 + 记账**：bwrap 与 microvm 实现 Expose（复用桥）；bwrap 不限时也进 scope、OOM 判定；microvm 统一到 `ExitError` | S1 |
+| S1 | **原语与校验（已完成）**：`Endpoint`/`Expose`、`ExitError{Reason}`、`Resources.CPU`、`Usage` 接口、`NetworkInternet` 常量（运行时尚不声明）；§2.6 的结构校验（`WellFormed`）；地址分面（`Classify`）与授予（`ParseGrant`/`Permits`）；代理按 §2.2 的授予规则改；bwrap 与 microvm 实现 Expose；bwrap 的 CPU 配额；结束原因除 `oom` 外统一；一致性测试：allowlist 重写、expose、cpu | 无 |
+| S2 | **记账与 OOM**：bwrap 不限时也进 scope、读 `memory.events` 判定 `oom`；microvm 判定 guest OOM；`Usage` 的实现 | S1 |
 | S3 | **`internet` 机制验证**：pasta（bwrap）与 passt + nftables（microvm）实测 P 的过滤，定方案后实现并通过 `network/internet` | S1；需安装 passt |
 | S4 | **Projects 默认切换**：线程策略改为 `internet` + 自动 Expose；live 测试覆盖（模型经网关、MCP 工具可用、宿主回环与内网不可达） | S2、S3 |
 | S5 | **配额**：项目设置的配额字段（后端模型、校验、codegen、前端），按线程生效；用量与 OOM 事件显示 | S2 |
@@ -288,8 +288,8 @@ type Usage interface {
 模型（§2、§3）是规范；下面是各实现与它的出入。标 **待修** 的是偏差，必须改到符合模型；其余是模型允许的实现细节或模型之外的可观察差异。
 
 **全体**
-- **待修**：`allowlist` 的代理按名单放行任何地址，包括 H（一致性测试正用宿主回环上的监听当"被放行"的目标）；按 §2.2，G(A) 永不含 H，通配条目只含 U。（S1）
-- **待修**：`limited` 接受全零；没有 CPU 项；结束原因不分 `oom`/`killed`/`failed`。（S1、S2）
+- **待修**：结束原因还不能判定 `oom`（现在 OOM 表现为 `signaled`，137）；`exited`/`signaled`/`killed`/`failed` 已区分。（S2）
+- 代理判定在宿主侧：名字不可能被任何条目授予时不做解析，直接拒绝；按解析结果连接时直连那个地址，不再二次解析。
 - `Sys` 的具体集合：`/usr`、`/etc`（整个，只读）、合并 usr 留下的 `/bin` `/sbin` `/lib*`（符号链接或目录）、`/opt`、`/etc` 中指向这些目录之外的**单个文件**（如 `resolv.conf`）。`/etc` 中对普通用户可读的配置因此可见。
 - `V(q) = ⊥` 的路径不可读写，但**挂载点的各级父目录**作为空目录可见（看得到路径名，看不到内容）。
 

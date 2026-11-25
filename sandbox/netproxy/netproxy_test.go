@@ -1,77 +1,165 @@
 package netproxy
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tingly-dev/tingly-box/sandbox"
 )
 
-func TestAllowed(t *testing.T) {
-	allow := []string{"api.anthropic.com", "*.github.com", "127.0.0.1:8080", "[::1]:9000"}
-	for _, tc := range []struct {
-		host string
-		port int
-		want bool
-	}{
-		{"api.anthropic.com", 443, true},
-		{"API.Anthropic.com.", 80, true},
-		{"api.anthropic.com", 22, false}, // no port named: 80 and 443 only
-		{"evil-api.anthropic.com", 443, false},
-		{"codeload.github.com", 443, true},
-		{"github.com", 443, false}, // "*." is subdomains only
-		{"notgithub.com", 443, false},
-		{"127.0.0.1", 8080, true},
-		{"127.0.0.1", 443, false},
-		{"::1", 9000, true},
-	} {
-		if got := Allowed(allow, tc.host, tc.port); got != tc.want {
-			t.Errorf("Allowed(%s:%d) = %v, want %v", tc.host, tc.port, got, tc.want)
+// publicIP stands for a public host; the test dialer sends it to a local
+// server, so the grant logic runs on a real address without a network.
+var publicIP = netip.MustParseAddr("93.184.216.34")
+
+func fakeNet(t *testing.T, names map[string]netip.Addr, server string) {
+	oldLookup, oldDial := lookup, dialOut
+	lookup = func(_ context.Context, name string) ([]netip.Addr, error) {
+		if ip, ok := names[name]; ok {
+			return []netip.Addr{ip}, nil
 		}
+		return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
 	}
+	dialOut = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if strings.HasPrefix(addr, publicIP.String()+":") {
+			addr = server
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}
+	t.Cleanup(func() { lookup, dialOut = oldLookup, oldDial })
 }
 
-// A plain http:// request through the proxy reaches an allowed host and is
-// refused for any other.
-func TestProxyForwardsPlainRequestsToAllowedHostsOnly(t *testing.T) {
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "upstream") }))
-	defer up.Close()
-	u, _ := url.Parse(up.URL)
-	p, err := Listen([]string{u.Host})
+func listenTest(t *testing.T, n sandbox.Network) *Host {
+	t.Helper()
+	h, err := ListenDir(n)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer p.Close()
-	client := &http.Client{Transport: &http.Transport{
+	t.Cleanup(func() { _ = h.Close() })
+	return h
+}
+
+func viaProxy(h *Host) *http.Client {
+	return &http.Client{Transport: &http.Transport{
 		Proxy: http.ProxyURL(&url.URL{Scheme: "http", Host: "proxy"}),
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", filepath.Join(p.Dir(), SocketName))
+			return (&net.Dialer{}).DialContext(ctx, "unix", filepath.Join(h.Dir(), ProxyName+".sock"))
 		},
 	}}
-	get := func(target string) (int, string) {
-		resp, err := client.Get(target)
-		if err != nil {
-			t.Fatal(err)
+}
+
+func connect(t *testing.T, h *Host, target string) string {
+	t.Helper()
+	c, err := net.Dial("unix", filepath.Join(h.Dir(), ProxyName+".sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	_, _ = io.WriteString(c, "CONNECT "+target+" HTTP/1.1\r\nHost: "+target+"\r\n\r\n")
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode == http.StatusOK {
+		return resp.Status // a tunnel: nothing to read until we send
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
+	return resp.Status + " " + string(body)
+}
+
+func TestProxyGrantsWhatAllowGrantsAndNeverTheHost(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "upstream") }))
+	defer up.Close()
+	upURL, _ := url.Parse(up.URL)
+	fakeNet(t, map[string]netip.Addr{
+		"example.test":          publicIP,
+		"api.example.test":      publicIP,
+		"rebind.example.test":   netip.MustParseAddr("127.0.0.1"), // a granted name that resolves to the host
+		"intranet.example.test": netip.MustParseAddr("10.0.0.9"),
+	}, upURL.Host)
+	h := listenTest(t, sandbox.Network{Level: sandbox.NetworkAllowlist, Allow: []string{"example.test", "*.example.test", "rebind.example.test"}})
+
+	resp, err := viaProxy(h).Get("http://example.test/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != 200 || string(b) != "upstream" {
+		t.Errorf("granted plain request: %d %q", resp.StatusCode, b)
+	}
+	if got := connect(t, h, "api.example.test:443"); !strings.HasPrefix(got, "200") {
+		t.Errorf("granted CONNECT: %s", got)
+	}
+	for target, why := range map[string]string{
+		"other.test:443":            "not in the network allowlist",
+		"example.test:22":           "not in the network allowlist",
+		"rebind.example.test:443":   "the host itself",
+		"intranet.example.test:443": "not in the network allowlist", // a wildcard never grants private
+		upURL.Host:                  "the host itself",              // the host's loopback, named by address
+	} {
+		if got := connect(t, h, target); !strings.HasPrefix(got, "403") || !strings.Contains(got, why) {
+			t.Errorf("CONNECT %s = %s, want 403 %q", target, got, why)
 		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		return resp.StatusCode, string(b)
 	}
-	if code, body := get(up.URL); code != 200 || body != "upstream" {
-		t.Errorf("allowed: %d %q", code, body)
+	resp, err = viaProxy(h).Get(up.URL)
+	if err != nil {
+		t.Fatal(err)
 	}
-	other := strings.Replace(up.URL, "127.0.0.1", "localhost", 1)
-	if code, body := get(other); code != http.StatusForbidden || !strings.Contains(body, "allowlist") {
-		t.Errorf("not allowed: %d %q", code, body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a plain request to the host's loopback: %d", resp.StatusCode)
 	}
-	_ = p.Close()
-	if _, err := net.Dial("unix", filepath.Join(p.Dir(), SocketName)); err == nil {
+	_ = h.Close()
+	if _, err := net.Dial("unix", filepath.Join(h.Dir(), ProxyName+".sock")); err == nil {
 		t.Error("the socket outlives Close")
+	}
+}
+
+func TestExposeForwardsToTheHostsLoopback(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = io.WriteString(c, "HELLO")
+			_ = c.Close()
+		}
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+	h := listenTest(t, sandbox.Network{Level: sandbox.NetworkNone, Expose: []sandbox.Endpoint{{Port: port}}})
+	c, err := net.Dial("unix", filepath.Join(h.Dir(), ExposeName(port)+".sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(c)
+	if string(b) != "HELLO" {
+		t.Errorf("got %q", b)
+	}
+}
+
+func TestPlanRoundTrips(t *testing.T) {
+	pl := Plan{Proxy: true, Expose: []int{12580, 8080}}
+	got, err := parsePlan(strings.Join(pl.Names(), ","))
+	if err != nil || !got.Proxy || len(got.Expose) != 2 || got.Expose[1] != 8080 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if _, err := parsePlan("nope"); err == nil {
+		t.Error("an unknown endpoint is an error")
 	}
 }
 

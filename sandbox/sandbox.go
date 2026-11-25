@@ -49,11 +49,14 @@ const (
 	// Storage: the host's whole filesystem, or only the declared mounts.
 	StorageHost     Level = "host"
 	StorageConfined Level = "confined"
-	// Network: anything the host reaches, or nothing at all (not even the
-	// host's own services), or only the hosts Network.Allow names.
-	NetworkOpen      Level = "open"
+	// Network, from strict to wide (.design/sandbox.md §2.2): only the
+	// sandbox's own loopback and Network.Expose; also the destinations
+	// Network.Allow grants, through a proxy; also the public internet; or
+	// the host's network itself.
 	NetworkNone      Level = "none"
 	NetworkAllowlist Level = "allowlist"
+	NetworkInternet  Level = "internet"
+	NetworkOpen      Level = "open"
 	// Exec: as the host user, or in its own namespaces with no privileges,
 	// unable to see, signal or trace other processes, killed as a whole.
 	ExecHost     Level = "host"
@@ -100,17 +103,23 @@ type Mount struct {
 	Optional bool `json:"optional,omitempty"`
 }
 
-// Network is the network axis. Allowlist, the process has no network of its
-// own: HTTP_PROXY and HTTPS_PROXY (and their lower-case forms) in its
-// environment name a proxy that connects only to the hosts Allow names, and
-// refuses the rest with 403. A tool that ignores the proxy variables reaches
-// nothing.
+// Network is the network axis. Below open the process has a network of its
+// own, and reaches the host only through Expose. Allowlist, HTTP_PROXY and
+// HTTPS_PROXY (and their lower-case forms) in its environment name a proxy
+// that connects only to what Allow grants (ParseGrant) and refuses the rest
+// with 403; a tool that ignores the proxy variables reaches nothing.
 type Network struct {
 	Level Level `json:"level"`
-	// Allow are host names or IP addresses, "*.example.com" for every
-	// subdomain of example.com, each with an optional ":port"; without one,
-	// ports 80 and 443.
+	// Allow grants destinations (allowlist; internet: private ones only).
 	Allow []string `json:"allow,omitempty"`
+	// Expose are TCP ports on the host's loopback the process reaches at
+	// localhost on the same port: the one way to the host's own services.
+	Expose []Endpoint `json:"expose,omitempty"`
+}
+
+// Endpoint is a TCP port on the host's loopback.
+type Endpoint struct {
+	Port int `json:"port"`
 }
 
 // Exec is the execution axis.
@@ -126,11 +135,14 @@ type Credentials struct {
 	Env   []string `json:"env,omitempty"`
 }
 
-// Resources is the resources axis. Zero leaves that resource unlimited.
+// Resources is the resources axis. Limited, zero leaves that resource
+// unlimited, and at least one is set.
 type Resources struct {
 	Level       Level `json:"level"`
 	MemoryBytes int64 `json:"memory_bytes,omitempty"`
 	Tasks       int   `json:"tasks,omitempty"`
+	// CPU is in thousandths of a core.
+	CPU int `json:"cpu,omitempty"`
 }
 
 // Level returns the level p asks for on axis a.
@@ -248,6 +260,9 @@ func Start(ctx context.Context, name string, cmd Cmd, p Policy) (Proc, error) {
 	rt, ok := Get(name)
 	if !ok {
 		return nil, fmt.Errorf("%w: no runtime %q in this build", ErrUnavailable, name)
+	}
+	if err := p.WellFormed(); err != nil {
+		return nil, fmt.Errorf("%w: invalid policy: %v", ErrUnavailable, err)
 	}
 	if err := Validate(rt.Info(), p); err != nil {
 		return nil, err

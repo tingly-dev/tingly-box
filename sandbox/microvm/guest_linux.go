@@ -78,9 +78,10 @@ func guest() error {
 		}
 	}
 	env := s.Env
-	if s.Proxy {
-		dial := func() (io.ReadWriteCloser, error) { return dialHost(portProxy) }
-		if env, err = netproxy.Bridge(dial, env); err != nil {
+	if pl := (netproxy.Plan{Proxy: s.Proxy, Expose: s.Expose}); !pl.Empty() {
+		ports := vsockPorts(pl)
+		dial := func(name string) (io.ReadWriteCloser, error) { return dialHost(uint32(ports[name])) }
+		if env, err = netproxy.ServeBridge(pl, dial, env); err != nil {
 			report(result{Error: "network bridge: " + err.Error()})
 			return err
 		}
@@ -114,11 +115,11 @@ func guest() error {
 	case err == nil:
 		report(result{})
 	case errors.As(err, &exit):
-		code := exit.ExitCode()
 		if ws, ok := exit.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-			code = 128 + int(ws.Signal())
+			report(result{Signal: int(ws.Signal())})
+		} else {
+			report(result{Exit: exit.ExitCode()})
 		}
-		report(result{Exit: code})
 	default:
 		report(result{Error: err.Error()})
 	}

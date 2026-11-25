@@ -12,8 +12,9 @@ this repository, and agentboot, Projects and Tingly Box use it.
 - **Registry**: a runtime package registers itself in `init`; a build ships
   the runtimes it imports (Projects: `projects/internal/project/sandbox.go`).
 
-- **Allowlist network**: `netproxy` is the host proxy and in-sandbox bridge
-  any runtime without a network of its own can reuse (see bwrap's `Start`).
+- **Host endpoints**: `netproxy` is the allowlist proxy, the exposed-port
+  forwarders and the in-sandbox bridge, which any runtime without a network
+  of its own reuses (see bwrap's `Start`).
 
 - **Runtimes here**: `bwrap` (namespaces) and `microvm` (Cloud Hypervisor +
   virtiofsd; its guest init is this binary, see `microvm/guest_linux.go`).
