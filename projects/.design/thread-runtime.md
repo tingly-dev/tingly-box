@@ -295,3 +295,14 @@ worker 可能以 yolo 模式跑，此时沙箱是唯一的防线，要按“沙�
 | 资源 | 没有 cgroup 时 fork 炸弹影响宿主 | `systemd-run --user --scope -p TasksMax= -p MemoryMax=` |
 
 结论：**bwrap 能做到“只有挂载/授权的路径可访问”，但 yolo 下要真正安全，还必须同时做到三件事：主仓库 `.git` 的配置与 hooks 只读、宿主侧 git 加固、断开宿主网络（只转发网关与 MCP）。** 这三条进 §5 的一致性测试（写 `core.fsmonitor` 后宿主 `git status` 不得执行；连宿主回环端口必须失败）。这也修正了 §1.4：同仓库共享 `.git` 不只是线程间可见的问题，可写的配置是宿主逃逸途径，最小修法是只读覆盖，不需要改成独立克隆。
+
+### 10.6 v1 实现（2026-11-25）
+
+网络按决定保持放通；先做 exec 与 storage 的隔离。
+
+- **agentboot**：`process.Sandbox`（同路径挂载、空 tmpfs HOME、环境变量白名单）挂在 `LaunchSpec` 与 `ExecutionOptions` 上，Runner 交给 factory；`OSExecFactory` 用 bwrap 包住命令：空根 + 宿主 `/usr` `/etc` 等只读、私有 `/proc` `/dev` `/tmp`、user/pid/ipc/uts 命名空间、`--disable-userns`、`--cap-drop ALL`、`--new-session`、`--die-with-parent`。**没有 bwrap 就拒绝启动**（`ErrNoSandbox`），从不退回宿主。沙箱变化进 `launchSignature`，常驻进程带 `--resume` 重开。
+- **Projects**：项目设置 `thread_sandbox`（`""` 本机 / `bwrap`，界面“线程运行环境”）。`sandboxFor` 的挂载：线程目录与仓库 git 目录（读写；`config`、`hooks`、子模块与 `config.worktree` 只读覆盖）、项目其它仓库、library、memory、本目录的转录（`$CLAUDE_CONFIG_DIR` 或 `~/.claude` 下 `projects/<名>`；名字超过 200 字符时按 Claude Code 的规则截断并加路径哈希）、设置与 MCP 配置（只读）、用户的 `CLAUDE.md`/skills/agents/commands（只读，不含 `settings.json`）、PATH 上家目录里的工具链（只读）、cwd 祖先目录的 `CLAUDE.md`；最小 `GIT_CONFIG_GLOBAL`（只有 user.name/email）。建不出沙箱时线程失败并写明原因。
+- **宿主 git**：`git()` 一律 `-c core.fsmonitor=false`。
+- **验证**：bwrap 真实运行的单元测试（秘密文件不可见、只读 config 写不进、环境变量被滤、杀掉后无残留进程、无 bwrap 拒绝启动）；挂载计划测试；`TB_SANDBOX_LIVE=1` 的端到端：真实 `claude` 2.1.259 以 `bypassPermissions` 在沙箱里跑，本地脚本模型让它的 Bash 去探家目录、植入的秘密、token 环境变量、仓库 `.git/config` 并在工作区写文件——全部挡住、写入落到宿主、转录在宿主读的位置。`TB_SANDBOX_LIVE_HOST=1` 是对照（不进沙箱），探针此时看到整个家目录，证明探针有效。端到端发现并修了一个问题：长路径的转录目录名被 Claude Code 截断加哈希，原先挂错目录。
+
+未做：资源上限（`systemd-run --user --scope`）；运行中经审批新加的目录（`AddDirectories`）不会自动挂进沙箱；`library/.cache` 线程间共享；网络（按决定后补）。宿主侧 agentboot 的 `SessionReader` 也没按长路径规则找转录（已告知协调者）。
